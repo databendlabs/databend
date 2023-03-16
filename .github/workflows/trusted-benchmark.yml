@@ -23,7 +23,7 @@ env:
 
 jobs:
   metadata:
-    if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_call'
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: [self-hosted, X64, Linux, dev]
     outputs:
       sha: ${{ steps.metadata.outputs.sha }}
@@ -48,16 +48,12 @@ jobs:
               echo "source=pr" >> $GITHUB_OUTPUT
               echo "source_id=$(jq -r '.pr_id' metadata.json)" >> $GITHUB_OUTPUT
               ;;
-            workflow_call)
+            *)
               echo "sha=${{ github.sha }}" >> $GITHUB_OUTPUT
               echo "head_sha=${{ github.sha }}" >> $GITHUB_OUTPUT
               echo "run_id=${{ github.run_id }}" >> $GITHUB_OUTPUT
               echo "source=release" >> $GITHUB_OUTPUT
               echo "source_id=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
-              ;;
-            *)
-              echo "Unknown event name: ${{ github.event_name }}"
-              exit 1
               ;;
           esac
       - uses: ./.github/actions/create_check_status
@@ -160,7 +156,7 @@ jobs:
           databend-query --version
           databend-meta --version
       - name: Set github check status to pending
-        if: steps.metadata.outputs.source == 'pr'
+        if: needs.metadata.outputs.source == 'pr'
         uses: ./.github/actions/create_check_status
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -179,7 +175,7 @@ jobs:
           source: ${{ needs.metadata.outputs.source }}
           source_id: ${{ needs.metadata.outputs.source_id }}
       - name: Set github check status to completed
-        if: steps.metadata.outputs.source == 'pr'
+        if: needs.metadata.outputs.source == 'pr'
         uses: ./.github/actions/create_check_status
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -261,7 +257,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup_bendsql
       - name: Set github check status to pending
-        if: steps.metadata.outputs.source == 'pr'
+        if: needs.metadata.outputs.source == 'pr'
         uses: ./.github/actions/create_check_status
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -286,7 +282,7 @@ jobs:
           cloud_org: ${{ secrets.BENCHMARK_CLOUD_ORG }}
           cloud_endpoint: ${{ secrets.BENCHMARK_CLOUD_ENDPOINT }}
       - name: Set github check status to pending
-        if: steps.metadata.outputs.source == 'pr'
+        if: needs.metadata.outputs.source == 'pr'
         uses: ./.github/actions/create_check_status
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
