@@ -110,7 +110,7 @@ impl Rule for RulePushDownFilterJoin {
             state.add_result(s_expr);
             return Ok(());
         }
-        // Third, extract or predicates from Filter to push down them to join.
+        // Finally, extract or predicates from Filter to push down them to join.
         // For example: `select * from t1, t2 where (t1.a=1 and t2.b=2) or (t1.a=2 and t2.b=1)`
         // The predicate will be rewritten to `((t1.a=1 and t2.b=2) or (t1.a=2 and t2.b=1)) and (t1.a=1 or t1.a=2) and (t2.b=2 or t2.b=1)`
         // So `(t1.a=1 or t1.a=1), (t2.b=2 or t2.b=1)` may be pushed down join and reduce rows between join
@@ -169,8 +169,8 @@ pub fn try_push_down_filter_join(
             JoinPredicate::Other(_) => original_predicates.push(predicate),
 
             JoinPredicate::Both { left, right } => {
-                let left_type = left.data_type();
-                let right_type = right.data_type();
+                let left_type = left.data_type()?;
+                let right_type = right.data_type()?;
                 let join_key_type =
                     common_super_type(left_type, right_type, &BUILTIN_FUNCTIONS.default_cast_rules);
 
@@ -182,7 +182,7 @@ pub fn try_push_down_filter_join(
                         join.join_type = JoinType::Inner;
                     }
                     if join.join_type == JoinType::Inner {
-                        if left.data_type().ne(&right.data_type()) {
+                        if left.data_type()? != right.data_type()? {
                             let left = wrap_cast(left, &join_key_type);
                             let right = wrap_cast(right, &join_key_type);
                             join.left_conditions.push(left);

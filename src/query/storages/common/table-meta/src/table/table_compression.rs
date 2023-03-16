@@ -18,19 +18,13 @@ use common_exception::ErrorCode;
 
 use crate::meta;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum TableCompression {
     None,
     LZ4,
     Snappy,
+    #[default]
     Zstd,
-}
-
-impl Default for TableCompression {
-    // Default is zstd.
-    fn default() -> Self {
-        TableCompression::Zstd
-    }
 }
 
 /// Convert from str.

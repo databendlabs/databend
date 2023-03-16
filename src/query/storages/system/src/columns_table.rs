@@ -146,7 +146,7 @@ impl ColumnsTable {
                 let fields = if table.engine() == VIEW_ENGINE {
                     if let Some(query) = table.options().get(QUERY) {
                         let mut planner = Planner::new(ctx.clone());
-                        let (plan, _, _) = planner.plan_sql(query).await?;
+                        let (plan, _) = planner.plan_sql(query).await?;
                         let schema = infer_table_schema(&plan.schema())?;
                         schema.fields().clone()
                     } else {

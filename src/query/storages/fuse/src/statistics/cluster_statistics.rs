@@ -78,6 +78,7 @@ impl ClusterStatsGenerator {
         data_block: &DataBlock,
     ) -> Result<(Option<ClusterStatistics>, DataBlock)> {
         let cluster_stats = self.clusters_statistics(data_block, self.level)?;
+        // TODO why clone the block here?
         let mut block = data_block.clone();
 
         block = block.pop_columns(self.extra_key_num)?;

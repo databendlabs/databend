@@ -67,8 +67,8 @@ async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>
         .set_authed_user(user, None)
         .await?;
     let mut planner = Planner::new(query_ctx.clone());
-    let (plan, _, _) = planner.plan_sql(sql).await?;
-    query_ctx.attach_query_str(plan.to_string(), sql);
+    let (plan, extras) = planner.plan_sql(sql).await?;
+    query_ctx.attach_query_str(plan.to_string(), extras.stament.to_mask_sql());
     InterpreterFactory::get(query_ctx.clone(), &plan).await
 }
 

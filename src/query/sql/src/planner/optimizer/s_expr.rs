@@ -152,6 +152,16 @@ impl SExpr {
         }
     }
 
+    pub fn replace_plan(&self, plan: RelOperator) -> Self {
+        Self {
+            plan,
+            original_group: self.original_group,
+            rel_prop: self.rel_prop.clone(),
+            applied_rules: self.applied_rules.clone(),
+            children: self.children.clone(),
+        }
+    }
+
     /// Record the applied rule id in current SExpr
     pub(crate) fn set_applied_rule(&mut self, rule_id: &RuleID) {
         self.applied_rules.set(rule_id, true);
@@ -169,6 +179,45 @@ impl SExpr {
         }
         true
     }
+
+    // Add (table_index, column_index) into `Scan` node recursively.
+    pub fn add_internal_column_index(
+        expr: &SExpr,
+        table_index: IndexType,
+        column_index: IndexType,
+    ) -> SExpr {
+        fn add_internal_column_index_into_child(
+            s_expr: &SExpr,
+            column_index: IndexType,
+            table_index: IndexType,
+        ) -> SExpr {
+            let mut s_expr = s_expr.clone();
+            if let RelOperator::Scan(p) = &mut s_expr.plan {
+                if p.table_index == table_index {
+                    p.columns.insert(column_index);
+                }
+            }
+
+            if s_expr.children.is_empty() {
+                s_expr
+            } else {
+                let mut children = Vec::with_capacity(s_expr.children.len());
+                for child in s_expr.children.as_ref() {
+                    children.push(add_internal_column_index_into_child(
+                        child,
+                        column_index,
+                        table_index,
+                    ));
+                }
+
+                s_expr.children = Arc::new(children);
+
+                s_expr
+            }
+        }
+
+        add_internal_column_index_into_child(expr, column_index, table_index)
+    }
 }
 
 fn find_subquery(rel_op: &RelOperator) -> bool {
@@ -179,6 +228,7 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
         | RelOperator::UnionAll(_)
         | RelOperator::Sort(_)
         | RelOperator::DummyTableScan(_)
+        | RelOperator::RuntimeFilterSource(_)
         | RelOperator::Pattern(_) => false,
         RelOperator::Join(op) => {
             op.left_conditions.iter().any(find_subquery_in_expr)
@@ -204,7 +254,9 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
 
 fn find_subquery_in_expr(expr: &ScalarExpr) -> bool {
     match expr {
-        ScalarExpr::BoundColumnRef(_) | ScalarExpr::ConstantExpr(_) => false,
+        ScalarExpr::BoundColumnRef(_)
+        | ScalarExpr::BoundInternalColumnRef(_)
+        | ScalarExpr::ConstantExpr(_) => false,
         ScalarExpr::AndExpr(expr) => {
             find_subquery_in_expr(&expr.left) || find_subquery_in_expr(&expr.right)
         }
@@ -219,5 +271,6 @@ fn find_subquery_in_expr(expr: &ScalarExpr) -> bool {
         ScalarExpr::FunctionCall(expr) => expr.arguments.iter().any(find_subquery_in_expr),
         ScalarExpr::CastExpr(expr) => find_subquery_in_expr(&expr.argument),
         ScalarExpr::SubqueryExpr(_) => true,
+        ScalarExpr::Unnest(expr) => find_subquery_in_expr(&expr.argument),
     }
 }

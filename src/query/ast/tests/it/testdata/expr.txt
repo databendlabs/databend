@@ -72,7 +72,7 @@ FunctionCall {
             span: Some(
                 5..9,
             ),
-            lit: Integer(
+            lit: UInt64(
                 208,
             ),
         },
@@ -80,7 +80,7 @@ FunctionCall {
             span: Some(
                 11..15,
             ),
-            lit: Integer(
+            lit: UInt64(
                 191,
             ),
         },
@@ -88,12 +88,13 @@ FunctionCall {
             span: Some(
                 17..21,
             ),
-            lit: Integer(
+            lit: UInt64(
                 209,
             ),
         },
     ],
     params: [],
+    window: None,
 }
 
 
@@ -111,7 +112,7 @@ Array {
             span: Some(
                 1..3,
             ),
-            lit: Integer(
+            lit: UInt64(
                 42,
             ),
         },
@@ -119,63 +120,77 @@ Array {
             span: Some(
                 5..8,
             ),
-            lit: Float(
-                3.5,
-            ),
+            lit: Decimal128 {
+                value: 35,
+                precision: 2,
+                scale: 1,
+            },
         },
         Literal {
             span: Some(
                 10..12,
             ),
-            lit: Float(
-                4.0,
-            ),
+            lit: Decimal128 {
+                value: 4,
+                precision: 1,
+                scale: 0,
+            },
         },
         Literal {
             span: Some(
                 14..18,
             ),
-            lit: Float(
-                0.001,
-            ),
+            lit: Decimal128 {
+                value: 1,
+                precision: 3,
+                scale: 3,
+            },
         },
         Literal {
             span: Some(
                 20..23,
             ),
-            lit: Float(
-                500.0,
-            ),
+            lit: Decimal128 {
+                value: 500,
+                precision: 3,
+                scale: 0,
+            },
         },
         Literal {
             span: Some(
                 25..33,
             ),
-            lit: Float(
-                0.001925,
-            ),
+            lit: Decimal128 {
+                value: 1925,
+                precision: 6,
+                scale: 6,
+            },
         },
         Literal {
             span: Some(
                 35..41,
             ),
-            lit: Float(
-                3800000.0,
-            ),
+            lit: Decimal128 {
+                value: 3800000,
+                precision: 7,
+                scale: 0,
+            },
         },
         Literal {
             span: Some(
                 43..49,
             ),
-            lit: Float(
-                0.1,
-            ),
+            lit: Decimal128 {
+                value: 1,
+                precision: 1,
+                scale: 1,
+            },
         },
         Literal {
             span: Some(
                 51..56,
             ),
-            lit: Integer(
+            lit: UInt64(
                 4095,
             ),
         },
@@ -183,7 +198,7 @@ Array {
             span: Some(
                 58..69,
             ),
-            lit: Integer(
+            lit: UInt64(
                 3740122863,
             ),
         },
@@ -200,9 +215,10 @@ Literal {
     span: Some(
         0..30,
     ),
-    lit: BigInt {
-        lit: "123456789012345678901234567890",
-        is_hex: false,
+    lit: Decimal128 {
+        value: 123456789012345678901234567890,
+        precision: 30,
+        scale: 0,
     },
 }
 
@@ -210,15 +226,16 @@ Literal {
 ---------- Input ----------
 x'123456789012345678901234567890'
 ---------- Output ---------
-0x123456789012345678901234567890
+94522879687365475552814062743484560
 ---------- AST ------------
 Literal {
     span: Some(
         0..33,
     ),
-    lit: BigInt {
-        lit: "123456789012345678901234567890",
-        is_hex: true,
+    lit: Decimal128 {
+        value: 94522879687365475552814062743484560,
+        precision: 38,
+        scale: 0,
     },
 }
 
@@ -247,30 +264,26 @@ Literal {
     span: Some(
         0..2,
     ),
-    lit: Float(
-        0.1,
-    ),
+    lit: Decimal128 {
+        value: 1,
+        precision: 1,
+        scale: 1,
+    },
 }
 
 
 ---------- Input ----------
 -1
 ---------- Output ---------
-(- 1)
+-1
 ---------- AST ------------
-UnaryOp {
+Literal {
     span: Some(
-        0..1,
+        1..2,
     ),
-    op: Minus,
-    expr: Literal {
-        span: Some(
-            1..2,
-        ),
-        lit: Integer(
-            1,
-        ),
-    },
+    lit: Int64(
+        -1,
+    ),
 }
 
 
@@ -288,7 +301,7 @@ Tuple {
             span: Some(
                 1..2,
             ),
-            lit: Integer(
+            lit: UInt64(
                 1,
             ),
         },
@@ -310,7 +323,7 @@ Tuple {
             span: Some(
                 1..2,
             ),
-            lit: Integer(
+            lit: UInt64(
                 1,
             ),
         },
@@ -318,7 +331,7 @@ Tuple {
             span: Some(
                 3..4,
             ),
-            lit: Integer(
+            lit: UInt64(
                 2,
             ),
         },
@@ -340,7 +353,7 @@ Tuple {
             span: Some(
                 1..2,
             ),
-            lit: Integer(
+            lit: UInt64(
                 1,
             ),
         },
@@ -348,7 +361,7 @@ Tuple {
             span: Some(
                 3..4,
             ),
-            lit: Integer(
+            lit: UInt64(
                 2,
             ),
         },
@@ -370,7 +383,7 @@ Array {
             span: Some(
                 1..2,
             ),
-            lit: Integer(
+            lit: UInt64(
                 1,
             ),
         },
@@ -392,7 +405,7 @@ Array {
             span: Some(
                 1..2,
             ),
-            lit: Integer(
+            lit: UInt64(
                 1,
             ),
         },
@@ -419,7 +432,7 @@ Array {
                     span: Some(
                         2..3,
                     ),
-                    lit: Integer(
+                    lit: UInt64(
                         1,
                     ),
                 },
@@ -448,7 +461,7 @@ Array {
                     span: Some(
                         2..3,
                     ),
-                    lit: Integer(
+                    lit: UInt64(
                         1,
                     ),
                 },
@@ -463,7 +476,7 @@ Array {
                     span: Some(
                         6..7,
                     ),
-                    lit: Integer(
+                    lit: UInt64(
                         2,
                     ),
                 },
@@ -509,7 +522,7 @@ MapAccess {
                                         span: Some(
                                             3..4,
                                         ),
-                                        lit: Integer(
+                                        lit: UInt64(
                                             1,
                                         ),
                                     },
@@ -517,7 +530,7 @@ MapAccess {
                                         span: Some(
                                             5..6,
                                         ),
-                                        lit: Integer(
+                                        lit: UInt64(
                                             2,
                                         ),
                                     },
@@ -525,7 +538,7 @@ MapAccess {
                                         span: Some(
                                             7..8,
                                         ),
-                                        lit: Integer(
+                                        lit: UInt64(
                                             3,
                                         ),
                                     },
@@ -540,7 +553,7 @@ MapAccess {
                                         span: Some(
                                             11..12,
                                         ),
-                                        lit: Integer(
+                                        lit: UInt64(
                                             4,
                                         ),
                                     },
@@ -548,7 +561,7 @@ MapAccess {
                                         span: Some(
                                             13..14,
                                         ),
-                                        lit: Integer(
+                                        lit: UInt64(
                                             5,
                                         ),
                                     },
@@ -556,7 +569,7 @@ MapAccess {
                                         span: Some(
                                             15..16,
                                         ),
-                                        lit: Integer(
+                                        lit: UInt64(
                                             6,
                                         ),
                                     },
@@ -578,7 +591,7 @@ MapAccess {
                                         span: Some(
                                             21..22,
                                         ),
-                                        lit: Integer(
+                                        lit: UInt64(
                                             7,
                                         ),
                                     },
@@ -586,7 +599,7 @@ MapAccess {
                                         span: Some(
                                             23..24,
                                         ),
-                                        lit: Integer(
+                                        lit: UInt64(
                                             8,
                                         ),
                                     },
@@ -594,7 +607,7 @@ MapAccess {
                                         span: Some(
                                             25..26,
                                         ),
-                                        lit: Integer(
+                                        lit: UInt64(
                                             9,
                                         ),
                                     },
@@ -609,7 +622,7 @@ MapAccess {
                     span: Some(
                         30..31,
                     ),
-                    lit: Integer(
+                    lit: UInt64(
                         0,
                     ),
                 },
@@ -620,7 +633,7 @@ MapAccess {
                 span: Some(
                     33..34,
                 ),
-                lit: Integer(
+                lit: UInt64(
                     1,
                 ),
             },
@@ -631,7 +644,7 @@ MapAccess {
             span: Some(
                 36..37,
             ),
-            lit: Integer(
+            lit: UInt64(
                 2,
             ),
         },
@@ -658,7 +671,7 @@ BinaryOp {
             span: Some(
                 2..3,
             ),
-            lit: Integer(
+            lit: UInt64(
                 1,
             ),
         },
@@ -666,7 +679,7 @@ BinaryOp {
             span: Some(
                 6..7,
             ),
-            lit: Integer(
+            lit: UInt64(
                 1,
             ),
         },
@@ -675,7 +688,7 @@ BinaryOp {
         span: Some(
             12..13,
         ),
-        lit: Integer(
+        lit: UInt64(
             1,
         ),
     },
@@ -709,7 +722,7 @@ FunctionCall {
                 span: Some(
                     7..8,
                 ),
-                lit: Integer(
+                lit: UInt64(
                     1,
                 ),
             },
@@ -717,20 +730,21 @@ FunctionCall {
                 span: Some(
                     11..12,
                 ),
-                lit: Integer(
+                lit: UInt64(
                     2,
                 ),
             },
         },
     ],
     params: [],
+    window: None,
 }
 
 
 ---------- Input ----------
 - - + + - 1 + + - 2
 ---------- Output ---------
-((- (- (+ (+ (- 1))))) + (+ (- 2)))
+((- (- (+ (+ -1)))) + (+ -2))
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -757,19 +771,13 @@ BinaryOp {
                         6..7,
                     ),
                     op: Plus,
-                    expr: UnaryOp {
+                    expr: Literal {
                         span: Some(
-                            8..9,
+                            10..11,
                         ),
-                        op: Minus,
-                        expr: Literal {
-                            span: Some(
-                                10..11,
-                            ),
-                            lit: Integer(
-                                1,
-                            ),
-                        },
+                        lit: Int64(
+                            -1,
+                        ),
                     },
                 },
             },
@@ -780,19 +788,13 @@ BinaryOp {
             14..15,
         ),
         op: Plus,
-        expr: UnaryOp {
+        expr: Literal {
             span: Some(
-                16..17,
+                18..19,
             ),
-            op: Minus,
-            expr: Literal {
-                span: Some(
-                    18..19,
-                ),
-                lit: Integer(
-                    2,
-                ),
-            },
+            lit: Int64(
+                -2,
+            ),
         },
     },
 }
@@ -822,7 +824,7 @@ BinaryOp {
                 span: Some(
                     0..4,
                 ),
-                lit: Integer(
+                lit: UInt64(
                     255,
                 ),
             },
@@ -830,7 +832,7 @@ BinaryOp {
                 span: Some(
                     7..11,
                 ),
-                lit: Integer(
+                lit: UInt64(
                     255,
                 ),
             },
@@ -839,7 +841,7 @@ BinaryOp {
             span: Some(
                 14..17,
             ),
-            lit: Integer(
+            lit: UInt64(
                 10,
             ),
         },
@@ -848,7 +850,7 @@ BinaryOp {
         span: Some(
             20..27,
         ),
-        lit: Integer(
+        lit: UInt64(
             65535,
         ),
     },
@@ -858,7 +860,7 @@ BinaryOp {
 ---------- Input ----------
 1 - -(- - -1)
 ---------- Output ---------
-(1 - (- (- (- (- 1)))))
+(1 - (- (- (- -1))))
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -869,7 +871,7 @@ BinaryOp {
         span: Some(
             0..1,
         ),
-        lit: Integer(
+        lit: UInt64(
             1,
         ),
     },
@@ -888,19 +890,13 @@ BinaryOp {
                     8..9,
                 ),
                 op: Minus,
-                expr: UnaryOp {
+                expr: Literal {
                     span: Some(
-                        10..11,
+                        11..12,
                     ),
-                    op: Minus,
-                    expr: Literal {
-                        span: Some(
-                            11..12,
-                        ),
-                        lit: Integer(
-                            1,
-                        ),
-                    },
+                    lit: Int64(
+                        -1,
+                    ),
                 },
             },
         },
@@ -922,7 +918,7 @@ BinaryOp {
         span: Some(
             0..1,
         ),
-        lit: Integer(
+        lit: UInt64(
             1,
         ),
     },
@@ -999,7 +995,7 @@ BinaryOp {
         span: Some(
             9..10,
         ),
-        lit: Integer(
+        lit: UInt64(
             2,
         ),
     },
@@ -1200,7 +1196,7 @@ Between {
         span: Some(
             17..18,
         ),
-        lit: Integer(
+        lit: UInt64(
             1,
         ),
     },
@@ -1208,7 +1204,7 @@ Between {
         span: Some(
             23..24,
         ),
-        lit: Integer(
+        lit: UInt64(
             2,
         ),
     },
@@ -1250,6 +1246,7 @@ FunctionCall {
         },
     ],
     params: [],
+    window: None,
 }
 
 
@@ -1274,6 +1271,7 @@ FunctionCall {
     },
     args: [],
     params: [],
+    window: None,
 }
 
 
@@ -1296,6 +1294,7 @@ FunctionCall {
     },
     args: [],
     params: [],
+    window: None,
 }
 
 
@@ -1347,6 +1346,7 @@ FunctionCall {
         },
     ],
     params: [],
+    window: None,
 }
 
 
@@ -1664,7 +1664,7 @@ ArraySort {
                 span: Some(
                     12..13,
                 ),
-                lit: Integer(
+                lit: UInt64(
                     2,
                 ),
             },
@@ -1693,7 +1693,7 @@ ArraySort {
                 span: Some(
                     12..13,
                 ),
-                lit: Integer(
+                lit: UInt64(
                     2,
                 ),
             },
@@ -1701,9 +1701,11 @@ ArraySort {
                 span: Some(
                     14..17,
                 ),
-                lit: Float(
-                    0.1,
-                ),
+                lit: Decimal128 {
+                    value: 1,
+                    precision: 1,
+                    scale: 1,
+                },
             },
         ],
     },
@@ -1730,7 +1732,7 @@ ArraySort {
                 span: Some(
                     12..13,
                 ),
-                lit: Integer(
+                lit: UInt64(
                     3,
                 ),
             },
@@ -1738,7 +1740,7 @@ ArraySort {
                 span: Some(
                     14..15,
                 ),
-                lit: Integer(
+                lit: UInt64(
                     2,
                 ),
             },
@@ -1813,7 +1815,7 @@ MapAccess {
                     span: Some(
                         5..6,
                     ),
-                    lit: Integer(
+                    lit: UInt64(
                         0,
                     ),
                 },
@@ -1873,7 +1875,7 @@ MapAccess {
                 span: Some(
                     4..5,
                 ),
-                lit: Integer(
+                lit: UInt64(
                     4,
                 ),
             },
@@ -2027,7 +2029,7 @@ BinaryOp {
                     span: Some(
                         49..50,
                     ),
-                    lit: Integer(
+                    lit: UInt64(
                         1,
                     ),
                 },
@@ -2075,6 +2077,7 @@ BinaryOp {
                     },
                 ],
                 params: [],
+                window: None,
             },
         },
         not: true,
@@ -2169,7 +2172,7 @@ BinaryOp {
                         span: Some(
                             56..57,
                         ),
-                        lit: Integer(
+                        lit: UInt64(
                             0,
                         ),
                     },
@@ -2177,6 +2180,7 @@ BinaryOp {
             },
         ],
         params: [],
+        window: None,
     },
     right: Case {
         span: Some(
@@ -2218,12 +2222,13 @@ BinaryOp {
                         },
                     ],
                     params: [],
+                    window: None,
                 },
                 right: Literal {
                     span: Some(
                         92..93,
                     ),
-                    lit: Integer(
+                    lit: UInt64(
                         0,
                     ),
                 },
@@ -2234,7 +2239,7 @@ BinaryOp {
                 span: Some(
                     99..100,
                 ),
-                lit: Integer(
+                lit: UInt64(
                     1,
                 ),
             },
@@ -2269,6 +2274,7 @@ BinaryOp {
                     },
                 ],
                 params: [],
+                window: None,
             },
         ),
     },
@@ -2466,7 +2472,7 @@ BinaryOp {
                                 span: Some(
                                     169..170,
                                 ),
-                                lit: Integer(
+                                lit: UInt64(
                                     1,
                                 ),
                             },
@@ -2507,7 +2513,7 @@ BinaryOp {
                                 span: Some(
                                     208..209,
                                 ),
-                                lit: Integer(
+                                lit: UInt64(
                                     1,
                                 ),
                             },
@@ -2515,7 +2521,7 @@ BinaryOp {
                                 span: Some(
                                     212..214,
                                 ),
-                                lit: Integer(
+                                lit: UInt64(
                                     10,
                                 ),
                             },
@@ -2551,7 +2557,7 @@ BinaryOp {
                         span: Some(
                             265..266,
                         ),
-                        lit: Integer(
+                        lit: UInt64(
                             1,
                         ),
                     },
@@ -2566,7 +2572,7 @@ BinaryOp {
                         span: Some(
                             290..291,
                         ),
-                        lit: Integer(
+                        lit: UInt64(
                             5,
                         ),
                     },
@@ -2668,7 +2674,7 @@ FunctionCall {
             span: Some(
                 7..8,
             ),
-            lit: Integer(
+            lit: UInt64(
                 1,
             ),
         },
@@ -2676,12 +2682,13 @@ FunctionCall {
             span: Some(
                 10..11,
             ),
-            lit: Integer(
+            lit: UInt64(
                 1,
             ),
         },
     ],
     params: [],
+    window: None,
 }
 
 
@@ -2733,6 +2740,7 @@ FunctionCall {
         },
     ],
     params: [],
+    window: None,
 }
 
 
@@ -2758,7 +2766,7 @@ FunctionCall {
             span: Some(
                 9..10,
             ),
-            lit: Integer(
+            lit: UInt64(
                 1,
             ),
         },
@@ -2766,7 +2774,7 @@ FunctionCall {
             span: Some(
                 12..13,
             ),
-            lit: Integer(
+            lit: UInt64(
                 2,
             ),
         },
@@ -2774,12 +2782,13 @@ FunctionCall {
             span: Some(
                 15..16,
             ),
-            lit: Integer(
+            lit: UInt64(
                 3,
             ),
         },
     ],
     params: [],
+    window: None,
 }
 
 
@@ -2845,6 +2854,7 @@ FunctionCall {
         },
     ],
     params: [],
+    window: None,
 }
 
 
@@ -2870,7 +2880,7 @@ FunctionCall {
             span: Some(
                 7..8,
             ),
-            lit: Integer(
+            lit: UInt64(
                 1,
             ),
         },
@@ -2878,12 +2888,13 @@ FunctionCall {
             span: Some(
                 10..11,
             ),
-            lit: Integer(
+            lit: UInt64(
                 1,
             ),
         },
     ],
     params: [],
+    window: None,
 }
 
 
@@ -2935,6 +2946,7 @@ FunctionCall {
         },
     ],
     params: [],
+    window: None,
 }
 
 
@@ -2951,7 +2963,7 @@ IsDistinctFrom {
         span: Some(
             0..1,
         ),
-        lit: Integer(
+        lit: UInt64(
             1,
         ),
     },
@@ -2959,7 +2971,7 @@ IsDistinctFrom {
         span: Some(
             19..20,
         ),
-        lit: Integer(
+        lit: UInt64(
             2,
         ),
     },
@@ -3021,7 +3033,7 @@ IsDistinctFrom {
         span: Some(
             0..1,
         ),
-        lit: Integer(
+        lit: UInt64(
             1,
         ),
     },
@@ -3032,6 +3044,674 @@ IsDistinctFrom {
         lit: Null,
     },
     not: true,
+}
+
+
+---------- Input ----------
+{'k1':1,'k2':2}
+---------- Output ---------
+{'k1':1,'k2':2}
+---------- AST ------------
+Map {
+    span: Some(
+        0..15,
+    ),
+    kvs: [
+        (
+            Literal {
+                span: Some(
+                    1..5,
+                ),
+                lit: String(
+                    "k1",
+                ),
+            },
+            Literal {
+                span: Some(
+                    6..7,
+                ),
+                lit: UInt64(
+                    1,
+                ),
+            },
+        ),
+        (
+            Literal {
+                span: Some(
+                    8..12,
+                ),
+                lit: String(
+                    "k2",
+                ),
+            },
+            Literal {
+                span: Some(
+                    13..14,
+                ),
+                lit: UInt64(
+                    2,
+                ),
+            },
+        ),
+    ],
+}
+
+
+---------- Input ----------
+ROW_NUMBER() OVER (ORDER BY salary DESC)
+---------- Output ---------
+ROW_NUMBER() OVER (ORDER BY salary DESC)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..40,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "ROW_NUMBER",
+        quote: None,
+        span: Some(
+            0..10,
+        ),
+    },
+    args: [],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [],
+            order_by: [
+                OrderByExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            28..34,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "salary",
+                            quote: None,
+                            span: Some(
+                                28..34,
+                            ),
+                        },
+                    },
+                    asc: Some(
+                        false,
+                    ),
+                    nulls_first: None,
+                },
+            ],
+            window_frame: None,
+        },
+    ),
+}
+
+
+---------- Input ----------
+SUM(salary) OVER ()
+---------- Output ---------
+SUM(salary) OVER ()
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..19,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "SUM",
+        quote: None,
+        span: Some(
+            0..3,
+        ),
+    },
+    args: [
+        ColumnRef {
+            span: Some(
+                4..10,
+            ),
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "salary",
+                quote: None,
+                span: Some(
+                    4..10,
+                ),
+            },
+        },
+    ],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [],
+            order_by: [],
+            window_frame: None,
+        },
+    ),
+}
+
+
+---------- Input ----------
+AVG(salary) OVER (PARTITION BY department)
+---------- Output ---------
+AVG(salary) OVER (PARTITION BY department)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..42,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "AVG",
+        quote: None,
+        span: Some(
+            0..3,
+        ),
+    },
+    args: [
+        ColumnRef {
+            span: Some(
+                4..10,
+            ),
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "salary",
+                quote: None,
+                span: Some(
+                    4..10,
+                ),
+            },
+        },
+    ],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [
+                ColumnRef {
+                    span: Some(
+                        31..41,
+                    ),
+                    database: None,
+                    table: None,
+                    column: Identifier {
+                        name: "department",
+                        quote: None,
+                        span: Some(
+                            31..41,
+                        ),
+                    },
+                },
+            ],
+            order_by: [],
+            window_frame: None,
+        },
+    ),
+}
+
+
+---------- Input ----------
+SUM(salary) OVER (PARTITION BY department ORDER BY salary DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+---------- Output ---------
+SUM(salary) OVER (PARTITION BY department ORDER BY salary DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..112,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "SUM",
+        quote: None,
+        span: Some(
+            0..3,
+        ),
+    },
+    args: [
+        ColumnRef {
+            span: Some(
+                4..10,
+            ),
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "salary",
+                quote: None,
+                span: Some(
+                    4..10,
+                ),
+            },
+        },
+    ],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [
+                ColumnRef {
+                    span: Some(
+                        31..41,
+                    ),
+                    database: None,
+                    table: None,
+                    column: Identifier {
+                        name: "department",
+                        quote: None,
+                        span: Some(
+                            31..41,
+                        ),
+                    },
+                },
+            ],
+            order_by: [
+                OrderByExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            51..57,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "salary",
+                            quote: None,
+                            span: Some(
+                                51..57,
+                            ),
+                        },
+                    },
+                    asc: Some(
+                        false,
+                    ),
+                    nulls_first: None,
+                },
+            ],
+            window_frame: Some(
+                WindowFrame {
+                    units: Rows,
+                    start_bound: Preceding(
+                        Some(
+                            ColumnRef {
+                                span: Some(
+                                    76..85,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "UNBOUNDED",
+                                    quote: None,
+                                    span: Some(
+                                        76..85,
+                                    ),
+                                },
+                            },
+                        ),
+                    ),
+                    end_bound: CurrentRow,
+                },
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) 
+---------- Output ---------
+AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..102,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "AVG",
+        quote: None,
+        span: Some(
+            0..3,
+        ),
+    },
+    args: [
+        ColumnRef {
+            span: Some(
+                4..10,
+            ),
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "salary",
+                quote: None,
+                span: Some(
+                    4..10,
+                ),
+            },
+        },
+    ],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [
+                ColumnRef {
+                    span: Some(
+                        31..41,
+                    ),
+                    database: None,
+                    table: None,
+                    column: Identifier {
+                        name: "department",
+                        quote: None,
+                        span: Some(
+                            31..41,
+                        ),
+                    },
+                },
+            ],
+            order_by: [
+                OrderByExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            51..60,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "hire_date",
+                            quote: None,
+                            span: Some(
+                                51..60,
+                            ),
+                        },
+                    },
+                    asc: None,
+                    nulls_first: None,
+                },
+            ],
+            window_frame: Some(
+                WindowFrame {
+                    units: Rows,
+                    start_bound: Preceding(
+                        Some(
+                            Literal {
+                                span: Some(
+                                    74..75,
+                                ),
+                                lit: UInt64(
+                                    2,
+                                ),
+                            },
+                        ),
+                    ),
+                    end_bound: CurrentRow,
+                },
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+COUNT() OVER (ORDER BY hire_date RANGE BETWEEN INTERVAL '7' DAY PRECEDING AND CURRENT ROW)
+---------- Output ---------
+COUNT() OVER (ORDER BY hire_date RANGE BETWEEN INTERVAL '7' DAY PRECEDING AND CURRENT ROW)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..90,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "COUNT",
+        quote: None,
+        span: Some(
+            0..5,
+        ),
+    },
+    args: [],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [],
+            order_by: [
+                OrderByExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            23..32,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "hire_date",
+                            quote: None,
+                            span: Some(
+                                23..32,
+                            ),
+                        },
+                    },
+                    asc: None,
+                    nulls_first: None,
+                },
+            ],
+            window_frame: Some(
+                WindowFrame {
+                    units: Range,
+                    start_bound: Preceding(
+                        Some(
+                            Interval {
+                                span: Some(
+                                    47..63,
+                                ),
+                                expr: Literal {
+                                    span: Some(
+                                        56..59,
+                                    ),
+                                    lit: String(
+                                        "7",
+                                    ),
+                                },
+                                unit: Day,
+                            },
+                        ),
+                    ),
+                    end_bound: CurrentRow,
+                },
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+COUNT() OVER (ORDER BY hire_date ROWS UNBOUNDED PRECEDING)
+---------- Output ---------
+COUNT() OVER (ORDER BY hire_date ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..58,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "COUNT",
+        quote: None,
+        span: Some(
+            0..5,
+        ),
+    },
+    args: [],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [],
+            order_by: [
+                OrderByExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            23..32,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "hire_date",
+                            quote: None,
+                            span: Some(
+                                23..32,
+                            ),
+                        },
+                    },
+                    asc: None,
+                    nulls_first: None,
+                },
+            ],
+            window_frame: Some(
+                WindowFrame {
+                    units: Rows,
+                    start_bound: Preceding(
+                        Some(
+                            ColumnRef {
+                                span: Some(
+                                    38..47,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "UNBOUNDED",
+                                    quote: None,
+                                    span: Some(
+                                        38..47,
+                                    ),
+                                },
+                            },
+                        ),
+                    ),
+                    end_bound: Following(
+                        None,
+                    ),
+                },
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+COUNT() OVER (ORDER BY hire_date ROWS CURRENT ROW)
+---------- Output ---------
+COUNT() OVER (ORDER BY hire_date ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..50,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "COUNT",
+        quote: None,
+        span: Some(
+            0..5,
+        ),
+    },
+    args: [],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [],
+            order_by: [
+                OrderByExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            23..32,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "hire_date",
+                            quote: None,
+                            span: Some(
+                                23..32,
+                            ),
+                        },
+                    },
+                    asc: None,
+                    nulls_first: None,
+                },
+            ],
+            window_frame: Some(
+                WindowFrame {
+                    units: Rows,
+                    start_bound: CurrentRow,
+                    end_bound: Following(
+                        None,
+                    ),
+                },
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
+COUNT() OVER (ORDER BY hire_date ROWS 3 PRECEDING)
+---------- Output ---------
+COUNT() OVER (ORDER BY hire_date ROWS BETWEEN 3 PRECEDING AND UNBOUNDED FOLLOWING)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..50,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "COUNT",
+        quote: None,
+        span: Some(
+            0..5,
+        ),
+    },
+    args: [],
+    params: [],
+    window: Some(
+        WindowSpec {
+            partition_by: [],
+            order_by: [
+                OrderByExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            23..32,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "hire_date",
+                            quote: None,
+                            span: Some(
+                                23..32,
+                            ),
+                        },
+                    },
+                    asc: None,
+                    nulls_first: None,
+                },
+            ],
+            window_frame: Some(
+                WindowFrame {
+                    units: Rows,
+                    start_bound: Preceding(
+                        Some(
+                            Literal {
+                                span: Some(
+                                    38..39,
+                                ),
+                                lit: UInt64(
+                                    3,
+                                ),
+                            },
+                        ),
+                    ),
+                    end_bound: Following(
+                        None,
+                    ),
+                },
+            ),
+        },
+    ),
 }
 
 

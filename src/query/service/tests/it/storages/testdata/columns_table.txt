@@ -6,6 +6,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 +---------------------------------+----------------------+-----------------------+--------------------+---------------------+----------+----------+----------+----------+
 | "Comment"                       | "system"             | "engines"             | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "Engine"                        | "system"             | "engines"             | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
+| "active_result_scan"            | "system"             | "query_cache"         | "Boolean"          | "BOOLEAN"           | ""       | ""       | "NO"     | ""       |
 | "auth_string"                   | "system"             | "users"               | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "auth_type"                     | "system"             | "users"               | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "cardinality"                   | "information_schema" | "statistics"          | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
@@ -72,6 +73,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | "default_character_set_catalog" | "information_schema" | "schemata"            | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
 | "default_character_set_name"    | "information_schema" | "schemata"            | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
 | "default_character_set_schema"  | "information_schema" | "schemata"            | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
+| "default_collation_name"        | "information_schema" | "schemata"            | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
 | "default_expression"            | "system"             | "columns"             | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "default_kind"                  | "system"             | "columns"             | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "default_role"                  | "system"             | "users"               | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
@@ -90,6 +92,8 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | "engine"                        | "information_schema" | "tables"              | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "engine"                        | "system"             | "tables"              | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "engine"                        | "system"             | "tables_with_history" | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
+| "engine_full"                   | "system"             | "tables"              | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
+| "engine_full"                   | "system"             | "tables_with_history" | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "entry"                         | "system"             | "tracing"             | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "event_date"                    | "system"             | "query_log"           | "Date"             | "DATE"              | ""       | ""       | "NO"     | ""       |
 | "event_time"                    | "system"             | "query_log"           | "Timestamp"        | "TIMESTAMP"         | ""       | ""       | "NO"     | ""       |
@@ -146,10 +150,12 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | "name"                          | "system"             | "roles"               | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "name"                          | "system"             | "settings"            | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "name"                          | "system"             | "stages"              | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
+| "name"                          | "system"             | "table_functions"     | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "name"                          | "system"             | "tables"              | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "name"                          | "system"             | "tables_with_history" | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "name"                          | "system"             | "users"               | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "non_unique"                    | "information_schema" | "statistics"          | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
+| "nullable"                      | "information_schema" | "columns"             | "Nullable(UInt8)"  | "TINYINT UNSIGNED"  | ""       | ""       | "YES"    | ""       |
 | "nullable"                      | "information_schema" | "statistics"          | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
 | "num_rows"                      | "system"             | "query_cache"         | "UInt64"           | "BIGINT UNSIGNED"   | ""       | ""       | "NO"     | ""       |
 | "num_rows"                      | "system"             | "tables"              | "Nullable(UInt64)" | "BIGINT UNSIGNED"   | ""       | ""       | "YES"    | ""       |
@@ -166,6 +172,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | "position_in_unique_constraint" | "information_schema" | "key_column_usage"    | "NULL"             | "NULL"              | ""       | ""       | "NO"     | ""       |
 | "projections"                   | "system"             | "query_log"           | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "query_duration_ms"             | "system"             | "query_log"           | "Int64"            | "BIGINT"            | ""       | ""       | "NO"     | ""       |
+| "query_id"                      | "system"             | "query_cache"         | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "query_id"                      | "system"             | "query_log"           | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "query_kind"                    | "system"             | "query_log"           | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "query_start_time"              | "system"             | "query_log"           | "Timestamp"        | "TIMESTAMP"         | ""       | ""       | "NO"     | ""       |

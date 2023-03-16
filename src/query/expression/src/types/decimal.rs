@@ -196,6 +196,15 @@ pub enum DecimalScalar {
     Decimal256(i256, DecimalSize),
 }
 
+impl DecimalScalar {
+    pub fn to_float64(&self) -> f64 {
+        match self {
+            DecimalScalar::Decimal128(v, size) => i128::to_float64(*v, size.scale),
+            DecimalScalar::Decimal256(v, size) => i256::to_float64(*v, size.scale),
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, EnumAsInner)]
 pub enum DecimalColumn {
     Decimal128(Buffer<i128>, DecimalSize),
@@ -261,6 +270,8 @@ pub trait Decimal:
     fn from_i64(value: i64) -> Self;
     fn de_binary(bytes: &mut &[u8]) -> Self;
 
+    fn to_float64(self, scale: u8) -> f64;
+
     fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)>;
     fn try_downcast_builder<'a>(builder: &'a mut ColumnBuilder) -> Option<&'a mut Vec<Self>>;
 
@@ -279,6 +290,8 @@ pub trait Decimal:
     fn to_column(value: Vec<Self>, size: DecimalSize) -> DecimalColumn {
         Self::to_column_from_buffer(value.into(), size)
     }
+
+    fn to_scalar(self, size: DecimalSize) -> DecimalScalar;
 
     fn with_size(&self, size: DecimalSize) -> Option<Self> {
         let multiplier = Self::e(size.scale as u32);
@@ -376,6 +389,15 @@ impl Decimal for i128 {
         i128::from_le_bytes(bs)
     }
 
+    fn to_float64(self, scale: u8) -> f64 {
+        let div = 10_f64.powi(scale as i32);
+        self as f64 / div
+    }
+
+    fn to_scalar(self, size: DecimalSize) -> DecimalScalar {
+        DecimalScalar::Decimal128(self, size)
+    }
+
     fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)> {
         let column = column.as_decimal()?;
         match column {
@@ -425,9 +447,9 @@ impl Decimal for i128 {
         }))
     }
 
-    const MIN: i128 = i128::MIN;
+    const MIN: i128 = -99999999999999999999999999999999999999i128;
 
-    const MAX: i128 = i128::MAX;
+    const MAX: i128 = 99999999999999999999999999999999999999i128;
 }
 
 impl Decimal for i256 {
@@ -508,6 +530,15 @@ impl Decimal for i256 {
         i256::from_le_bytes(bs)
     }
 
+    fn to_float64(self, scale: u8) -> f64 {
+        let div = 10_f64.powi(scale as i32);
+        self.as_f64() / div
+    }
+
+    fn to_scalar(self, size: DecimalSize) -> DecimalScalar {
+        DecimalScalar::Decimal256(self, size)
+    }
+
     fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)> {
         let column = column.as_decimal()?;
         match column {
@@ -556,8 +587,12 @@ impl Decimal for i256 {
         }))
     }
 
-    const MIN: i256 = i256::MIN;
-    const MAX: i256 = i256::MAX;
+    const MIN: i256 = ethnum::int!(
+        "-9999999999999999999999999999999999999999999999999999999999999999999999999999"
+    );
+    const MAX: i256 = ethnum::int!(
+        "9999999999999999999999999999999999999999999999999999999999999999999999999999"
+    );
     fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn {
         DecimalColumn::Decimal256(value, size)
     }

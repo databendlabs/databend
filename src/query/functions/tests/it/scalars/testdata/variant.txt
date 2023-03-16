@@ -307,7 +307,7 @@ evaluation:
 |        | s                | Output                  |
 +--------+------------------+-------------------------+
 | Type   | String           | String NULL             |
-| Domain | {"abc"..="true"} | Unknown                 |
+| Domain | {"abc"..="true"} | {""..} ∪ {NULL}         |
 | Row 0  | "null"           | NULL                    |
 | Row 1  | "abc"            | "expected value, pos 1" |
 | Row 2  | "true"           | NULL                    |
@@ -329,7 +329,7 @@ evaluation:
 |        | s                     | Output                  |
 +--------+-----------------------+-------------------------+
 | Type   | String NULL           | String NULL             |
-| Domain | {""..="ttt"} ∪ {NULL} | Unknown                 |
+| Domain | {""..="ttt"} ∪ {NULL} | {""..} ∪ {NULL}         |
 | Row 0  | "true"                | NULL                    |
 | Row 1  | "ttt"                 | "expected ident, pos 2" |
 | Row 2  | NULL                  | NULL                    |
@@ -416,27 +416,27 @@ evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
-ast            : object_keys(parse_json('[1,2,3,4]'))
-raw expr       : object_keys(parse_json("[1,2,3,4]"))
-checked expr   : object_keys<Variant NULL>(CAST(parse_json<String>("[1,2,3,4]") AS Variant NULL))
+ast            : json_object_keys(parse_json('[1,2,3,4]'))
+raw expr       : json_object_keys(parse_json("[1,2,3,4]"))
+checked expr   : json_object_keys<Variant NULL>(CAST(parse_json<String>("[1,2,3,4]") AS Variant NULL))
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
 output         : NULL
 
 
-ast            : object_keys(parse_json('{"k1":"v1","k2":"v2"}'))
-raw expr       : object_keys(parse_json("{\"k1\":\"v1\",\"k2\":\"v2\"}"))
-checked expr   : object_keys<Variant NULL>(CAST(parse_json<String>("{\"k1\":\"v1\",\"k2\":\"v2\"}") AS Variant NULL))
+ast            : json_object_keys(parse_json('{"k1":"v1","k2":"v2"}'))
+raw expr       : json_object_keys(parse_json("{\"k1\":\"v1\",\"k2\":\"v2\"}"))
+checked expr   : json_object_keys<Variant NULL>(CAST(parse_json<String>("{\"k1\":\"v1\",\"k2\":\"v2\"}") AS Variant NULL))
 optimized expr : 0x8000000210000002100000026b316b32
 output type    : Variant NULL
 output domain  : Undefined
 output         : ["k1","k2"]
 
 
-ast            : object_keys(parse_json(s))
-raw expr       : object_keys(parse_json(s::String))
-checked expr   : object_keys<Variant NULL>(CAST(parse_json<String>(s) AS Variant NULL))
+ast            : json_object_keys(parse_json(s))
+raw expr       : json_object_keys(parse_json(s::String))
+checked expr   : json_object_keys<Variant NULL>(CAST(parse_json<String>(s) AS Variant NULL))
 evaluation:
 +--------+-------------------------------------------------+--------------+
 |        | s                                               | Output       |
@@ -456,9 +456,9 @@ evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
-ast            : object_keys(parse_json(s))
-raw expr       : object_keys(parse_json(s::String NULL))
-checked expr   : object_keys<Variant NULL>(parse_json<String NULL>(s))
+ast            : json_object_keys(parse_json(s))
+raw expr       : json_object_keys(parse_json(s::String NULL))
+checked expr   : json_object_keys<Variant NULL>(parse_json<String NULL>(s))
 evaluation:
 +--------+-------------------------------------------------+--------------+
 |        | s                                               | Output       |
@@ -1354,5 +1354,800 @@ evaluation (internal):
 | s      | StringColumn { data: 0x7472756531323331322e3334226162225b312c322c335d7b2261223a2262227d, offsets: [0, 4, 7, 12, 16, 23, 32] }             |
 | Output | NullableColumn { column: StringColumn { data: 0x4000000110000001100000016162, offsets: [0, 0, 0, 0, 0, 0, 14] }, validity: [0b__100000] } |
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : to_boolean(parse_json('true'))
+raw expr       : to_boolean(parse_json("true"))
+checked expr   : to_boolean<Variant>(parse_json<String>("true"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_boolean(parse_json('123'))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean(123)`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_boolean(parse_json('"abc"'))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean("abc")`
+
+
+
+ast            : to_uint64(parse_json('123'))
+raw expr       : to_uint64(parse_json("123"))
+checked expr   : to_uint64<Variant>(parse_json<String>("123"))
+optimized expr : 123_u64
+output type    : UInt64
+output domain  : {123..=123}
+output         : 123
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_uint64(parse_json('-123'))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64(-123)`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_uint64(parse_json('"abc"'))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64("abc")`
+
+
+
+ast            : to_int64(parse_json('123'))
+raw expr       : to_int64(parse_json("123"))
+checked expr   : to_int64<Variant>(parse_json<String>("123"))
+optimized expr : 123_i64
+output type    : Int64
+output domain  : {123..=123}
+output         : 123
+
+
+ast            : to_int64(parse_json('-123'))
+raw expr       : to_int64(parse_json("-123"))
+checked expr   : to_int64<Variant>(parse_json<String>("-123"))
+optimized expr : -123_i64
+output type    : Int64
+output domain  : {-123..=-123}
+output         : -123
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_int64(parse_json('"abc"'))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Int64 while evaluating function `to_int64("abc")`
+
+
+
+ast            : to_float64(parse_json('12.34'))
+raw expr       : to_float64(parse_json("12.34"))
+checked expr   : to_float64<Variant>(parse_json<String>("12.34"))
+optimized expr : 12.34_f64
+output type    : Float64
+output domain  : {12.34..=12.34}
+output         : 12.34
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_float64(parse_json('"abc"'))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Float64 while evaluating function `to_float64("abc")`
+
+
+
+ast            : to_date(parse_json('"2023-01-01"'))
+raw expr       : to_date(parse_json("\"2023-01-01\""))
+checked expr   : to_date<Variant>(parse_json<String>("\"2023-01-01\""))
+optimized expr : 19358
+output type    : Date
+output domain  : {19358..=19358}
+output         : 2023-01-01
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_date(parse_json('"abc"'))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `DATE` while evaluating function `to_date("abc")`
+
+
+
+ast            : to_timestamp(parse_json('"2023-01-01 00:00:00"'))
+raw expr       : to_timestamp(parse_json("\"2023-01-01 00:00:00\""))
+checked expr   : to_timestamp<Variant>(parse_json<String>("\"2023-01-01 00:00:00\""))
+optimized expr : 1672531200000000
+output type    : Timestamp
+output domain  : {1672531200000000..=1672531200000000}
+output         : 2023-01-01 00:00:00.000000
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_timestamp(parse_json('"abc"'))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `TIMESTAMP` while evaluating function `to_timestamp("abc")`
+
+
+
+ast            : to_string(parse_json('12.34'))
+raw expr       : to_string(parse_json("12.34"))
+checked expr   : to_string<Variant>(parse_json<String>("12.34"))
+optimized expr : "12.34"
+output type    : String
+output domain  : {"12.34"..="12.34"}
+output         : "12.34"
+
+
+ast            : to_string(parse_json('"abc"'))
+raw expr       : to_string(parse_json("\"abc\""))
+checked expr   : to_string<Variant>(parse_json<String>("\"abc\""))
+optimized expr : "abc"
+output type    : String
+output domain  : {"abc"..="abc"}
+output         : "abc"
+
+
+ast            : to_boolean(parse_json(s))
+raw expr       : to_boolean(parse_json(s::String NULL))
+checked expr   : to_boolean<Variant NULL>(parse_json<String NULL>(s))
+evaluation:
++--------+------------------------+--------------+
+|        | s                      | Output       |
++--------+------------------------+--------------+
+| Type   | String NULL            | Boolean NULL |
+| Domain | {""..="true"} ∪ {NULL} | Unknown      |
+| Row 0  | "true"                 | true         |
+| Row 1  | NULL                   | NULL         |
+| Row 2  | "true"                 | true         |
++--------+------------------------+--------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                |
++--------+---------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x7472756574727565, offsets: [0, 4, 4, 8] }, validity: [0b_____101] } |
+| Output | NullableColumn { column: Boolean([0b_____101]), validity: [0b_____101] }                                            |
++--------+---------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : to_int64(parse_json(s))
+raw expr       : to_int64(parse_json(s::String NULL))
+checked expr   : to_int64<Variant NULL>(parse_json<String NULL>(s))
+evaluation:
++--------+---------------------+------------+
+|        | s                   | Output     |
++--------+---------------------+------------+
+| Type   | String NULL         | Int64 NULL |
+| Domain | {""..="1"} ∪ {NULL} | Unknown    |
+| Row 0  | "1"                 | 1          |
+| Row 1  | NULL                | NULL       |
+| Row 2  | "-10"               | -10        |
++--------+---------------------+------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                        |
++--------+-------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x312d3130, offsets: [0, 1, 1, 4] }, validity: [0b_____101] } |
+| Output | NullableColumn { column: Int64([1, 0, -10]), validity: [0b_____101] }                                       |
++--------+-------------------------------------------------------------------------------------------------------------+
+
+
+ast            : to_uint64(parse_json(s))
+raw expr       : to_uint64(parse_json(s::String NULL))
+checked expr   : to_uint64<Variant NULL>(parse_json<String NULL>(s))
+evaluation:
++--------+----------------------+-------------+
+|        | s                    | Output      |
++--------+----------------------+-------------+
+| Type   | String NULL          | UInt64 NULL |
+| Domain | {""..="20"} ∪ {NULL} | Unknown     |
+| Row 0  | "1"                  | 1           |
+| Row 1  | NULL                 | NULL        |
+| Row 2  | "20"                 | 20          |
++--------+----------------------+-------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                      |
++--------+-----------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x313230, offsets: [0, 1, 1, 3] }, validity: [0b_____101] } |
+| Output | NullableColumn { column: UInt64([1, 0, 20]), validity: [0b_____101] }                                     |
++--------+-----------------------------------------------------------------------------------------------------------+
+
+
+ast            : to_float64(parse_json(s))
+raw expr       : to_float64(parse_json(s::String NULL))
+checked expr   : to_float64<Variant NULL>(parse_json<String NULL>(s))
+evaluation:
++--------+-------------------------+--------------+
+|        | s                       | Output       |
++--------+-------------------------+--------------+
+| Type   | String NULL             | Float64 NULL |
+| Domain | {""..="100.2"} ∪ {NULL} | Unknown      |
+| Row 0  | "1.2"                   | 1.2          |
+| Row 1  | NULL                    | NULL         |
+| Row 2  | "100.2"                 | 100.2        |
++--------+-------------------------+--------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                |
++--------+---------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x312e323130302e32, offsets: [0, 3, 3, 8] }, validity: [0b_____101] } |
+| Output | NullableColumn { column: Float64([1.2, 0, 100.2]), validity: [0b_____101] }                                         |
++--------+---------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : to_date(parse_json(s))
+raw expr       : to_date(parse_json(s::String NULL))
+checked expr   : to_date<Variant NULL>(parse_json<String NULL>(s))
+evaluation:
++--------+----------------------------------+------------+
+|        | s                                | Output     |
++--------+----------------------------------+------------+
+| Type   | String NULL                      | Date NULL  |
+| Domain | {""..="\"2023-10-01\""} ∪ {NULL} | Unknown    |
+| Row 0  | "\"2020-01-01\""                 | 2020-01-01 |
+| Row 1  | NULL                             | NULL       |
+| Row 2  | "\"2023-10-01\""                 | 2023-10-01 |
++--------+----------------------------------+------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                   |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x22323032302d30312d30312222323032332d31302d303122, offsets: [0, 12, 12, 24] }, validity: [0b_____101] } |
+| Output | NullableColumn { column: [18262, 0, 19631], validity: [0b_____101] }                                                                                   |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : to_timestamp(parse_json(s))
+raw expr       : to_timestamp(parse_json(s::String NULL))
+checked expr   : to_timestamp<Variant NULL>(parse_json<String NULL>(s))
+evaluation:
++--------+-------------------------------------------+----------------------------+
+|        | s                                         | Output                     |
++--------+-------------------------------------------+----------------------------+
+| Type   | String NULL                               | Timestamp NULL             |
+| Domain | {""..="\"2023-10-01 10:11:12\""} ∪ {NULL} | Unknown                    |
+| Row 0  | "\"2020-01-01 00:00:00\""                 | 2020-01-01 00:00:00.000000 |
+| Row 1  | NULL                                      | NULL                       |
+| Row 2  | "\"2023-10-01 10:11:12\""                 | 2023-10-01 10:11:12.000000 |
++--------+-------------------------------------------+----------------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                       |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x22323032302d30312d30312030303a30303a30302222323032332d31302d30312031303a31313a313222, offsets: [0, 21, 21, 42] }, validity: [0b_____101] } |
+| Output | NullableColumn { column: [1577836800000000, 0, 1696155072000000], validity: [0b_____101] }                                                                                                 |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : to_string(parse_json(s))
+raw expr       : to_string(parse_json(s::String NULL))
+checked expr   : to_string<Variant NULL>(parse_json<String NULL>(s))
+evaluation:
++--------+-----------------------+-------------+
+|        | s                     | Output      |
++--------+-----------------------+-------------+
+| Type   | String NULL           | String NULL |
+| Domain | {""..="123"} ∪ {NULL} | Unknown     |
+| Row 0  | "\"abc\""             | "abc"       |
+| Row 1  | NULL                  | NULL        |
+| Row 2  | "123"                 | "123"       |
++--------+-----------------------+-------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                |
++--------+---------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x2261626322313233, offsets: [0, 5, 5, 8] }, validity: [0b_____101] } |
+| Output | NullableColumn { column: StringColumn { data: 0x616263313233, offsets: [0, 3, 3, 6] }, validity: [0b_____101] }     |
++--------+---------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : try_to_boolean(parse_json('true'))
+raw expr       : try_to_boolean(parse_json("true"))
+checked expr   : try_to_boolean<Variant>(parse_json<String>("true"))
+optimized expr : true
+output type    : Boolean NULL
+output domain  : {TRUE}
+output         : true
+
+
+ast            : try_to_boolean(parse_json('123'))
+raw expr       : try_to_boolean(parse_json("123"))
+checked expr   : try_to_boolean<Variant>(parse_json<String>("123"))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : try_to_boolean(parse_json('"abc"'))
+raw expr       : try_to_boolean(parse_json("\"abc\""))
+checked expr   : try_to_boolean<Variant>(parse_json<String>("\"abc\""))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : try_to_uint64(parse_json('123'))
+raw expr       : try_to_uint64(parse_json("123"))
+checked expr   : try_to_uint64<Variant>(parse_json<String>("123"))
+optimized expr : 123_u64
+output type    : UInt64 NULL
+output domain  : {123..=123}
+output         : 123
+
+
+ast            : try_to_uint64(parse_json('-123'))
+raw expr       : try_to_uint64(parse_json("-123"))
+checked expr   : try_to_uint64<Variant>(parse_json<String>("-123"))
+optimized expr : NULL
+output type    : UInt64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : try_to_uint64(parse_json('"abc"'))
+raw expr       : try_to_uint64(parse_json("\"abc\""))
+checked expr   : try_to_uint64<Variant>(parse_json<String>("\"abc\""))
+optimized expr : NULL
+output type    : UInt64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : try_to_int64(parse_json('123'))
+raw expr       : try_to_int64(parse_json("123"))
+checked expr   : try_to_int64<Variant>(parse_json<String>("123"))
+optimized expr : 123_i64
+output type    : Int64 NULL
+output domain  : {123..=123}
+output         : 123
+
+
+ast            : try_to_int64(parse_json('-123'))
+raw expr       : try_to_int64(parse_json("-123"))
+checked expr   : try_to_int64<Variant>(parse_json<String>("-123"))
+optimized expr : -123_i64
+output type    : Int64 NULL
+output domain  : {-123..=-123}
+output         : -123
+
+
+ast            : try_to_int64(parse_json('"abc"'))
+raw expr       : try_to_int64(parse_json("\"abc\""))
+checked expr   : try_to_int64<Variant>(parse_json<String>("\"abc\""))
+optimized expr : NULL
+output type    : Int64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : try_to_float64(parse_json('12.34'))
+raw expr       : try_to_float64(parse_json("12.34"))
+checked expr   : try_to_float64<Variant>(parse_json<String>("12.34"))
+optimized expr : 12.34_f64
+output type    : Float64 NULL
+output domain  : {12.34..=12.34}
+output         : 12.34
+
+
+ast            : try_to_float64(parse_json('"abc"'))
+raw expr       : try_to_float64(parse_json("\"abc\""))
+checked expr   : try_to_float64<Variant>(parse_json<String>("\"abc\""))
+optimized expr : NULL
+output type    : Float64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : try_to_date(parse_json('"2023-01-01"'))
+raw expr       : try_to_date(parse_json("\"2023-01-01\""))
+checked expr   : try_to_date<Variant>(parse_json<String>("\"2023-01-01\""))
+optimized expr : 19358
+output type    : Date NULL
+output domain  : {19358..=19358}
+output         : 2023-01-01
+
+
+ast            : try_to_date(parse_json('"abc"'))
+raw expr       : try_to_date(parse_json("\"abc\""))
+checked expr   : try_to_date<Variant>(parse_json<String>("\"abc\""))
+optimized expr : NULL
+output type    : Date NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : try_to_timestamp(parse_json('"2023-01-01 00:00:00"'))
+raw expr       : try_to_timestamp(parse_json("\"2023-01-01 00:00:00\""))
+checked expr   : try_to_timestamp<Variant>(parse_json<String>("\"2023-01-01 00:00:00\""))
+optimized expr : 1672531200000000
+output type    : Timestamp NULL
+output domain  : {1672531200000000..=1672531200000000}
+output         : 2023-01-01 00:00:00.000000
+
+
+ast            : try_to_timestamp(parse_json('"abc"'))
+raw expr       : try_to_timestamp(parse_json("\"abc\""))
+checked expr   : try_to_timestamp<Variant>(parse_json<String>("\"abc\""))
+optimized expr : NULL
+output type    : Timestamp NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : try_to_string(parse_json('12.34'))
+raw expr       : try_to_string(parse_json("12.34"))
+checked expr   : try_to_string<Variant>(parse_json<String>("12.34"))
+optimized expr : "12.34"
+output type    : String NULL
+output domain  : {"12.34"..="12.34"}
+output         : "12.34"
+
+
+ast            : try_to_string(parse_json('"abc"'))
+raw expr       : try_to_string(parse_json("\"abc\""))
+checked expr   : try_to_string<Variant>(parse_json<String>("\"abc\""))
+optimized expr : "abc"
+output type    : String NULL
+output domain  : {"abc"..="abc"}
+output         : "abc"
+
+
+ast            : try_to_boolean(parse_json(s))
+raw expr       : try_to_boolean(parse_json(s::String NULL))
+checked expr   : try_to_boolean<Variant NULL>(parse_json<String NULL>(s))
+evaluation:
++--------+---------------------------+--------------+
+|        | s                         | Output       |
++--------+---------------------------+--------------+
+| Type   | String NULL               | Boolean NULL |
+| Domain | {""..="true"} ∪ {NULL}    | Unknown      |
+| Row 0  | "true"                    | true         |
+| Row 1  | "123"                     | NULL         |
+| Row 2  | "-100"                    | NULL         |
+| Row 3  | "12.34"                   | NULL         |
+| Row 4  | NULL                      | NULL         |
+| Row 5  | "\"2020-01-01\""          | NULL         |
+| Row 6  | "\"2021-01-01 20:00:00\"" | NULL         |
+| Row 7  | "\"abc\""                 | NULL         |
++--------+---------------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                 |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x747275653132332d31303031322e333422323032302d30312d30312222323032312d30312d30312032303a30303a3030222261626322, offsets: [0, 4, 7, 11, 16, 16, 28, 49, 54] }, validity: [0b11101111] } |
+| Output | NullableColumn { column: Boolean([0b00000001]), validity: [0b00000001] }                                                                                                                                                             |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : try_to_int64(parse_json(s))
+raw expr       : try_to_int64(parse_json(s::String NULL))
+checked expr   : try_to_int64<Variant NULL>(parse_json<String NULL>(s))
+evaluation:
++--------+---------------------------+------------+
+|        | s                         | Output     |
++--------+---------------------------+------------+
+| Type   | String NULL               | Int64 NULL |
+| Domain | {""..="true"} ∪ {NULL}    | Unknown    |
+| Row 0  | "true"                    | 1          |
+| Row 1  | "123"                     | 123        |
+| Row 2  | "-100"                    | -100       |
+| Row 3  | "12.34"                   | NULL       |
+| Row 4  | NULL                      | NULL       |
+| Row 5  | "\"2020-01-01\""          | NULL       |
+| Row 6  | "\"2021-01-01 20:00:00\"" | NULL       |
+| Row 7  | "\"abc\""                 | NULL       |
++--------+---------------------------+------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                 |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x747275653132332d31303031322e333422323032302d30312d30312222323032312d30312d30312032303a30303a3030222261626322, offsets: [0, 4, 7, 11, 16, 16, 28, 49, 54] }, validity: [0b11101111] } |
+| Output | NullableColumn { column: Int64([1, 123, -100, 0, 0, 0, 0, 0]), validity: [0b00000111] }                                                                                                                                              |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : try_to_uint64(parse_json(s))
+raw expr       : try_to_uint64(parse_json(s::String NULL))
+checked expr   : try_to_uint64<Variant NULL>(parse_json<String NULL>(s))
+evaluation:
++--------+---------------------------+-------------+
+|        | s                         | Output      |
++--------+---------------------------+-------------+
+| Type   | String NULL               | UInt64 NULL |
+| Domain | {""..="true"} ∪ {NULL}    | Unknown     |
+| Row 0  | "true"                    | 1           |
+| Row 1  | "123"                     | 123         |
+| Row 2  | "-100"                    | NULL        |
+| Row 3  | "12.34"                   | NULL        |
+| Row 4  | NULL                      | NULL        |
+| Row 5  | "\"2020-01-01\""          | NULL        |
+| Row 6  | "\"2021-01-01 20:00:00\"" | NULL        |
+| Row 7  | "\"abc\""                 | NULL        |
++--------+---------------------------+-------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                 |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x747275653132332d31303031322e333422323032302d30312d30312222323032312d30312d30312032303a30303a3030222261626322, offsets: [0, 4, 7, 11, 16, 16, 28, 49, 54] }, validity: [0b11101111] } |
+| Output | NullableColumn { column: UInt64([1, 123, 0, 0, 0, 0, 0, 0]), validity: [0b00000011] }                                                                                                                                                |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : try_to_float64(parse_json(s))
+raw expr       : try_to_float64(parse_json(s::String NULL))
+checked expr   : try_to_float64<Variant NULL>(parse_json<String NULL>(s))
+evaluation:
++--------+---------------------------+--------------+
+|        | s                         | Output       |
++--------+---------------------------+--------------+
+| Type   | String NULL               | Float64 NULL |
+| Domain | {""..="true"} ∪ {NULL}    | Unknown      |
+| Row 0  | "true"                    | 1            |
+| Row 1  | "123"                     | 123          |
+| Row 2  | "-100"                    | -100         |
+| Row 3  | "12.34"                   | 12.34        |
+| Row 4  | NULL                      | NULL         |
+| Row 5  | "\"2020-01-01\""          | NULL         |
+| Row 6  | "\"2021-01-01 20:00:00\"" | NULL         |
+| Row 7  | "\"abc\""                 | NULL         |
++--------+---------------------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                 |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x747275653132332d31303031322e333422323032302d30312d30312222323032312d30312d30312032303a30303a3030222261626322, offsets: [0, 4, 7, 11, 16, 16, 28, 49, 54] }, validity: [0b11101111] } |
+| Output | NullableColumn { column: Float64([1, 123, -100, 12.34, 0, 0, 0, 0]), validity: [0b00001111] }                                                                                                                                        |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : try_to_date(parse_json(s))
+raw expr       : try_to_date(parse_json(s::String NULL))
+checked expr   : try_to_date<Variant NULL>(parse_json<String NULL>(s))
+evaluation:
++--------+---------------------------+------------+
+|        | s                         | Output     |
++--------+---------------------------+------------+
+| Type   | String NULL               | Date NULL  |
+| Domain | {""..="true"} ∪ {NULL}    | Unknown    |
+| Row 0  | "true"                    | NULL       |
+| Row 1  | "123"                     | NULL       |
+| Row 2  | "-100"                    | NULL       |
+| Row 3  | "12.34"                   | NULL       |
+| Row 4  | NULL                      | NULL       |
+| Row 5  | "\"2020-01-01\""          | 2020-01-01 |
+| Row 6  | "\"2021-01-01 20:00:00\"" | 2021-01-01 |
+| Row 7  | "\"abc\""                 | NULL       |
++--------+---------------------------+------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                 |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x747275653132332d31303031322e333422323032302d30312d30312222323032312d30312d30312032303a30303a3030222261626322, offsets: [0, 4, 7, 11, 16, 16, 28, 49, 54] }, validity: [0b11101111] } |
+| Output | NullableColumn { column: [0, 0, 0, 0, 0, 18262, 18628, 0], validity: [0b01100000] }                                                                                                                                                  |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : try_to_timestamp(parse_json(s))
+raw expr       : try_to_timestamp(parse_json(s::String NULL))
+checked expr   : try_to_timestamp<Variant NULL>(parse_json<String NULL>(s))
+evaluation:
++--------+---------------------------+----------------------------+
+|        | s                         | Output                     |
++--------+---------------------------+----------------------------+
+| Type   | String NULL               | Timestamp NULL             |
+| Domain | {""..="true"} ∪ {NULL}    | Unknown                    |
+| Row 0  | "true"                    | NULL                       |
+| Row 1  | "123"                     | NULL                       |
+| Row 2  | "-100"                    | NULL                       |
+| Row 3  | "12.34"                   | NULL                       |
+| Row 4  | NULL                      | NULL                       |
+| Row 5  | "\"2020-01-01\""          | 2020-01-01 00:00:00.000000 |
+| Row 6  | "\"2021-01-01 20:00:00\"" | 2021-01-01 20:00:00.000000 |
+| Row 7  | "\"abc\""                 | NULL                       |
++--------+---------------------------+----------------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                 |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x747275653132332d31303031322e333422323032302d30312d30312222323032312d30312d30312032303a30303a3030222261626322, offsets: [0, 4, 7, 11, 16, 16, 28, 49, 54] }, validity: [0b11101111] } |
+| Output | NullableColumn { column: [0, 0, 0, 0, 0, 1577836800000000, 1609531200000000, 0], validity: [0b01100000] }                                                                                                                            |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : try_to_string(parse_json(s))
+raw expr       : try_to_string(parse_json(s::String NULL))
+checked expr   : try_to_string<Variant NULL>(parse_json<String NULL>(s))
+evaluation:
++--------+---------------------------+-----------------------+
+|        | s                         | Output                |
++--------+---------------------------+-----------------------+
+| Type   | String NULL               | String NULL           |
+| Domain | {""..="true"} ∪ {NULL}    | Unknown               |
+| Row 0  | "true"                    | "true"                |
+| Row 1  | "123"                     | "123"                 |
+| Row 2  | "-100"                    | "-100"                |
+| Row 3  | "12.34"                   | "12.34"               |
+| Row 4  | NULL                      | NULL                  |
+| Row 5  | "\"2020-01-01\""          | "2020-01-01"          |
+| Row 6  | "\"2021-01-01 20:00:00\"" | "2021-01-01 20:00:00" |
+| Row 7  | "\"abc\""                 | "abc"                 |
++--------+---------------------------+-----------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                 |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | NullableColumn { column: StringColumn { data: 0x747275653132332d31303031322e333422323032302d30312d30312222323032312d30312d30312032303a30303a3030222261626322, offsets: [0, 4, 7, 11, 16, 16, 28, 49, 54] }, validity: [0b11101111] } |
+| Output | NullableColumn { column: StringColumn { data: 0x747275653132332d31303031322e3334323032302d30312d3031323032312d30312d30312032303a30303a3030616263, offsets: [0, 4, 7, 11, 16, 16, 26, 45, 48] }, validity: [0b11101111] }             |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : json_object()
+raw expr       : json_object()
+checked expr   : json_object<>()
+optimized expr : 0x40000000
+output type    : Variant
+output domain  : Undefined
+output         : {}
+
+
+ast            : json_object('a', true, 'b', 1, 'c', 'str', 'd', [1,2], 'e', {'k':'v'})
+raw expr       : json_object("a", true, "b", 1_u8, "c", "str", "d", array(1_u8, 2_u8), "e", map(array("k"), array("v")))
+checked expr   : json_object<T0=String, T1=Boolean, T2=String, T3=UInt8, T4=String, T5=String, T6=String, T7=Array(UInt8), T8=String, T9=Map(String, String)><T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>("a", true, "b", 1_u8, "c", "str", "d", array<T0=UInt8><T0, T0>(1_u8, 2_u8), "e", map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("k"), array<T0=String><T0>("v")))
+optimized expr : 0x400000051000000110000001100000011000000110000001400000002000000210000003500000105000000e61626364655001737472800000022000000220000002500150024000000110000001100000016b76
+output type    : Variant
+output domain  : Undefined
+output         : {"a":true,"b":1,"c":"str","d":[1,2],"e":{"k":"v"}}
+
+
+ast            : json_object('k1', 1, 'k2', null, 'k3', 2, null, 3)
+raw expr       : json_object("k1", 1_u8, "k2", NULL, "k3", 2_u8, NULL, 3_u8)
+checked expr   : json_object<T0=String, T1=UInt8, T2=String, T3=NULL, T4=String, T5=UInt8, T6=NULL, T7=UInt8><T0, T1, T2, T3, T4, T5, T6, T7>("k1", 1_u8, "k2", NULL, "k3", 2_u8, NULL, 3_u8)
+optimized expr : 0x40000002100000021000000220000002200000026b316b3350015002
+output type    : Variant
+output domain  : Undefined
+output         : {"k1":1,"k3":2}
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | json_object('k1', 1, 'k1')
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ The number of keys and values must be equal while evaluating function `json_object("k1", 1, "k1")`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | json_object('k1', 1, 'k1', 2)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Keys have to be unique while evaluating function `json_object("k1", 1, "k1", 2)`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | json_object(1, 'k1', 2, 'k2')
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Key must be a string value while evaluating function `json_object(1, "k1", 2, "k2")`
+
+
+
+ast            : json_object(k1, v1, k2, v2)
+raw expr       : json_object(k1::String NULL, v1::String NULL, k2::String NULL, v2::String NULL)
+checked expr   : json_object<T0=String NULL, T1=String NULL, T2=String NULL, T3=String NULL><T0, T1, T2, T3>(k1, v1, k2, v2)
+evaluation:
++--------+----------------------+----------------------+----------------------+---------------+-----------------------+
+|        | k1                   | v1                   | k2                   | v2            | Output                |
++--------+----------------------+----------------------+----------------------+---------------+-----------------------+
+| Type   | String NULL          | String NULL          | String NULL          | String NULL   | Variant               |
+| Domain | {""..="d1"} ∪ {NULL} | {""..="l1"} ∪ {NULL} | {""..="d2"} ∪ {NULL} | {"j2"..="m2"} | Unknown               |
+| Row 0  | "a1"                 | "j1"                 | "a2"                 | "j2"          | {"a1":"j1","a2":"j2"} |
+| Row 1  | "b1"                 | "k1"                 | NULL                 | "k2"          | {"b1":"k1"}           |
+| Row 2  | NULL                 | "l1"                 | "c2"                 | "l2"          | {"c2":"l2"}           |
+| Row 3  | "d1"                 | NULL                 | "d2"                 | "m2"          | {"d2":"m2"}           |
++--------+----------------------+----------------------+----------------------+---------------+-----------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                            |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| k1     | NullableColumn { column: StringColumn { data: 0x613162316431, offsets: [0, 2, 4, 4, 6] }, validity: [0b____1011] }                                                                                              |
+| v1     | NullableColumn { column: StringColumn { data: 0x6a316b316c31, offsets: [0, 2, 4, 6, 6] }, validity: [0b____0111] }                                                                                              |
+| k2     | NullableColumn { column: StringColumn { data: 0x613263326432, offsets: [0, 2, 2, 4, 6] }, validity: [0b____1101] }                                                                                              |
+| v2     | NullableColumn { column: StringColumn { data: 0x6a326b326c326d32, offsets: [0, 2, 4, 6, 8] }, validity: [0b____1111] }                                                                                          |
+| Output | StringColumn { data: 0x4000000210000002100000021000000210000002613161326a316a3240000001100000021000000262316b3140000001100000021000000263326c3240000001100000021000000264326d32, offsets: [0, 28, 44, 60, 76] } |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : json_object_keep_null()
+raw expr       : json_object_keep_null()
+checked expr   : json_object_keep_null<>()
+optimized expr : 0x40000000
+output type    : Variant
+output domain  : Undefined
+output         : {}
+
+
+ast            : json_object_keep_null('a', true, 'b', 1, 'c', 'str', 'd', [1,2], 'e', {'k':'v'})
+raw expr       : json_object_keep_null("a", true, "b", 1_u8, "c", "str", "d", array(1_u8, 2_u8), "e", map(array("k"), array("v")))
+checked expr   : json_object_keep_null<T0=String, T1=Boolean, T2=String, T3=UInt8, T4=String, T5=String, T6=String, T7=Array(UInt8), T8=String, T9=Map(String, String)><T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>("a", true, "b", 1_u8, "c", "str", "d", array<T0=UInt8><T0, T0>(1_u8, 2_u8), "e", map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("k"), array<T0=String><T0>("v")))
+optimized expr : 0x400000051000000110000001100000011000000110000001400000002000000210000003500000105000000e61626364655001737472800000022000000220000002500150024000000110000001100000016b76
+output type    : Variant
+output domain  : Undefined
+output         : {"a":true,"b":1,"c":"str","d":[1,2],"e":{"k":"v"}}
+
+
+ast            : json_object_keep_null('k1', 1, 'k2', null, 'k3', 2, null, 3)
+raw expr       : json_object_keep_null("k1", 1_u8, "k2", NULL, "k3", 2_u8, NULL, 3_u8)
+checked expr   : json_object_keep_null<T0=String, T1=UInt8, T2=String, T3=NULL, T4=String, T5=UInt8, T6=NULL, T7=UInt8><T0, T1, T2, T3, T4, T5, T6, T7>("k1", 1_u8, "k2", NULL, "k3", 2_u8, NULL, 3_u8)
+optimized expr : 0x400000031000000210000002100000022000000200000000200000026b316b326b3350015002
+output type    : Variant
+output domain  : Undefined
+output         : {"k1":1,"k2":null,"k3":2}
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | json_object_keep_null('k1', 1, 'k1')
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ The number of keys and values must be equal while evaluating function `json_object_keep_null("k1", 1, "k1")`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | json_object_keep_null('k1', 1, 'k1', 2)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Keys have to be unique while evaluating function `json_object_keep_null("k1", 1, "k1", 2)`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | json_object_keep_null(1, 'k1', 2, 'k2')
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Key must be a string value while evaluating function `json_object_keep_null(1, "k1", 2, "k2")`
+
+
+
+ast            : json_object_keep_null(k1, v1, k2, v2)
+raw expr       : json_object_keep_null(k1::String NULL, v1::String NULL, k2::String NULL, v2::String NULL)
+checked expr   : json_object_keep_null<T0=String NULL, T1=String NULL, T2=String NULL, T3=String NULL><T0, T1, T2, T3>(k1, v1, k2, v2)
+evaluation:
++--------+----------------------+----------------------+----------------------+---------------+-----------------------+
+|        | k1                   | v1                   | k2                   | v2            | Output                |
++--------+----------------------+----------------------+----------------------+---------------+-----------------------+
+| Type   | String NULL          | String NULL          | String NULL          | String NULL   | Variant               |
+| Domain | {""..="d1"} ∪ {NULL} | {""..="l1"} ∪ {NULL} | {""..="d2"} ∪ {NULL} | {"j2"..="m2"} | Unknown               |
+| Row 0  | "a1"                 | "j1"                 | "a2"                 | "j2"          | {"a1":"j1","a2":"j2"} |
+| Row 1  | "b1"                 | "k1"                 | NULL                 | "k2"          | {"b1":"k1"}           |
+| Row 2  | NULL                 | "l1"                 | "c2"                 | "l2"          | {"c2":"l2"}           |
+| Row 3  | "d1"                 | NULL                 | "d2"                 | "m2"          | {"d1":null,"d2":"m2"} |
++--------+----------------------+----------------------+----------------------+---------------+-----------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| k1     | NullableColumn { column: StringColumn { data: 0x613162316431, offsets: [0, 2, 4, 4, 6] }, validity: [0b____1011] }                                                                                                                  |
+| v1     | NullableColumn { column: StringColumn { data: 0x6a316b316c31, offsets: [0, 2, 4, 6, 6] }, validity: [0b____0111] }                                                                                                                  |
+| k2     | NullableColumn { column: StringColumn { data: 0x613263326432, offsets: [0, 2, 2, 4, 6] }, validity: [0b____1101] }                                                                                                                  |
+| v2     | NullableColumn { column: StringColumn { data: 0x6a326b326c326d32, offsets: [0, 2, 4, 6, 8] }, validity: [0b____1111] }                                                                                                              |
+| Output | StringColumn { data: 0x4000000210000002100000021000000210000002613161326a316a3240000001100000021000000262316b3140000001100000021000000263326c324000000210000002100000020000000010000002643164326d32, offsets: [0, 28, 44, 60, 86] } |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 

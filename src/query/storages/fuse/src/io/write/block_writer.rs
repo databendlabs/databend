@@ -13,25 +13,30 @@
 //  limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
-use backon::ExponentialBuilder;
-use backon::Retryable;
 use common_arrow::arrow::chunk::Chunk as ArrowChunk;
 use common_arrow::native::write::NativeWriter;
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
+use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use opendal::Operator;
 use storages_common_blocks::blocks_to_parquet;
+use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnMeta;
-use tracing::warn;
 
 use crate::fuse_table::FuseStorageFormat;
 use crate::io::write::WriteSettings;
+use crate::io::TableMetaLocationGenerator;
 use crate::operations::util;
+use crate::operations::BloomIndexState;
+use crate::statistics::BlockStatistics;
 
-pub fn write_block(
+// TODO rename this, it is serialization, or pass in a writer(if not rename)
+pub fn serialize_block(
     write_settings: &WriteSettings,
     schema: &TableSchemaRef,
     block: DataBlock,
@@ -74,20 +79,88 @@ pub fn write_block(
     }
 }
 
-pub async fn write_data(data: &[u8], data_accessor: &Operator, location: &str) -> Result<()> {
-    let object = data_accessor.object(location);
-
-    { || object.write(data) }
-        .retry(&ExponentialBuilder::default().with_jitter())
-        .when(|err| err.is_temporary())
-        .notify(|err, dur| {
-            warn!(
-                "fuse table block writer write_data retry after {}s for error {:?}",
-                dur.as_secs(),
-                err
-            )
-        })
-        .await?;
+/// Take ownership here to avoid extra copy.
+pub async fn write_data(data: Vec<u8>, data_accessor: &Operator, location: &str) -> Result<()> {
+    data_accessor.write(location, data).await?;
 
     Ok(())
+}
+
+pub struct BlockSerialization {
+    pub block_raw_data: Vec<u8>,
+    pub size: u64, // TODO redundancy
+    pub block_meta: BlockMeta,
+    pub bloom_index_state: Option<BloomIndexState>,
+}
+
+#[derive(Clone)]
+pub struct BlockBuilder {
+    pub ctx: Arc<dyn TableContext>,
+    pub meta_locations: TableMetaLocationGenerator,
+    pub source_schema: TableSchemaRef,
+    pub write_settings: WriteSettings,
+}
+
+impl BlockBuilder {
+    pub fn build(&self, data_block: DataBlock) -> Result<BlockSerialization> {
+        // TODO cluster stats
+        // let (cluster_stats, block) = self.cluster_stats_gen.gen_stats_for_append(data_block)?;
+
+        let (block_location, block_id) = self.meta_locations.gen_block_location();
+
+        let bloom_index_location = self.meta_locations.block_bloom_index_location(&block_id);
+        let bloom_index_state = BloomIndexState::try_create(
+            self.ctx.clone(),
+            self.source_schema.clone(),
+            &data_block,
+            bloom_index_location,
+        )?;
+        let column_distinct_count = bloom_index_state
+            .as_ref()
+            .map(|i| i.column_distinct_count.clone());
+
+        // TODO, generate the cluster stats
+        let cluster_stats = None;
+
+        // need to use BlockStatistics any more?
+        let block_statistics = BlockStatistics::from(
+            &data_block,
+            block_location.0.clone(),
+            cluster_stats,
+            column_distinct_count,
+            &self.source_schema,
+        )?;
+
+        let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
+        let (file_size, col_metas) = serialize_block(
+            &self.write_settings,
+            &self.source_schema,
+            data_block,
+            &mut buffer,
+        )?;
+
+        let block_meta = BlockMeta {
+            row_count: block_statistics.block_rows_size,
+            block_size: block_statistics.block_bytes_size,
+            file_size,
+            col_stats: block_statistics.block_column_statistics,
+            col_metas,
+            cluster_stats: block_statistics.block_cluster_statistics,
+            location: block_location,
+            bloom_filter_index_location: bloom_index_state.as_ref().map(|v| v.location.clone()),
+            bloom_filter_index_size: bloom_index_state
+                .as_ref()
+                .map(|v| v.size)
+                .unwrap_or_default(),
+            compression: self.write_settings.table_compression.try_into()?,
+        };
+
+        let serialized = BlockSerialization {
+            block_raw_data: buffer,
+            size: file_size,
+            block_meta,
+            bloom_index_state,
+        };
+        Ok(serialized)
+    }
 }

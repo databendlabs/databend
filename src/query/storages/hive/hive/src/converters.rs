@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::NumberDataType;
+use common_expression::types::decimal::DecimalSize;
+use common_expression::types::DecimalDataType;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
@@ -29,6 +29,7 @@ use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_sql::resolve_type_name_by_str;
 
 use crate::hive_catalog::HIVE_CATALOG;
 use crate::hive_database::HiveDatabase;
@@ -140,26 +141,14 @@ fn try_from_filed_type_name(type_name: impl AsRef<str>) -> Result<TableDataType>
         let sub_type = try_from_filed_type_name(sub_type)?;
         Ok(TableDataType::Array(Box::new(sub_type.wrap_nullable())))
     } else {
-        let number = match name.as_str() {
-            "TINYINT" => Ok(NumberDataType::Int8),
-            "SMALLINT" => Ok(NumberDataType::Int16),
-            "INT" => Ok(NumberDataType::Int32),
-            "BIGINT" => Ok(NumberDataType::Int64),
-            //"DECIMAL", "NUMERIC" type not supported
-            "FLOAT" => Ok(NumberDataType::Float32),
-            "DOUBLE" | "DOUBLE PRECISION" => Ok(NumberDataType::Float64),
-
-            "BINARY" | "STRING" => return Ok(TableDataType::String),
-            // boolean
-            "BOOLEAN" => return Ok(TableDataType::Boolean),
-            // timestamp
-            "TIMESTAMP" => return Ok(TableDataType::Timestamp),
-            "DATE" => return Ok(TableDataType::Date),
-            _ => Err(ErrorCode::IllegalDataType(format!(
-                "Unsupported data type: {}",
-                name
+        match name.as_str() {
+            "DECIMAL" | "NUMERIC" => Ok(TableDataType::Decimal(DecimalDataType::Decimal128(
+                DecimalSize {
+                    precision: 10,
+                    scale: 0,
+                },
             ))),
-        }?;
-        Ok(TableDataType::Number(number))
+            _ => resolve_type_name_by_str(name.as_str()),
+        }
     }
 }

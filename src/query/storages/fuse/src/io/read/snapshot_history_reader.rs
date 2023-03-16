@@ -49,6 +49,7 @@ impl SnapshotHistoryReader for TableSnapshotReader {
                         location: loc,
                         len_hint: None,
                         ver,
+                        put_cache: true,
                     };
 
                     let snapshot = match reader.read(&load_params).await {

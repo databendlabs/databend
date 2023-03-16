@@ -178,7 +178,6 @@ impl Table for MemoryTable {
                     .fold(PartStatistics::default(), |mut stats, block| {
                         stats.read_rows += block.num_rows();
                         stats.read_bytes += (0..block.num_columns())
-                            .into_iter()
                             .collect::<Vec<usize>>()
                             .iter()
                             .filter(|cid| projection_filter(**cid))
@@ -328,7 +327,7 @@ impl MemoryTableSource {
         match &entry.data_type {
             DataType::Tuple(inner_tys) => {
                 let col = entry.value.clone().into_column().unwrap();
-                let (inner_columns, _) = col.into_tuple().unwrap();
+                let inner_columns = col.into_tuple().unwrap();
                 let mut values = Vec::with_capacity(inner_tys.len());
                 for (col, ty) in inner_columns.iter().zip(inner_tys.iter()) {
                     values.push(BlockEntry {

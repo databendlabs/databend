@@ -12,50 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::types::StringType;
-use common_expression::utils::FromData;
-use common_expression::DataBlock;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRef;
-use common_expression::TableSchemaRefExt;
-use once_cell::sync::Lazy;
+use ctor::ctor;
 use regex::Regex;
-
-use crate::servers::federated_helper::FederatedHelper;
-
-const CLICKHOUSE_VERSION: &str = "8.12.14";
 
 pub struct ClickHouseFederated {}
 
-static FORMAT_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r".*(?i)FORMAT\s*([[:alpha:]]*)\s*;?$").unwrap());
+#[ctor]
+static FORMAT_REGEX: Regex = Regex::new(r".*(?i)FORMAT\s*([[:alpha:]]*)\s*;?$").unwrap();
 
 impl ClickHouseFederated {
-    // Build block for select function.
-    // Format:
-    // |function_name()|
-    // |value|
-    fn select_function_block(name: &str, value: &str) -> Option<(TableSchemaRef, DataBlock)> {
-        let schema = TableSchemaRefExt::create(vec![TableField::new(name, TableDataType::String)]);
-        let block = DataBlock::new_from_columns(vec![StringType::from_data(vec![
-            value.as_bytes().to_vec(),
-        ])]);
-        Some((schema, block))
-    }
-
     pub fn get_format(query: &str) -> Option<String> {
         match FORMAT_REGEX.captures(query) {
             Some(x) => x.get(1).map(|s| s.as_str().to_owned()),
             None => None,
         }
-    }
-
-    pub fn check(query: &str) -> Option<(TableSchemaRef, DataBlock)> {
-        let rules: Vec<(&str, Option<(TableSchemaRef, DataBlock)>)> = vec![(
-            "(?i)^(SELECT VERSION()(.*))",
-            Self::select_function_block("version()", CLICKHOUSE_VERSION),
-        )];
-        FederatedHelper::block_match_rule(query, rules)
     }
 }

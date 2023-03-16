@@ -25,12 +25,11 @@ use super::format::display_memo;
 use super::Memo;
 use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::distributed::optimize_distributed_query;
-use crate::optimizer::heuristic::RuleList;
+use crate::optimizer::runtime_filter::try_add_runtime_filter_nodes;
 use crate::optimizer::util::contains_local_table_scan;
 use crate::optimizer::HeuristicOptimizer;
 use crate::optimizer::SExpr;
-use crate::optimizer::DEFAULT_REWRITE_RULES;
-use crate::plans::CopyPlanV2;
+use crate::plans::CopyPlan;
 use crate::plans::Plan;
 use crate::BindContext;
 use crate::IndexType;
@@ -117,13 +116,13 @@ pub fn optimize(
         }),
         Plan::Copy(v) => {
             Ok(Plan::Copy(Box::new(match *v {
-                CopyPlanV2::IntoStage {
+                CopyPlan::IntoStage {
                     stage,
                     path,
                     validation_mode,
                     from,
                 } => {
-                    CopyPlanV2::IntoStage {
+                    CopyPlan::IntoStage {
                         stage,
                         path,
                         validation_mode,
@@ -146,20 +145,23 @@ pub fn optimize_query(
     bind_context: Box<BindContext>,
     s_expr: SExpr,
 ) -> Result<SExpr> {
-    let rules = RuleList::create(DEFAULT_REWRITE_RULES.clone(), Some(metadata.clone()))?;
-
     let contains_local_table_scan = contains_local_table_scan(&s_expr, &metadata);
 
-    let mut heuristic = HeuristicOptimizer::new(ctx.clone(), bind_context, metadata, rules);
+    let mut heuristic = HeuristicOptimizer::new(ctx.clone(), bind_context, metadata.clone());
     let mut result = heuristic.optimize(s_expr)?;
-
-    let mut cascades = CascadesOptimizer::create(ctx.clone())?;
+    let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata)?;
     result = cascades.optimize(result)?;
-
     // So far, we don't have ability to execute distributed query
     // with reading data from local tales(e.g. system tables).
     let enable_distributed_query =
         opt_ctx.config.enable_distributed_optimization && !contains_local_table_scan;
+    // Add runtime filter related nodes after cbo
+    // Because cbo may change join order and we don't want to
+    // break optimizer due to new added nodes by runtime filter.
+    // Currently, we only support standalone.
+    if !enable_distributed_query && ctx.get_settings().get_runtime_filter()? {
+        result = try_add_runtime_filter_nodes(&result)?;
+    }
     if enable_distributed_query {
         result = optimize_distributed_query(ctx.clone(), &result)?;
     }
@@ -174,12 +176,10 @@ fn get_optimized_memo(
     metadata: MetadataRef,
     bind_context: Box<BindContext>,
 ) -> Result<(Memo, HashMap<IndexType, CostContext>)> {
-    let rules = RuleList::create(DEFAULT_REWRITE_RULES.clone(), Some(metadata.clone()))?;
-
-    let mut heuristic = HeuristicOptimizer::new(ctx.clone(), bind_context, metadata, rules);
+    let mut heuristic = HeuristicOptimizer::new(ctx.clone(), bind_context, metadata.clone());
     let result = heuristic.optimize(s_expr)?;
 
-    let mut cascades = CascadesOptimizer::create(ctx)?;
+    let mut cascades = CascadesOptimizer::create(ctx, metadata)?;
     cascades.optimize(result)?;
     Ok((cascades.memo, cascades.best_cost_map))
 }

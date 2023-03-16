@@ -70,7 +70,7 @@ impl Binder {
     fn bind_limit_argument(expr: &Expr) -> Option<u64> {
         match expr {
             Expr::Literal {
-                lit: Literal::Integer(value),
+                lit: Literal::UInt64(value),
                 ..
             } => Some(*value),
             _ => None,

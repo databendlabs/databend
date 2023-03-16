@@ -102,6 +102,9 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_function_factory("array", |_, args_type| {
+        if args_type.is_empty() {
+            return None;
+        }
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "array".to_string(),
@@ -160,6 +163,13 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_2_arg_core::<NullableType<EmptyArrayType>, NullableType<UInt64Type>, NullType, _, _>(
+        "get",
+        FunctionProperty::default(),
+        |_, _| FunctionDomain::Full,
+        |_, _, _| Value::Scalar(()),
+    );
+
+    registry.register_2_arg_core::<NullableType<ArrayType<NullType>>, NullableType<UInt64Type>, NullType, _, _>(
         "get",
         FunctionProperty::default(),
         |_, _| FunctionDomain::Full,

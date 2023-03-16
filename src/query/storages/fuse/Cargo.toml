@@ -11,6 +11,9 @@ edition = { workspace = true }
 doctest = false
 test = false
 
+[features]
+enable-histogram-metrics = ["metrics/enable-histogram", "storages-common-cache/enable-histogram-metrics"]
+
 [dependencies]
 common-arrow = { path = "../../../common/arrow" }
 common-base = { path = "../../../common/base" }
@@ -19,7 +22,6 @@ common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
 common-functions = { path = "../../functions" }
 common-io = { path = "../../../common/io" }
-common-jsonb = { path = "../../../common/jsonb" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../../pipeline/core" }
@@ -28,6 +30,7 @@ common-pipeline-transforms = { path = "../../pipeline/transforms" }
 common-sharing = { path = "../../sharing" }
 common-sql = { path = "../../sql" }
 common-storage = { path = "../../../common/storage" }
+jsonb = { workspace = true }
 
 storages-common-blocks = { path = "../common/blocks" }
 storages-common-cache = { path = "../common/cache" }
@@ -38,7 +41,6 @@ storages-common-table-meta = { path = "../common/table-meta" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
-backon = "0.4"
 chrono = { workspace = true }
 futures = "0.3.24"
 futures-util = "0.3.24"
@@ -48,7 +50,9 @@ opendal = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = "0.10.6"
+siphasher = "0.3.10"
 streaming-decompression = "0.1.2"
+tokio-rayon = "2.1.0"
 tracing = "0.1.36"
 typetag = "0.2.3"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }

@@ -14,9 +14,7 @@
 
 #![allow(clippy::uninlined_format_args)]
 
-mod file;
 mod stage_table;
 mod stage_table_sink;
 
-pub use file::*;
 pub use stage_table::StageTable;

@@ -16,9 +16,10 @@ These tutorials are intended to help you get started with Databend:
 ## Connecting to Databend
 
 * [How to Connect Databend with MySQL Client](../11-integrations/00-api/01-mysql-handler.md)
-* [How to Connect Databend with ClickHouse Client](../11-integrations/00-api/02-clickhouse-handler.md)
+* [How to Connect Databend with ClickHouse HTTP Handler](../11-integrations/00-api/02-clickhouse-handler.md)
 * [How to Connect Databend with REST API](../11-integrations/00-api/00-rest.md)
-* [How to Connect Databend with DBeaver SQL IDE](../11-integrations/20-gui-tool/01-dbeaver.md)
+* [How to Connect Databend with MySQL-Compatible Clients](../11-integrations/30-access-tool/00-mysql.md)
+* [How to Connect Databend with bendsql](../11-integrations/30-access-tool/01-bendsql.md)
 * [How to Execute Queries in Python](../03-develop/01-python.md)
 * [How to Query Databend in Jupyter Notebooks](../11-integrations/20-gui-tool/00-jupyter.md)
 * [How to Execute Queries in Golang](../03-develop/00-golang.md)
@@ -30,11 +31,20 @@ These tutorials are intended to help you get started with Databend:
 * [How to Load Data from Amazon S3](../12-load-data/01-s3.md)
 * [How to Load Data from Local File System](../12-load-data/02-local.md)
 * [How to Load Data from Remote Files](../12-load-data/04-http.md)
-
+* [Querying Data in Staged Files](../12-load-data/05-querying-stage.md)
+* [Transforming Data During a Load](../12-load-data/06-data-load-transform.md)
 
 ## Unloading Data from Databend
 
 * [How to Unload Data from Databend](../12-unload-data/index.md)
+
+### Managing Data
+
+* [COPY](../14-sql-commands/10-dml/dml-copy-into-table.md)
+* [INSERT](../14-sql-commands/10-dml/dml-insert.md)
+* [DELETE](../14-sql-commands/10-dml/dml-delete-from.md)
+* [UPDATE](../14-sql-commands/10-dml/dml-update.md)
+* [REPLACE](../14-sql-commands/10-dml/dml-replace.md)
 
 ## Managing Users
 

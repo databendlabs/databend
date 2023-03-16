@@ -11,6 +11,9 @@ edition = { workspace = true }
 doctest = false
 test = false
 
+[features]
+enable-histogram-metrics = ["common-metrics/enable-histogram"]
+
 [dependencies]
 common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
@@ -18,7 +21,6 @@ common-config = { path = "../../config" }
 common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
 common-functions = { path = "../../functions" }
-common-jsonb = { path = "../../../common/jsonb" }
 common-meta-app = { path = "../../../meta/app" }
 common-metrics = { path = "../../../common/metrics" }
 common-pipeline-core = { path = "../../pipeline/core" }
@@ -28,6 +30,7 @@ common-storages-fuse = { path = "../fuse" }
 common-storages-result-cache = { path = "../result_cache" }
 common-storages-view = { path = "../view" }
 common-users = { path = "../../users" }
+jsonb = { workspace = true }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 chrono = { workspace = true }

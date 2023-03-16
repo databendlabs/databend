@@ -56,13 +56,12 @@ impl Binder {
     pub(super) async fn bind_join(
         &mut self,
         bind_context: &BindContext,
+        left_context: BindContext,
+        right_context: BindContext,
+        left_child: SExpr,
+        right_child: SExpr,
         join: &common_ast::ast::Join,
     ) -> Result<(SExpr, BindContext)> {
-        let (left_child, left_context) =
-            self.bind_table_reference(bind_context, &join.left).await?;
-        let (right_child, right_context) =
-            self.bind_table_reference(bind_context, &join.right).await?;
-
         check_duplicate_join_tables(&left_context, &right_context)?;
 
         let mut bind_context = bind_context.replace();
@@ -200,6 +199,7 @@ impl Binder {
             join_type,
             marker_index: None,
             from_correlated_subquery: false,
+            contain_runtime_filter: false,
         };
         Ok(SExpr::create_binary(
             logical_join.into(),
@@ -607,8 +607,8 @@ impl<'a> JoinConditionResolver<'a> {
         let (left_columns, right_columns) = self.left_right_columns()?;
 
         // Bump types of left conditions and right conditions
-        let left_type = left.data_type();
-        let right_type = right.data_type();
+        let left_type = left.data_type()?;
+        let right_type = right.data_type()?;
         if left_type.ne(&right_type) {
             let least_super_type = common_super_type(
                 left_type.clone(),

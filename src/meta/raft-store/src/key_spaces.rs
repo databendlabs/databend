@@ -15,13 +15,13 @@
 //! Defines application key spaces that are defined by raft-store.
 //! All of the key spaces stores key-value pairs in the underlying sled db.
 
-use common_meta_sled_store::openraft::Entry;
 use common_meta_sled_store::sled;
 use common_meta_sled_store::SledKeySpace;
 use common_meta_sled_store::SledOrderedSerde;
 use common_meta_sled_store::SledSerde;
 use common_meta_stoerr::MetaStorageError;
-use common_meta_types::LogEntry;
+use common_meta_types::compat07;
+use common_meta_types::Entry;
 use common_meta_types::LogIndex;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
@@ -46,7 +46,7 @@ impl SledKeySpace for Logs {
     const PREFIX: u8 = 1;
     const NAME: &'static str = "log";
     type K = LogIndex;
-    type V = Entry<LogEntry>;
+    type V = Entry;
 }
 
 /// Types for raft log meta data in SledTree
@@ -77,10 +77,7 @@ impl SledKeySpace for StateMachineMeta {
 }
 
 /// Key-Value Types for storing meta data of a raft in sled::Tree:
-/// id: NodeId,
-/// hard_state:
-///      current_term,
-///      voted_for,
+/// node_id, vote, state_machine_id pairs:(a,b)
 pub struct RaftStateKV {}
 impl SledKeySpace for RaftStateKV {
     const PREFIX: u8 = 4;
@@ -127,44 +124,18 @@ impl SledKeySpace for ClientLastResps {
 }
 
 /// Enum of key-value pairs that are used in the raft storage impl for meta-service.
+#[rustfmt::skip]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RaftStoreEntry {
-    Logs {
-        key: <Logs as SledKeySpace>::K,
-        value: <Logs as SledKeySpace>::V,
-    },
-    Nodes {
-        key: <Nodes as SledKeySpace>::K,
-        value: <Nodes as SledKeySpace>::V,
-    },
-    StateMachineMeta {
-        key: <StateMachineMeta as SledKeySpace>::K,
-        value: <StateMachineMeta as SledKeySpace>::V,
-    },
-    RaftStateKV {
-        key: <RaftStateKV as SledKeySpace>::K,
-        value: <RaftStateKV as SledKeySpace>::V,
-    },
-    Expire {
-        key: <Expire as SledKeySpace>::K,
-        value: <Expire as SledKeySpace>::V,
-    },
-    GenericKV {
-        key: <GenericKV as SledKeySpace>::K,
-        value: <GenericKV as SledKeySpace>::V,
-    },
-    Sequences {
-        key: <Sequences as SledKeySpace>::K,
-        value: <Sequences as SledKeySpace>::V,
-    },
-    ClientLastResps {
-        key: <ClientLastResps as SledKeySpace>::K,
-        value: <ClientLastResps as SledKeySpace>::V,
-    },
-    LogMeta {
-        key: <LogMeta as SledKeySpace>::K,
-        value: <LogMeta as SledKeySpace>::V,
-    },
+    Logs             { key: <Logs             as SledKeySpace>::K, value: <Logs             as SledKeySpace>::V, },
+    Nodes            { key: <Nodes            as SledKeySpace>::K, value: <Nodes            as SledKeySpace>::V, },
+    StateMachineMeta { key: <StateMachineMeta as SledKeySpace>::K, value: <StateMachineMeta as SledKeySpace>::V, },
+    RaftStateKV      { key: <RaftStateKV      as SledKeySpace>::K, value: <RaftStateKV      as SledKeySpace>::V, },
+    Expire           { key: <Expire           as SledKeySpace>::K, value: <Expire           as SledKeySpace>::V, },
+    GenericKV        { key: <GenericKV        as SledKeySpace>::K, value: <GenericKV        as SledKeySpace>::V, },
+    Sequences        { key: <Sequences        as SledKeySpace>::K, value: <Sequences        as SledKeySpace>::V, },
+    ClientLastResps  { key: <ClientLastResps  as SledKeySpace>::K, value: <ClientLastResps  as SledKeySpace>::V, },
+    LogMeta          { key: <LogMeta          as SledKeySpace>::K, value: <LogMeta          as SledKeySpace>::V, },
 }
 
 /// Convert (sub_tree_prefix, key, value, key_space1, key_space2...) into a [`RaftStoreEntry`].
@@ -188,6 +159,7 @@ macro_rules! deserialize_by_prefix {
 
 impl RaftStoreEntry {
     /// Serialize a key-value entry into a two elt vec of vec<u8>: `[key, value]`.
+    #[rustfmt::skip]
     pub fn serialize(kv: &RaftStoreEntry) -> Result<(sled::IVec, sled::IVec), MetaStorageError> {
         macro_rules! ser {
             ($ks:tt, $key:expr, $value:expr) => {
@@ -196,19 +168,15 @@ impl RaftStoreEntry {
         }
 
         match kv {
-            Self::Logs { key, value } => ser!(Logs, key, value),
-            Self::Nodes { key, value } => ser!(Nodes, key, value),
-            Self::StateMachineMeta { key, value } => {
-                ser!(StateMachineMeta, key, value)
-            }
-            Self::RaftStateKV { key, value } => ser!(RaftStateKV, key, value),
-            Self::Expire { key, value } => ser!(Expire, key, value),
-            Self::GenericKV { key, value } => ser!(GenericKV, key, value),
-            Self::Sequences { key, value } => ser!(Sequences, key, value),
-            Self::ClientLastResps { key, value } => {
-                ser!(ClientLastResps, key, value)
-            }
-            Self::LogMeta { key, value } => ser!(LogMeta, key, value),
+            Self::Logs             { key, value } => ser!(Logs,             key, value),
+            Self::Nodes            { key, value } => ser!(Nodes,            key, value),
+            Self::StateMachineMeta { key, value } => ser!(StateMachineMeta, key, value),
+            Self::RaftStateKV      { key, value } => ser!(RaftStateKV,      key, value),
+            Self::Expire           { key, value } => ser!(Expire,           key, value),
+            Self::GenericKV        { key, value } => ser!(GenericKV,        key, value),
+            Self::Sequences        { key, value } => ser!(Sequences,        key, value),
+            Self::ClientLastResps  { key, value } => ser!(ClientLastResps,  key, value),
+            Self::LogMeta          { key, value } => ser!(LogMeta,          key, value),
         }
     }
 
@@ -234,5 +202,37 @@ impl RaftStoreEntry {
         );
 
         unreachable!("unknown prefix: {}", prefix);
+    }
+}
+
+/// Compatible layer for RaftStoreEntry
+#[rustfmt::skip]
+#[derive(Serialize, Deserialize)]
+pub enum RaftStoreEntryCompat {
+    Logs             { key: <Logs             as SledKeySpace>::K, value: compat07::Entry,                        },
+    Nodes            { key: <Nodes            as SledKeySpace>::K, value: <Nodes as SledKeySpace>::V,             },
+    StateMachineMeta { key: <StateMachineMeta as SledKeySpace>::K, value: crate::compat07::StateMachineMetaValue, },
+    RaftStateKV      { key: <RaftStateKV      as SledKeySpace>::K, value: crate::compat07::RaftStateValue,        },
+    Expire           { key: <Expire           as SledKeySpace>::K, value: <Expire as SledKeySpace>::V,            },
+    GenericKV        { key: <GenericKV        as SledKeySpace>::K, value: <GenericKV as SledKeySpace>::V,         },
+    Sequences        { key: <Sequences        as SledKeySpace>::K, value: <Sequences as SledKeySpace>::V,         },
+    ClientLastResps  { key: <ClientLastResps  as SledKeySpace>::K, value: <ClientLastResps as SledKeySpace>::V,   },
+    LogMeta          { key: <LogMeta          as SledKeySpace>::K, value: crate::compat07::LogMetaValue,          },
+}
+
+impl openraft::compat::Upgrade<RaftStoreEntry> for RaftStoreEntryCompat {
+    #[rustfmt::skip]
+    fn upgrade(self) -> RaftStoreEntry {
+        match self {
+            RaftStoreEntryCompat::Logs             { key, value } => RaftStoreEntry::Logs             { key, value: value.upgrade(), },
+            RaftStoreEntryCompat::Nodes            { key, value } => RaftStoreEntry::Nodes            { key, value, },
+            RaftStoreEntryCompat::StateMachineMeta { key, value } => RaftStoreEntry::StateMachineMeta { key, value: value.upgrade(), },
+            RaftStoreEntryCompat::RaftStateKV      { key, value } => RaftStoreEntry::RaftStateKV      { key, value: value.upgrade(), },
+            RaftStoreEntryCompat::Expire           { key, value } => RaftStoreEntry::Expire           { key, value, },
+            RaftStoreEntryCompat::GenericKV        { key, value } => RaftStoreEntry::GenericKV        { key, value, },
+            RaftStoreEntryCompat::Sequences        { key, value } => RaftStoreEntry::Sequences        { key, value, },
+            RaftStoreEntryCompat::ClientLastResps  { key, value } => RaftStoreEntry::ClientLastResps  { key, value, },
+            RaftStoreEntryCompat::LogMeta          { key, value } => RaftStoreEntry::LogMeta          { key, value: value.upgrade(), },
+        }
     }
 }

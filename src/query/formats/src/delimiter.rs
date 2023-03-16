@@ -15,8 +15,9 @@
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub enum RecordDelimiter {
+    #[default]
     Crlf,
     Any(u8),
 }
@@ -48,11 +49,5 @@ impl TryFrom<&[u8]> for RecordDelimiter {
                 s
             ))),
         }
-    }
-}
-
-impl Default for RecordDelimiter {
-    fn default() -> Self {
-        RecordDelimiter::Crlf
     }
 }

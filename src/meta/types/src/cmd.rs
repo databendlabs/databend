@@ -14,7 +14,6 @@
 
 use std::fmt;
 
-use openraft::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -22,6 +21,7 @@ use crate::with::With;
 use crate::KVMeta;
 use crate::MatchSeq;
 use crate::Node;
+use crate::NodeId;
 use crate::Operation;
 use crate::TxnRequest;
 

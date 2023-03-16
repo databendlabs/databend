@@ -29,7 +29,6 @@ use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_io::prelude::BinaryRead;
-use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -72,13 +71,6 @@ impl TransformExchangeDeserializer {
     }
 
     fn recv_data(&self, fragment_data: FragmentData) -> Result<DataBlock> {
-        let batch = deserialize_batch(
-            &fragment_data.data,
-            &self.arrow_schema.fields,
-            &self.ipc_schema,
-            &Default::default(),
-        )?;
-
         const ROW_HEADER_SIZE: usize = std::mem::size_of::<u32>();
 
         let meta = match bincode::deserialize(&fragment_data.get_meta()[ROW_HEADER_SIZE..]) {
@@ -88,15 +80,27 @@ impl TransformExchangeDeserializer {
             )),
         }?;
 
-        let block = DataBlock::from_arrow_chunk(&batch, &self.schema)?;
+        let mut row_count_meta = &fragment_data.get_meta()[..ROW_HEADER_SIZE];
+        let row_count: u32 = row_count_meta.read_scalar()?;
 
-        if block.num_columns() == 0 {
-            let mut row_count_meta = &fragment_data.get_meta()[..ROW_HEADER_SIZE];
-            let row_count: u32 = row_count_meta.read_scalar()?;
+        if row_count == 0 {
+            return Ok(DataBlock::new_with_meta(vec![], 0, meta));
+        }
+
+        let batch = deserialize_batch(
+            &fragment_data.data,
+            &self.arrow_schema.fields,
+            &self.ipc_schema,
+            &Default::default(),
+        )?;
+
+        let data_block = DataBlock::from_arrow_chunk(&batch, &self.schema)?;
+
+        if data_block.num_columns() == 0 {
             return Ok(DataBlock::new_with_meta(vec![], row_count as usize, meta));
         }
 
-        block.add_meta(meta)
+        data_block.add_meta(meta)
     }
 }
 
@@ -168,24 +172,4 @@ impl BlockMetaInfo for ExchangeDeserializeMeta {
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         unimplemented!("Unimplemented clone ExchangeSourceMeta")
     }
-}
-
-pub fn create_deserializer_items(size: usize, schema: &DataSchemaRef) -> Vec<PipeItem> {
-    let mut items = Vec::with_capacity(size);
-    for _index in 0..size {
-        items.push(create_deserializer_item(schema));
-    }
-
-    items
-}
-
-pub fn create_deserializer_item(schema: &DataSchemaRef) -> PipeItem {
-    let input = InputPort::create();
-    let output = OutputPort::create();
-
-    PipeItem::create(
-        TransformExchangeDeserializer::create(input.clone(), output.clone(), schema),
-        vec![input],
-        vec![output],
-    )
 }

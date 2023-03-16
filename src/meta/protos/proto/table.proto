@@ -106,7 +106,7 @@ message TableMeta {
   repeated string field_comments = 25;
 
   // Table storage location connection info.
-  optional UserStageInfo.StageStorage storage_params = 26;
+  optional StageInfo.StageStorage storage_params = 26;
 
   optional string part_prefix = 27;
 }

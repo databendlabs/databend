@@ -26,17 +26,21 @@ use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::TableStatistics;
 use common_catalog::table_args::TableArgs;
-use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check::check_number;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::number::UInt64Type;
+use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::utils::FromData;
 use common_expression::DataBlock;
+use common_expression::Expr;
+use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -67,13 +71,21 @@ impl NumbersTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let args = table_args.expect_all_positioned(table_func_name, Some(1))?;
-        let total = args[0].as_ref().cast_to_u64();
-        let total = total.ok_or_else(|| {
-            ErrorCode::BadArguments(format!(
-                "the arg must be a number for table function {}",
-                &table_func_name
-            ))
-        })?;
+        let total = check_number(
+            None,
+            FunctionContext::default(),
+            &Expr::<usize>::Cast {
+                span: None,
+                is_try: false,
+                expr: Box::new(Expr::Constant {
+                    span: None,
+                    scalar: args[0].clone(),
+                    data_type: args[0].as_ref().infer_data_type(),
+                }),
+                dest_type: DataType::Number(NumberDataType::UInt64),
+            },
+            &BUILTIN_FUNCTIONS,
+        )?;
         let engine = match table_func_name {
             "numbers" => "SystemNumbers",
             "numbers_mt" => "SystemNumbersMt",
@@ -93,8 +105,10 @@ impl NumbersTable {
                 engine: engine.to_string(),
                 // Assuming that created_on is unnecessary for function table,
                 // we could make created_on fixed to pass test_shuffle_action_try_into.
-                created_on: Utc.from_utc_datetime(&NaiveDateTime::from_timestamp(0, 0)),
-                updated_on: Utc.from_utc_datetime(&NaiveDateTime::from_timestamp(0, 0)),
+                created_on: Utc
+                    .from_utc_datetime(&NaiveDateTime::from_timestamp_opt(0, 0).unwrap()),
+                updated_on: Utc
+                    .from_utc_datetime(&NaiveDateTime::from_timestamp_opt(0, 0).unwrap()),
                 ..Default::default()
             },
             ..Default::default()

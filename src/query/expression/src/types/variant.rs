@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::ops::Range;
 
 use super::date::date_to_string;
@@ -175,9 +174,9 @@ impl ArgType for VariantType {
 pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
     let inner_tz = tz.tz;
     let value = match scalar {
-        ScalarRef::Null => common_jsonb::Value::Null,
-        ScalarRef::EmptyArray => common_jsonb::Value::Array(vec![]),
-        ScalarRef::EmptyMap => common_jsonb::Value::Object(common_jsonb::Object::new()),
+        ScalarRef::Null => jsonb::Value::Null,
+        ScalarRef::EmptyArray => jsonb::Value::Array(vec![]),
+        ScalarRef::EmptyMap => jsonb::Value::Object(jsonb::Object::new()),
         ScalarRef::Number(n) => match n {
             NumberScalar::UInt8(n) => n.into(),
             NumberScalar::UInt16(n) => n.into(),
@@ -190,14 +189,14 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
             NumberScalar::Float32(n) => n.0.into(),
             NumberScalar::Float64(n) => n.0.into(),
         },
-        ScalarRef::Decimal(x) => common_jsonb::Value::String(Cow::from(x.to_string())),
-        ScalarRef::Boolean(b) => common_jsonb::Value::Bool(b),
-        ScalarRef::String(s) => common_jsonb::Value::String(String::from_utf8_lossy(s)),
+        ScalarRef::Decimal(x) => x.to_float64().into(),
+        ScalarRef::Boolean(b) => jsonb::Value::Bool(b),
+        ScalarRef::String(s) => jsonb::Value::String(String::from_utf8_lossy(s)),
         ScalarRef::Timestamp(ts) => timestamp_to_string(ts, inner_tz).to_string().into(),
         ScalarRef::Date(d) => date_to_string(d, inner_tz).to_string().into(),
         ScalarRef::Array(col) => {
             let items = cast_scalars_to_variants(col.iter(), tz);
-            common_jsonb::build_array(items.iter(), buf).expect("failed to build jsonb array");
+            jsonb::build_array(items.iter(), buf).expect("failed to build jsonb array");
             return;
         }
         ScalarRef::Map(col) => {
@@ -219,13 +218,13 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
                     (key, val)
                 })
                 .collect::<Vec<_>>();
-            common_jsonb::build_object(kvs.iter().map(|(k, v)| (k, &v[..])), buf)
+            jsonb::build_object(kvs.iter().map(|(k, v)| (k, &v[..])), buf)
                 .expect("failed to build jsonb object");
             return;
         }
         ScalarRef::Tuple(fields) => {
             let values = cast_scalars_to_variants(fields, tz);
-            common_jsonb::build_object(
+            jsonb::build_object(
                 values
                     .iter()
                     .enumerate()

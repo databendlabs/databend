@@ -22,12 +22,15 @@ use common_exception::Result;
 use common_exception::Span;
 use educe::Educe;
 use enum_as_inner::EnumAsInner;
+use ethnum::i256;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::function::Function;
 use crate::function::FunctionID;
 use crate::function::FunctionRegistry;
+use crate::types::decimal::DecimalScalar;
+use crate::types::decimal::DecimalSize;
 use crate::types::number::NumberScalar;
 use crate::types::number::F32;
 use crate::types::number::F64;
@@ -94,6 +97,11 @@ pub enum Expr<Index: ColumnIndex = usize> {
         expr: Box<Expr<Index>>,
         dest_type: DataType,
     },
+    Catch {
+        span: Span,
+        data_type: DataType,
+        expr: Box<Expr<Index>>,
+    },
     FunctionCall {
         span: Span,
         id: FunctionID,
@@ -130,6 +138,11 @@ pub enum RemoteExpr<Index: ColumnIndex = usize> {
         expr: Box<RemoteExpr<Index>>,
         dest_type: DataType,
     },
+    Catch {
+        span: Span,
+        expr: Box<RemoteExpr<Index>>,
+        data_type: DataType,
+    },
     FunctionCall {
         span: Span,
         id: FunctionID,
@@ -152,6 +165,16 @@ pub enum Literal {
     UInt64(u64),
     Float32(F32),
     Float64(F64),
+    Decimal128 {
+        value: i128,
+        precision: u8,
+        scale: u8,
+    },
+    Decimal256 {
+        value: i256,
+        precision: u8,
+        scale: u8,
+    },
     Boolean(bool),
     String(Vec<u8>),
 }
@@ -169,6 +192,22 @@ impl Literal {
             Literal::UInt32(value) => Scalar::Number(NumberScalar::UInt32(value)),
             Literal::UInt64(value) => Scalar::Number(NumberScalar::UInt64(value)),
             Literal::Float32(value) => Scalar::Number(NumberScalar::Float32(value)),
+            Literal::Decimal128 {
+                value,
+                precision,
+                scale,
+            } => Scalar::Decimal(DecimalScalar::Decimal128(value, DecimalSize {
+                precision,
+                scale,
+            })),
+            Literal::Decimal256 {
+                value,
+                precision,
+                scale,
+            } => Scalar::Decimal(DecimalScalar::Decimal256(value, DecimalSize {
+                precision,
+                scale,
+            })),
             Literal::Float64(value) => Scalar::Number(NumberScalar::Float64(value)),
             Literal::Boolean(value) => Scalar::Boolean(value),
             Literal::String(value) => Scalar::String(value.to_vec()),
@@ -255,6 +294,7 @@ impl<Index: ColumnIndex> Expr<Index> {
             Expr::Constant { data_type, .. } => data_type,
             Expr::ColumnRef { data_type, .. } => data_type,
             Expr::Cast { dest_type, .. } => dest_type,
+            Expr::Catch { data_type, .. } => data_type,
             Expr::FunctionCall { return_type, .. } => return_type,
         }
     }
@@ -266,6 +306,7 @@ impl<Index: ColumnIndex> Expr<Index> {
                     buf.insert(id.clone(), data_type.clone());
                 }
                 Expr::Cast { expr, .. } => walk(expr, buf),
+                Expr::Catch { expr, .. } => walk(expr, buf),
                 Expr::FunctionCall { args, .. } => args.iter().for_each(|expr| walk(expr, buf)),
                 Expr::Constant { .. } => (),
             }
@@ -277,35 +318,126 @@ impl<Index: ColumnIndex> Expr<Index> {
     }
 
     pub fn sql_display(&self) -> String {
-        match self {
-            Expr::Constant { scalar, .. } => format!("{}", scalar.as_ref()),
-            Expr::ColumnRef { display_name, .. } => display_name.clone(),
-            Expr::Cast {
-                is_try,
-                expr,
-                dest_type,
-                ..
-            } => {
-                if *is_try {
-                    format!("TRY_CAST({} AS {dest_type})", expr.sql_display())
-                } else {
-                    format!("CAST({} AS {dest_type})", expr.sql_display())
-                }
-            }
-            Expr::FunctionCall { function, args, .. } => {
-                let mut s = String::new();
-                s += &function.signature.name;
-                s += "(";
-                for (i, arg) in args.iter().enumerate() {
-                    if i > 0 {
-                        s += ", ";
-                    }
-                    s += &arg.sql_display();
-                }
-                s += ")";
-                s
+        fn write_unary_op<Index: ColumnIndex>(
+            op: &str,
+            expr: &Expr<Index>,
+            precedence: usize,
+            min_precedence: usize,
+        ) -> String {
+            if precedence < min_precedence {
+                format!("({op} {})", write_expr(expr, precedence))
+            } else {
+                format!("{op} {}", write_expr(expr, precedence))
             }
         }
+
+        fn write_binary_op<Index: ColumnIndex>(
+            op: &str,
+            lhs: &Expr<Index>,
+            rhs: &Expr<Index>,
+            precedence: usize,
+            min_precedence: usize,
+        ) -> String {
+            if precedence < min_precedence {
+                format!(
+                    "({} {op} {})",
+                    write_expr(lhs, precedence),
+                    write_expr(rhs, precedence)
+                )
+            } else {
+                format!(
+                    "{} {op} {}",
+                    write_expr(lhs, precedence),
+                    write_expr(rhs, precedence)
+                )
+            }
+        }
+
+        fn write_expr<Index: ColumnIndex>(expr: &Expr<Index>, min_precedence: usize) -> String {
+            match expr {
+                Expr::Constant { scalar, .. } => scalar.as_ref().to_string(),
+                Expr::ColumnRef { display_name, .. } => display_name.clone(),
+                Expr::Cast {
+                    is_try,
+                    expr,
+                    dest_type,
+                    ..
+                } => {
+                    if *is_try {
+                        format!("TRY_CAST({} AS {dest_type})", expr.sql_display())
+                    } else {
+                        format!("CAST({} AS {dest_type})", expr.sql_display())
+                    }
+                }
+                Expr::Catch { expr, .. } => {
+                    format!("CATCH({})", expr.sql_display())
+                }
+                Expr::FunctionCall { function, args, .. } => {
+                    match (function.signature.name.as_str(), args.as_slice()) {
+                        ("and", [ref lhs, ref rhs]) => {
+                            write_binary_op("AND", lhs, rhs, 10, min_precedence)
+                        }
+                        ("or", [ref lhs, ref rhs]) => {
+                            write_binary_op("OR", lhs, rhs, 5, min_precedence)
+                        }
+                        ("not", [ref expr]) => write_unary_op("NOT", expr, 15, min_precedence),
+                        ("gte", [ref lhs, ref rhs]) => {
+                            write_binary_op(">=", lhs, rhs, 20, min_precedence)
+                        }
+                        ("gt", [ref lhs, ref rhs]) => {
+                            write_binary_op(">", lhs, rhs, 20, min_precedence)
+                        }
+                        ("lte", [ref lhs, ref rhs]) => {
+                            write_binary_op("<=", lhs, rhs, 20, min_precedence)
+                        }
+                        ("lt", [ref lhs, ref rhs]) => {
+                            write_binary_op("<", lhs, rhs, 20, min_precedence)
+                        }
+                        ("eq", [ref lhs, ref rhs]) => {
+                            write_binary_op("=", lhs, rhs, 20, min_precedence)
+                        }
+                        ("noteq", [ref lhs, ref rhs]) => {
+                            write_binary_op("<>", lhs, rhs, 20, min_precedence)
+                        }
+                        ("plus", [ref expr]) => write_unary_op("+", expr, 50, min_precedence),
+                        ("minus", [ref expr]) => write_unary_op("-", expr, 50, min_precedence),
+                        ("plus", [ref lhs, ref rhs]) => {
+                            write_binary_op("+", lhs, rhs, 30, min_precedence)
+                        }
+                        ("minus", [ref lhs, ref rhs]) => {
+                            write_binary_op("-", lhs, rhs, 30, min_precedence)
+                        }
+                        ("multiply", [ref lhs, ref rhs]) => {
+                            write_binary_op("*", lhs, rhs, 40, min_precedence)
+                        }
+                        ("divide", [ref lhs, ref rhs]) => {
+                            write_binary_op("/", lhs, rhs, 40, min_precedence)
+                        }
+                        ("div", [ref lhs, ref rhs]) => {
+                            write_binary_op("DIV", lhs, rhs, 40, min_precedence)
+                        }
+                        ("modulo", [ref lhs, ref rhs]) => {
+                            write_binary_op("%", lhs, rhs, 40, min_precedence)
+                        }
+                        _ => {
+                            let mut s = String::new();
+                            s += &function.signature.name;
+                            s += "(";
+                            for (i, arg) in args.iter().enumerate() {
+                                if i > 0 {
+                                    s += ", ";
+                                }
+                                s += &arg.sql_display();
+                            }
+                            s += ")";
+                            s
+                        }
+                    }
+                }
+            }
+        }
+
+        write_expr(self, 0)
     }
 
     pub fn project_column_ref<ToIndex: ColumnIndex>(
@@ -343,6 +475,15 @@ impl<Index: ColumnIndex> Expr<Index> {
                 is_try: *is_try,
                 expr: Box::new(expr.project_column_ref(f)),
                 dest_type: dest_type.clone(),
+            },
+            Expr::Catch {
+                span,
+                expr,
+                data_type,
+            } => Expr::Catch {
+                span: *span,
+                expr: Box::new(expr.project_column_ref(f)),
+                data_type: data_type.clone(),
             },
             Expr::FunctionCall {
                 span,
@@ -395,6 +536,15 @@ impl<Index: ColumnIndex> Expr<Index> {
                 expr: Box::new(expr.as_remote_expr()),
                 dest_type: dest_type.clone(),
             },
+            Expr::Catch {
+                span,
+                expr,
+                data_type,
+            } => RemoteExpr::Catch {
+                span: *span,
+                expr: Box::new(expr.as_remote_expr()),
+                data_type: data_type.clone(),
+            },
             Expr::FunctionCall {
                 span,
                 id,
@@ -417,10 +567,113 @@ impl<Index: ColumnIndex> Expr<Index> {
             Expr::Constant { .. } => true,
             Expr::ColumnRef { .. } => true,
             Expr::Cast { expr, .. } => expr.is_deterministic(),
+            Expr::Catch { expr, .. } => expr.is_deterministic(),
             Expr::FunctionCall { function, args, .. } => {
                 !function.signature.property.non_deterministic
                     && args.iter().all(|arg| arg.is_deterministic())
             }
+        }
+    }
+
+    fn span(&self) -> Span {
+        match self {
+            Expr::Constant { span, .. } => *span,
+            Expr::ColumnRef { span, .. } => *span,
+            Expr::Cast { span, .. } => *span,
+            Expr::Catch { span, .. } => *span,
+            Expr::FunctionCall { span, .. } => *span,
+        }
+    }
+
+    pub fn wrap_catch(&self) -> Self {
+        match self {
+            Expr::Catch { .. } => self.clone(),
+            expr => Expr::Catch {
+                span: expr.span(),
+                expr: Box::new(expr.clone()),
+                data_type: DataType::Tuple(vec![
+                    expr.data_type().clone(),
+                    DataType::Nullable(Box::new(DataType::String)),
+                ]),
+            },
+        }
+    }
+}
+
+impl Expr<usize> {
+    pub fn project_column_ref_with_unnest_offset(
+        &self,
+        f: impl Fn(&usize) -> usize + Copy,
+        offset: &mut usize,
+    ) -> Expr<usize> {
+        match self {
+            Expr::Constant {
+                span,
+                scalar,
+                data_type,
+            } => Expr::Constant {
+                span: *span,
+                scalar: scalar.clone(),
+                data_type: data_type.clone(),
+            },
+            Expr::ColumnRef {
+                span,
+                id,
+                data_type,
+                display_name,
+            } => {
+                let id = if *id == usize::MAX {
+                    let id = *offset;
+                    *offset += 1;
+                    id
+                } else {
+                    f(id)
+                };
+                Expr::ColumnRef {
+                    span: *span,
+                    id,
+                    data_type: data_type.clone(),
+                    display_name: display_name.clone(),
+                }
+            }
+            Expr::Cast {
+                span,
+                is_try,
+                expr,
+                dest_type,
+            } => Expr::Cast {
+                span: *span,
+                is_try: *is_try,
+                expr: Box::new(expr.project_column_ref_with_unnest_offset(f, offset)),
+                dest_type: dest_type.clone(),
+            },
+            Expr::Catch {
+                span,
+                expr,
+                data_type,
+            } => Expr::Catch {
+                span: *span,
+                expr: Box::new(expr.project_column_ref_with_unnest_offset(f, offset)),
+                data_type: data_type.clone(),
+            },
+            Expr::FunctionCall {
+                span,
+                id,
+                function,
+                generics,
+                args,
+                return_type,
+            } => Expr::FunctionCall {
+                span: *span,
+                id: id.clone(),
+                function: function.clone(),
+                generics: generics.clone(),
+                args: args
+                    .iter()
+                    .map(|expr| expr.project_column_ref_with_unnest_offset(f, offset))
+                    .collect(),
+                return_type: return_type.clone(),
+            },
         }
     }
 }
@@ -458,6 +711,15 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                 is_try: *is_try,
                 expr: Box::new(expr.as_expr(fn_registry)),
                 dest_type: dest_type.clone(),
+            },
+            RemoteExpr::Catch {
+                span,
+                expr,
+                data_type,
+            } => Expr::Catch {
+                span: *span,
+                expr: Box::new(expr.as_expr(fn_registry)),
+                data_type: data_type.clone(),
             },
             RemoteExpr::FunctionCall {
                 span,

@@ -23,7 +23,7 @@ use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 
 use crate::optimizer::SExpr;
-use crate::plans::copy_v2::CopyPlanV2;
+use crate::plans::copy::CopyPlan;
 use crate::plans::insert::Insert;
 use crate::plans::presign::PresignPlan;
 use crate::plans::recluster_table::ReclusterTablePlan;
@@ -48,7 +48,7 @@ use crate::plans::CreateDatabasePlan;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::CreateStagePlan;
-use crate::plans::CreateTablePlanV2;
+use crate::plans::CreateTablePlan;
 use crate::plans::CreateUDFPlan;
 use crate::plans::CreateUserPlan;
 use crate::plans::CreateViewPlan;
@@ -74,6 +74,7 @@ use crate::plans::OptimizeTablePlan;
 use crate::plans::RemoveStagePlan;
 use crate::plans::RenameDatabasePlan;
 use crate::plans::RenameTablePlan;
+use crate::plans::Replace;
 use crate::plans::RevertTablePlan;
 use crate::plans::RevokePrivilegePlan;
 use crate::plans::RevokeRolePlan;
@@ -122,7 +123,7 @@ pub enum Plan {
     },
 
     // Copy
-    Copy(Box<CopyPlanV2>),
+    Copy(Box<CopyPlan>),
 
     // Call
     Call(Box<CallPlan>),
@@ -143,7 +144,7 @@ pub enum Plan {
     // Tables
     ShowCreateTable(Box<ShowCreateTablePlan>),
     DescribeTable(Box<DescribeTablePlan>),
-    CreateTable(Box<CreateTablePlanV2>),
+    CreateTable(Box<CreateTablePlan>),
     DropTable(Box<DropTablePlan>),
     UndropTable(Box<UndropTablePlan>),
     RenameTable(Box<RenameTablePlan>),
@@ -160,6 +161,7 @@ pub enum Plan {
 
     // Insert
     Insert(Box<Insert>),
+    Replace(Box<Replace>),
     Delete(Box<DeletePlan>),
     Update(Box<UpdatePlan>),
 
@@ -233,6 +235,7 @@ pub enum RewriteKind {
     ShowTablesStatus,
 
     ShowFunctions,
+    ShowTableFunctions,
 
     ShowUsers,
     ShowStages,
@@ -296,6 +299,7 @@ impl Display for Plan {
             Plan::AlterUDF(_) => write!(f, "AlterUDF"),
             Plan::DropUDF(_) => write!(f, "DropUDF"),
             Plan::Insert(_) => write!(f, "Insert"),
+            Plan::Replace(_) => write!(f, "Replace"),
             Plan::Delete(_) => write!(f, "Delete"),
             Plan::Update(_) => write!(f, "Update"),
             Plan::Call(_) => write!(f, "Call"),
@@ -387,6 +391,7 @@ impl Plan {
             Plan::AlterUDF(_) => Arc::new(DataSchema::empty()),
             Plan::DropUDF(_) => Arc::new(DataSchema::empty()),
             Plan::Insert(plan) => plan.schema(),
+            Plan::Replace(plan) => plan.schema(),
             Plan::Delete(_) => Arc::new(DataSchema::empty()),
             Plan::Update(_) => Arc::new(DataSchema::empty()),
             Plan::Call(_) => Arc::new(DataSchema::empty()),

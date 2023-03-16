@@ -19,14 +19,19 @@ use common_catalog::table::AppendMode;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_function;
+use common_expression::with_hash_method;
+use common_expression::with_mappedhash_method;
 use common_expression::DataBlock;
-use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::FunctionContext;
+use common_expression::HashMethodKind;
 use common_expression::SortColumnDescription;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_pipeline_core::pipe::Pipe;
+use common_pipeline_core::pipe::PipeItem;
+use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_sinks::EmptySink;
 use common_pipeline_sinks::Sinker;
@@ -36,6 +41,7 @@ use common_pipeline_transforms::processors::transforms::try_create_transform_sor
 use common_profile::ProfSpanSetRef;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
+use common_sql::executor::AggregateExpand;
 use common_sql::executor::AggregateFinal;
 use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::AggregatePartial;
@@ -48,37 +54,49 @@ use common_sql::executor::HashJoin;
 use common_sql::executor::Limit;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
+use common_sql::executor::RuntimeFilterSource;
 use common_sql::executor::Sort;
 use common_sql::executor::TableScan;
 use common_sql::executor::UnionAll;
+use common_sql::executor::Unnest;
 use common_sql::plans::JoinType;
 use common_sql::ColumnBinding;
 use common_sql::IndexType;
+use common_storage::DataOperator;
+use common_storages_fuse::operations::FillInternalColumnProcessor;
 
 use super::processors::ProfileWrapper;
-use crate::api::ExchangeSorting;
-use crate::pipelines::processors::transforms::efficiently_memory_final_aggregator;
-use crate::pipelines::processors::transforms::AggregateExchangeSorting;
+use super::processors::TransformExpandGroupingSets;
+use crate::api::DefaultExchangeInjector;
+use crate::api::ExchangeInjector;
+use crate::pipelines::processors::transforms::build_partition_bucket;
+use crate::pipelines::processors::transforms::AggregateInjector;
 use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
+use crate::pipelines::processors::transforms::PartialSingleStateAggregator;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
+use crate::pipelines::processors::transforms::RuntimeFilterState;
+use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
+use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
 use crate::pipelines::processors::transforms::TransformLeftJoin;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
 use crate::pipelines::processors::transforms::TransformMergeBlock;
+use crate::pipelines::processors::transforms::TransformPartialAggregate;
+use crate::pipelines::processors::transforms::TransformPartialGroupBy;
 use crate::pipelines::processors::transforms::TransformRightJoin;
 use crate::pipelines::processors::transforms::TransformRightSemiAntiJoin;
 use crate::pipelines::processors::AggregatorParams;
-use crate::pipelines::processors::AggregatorTransformParams;
 use crate::pipelines::processors::JoinHashTable;
 use crate::pipelines::processors::LeftJoinCompactor;
 use crate::pipelines::processors::MarkJoinCompactor;
 use crate::pipelines::processors::RightJoinCompactor;
 use crate::pipelines::processors::SinkBuildHashTable;
-use crate::pipelines::processors::TransformAggregator;
+use crate::pipelines::processors::SinkRuntimeFilterSource;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::processors::TransformHashJoinProbe;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::processors::TransformResortAddOn;
+use crate::pipelines::processors::TransformRuntimeFilter;
 use crate::pipelines::processors::TransformSortPartial;
 use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
@@ -91,9 +109,14 @@ pub struct PipelineBuilder {
     main_pipeline: Pipeline,
     pub pipelines: Vec<Pipeline>,
 
+    // Used in runtime filter source
+    pub join_state: Option<Arc<JoinHashTable>>,
+    // record the index of join build side pipeline in `pipelines`
+    pub index: Option<usize>,
+
     enable_profiling: bool,
     prof_span_set: ProfSpanSetRef,
-    exchange_sorting: Option<Arc<dyn ExchangeSorting>>,
+    exchange_injector: Arc<dyn ExchangeInjector>,
 }
 
 impl PipelineBuilder {
@@ -106,9 +129,11 @@ impl PipelineBuilder {
             enable_profiling,
             ctx,
             pipelines: vec![],
+            join_state: None,
             main_pipeline: Pipeline::create(),
             prof_span_set,
-            exchange_sorting: None,
+            exchange_injector: DefaultExchangeInjector::create(),
+            index: None,
         }
     }
 
@@ -127,7 +152,7 @@ impl PipelineBuilder {
             main_pipeline: self.main_pipeline,
             sources_pipelines: self.pipelines,
             prof_span_set: self.prof_span_set,
-            exchange_sorting: self.exchange_sorting,
+            exchange_injector: self.exchange_injector,
         })
     }
 
@@ -137,6 +162,7 @@ impl PipelineBuilder {
             PhysicalPlan::Filter(filter) => self.build_filter(filter),
             PhysicalPlan::Project(project) => self.build_project(project),
             PhysicalPlan::EvalScalar(eval_scalar) => self.build_eval_scalar(eval_scalar),
+            PhysicalPlan::AggregateExpand(aggregate) => self.build_aggregate_expand(aggregate),
             PhysicalPlan::AggregatePartial(aggregate) => self.build_aggregate_partial(aggregate),
             PhysicalPlan::AggregateFinal(aggregate) => self.build_aggregate_final(aggregate),
             PhysicalPlan::Sort(sort) => self.build_sort(sort),
@@ -148,9 +174,13 @@ impl PipelineBuilder {
             PhysicalPlan::DistributedInsertSelect(insert_select) => {
                 self.build_distributed_insert_select(insert_select)
             }
+            PhysicalPlan::Unnest(unnest) => self.build_unnest(unnest),
             PhysicalPlan::Exchange(_) => Err(ErrorCode::Internal(
                 "Invalid physical plan with PhysicalPlan::Exchange",
             )),
+            PhysicalPlan::RuntimeFilterSource(runtime_filter_source) => {
+                self.build_runtime_filter_source(runtime_filter_source)
+            }
         }
     }
 
@@ -185,7 +215,8 @@ impl PipelineBuilder {
         let mut build_res = build_side_builder.finalize(build)?;
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
-        build_res.main_pipeline.add_sink(|input| {
+
+        let create_sink_processor = |input| {
             let transform = Sinker::<SinkBuildHashTable>::create(
                 input,
                 SinkBuildHashTable::try_create(join_state.clone())?,
@@ -200,7 +231,14 @@ impl PipelineBuilder {
             } else {
                 Ok(ProcessorPtr::create(transform))
             }
-        })?;
+        };
+        if hash_join_plan.contain_runtime_filter {
+            build_res.main_pipeline.duplicate(false)?;
+            self.join_state = Some(join_state);
+            self.index = Some(self.pipelines.len());
+        } else {
+            build_res.main_pipeline.add_sink(create_sink_processor)?;
+        }
 
         self.pipelines.push(build_res.main_pipeline);
         self.pipelines
@@ -220,17 +258,10 @@ impl PipelineBuilder {
         }
 
         let mut projections = Vec::with_capacity(result_columns.len());
-        let mut result_fields = Vec::with_capacity(result_columns.len());
 
         for column_binding in result_columns {
             let index = column_binding.index;
-            let name = column_binding.column_name.clone();
-            let data_type = input_schema
-                .field_with_name(index.to_string().as_str())?
-                .data_type()
-                .clone();
             projections.push(input_schema.index_of(index.to_string().as_str())?);
-            result_fields.push(DataField::new(name.as_str(), data_type.clone()));
         }
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(CompoundBlockOperator::create(
@@ -250,6 +281,15 @@ impl PipelineBuilder {
         let table = self.ctx.build_table_from_source_plan(&scan.source)?;
         self.ctx.set_partitions(scan.source.parts.clone())?;
         table.read_data(self.ctx.clone(), &scan.source, &mut self.main_pipeline)?;
+
+        // Fill internal columns if needed.
+        if let Some(internal_columns) = &scan.internal_column {
+            self.main_pipeline.add_transform(|input, output| {
+                Ok(ProcessorPtr::create(Box::new(
+                    FillInternalColumnProcessor::create(internal_columns.clone(), input, output),
+                )))
+            })?;
+        }
 
         let schema = scan.source.schema();
         let projection = scan
@@ -271,6 +311,7 @@ impl PipelineBuilder {
                 )))
             })?;
         }
+
         Ok(())
     }
 
@@ -362,24 +403,142 @@ impl PipelineBuilder {
         Ok(())
     }
 
+    fn build_unnest(&mut self, unnest: &Unnest) -> Result<()> {
+        self.build_pipeline(&unnest.input)?;
+
+        let op = BlockOperator::Unnest {
+            num_columns: unnest.num_columns,
+        };
+
+        let func_ctx = self.ctx.get_function_context()?;
+
+        self.main_pipeline.add_transform(|input, output| {
+            let transform =
+                CompoundBlockOperator::create(input, output, func_ctx, vec![op.clone()]);
+
+            if self.enable_profiling {
+                Ok(ProcessorPtr::create(ProfileWrapper::create(
+                    transform,
+                    unnest.plan_id,
+                    self.prof_span_set.clone(),
+                )))
+            } else {
+                Ok(ProcessorPtr::create(transform))
+            }
+        })
+    }
+
+    fn build_aggregate_expand(&mut self, expand: &AggregateExpand) -> Result<()> {
+        self.build_pipeline(&expand.input)?;
+        let input_schema = expand.input.output_schema()?;
+        let group_bys = expand
+            .group_bys
+            .iter()
+            .filter_map(|i| {
+                // Do not collect virtual column "_grouping_id".
+                if *i != expand.grouping_id_index {
+                    match input_schema.index_of(&i.to_string()) {
+                        Ok(index) => {
+                            let ty = input_schema.field(index).data_type().clone();
+                            Some(Ok((index, ty)))
+                        }
+                        Err(e) => Some(Err(e)),
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let grouping_sets = expand
+            .grouping_sets
+            .iter()
+            .map(|sets| {
+                sets.iter()
+                    .map(|i| {
+                        let i = input_schema.index_of(&i.to_string())?;
+                        let offset = group_bys.iter().position(|(j, _)| *j == i).unwrap();
+                        Ok(offset)
+                    })
+                    .collect::<Result<Vec<_>>>()
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let mut grouping_ids = Vec::with_capacity(grouping_sets.len());
+        for set in grouping_sets {
+            let mut id = 0;
+            for i in set {
+                id |= 1 << i;
+            }
+            // For element in `group_bys`,
+            // if it is in current grouping set: set 0, else: set 1. (1 represents it will be NULL in grouping)
+            // Example: GROUP BY GROUPING SETS ((a, b), (a), (b), ())
+            // group_bys: [a, b]
+            // grouping_sets: [[0, 1], [0], [1], []]
+            // grouping_ids: 00, 01, 10, 11
+            grouping_ids.push(!id);
+        }
+
+        self.main_pipeline.add_transform(|input, output| {
+            Ok(TransformExpandGroupingSets::create(
+                input,
+                output,
+                group_bys.clone(),
+                grouping_ids.clone(),
+            ))
+        })
+    }
+
     fn build_aggregate_partial(&mut self, aggregate: &AggregatePartial) -> Result<()> {
         self.build_pipeline(&aggregate.input)?;
+
         let params = Self::build_aggregator_params(
             aggregate.input.output_schema()?,
-            // aggregate.output_schema()?,
             &aggregate.group_by,
             &aggregate.agg_funcs,
             None,
         )?;
 
-        let pass_state_to_final = self.enable_memory_efficient_aggregator(&params);
+        if params.group_columns.is_empty() {
+            return self.main_pipeline.add_transform(|input, output| {
+                let transform = PartialSingleStateAggregator::try_create(input, output, &params)?;
+
+                if self.enable_profiling {
+                    Ok(ProcessorPtr::create(ProfileWrapper::create(
+                        transform,
+                        aggregate.plan_id,
+                        self.prof_span_set.clone(),
+                    )))
+                } else {
+                    Ok(ProcessorPtr::create(transform))
+                }
+            });
+        }
+
+        let group_cols = &params.group_columns;
+        let schema_before_group_by = params.input_schema.clone();
+        let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
+        let method = DataBlock::choose_hash_method(&sample_block, group_cols)?;
 
         self.main_pipeline.add_transform(|input, output| {
-            let transform = TransformAggregator::try_create_partial(
-                AggregatorTransformParams::try_create(input, output, &params)?,
-                self.ctx.clone(),
-                pass_state_to_final,
-            )?;
+            let transform = match params.aggregate_functions.is_empty() {
+                true => with_mappedhash_method!(|T| match method.clone() {
+                    HashMethodKind::T(method) => TransformPartialGroupBy::try_create(
+                        self.ctx.clone(),
+                        method,
+                        input,
+                        output,
+                        params.clone()
+                    ),
+                }),
+                false => with_mappedhash_method!(|T| match method.clone() {
+                    HashMethodKind::T(method) => TransformPartialAggregate::try_create(
+                        self.ctx.clone(),
+                        method,
+                        input,
+                        output,
+                        params.clone()
+                    ),
+                }),
+            }?;
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProfileWrapper::create(
@@ -392,29 +551,69 @@ impl PipelineBuilder {
             }
         })?;
 
-        self.exchange_sorting = Some(AggregateExchangeSorting::create());
+        if self.ctx.get_cluster().is_empty() {
+            let operator = DataOperator::instance().operator();
+            let location_prefix = format!("_aggregate_spill/{}", self.ctx.get_tenant());
+            self.main_pipeline.add_transform(|input, output| {
+                let transform = match params.aggregate_functions.is_empty() {
+                    true => with_mappedhash_method!(|T| match method.clone() {
+                        HashMethodKind::T(method) => TransformGroupBySpillWriter::create(
+                            input,
+                            output,
+                            method,
+                            operator.clone(),
+                            location_prefix.clone()
+                        ),
+                    }),
+                    false => with_mappedhash_method!(|T| match method.clone() {
+                        HashMethodKind::T(method) => TransformAggregateSpillWriter::create(
+                            input,
+                            output,
+                            method,
+                            operator.clone(),
+                            params.clone(),
+                            location_prefix.clone()
+                        ),
+                    }),
+                };
+
+                if self.enable_profiling {
+                    Ok(ProcessorPtr::create(ProfileWrapper::create(
+                        transform,
+                        aggregate.plan_id,
+                        self.prof_span_set.clone(),
+                    )))
+                } else {
+                    Ok(ProcessorPtr::create(transform))
+                }
+            })?;
+        }
+
+        let tenant = self.ctx.get_tenant();
+        self.exchange_injector = match params.aggregate_functions.is_empty() {
+            true => with_mappedhash_method!(|T| match method.clone() {
+                HashMethodKind::T(method) =>
+                    AggregateInjector::<_, ()>::create(tenant.clone(), method, params.clone()),
+            }),
+            false => with_mappedhash_method!(|T| match method.clone() {
+                HashMethodKind::T(method) =>
+                    AggregateInjector::<_, usize>::create(tenant.clone(), method, params.clone()),
+            }),
+        };
 
         Ok(())
     }
 
-    fn enable_memory_efficient_aggregator(&self, params: &Arc<AggregatorParams>) -> bool {
-        self.ctx.get_cluster().is_empty()
-            && !params.group_columns.is_empty()
-            && self.main_pipeline.output_len() > 1
-    }
-
     fn build_aggregate_final(&mut self, aggregate: &AggregateFinal) -> Result<()> {
-        self.build_pipeline(&aggregate.input)?;
-
         let params = Self::build_aggregator_params(
             aggregate.before_group_by_schema.clone(),
-            // aggregate.output_schema()?,
             &aggregate.group_by,
             &aggregate.agg_funcs,
             aggregate.limit,
         )?;
 
         if params.group_columns.is_empty() {
+            self.build_pipeline(&aggregate.input)?;
             self.main_pipeline.resize(1)?;
             return self.main_pipeline.add_transform(|input, output| {
                 let transform = FinalSingleStateAggregator::try_create(input, output, &params)?;
@@ -431,7 +630,44 @@ impl PipelineBuilder {
             });
         }
 
-        efficiently_memory_final_aggregator(params, &mut self.main_pipeline)
+        let group_cols = &params.group_columns;
+        let schema_before_group_by = params.input_schema.clone();
+        let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
+        let method = DataBlock::choose_hash_method(&sample_block, group_cols)?;
+
+        let tenant = self.ctx.get_tenant();
+        let old_inject = self.exchange_injector.clone();
+
+        match params.aggregate_functions.is_empty() {
+            true => with_hash_method!(|T| match method {
+                HashMethodKind::T(v) => {
+                    let input: &PhysicalPlan = &aggregate.input;
+                    if matches!(input, PhysicalPlan::ExchangeSource(_)) {
+                        self.exchange_injector =
+                            AggregateInjector::<_, ()>::create(tenant, v.clone(), params.clone());
+                    }
+
+                    self.build_pipeline(&aggregate.input)?;
+                    self.exchange_injector = old_inject;
+                    build_partition_bucket::<_, ()>(v, &mut self.main_pipeline, params.clone())
+                }
+            }),
+            false => with_hash_method!(|T| match method {
+                HashMethodKind::T(v) => {
+                    let input: &PhysicalPlan = &aggregate.input;
+                    if matches!(input, PhysicalPlan::ExchangeSource(_)) {
+                        self.exchange_injector = AggregateInjector::<_, usize>::create(
+                            tenant,
+                            v.clone(),
+                            params.clone(),
+                        );
+                    }
+                    self.build_pipeline(&aggregate.input)?;
+                    self.exchange_injector = old_inject;
+                    build_partition_bucket::<_, usize>(v, &mut self.main_pipeline, params.clone())
+                }
+            }),
+        }
     }
 
     pub fn build_aggregator_params(
@@ -693,6 +929,7 @@ impl PipelineBuilder {
         let build_res = exchange_manager.get_fragment_source(
             &exchange_source.query_id,
             exchange_source.source_fragment_id,
+            self.exchange_injector.clone(),
         )?;
 
         self.main_pipeline = build_res.main_pipeline;
@@ -828,5 +1065,80 @@ impl PipelineBuilder {
         )?;
 
         Ok(())
+    }
+
+    pub fn build_runtime_filter_source(
+        &mut self,
+        runtime_filter_source: &RuntimeFilterSource,
+    ) -> Result<()> {
+        let state = self.build_runtime_filter_state(self.ctx.clone(), runtime_filter_source)?;
+        self.expand_runtime_filter_source(&runtime_filter_source.right_side, state.clone())?;
+        self.build_runtime_filter(&runtime_filter_source.left_side, state)?;
+        Ok(())
+    }
+
+    fn expand_runtime_filter_source(
+        &mut self,
+        _right_side: &PhysicalPlan,
+        state: Arc<RuntimeFilterState>,
+    ) -> Result<()> {
+        let pipeline = &mut self.pipelines[self.index.unwrap()];
+        let output_size = pipeline.output_len();
+        debug_assert!(output_size % 2 == 0);
+        let mut items = Vec::with_capacity(output_size);
+        //           Join
+        //          /   \
+        //        /      \
+        //   RFSource     \
+        //      /    \     \
+        //     /      \     \
+        // scan t1     scan t2
+        for _ in 0..output_size / 2 {
+            let input = InputPort::create();
+            items.push(PipeItem::create(
+                ProcessorPtr::create(Sinker::<SinkBuildHashTable>::create(
+                    input.clone(),
+                    SinkBuildHashTable::try_create(self.join_state.as_ref().unwrap().clone())?,
+                )),
+                vec![input],
+                vec![],
+            ));
+            let input = InputPort::create();
+            items.push(PipeItem::create(
+                ProcessorPtr::create(Sinker::<SinkRuntimeFilterSource>::create(
+                    input.clone(),
+                    SinkRuntimeFilterSource::new(state.clone()),
+                )),
+                vec![input],
+                vec![],
+            ));
+        }
+        pipeline.add_pipe(Pipe::create(output_size, 0, items));
+        Ok(())
+    }
+
+    fn build_runtime_filter(
+        &mut self,
+        left_side: &PhysicalPlan,
+        state: Arc<RuntimeFilterState>,
+    ) -> Result<()> {
+        self.build_pipeline(left_side)?;
+        self.main_pipeline.add_transform(|input, output| {
+            let processor = TransformRuntimeFilter::create(input, output, state.clone());
+            Ok(ProcessorPtr::create(processor))
+        })?;
+        Ok(())
+    }
+
+    fn build_runtime_filter_state(
+        &self,
+        ctx: Arc<QueryContext>,
+        runtime_filter_source: &RuntimeFilterSource,
+    ) -> Result<Arc<RuntimeFilterState>> {
+        Ok(Arc::new(RuntimeFilterState::new(
+            ctx,
+            runtime_filter_source.left_runtime_filters.clone(),
+            runtime_filter_source.right_runtime_filters.clone(),
+        )))
     }
 }

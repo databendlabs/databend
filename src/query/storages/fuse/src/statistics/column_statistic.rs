@@ -154,7 +154,7 @@ pub fn gen_col_stats_lite(
         match data_type {
             DataType::Tuple(inner_types) => {
                 if let Some((col, val)) = col_scalar {
-                    let (inner_columns, _) = col.as_tuple().unwrap();
+                    let inner_columns = col.as_tuple().unwrap();
                     let inner_scalars = val.as_tuple().unwrap();
                     for ((inner_column, inner_type), inner_scalar) in
                         inner_columns.iter().zip(inner_types).zip(inner_scalars)
@@ -174,6 +174,9 @@ pub fn gen_col_stats_lite(
                 }
             }
             DataType::Array(inner_type) => {
+                collect_col_stats(None, inner_type, column_id, stats, rows)?
+            }
+            DataType::Map(inner_type) => {
                 collect_col_stats(None, inner_type, column_id, stats, rows)?
             }
             _ => {
@@ -253,7 +256,7 @@ pub mod traverse {
         match data_type.remove_nullable() {
             DataType::Tuple(inner_types) => match (data_type.is_nullable(), column) {
                 (false, Some(column)) => {
-                    let (inner_columns, _) = column.as_tuple().unwrap();
+                    let inner_columns = column.as_tuple().unwrap();
                     for (inner_column, inner_type) in inner_columns.iter().zip(inner_types.iter()) {
                         traverse_recursive(None, Some(inner_column), inner_type, leaves)?;
                     }
@@ -282,6 +285,14 @@ pub mod traverse {
                     break;
                 }
             }
+            DataType::Map(inner_type) => match *inner_type {
+                DataType::Tuple(tuple_inner_types) => {
+                    for tuple_inner_type in tuple_inner_types.iter() {
+                        traverse_recursive(None, None, tuple_inner_type, leaves)?;
+                    }
+                }
+                _ => unreachable!(),
+            },
             _ => {
                 leaves.push((idx, column.cloned(), data_type.clone()));
             }

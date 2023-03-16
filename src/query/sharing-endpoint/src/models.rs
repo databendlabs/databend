@@ -150,7 +150,7 @@ impl SharingConfig {
         if share_spec.is_none() {
             return Ok(None);
         }
-        return match share_spec {
+        match share_spec {
             None => Ok(None),
             Some(share) => {
                 if !share.tenants.contains(&tenant_id) {
@@ -169,7 +169,7 @@ impl SharingConfig {
                 }
                 Ok(target)
             }
-        };
+        }
     }
 }
 

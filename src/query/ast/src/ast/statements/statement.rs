@@ -51,6 +51,9 @@ pub enum Statement {
     ShowFunctions {
         limit: Option<ShowLimit>,
     },
+    ShowTableFunctions {
+        limit: Option<ShowLimit>,
+    },
 
     KillStmt {
         kill_target: KillTarget,
@@ -71,6 +74,7 @@ pub enum Statement {
     },
 
     Insert(InsertStmt),
+    Replace(ReplaceStmt),
 
     Delete {
         table_reference: TableReference,
@@ -208,6 +212,33 @@ pub struct StatementMsg {
     pub(crate) format: Option<String>,
 }
 
+impl Statement {
+    pub fn to_mask_sql(&self) -> String {
+        match self {
+            Statement::Copy(copy) => {
+                let mut copy_clone = copy.clone();
+
+                if let CopyUnit::UriLocation(location) = &mut copy_clone.src {
+                    location.connection = location.connection.mask()
+                }
+
+                if let CopyUnit::UriLocation(location) = &mut copy_clone.dst {
+                    location.connection = location.connection.mask()
+                }
+                format!("{}", Statement::Copy(copy_clone))
+            }
+            Statement::CreateStage(stage) => {
+                let mut stage_clone = stage.clone();
+                if let Some(location) = &mut stage_clone.location {
+                    location.connection = location.connection.mask()
+                }
+                format!("{}", Statement::CreateStage(stage_clone))
+            }
+            _ => format!("{}", self),
+        }
+    }
+}
+
 impl Display for Statement {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -231,6 +262,7 @@ impl Display for Statement {
             }
             Statement::Query(query) => write!(f, "{query}")?,
             Statement::Insert(insert) => write!(f, "{insert}")?,
+            Statement::Replace(replace) => write!(f, "{replace}")?,
             Statement::Delete {
                 table_reference,
                 selection,
@@ -254,6 +286,12 @@ impl Display for Statement {
             Statement::ShowEngines => write!(f, "SHOW ENGINES")?,
             Statement::ShowFunctions { limit } => {
                 write!(f, "SHOW FUNCTIONS")?;
+                if let Some(limit) = limit {
+                    write!(f, " {limit}")?;
+                }
+            }
+            Statement::ShowTableFunctions { limit } => {
+                write!(f, "SHOW TABLE_FUNCTIONS")?;
                 if let Some(limit) = limit {
                     write!(f, " {limit}")?;
                 }

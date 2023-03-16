@@ -3,7 +3,7 @@ select
     supp_nation,
     cust_nation,
     l_year,
-    truncate(sum(volume),3) as revenue
+    sum(volume) as revenue
 from
     (
         select

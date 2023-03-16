@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>ClickBench — a Benchmark For Analytical DBMS</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet">
+    <link rel="icon" href="https://databend.rs/img/logo/logo-no-text.svg">
+
+    <style>
+        :root {
+            --color: black;
+            --title-color: black;
+            --background-color: white;
+
+            --link-color: #08F;
+            --link-hover-color: #F40;
+
+            --selector-text-color: black;
+            --selector-active-text-color: black;
+            --selector-background-color: #EEE;
+            --selector-active-background-color: #FFCB80;
+            --selector-hover-text-color: black;
+            --selector-hover-background-color: #FDB;
+
+            --summary-every-other-row-color: #F8F8F8;
+            --highlight-color: #EEE;
+            --bar-color: #FFCB80;
+
+            --tooltip-text-color: white;
+            --tooltip-background-color: black;
+
+            --nothing-selected-color: #CCC;
+            --shadow-color: grey;
+        }
+
+        [data-theme="dark"] {
+            --color: #CCC;
+            --title-color: white;
+            --background-color: #04293A;
+
+            --link-color: #8CF;
+            --link-hover-color: #FFF;
+
+            --selector-text-color: white;
+            --selector-background-color: #444;
+            --selector-active-text-color: white;
+            --selector-active-background-color: #088;
+            --selector-hover-text-color: black;
+            --selector-hover-background-color: white;
+
+            --summary-every-other-row-color: #042e41;
+            --highlight-color: #064663;
+            --bar-color: #088;
+
+            --tooltip-text-color: white;
+            --tooltip-background-color: #444;
+
+            --nothing-selected-color: #666;
+            --shadow-color: black;
+        }
+
+        html,
+        body {
+            color: var(--color);
+            background-color: var(--background-color);
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            overflow: auto;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            padding: 1% 3% 0 3%;
+        }
+
+        h1 {
+            color: var(--title-color);
+        }
+
+        table {
+            border-spacing: 1px;
+        }
+
+        .stick-left {
+            position: sticky;
+            left: 0px;
+        }
+
+        .selectors-container {
+            padding: 2rem 0 2rem 0;
+            user-select: none;
+        }
+
+        .selectors-container th {
+            text-align: left;
+            vertical-align: top;
+            white-space: nowrap;
+            padding-top: 0.5rem;
+            padding-right: 1rem;
+        }
+
+        .selector {
+            display: inline-block;
+            margin-left: 0.1rem;
+            padding: 0.2rem 0.5rem 0.2rem 0.5rem;
+            background: var(--selector-background-color);
+            color: var(--selector-text-color);
+            border: 0.2rem solid var(--background-color);
+            border-radius: 0.5rem;
+        }
+
+        .selector-active {
+            color: var(--selector-active-text-color);
+            background: var(--selector-active-background-color);
+        }
+
+        a,
+        a:visited {
+            text-decoration: none;
+            color: var(--link-color);
+            cursor: pointer;
+        }
+
+        a:hover {
+            color: var(--link-hover-color);
+        }
+
+        .selector:hover {
+            color: var(--selector-hover-text-color) !important;
+            background: var(--selector-background-color);
+        }
+
+        .selector-active:hover {
+            background: var(--selector-hover-background-color);
+        }
+
+        #summary tr:nth-child(odd) {
+            background: var(--summary-every-other-row-color);
+        }
+
+        .summary-name {
+            white-space: nowrap;
+            text-align: right;
+            padding-right: 1rem;
+        }
+
+        .summary-bar-cell {
+            width: 100%;
+        }
+
+        .summary-bar {
+            height: 1rem;
+            background: var(--bar-color);
+            border-radius: 0 0.2rem 0.2rem 0;
+        }
+
+        .summary-number {
+            font-family: monospace;
+            text-align: right;
+            padding-left: 1rem;
+            white-space: nowrap;
+        }
+
+        th {
+            padding-bottom: 0.5rem;
+        }
+
+        .th-entry-hilite {
+            background: var(--highlight-color);
+            font-weight: bold;
+        }
+
+        .summary-row:hover,
+        .summary-row-hilite {
+            background: var(--highlight-color) !important;
+            font-weight: bold;
+        }
+
+        #details {
+            padding-bottom: 1rem;
+        }
+
+        #details th {
+            vertical-align: bottom;
+            white-space: pre;
+        }
+
+        #details td {
+            white-space: pre;
+            font-family: monospace;
+            text-align: right;
+            padding: 0.1rem 0.5rem 0.1rem 0.5rem;
+        }
+
+        .shadow:hover {
+            box-shadow: 0 0 1rem var(--shadow-color);
+            position: relative;
+        }
+
+        #nothing-selected {
+            display: none;
+            font-size: 32pt;
+            font-weight: bold;
+            color: var(--nothing-selected-color);
+        }
+
+        .note {
+            position: relative;
+            display: inline-block;
+        }
+
+        .tooltip {
+            position: absolute;
+            bottom: calc(100% + 0.5rem);
+            visibility: hidden;
+            background-color: var(--tooltip-background-color);
+            color: var(--tooltip-text-color);
+            box-shadow: 0 0 1rem var(--shadow-color);
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.5rem;
+            z-index: 1;
+            text-align: left;
+            white-space: normal;
+        }
+
+        .tooltip-result {
+            left: calc(50% - 0.25rem);
+            width: 20rem;
+            margin-left: -10rem;
+        }
+
+        .tooltip-query {
+            left: 0;
+            width: 40rem;
+            margin-left: -3rem;
+        }
+
+        .note:hover .tooltip {
+            visibility: visible;
+        }
+
+        .tooltip::after {
+            content: " ";
+            position: absolute;
+            top: 100%;
+            border-width: 0.5rem;
+            border-style: solid;
+            border-color: var(--tooltip-background-color) transparent transparent transparent;
+        }
+
+        .tooltip-result::after {
+            left: 50%;
+            margin-left: -1rem;
+        }
+
+        .tooltip-query::after {
+            left: 3rem;
+            margin-left: 0.5rem;
+        }
+
+        .nowrap {
+            word-wrap: none;
+        }
+
+        .themes {
+            float: right;
+            font-size: 200%;
+            cursor: pointer;
+        }
+
+        #toggle-dark,
+        #toggle-light {
+            padding-right: 0.5rem;
+            cursor: pointer;
+        }
+
+        #toggle-dark:hover,
+        #toggle-light:hover {
+            display: inline-block;
+            transform: translate(1px, 1px);
+            filter: brightness(125%);
+        }
+
+    </style>
+    <script type="text/javascript">
+
+        const queries = [
+            "select l_returnflag, l_linestatus, sum(l_quantity) as sum_qty, sum(l_extendedprice) as sum_base_price, sum(l_extendedprice * (1 - l_discount)) as sum_disc_price, sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge, avg(l_quantity) as avg_qty, avg(l_extendedprice) as avg_price, avg(l_discount) as avg_disc, count(*) as count_order from lineitem where l_shipdate <= add_days(to_date('1998-12-01'), -90) group by l_returnflag, l_linestatus order by l_returnflag, l_linestatus;",
+            "select s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment from part, supplier, partsupp, nation, region where p_partkey = ps_partkey and s_suppkey = ps_suppkey and p_size = 15 and p_type like '%BRASS' and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'EUROPE' and ps_supplycost = ( select min(ps_supplycost) from partsupp, supplier, nation, region where p_partkey = ps_partkey and s_suppkey = ps_suppkey and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'EUROPE' ) order by s_acctbal desc, n_name, s_name, p_partkey;",
+            "select l_orderkey, sum(l_extendedprice * (1 - l_discount)) as revenue, o_orderdate, o_shippriority from customer, orders, lineitem where c_mktsegment = 'BUILDING' and c_custkey = o_custkey and l_orderkey = o_orderkey and o_orderdate < to_date('1995-03-15') and l_shipdate > to_date('1995-03-15') group by l_orderkey, o_orderdate, o_shippriority order by revenue desc, o_orderdate limit 5;",
+            "select o_orderpriority, count(*) as order_count from orders where o_orderdate >= to_date('1993-07-01') and o_orderdate < add_months(to_date('1993-07-01'), 3) and exists ( select * from lineitem where l_orderkey = o_orderkey and l_commitdate < l_receiptdate ) group by o_orderpriority order by o_orderpriority;",
+            "select n_name, sum(l_extendedprice * (1 - l_discount)) / 10 as revenue from customer, orders, lineitem, supplier, nation, region where c_custkey = o_custkey and l_orderkey = o_orderkey and l_suppkey = s_suppkey and c_nationkey = s_nationkey and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'ASIA' and o_orderdate >= to_date('1994-01-01') and o_orderdate < add_years(to_date('1994-01-01'), 1) group by n_name order by revenue desc;",
+            "select sum(l_extendedprice * l_discount) as revenue from lineitem where l_shipdate >= '1994-01-01' and l_shipdate < date_add(year, 1, to_date('1994-01-01')) and l_discount between 0.05 and 0.07 and l_quantity < 24;",
+            "select supp_nation, cust_nation, l_year, sum(volume) as revenue from ( select n1.n_name as supp_nation, n2.n_name as cust_nation, extract(year from l_shipdate) as l_year, l_extendedprice * (1 - l_discount) as volume from supplier, lineitem, orders, customer, nation n1, nation n2 where s_suppkey = l_suppkey and o_orderkey = l_orderkey and c_custkey = o_custkey and s_nationkey = n1.n_nationkey and c_nationkey = n2.n_nationkey and ( (n1.n_name = 'FRANCE' and n2.n_name = 'GERMANY') or (n1.n_name = 'GERMANY' and n2.n_name = 'FRANCE') ) and l_shipdate between to_date('1995-01-01') and to_date('1996-12-31') ) as shipping group by supp_nation, cust_nation, l_year order by supp_nation, cust_nation, l_year;",
+            "select o_year, sum(case when nation = 'BRAZIL' then volume else 0 end) / sum(volume) as mkt_share from ( select extract(year from o_orderdate) as o_year, l_extendedprice * (1 - l_discount) as volume, n2.n_name as nation from part, supplier, lineitem, orders, customer, nation n1, nation n2, region where p_partkey = l_partkey and s_suppkey = l_suppkey and l_orderkey = o_orderkey and o_custkey = c_custkey and c_nationkey = n1.n_nationkey and n1.n_regionkey = r_regionkey and r_name = 'AMERICA' and s_nationkey = n2.n_nationkey and o_orderdate between to_date('1995-01-01') and to_date('1996-12-31') and p_type = 'ECONOMY ANODIZED STEEL' ) as all_nations group by o_year order by o_year;",
+            "select nation, o_year, sum(amount) as sum_profit from ( select n_name as nation, extract(year from o_orderdate) as o_year, l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity as amount from lineitem join orders on o_orderkey = l_orderkey join part on p_partkey = l_partkey join partsupp on ps_partkey = l_partkey join supplier on s_suppkey = l_suppkey join nation on s_nationkey = n_nationkey where ps_suppkey = l_suppkey and p_name like '%green%' ) as profit group by nation, o_year order by nation, o_year desc;",
+            "select c_custkey, c_name, sum(l_extendedprice * (1 - l_discount)) as revenue, c_acctbal, n_name, c_address, c_phone, c_comment from customer, orders, lineitem, nation where c_custkey = o_custkey and l_orderkey = o_orderkey and o_orderdate >= to_date('1993-10-01') and o_orderdate < add_months(to_date('1993-10-01'), 3) and l_returnflag = 'R' and c_nationkey = n_nationkey group by c_custkey, c_name, c_acctbal, c_phone, n_name, c_address, c_comment order by revenue desc limit 5;",
+            "select ps_partkey, sum(ps_supplycost * ps_availqty) as value from partsupp, supplier, nation where ps_suppkey = s_suppkey and s_nationkey = n_nationkey and n_name = 'GERMANY' group by ps_partkey having sum(ps_supplycost * ps_availqty) > ( select sum(ps_supplycost * ps_availqty) * 0.0100000000 from partsupp, supplier, nation where ps_suppkey = s_suppkey and s_nationkey = n_nationkey and n_name = 'GERMANY' ) order by value desc;",
+            "select l_shipmode, sum(case when o_orderpriority = '1-URGENT' or o_orderpriority = '2-HIGH' then 1 else 0 end) as high_line_count, sum(case when o_orderpriority <> '1-URGENT' and o_orderpriority <> '2-HIGH' then 1 else 0 end) as low_line_count from orders, lineitem where o_orderkey = l_orderkey and l_shipmode in ('MAIL', 'SHIP') and l_commitdate < l_receiptdate and l_shipdate < l_commitdate and l_receiptdate >= to_date('1994-01-01') and l_receiptdate < date_add(year, 1, to_date('1994-01-01')) group by l_shipmode order by l_shipmode;",
+            "select c_count, count(*) as custdist from ( select c_custkey, count(o_orderkey) as c_count from customer left outer join orders on c_custkey = o_custkey and o_comment not like '%pending%deposits%' group by c_custkey ) c_orders group by c_count order by custdist desc, c_count desc;",
+            "select 100.00 * sum(case when p_type like 'PROMO%' then l_extendedprice * (1 - l_discount) else 0 end) / sum(l_extendedprice * (1 - l_discount)) as promo_revenue from lineitem, part where l_partkey = p_partkey and l_shipdate >= to_date('1995-09-01') and l_shipdate < add_months(to_date('1995-09-01'), 1);",
+            "with revenue as ( select l_suppkey as supplier_no, sum(l_extendedprice * (1 - l_discount)) as total_revenue from lineitem where l_shipdate >= to_date ('1996-01-01') and l_shipdate < to_date ('1996-04-01') group by l_suppkey) select s_suppkey, s_name, s_address, s_phone, total_revenue from supplier, revenue where s_suppkey = supplier_no and total_revenue = ( select max(total_revenue) from revenue ) order by s_suppkey;",
+            "select p_brand, p_type, p_size, count(distinct ps_suppkey) as supplier_cnt from partsupp, part where p_partkey = ps_partkey and p_brand <> 'Brand#45' and p_type not like 'MEDIUM POLISHED%' and p_size in (49, 14, 23, 45, 19, 3, 36, 9) and ps_suppkey not in ( select s_suppkey from supplier where s_comment like '%Customer%Complaints%' ) group by p_brand, p_type, p_size order by supplier_cnt desc, p_brand, p_type, p_size limit 20;",
+            "select sum(l_extendedprice) / 7.0 as avg_yearly from lineitem, part where p_partkey = l_partkey and p_brand = 'Brand#23' and p_container = 'MED BOX' and l_quantity < ( select 0.2 * avg(l_quantity) from lineitem where l_partkey = p_partkey );",
+            "select c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice, sum(l_quantity) from customer, orders, lineitem where o_orderkey in ( select l_orderkey from lineitem group by l_orderkey having sum(l_quantity) > 300 ) and c_custkey = o_custkey and o_orderkey = l_orderkey group by c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice order by o_totalprice desc, o_orderdate;",
+            "select sum(l_extendedprice* (1 - l_discount)) as revenue from lineitem, part where ( p_partkey = l_partkey and p_brand = 'Brand#52' and p_container in ( 'SM CASE', 'SM BOX', 'SM PACK', 'SM PKG' ) and l_quantity >= 4 and l_quantity <= 4 + 10 and p_size between 1 and 5 and l_shipmode in ( 'AIR', 'AIR REG' ) and l_shipinstruct = 'DELIVER IN PERSON' ) or ( p_partkey = l_partkey and p_brand = 'Brand#11' and p_container in ( 'MED BAG', 'MED BOX', 'MED PKG', 'MED PACK' ) and l_quantity >= 18 and l_quantity <= 18 + 10 and p_size between 1 and 10 and l_shipmode in ( 'AIR', 'AIR REG' ) and l_shipinstruct = 'DELIVER IN PERSON' ) or ( p_partkey = l_partkey and p_brand = 'Brand#51' and p_container in ( 'LG CASE', 'LG BOX', 'LG PACK', 'LG PKG' ) and l_quantity >= 29 and l_quantity <= 29 + 10 and p_size between 1 and 15 and l_shipmode in ( 'AIR', 'AIR REG' ) and l_shipinstruct = 'DELIVER IN PERSON' ) ;",
+            "select s_name, s_address from supplier, nation where s_suppkey in ( select ps_suppkey from partsupp where ps_partkey in ( select p_partkey from part where p_name like 'forest%' ) and ps_availqty > ( select 0.5 * sum(l_quantity) from lineitem where l_partkey = ps_partkey and l_suppkey = ps_suppkey and l_shipdate >= to_date('1994-01-01') and l_shipdate < add_years(to_date('1994-01-01'), 1) ) ) and s_nationkey = n_nationkey and n_name = 'CANADA' order by s_name;",
+            "select s_name, truncate(count(*),4) as numwait from supplier, lineitem l1, orders, nation where s_suppkey = l1.l_suppkey and o_orderkey = l1.l_orderkey and o_orderstatus = 'F' and l1.l_receiptdate > l1.l_commitdate and exists ( select * from lineitem l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey <> l1.l_suppkey ) and not exists ( select * from lineitem l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey <> l1.l_suppkey and l3.l_receiptdate > l3.l_commitdate ) and s_nationkey = n_nationkey and n_name = 'SAUDI ARABIA' group by s_name order by numwait desc, s_name;",
+            "select cntrycode, count(*) as numcust, sum(c_acctbal) as totacctbal from ( select substring(c_phone from 1 for 2) as cntrycode, c_acctbal from customer where substring(c_phone from 1 for 2) in ('13', '31', '23', '29', '30', '18', '17') and c_acctbal > ( select avg(c_acctbal) from customer where c_acctbal > 0.00 and substring(c_phone from 1 for 2) in ('13', '31', '23', '29', '30', '18', '17') ) and not exists ( select * from orders where o_custkey = c_custkey ) ) as custsale group by cntrycode order by cntrycode;",
+        ];
+
+        const data = [
+        ]; // end of data
+
+        const additional_data_size_points = [
+        ];
+    </script>
+</head>
+
+<body>
+
+    <div class="header stick-left">
+        <span class="nowrap themes"><span id="toggle-dark">🌚</span><span id="toggle-light">🌞</span></span>
+        <h1>ClickBench — a Benchmark For Analytical DBMS</h1>
+        <a href="https://github.com/ClickHouse/ClickBench/">Add a System</a> | <a
+            href="https://benchmark.clickhouse.com/hardware/">Hardware Benchmark</a> | <a
+            href="https://benchmark.clickhouse.com/versions/">Versions Benchmark</a>
+    </div>
+
+    <table class="selectors-container stick-left">
+        <tr>
+            <th>System: </th>
+            <td id="selectors_system">
+                <a id="select-all-systems" class="selector selector-active">All</a>
+            </td>
+        </tr>
+        <tr>
+            <th>Type: </th>
+            <td id="selectors_type">
+                <a id="select-all-types" class="selector selector-active">All</a>
+            </td>
+        </tr>
+        <tr>
+            <th>Machine: </th>
+            <td id="selectors_machine">
+                <a id="select-all-machines" class="selector selector-active">All</a>
+            </td>
+        </tr>
+        <tr>
+            <th>Cluster size: </th>
+            <td id="selectors_cluster_size">
+                <a id="select-all-cluster-sizes" class="selector selector-active">All</a>
+            </td>
+        </tr>
+        <tr>
+            <th>Metric: </th>
+            <td id="selectors_run">
+                <a class="selector" id="selector-metric-cold">Cold Run</a>
+                <a class="selector" id="selector-metric-hot">Hot Run</a>
+                <a class="selector" id="selector-metric-load">Load Time</a>
+                <a class="selector" id="selector-metric-size">Storage Size</a>
+            </td>
+        </tr>
+    </table>
+
+    <table class="stick-left comparison">
+        <thead>
+            <tr>
+                <th class="summary-name">
+                    System &amp; Machine
+                </th>
+                <th colspan="2">
+                    Relative <span id="time-or-size">time</span> (lower is better)
+                </th>
+            </tr>
+        </thead>
+        <tbody id="summary">
+        </tbody>
+    </table>
+
+    <div id="nothing-selected" class="stick-left">Nothing selected</div>
+
+    <div class="stick-left comparison">
+        <h2>Detailed Comparison</h2>
+    </div>
+
+    <table id="details">
+        <thead>
+            <tr id="details_head">
+            </tr>
+        </thead>
+        <tbody id="details_body">
+        </tbody>
+    </table>
+
+    <script type="text/javascript">
+
+        const constant_time_add = 0.01;
+        const missing_result_penalty = 2;
+        const missing_result_time = 300;
+
+        let selectors = {
+            "system": {},
+            "type": {},
+            "machine": {},
+            "cluster_size": {},
+            "metric": "hot",
+            "queries": [],
+        };
+
+        let theme = 'light';
+
+        function setTheme(new_theme) {
+            theme = new_theme;
+            document.documentElement.setAttribute('data-theme', theme);
+            window.localStorage.setItem('theme', theme);
+            render();
+        }
+
+        document.getElementById('toggle-light').addEventListener('click', e => setTheme('light'));
+        document.getElementById('toggle-dark').addEventListener('click', e => setTheme('dark'));
+
+        let new_theme = window.localStorage.getItem('theme');
+        if (new_theme && new_theme != theme) {
+            setTheme(new_theme);
+        }
+
+        /// Generate selectors
+
+        let systems = document.getElementById('selectors_system');
+        let types = document.getElementById('selectors_type');
+        let machines = document.getElementById('selectors_machine');
+        let cluster_sizes = document.getElementById('selectors_cluster_size');
+
+        let unique_systems = [... new Set(data.map(elem => elem.system))];
+
+        function toggle(e, elem, selectors_map) {
+            selectors_map[elem] = !selectors_map[elem];
+            e.target.className = selectors_map[elem] ? 'selector selector-active' : 'selector';
+            render();
+            updateHistory();
+        }
+
+        function toggleAll(e, selectors_map) {
+            const new_value = Object.keys(selectors_map).filter(k => selectors_map[k]).length * 2 < Object.keys(selectors_map).length;
+            [...e.target.parentElement.querySelectorAll('a')].map(
+                elem => { elem.className = new_value ? 'selector selector-active' : 'selector' });
+
+            Object.keys(selectors_map).map(k => { selectors_map[k] = new_value });
+            render();
+            updateHistory();
+        }
+
+        unique_systems.map(elem => {
+            let selector = document.createElement('a');
+            selector.className = 'selector selector-active';
+            selector.appendChild(document.createTextNode(elem));
+            systems.appendChild(selector);
+            if (!(elem in selectors.system)) { selectors.system[elem] = data.some(entry => entry.system == elem && !entry.hide); }
+            selector.addEventListener('click', e => toggle(e, elem, selectors.system));
+
+            /// Highlighting summary rows and table columns on hovering over the system selector.
+            selector.addEventListener('mouseover', e => {
+                [...document.querySelectorAll('.summary-row')].map(row => {
+                    row.className = row.dataset.system == elem ? 'summary-row summary-row-hilite' : 'summary-row'
+                });
+                [...document.querySelectorAll('.th-entry')].map(th => {
+                    th.className = th.dataset.system == elem ? 'th-entry th-entry-hilite' : 'th-entry'
+                });
+            });
+            selector.addEventListener('mouseout', e => {
+                [...document.querySelectorAll('.summary-row')].map(row => { row.className = 'summary-row' });
+                [...document.querySelectorAll('.th-entry')].map(row => { row.className = 'th-entry' });
+            });
+        });
+
+        [... new Set(data.map(elem => elem.tags).flat())].map(elem => {
+            let selector = document.createElement('a');
+            selector.className = 'selector selector-active';
+            selector.appendChild(document.createTextNode(elem));
+            types.appendChild(selector);
+            if (!(elem in selectors.type)) { selectors.type[elem] = true; }
+            selector.addEventListener('click', e => toggle(e, elem, selectors.type));
+        });
+
+        [... new Set(data.map(elem => elem.machine))].map(elem => {
+            let selector = document.createElement('a');
+            selector.className = 'selector selector-active';
+            selector.appendChild(document.createTextNode(elem));
+            machines.appendChild(selector);
+            if (!(elem in selectors.machine)) { selectors.machine[elem] = true; }
+            selector.addEventListener('click', e => toggle(e, elem, selectors.machine));
+        });
+
+        [... new Set(data.map(elem => elem.cluster_size))].sort(
+            (a, b) => ((typeof (b) === 'number') - (typeof (a) === 'number')) || (a - b)).map(elem => {
+                let selector = document.createElement('a');
+                selector.className = 'selector selector-active';
+                selector.appendChild(document.createTextNode(elem));
+                cluster_sizes.appendChild(selector);
+                if (!(elem in selectors.cluster_size)) { selectors.cluster_size[elem] = true; }
+                selector.addEventListener('click', e => toggle(e, elem, selectors.cluster_size));
+            });
+
+        document.getElementById('select-all-systems').addEventListener('click', e => toggleAll(e, selectors.system));
+        document.getElementById('select-all-types').addEventListener('click', e => toggleAll(e, selectors.type));
+        document.getElementById('select-all-machines').addEventListener('click', e => toggleAll(e, selectors.machine));
+        document.getElementById('select-all-cluster-sizes').addEventListener('click', e => toggleAll(e, selectors.cluster_size));
+
+        [...document.getElementById('selectors_run').querySelectorAll('a')].map(elem => elem.addEventListener('click', e => {
+            [...e.target.parentElement.querySelectorAll('a')].map(elem => { elem.className = elem == e.target ? 'selector selector-active' : 'selector' });
+        }));
+
+        document.getElementById('selector-metric-cold').addEventListener('click', e => { selectors.metric = 'cold'; render(); updateHistory(); });
+        document.getElementById('selector-metric-hot').addEventListener('click', e => { selectors.metric = 'hot'; render(); updateHistory(); });
+        document.getElementById('selector-metric-load').addEventListener('click', e => { selectors.metric = 'load'; render(); updateHistory(); });
+        document.getElementById('selector-metric-size').addEventListener('click', e => { selectors.metric = 'size'; render(); updateHistory(); });
+
+        selectors.queries = [...data[0].result.keys()].map(k => true);
+
+        function updateSelectors() {
+            [...systems.childNodes].map(elem => { elem.className = selectors.system[elem.innerText] ? 'selector selector-active' : 'selector' });
+            [...types.childNodes].map(elem => { elem.className = selectors.type[elem.innerText] ? 'selector selector-active' : 'selector' });
+            [...machines.childNodes].map(elem => { elem.className = selectors.machine[elem.innerText] ? 'selector selector-active' : 'selector' });
+            [...cluster_sizes.childNodes].map(elem => { elem.className = selectors.cluster_size[elem.innerText] ? 'selector selector-active' : 'selector' });
+
+            [...document.getElementById('selectors_run').querySelectorAll('a')].map(elem => {
+                elem.className = elem.id == 'selector-metric-' + selectors.metric ? 'selector selector-active' : 'selector'
+            });
+
+            [...document.querySelectorAll('.query-checkbox')].map((elem, i) => { elem.checked = selectors.queries[i] });
+        }
+
+        function clearElement(elem) {
+            while (elem.firstChild) {
+                elem.removeChild(elem.lastChild);
+            }
+        }
+
+        function selectRun(timings) {
+            if (selectors.metric == 'cold') {
+                return timings[0];
+            } else {
+                let hot = timings.slice(1).filter(t => t !== null);
+                if (hot.length > 0) {
+                    return Math.min(...hot);
+                } else {
+                    return null;
+                }
+            }
+        }
+
+        function addNote(text) {
+            let note = document.createElement('sup');
+            note.className = 'note';
+            note.appendChild(document.createTextNode('†'));
+
+            let tooltip = document.createElement('span');
+            tooltip.className = 'tooltip tooltip-result';
+            tooltip.appendChild(document.createTextNode(text));
+
+            note.appendChild(tooltip);
+            return note;
+        }
+
+        function renderSummary(filtered_data) {
+            let table = document.getElementById('summary');
+            clearElement(table);
+
+            /// Generate summary
+
+            /// The algorithm: for each of the queries,
+            /// - if there is a result - take query duration, add 10 ms, and divide it to the corresponding value from the baseline,
+            /// - if there is no result - take the worse query duration across all query runs for this system and multiply by 2.
+            /// Take geometric mean across the queries.
+
+            let summary = {};
+
+            const num_queries = filtered_data[0].result.length;
+
+            const baseline_data = [...filtered_data[0].result.keys()].map(query_num =>
+                [...Array(3).keys()].map(run_num =>
+                    Math.min(...filtered_data.filter(elem => !elem.fake).map(elem => elem.result[query_num][run_num]).filter(x => x))));
+
+            const min_load_time = Math.min(...filtered_data.map(elem => elem.load_time).filter(x => x));
+            const min_data_size = Math.min(...filtered_data.map(elem => elem.data_size).filter(x => x));
+
+            let summaries;
+            if (selectors.metric == 'load') {
+                summaries = filtered_data.map(elem => elem.load_time / min_load_time);
+                document.getElementById('time-or-size').innerText = 'time';
+            } else if (selectors.metric == 'size') {
+                summaries = filtered_data.map(elem => elem.data_size / min_data_size);
+                document.getElementById('time-or-size').innerText = 'size';
+            } else {
+                summaries = filtered_data.map(elem => {
+                    const fallback_timing = missing_result_penalty * Math.max(missing_result_time, ...elem.result.map(timings => selectRun(timings)));
+
+                    let accumulator = 0;
+                    let used_queries = 0;
+
+                    const no_queries_selected = selectors.queries.filter(x => x).length == 0;
+
+                    for (let i = 0; i < num_queries; ++i) {
+                        if (no_queries_selected || selectors.queries[i]) {
+                            const curr_timing = selectRun(elem.result[i]) ?? fallback_timing;
+                            const baseline_timing = selectRun(baseline_data[i]);
+                            const ratio = (constant_time_add + curr_timing) / (constant_time_add + baseline_timing);
+                            accumulator += Math.log(ratio);
+                            ++used_queries;
+                        }
+                    }
+
+                    return Math.exp(accumulator / used_queries);
+                });
+                document.getElementById('time-or-size').innerText = 'time';
+            }
+
+            const sorted_indices = [...summaries.keys()].sort((a, b) => summaries[a] - summaries[b]);
+            const max_ratio = summaries[sorted_indices[sorted_indices.length - 1]];
+
+            sorted_indices.map(idx => {
+                const elem = filtered_data[idx];
+
+                if (selectors.metric == 'size' && elem.data_size === null) { return; }
+
+                let tr = document.createElement('tr');
+                tr.className = 'summary-row';
+
+                tr.dataset.system = elem.system;
+
+                let td_name = document.createElement('td');
+                td_name.className = 'summary-name';
+
+                if (!elem.fake) {
+                    let link = document.createElement('a');
+                    link.appendChild(document.createTextNode(`${elem.system} (${Number.isInteger(elem.cluster_size) && elem.cluster_size > 1 ? elem.cluster_size + '×' : ''}${elem.machine})`));
+                    link.href = "https://github.com/ClickHouse/ClickBench/blob/main/" + elem.source;
+                    td_name.appendChild(link);
+                } else {
+                    td_name.appendChild(document.createTextNode(elem.system));
+                }
+
+                if (elem.comment) { td_name.appendChild(addNote(elem.comment)); }
+                td_name.appendChild(document.createTextNode(': '));
+
+                const ratio = summaries[idx];
+                const percentage = summaries[idx] / max_ratio * 100;
+
+                let td_number = document.createElement('td');
+                td_number.className = 'summary-number';
+
+                const text = selectors.metric == 'load' ? (elem.load_time ? `${Math.round(elem.load_time)}s (×${ratio.toFixed(2)})` : 'stateless')
+                    : selectors.metric == 'size' ? `${(elem.data_size / 1024 / 1024 / 1024).toFixed(2)} GiB (×${ratio.toFixed(2)})`
+                        : `×${ratio.toFixed(2)}`;
+
+                td_number.appendChild(document.createTextNode(text));
+
+                let td_bar = document.createElement('td');
+                td_bar.className = 'summary-bar-cell';
+
+                let bar = document.createElement('div');
+
+                bar.className = `summary-bar`;
+                bar.style.width = `${percentage}%`;
+
+                td_bar.appendChild(bar);
+
+                tr.appendChild(td_name);
+                tr.appendChild(td_bar);
+                tr.appendChild(td_number);
+                table.appendChild(tr);
+            });
+
+            return [sorted_indices, baseline_data];
+        }
+
+        function colorize(elem, ratio) {
+            let [r, g, b] = [0, 0, 0];
+
+            /// ratio less than 1 - green
+            /// ratio from 1 to 2 - green to yellow
+            /// ratio from 2 to 10 - yellow to red
+            /// ratio from 10 to 1000 to infinity - red to brown to black
+
+            /// Note: we are using RGB space without proper gamma correction. Read more: https://www.handprint.com/HP/WCL/color1.html
+
+            if (ratio !== null) {
+                if (ratio < 1) {
+                    r = 232;
+                    g = 255;
+                    b = 232;
+                } else if (ratio <= 1) {
+                    g = 255;
+                } else if (ratio <= 2) {
+                    g = 255;
+                    r = (ratio - 1) * 255;
+                } else if (ratio <= 10) {
+                    g = (10 - ratio) / 8 * 255;
+                    r = 255;
+                } else {
+                    r = (1 - ((ratio - 10) / ((ratio - 10) + 1000))) * 255;
+                }
+            }
+
+            if (document.documentElement.getAttribute('data-theme') == 'dark') {
+                r /= 1.5;
+                g /= 1.5;
+                b /= 1.5;
+            }
+
+            elem.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+            if (ratio === null || ratio > 10) {
+                /// This will look better on dark backgrounds
+                elem.style.color = 'white';
+            } else {
+                elem.style.color = 'black';
+            }
+
+            /// The best result is highlighted
+            if (ratio == 1) {
+                elem.style.fontWeight = 'bold';
+            }
+        }
+
+        function render() {
+            let details_head = document.getElementById('details_head');
+            let details_body = document.getElementById('details_body');
+
+            clearElement(details_head);
+            clearElement(details_body);
+
+            let filtered_data = data.filter(elem =>
+                selectors.system[elem.system] &&
+                selectors.machine[elem.machine] &&
+                selectors.cluster_size[elem.cluster_size] &&
+                elem.tags.filter(type => selectors.type[type]).length > 0);
+
+            let nothing_selected_elem = document.getElementById('nothing-selected');
+            if (filtered_data.length == 0) {
+                nothing_selected_elem.style.display = 'block';
+                [...document.querySelectorAll('.comparison')].map(e => e.style.display = 'none');
+                return;
+            }
+            nothing_selected_elem.style.display = 'none';
+            [...document.querySelectorAll('.comparison')].map(e => e.style.display = 'block');
+
+            if (selectors.metric == 'size') {
+                filtered_data = [...filtered_data, ...additional_data_size_points];
+            }
+
+            let [sorted_indices, baseline_data] = renderSummary(filtered_data);
+            sorted_indices = sorted_indices.filter(idx => !filtered_data[idx].fake);
+
+            /// Generate details
+
+            /// Global checkbox
+            {
+                let th_checkbox = document.createElement('th');
+                let checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = true;
+                checkbox.addEventListener('change', e => {
+                    [...document.querySelectorAll('.query-checkbox')].map(elem => { elem.checked = e.target.checked });
+                    selectors.queries.map((_, i) => { selectors.queries[i] = e.target.checked });
+                    renderSummary(filtered_data);
+                    updateHistory();
+                });
+                th_checkbox.appendChild(checkbox);
+                details_head.appendChild(th_checkbox);
+                details_head.appendChild(document.createElement('th'));
+            }
+
+            /// Table header
+            sorted_indices.map(idx => {
+                const elem = filtered_data[idx];
+                let th = document.createElement('th');
+                th.appendChild(document.createTextNode(`${elem.system}\n(${Number.isInteger(elem.cluster_size) && elem.cluster_size > 1 ? elem.cluster_size + '×' : ''}${elem.machine})`));
+                th.className = 'th-entry';
+                th.dataset.system = elem.system;
+                details_head.appendChild(th);
+            });
+
+            /// Load times
+            {
+                let tr = document.createElement('tr');
+                tr.className = 'shadow';
+
+                let td_title = document.createElement('td');
+                td_title.colSpan = 2;
+                td_title.appendChild(document.createTextNode('Load time: '));
+                tr.appendChild(td_title);
+
+                sorted_indices.map(idx => {
+                    const curr_timing = filtered_data[idx].load_time;
+                    const baseline_timing = Math.min(...filtered_data.map(elem => elem.load_time).filter(x => x));
+                    const ratio = curr_timing / baseline_timing;
+
+                    let td = document.createElement('td');
+                    td.appendChild(document.createTextNode(curr_timing ? `${Math.round(curr_timing)}s (×${ratio.toFixed(2)})` : '0'));
+
+                    colorize(td, ratio);
+                    tr.appendChild(td);
+                });
+
+                details_body.appendChild(tr);
+            }
+
+            /// Data sizes
+            {
+                let tr = document.createElement('tr');
+                tr.className = 'shadow';
+
+                let td_title = document.createElement('td');
+                td_title.colSpan = 2;
+                td_title.appendChild(document.createTextNode('Data size: '));
+                tr.appendChild(td_title);
+
+                sorted_indices.map(idx => {
+                    const curr_size = filtered_data[idx].data_size;
+                    const baseline_size = Math.min(...filtered_data.map(elem => elem.data_size).filter(x => x));
+                    const ratio = curr_size !== null ? curr_size / baseline_size : null;
+
+                    let td = document.createElement('td');
+                    td.appendChild(document.createTextNode(curr_size !== null ? `${(curr_size / 1024 / 1024 / 1024).toFixed(2)} GiB (×${ratio.toFixed(2)})` : '☠'));
+
+                    colorize(td, ratio);
+                    tr.appendChild(td);
+                });
+
+                details_body.appendChild(tr);
+            }
+
+            /// Query runtimes
+            const num_queries = filtered_data[0].result.length;
+
+            for (let query_num = 0; query_num < num_queries; ++query_num) {
+                let tr = document.createElement('tr');
+                tr.className = 'shadow';
+
+                let td_checkbox = document.createElement('td');
+                let checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'query-checkbox';
+                checkbox.checked = selectors.queries[query_num];
+                checkbox.addEventListener('change', e => {
+                    selectors.queries[query_num] = e.target.checked;
+                    renderSummary(filtered_data);
+                    updateHistory();
+                });
+                td_checkbox.appendChild(checkbox);
+                tr.appendChild(td_checkbox);
+
+                let td_query_num = document.createElement('td');
+                td_query_num.className = 'note';
+                td_query_num.appendChild(document.createTextNode(`Q${query_num}. `));
+
+                let tooltip = document.createElement('span');
+                tooltip.className = 'tooltip tooltip-query';
+                tooltip.appendChild(document.createTextNode(`Query ${query_num}: ${queries[query_num]}`));
+                td_query_num.appendChild(tooltip);
+
+                tr.appendChild(td_query_num);
+
+                sorted_indices.map(idx => {
+                    const curr_timing = selectRun(filtered_data[idx].result[query_num]);
+                    const baseline_timing = selectRun(baseline_data[query_num]);
+                    const ratio = curr_timing !== null ? (constant_time_add + curr_timing) / (constant_time_add + baseline_timing) : null;
+
+                    let td = document.createElement('td');
+                    td.appendChild(document.createTextNode(curr_timing !== null ? `${curr_timing.toFixed(2)}s (×${ratio.toFixed(2)})` : '☠'));
+
+                    colorize(td, ratio);
+                    tr.appendChild(td);
+                });
+
+                details_body.appendChild(tr);
+            }
+        }
+
+        function updateHistory() {
+            history.pushState(selectors, '',
+                window.location.pathname + (window.location.search || '') + '#' + btoa(JSON.stringify(selectors)));
+        }
+
+        window.onpopstate = function (event) {
+            if (!event.state) { return; }
+            selectors = event.state;
+            render();
+            updateSelectors();
+        };
+
+        if (window.location.hash) {
+            try {
+                selectors = JSON.parse(atob(window.location.hash.substring(1)));
+            } catch { }
+        }
+
+        render();
+        updateSelectors();
+
+    </script>
+</body>
+
+</html>

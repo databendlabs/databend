@@ -32,6 +32,7 @@ fn test_cast() {
         test_cast_number_to_date(file, is_try);
         test_cast_between_number_and_string(file, is_try);
         test_cast_between_boolean_and_string(file, is_try);
+        test_cast_between_string_and_decimal(file, is_try);
         test_cast_between_number_and_boolean(file, is_try);
         test_cast_between_date_and_timestamp(file, is_try);
         test_cast_between_string_and_timestamp(file, is_try);
@@ -619,6 +620,39 @@ fn test_cast_to_nested_type(file: &mut impl Write, is_try: bool) {
     run_ast(
         file,
         format!("{prefix}CAST([['a'], ['b', 'c']] AS Array(Array(INT) NULL))"),
+        &[],
+    );
+}
+
+fn test_cast_between_string_and_decimal(file: &mut impl Write, is_try: bool) {
+    let prefix = if is_try { "TRY_" } else { "" };
+
+    run_ast(file, format!("{prefix}CAST('010.010' AS DECIMAL(5,3))"), &[
+    ]);
+    run_ast(file, format!("{prefix}CAST('010.010' AS DECIMAL(5,4))"), &[
+    ]);
+    run_ast(file, format!("{prefix}CAST('010.010' AS DECIMAL(5,2))"), &[
+    ]);
+    run_ast(file, format!("{prefix}CAST('010.010' AS DECIMAL(4,3))"), &[
+    ]);
+    run_ast(file, format!("{prefix}CAST('010.010' AS DECIMAL(4,2))"), &[
+    ]);
+    run_ast(
+        file,
+        format!("{prefix}CAST('-1010.010' AS DECIMAL(7,3))"),
+        &[],
+    );
+    run_ast(file, format!("{prefix}CAST('00' AS DECIMAL(2,1))"), &[]);
+    run_ast(file, format!("{prefix}CAST('0.0' AS DECIMAL(2,0))"), &[]);
+    run_ast(file, format!("{prefix}CAST('.0' AS DECIMAL(1,0))"), &[]);
+    run_ast(
+        file,
+        format!("{prefix}CAST('+1.0e-10' AS DECIMAL(11, 10))"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST('-1.0e+10' AS DECIMAL(11, 0))"),
         &[],
     );
 }

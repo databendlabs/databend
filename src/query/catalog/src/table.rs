@@ -25,6 +25,7 @@ use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
+use common_expression::TableField;
 use common_expression::TableSchema;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
@@ -176,6 +177,21 @@ pub trait Table: Sync + Send {
 
         Err(ErrorCode::Unimplemented(format!(
             "append_data operation for table {} is not implemented. table engine : {}",
+            self.name(),
+            self.get_table_info().meta.engine
+        )))
+    }
+
+    async fn replace_into(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        on_conflict_fields: Vec<TableField>,
+    ) -> Result<()> {
+        let (_, _, _) = (ctx, pipeline, on_conflict_fields);
+
+        Err(ErrorCode::Unimplemented(format!(
+            "replace_into operation for table {} is not implemented. table engine : {}",
             self.name(),
             self.get_table_info().meta.engine
         )))

@@ -4,6 +4,7 @@ description: Xor Filter
 slug: xor-filter
 date: 2022-11-23
 tags: [databend, xor, bloom]
+cover_url: replace-bloom-filter.png
 authors:
 - name: BohuTANG
   url: https://github.com/BohuTANG
@@ -102,7 +103,7 @@ Step 2: Start Databend Meta
 ./bin/databend-meta -c configs/databend-meta.toml
 ```
 
-Step 3：Configure Databend Query
+Step 3: Configure Databend Query
 
 For more information, refer to https://databend.rs/doc/deploy/deploying-databend
 

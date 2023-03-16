@@ -103,6 +103,9 @@ echo "drop table default.t20_0012_a all" | $MYSQL_CLIENT_CONNECT
 echo "drop table default.t20_0012_b all" | $MYSQL_CLIENT_CONNECT
 echo "drop view default2.v_t20_0012" | $MYSQL_CLIENT_CONNECT
 
+## Drop database.
+echo "drop database default2" | $MYSQL_CLIENT_CONNECT
+
 ## Drop user
 echo "drop user 'test-user'@'$QUERY_MYSQL_HANDLER_HOST'" | $MYSQL_CLIENT_CONNECT
 rm -rf password.out

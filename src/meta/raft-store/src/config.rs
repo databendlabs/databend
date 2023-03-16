@@ -23,7 +23,7 @@ use once_cell::sync::Lazy;
 
 pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
     let build_semver = option_env!("VERGEN_BUILD_SEMVER");
-    let git_sha = option_env!("VERGEN_GIT_SHA_SHORT");
+    let git_sha = option_env!("VERGEN_GIT_SHA");
     let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
     let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
 
@@ -192,6 +192,13 @@ impl RaftConfig {
     /// Returns true to fsync after a write operation to meta.
     pub fn is_sync(&self) -> bool {
         !self.no_sync
+    }
+
+    /// Returns the min and max election timeout, in milli seconds.
+    ///
+    /// Raft will choose a random timeout in this range for next election.
+    pub fn election_timeout(&self) -> (u64, u64) {
+        (self.heartbeat_interval * 5, self.heartbeat_interval * 7)
     }
 
     pub fn check(&self) -> std::result::Result<(), MetaStartupError> {

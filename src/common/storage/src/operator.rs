@@ -42,8 +42,6 @@ use opendal::layers::LoggingLayer;
 use opendal::layers::MetricsLayer;
 use opendal::layers::RetryLayer;
 use opendal::layers::TracingLayer;
-use opendal::raw::Accessor;
-use opendal::raw::Layer;
 use opendal::services;
 use opendal::Builder;
 use opendal::Operator;
@@ -54,20 +52,23 @@ use crate::StorageConfig;
 /// init_operator will init an opendal operator based on storage config.
 pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
     let op = match &cfg {
-        StorageParams::Azblob(cfg) => build_operator(init_azblob_operator(cfg)?),
-        StorageParams::Fs(cfg) => build_operator(init_fs_operator(cfg)?),
-        StorageParams::Gcs(cfg) => build_operator(init_gcs_operator(cfg)?),
+        StorageParams::Azblob(cfg) => build_operator(init_azblob_operator(cfg)?)?,
+        StorageParams::Fs(cfg) => build_operator(init_fs_operator(cfg)?)?,
+        StorageParams::Gcs(cfg) => build_operator(init_gcs_operator(cfg)?)?,
         #[cfg(feature = "storage-hdfs")]
-        StorageParams::Hdfs(cfg) => build_operator(init_hdfs_operator(cfg)?),
-        StorageParams::Http(cfg) => build_operator(init_http_operator(cfg)?),
-        StorageParams::Ipfs(cfg) => build_operator(init_ipfs_operator(cfg)?),
-        StorageParams::Memory => build_operator(init_memory_operator()?),
-        StorageParams::Moka(cfg) => build_operator(init_moka_operator(cfg)?),
-        StorageParams::Obs(cfg) => build_operator(init_obs_operator(cfg)?),
-        StorageParams::S3(cfg) => build_operator(init_s3_operator(cfg)?),
-        StorageParams::Oss(cfg) => build_operator(init_oss_operator(cfg)?),
-        StorageParams::Redis(cfg) => build_operator(init_redis_operator(cfg)?),
-        StorageParams::Webhdfs(cfg) => build_operator(init_webhdfs_operator(cfg)?),
+        StorageParams::Hdfs(cfg) => build_operator(init_hdfs_operator(cfg)?)?,
+        StorageParams::Http(cfg) => {
+            let (builder, layer) = init_http_operator(cfg)?;
+            build_operator(builder)?.layer(layer)
+        }
+        StorageParams::Ipfs(cfg) => build_operator(init_ipfs_operator(cfg)?)?,
+        StorageParams::Memory => build_operator(init_memory_operator()?)?,
+        StorageParams::Moka(cfg) => build_operator(init_moka_operator(cfg)?)?,
+        StorageParams::Obs(cfg) => build_operator(init_obs_operator(cfg)?)?,
+        StorageParams::S3(cfg) => build_operator(init_s3_operator(cfg)?)?,
+        StorageParams::Oss(cfg) => build_operator(init_oss_operator(cfg)?)?,
+        StorageParams::Redis(cfg) => build_operator(init_redis_operator(cfg)?)?,
+        StorageParams::Webhdfs(cfg) => build_operator(init_webhdfs_operator(cfg)?)?,
         v => {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
@@ -79,10 +80,10 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
     Ok(op)
 }
 
-pub fn build_operator<A: Accessor>(acc: A) -> Operator {
-    let ob = Operator::new(acc);
+pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
+    let ob = Operator::new(builder)?;
 
-    ob
+    let op = ob
         // Add retry
         .layer(RetryLayer::new().with_jitter())
         // Add metrics
@@ -97,11 +98,13 @@ pub fn build_operator<A: Accessor>(acc: A) -> Operator {
         // storage operator so that all underlying storage operations
         // will send to storage runtime.
         .layer(RuntimeLayer::new(GlobalIORuntime::instance().inner()))
-        .finish()
+        .finish();
+
+    Ok(op)
 }
 
 /// init_azblob_operator will init an opendal azblob operator.
-pub fn init_azblob_operator(cfg: &StorageAzblobConfig) -> Result<impl Accessor> {
+pub fn init_azblob_operator(cfg: &StorageAzblobConfig) -> Result<impl Builder> {
     let mut builder = services::Azblob::default();
 
     // Endpoint
@@ -117,11 +120,11 @@ pub fn init_azblob_operator(cfg: &StorageAzblobConfig) -> Result<impl Accessor> 
     builder.account_name(&cfg.account_name);
     builder.account_key(&cfg.account_key);
 
-    Ok(builder.build()?)
+    Ok(builder)
 }
 
 /// init_fs_operator will init a opendal fs operator.
-fn init_fs_operator(cfg: &StorageFsConfig) -> Result<impl Accessor> {
+fn init_fs_operator(cfg: &StorageFsConfig) -> Result<impl Builder> {
     let mut builder = services::Fs::default();
 
     let mut path = cfg.root.clone();
@@ -130,11 +133,11 @@ fn init_fs_operator(cfg: &StorageFsConfig) -> Result<impl Accessor> {
     }
     builder.root(&path);
 
-    Ok(builder.build()?)
+    Ok(builder)
 }
 
 /// init_gcs_operator will init a opendal gcs operator.
-fn init_gcs_operator(cfg: &StorageGcsConfig) -> Result<impl Accessor> {
+fn init_gcs_operator(cfg: &StorageGcsConfig) -> Result<impl Builder> {
     let mut builder = services::Gcs::default();
 
     builder
@@ -143,12 +146,12 @@ fn init_gcs_operator(cfg: &StorageGcsConfig) -> Result<impl Accessor> {
         .root(&cfg.root)
         .credential(&cfg.credential);
 
-    Ok(builder.build()?)
+    Ok(builder)
 }
 
 /// init_hdfs_operator will init an opendal hdfs operator.
 #[cfg(feature = "storage-hdfs")]
-fn init_hdfs_operator(cfg: &StorageHdfsConfig) -> Result<impl Accessor> {
+fn init_hdfs_operator(cfg: &StorageHdfsConfig) -> Result<impl Builder> {
     let mut builder = services::Hdfs::default();
 
     // Endpoint.
@@ -157,19 +160,19 @@ fn init_hdfs_operator(cfg: &StorageHdfsConfig) -> Result<impl Accessor> {
     // Root
     builder.root(&cfg.root);
 
-    Ok(builder.build()?)
+    Ok(builder)
 }
 
-fn init_ipfs_operator(cfg: &StorageIpfsConfig) -> Result<impl Accessor> {
+fn init_ipfs_operator(cfg: &StorageIpfsConfig) -> Result<impl Builder> {
     let mut builder = services::Ipfs::default();
 
     builder.root(&cfg.root);
     builder.endpoint(&cfg.endpoint_url);
 
-    Ok(builder.build()?)
+    Ok(builder)
 }
 
-fn init_http_operator(cfg: &StorageHttpConfig) -> Result<impl Accessor> {
+fn init_http_operator(cfg: &StorageHttpConfig) -> Result<(impl Builder, ImmutableIndexLayer)> {
     let mut builder = services::Http::default();
 
     // Endpoint.
@@ -188,18 +191,18 @@ fn init_http_operator(cfg: &StorageHttpConfig) -> Result<impl Accessor> {
         immutable_layer.insert(i);
     }
 
-    Ok(immutable_layer.layer(builder.build()?))
+    Ok((builder, immutable_layer))
 }
 
 /// init_memory_operator will init a opendal memory operator.
-fn init_memory_operator() -> Result<impl Accessor> {
-    let mut builder = services::Memory::default();
+fn init_memory_operator() -> Result<impl Builder> {
+    let builder = services::Memory::default();
 
-    Ok(builder.build()?)
+    Ok(builder)
 }
 
 /// init_s3_operator will init a opendal s3 operator with input s3 config.
-fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Accessor> {
+fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
     let mut builder = services::S3::default();
 
     // Endpoint.
@@ -231,11 +234,11 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Accessor> {
         builder.enable_virtual_host_style();
     }
 
-    Ok(builder.build()?)
+    Ok(builder)
 }
 
 /// init_obs_operator will init a opendal obs operator with input obs config.
-fn init_obs_operator(cfg: &StorageObsConfig) -> Result<impl Accessor> {
+fn init_obs_operator(cfg: &StorageObsConfig) -> Result<impl Builder> {
     let mut builder = services::Obs::default();
     // Endpoint
     builder.endpoint(&cfg.endpoint_url);
@@ -247,11 +250,11 @@ fn init_obs_operator(cfg: &StorageObsConfig) -> Result<impl Accessor> {
     builder.access_key_id(&cfg.access_key_id);
     builder.secret_access_key(&cfg.secret_access_key);
 
-    Ok(builder.build()?)
+    Ok(builder)
 }
 
 /// init_oss_operator will init an opendal OSS operator with input oss config.
-fn init_oss_operator(cfg: &StorageOssConfig) -> Result<impl Accessor> {
+fn init_oss_operator(cfg: &StorageOssConfig) -> Result<impl Builder> {
     let mut builder = services::Oss::default();
 
     builder
@@ -262,22 +265,22 @@ fn init_oss_operator(cfg: &StorageOssConfig) -> Result<impl Accessor> {
         .bucket(&cfg.bucket)
         .root(&cfg.root);
 
-    Ok(builder.build()?)
+    Ok(builder)
 }
 
 /// init_moka_operator will init a moka operator.
-fn init_moka_operator(v: &StorageMokaConfig) -> Result<impl Accessor> {
+fn init_moka_operator(v: &StorageMokaConfig) -> Result<impl Builder> {
     let mut builder = services::Moka::default();
 
     builder.max_capacity(v.max_capacity);
     builder.time_to_live(std::time::Duration::from_secs(v.time_to_live as u64));
     builder.time_to_idle(std::time::Duration::from_secs(v.time_to_idle as u64));
 
-    Ok(builder.build()?)
+    Ok(builder)
 }
 
 /// init_redis_operator will init a reids operator.
-fn init_redis_operator(v: &StorageRedisConfig) -> Result<impl Accessor> {
+fn init_redis_operator(v: &StorageRedisConfig) -> Result<impl Builder> {
     let mut builder = services::Redis::default();
 
     builder.endpoint(&v.endpoint_url);
@@ -293,18 +296,18 @@ fn init_redis_operator(v: &StorageRedisConfig) -> Result<impl Accessor> {
         builder.password(v);
     }
 
-    Ok(builder.build()?)
+    Ok(builder)
 }
 
 /// init_webhdfs_operator will init a WebHDFS operator
-fn init_webhdfs_operator(v: &StorageWebhdfsConfig) -> Result<impl Accessor> {
+fn init_webhdfs_operator(v: &StorageWebhdfsConfig) -> Result<impl Builder> {
     let mut builder = services::Webhdfs::default();
 
     builder.endpoint(&v.endpoint_url);
     builder.root(&v.root);
     builder.delegation(&v.delegation);
 
-    Ok(builder.build()?)
+    Ok(builder)
 }
 
 /// DataOperator is the operator to access persist data services.

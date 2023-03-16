@@ -46,9 +46,7 @@ impl ParquetTable {
         {
             prj.clone()
         } else {
-            let indices = (0..self.arrow_schema.fields.len())
-                .into_iter()
-                .collect::<Vec<usize>>();
+            let indices = (0..self.arrow_schema.fields.len()).collect::<Vec<usize>>();
             Projection::Columns(indices)
         };
 
@@ -109,14 +107,20 @@ impl ParquetTable {
             None
         };
 
-        let file_locations = if self.operator.metadata().can_blocking() {
-            self.files_info.blocking_list(&self.operator, false)
-        } else {
-            self.files_info.list(&self.operator, false).await
-        }?
-        .into_iter()
-        .map(|f| f.path)
-        .collect::<Vec<_>>();
+        let file_locations = match &self.files_to_read {
+            Some(files) => files
+                .iter()
+                .map(|f| (f.path.clone(), f.size))
+                .collect::<Vec<_>>(),
+            None => if self.operator.info().can_blocking() {
+                self.files_info.blocking_list(&self.operator, false)
+            } else {
+                self.files_info.list(&self.operator, false).await
+            }?
+            .into_iter()
+            .map(|f| (f.path, f.metadata.content_length()))
+            .collect::<Vec<_>>(),
+        };
 
         let pruner = PartitionPruner {
             schema,

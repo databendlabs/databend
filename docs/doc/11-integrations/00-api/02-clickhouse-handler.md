@@ -2,14 +2,14 @@
 title: ClickHouse Handler
 sidebar_label: ClickHouse Handler
 description:
-  Databend is ClickHouse wire protocol-compatible.
+  Databend is ClickHouse HTTP API wire protocol-compatible.
 ---
 
 ![image](/img/api/api-handler-clickhouse.png)
 
 ## Overview
 
-Databend is ClickHouse wire protocol-compatible, allow you to connect to Databend server with Clickhouse client, make it easier for users/developers to use Databend.
+Databend is ClickHouse HTTP API wire protocol-compatible, allowing users and developers to easily connect to Databend with ClickHouse HTTP Handler.
 
 ## ClickHouse REST API
 

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -28,10 +29,10 @@ use common_pipeline_core::processors::Processor;
 pub trait AccumulatingTransform: Send {
     const NAME: &'static str;
 
-    fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>>;
+    fn transform(&mut self, data: DataBlock) -> Result<Vec<DataBlock>>;
 
-    fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
-        Ok(None)
+    fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
+        Ok(vec![])
     }
 }
 
@@ -42,7 +43,7 @@ pub struct AccumulatingTransformer<T: AccumulatingTransform + 'static> {
 
     called_on_finish: bool,
     input_data: Option<DataBlock>,
-    output_data: Option<DataBlock>,
+    output_data: VecDeque<DataBlock>,
 }
 
 impl<T: AccumulatingTransform + 'static> AccumulatingTransformer<T> {
@@ -52,7 +53,7 @@ impl<T: AccumulatingTransform + 'static> AccumulatingTransformer<T> {
             input,
             output,
             input_data: None,
-            output_data: None,
+            output_data: VecDeque::with_capacity(1),
             called_on_finish: false,
         })
     }
@@ -91,7 +92,7 @@ impl<T: AccumulatingTransform + 'static> Processor for AccumulatingTransformer<T
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(data_block) = self.output_data.take() {
+        if let Some(data_block) = self.output_data.pop_front() {
             self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
@@ -121,13 +122,13 @@ impl<T: AccumulatingTransform + 'static> Processor for AccumulatingTransformer<T
 
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
-            self.output_data = self.inner.transform(data_block)?;
+            self.output_data.extend(self.inner.transform(data_block)?);
             return Ok(());
         }
 
         if !self.called_on_finish {
             self.called_on_finish = true;
-            self.output_data = self.inner.on_finish(true)?;
+            self.output_data.extend(self.inner.on_finish(true)?);
         }
 
         Ok(())

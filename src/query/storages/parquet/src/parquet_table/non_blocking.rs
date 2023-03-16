@@ -20,8 +20,9 @@ use common_catalog::plan::ParquetReadOptions;
 use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_app::principal::UserStageInfo;
+use common_meta_app::principal::StageInfo;
 use common_storage::init_stage_operator;
+use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
 use opendal::Operator;
 
@@ -30,17 +31,27 @@ use crate::ParquetTable;
 
 impl ParquetTable {
     pub async fn create(
-        stage_info: UserStageInfo,
+        stage_info: StageInfo,
         files_info: StageFilesInfo,
         read_options: ParquetReadOptions,
+        files_to_read: Option<Vec<StageFileInfo>>,
     ) -> Result<Arc<dyn Table>> {
         let operator = init_stage_operator(&stage_info)?;
-        if operator.metadata().can_blocking() {
-            return Self::blocking_create(operator, read_options, stage_info, files_info);
+        if operator.info().can_blocking() {
+            return Self::blocking_create(
+                operator,
+                read_options,
+                stage_info,
+                files_info,
+                files_to_read,
+            );
         }
-        let first_file = files_info.first_file(&operator).await?;
+        let first_file = match &files_to_read {
+            Some(files) => files[0].path.clone(),
+            None => files_info.first_file(&operator).await?.path.clone(),
+        };
 
-        let arrow_schema = Self::prepare_metas(&first_file.path, operator.clone()).await?;
+        let arrow_schema = Self::prepare_metas(&first_file, operator.clone()).await?;
 
         let table_info = create_parquet_table_info(arrow_schema.clone());
 
@@ -51,6 +62,7 @@ impl ParquetTable {
             read_options,
             stage_info,
             files_info,
+            files_to_read,
         }))
     }
 
@@ -58,7 +70,7 @@ impl ParquetTable {
         // Infer schema from the first parquet file.
         // Assume all parquet files have the same schema.
         // If not, throw error during reading.
-        let mut reader = operator.object(path).reader().await?;
+        let mut reader = operator.reader(path).await?;
         let first_meta = pread::read_metadata_async(&mut reader).await.map_err(|e| {
             ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
         })?;

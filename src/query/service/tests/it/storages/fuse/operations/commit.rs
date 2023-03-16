@@ -12,7 +12,9 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 use std::any::Any;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
@@ -52,6 +54,7 @@ use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -70,6 +73,7 @@ use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
 use common_settings::Settings;
 use common_storage::DataOperator;
+use common_storage::StageFileInfo;
 use common_storages_fuse::operations::AppendOperationLogEntry;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
@@ -166,11 +170,11 @@ async fn test_last_snapshot_hint() -> Result<()> {
     let location = fuse_table
         .meta_location_generator()
         .gen_last_snapshot_hint_location();
-    let storage_meta_data = operator.metadata();
+    let storage_meta_data = operator.info();
     let storage_prefix = storage_meta_data.root();
 
     let expected = format!("{}{}", storage_prefix, last_snapshot_location);
-    let content = operator.object(location.as_str()).read().await?;
+    let content = operator.read(location.as_str()).await?;
 
     assert_eq!(content.as_slice(), expected.as_bytes());
 
@@ -224,7 +228,7 @@ async fn test_abort_on_error() -> Result<()> {
 
             let operator = fuse_table.get_operator();
             let table_data_prefix = fuse_table.meta_location_generator().prefix();
-            let storage_meta_data = operator.metadata();
+            let storage_meta_data = operator.info();
             let storage_prefix = storage_meta_data.root();
 
             let mut ss_count = 0;
@@ -344,6 +348,12 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn get_status_info(&self) -> String {
+        "".to_string()
+    }
+
+    fn set_status_info(&self, _info: &str) {}
+
     fn get_partition(&self) -> Option<PartInfoPtr> {
         todo!()
     }
@@ -364,7 +374,15 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn attach_query_str(&self, _kind: String, _query: &str) {
+    fn get_cacheable(&self) -> bool {
+        todo!()
+    }
+
+    fn set_cacheable(&self, _: bool) {
+        todo!()
+    }
+
+    fn attach_query_str(&self, _kind: String, _query: String) {
         todo!()
     }
 
@@ -447,6 +465,9 @@ impl TableContext for CtxDelegation {
     fn get_last_query_id(&self, _index: i32) -> String {
         todo!()
     }
+    fn get_query_id_history(&self) -> HashSet<String> {
+        todo!()
+    }
     fn get_result_cache_key(&self, _query_id: &str) -> Option<String> {
         todo!()
     }
@@ -488,6 +509,26 @@ impl TableContext for CtxDelegation {
         _database: &str,
         _table: &str,
     ) -> Result<Arc<dyn Table>> {
+        todo!()
+    }
+
+    async fn color_copied_files(
+        &self,
+        _catalog_name: &str,
+        _database_name: &str,
+        _table_name: &str,
+        _files: Vec<StageFileInfo>,
+    ) -> Result<Vec<StageFileInfo>> {
+        todo!()
+    }
+
+    async fn upsert_copied_files(
+        &self,
+        _catalog_name: &str,
+        _database_name: &str,
+        _table_name: &str,
+        _copy_stage_files: BTreeMap<String, TableCopiedFileInfo>,
+    ) -> Result<()> {
         todo!()
     }
 }

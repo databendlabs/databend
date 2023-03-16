@@ -15,6 +15,8 @@
 use std::cmp::Ordering;
 use std::io::Write;
 
+use base64::engine::general_purpose;
+use base64::prelude::*;
 use bstr::ByteSlice;
 use common_expression::types::number::SimpleDomain;
 use common_expression::types::number::UInt64Type;
@@ -318,7 +320,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_string_to_string(
             |col| col.data.len() * 4 / 3 + col.len() * 4,
             |val, output, _| {
-                base64::write::EncoderWriter::new(&mut output.data, base64::STANDARD)
+                base64::write::EncoderWriter::new(&mut output.data, &general_purpose::STANDARD)
                     .write_all(val)
                     .unwrap();
                 output.commit_row();
@@ -333,8 +335,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_string_to_string(
             |col| col.data.len() * 4 / 3 + col.len() * 4,
             |val, output, ctx| {
-                if let Err(err) = base64::decode_config_buf(val, base64::STANDARD, &mut output.data)
-                {
+                if let Err(err) = general_purpose::STANDARD.decode_vec(val, &mut output.data) {
                     ctx.set_error(output.len(), err.to_string());
                 }
                 output.commit_row();
@@ -808,7 +809,7 @@ mod soundex {
     // https://github.com/mysql/mysql-server/blob/3290a66c89eb1625a7058e0ef732432b6952b435/sql/item_strfunc.cc#L1919
     #[inline(always)]
     pub fn is_uni_alphabetic(c: char) -> bool {
-        ('a'..='z').contains(&c) || ('A'..='Z').contains(&c) || c as i32 >= 0xC0
+        c.is_ascii_lowercase() || c.is_ascii_uppercase() || c as i32 >= 0xC0
     }
 }
 

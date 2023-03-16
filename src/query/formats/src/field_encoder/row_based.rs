@@ -63,7 +63,7 @@ pub trait FieldEncoderRowBased {
             Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf, raw),
             Column::Array(box c) => self.write_array(c, row_index, out_buf, raw),
             Column::Map(box c) => self.write_map(c, row_index, out_buf, raw),
-            Column::Tuple { fields, .. } => self.write_tuple(fields, row_index, out_buf, raw),
+            Column::Tuple(fields) => self.write_tuple(fields, row_index, out_buf, raw),
             Column::Variant(c) => self.write_variant(c, row_index, out_buf, raw),
         }
     }
@@ -172,7 +172,7 @@ pub trait FieldEncoderRowBased {
         raw: bool,
     ) {
         let v = unsafe { column.index_unchecked(row_index) };
-        let s = common_jsonb::to_string(v);
+        let s = jsonb::to_string(v);
         self.write_string_inner(s.as_bytes(), out_buf, raw);
     }
 

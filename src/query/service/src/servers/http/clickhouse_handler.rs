@@ -25,8 +25,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_expression::infer_table_schema;
-use common_expression::DataBlock;
-use common_expression::TableSchemaRef;
 use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;
 use common_formats::FileFormatTypeExt;
@@ -57,7 +55,6 @@ use tracing::info;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterPtr;
 use crate::servers::http::v1::HttpQueryContext;
-use crate::servers::http::ClickHouseFederated;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
@@ -241,27 +238,15 @@ pub async fn clickhouse_handler_get(
 
     let default_format = get_default_format(&params, headers).map_err(BadRequest)?;
     let sql = params.query();
-    if let Some((schema, block)) = ClickHouseFederated::check(&sql) {
-        return serialize_one_block(
-            context.clone(),
-            schema,
-            block,
-            &sql,
-            &params,
-            default_format,
-        )
-        .map_err(InternalServerError);
-    }
-
     let mut planner = Planner::new(context.clone());
-    let (plan, _, fmt) = planner
+    let (plan, extras) = planner
         .plan_sql(&sql)
         .await
         .map_err(|err| err.display_with_sql(&sql))
         .map_err(BadRequest)?;
-    let format = get_format_with_default(fmt, default_format)?;
+    let format = get_format_with_default(extras.format, default_format)?;
 
-    context.attach_query_str(plan.to_string(), &sql);
+    context.attach_query_str(plan.to_string(), extras.stament.to_mask_sql());
     let interpreter = InterpreterFactory::get(context.clone(), &plan)
         .await
         .map_err(|err| err.display_with_sql(&sql))
@@ -312,19 +297,14 @@ pub async fn clickhouse_handler_post(
     };
     info!("receive clickhouse http post, (query + body) = {}", &msg);
 
-    if let Some((schema, block)) = ClickHouseFederated::check(&sql) {
-        return serialize_one_block(ctx.clone(), schema, block, &sql, &params, default_format)
-            .map_err(InternalServerError);
-    }
-
     let mut planner = Planner::new(ctx.clone());
-    let (mut plan, _, fmt) = planner
+    let (mut plan, extras) = planner
         .plan_sql(&sql)
         .await
         .map_err(|err| err.display_with_sql(&sql))
         .map_err(BadRequest)?;
     let schema = plan.schema();
-    ctx.attach_query_str(plan.to_string(), &sql);
+    ctx.attach_query_str(plan.to_string(), extras.stament.to_mask_sql());
     let mut handle = None;
     if let Plan::Insert(insert) = &mut plan {
         if let InsertInputSource::StreamingWithFormat(format, start, input_context_ref) =
@@ -424,7 +404,7 @@ pub async fn clickhouse_handler_post(
         }
     };
 
-    let format = get_format_with_default(fmt, default_format)?;
+    let format = get_format_with_default(extras.format, default_format)?;
     let interpreter = InterpreterFactory::get(ctx.clone(), &plan)
         .await
         .map_err(|err| err.display_with_sql(&sql))
@@ -449,7 +429,7 @@ pub fn clickhouse_router() -> impl Endpoint {
         )
         .at("/ping", get(clickhouse_ping_handler))
         .at("/replicas_status", get(clickhouse_ping_handler))
-        .with(poem::middleware::Compression)
+        .with(poem::middleware::Compression::default())
 }
 
 // default codec is always lz4
@@ -482,34 +462,6 @@ fn compress_block(input: Vec<u8>) -> Result<Vec<u8>> {
         output.extend_from_slice(&compressed_with_header);
         Ok(output)
     }
-}
-
-fn serialize_one_block(
-    ctx: Arc<QueryContext>,
-    schema: TableSchemaRef,
-    block: DataBlock,
-    sql: &str,
-    params: &StatementHandlerParams,
-    default_format: ClickhouseFormatType,
-) -> Result<WithContentType<Body>> {
-    let format = match ClickHouseFederated::get_format(sql) {
-        Some(format) => ClickhouseFormatType::parse_clickhouse_format(&format)?,
-        None => default_format,
-    };
-    let format_typ = format.typ.clone();
-    let mut output_format = FileFormatOptionsExt::get_output_format_from_clickhouse_format(
-        format,
-        schema,
-        &ctx.get_settings(),
-    )?;
-    let mut res = output_format.serialize_prefix()?;
-    let mut data = output_format.serialize_block(&block)?;
-    if params.compress() {
-        data = compress_block(data)?;
-    }
-    res.append(&mut data);
-    res.append(&mut output_format.finalize()?);
-    Ok(Body::from(res).with_content_type(format_typ.get_content_type()))
 }
 
 fn get_default_format(

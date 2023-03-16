@@ -90,12 +90,12 @@ Exchange
 ├── exchange type: Merge
 └── HashJoin
     ├── join type: INNER
-    ├── build keys: [t1.number (#3)]
+    ├── build keys: [t1.number (#2)]
     ├── probe keys: [t.a (#0)]
     ├── filters: []
     ├── estimated rows: 6.00
     ├── Exchange(Build)
-    │   ├── exchange type: Hash(t1.number (#3))
+    │   ├── exchange type: Hash(t1.number (#2))
     │   └── TableScan
     │       ├── table: default.system.numbers
     │       ├── read rows: 2
@@ -109,13 +109,13 @@ Exchange
         └── HashJoin
             ├── join type: INNER
             ├── build keys: [t.b (#1)]
-            ├── probe keys: [t2.number (#4)]
+            ├── probe keys: [t2.number (#3)]
             ├── filters: []
             ├── estimated rows: 3.00
             ├── Exchange(Build)
             │   ├── exchange type: Hash(t.b (#1))
             │   └── EvalScalar
-            │       ├── expressions: [plus(numbers.number (#0), 1)]
+            │       ├── expressions: [numbers.number (#0) + 1]
             │       ├── estimated rows: 1.00
             │       └── TableScan
             │           ├── table: default.system.numbers
@@ -126,7 +126,7 @@ Exchange
             │           ├── push downs: [filters: [], limit: NONE]
             │           └── estimated rows: 1.00
             └── Exchange(Probe)
-                ├── exchange type: Hash(t2.number (#4))
+                ├── exchange type: Hash(t2.number (#3))
                 └── TableScan
                     ├── table: default.system.numbers
                     ├── read rows: 3

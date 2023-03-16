@@ -221,6 +221,12 @@ impl<T: ValueType> ArrayColumn<T> {
     pub fn memory_size(&self) -> usize {
         T::column_memory_size(&self.values) + self.offsets.len() * 8
     }
+
+    pub fn underlying_column(&self) -> T::Column {
+        debug_assert!(!self.offsets.is_empty());
+        let range = *self.offsets.first().unwrap() as usize..*self.offsets.last().unwrap() as usize;
+        T::slice_column(&self.values, range)
+    }
 }
 
 impl ArrayColumn<AnyType> {
@@ -346,6 +352,23 @@ impl<T: ArgType> ArrayColumnBuilder<T> {
         ArrayColumnBuilder {
             builder: T::create_builder(values_capacity, generics),
             offsets,
+        }
+    }
+}
+
+impl ArrayColumnBuilder<AnyType> {
+    pub fn pop(&mut self) -> Option<Column> {
+        if self.len() > 0 {
+            let pop_count = self.offsets[self.offsets.len() - 1] as usize
+                - self.offsets[self.offsets.len() - 2] as usize;
+            self.offsets.pop();
+            let mut builder = ColumnBuilder::with_capacity(&self.builder.data_type(), pop_count);
+            for _ in 0..pop_count {
+                builder.push(self.builder.pop().unwrap().as_ref());
+            }
+            Some(builder.build())
+        } else {
+            None
         }
     }
 }

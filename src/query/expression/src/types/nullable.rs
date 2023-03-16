@@ -350,6 +350,17 @@ impl<T: ArgType> NullableColumnBuilder<T> {
     }
 }
 
+impl NullableColumnBuilder<AnyType> {
+    pub fn pop(&mut self) -> Option<Option<Scalar>> {
+        if self.validity.pop()? {
+            Some(Some(self.builder.pop().unwrap()))
+        } else {
+            self.builder.pop().unwrap();
+            Some(None)
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct NullableDomain<T: ValueType> {
     pub has_null: bool,

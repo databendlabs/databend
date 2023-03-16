@@ -14,6 +14,7 @@
 
 use std::convert::TryInto;
 use std::error::Error;
+use std::io::ErrorKind;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -28,6 +29,8 @@ use common_arrow::arrow_format::flight::service::flight_service_client::FlightSe
 use common_base::base::tokio::time::Duration;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use futures_util::future::BoxFuture;
+use futures_util::future::Either;
 use futures_util::StreamExt;
 use parking_lot::Mutex;
 use tonic::transport::channel::Channel;
@@ -139,8 +142,7 @@ impl FlightExchange {
         let streaming = streaming.into_inner();
         let state = Arc::new(ChannelState::create());
         let f = |x| Ok(FlightData::from(x));
-        let (tx, rx) =
-            Self::listen_request::<true, _>(state.clone(), response_tx.clone(), streaming, f);
+        let (tx, rx) = Self::listen_request(state.clone(), response_tx.clone(), streaming, f);
 
         FlightExchange::Server(ServerFlightExchange {
             state,
@@ -156,8 +158,7 @@ impl FlightExchange {
     ) -> FlightExchange {
         let state = Arc::new(ChannelState::create());
         let f = FlightData::from;
-        let (tx, rx) =
-            Self::listen_request::<false, _>(state.clone(), response_tx.clone(), streaming, f);
+        let (tx, rx) = Self::listen_request(state.clone(), response_tx.clone(), streaming, f);
 
         FlightExchange::Client(ClientFlightExchange {
             state,
@@ -167,7 +168,7 @@ impl FlightExchange {
         })
     }
 
-    fn listen_request<const CLOSE_CONN: bool, ResponseT: Send + 'static>(
+    fn listen_request<ResponseT: Send + 'static>(
         state: Arc<ChannelState>,
         network_tx: Sender<ResponseT>,
         mut streaming: Streaming<FlightData>,
@@ -176,75 +177,123 @@ impl FlightExchange {
         let (tx, rx) = async_channel::bounded(1);
         let (response_tx, response_rx) = async_channel::bounded(1);
 
-        Self::start_push_worker(network_tx.clone(), response_rx.clone());
+        Self::start_push_worker(network_tx.clone(), response_rx);
 
         let f = Arc::new(f);
-        common_base::base::tokio::spawn(async move {
-            while let Some(message) = streaming.next().await {
-                match message {
-                    Ok(message) if DataPacket::is_closing_input(&message) => {
-                        if !response_rx.is_closed() {
-                            response_rx.close();
+        common_base::base::tokio::spawn({
+            let response_tx = response_tx.clone();
+            async move {
+                let mut send_closing_input = false;
+                let mut send_closing_output = false;
+                let mut futures = Vec::<BoxFuture<'static, _>>::new();
 
-                            let f = f.clone();
-                            let network_tx = network_tx.clone();
-                            let response_rx = response_rx.clone();
-                            // create new future send packet to remote for avoid blocking recv data
-                            common_base::base::tokio::spawn(async move {
-                                // Send ClosingOutput response after other response.
-                                while let Ok(response) = response_rx.recv().await {
-                                    let _ = network_tx.send(response).await;
-                                }
+                'worker: while let Some(message) = streaming.next().await {
+                    match message {
+                        Ok(message) if DataPacket::is_closing_input(&message) => {
+                            if !send_closing_output {
+                                send_closing_output = true;
 
-                                let _ = network_tx.send(f(DataPacket::ClosingOutput)).await;
-                            });
-                        }
-                    }
-                    Ok(message) if DataPacket::is_closing_output(&message) => {
-                        if !tx.is_closed() {
-                            tx.close();
+                                // create new future send packet to remote for avoid blocking recv data
+                                futures.push(Box::pin(common_base::base::tokio::spawn({
+                                    let f = f.clone();
+                                    let response_tx = response_tx.clone();
+                                    async move {
+                                        let response_t = f(DataPacket::ClosingOutput);
+                                        let _ = response_tx.send(response_t).await;
 
-                            let f = f.clone();
-                            let network_tx = network_tx.clone();
-                            // create new future send packet to remote for avoid blocking recv data
-                            common_base::base::tokio::spawn(async move {
-                                let _ = network_tx.send(f(DataPacket::ClosingInput)).await;
-                            });
-                        }
-                    }
-                    other => {
-                        if let Err(status) = &other {
-                            if let Some(error) = match_for_io_error(status) {
-                                {
-                                    let mut may_recv_error = state.may_recv_error.lock();
-                                    *may_recv_error = Some(std::io::Error::new(error.kind(), ""));
-                                }
-
-                                break;
+                                        response_tx.close();
+                                    }
+                                })));
                             }
                         }
+                        Ok(message) if DataPacket::is_closing_output(&message) => {
+                            if !tx.is_closed() {
+                                tx.close();
+                            }
 
-                        // We need to continue consume stream for avoid stream die message blocking io buffer.
-                        let _ = tx.send(other).await;
+                            if !send_closing_input {
+                                send_closing_input = true;
+                                // create new future send packet to remote for avoid blocking recv data
+                                futures.push(Box::pin(common_base::base::tokio::spawn({
+                                    let f = f.clone();
+                                    let network_tx = network_tx.clone();
+
+                                    async move {
+                                        let response_t = f(DataPacket::ClosingInput);
+                                        let _ = network_tx.send(response_t).await;
+                                    }
+                                })));
+                            }
+                        }
+                        other => {
+                            if let Err(status) = &other {
+                                let mut may_recv_error = state.may_recv_error.lock();
+                                *may_recv_error = Some(match match_for_io_error(status) {
+                                    Some(error) => std::io::Error::new(error.kind(), ""),
+                                    None => std::io::Error::new(
+                                        ErrorKind::Other,
+                                        format!("{:?}", status),
+                                    ),
+                                });
+
+                                tx.close();
+                                response_tx.close();
+                                network_tx.close();
+                                return;
+                            }
+
+                            // We need to continue consume stream for avoid stream die message blocking io buffer.
+                            let _ = tx.send(other).await;
+                        }
+                    };
+
+                    if send_closing_input && send_closing_output {
+                        break 'worker;
+                    }
+                }
+
+                if !send_closing_input {
+                    futures.push(Box::pin(common_base::base::tokio::spawn({
+                        let f = f.clone();
+                        let network_tx = network_tx.clone();
+
+                        async move {
+                            let response_t = f(DataPacket::ClosingInput);
+                            let _ = network_tx.send(response_t).await;
+                        }
+                    })));
+                }
+
+                if !send_closing_output {
+                    futures.push(Box::pin(common_base::base::tokio::spawn({
+                        let f = f.clone();
+                        let response_tx = response_tx.clone();
+                        async move {
+                            let response_t = f(DataPacket::ClosingOutput);
+                            let _ = response_tx.send(response_t).await;
+                            response_tx.close();
+                        }
+                    })));
+                }
+
+                let recv_all = StreamExt::count(streaming);
+                let send_all = futures::future::join_all(futures);
+
+                match futures::future::select(send_all, recv_all).await {
+                    Either::Left((_, recv_all)) => {
+                        tx.close();
+                        response_tx.close();
+                        drop(network_tx);
+                        let _ = recv_all.await;
+                    }
+                    Either::Right((_, send_all)) => {
+                        let _ = send_all.await;
+                        tx.close();
+                        response_tx.close();
+                        drop(network_tx);
                     }
                 };
-
-                if CLOSE_CONN && tx.is_closed() && response_rx.is_closed() {
-                    // We cannot stop the loop immediately. Because the connection will be reset when destroy streaming and network_tx.
-                    // the remote may still be receiving data.
-
-                    // Close network channel after all responses is sent.
-                    while let Ok(resp) = response_rx.recv().await {
-                        let _ = network_tx.send(resp).await;
-                    }
-
-                    network_tx.close();
-                }
             }
-
-            tx.close();
-            response_rx.close();
-            drop(network_tx);
         });
 
         (response_tx, rx)
@@ -275,8 +324,8 @@ impl FlightExchange {
             FlightExchange::Server(exchange) => exchange.state.clone(),
         };
 
-        state.request_count.fetch_add(1, Ordering::Relaxed);
-        state.response_count.fetch_add(1, Ordering::Relaxed);
+        state.request_count.fetch_add(1, Ordering::SeqCst);
+        state.response_count.fetch_add(1, Ordering::SeqCst);
 
         FlightExchangeRef {
             state,
@@ -347,8 +396,8 @@ pub struct FlightExchangeRef {
 impl Drop for FlightExchangeRef {
     fn drop(&mut self) {
         // Blocking is ok, because the channel may not be closed when has error in query execution.
-        if !(self.is_closed_request.load(Ordering::Relaxed)
-            && self.is_closed_response.load(Ordering::Relaxed))
+        if !self.is_closed_request.load(Ordering::SeqCst)
+            || !self.is_closed_response.load(Ordering::SeqCst)
         {
             futures::executor::block_on(async move {
                 self.close_input().await;
@@ -360,8 +409,8 @@ impl Drop for FlightExchangeRef {
 
 impl Clone for FlightExchangeRef {
     fn clone(&self) -> Self {
-        self.state.request_count.fetch_add(1, Ordering::Relaxed);
-        self.state.response_count.fetch_add(1, Ordering::Relaxed);
+        self.state.request_count.fetch_add(1, Ordering::SeqCst);
+        self.state.response_count.fetch_add(1, Ordering::SeqCst);
 
         FlightExchangeRef {
             state: self.state.clone(),
@@ -386,7 +435,7 @@ impl FlightExchangeRef {
             return;
         }
 
-        if self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1 {
+        if self.state.request_count.fetch_sub(1, Ordering::SeqCst) == 1 {
             self.inner.close_input().await;
         }
     }
@@ -396,7 +445,7 @@ impl FlightExchangeRef {
             return;
         }
 
-        if self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1 {
+        if self.state.response_count.fetch_sub(1, Ordering::SeqCst) == 1 {
             self.inner.close_output().await;
         }
     }
@@ -482,10 +531,8 @@ impl ClientFlightExchange {
 
     pub async fn close_output(&self) {
         // Notify remote that no message will be sent.
-        if !self.response_tx.is_closed() {
-            let packet = FlightData::from(DataPacket::ClosingOutput);
-            let _ = self.response_tx.send(packet).await;
-        }
+        let packet = FlightData::from(DataPacket::ClosingOutput);
+        let _ = self.response_tx.send(packet).await;
     }
 }
 
@@ -553,10 +600,8 @@ impl ServerFlightExchange {
 
     pub async fn close_output(&self) {
         // Notify remote that no message will be sent.
-        if !self.response_tx.is_closed() {
-            let packet = FlightData::from(DataPacket::ClosingOutput);
-            let _ = self.response_tx.send(Ok(packet)).await;
-        }
+        let packet = FlightData::from(DataPacket::ClosingOutput);
+        let _ = self.response_tx.send(Ok(packet)).await;
     }
 }
 

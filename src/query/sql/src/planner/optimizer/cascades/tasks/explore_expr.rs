@@ -149,10 +149,11 @@ impl ExploreExprTask {
             .memo
             .group(self.group_index)?
             .m_expr(self.m_expr_index)?;
+        let rule_set = &optimizer.explore_rule_set;
 
-        for rule in optimizer.explore_rules.iter() {
+        for rule_id in rule_set.iter() {
             let apply_rule_task = ApplyRuleTask::with_parent(
-                rule.id(),
+                rule_id,
                 m_expr.group_index,
                 m_expr.index,
                 &self.ref_count,

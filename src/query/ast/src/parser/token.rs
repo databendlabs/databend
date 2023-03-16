@@ -178,10 +178,6 @@ pub enum TokenKind {
     LBracket,
     #[token("]")]
     RBracket,
-    #[token("&")]
-    Ampersand,
-    #[token("|")]
-    Pipe,
     #[token("^")]
     Caret,
     #[token("{")]
@@ -192,10 +188,6 @@ pub enum TokenKind {
     RArrow,
     #[token("=>")]
     FatRArrow,
-    #[token("#")]
-    Sharp,
-    #[token("~")]
-    Tilde,
     /// A case insensitive match regular expression operator in PostgreSQL
     #[token("~*")]
     TildeAsterisk,
@@ -205,6 +197,18 @@ pub enum TokenKind {
     /// A case insensitive not match regular expression operator in PostgreSQL
     #[token("!~*")]
     ExclamationMarkTildeAsterisk,
+    /// A bitwise and operator in PostgreSQL
+    #[token("&")]
+    BitWiseAnd,
+    /// A bitwise or operator in PostgreSQL
+    #[token("|")]
+    BitWiseOr,
+    /// A bitwise xor operator in PostgreSQL
+    #[token("#")]
+    BitWiseXor,
+    /// A bitwise not operator in PostgreSQL
+    #[token("~")]
+    BitWiseNot,
     /// A bitwise shift left operator in PostgreSQL
     #[token("<<")]
     ShiftLeft,
@@ -213,19 +217,19 @@ pub enum TokenKind {
     ShiftRight,
     /// Exclamation Mark `!` used for PostgreSQL factorial operator
     #[token("!")]
-    ExclamationMark,
+    Factorial,
     /// Double Exclamation Mark `!!` used for PostgreSQL prefix factorial operator
     #[token("!!")]
     DoubleExclamationMark,
     /// AtSign `@` used for PostgreSQL abs operator
     #[token("@")]
-    AtSign,
+    Abs,
     /// A square root math operator in PostgreSQL
     #[token("|/")]
-    PGSquareRoot,
+    SquareRoot,
     /// A cube root math operator in PostgreSQL
     #[token("||/")]
-    PGCubeRoot,
+    CubeRoot,
     /// Placeholder used in prepared stmt
     #[token("?")]
     Placeholder,
@@ -317,10 +321,12 @@ pub enum TokenKind {
     CONTENT_TYPE,
     #[token("CHAR", ignore(ascii_case))]
     CHAR,
-    #[token("CHARACTER", ignore(ascii_case))]
     #[token("COLUMN", ignore(ascii_case))]
     COLUMN,
+    #[token("CHARACTER", ignore(ascii_case))]
     CHARACTER,
+    #[token("CONFLICT", ignore(ascii_case))]
+    CONFLICT,
     #[token("COMPRESSION", ignore(ascii_case))]
     COMPRESSION,
     #[token("COPY_OPTIONS", ignore(ascii_case))]
@@ -337,6 +343,8 @@ pub enum TokenKind {
     CROSS,
     #[token("CSV", ignore(ascii_case))]
     CSV,
+    #[token("CURRENT", ignore(ascii_case))]
+    CURRENT,
     #[token("CURRENT_TIMESTAMP", ignore(ascii_case))]
     CURRENT_TIMESTAMP,
     #[token("DATABASE", ignore(ascii_case))]
@@ -445,6 +453,8 @@ pub enum TokenKind {
     FORCE,
     #[token("FORMAT", ignore(ascii_case))]
     FORMAT,
+    #[token("FOLLOWING", ignore(ascii_case))]
+    FOLLOWING,
     #[token("FORMAT_NAME", ignore(ascii_case))]
     FORMAT_NAME,
     #[token("FORMATS", ignore(ascii_case))]
@@ -459,6 +469,8 @@ pub enum TokenKind {
     FUNCTION,
     #[token("FUNCTIONS", ignore(ascii_case))]
     FUNCTIONS,
+    #[token("TABLE_FUNCTIONS", ignore(ascii_case))]
+    TABLE_FUNCTIONS,
     #[token("FUSE", ignore(ascii_case))]
     FUSE,
     #[token("GLOBAL", ignore(ascii_case))]
@@ -601,8 +613,12 @@ pub enum TokenKind {
     OUTER,
     #[token("ON_ERROR", ignore(ascii_case))]
     ON_ERROR,
+    #[token("OVER", ignore(ascii_case))]
+    OVER,
     #[token("OVERWRITE", ignore(ascii_case))]
     OVERWRITE,
+    #[token("PARTITION", ignore(ascii_case))]
+    PARTITION,
     #[token("PARQUET", ignore(ascii_case))]
     PARQUET,
     #[token("PATTERN", ignore(ascii_case))]
@@ -623,6 +639,8 @@ pub enum TokenKind {
     QUERY,
     #[token("QUOTE", ignore(ascii_case))]
     QUOTE,
+    #[token("RANGE", ignore(ascii_case))]
+    RANGE,
     #[token("RAWDEFLATE", ignore(ascii_case))]
     RAWDEFLATE,
     #[token("RECLUSTER", ignore(ascii_case))]
@@ -635,12 +653,22 @@ pub enum TokenKind {
     REGEXP,
     #[token("RENAME", ignore(ascii_case))]
     RENAME,
+    #[token("REPLACE", ignore(ascii_case))]
+    REPLACE,
+    #[token("ROW", ignore(ascii_case))]
+    ROW,
+    #[token("ROWS", ignore(ascii_case))]
+    ROWS,
     #[token("ROW_TAG", ignore(ascii_case))]
     ROW_TAG,
     #[token("GRANT", ignore(ascii_case))]
     GRANT,
     #[token("ROLE", ignore(ascii_case))]
     ROLE,
+    #[token("PRECEDING", ignore(ascii_case))]
+    PRECEDING,
+    #[token("PRECISION", ignore(ascii_case))]
+    PRECISION,
     #[token("PRESIGN", ignore(ascii_case))]
     PRESIGN,
     #[token("PRIVILEGES", ignore(ascii_case))]
@@ -777,6 +805,8 @@ pub enum TokenKind {
     TUPLE,
     #[token("TYPE", ignore(ascii_case))]
     TYPE,
+    #[token("UNBOUNDED", ignore(ascii_case))]
+    UNBOUNDED,
     #[token("UNION", ignore(ascii_case))]
     UNION,
     #[token("UINT16", ignore(ascii_case))]
@@ -845,6 +875,10 @@ pub enum TokenKind {
     LAST,
     #[token("IGNORE_RESULT", ignore(ascii_case))]
     IGNORE_RESULT,
+    #[token("GROUPING", ignore(ascii_case))]
+    GROUPING,
+    #[token("SETS", ignore(ascii_case))]
+    SETS,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -882,25 +916,25 @@ impl TokenKind {
                 | Backslash
                 | LBracket
                 | RBracket
-                | Ampersand
-                | Pipe
+                | BitWiseAnd
+                | BitWiseOr
                 | Caret
+                | Factorial
                 | LBrace
                 | RBrace
                 | RArrow
                 | FatRArrow
-                | Sharp
-                | Tilde
+                | BitWiseXor
+                | BitWiseNot
                 | TildeAsterisk
                 | ExclamationMarkTilde
                 | ExclamationMarkTildeAsterisk
                 | ShiftLeft
                 | ShiftRight
-                | ExclamationMark
                 | DoubleExclamationMark
-                | AtSign
-                | PGSquareRoot
-                | PGCubeRoot
+                | Abs
+                | SquareRoot
+                | CubeRoot
                 | EOI
         )
     }
@@ -1035,6 +1069,9 @@ impl TokenKind {
             | TokenKind::ON
             | TokenKind::OF
             | TokenKind::ORDER
+            | TokenKind::OVER
+            | TokenKind::ROWS
+            | TokenKind::RANGE
             // | TokenKind::PRECISION
             // | TokenKind::RETURNING
             | TokenKind::TO
@@ -1149,6 +1186,9 @@ impl TokenKind {
             | TokenKind::ON
             | TokenKind::OF
             | TokenKind::ORDER
+            | TokenKind::OVER
+            | TokenKind::ROWS
+            | TokenKind::RANGE
             // | TokenKind::OVERLAPS
             // | TokenKind::RETURNING
             | TokenKind::STAGE

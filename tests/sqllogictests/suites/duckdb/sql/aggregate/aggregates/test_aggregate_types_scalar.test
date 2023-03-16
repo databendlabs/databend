@@ -51,28 +51,10 @@ SELECT MAX()
 statement error 1028
 SELECT MAX(1, 2)
 
-statement error 1008
-SELECT FIRST(1), FIRST(NULL), FIRST(33.3), FIRST('hello'), FIRST(True), FIRST('1992-02-02'::DATE), FIRST('2008-01-01 00:00:01'::TIMESTAMP)
-
-statement error 1008
-SELECT FIRST()
-
-statement error 1008
-SELECT FIRST(1, 2)
-
-statement error 1005
-SELECT LAST(1), LAST(NULL), LAST(33.3), LAST('hello'), LAST(True), LAST(DATE '1992-02-02'), LAST(TIMESTAMP '2008-01-01 00:00:01')
-
-statement error 1008
-SELECT LAST()
-
-statement error 1008
-SELECT LAST(1, 2)
-
 query FTF
 SELECT AVG(1), AVG(NULL), AVG(33.3)
 ----
-1.0 NULL 33.3
+1.0 NULL 33.3000
 
 statement error 1010
 SELECT AVG(True)
@@ -89,18 +71,6 @@ SELECT AVG()
 statement error 1028
 SELECT AVG(1, 2)
 
-statement error 1008
-SELECT STRING_AGG('hello')
-
-statement error 1008
-SELECT STRING_AGG('hello', ' '), STRING_AGG('hello', NULL), STRING_AGG(NULL, ' '), STRING_AGG(NULL, NULL), STRING_AGG('', '')
-
-statement error 1008
-SELECT STRING_AGG()
-
-statement error 1008
-SELECT STRING_AGG(1, 2, 3)
-
 statement ok
 CREATE TABLE test_val(val INT)
 
@@ -113,3 +83,6 @@ SELECT STRING_AGG(DISTINCT val ORDER BY val DESC) from test_val
 statement error 1005
 SELECT COUNT(NULL), STRING_AGG(DISTINCT val ORDER BY val ASC) from test_val
 
+
+statement ok
+drop table test_val

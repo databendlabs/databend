@@ -16,6 +16,8 @@ on:
 
 permissions:
   id-token: write
+  pull-requests: write
+  checks: write
   contents: write
 
 jobs:
@@ -76,14 +78,6 @@ jobs:
           gh release create ${{ steps.generated-tag.outputs.tag }} --generate-notes -p
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Trigger benchmark
-        continue-on-error: true
-        run: |
-          echo "Trigger benchmark for ${{ steps.generated-tag.outputs.tag }}"
-          gh workflow run benchmark.yml -f tag=${{ steps.generated-tag.outputs.tag }}
-        env:
-          GH_TOKEN: ${{ secrets.DATABEND_BOT_TOKEN }}
-
 
   publish_macos:
     name: macos assets
@@ -343,7 +337,6 @@ jobs:
           platforms: linux/amd64,linux/arm64
           context: .
           file: ./docker/Dockerfile
-          build-args: VERSION=${{ needs.create_release.outputs.version }}
       - name: Update repo description
         uses: peter-evans/dockerhub-description@v3
         with:
@@ -416,7 +409,6 @@ jobs:
           platforms: linux/amd64,linux/arm64
           context: .
           file: ./docker/${{ matrix.distro }}/${{ matrix.service }}.Dockerfile
-          build-args: VERSION=${{ needs.create_release.outputs.version }}
 
   release_packages:
     name: release packages
@@ -494,7 +486,7 @@ jobs:
     name: upload-sha256sums
     steps:
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Get Pre-release
         uses: cardinalby/git-get-release-action@v1
         id: latest_pre_release
@@ -522,6 +514,14 @@ jobs:
           asset_path: sha256sums.txt
           asset_name: sha256sums.txt
           asset_content_type: text/plain
+
+  run_benchmark:
+    name: run benchmark
+    needs: [create_release, publish_linux]
+    uses: ./.github/workflows/trusted-benchmark.yml
+    secrets: inherit
+    with:
+      tag: ${{ needs.create_release.outputs.version }}
 
   notify_build_result:
     name: notify build result

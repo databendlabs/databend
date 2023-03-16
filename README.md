@@ -5,7 +5,7 @@
 <h4 align="center">
   <a href="https://databend.rs/doc/cloud">Databend Serverless Cloud (beta)</a>  |
   <a href="https://databend.rs/doc">Documentation</a>  |
-  <a href="https://perf.databend.rs">Benchmarking</a>  |
+  <a href="https://benchmark.clickhouse.com/">Benchmarking</a>  |
   <a href="https://github.com/datafuselabs/databend/issues/9604">Roadmap (v1.0)</a>
 
 </h4>
@@ -13,14 +13,6 @@
 <div>
 <a href="https://link.databend.rs/join-slack">
 <img src="https://img.shields.io/badge/slack-databend-0abd59?logo=slack" alt="slack" />
-</a>
-
-<a href="https://link.databend.rs/join-discord">
-<img src="https://img.shields.io/discord/1023794859972235304?label=discord&logo=discord&color=0abd59" alt="discord" />
-</a>
-
-<a href="https://link.databend.rs/join-matrix">
-<img src="https://img.shields.io/matrix/databend-general:matrix.org?logo=matrix&label=databend&color=0abd59" alt="matrix" />
 </a>
 
 <a href="https://link.databend.rs/join-feishu">
@@ -53,7 +45,7 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 
 - __Feature-Rich__
 
-  Support for atomic operations including `SELECT/INSERT/DELETE/UPDATE/COPY/ALTER` and advanced features like Time Travel, Multi Catalog(Apache Hive/Apache Iceberg).
+  Support for atomic operations including `SELECT/INSERT/DELETE/UPDATE/REPLACE/COPY/ALTER` and advanced features like Time Travel, Multi Catalog(Apache Hive/Apache Iceberg).
 
 
 - __Instant Elasticity__
@@ -63,12 +55,12 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 
 - __Blazing Performance__
 
-  Databend leverages data-level parallelism(Vectorized Query Execution) and instruction-level parallelism(SIMD) technology, offering blazing performance data analytics.
+  Databend leverages data-level parallelism(Vectorized Query Execution) and instruction-level parallelism(SIMD) technology, offering [blazing performance](https://benchmark.clickhouse.com/) data analytics.
 
 
 - __Git-like MVCC Storage__
 
-  Databend stores data with snapshots. It's easy to query, clone, and restore historical data in tables.
+  [Databend stores data with snapshots](https://databend.rs/doc/sql-commands/ddl/table/optimize-table#what-are-snapshot-segment-and-block), enabling users to effortlessly query, clone, or restore data from any history timepoint.
 
 
 - __Support for Semi-Structured Data__
@@ -78,7 +70,7 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 
 - __MySQL/ClickHouse Compatible__
 
-  Databend is ANSI SQL compliant and MySQL/ClickHouse wire protocol compatible, making it easy to connect with existing tools([MySQL Client](https://databend.rs/doc/integrations/api/mysql-handler), [ClickHouse Client](https://databend.rs/doc/integrations/api/clickhouse-handler), [Vector](https://vector.dev/), [DBeaver](https://dbeaver.com/), [Jupyter](https://databend.rs/doc/integrations/gui-tool/jupyter), [JDBC](https://databend.rs/doc/develop), etc.).
+  Databend is ANSI SQL compliant and MySQL/ClickHouse wire protocol compatible, making it easy to connect with existing tools([MySQL Client](https://databend.rs/doc/integrations/api/mysql-handler), [ClickHouse HTTP Handler](https://databend.rs/doc/integrations/api/clickhouse-handler), [Vector](https://vector.dev/), [DBeaver](https://dbeaver.com/), [Jupyter](https://databend.rs/doc/integrations/gui-tool/jupyter), [JDBC](https://databend.rs/doc/develop), etc.).
 
 
 - __Easy to Use__
@@ -122,7 +114,7 @@ docker run --net=host  datafuselabs/databend
 ### Connecting to Databend
 
 - [How to Connect Databend with MySQL Client](https://databend.rs/doc/integrations/api/mysql-handler)
-- [How to Connect Databend with ClickHouse Client](https://databend.rs/doc/integrations/api/clickhouse-handler)
+- [How to Connect Databend with ClickHouse HTTP Handler](https://databend.rs/doc/integrations/api/clickhouse-handler)
 - [How to Connect Databend with DBeaver SQL IDE](https://databend.rs/doc/integrations/gui-tool/dbeaver)
 - [How to Execute Queries in Python](https://databend.rs/doc/develop/python)
 - [How to Query Databend in Jupyter Notebooks](https://databend.rs/doc/integrations/gui-tool/jupyter)
@@ -135,11 +127,20 @@ docker run --net=host  datafuselabs/databend
 - [How to Load Data from Remote Files](https://databend.rs/doc/load-data/http)
 - [How to Load Data from Amazon S3](https://databend.rs/doc/load-data/s3)
 - [How to Load Data from Databend Stages](https://databend.rs/doc/load-data/stage)
+* [Querying Data in Staged Files](https://databend.rs/doc/load-data/querying-stage)
+* [Transforming Data During a Load](http://databend.rs/doc/load-data/data-load-transform)
 
-
-## Unloading Data from Databend
+### Unloading Data from Databend
 
 - [How to Unload Data from Databend](https://databend.rs/doc/unload-data/)
+
+### Managing Data
+
+- [COPY](https://databend.rs/doc/sql-commands/dml/dml-copy-into-table)
+- [INSERT](https://databend.rs/doc/sql-commands/dml/dml-insert)
+- [DELETE](https://databend.rs/doc/sql-commands/dml/dml-delete-from)
+- [UPDATE](https://databend.rs/doc/sql-commands/dml/dml-update)
+- [REPLACE](https://databend.rs/doc/sql-commands/dml/dml-replace)
 
 ### Managing Users
 
@@ -214,6 +215,7 @@ For general help in using Databend, please refer to the official documentation. 
 
 ## Roadmap
 
+- [Roadmap v1.1](https://github.com/datafuselabs/databend/issues/10334)
 - [Roadmap v1.0](https://github.com/datafuselabs/databend/issues/9604)
 - [Roadmap v0.9](https://github.com/datafuselabs/databend/issues/7052)
 - [Roadmap 2023](https://github.com/datafuselabs/databend/issues/9448)

@@ -15,10 +15,11 @@
 use std::sync::Arc;
 
 use common_base::base::tokio;
+use common_meta_sled_store::openraft::error::RaftError;
+use common_meta_types::ClientWriteError;
 use common_meta_types::Cmd;
 use common_meta_types::ForwardToLeader;
 use common_meta_types::LogEntry;
-use common_meta_types::RaftWriteError;
 use common_meta_types::UpsertKV;
 use databend_meta::init_meta_ut;
 use databend_meta::meta_service::meta_leader::MetaLeader;
@@ -58,9 +59,10 @@ async fn test_meta_node_forward_to_leader() -> anyhow::Result<()> {
             assert!(rst.is_err());
             let e = rst.unwrap_err();
             match e {
-                RaftWriteError::ForwardToLeader(ForwardToLeader {
+                RaftError::APIError(ClientWriteError::ForwardToLeader(ForwardToLeader {
                     leader_id: forward_leader_id,
-                }) => {
+                    ..
+                })) => {
                     assert_eq!(Some(leader_id), forward_leader_id);
                 }
                 _ => {

@@ -30,9 +30,9 @@ use crate::common;
 // The message bytes are built from the output of `test_user_stage_webhdfs_latest()`
 #[test]
 fn test_decode_v30_user_stage() -> anyhow::Result<()> {
-    // Encoded data of version 30 of common_meta_app::principal::user_stage::UserStageInfo:
+    // Encoded data of version 30 of common_meta_app::principal::user_stage::StageInfo:
     // It is generated with common::test_pb_from_to().
-    let user_stage_info_v30 = vec![
+    let stage_info_v30 = vec![
         10, 29, 119, 101, 98, 104, 100, 102, 115, 58, 47, 47, 112, 97, 116, 104, 47, 116, 111, 47,
         115, 116, 97, 103, 101, 47, 102, 105, 108, 101, 115, 16, 1, 26, 81, 10, 79, 42, 77, 10, 27,
         104, 116, 116, 112, 115, 58, 47, 47, 119, 101, 98, 104, 100, 102, 115, 46, 101, 120, 97,
@@ -44,7 +44,7 @@ fn test_decode_v30_user_stage() -> anyhow::Result<()> {
         116, 160, 6, 30, 168, 6, 24,
     ];
 
-    let want = || mt::principal::UserStageInfo {
+    let want = || mt::principal::StageInfo {
         stage_name: "webhdfs://path/to/stage/files".to_string(),
         stage_type: mt::principal::StageType::External,
         stage_params: mt::principal::StageParams {
@@ -77,7 +77,7 @@ fn test_decode_v30_user_stage() -> anyhow::Result<()> {
         comment: "test".to_string(),
         ..Default::default()
     };
-    common::test_load_old(func_name!(), user_stage_info_v30.as_slice(), 30, want())?;
+    common::test_load_old(func_name!(), stage_info_v30.as_slice(), 30, want())?;
     common::test_pb_from_to(func_name!(), want())?;
 
     Ok(())

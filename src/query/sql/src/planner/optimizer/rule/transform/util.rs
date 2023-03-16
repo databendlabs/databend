@@ -13,9 +13,6 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_expression::type_check;
-use common_expression::RawExpr;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
 
 use crate::plans::ComparisonExpr;
 use crate::plans::ComparisonOp;
@@ -28,22 +25,10 @@ pub fn get_join_predicates(join: &Join) -> Result<Vec<ScalarExpr>> {
         .iter()
         .zip(join.right_conditions.iter())
         .map(|(left_cond, right_cond)| {
-            let registry = &BUILTIN_FUNCTIONS;
-            let raw_expr = RawExpr::FunctionCall {
-                span: None,
-                name: "eq".to_string(),
-                params: vec![],
-                args: vec![
-                    left_cond.as_raw_expr_with_col_name(),
-                    right_cond.as_raw_expr_with_col_name(),
-                ],
-            };
-            let expr = type_check::check(&raw_expr, registry)?;
             Ok(ScalarExpr::ComparisonExpr(ComparisonExpr {
                 left: Box::new(left_cond.clone()),
                 right: Box::new(right_cond.clone()),
                 op: ComparisonOp::Equal,
-                return_type: Box::new(expr.data_type().clone()),
             }))
         })
         .collect::<Result<Vec<_>>>()?

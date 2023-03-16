@@ -22,7 +22,7 @@ use common_storages_system::TablesTableWithoutHistory;
 use futures::TryStreamExt;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::SelectInterpreterV2;
+use crate::interpreters::SelectInterpreter;
 use crate::procedures::OneBlockProcedure;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
@@ -56,7 +56,7 @@ impl OneBlockProcedure for SearchTablesProcedure {
             args[0]
         );
         let mut planner = Planner::new(ctx.clone());
-        let (plan, _, _) = planner.plan_sql(&query).await?;
+        let (plan, _) = planner.plan_sql(&query).await?;
 
         let stream = if let Plan::Query {
             s_expr,
@@ -65,7 +65,7 @@ impl OneBlockProcedure for SearchTablesProcedure {
             ..
         } = plan
         {
-            let interpreter = SelectInterpreterV2::try_create(
+            let interpreter = SelectInterpreter::try_create(
                 ctx.clone(),
                 *bind_context,
                 *s_expr,

@@ -31,6 +31,7 @@ use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::NotExpr;
 use crate::plans::OrExpr;
+use crate::plans::Unnest;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::ColumnSet;
@@ -248,6 +249,8 @@ fn remove_column_nullable(
                         need_remove = false;
                     }
                 }
+                // None of internal columns will be nullable, so just ignore internal column type entry
+                ColumnEntry::InternalColumn(..) => {}
             }
             match join_type {
                 JoinType::Left => {
@@ -278,6 +281,10 @@ fn remove_column_nullable(
                 },
             })
         }
+        ScalarExpr::BoundInternalColumnRef(_) => {
+            // internal column will never be null
+            unreachable!()
+        }
         ScalarExpr::AndExpr(expr) => {
             let left_expr = remove_column_nullable(
                 &expr.left,
@@ -291,7 +298,6 @@ fn remove_column_nullable(
             ScalarExpr::AndExpr(AndExpr {
                 left: Box::new(left_expr),
                 right: Box::new(right_expr),
-                return_type: expr.return_type.clone(),
             })
         }
         ScalarExpr::OrExpr(expr) => {
@@ -307,7 +313,6 @@ fn remove_column_nullable(
             ScalarExpr::OrExpr(OrExpr {
                 left: Box::new(left_expr),
                 right: Box::new(right_expr),
-                return_type: expr.return_type.clone(),
             })
         }
         ScalarExpr::NotExpr(expr) => {
@@ -315,7 +320,6 @@ fn remove_column_nullable(
                 remove_column_nullable(&expr.argument, left_prop, right_prop, join_type, metadata)?;
             ScalarExpr::NotExpr(NotExpr {
                 argument: Box::new(new_expr),
-                return_type: expr.return_type.clone(),
             })
         }
         ScalarExpr::ComparisonExpr(expr) => {
@@ -332,7 +336,6 @@ fn remove_column_nullable(
                 op: expr.op.clone(),
                 left: Box::new(left_expr),
                 right: Box::new(right_expr),
-                return_type: expr.return_type.clone(),
             })
         }
         ScalarExpr::AggregateFunction(expr) => {
@@ -370,7 +373,6 @@ fn remove_column_nullable(
                 params: expr.params.clone(),
                 arguments: args,
                 func_name: expr.func_name.clone(),
-                return_type: expr.return_type.clone(),
             })
         }
         ScalarExpr::CastExpr(expr) => {
@@ -379,10 +381,22 @@ fn remove_column_nullable(
             ScalarExpr::CastExpr(CastExpr {
                 is_try: expr.is_try,
                 argument: Box::new(new_expr),
-                from_type: expr.from_type.clone(),
                 target_type: expr.target_type.clone(),
             })
         }
         ScalarExpr::ConstantExpr(_) | ScalarExpr::SubqueryExpr(_) => scalar_expr.clone(),
+        ScalarExpr::Unnest(expr) => {
+            let argument = Box::new(remove_column_nullable(
+                &expr.argument,
+                left_prop,
+                right_prop,
+                join_type,
+                metadata,
+            )?);
+            ScalarExpr::Unnest(Unnest {
+                argument,
+                return_type: expr.return_type.clone(),
+            })
+        }
     })
 }

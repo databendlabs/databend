@@ -239,19 +239,17 @@ where T: Decimal
         match self
             .value
             .checked_mul(T::e(scale_add as u32))
-            .and_then(|v| v.checked_div(T::from_float(count as f64)))
+            .and_then(|v| v.checked_div(T::from_u64(count)))
         {
             Some(value) => {
                 builder.push(value);
                 Ok(())
             }
-            None => {
-                return Err(ErrorCode::Overflow(format!(
-                    "Decimal overflow: {} > (precision: {})",
-                    self.value,
-                    T::max_of_max_precision()
-                )));
-            }
+            None => Err(ErrorCode::Overflow(format!(
+                "Decimal overflow: {} > (precision: {})",
+                self.value,
+                T::max_of_max_precision()
+            ))),
         }
     }
 }

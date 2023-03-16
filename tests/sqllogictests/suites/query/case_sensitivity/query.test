@@ -58,3 +58,10 @@ query I
 select A.* from  (WITH source2 AS (select 1 as e) SELECT * FROM source2) A
 ----
 1
+
+onlyif mysql
+query T
+select substr(version(), 1, 6);
+----
+8.0.26
+

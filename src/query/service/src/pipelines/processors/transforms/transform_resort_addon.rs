@@ -20,6 +20,7 @@ use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::Expr;
+use common_expression::Scalar;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::parse_exprs;
@@ -58,7 +59,7 @@ where Self: Transform
         for f in fields.iter() {
             let expr = if !input_schema.has_field(f.name()) {
                 if let Some(default_expr) = f.default_expr() {
-                    let mut expr = parse_exprs(ctx.clone(), table.clone(), false, default_expr)?;
+                    let mut expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?;
                     let mut expr = expr.remove(0);
                     if expr.data_type() != f.data_type() {
                         expr = Expr::Cast {
@@ -70,7 +71,7 @@ where Self: Transform
                     }
                     expr
                 } else {
-                    let default_value = f.data_type().default_value();
+                    let default_value = Scalar::default_value(f.data_type());
                     Expr::Constant {
                         span: None,
                         scalar: default_value,

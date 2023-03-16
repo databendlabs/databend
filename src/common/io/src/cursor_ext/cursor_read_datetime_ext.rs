@@ -97,12 +97,19 @@ where T: AsRef<[u8]>
             .map_err_to_code(ErrorCode::BadBytes, || {
                 format!("Cannot parse value:{} to Date type", v)
             })?;
-        let mut dt = tz.from_local_datetime(&d.and_hms(0, 0, 0)).unwrap();
+        let mut dt = tz
+            .from_local_datetime(&d.and_hms_opt(0, 0, 0).unwrap())
+            .unwrap();
 
         let less_1000 = |dt: DateTime<Tz>| {
             // convert timestamp less than `1000-01-01 00:00:00` to `1000-01-01 00:00:00`
             if dt.year() < 1000 {
-                Ok(tz.from_utc_datetime(&NaiveDate::from_ymd(1000, 1, 1).and_hms(0, 0, 0)))
+                Ok(tz.from_utc_datetime(
+                    &NaiveDate::from_ymd_opt(1000, 1, 1)
+                        .unwrap()
+                        .and_hms_opt(0, 0, 0)
+                        .unwrap(),
+                ))
             } else {
                 Ok(dt)
             }
@@ -133,13 +140,13 @@ where T: AsRef<[u8]>
             if times.len() < 3 {
                 times.resize(3, 0);
                 dt = tz
-                    .from_local_datetime(&d.and_hms(times[0], times[1], times[2]))
+                    .from_local_datetime(&d.and_hms_opt(times[0], times[1], times[2]).unwrap())
                     .unwrap();
                 return less_1000(dt);
             }
 
             dt = tz
-                .from_local_datetime(&d.and_hms(times[0], times[1], times[2]))
+                .from_local_datetime(&d.and_hms_opt(times[0], times[1], times[2]).unwrap())
                 .unwrap();
 
             // ms .microseconds
@@ -187,7 +194,12 @@ where T: AsRef<[u8]>
             if self.ignore(|b| b == b'z' || b == b'Z') {
                 // ISO 8601 The Z on the end means UTC (that is, an offset-from-UTC of zero hours-minutes-seconds).
                 if dt.year() < 1000 {
-                    Ok(tz.from_utc_datetime(&NaiveDate::from_ymd(1000, 1, 1).and_hms(0, 0, 0)))
+                    Ok(tz.from_utc_datetime(
+                        &NaiveDate::from_ymd_opt(1000, 1, 1)
+                            .unwrap()
+                            .and_hms_opt(0, 0, 0)
+                            .unwrap(),
+                    ))
                 } else {
                     let current_tz = dt.offset().fix().local_minus_utc();
                     calc_offset(current_tz.into(), 0, &dt)
@@ -239,11 +251,18 @@ where T: AsRef<[u8]>
                 || ((0..60).contains(&minute_offset) && hour_offset < 14)
             {
                 if dt.year() < 1970 {
-                    Ok(tz.from_utc_datetime(&NaiveDate::from_ymd(1970, 1, 1).and_hms(0, 0, 0)))
+                    Ok(tz.from_utc_datetime(
+                        &NaiveDate::from_ymd_opt(1970, 1, 1)
+                            .unwrap()
+                            .and_hms_opt(0, 0, 0)
+                            .unwrap(),
+                    ))
                 } else {
                     let current_tz_sec = dt.offset().fix().local_minus_utc();
-                    let mut val_tz_sec = FixedOffset::east(hour_offset * 3600 + minute_offset * 60)
-                        .local_minus_utc();
+                    let mut val_tz_sec =
+                        FixedOffset::east_opt(hour_offset * 3600 + minute_offset * 60)
+                            .unwrap()
+                            .local_minus_utc();
                     if west_tz {
                         val_tz_sec = -val_tz_sec;
                     }

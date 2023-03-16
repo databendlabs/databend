@@ -82,6 +82,9 @@ pub struct QueryContextShared {
     pub(in crate::sessions) on_error_map: Arc<RwLock<Option<HashMap<String, ErrorCode>>>>,
     /// partitions_sha for each table in the query. Not empty only when enabling query result cache.
     pub(in crate::sessions) partitions_shas: Arc<RwLock<Vec<String>>>,
+    pub(in crate::sessions) cacheable: Arc<AtomicBool>,
+    // Status info.
+    pub(in crate::sessions) status: Arc<RwLock<String>>,
 }
 
 impl QueryContextShared {
@@ -113,6 +116,8 @@ impl QueryContextShared {
             created_time: SystemTime::now(),
             on_error_map: Arc::new(RwLock::new(None)),
             partitions_shas: Arc::new(RwLock::new(vec![])),
+            cacheable: Arc::new(AtomicBool::new(true)),
+            status: Arc::new(RwLock::new("null".to_string())),
         }))
     }
 
@@ -265,7 +270,12 @@ impl QueryContextShared {
         }
     }
 
-    pub fn attach_query_str(&self, kind: String, query: &str) {
+    pub fn get_runtime(&self) -> Option<Arc<Runtime>> {
+        let query_runtime = self.runtime.read();
+        (*query_runtime).clone()
+    }
+
+    pub fn attach_query_str(&self, kind: String, query: String) {
         {
             let mut running_query = self.running_query.write();
             *running_query = Some(short_sql(query));
@@ -334,6 +344,11 @@ impl QueryContextShared {
     pub fn get_created_time(&self) -> SystemTime {
         self.created_time
     }
+
+    pub fn get_status_info(&self) -> String {
+        let status = self.status.read();
+        status.clone()
+    }
 }
 
 impl Drop for QueryContextShared {
@@ -347,9 +362,9 @@ impl Drop for QueryContextShared {
     }
 }
 
-pub fn short_sql(query: &str) -> String {
+pub fn short_sql(sql: String) -> String {
     use unicode_segmentation::UnicodeSegmentation;
-    let query = query.trim_start();
+    let query = sql.trim_start();
     if query.len() >= 64 && query[..6].eq_ignore_ascii_case("INSERT") {
         // keep first 64 graphemes
         String::from_utf8(
@@ -363,6 +378,6 @@ pub fn short_sql(query: &str) -> String {
         )
         .unwrap() // by construction, this cannot panic as we extracted unicode grapheme
     } else {
-        query.to_string()
+        sql
     }
 }

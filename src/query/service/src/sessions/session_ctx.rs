@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -23,7 +24,6 @@ use common_exception::Result;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
 use common_settings::Settings;
-use futures::channel::oneshot::Sender;
 use parking_lot::RwLock;
 
 use crate::sessions::QueryContextShared;
@@ -49,7 +49,7 @@ pub struct SessionContext {
     auth_role: RwLock<Option<String>>,
     // The client IP from the client.
     client_host: RwLock<Option<SocketAddr>>,
-    io_shutdown_tx: RwLock<Option<Sender<Sender<()>>>>,
+    io_shutdown_tx: RwLock<Option<Box<dyn FnOnce() + Send + Sync + 'static>>>,
     query_context_shared: RwLock<Weak<QueryContextShared>>,
     // We store `query_id -> query_result_cache_key` to session context, so that we can fetch
     // query result through previous query_id easily.
@@ -189,13 +189,22 @@ impl SessionContext {
         *lock = sock
     }
 
-    pub fn set_io_shutdown_tx(&self, tx: Option<Sender<Sender<()>>>) {
+    pub fn set_io_shutdown_tx<F: FnOnce() + Send + Sync + 'static>(&self, f: F) {
         let mut lock = self.io_shutdown_tx.write();
-        *lock = tx
+
+        if let Some(old_fun) = lock.take() {
+            *lock = Some(Box::new(move || {
+                old_fun();
+                f();
+            }));
+
+            return;
+        }
+        *lock = Some(Box::new(f));
     }
 
     //  Take the io_shutdown_tx and the self.io_shuttdown_tx is None.
-    pub fn take_io_shutdown_tx(&self) -> Option<Sender<Sender<()>>> {
+    pub fn take_io_shutdown_tx(&self) -> Option<Box<dyn FnOnce() + Send + Sync + 'static>> {
         let mut lock = self.io_shutdown_tx.write();
         lock.take()
     }
@@ -256,5 +265,10 @@ impl SessionContext {
         }
 
         (*lock)[idx as usize].0.clone()
+    }
+
+    pub fn get_query_id_history(&self) -> HashSet<String> {
+        let lock = self.query_ids_results.read();
+        HashSet::from_iter(lock.iter().map(|result| result.clone().0))
     }
 }

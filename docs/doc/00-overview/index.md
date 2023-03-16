@@ -19,7 +19,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="Performance" label="Performance">
 
 - Blazing-fast data analytics on object storage.
-- Leverages data-level parallelism and instruction-level parallelism technologies for optimal performance.
+- Leverages data-level parallelism and instruction-level parallelism technologies for [optimal performance](https://benchmark.clickhouse.com/).
 - Supports Git-like MVCC storage for easy querying, cloning, and restoration of historical data.
 - No indexes to build, no manual tuning, and no need to figure out partitions or shard data.
 
@@ -29,7 +29,7 @@ import TabItem from '@theme/TabItem';
 
 - Compatible with MySQL / ClickHouse.
 - ANSI SQL compliant.
-- Easy connection with existing tools such as [MySQL Client](https://databend.rs/doc/integrations/api/mysql-handler), [ClickHouse Client](https://databend.rs/doc/integrations/api/clickhouse-handler), [Vector](https://vector.dev/), [DBeaver](https://dbeaver.com/), [Jupyter](https://databend.rs/doc/integrations/gui-tool/jupyter), [JDBC](https://databend.rs/doc/develop), and more.
+- Easy connection with existing tools such as [MySQL Client](https://databend.rs/doc/integrations/api/mysql-handler), [ClickHouse HTTP Handler](https://databend.rs/doc/integrations/api/clickhouse-handler), [Vector](https://vector.dev/), [DBeaver](https://dbeaver.com/), [Jupyter](https://databend.rs/doc/integrations/gui-tool/jupyter), [JDBC](https://databend.rs/doc/develop), and more.
 
 </TabItem>
 
@@ -50,7 +50,7 @@ import TabItem from '@theme/TabItem';
 </TabItem>
 </Tabs>
 
-## Databend Architucture
+## Databend Architecture
 
 Databend's high-level architecture is composed of a meta-service layer, a compute layer, and a storage layer.
 
@@ -148,6 +148,7 @@ The Databend community is open to data professionals, students, and anyone who h
 
 ## Roadmap
 
+- [Roadmap v1.1](https://github.com/datafuselabs/databend/issues/10334)
 - [Roadmap v1.0](https://github.com/datafuselabs/databend/issues/9604)
 - [Roadmap v0.9](https://github.com/datafuselabs/databend/issues/7052)
 - [Roadmap 2023](https://github.com/datafuselabs/databend/issues/9448)

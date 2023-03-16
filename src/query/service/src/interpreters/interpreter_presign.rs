@@ -22,8 +22,8 @@ use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Scalar;
 use common_expression::Value;
-use common_jsonb::Value as JsonbValue;
 use common_storages_stage::StageTable;
+use jsonb::Value as JsonbValue;
 use opendal::ops::OpWrite;
 
 use crate::interpreters::Interpreter;
@@ -58,21 +58,20 @@ impl Interpreter for PresignInterpreter {
     #[tracing::instrument(level = "debug", name = "presign_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let op = StageTable::get_op(&self.plan.stage)?;
-        if !op.metadata().can_presign() {
+        if !op.info().can_presign() {
             return Err(ErrorCode::StorageUnsupported(
                 "storage doesn't support presign operation",
             ));
         }
 
-        let o = op.object(&self.plan.path);
         let presigned_req = match self.plan.action {
-            PresignAction::Download => o.presign_read(self.plan.expire)?,
+            PresignAction::Download => op.presign_read(&self.plan.path, self.plan.expire)?,
             PresignAction::Upload => {
-                let mut presign_args = OpWrite::new(0);
+                let mut presign_args = OpWrite::new();
                 if let Some(content_type) = &self.plan.content_type {
                     presign_args = presign_args.with_content_type(content_type);
                 }
-                o.presign_write_with(presign_args, self.plan.expire)?
+                op.presign_write_with(&self.plan.path, presign_args, self.plan.expire)?
             }
         };
 

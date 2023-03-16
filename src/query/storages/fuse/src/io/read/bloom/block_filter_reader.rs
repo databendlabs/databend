@@ -168,6 +168,7 @@ async fn load_index_meta(dal: Operator, path: &str, length: u64) -> Result<Arc<B
             location: path_owned,
             len_hint: Some(length),
             ver: version,
+            put_cache: true,
         };
 
         reader.read(&load_params).await

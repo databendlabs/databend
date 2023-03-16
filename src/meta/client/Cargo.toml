@@ -13,6 +13,9 @@ edition = { workspace = true }
 doctest = false
 test = false
 
+[features]
+enable-histogram = ["common-metrics/enable-histogram"]
+
 [dependencies]
 common-arrow = { path = "../../common/arrow" }
 common-base = { path = "../../common/base" }

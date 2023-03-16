@@ -20,7 +20,6 @@ use common_ast::ast::MapAccessor;
 use common_ast::ast::UnaryOperator;
 use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
-use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_expression::types::decimal::DecimalDataType;
 use common_expression::types::decimal::DecimalSize;
@@ -31,9 +30,8 @@ use common_expression::RawExpr;
 use ordered_float::OrderedFloat;
 
 pub fn parse_raw_expr(text: &str, columns: &[(&str, DataType)]) -> RawExpr {
-    let backtrace = Backtrace::new();
     let tokens = tokenize_sql(text).unwrap();
-    let expr = parse_expr(&tokens, Dialect::PostgreSQL, &backtrace).unwrap();
+    let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
     transform_expr(expr, columns)
 }
 
@@ -148,14 +146,15 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
             params: params
                 .into_iter()
                 .map(|param| match param {
-                    ASTLiteral::Integer(u) => u as usize,
+                    ASTLiteral::UInt64(u) => u as usize,
+                    ASTLiteral::Decimal128 { .. } => 0_usize,
                     _ => unimplemented!(),
                 })
                 .collect(),
         },
         AExpr::UnaryOp { span, op, expr } => RawExpr::FunctionCall {
             span,
-            name: format!("{op:?}").to_lowercase(),
+            name: op.to_func_name(),
             params: vec![],
             args: vec![transform_expr(*expr, columns)],
         },
@@ -184,7 +183,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 }
                 (_, _) => RawExpr::FunctionCall {
                     span,
-                    name: format!("{op:?}").to_lowercase(),
+                    name: op.to_func_name(),
                     params: vec![],
                     args: vec![
                         transform_expr(*left, columns),
@@ -296,6 +295,33 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 name,
                 params: vec![],
                 args: vec![transform_expr(*expr, columns)],
+            }
+        }
+        AExpr::Map { span, kvs } => {
+            let mut keys = Vec::with_capacity(kvs.len());
+            let mut vals = Vec::with_capacity(kvs.len());
+            for (key, val) in kvs {
+                keys.push(transform_expr(key, columns));
+                vals.push(transform_expr(val, columns));
+            }
+            let keys = RawExpr::FunctionCall {
+                span,
+                name: "array".to_string(),
+                params: vec![],
+                args: keys,
+            };
+            let vals = RawExpr::FunctionCall {
+                span,
+                name: "array".to_string(),
+                params: vec![],
+                args: vals,
+            };
+            let args = vec![keys, vals];
+            RawExpr::FunctionCall {
+                span,
+                name: "map".to_string(),
+                params: vec![],
+                args,
             }
         }
         AExpr::Tuple { span, exprs } => RawExpr::FunctionCall {
@@ -498,9 +524,14 @@ fn transform_data_type(target_type: common_ast::ast::TypeName) -> DataType {
         common_ast::ast::TypeName::String => DataType::String,
         common_ast::ast::TypeName::Timestamp => DataType::Timestamp,
         common_ast::ast::TypeName::Date => DataType::Date,
-        common_ast::ast::TypeName::Array {
-            item_type: Some(item_type),
-        } => DataType::Array(Box::new(transform_data_type(*item_type))),
+        common_ast::ast::TypeName::Array(item_type) => {
+            DataType::Array(Box::new(transform_data_type(*item_type)))
+        }
+        common_ast::ast::TypeName::Map { key_type, val_type } => {
+            let key_type = transform_data_type(*key_type);
+            let val_type = transform_data_type(*val_type);
+            DataType::Map(Box::new(DataType::Tuple(vec![key_type, val_type])))
+        }
         common_ast::ast::TypeName::Tuple { fields_type, .. } => {
             DataType::Tuple(fields_type.into_iter().map(transform_data_type).collect())
         }
@@ -508,13 +539,12 @@ fn transform_data_type(target_type: common_ast::ast::TypeName) -> DataType {
             DataType::Nullable(Box::new(transform_data_type(*inner_type)))
         }
         common_ast::ast::TypeName::Variant => DataType::Variant,
-        _ => unimplemented!(),
     }
 }
 
 pub fn transform_literal(lit: ASTLiteral) -> Literal {
     match lit {
-        ASTLiteral::Integer(u) => {
+        ASTLiteral::UInt64(u) => {
             if u < u8::MAX as u64 {
                 Literal::UInt8(u as u8)
             } else if u < u16::MAX as u64 {
@@ -525,6 +555,35 @@ pub fn transform_literal(lit: ASTLiteral) -> Literal {
                 Literal::UInt64(u)
             }
         }
+        ASTLiteral::Int64(int) => {
+            if int >= i8::MIN as i64 && int <= i8::MAX as i64 {
+                Literal::Int8(int as i8)
+            } else if int >= i16::MIN as i64 && int <= i16::MAX as i64 {
+                Literal::Int16(int as i16)
+            } else if int >= i32::MIN as i64 && int <= i32::MAX as i64 {
+                Literal::Int32(int as i32)
+            } else {
+                Literal::Int64(int)
+            }
+        }
+        ASTLiteral::Decimal128 {
+            value,
+            precision,
+            scale,
+        } => Literal::Decimal128 {
+            value,
+            precision,
+            scale,
+        },
+        ASTLiteral::Decimal256 {
+            value,
+            precision,
+            scale,
+        } => Literal::Decimal256 {
+            value,
+            precision,
+            scale,
+        },
         ASTLiteral::String(s) => Literal::String(s.as_bytes().to_vec()),
         ASTLiteral::Boolean(b) => Literal::Boolean(b),
         ASTLiteral::Null => Literal::Null,

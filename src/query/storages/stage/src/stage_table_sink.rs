@@ -16,8 +16,6 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use backon::ExponentialBuilder;
-use backon::Retryable;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -31,7 +29,6 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use opendal::Operator;
-use tracing::warn;
 
 #[derive(Debug)]
 enum State {
@@ -75,12 +72,12 @@ impl StageTableSink {
     ) -> Result<ProcessorPtr> {
         let output_format = FileFormatOptionsExt::get_output_format_from_format_options(
             table_info.schema(),
-            table_info.user_stage_info.file_format_options.clone(),
+            table_info.stage_info.file_format_options.clone(),
             &ctx.get_settings(),
         )?;
 
         let max_file_size = Self::adjust_max_file_size(&ctx, &table_info)?;
-        let single = table_info.user_stage_info.copy_options.single;
+        let single = table_info.stage_info.copy_options.single;
 
         Ok(ProcessorPtr::create(Box::new(StageTableSink {
             input,
@@ -110,7 +107,7 @@ impl StageTableSink {
         // max is half of the max memory usage.
         let max_size = (ctx.get_settings().get_max_memory_usage()? / 2) as usize;
 
-        let mut max_file_size = stage_info.user_stage_info.copy_options.max_file_size;
+        let mut max_file_size = stage_info.stage_info.copy_options.max_file_size;
         if max_file_size == 0 {
             max_file_size = DEFAULT_SIZE;
         } else if max_file_size > max_size {
@@ -123,12 +120,14 @@ impl StageTableSink {
     pub fn unload_path(&self) -> String {
         let format_name = format!(
             "{:?}",
-            self.table_info.user_stage_info.file_format_options.format
+            self.table_info.stage_info.file_format_options.format
         );
-        if self.table_info.path.ends_with("data_") {
+
+        // assert_eq!("00000110", format!("{:0>8}", "110"))
+        if self.table_info.files_info.path.ends_with("data_") {
             format!(
-                "{}{}_{}_{}.{}",
-                self.table_info.path,
+                "{}{}_{:0>4}_{:0>8}.{}",
+                self.table_info.files_info.path,
                 self.uuid,
                 self.group_id,
                 self.batch_id,
@@ -136,8 +135,8 @@ impl StageTableSink {
             )
         } else {
             format!(
-                "{}/data_{}_{}_{}.{}",
-                self.table_info.path,
+                "{}/data_{}_{:0>4}_{:0>8}.{}",
+                self.table_info.files_info.path,
                 self.uuid,
                 self.group_id,
                 self.batch_id,
@@ -261,23 +260,7 @@ impl Processor for StageTableSink {
             State::NeedWrite(bytes, remainng_block) => {
                 let path = self.unload_path();
 
-                // TODO(xuanwo): we used to update the data metrics here.
-                //
-                // But all data metrics will be moved to table, thus we can't
-                // update here, we need to address this.
-
-                let object = self.data_accessor.object(&path);
-                { || object.write(bytes.as_slice()) }
-                    .retry(&ExponentialBuilder::default().with_jitter())
-                    .when(|err| err.is_temporary())
-                    .notify(|err, dur| {
-                        warn!(
-                            "stage table sink write retry after {}s for error {:?}",
-                            dur.as_secs(),
-                            err
-                        )
-                    })
-                    .await?;
+                self.data_accessor.write(&path, bytes).await?;
 
                 match remainng_block {
                     Some(block) => self.state = State::NeedSerialize(block),

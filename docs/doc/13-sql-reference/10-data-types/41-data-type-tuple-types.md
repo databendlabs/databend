@@ -4,9 +4,10 @@ description:  Tuple is a collection of ordered, immutable types.
 ---
 
 ## Tuple Data Types
-| Name    |  Aliases  |  Values        | Description
-|---------|-----------|--------------------------|----------------
-| TUPLE   |           | ('2023-02-14 08:00:00','Valentine's Day') | Collection of ordered,immmutable,which requires the type of each element to be declared before being used.
+
+| Name  | Aliases | Values                                    | Description                                                                                                |
+|-------|---------|-------------------------------------------|------------------------------------------------------------------------------------------------------------|
+| TUPLE |         | ('2023-02-14 08:00:00','Valentine's Day') | Collection of ordered,immmutable,which requires the type of each element to be declared before being used. |
 
 A tuple is a collection of ordered, immutable, and heterogeneous elements, represented within parentheses () in most programming languages. In other words, a tuple is a finite ordered list of elements of different data types, and once created, its elements cannot be changed or modified.
 

@@ -19,7 +19,7 @@ Check out what we've done this week to make Databend even better for you.
 
 **AST**
 
-- select from stage support uri with connect\*ion options ([#9926](https://github.com/datafuselabs/databend/pull/9926))
+- select from stage support uri with connection options ([#10066](https://github.com/datafuselabs/databend/pull/10066))
 
 **Catalog**
 
@@ -118,6 +118,8 @@ Upstream────►│Duplicate│ 4  │         │ 4  │ Result  │
 
 ```
 
+**Learn More**
+
 - [PR | feat(query): query result cache](https://github.com/datafuselabs/databend/pull/10042)
 - [Docs | RFC: Query Result Cache](https://databend.rs/doc/contributing/rfcs/query-result-cache)
 - [Tracking Issue | RFC: query result cache](https://github.com/datafuselabs/databend/issues/10011)
@@ -130,6 +132,8 @@ Databend now supports table data cache:
 - in-memory cache(experimental): deserialized column objects of a data block.
 
 For cache-friendly workloads, the performance gains are significant.
+
+**Learn More**
 
 - [PR | feat: table data cache](https://github.com/datafuselabs/databend/pull/9772)
 - [Docs | Query Server Configuration - Cache](https://databend.rs/doc/deploy/query/query-config#5-cache)
@@ -147,6 +151,8 @@ sudo apt install databend
 sudo systemctl start databend-meta
 sudo systemctl start databend-query
 ```
+
+**Learn More**
 
 - [PR | chore(ci): release with systemd units](https://github.com/datafuselabs/databend/pull/10145)
 - [Docs | Installing Databend - Package Manager](https://databend.rs/doc/deploy/installing-databend#package-manager)
@@ -207,14 +213,3 @@ Thanks a lot to the contributors for their excellent work this week.
 | [<img alt="zhyass" src="https://avatars.githubusercontent.com/u/34016424?v=4&s=117" width="117" />](https://github.com/zhyass) |
 | :----------------------------------------------------------------------------------------------------------------------------: |
 |                                              [zhyass](https://github.com/zhyass)                                               |
-
-## Connect With Us
-
-We'd love to hear from you. Feel free to run the code and see if Databend works for you. Submit an issue with your problem if you need help.
-
-[DatafuseLabs Community](https://github.com/datafuselabs/) is open to everyone who loves data warehouses. Please join the community and share your thoughts.
-
-- [Databend Official Website](https://databend.rs)
-- [GitHub Discussions](https://github.com/datafuselabs/databend/discussions) (Feature requests, bug reports, and contributions)
-- [Twitter](https://twitter.com/DatabendLabs) (Stay in the know)
-- [Slack Channel](https://link.databend.rs/join-slack) (Chat with the community)

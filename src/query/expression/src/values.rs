@@ -14,8 +14,12 @@
 
 use std::cmp::Ordering;
 use std::hash::Hash;
+use std::io::Read;
 use std::ops::Range;
 
+use base64::engine::general_purpose;
+use base64::prelude::*;
+use common_arrow::arrow::bitmap::and;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
@@ -24,8 +28,12 @@ use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::TimeUnit;
 use common_arrow::arrow::offset::OffsetsBuffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
+use common_exception::Result;
+use common_io::prelude::BinaryRead;
 use enum_as_inner::EnumAsInner;
+use ethnum::i256;
 use itertools::Itertools;
+use ordered_float::OrderedFloat;
 use serde::de::Visitor;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -36,6 +44,7 @@ use crate::property::Domain;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::boolean::BooleanDomain;
+use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalColumnBuilder;
 use crate::types::decimal::DecimalDataType;
@@ -53,6 +62,7 @@ use crate::types::number::F64;
 use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::types::string::StringDomain;
+use crate::types::timestamp::check_timestamp;
 use crate::types::variant::JSONB_NULL;
 use crate::types::*;
 use crate::utils::arrow::append_bitmap;
@@ -61,8 +71,9 @@ use crate::utils::arrow::buffer_into_mut;
 use crate::utils::arrow::constant_bitmap;
 use crate::utils::arrow::deserialize_column;
 use crate::utils::arrow::serialize_column;
+use crate::with_decimal_mapped_type;
 use crate::with_decimal_type;
-use crate::with_integer_mapped_type;
+use crate::with_number_mapped_type;
 use crate::with_number_type;
 
 #[derive(Debug, Clone, PartialEq, EnumAsInner)]
@@ -77,9 +88,8 @@ pub enum ValueRef<'a, T: ValueType> {
     Column(T::Column),
 }
 
-#[derive(Debug, Clone, Default, EnumAsInner, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, EnumAsInner, Eq, Serialize, Deserialize)]
 pub enum Scalar {
-    #[default]
     Null,
     EmptyArray,
     EmptyMap,
@@ -127,21 +137,15 @@ pub enum Column {
     Array(Box<ArrayColumn<AnyType>>),
     Map(Box<ArrayColumn<AnyType>>),
     Nullable(Box<NullableColumn<AnyType>>),
-    Tuple { fields: Vec<Column>, len: usize },
+    Tuple(Vec<Column>),
     Variant(StringColumn),
 }
 
 #[derive(Debug, Clone, EnumAsInner)]
 pub enum ColumnBuilder {
-    Null {
-        len: usize,
-    },
-    EmptyArray {
-        len: usize,
-    },
-    EmptyMap {
-        len: usize,
-    },
+    Null { len: usize },
+    EmptyArray { len: usize },
+    EmptyMap { len: usize },
     Number(NumberColumnBuilder),
     Decimal(DecimalColumnBuilder),
     Boolean(MutableBitmap),
@@ -151,10 +155,7 @@ pub enum ColumnBuilder {
     Array(Box<ArrayColumnBuilder<AnyType>>),
     Map(Box<ArrayColumnBuilder<AnyType>>),
     Nullable(Box<NullableColumnBuilder<AnyType>>),
-    Tuple {
-        fields: Vec<ColumnBuilder>,
-        len: usize,
-    },
+    Tuple(Vec<ColumnBuilder>),
     Variant(StringColumnBuilder),
 }
 
@@ -239,6 +240,13 @@ impl Value<AnyType> {
     pub fn try_downcast<T: ValueType>(&self) -> Option<Value<T>> {
         Some(self.as_ref().try_downcast::<T>()?.to_owned())
     }
+
+    pub fn wrap_nullable(self) -> Self {
+        match self {
+            Value::Column(c) => Value::Column(c.wrap_nullable()),
+            scalar => scalar,
+        }
+    }
 }
 
 impl<'a> ValueRef<'a, AnyType> {
@@ -273,6 +281,46 @@ impl Scalar {
             Scalar::Map(col) => ScalarRef::Map(col.clone()),
             Scalar::Tuple(fields) => ScalarRef::Tuple(fields.iter().map(Scalar::as_ref).collect()),
             Scalar::Variant(s) => ScalarRef::Variant(s.as_slice()),
+        }
+    }
+
+    pub fn default_value(ty: &DataType) -> Scalar {
+        match ty {
+            DataType::Null => Scalar::Null,
+            DataType::EmptyArray => Scalar::EmptyArray,
+            DataType::EmptyMap => Scalar::EmptyMap,
+            DataType::Boolean => Scalar::Boolean(false),
+            DataType::String => Scalar::String(vec![]),
+            DataType::Number(num_ty) => Scalar::Number(match num_ty {
+                NumberDataType::UInt8 => NumberScalar::UInt8(0),
+                NumberDataType::UInt16 => NumberScalar::UInt16(0),
+                NumberDataType::UInt32 => NumberScalar::UInt32(0),
+                NumberDataType::UInt64 => NumberScalar::UInt64(0),
+                NumberDataType::Int8 => NumberScalar::Int8(0),
+                NumberDataType::Int16 => NumberScalar::Int16(0),
+                NumberDataType::Int32 => NumberScalar::Int32(0),
+                NumberDataType::Int64 => NumberScalar::Int64(0),
+                NumberDataType::Float32 => NumberScalar::Float32(OrderedFloat(0.0)),
+                NumberDataType::Float64 => NumberScalar::Float64(OrderedFloat(0.0)),
+            }),
+            DataType::Decimal(ty) => Scalar::Decimal(ty.default_scalar()),
+            DataType::Timestamp => Scalar::Timestamp(0),
+            DataType::Date => Scalar::Date(0),
+            DataType::Nullable(_) => Scalar::Null,
+            DataType::Array(ty) => {
+                let builder = ColumnBuilder::with_capacity(ty, 0);
+                let col = builder.build();
+                Scalar::Array(col)
+            }
+            DataType::Map(ty) => {
+                let builder = ColumnBuilder::with_capacity(ty, 0);
+                let col = builder.build();
+                Scalar::Map(col)
+            }
+            DataType::Tuple(tys) => Scalar::Tuple(tys.iter().map(Scalar::default_value).collect()),
+            DataType::Variant => Scalar::Variant(vec![]),
+
+            _ => unimplemented!(),
         }
     }
 }
@@ -315,6 +363,7 @@ impl<'a> ScalarRef<'a> {
                 value: None,
             }),
             ScalarRef::EmptyArray => Domain::Array(None),
+            ScalarRef::EmptyMap => Domain::Map(None),
             ScalarRef::Number(num) => Domain::Number(num.domain()),
             ScalarRef::Decimal(dec) => Domain::Decimal(dec.domain()),
             ScalarRef::Boolean(true) => Domain::Boolean(BooleanDomain {
@@ -338,6 +387,20 @@ impl<'a> ScalarRef<'a> {
                     Domain::Array(Some(Box::new(array.domain())))
                 }
             }
+            ScalarRef::Map(map) => {
+                if map.len() == 0 {
+                    Domain::Map(None)
+                } else {
+                    let inner_domain = map.domain();
+                    let map_domain = match inner_domain {
+                        Domain::Tuple(domains) => {
+                            (Box::new(domains[0].clone()), Box::new(domains[1].clone()))
+                        }
+                        _ => unreachable!(),
+                    };
+                    Domain::Map(Some(map_domain))
+                }
+            }
             ScalarRef::Tuple(fields) => {
                 let types = data_type.as_tuple().unwrap();
                 Domain::Tuple(
@@ -348,7 +411,7 @@ impl<'a> ScalarRef<'a> {
                         .collect(),
                 )
             }
-            ScalarRef::EmptyMap | ScalarRef::Map(_) | ScalarRef::Variant(_) => Domain::Undefined,
+            ScalarRef::Variant(_) => Domain::Undefined,
         }
     }
 
@@ -378,22 +441,35 @@ impl<'a> ScalarRef<'a> {
         }
     }
 
-    pub fn cast_to_u64(&self) -> Option<u64> {
+    /// Infer the data type of the scalar.
+    /// If the scalar is Null, the data type is `DataType::Null`,
+    /// otherwise, the inferred data type is not nullable.
+    pub fn infer_data_type(&self) -> DataType {
         match self {
-            ScalarRef::Number(t) => with_integer_mapped_type!(|NUM_TYPE| match t {
-                NumberScalar::NUM_TYPE(v) => {
-                    if *v >= 0 as _ { Some(*v as _) } else { None }
-                }
-                _ => None,
+            ScalarRef::Null => DataType::Null,
+            ScalarRef::EmptyArray => DataType::EmptyArray,
+            ScalarRef::EmptyMap => DataType::EmptyMap,
+            ScalarRef::Number(s) => with_number_type!(|NUM_TYPE| match s {
+                NumberScalar::NUM_TYPE(_) => DataType::Number(NumberDataType::NUM_TYPE),
             }),
-            ScalarRef::Timestamp(i) => {
-                if *i >= 0 {
-                    Some(*i as u64)
-                } else {
-                    None
-                }
+            ScalarRef::Decimal(s) => with_decimal_type!(|DECIMAL_TYPE| match s {
+                DecimalScalar::DECIMAL_TYPE(_, size) =>
+                    DataType::Decimal(DecimalDataType::DECIMAL_TYPE(*size)),
+            }),
+            ScalarRef::Boolean(_) => DataType::Boolean,
+            ScalarRef::String(_) => DataType::String,
+            ScalarRef::Timestamp(_) => DataType::Timestamp,
+            ScalarRef::Date(_) => DataType::Date,
+            ScalarRef::Array(array) => DataType::Array(Box::new(array.data_type())),
+            ScalarRef::Map(col) => DataType::Map(Box::new(col.data_type())),
+            ScalarRef::Tuple(fields) => {
+                let inner = fields
+                    .iter()
+                    .map(|field| field.infer_data_type())
+                    .collect::<Vec<_>>();
+                DataType::Tuple(inner)
             }
-            _ => None,
+            ScalarRef::Variant(_) => DataType::Variant,
         }
     }
 }
@@ -405,6 +481,7 @@ impl PartialOrd for Scalar {
             (Scalar::EmptyArray, Scalar::EmptyArray) => Some(Ordering::Equal),
             (Scalar::EmptyMap, Scalar::EmptyMap) => Some(Ordering::Equal),
             (Scalar::Number(n1), Scalar::Number(n2)) => n1.partial_cmp(n2),
+            (Scalar::Decimal(d1), Scalar::Decimal(d2)) => d1.partial_cmp(d2),
             (Scalar::Boolean(b1), Scalar::Boolean(b2)) => b1.partial_cmp(b2),
             (Scalar::String(s1), Scalar::String(s2)) => s1.partial_cmp(s2),
             (Scalar::Timestamp(t1), Scalar::Timestamp(t2)) => t1.partial_cmp(t2),
@@ -413,7 +490,7 @@ impl PartialOrd for Scalar {
             (Scalar::Map(m1), Scalar::Map(m2)) => m1.partial_cmp(m2),
             (Scalar::Tuple(t1), Scalar::Tuple(t2)) => t1.partial_cmp(t2),
             (Scalar::Variant(v1), Scalar::Variant(v2)) => {
-                common_jsonb::compare(v1.as_slice(), v2.as_slice()).ok()
+                jsonb::compare(v1.as_slice(), v2.as_slice()).ok()
             }
             _ => None,
         }
@@ -439,6 +516,7 @@ impl PartialOrd for ScalarRef<'_> {
             (ScalarRef::EmptyArray, ScalarRef::EmptyArray) => Some(Ordering::Equal),
             (ScalarRef::EmptyMap, ScalarRef::EmptyMap) => Some(Ordering::Equal),
             (ScalarRef::Number(n1), ScalarRef::Number(n2)) => n1.partial_cmp(n2),
+            (ScalarRef::Decimal(d1), ScalarRef::Decimal(d2)) => d1.partial_cmp(d2),
             (ScalarRef::Boolean(b1), ScalarRef::Boolean(b2)) => b1.partial_cmp(b2),
             (ScalarRef::String(s1), ScalarRef::String(s2)) => s1.partial_cmp(s2),
             (ScalarRef::Timestamp(t1), ScalarRef::Timestamp(t2)) => t1.partial_cmp(t2),
@@ -446,7 +524,7 @@ impl PartialOrd for ScalarRef<'_> {
             (ScalarRef::Array(a1), ScalarRef::Array(a2)) => a1.partial_cmp(a2),
             (ScalarRef::Map(m1), ScalarRef::Map(m2)) => m1.partial_cmp(m2),
             (ScalarRef::Tuple(t1), ScalarRef::Tuple(t2)) => t1.partial_cmp(t2),
-            (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => common_jsonb::compare(v1, v2).ok(),
+            (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => jsonb::compare(v1, v2).ok(),
             _ => None,
         }
     }
@@ -527,12 +605,10 @@ impl PartialOrd for Column {
             (Column::Nullable(col1), Column::Nullable(col2)) => {
                 col1.iter().partial_cmp(col2.iter())
             }
-            (Column::Tuple { fields: col1, .. }, Column::Tuple { fields: col2, .. }) => {
-                col1.partial_cmp(col2)
-            }
+            (Column::Tuple(fields1), Column::Tuple(fields2)) => fields1.partial_cmp(fields2),
             (Column::Variant(col1), Column::Variant(col2)) => col1
                 .iter()
-                .partial_cmp_by(col2.iter(), |v1, v2| common_jsonb::compare(v1, v2).ok()),
+                .partial_cmp_by(col2.iter(), |v1, v2| jsonb::compare(v1, v2).ok()),
             _ => None,
         }
     }
@@ -563,7 +639,7 @@ impl Column {
             Column::Array(col) => col.len(),
             Column::Map(col) => col.len(),
             Column::Nullable(col) => col.len(),
-            Column::Tuple { len, .. } => *len,
+            Column::Tuple(fields) => fields[0].len(),
             Column::Variant(col) => col.len(),
         }
     }
@@ -582,7 +658,7 @@ impl Column {
             Column::Array(col) => Some(ScalarRef::Array(col.index(index)?)),
             Column::Map(col) => Some(ScalarRef::Map(col.index(index)?)),
             Column::Nullable(col) => Some(col.index(index)?.unwrap_or(ScalarRef::Null)),
-            Column::Tuple { fields, .. } => Some(ScalarRef::Tuple(
+            Column::Tuple(fields) => Some(ScalarRef::Tuple(
                 fields
                     .iter()
                     .map(|field| field.index(index))
@@ -608,7 +684,7 @@ impl Column {
             Column::Array(col) => ScalarRef::Array(col.index_unchecked(index)),
             Column::Map(col) => ScalarRef::Map(col.index_unchecked(index)),
             Column::Nullable(col) => col.index_unchecked(index).unwrap_or(ScalarRef::Null),
-            Column::Tuple { fields, .. } => ScalarRef::Tuple(
+            Column::Tuple(fields) => ScalarRef::Tuple(
                 fields
                     .iter()
                     .map(|field| field.index_unchecked(index))
@@ -627,10 +703,8 @@ impl Column {
         );
 
         if range.is_empty() {
-            use crate::deserializations::TypeDeserializer;
-            let data_type = self.data_type();
-            let mut de = data_type.create_deserializer(0);
-            return de.finish_to_column();
+            let builder = ColumnBuilder::with_capacity(&self.data_type(), 0);
+            return builder.build();
         }
 
         match self {
@@ -658,13 +732,12 @@ impl Column {
             Column::Array(col) => Column::Array(Box::new(col.slice(range))),
             Column::Map(col) => Column::Map(Box::new(col.slice(range))),
             Column::Nullable(col) => Column::Nullable(Box::new(col.slice(range))),
-            Column::Tuple { fields, .. } => Column::Tuple {
-                fields: fields
+            Column::Tuple(fields) => Column::Tuple(
+                fields
                     .iter()
                     .map(|field| field.slice(range.clone()))
                     .collect(),
-                len: range.end - range.start,
-            },
+            ),
             Column::Variant(col) => Column::Variant(col.slice(range)),
         }
     }
@@ -721,6 +794,20 @@ impl Column {
                     Domain::Array(Some(Box::new(inner_domain)))
                 }
             }
+            Column::Map(col) => {
+                if col.len() == 0 {
+                    Domain::Map(None)
+                } else {
+                    let inner_domain = col.values.domain();
+                    let map_domain = match inner_domain {
+                        Domain::Tuple(domains) => {
+                            (Box::new(domains[0].clone()), Box::new(domains[1].clone()))
+                        }
+                        _ => unreachable!(),
+                    };
+                    Domain::Map(Some(map_domain))
+                }
+            }
             Column::Nullable(col) => {
                 let inner_domain = col.column.domain();
                 Domain::Nullable(NullableDomain {
@@ -728,11 +815,11 @@ impl Column {
                     value: Some(Box::new(inner_domain)),
                 })
             }
-            Column::Tuple { fields, .. } => {
+            Column::Tuple(fields) => {
                 let domains = fields.iter().map(|col| col.domain()).collect::<Vec<_>>();
                 Domain::Tuple(domains)
             }
-            Column::Map(_) | Column::Variant(_) => Domain::Undefined,
+            Column::Variant(_) => Domain::Undefined,
         }
     }
 
@@ -764,11 +851,19 @@ impl Column {
                 let inner = inner.column.data_type();
                 DataType::Nullable(Box::new(inner))
             }
-            Column::Tuple { fields, .. } => {
+            Column::Tuple(fields) => {
                 let inner = fields.iter().map(|col| col.data_type()).collect::<Vec<_>>();
                 DataType::Tuple(inner)
             }
             Column::Variant(_) => DataType::Variant,
+        }
+    }
+
+    /// Unnest a nested column into one column.
+    pub fn unnest(&self) -> Self {
+        match self {
+            Column::Array(array) => array.underlying_column().unnest(),
+            col => col.clone(),
         }
     }
 
@@ -945,11 +1040,25 @@ impl Column {
             Column::Map(col) => {
                 let offsets: Buffer<i32> =
                     col.offsets.iter().map(|offset| *offset as i32).collect();
+                let values = match (&arrow_type, &col.values) {
+                    (ArrowType::Map(inner_field, _), Column::Tuple(fields)) => {
+                        let inner_type = inner_field.data_type.clone();
+                        Box::new(
+                            common_arrow::arrow::array::StructArray::try_new(
+                                inner_type,
+                                fields.iter().map(|field| field.as_arrow()).collect(),
+                                None,
+                            )
+                            .unwrap(),
+                        )
+                    }
+                    (_, _) => unreachable!(),
+                };
                 Box::new(
                     common_arrow::arrow::array::MapArray::try_new(
                         arrow_type,
                         unsafe { OffsetsBuffer::new_unchecked(offsets) },
-                        col.values.as_arrow(),
+                        values,
                         None,
                     )
                     .unwrap(),
@@ -957,13 +1066,9 @@ impl Column {
             }
             Column::Nullable(col) => {
                 let arrow_array = col.column.as_arrow();
-                match arrow_array.data_type() {
-                    ArrowType::Null => arrow_array,
-                    ArrowType::Extension(_, t, _) if **t == ArrowType::Null => arrow_array,
-                    _ => arrow_array.with_validity(Some(col.validity.clone())),
-                }
+                Self::set_validity(arrow_array.clone(), &col.validity)
             }
-            Column::Tuple { fields, .. } => Box::new(
+            Column::Tuple(fields) => Box::new(
                 common_arrow::arrow::array::StructArray::try_new(
                     arrow_type,
                     fields.iter().map(|field| field.as_arrow()).collect(),
@@ -987,11 +1092,49 @@ impl Column {
         }
     }
 
+    fn set_validity(
+        arrow_array: Box<dyn common_arrow::arrow::array::Array>,
+        validity: &Bitmap,
+    ) -> Box<dyn common_arrow::arrow::array::Array> {
+        // merge Struct validity with the inner fields validity
+        let validity = match arrow_array.validity() {
+            Some(inner_validity) => and(inner_validity, validity),
+            None => validity.clone(),
+        };
+
+        match arrow_array.data_type() {
+            ArrowType::Null => arrow_array.clone(),
+            ArrowType::Extension(_, t, _) if **t == ArrowType::Null => arrow_array.clone(),
+            ArrowType::Struct(_) => {
+                let struct_array = arrow_array
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::StructArray>()
+                    .expect("fail to read from arrow: array should be `StructArray`");
+                let fields = struct_array
+                    .values()
+                    .iter()
+                    .map(|array| {
+                        let array = Self::set_validity(array.clone(), &validity);
+                        array.clone()
+                    })
+                    .collect::<Vec<_>>();
+                Box::new(
+                    common_arrow::arrow::array::StructArray::try_new(
+                        arrow_array.data_type().clone(),
+                        fields,
+                        Some(validity),
+                    )
+                    .unwrap(),
+                )
+            }
+            _ => arrow_array.with_validity(Some(validity)),
+        }
+    }
+
     pub fn from_arrow(
         arrow_col: &dyn common_arrow::arrow::array::Array,
         data_type: &DataType,
     ) -> Column {
-        use common_arrow::arrow::array::Array as _;
         use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 
         let is_nullable = data_type.is_nullable();
@@ -1296,10 +1439,7 @@ impl Column {
                     .zip(struct_type.iter())
                     .map(|(field, dt)| Column::from_arrow(&**field, dt))
                     .collect::<Vec<_>>();
-                Column::Tuple {
-                    fields,
-                    len: arrow_col.len(),
-                }
+                Column::Tuple(fields)
             }
             ArrowDataType::Decimal(precision, scale) => {
                 let arrow_col = arrow_col
@@ -1348,23 +1488,37 @@ impl Column {
         }
     }
 
+    pub fn wrap_nullable(self) -> Self {
+        match self {
+            column @ Column::Nullable(_) => column,
+            column => {
+                let mut validity = MutableBitmap::with_capacity(column.len());
+                validity.extend_constant(column.len(), true);
+                Column::Nullable(Box::new(NullableColumn {
+                    column,
+                    validity: validity.into(),
+                }))
+            }
+        }
+    }
+
     pub fn memory_size(&self) -> usize {
         match self {
             Column::Null { .. } => std::mem::size_of::<usize>(),
             Column::EmptyArray { .. } => std::mem::size_of::<usize>(),
             Column::EmptyMap { .. } => std::mem::size_of::<usize>(),
-            Column::Number(NumberColumn::UInt8(_)) => self.len(),
-            Column::Number(NumberColumn::UInt16(_)) => self.len() * 2,
-            Column::Number(NumberColumn::UInt32(_)) => self.len() * 4,
-            Column::Number(NumberColumn::UInt64(_)) => self.len() * 8,
-            Column::Number(NumberColumn::Float32(_)) => self.len() * 4,
-            Column::Number(NumberColumn::Float64(_)) => self.len() * 8,
-            Column::Number(NumberColumn::Int8(_)) => self.len(),
-            Column::Number(NumberColumn::Int16(_)) => self.len() * 2,
-            Column::Number(NumberColumn::Int32(_)) => self.len() * 4,
-            Column::Number(NumberColumn::Int64(_)) => self.len() * 8,
-            Column::Decimal(DecimalColumn::Decimal128(_, _)) => self.len() * 16,
-            Column::Decimal(DecimalColumn::Decimal256(_, _)) => self.len() * 32,
+            Column::Number(NumberColumn::UInt8(col)) => col.len(),
+            Column::Number(NumberColumn::UInt16(col)) => col.len() * 2,
+            Column::Number(NumberColumn::UInt32(col)) => col.len() * 4,
+            Column::Number(NumberColumn::UInt64(col)) => col.len() * 8,
+            Column::Number(NumberColumn::Float32(col)) => col.len() * 4,
+            Column::Number(NumberColumn::Float64(col)) => col.len() * 8,
+            Column::Number(NumberColumn::Int8(col)) => col.len(),
+            Column::Number(NumberColumn::Int16(col)) => col.len() * 2,
+            Column::Number(NumberColumn::Int32(col)) => col.len() * 4,
+            Column::Number(NumberColumn::Int64(col)) => col.len() * 8,
+            Column::Decimal(DecimalColumn::Decimal128(col, _)) => col.len() * 16,
+            Column::Decimal(DecimalColumn::Decimal256(col, _)) => col.len() * 32,
             Column::Boolean(c) => c.as_slice().0.len(),
             Column::String(col) => col.data.len() + col.offsets.len() * 8,
             Column::Timestamp(col) => col.len() * 8,
@@ -1372,7 +1526,7 @@ impl Column {
             Column::Array(col) => col.values.memory_size() + col.offsets.len() * 8,
             Column::Map(col) => col.values.memory_size() + col.offsets.len() * 8,
             Column::Nullable(c) => c.column.memory_size() + c.validity.as_slice().0.len(),
-            Column::Tuple { fields, .. } => fields.iter().map(|f| f.memory_size()).sum(),
+            Column::Tuple(fields) => fields.iter().map(|f| f.memory_size()).sum(),
             Column::Variant(col) => col.data.len() + col.offsets.len() * 8,
         }
     }
@@ -1399,7 +1553,7 @@ impl Serialize for Column {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
         let bytes = serialize_column(self);
-        let base64_str = base64::encode(bytes);
+        let base64_str = general_purpose::STANDARD.encode(bytes);
         serializer.serialize_str(&base64_str)
     }
 }
@@ -1418,7 +1572,7 @@ impl<'de> Deserialize<'de> for Column {
 
             fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
             where E: serde::de::Error {
-                let bytes = base64::decode(v).unwrap();
+                let bytes = general_purpose::STANDARD.decode(v).unwrap();
                 let column = deserialize_column(&bytes)
                     .expect("expecting an arrow chunk with exactly one column");
                 Ok(column)
@@ -1452,13 +1606,12 @@ impl ColumnBuilder {
             Column::Nullable(box col) => {
                 ColumnBuilder::Nullable(Box::new(NullableColumnBuilder::from_column(col)))
             }
-            Column::Tuple { fields, len } => ColumnBuilder::Tuple {
-                fields: fields
+            Column::Tuple(fields) => ColumnBuilder::Tuple(
+                fields
                     .iter()
                     .map(|col| ColumnBuilder::from_column(col.clone()))
                     .collect(),
-                len,
-            },
+            ),
             Column::Variant(col) => ColumnBuilder::Variant(StringColumnBuilder::from_column(col)),
         }
     }
@@ -1511,14 +1664,13 @@ impl ColumnBuilder {
                     DataType::Tuple(fields_ty) => fields_ty,
                     _ => unreachable!(),
                 };
-                ColumnBuilder::Tuple {
-                    fields: fields
+                ColumnBuilder::Tuple(
+                    fields
                         .iter()
                         .zip(fields_ty)
                         .map(|(field, ty)| ColumnBuilder::repeat(field, n, ty))
                         .collect(),
-                    len: n,
-                }
+                )
             }
             ScalarRef::Variant(s) => ColumnBuilder::Variant(StringColumnBuilder::repeat(s, n)),
         }
@@ -1538,8 +1690,73 @@ impl ColumnBuilder {
             ColumnBuilder::Array(builder) => builder.len(),
             ColumnBuilder::Map(builder) => builder.len(),
             ColumnBuilder::Nullable(builder) => builder.len(),
-            ColumnBuilder::Tuple { len, .. } => *len,
+            ColumnBuilder::Tuple(fields) => fields[0].len(),
             ColumnBuilder::Variant(builder) => builder.len(),
+        }
+    }
+
+    pub fn memory_size(&self) -> usize {
+        match self {
+            ColumnBuilder::Null { .. } => std::mem::size_of::<usize>(),
+            ColumnBuilder::EmptyArray { .. } => std::mem::size_of::<usize>(),
+            ColumnBuilder::EmptyMap { .. } => std::mem::size_of::<usize>(),
+            ColumnBuilder::Number(NumberColumnBuilder::UInt8(builder)) => builder.len(),
+            ColumnBuilder::Number(NumberColumnBuilder::UInt16(builder)) => builder.len() * 2,
+            ColumnBuilder::Number(NumberColumnBuilder::UInt32(builder)) => builder.len() * 4,
+            ColumnBuilder::Number(NumberColumnBuilder::UInt64(builder)) => builder.len() * 8,
+            ColumnBuilder::Number(NumberColumnBuilder::Float32(builder)) => builder.len() * 4,
+            ColumnBuilder::Number(NumberColumnBuilder::Float64(builder)) => builder.len() * 8,
+            ColumnBuilder::Number(NumberColumnBuilder::Int8(builder)) => builder.len(),
+            ColumnBuilder::Number(NumberColumnBuilder::Int16(builder)) => builder.len() * 2,
+            ColumnBuilder::Number(NumberColumnBuilder::Int32(builder)) => builder.len() * 4,
+            ColumnBuilder::Number(NumberColumnBuilder::Int64(builder)) => builder.len() * 8,
+            ColumnBuilder::Decimal(DecimalColumnBuilder::Decimal128(builder, _)) => {
+                builder.len() * 16
+            }
+            ColumnBuilder::Decimal(DecimalColumnBuilder::Decimal256(builder, _)) => {
+                builder.len() * 32
+            }
+            ColumnBuilder::Boolean(c) => c.as_slice().len(),
+            ColumnBuilder::String(col) => col.data.len() + col.offsets.len() * 8,
+            ColumnBuilder::Timestamp(col) => col.len() * 8,
+            ColumnBuilder::Date(col) => col.len() * 4,
+            ColumnBuilder::Array(col) => col.builder.memory_size() + col.offsets.len() * 8,
+            ColumnBuilder::Map(col) => col.builder.memory_size() + col.offsets.len() * 8,
+            ColumnBuilder::Nullable(c) => c.builder.memory_size() + c.validity.as_slice().len(),
+            ColumnBuilder::Tuple(fields) => fields.iter().map(|f| f.memory_size()).sum(),
+            ColumnBuilder::Variant(col) => col.data.len() + col.offsets.len() * 8,
+        }
+    }
+
+    pub fn data_type(&self) -> DataType {
+        match self {
+            ColumnBuilder::Null { .. } => DataType::Null,
+            ColumnBuilder::EmptyArray { .. } => DataType::EmptyArray,
+            ColumnBuilder::EmptyMap { .. } => DataType::EmptyMap,
+            ColumnBuilder::Number(col) => with_number_type!(|NUM_TYPE| match col {
+                NumberColumnBuilder::NUM_TYPE(_) => DataType::Number(NumberDataType::NUM_TYPE),
+            }),
+            ColumnBuilder::Decimal(col) => with_decimal_type!(|DECIMAL_TYPE| match col {
+                DecimalColumnBuilder::DECIMAL_TYPE(_, size) =>
+                    DataType::Decimal(DecimalDataType::DECIMAL_TYPE(*size)),
+            }),
+            ColumnBuilder::Boolean(_) => DataType::Boolean,
+            ColumnBuilder::String(_) => DataType::String,
+            ColumnBuilder::Timestamp(_) => DataType::Timestamp,
+            ColumnBuilder::Date(_) => DataType::Date,
+            ColumnBuilder::Array(col) => {
+                let inner = col.builder.data_type();
+                DataType::Array(Box::new(inner))
+            }
+            ColumnBuilder::Map(col) => {
+                let inner = col.builder.data_type();
+                DataType::Map(Box::new(inner))
+            }
+            ColumnBuilder::Nullable(col) => DataType::Nullable(Box::new(col.builder.data_type())),
+            ColumnBuilder::Tuple(fields) => {
+                DataType::Tuple(fields.iter().map(|f| f.data_type()).collect::<Vec<_>>())
+            }
+            ColumnBuilder::Variant(_) => DataType::Variant,
         }
     }
 
@@ -1575,18 +1792,20 @@ impl ColumnBuilder {
             DataType::Map(ty) => {
                 let mut offsets = Vec::with_capacity(capacity + 1);
                 offsets.push(0);
-                ColumnBuilder::Array(Box::new(ArrayColumnBuilder {
+                ColumnBuilder::Map(Box::new(ArrayColumnBuilder {
                     builder: Self::with_capacity(ty, 0),
                     offsets,
                 }))
             }
-            DataType::Tuple(fields) => ColumnBuilder::Tuple {
-                fields: fields
-                    .iter()
-                    .map(|field| Self::with_capacity(field, capacity))
-                    .collect(),
-                len: 0,
-            },
+            DataType::Tuple(fields) => {
+                assert!(!fields.is_empty());
+                ColumnBuilder::Tuple(
+                    fields
+                        .iter()
+                        .map(|field| Self::with_capacity(field, capacity))
+                        .collect(),
+                )
+            }
             DataType::Variant => {
                 ColumnBuilder::Variant(StringColumnBuilder::with_capacity(capacity, 0))
             }
@@ -1624,12 +1843,11 @@ impl ColumnBuilder {
             (ColumnBuilder::Nullable(builder), scalar) => {
                 builder.push(scalar);
             }
-            (ColumnBuilder::Tuple { fields, len }, ScalarRef::Tuple(value)) => {
+            (ColumnBuilder::Tuple(fields), ScalarRef::Tuple(value)) => {
                 assert_eq!(fields.len(), value.len());
                 for (field, scalar) in fields.iter_mut().zip(value.iter()) {
                     field.push(scalar.clone());
                 }
-                *len += 1;
             }
             (ColumnBuilder::Variant(builder), ScalarRef::Variant(value)) => {
                 builder.put_slice(value);
@@ -1653,16 +1871,233 @@ impl ColumnBuilder {
             ColumnBuilder::Array(builder) => builder.push_default(),
             ColumnBuilder::Map(builder) => builder.push_default(),
             ColumnBuilder::Nullable(builder) => builder.push_null(),
-            ColumnBuilder::Tuple { fields, len } => {
+            ColumnBuilder::Tuple(fields) => {
                 for field in fields {
                     field.push_default();
                 }
-                *len += 1;
             }
             ColumnBuilder::Variant(builder) => {
                 builder.put_slice(JSONB_NULL);
                 builder.commit_row();
             }
+        }
+    }
+
+    pub fn push_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
+        match self {
+            ColumnBuilder::Null { len } => *len += 1,
+            ColumnBuilder::EmptyArray { len } => *len += 1,
+            ColumnBuilder::EmptyMap { len } => *len += 1,
+            ColumnBuilder::Number(builder) => with_number_mapped_type!(|NUM_TYPE| match builder {
+                NumberColumnBuilder::NUM_TYPE(builder) => {
+                    let value: NUM_TYPE = reader.read_scalar()?;
+                    builder.push(value);
+                }
+            }),
+            ColumnBuilder::Decimal(builder) => {
+                with_decimal_mapped_type!(|DECIMAL_TYPE| match builder {
+                    DecimalColumnBuilder::DECIMAL_TYPE(builder, _) =>
+                        builder.push(DECIMAL_TYPE::de_binary(reader)),
+                })
+            }
+            ColumnBuilder::Boolean(builder) => {
+                let v: bool = reader.read_scalar()?;
+                builder.push(v);
+            }
+            ColumnBuilder::String(builder) | ColumnBuilder::Variant(builder) => {
+                let offset: u64 = reader.read_uvarint()?;
+                builder.data.resize(offset as usize + builder.data.len(), 0);
+                let last = *builder.offsets.last().unwrap() as usize;
+                reader.read_exact(&mut builder.data[last..last + offset as usize])?;
+                builder.commit_row();
+            }
+            ColumnBuilder::Timestamp(builder) => {
+                let value: i64 = reader.read_scalar()?;
+                check_timestamp(value)?;
+                builder.push(value);
+            }
+            ColumnBuilder::Date(builder) => {
+                let value: i32 = reader.read_scalar()?;
+                builder.push(value);
+            }
+            ColumnBuilder::Array(builder) => {
+                let len = reader.read_uvarint()?;
+                for _ in 0..len {
+                    builder.builder.push_binary(reader)?;
+                }
+                builder.commit_row();
+            }
+            ColumnBuilder::Map(builder) => {
+                const KEY: usize = 0;
+                const VALUE: usize = 1;
+                let len = reader.read_uvarint()?;
+                let map_builder = builder.builder.as_tuple_mut().unwrap();
+                for _ in 0..len {
+                    map_builder[KEY].push_binary(reader)?;
+                    map_builder[VALUE].push_binary(reader)?;
+                }
+                builder.commit_row();
+            }
+            ColumnBuilder::Nullable(builder) => {
+                let valid: bool = reader.read_scalar()?;
+                if valid {
+                    builder.builder.push_binary(reader)?;
+                    builder.validity.push(true);
+                } else {
+                    builder.push_null();
+                }
+            }
+            ColumnBuilder::Tuple(fields) => {
+                for field in fields {
+                    field.push_binary(reader)?;
+                }
+            }
+        };
+
+        Ok(())
+    }
+
+    pub fn push_fix_len_binaries(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
+        match self {
+            ColumnBuilder::Null { len } => *len += rows,
+            ColumnBuilder::EmptyArray { len } => *len += rows,
+            ColumnBuilder::EmptyMap { len } => *len += rows,
+            ColumnBuilder::Number(builder) => with_number_mapped_type!(|NUM_TYPE| match builder {
+                NumberColumnBuilder::NUM_TYPE(builder) => {
+                    for row in 0..rows {
+                        let mut reader = &reader[step * row..];
+                        let value: NUM_TYPE = reader.read_scalar()?;
+                        builder.push(value);
+                    }
+                }
+            }),
+            ColumnBuilder::Decimal(builder) => {
+                with_decimal_mapped_type!(|DECIMAL_TYPE| match builder {
+                    DecimalColumnBuilder::DECIMAL_TYPE(builder, _) => {
+                        for row in 0..rows {
+                            let mut reader = &reader[step * row..];
+                            builder.push(DECIMAL_TYPE::de_binary(&mut reader));
+                        }
+                    }
+                })
+            }
+            ColumnBuilder::Boolean(builder) => {
+                for row in 0..rows {
+                    let mut reader = &reader[step * row..];
+                    let v: bool = reader.read_scalar()?;
+                    builder.push(v);
+                }
+            }
+            ColumnBuilder::String(builder) | ColumnBuilder::Variant(builder) => {
+                for row in 0..rows {
+                    let reader = &reader[step * row..];
+                    builder.put_slice(reader);
+                    builder.commit_row();
+                }
+            }
+            ColumnBuilder::Timestamp(builder) => {
+                for row in 0..rows {
+                    let mut reader = &reader[step * row..];
+                    let value: i64 = reader.read_scalar()?;
+                    check_timestamp(value)?;
+                    builder.push(value);
+                }
+            }
+            ColumnBuilder::Date(builder) => {
+                for row in 0..rows {
+                    let mut reader = &reader[step * row..];
+                    let value: i32 = reader.read_scalar()?;
+                    builder.push(value);
+                }
+            }
+            ColumnBuilder::Array(builder) => {
+                for row in 0..rows {
+                    let mut reader = &reader[step * row..];
+                    let len = reader.read_uvarint()?;
+                    for _ in 0..len {
+                        builder.builder.push_binary(&mut reader)?;
+                    }
+                    builder.commit_row();
+                }
+            }
+            ColumnBuilder::Map(builder) => {
+                const KEY: usize = 0;
+                const VALUE: usize = 1;
+                for row in 0..rows {
+                    let mut reader = &reader[step * row..];
+                    let map_builder = builder.builder.as_tuple_mut().unwrap();
+                    let len = reader.read_uvarint()?;
+                    for _ in 0..len {
+                        map_builder[KEY].push_binary(&mut reader)?;
+                        map_builder[VALUE].push_binary(&mut reader)?;
+                    }
+                    builder.commit_row();
+                }
+            }
+            ColumnBuilder::Nullable(_) => {
+                unimplemented!()
+            }
+            ColumnBuilder::Tuple(fields) => {
+                for row in 0..rows {
+                    let mut reader = &reader[step * row..];
+                    for field in fields.iter_mut() {
+                        field.push_binary(&mut reader)?;
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn pop(&mut self) -> Option<Scalar> {
+        match self {
+            ColumnBuilder::Null { len } => {
+                if *len > 0 {
+                    *len -= 1;
+                    Some(Scalar::Null)
+                } else {
+                    None
+                }
+            }
+            ColumnBuilder::EmptyArray { len } => {
+                if *len > 0 {
+                    *len -= 1;
+                    Some(Scalar::EmptyArray)
+                } else {
+                    None
+                }
+            }
+            ColumnBuilder::EmptyMap { len } => {
+                if *len > 0 {
+                    *len -= 1;
+                    Some(Scalar::EmptyMap)
+                } else {
+                    None
+                }
+            }
+            ColumnBuilder::Number(builder) => builder.pop().map(Scalar::Number),
+            ColumnBuilder::Decimal(builder) => builder.pop().map(Scalar::Decimal),
+            ColumnBuilder::Boolean(builder) => builder.pop().map(Scalar::Boolean),
+            ColumnBuilder::String(builder) => builder.pop().map(Scalar::String),
+            ColumnBuilder::Timestamp(builder) => builder.pop().map(Scalar::Timestamp),
+            ColumnBuilder::Date(builder) => builder.pop().map(Scalar::Date),
+            ColumnBuilder::Array(builder) => builder.pop().map(Scalar::Array),
+            ColumnBuilder::Map(builder) => builder.pop().map(Scalar::Map),
+            ColumnBuilder::Nullable(builder) => Some(builder.pop()?.unwrap_or(Scalar::Null)),
+            ColumnBuilder::Tuple(fields) => {
+                if fields[0].len() > 0 {
+                    Some(Scalar::Tuple(
+                        fields
+                            .iter_mut()
+                            .map(|field| field.pop().unwrap())
+                            .collect(),
+                    ))
+                } else {
+                    None
+                }
+            }
+            ColumnBuilder::Variant(builder) => builder.pop().map(Scalar::Variant),
         }
     }
 
@@ -1707,18 +2142,11 @@ impl ColumnBuilder {
             (ColumnBuilder::Nullable(builder), Column::Nullable(other)) => {
                 builder.append_column(other);
             }
-            (
-                ColumnBuilder::Tuple { fields, len },
-                Column::Tuple {
-                    fields: other_fields,
-                    len: other_len,
-                },
-            ) => {
+            (ColumnBuilder::Tuple(fields), Column::Tuple(other_fields)) => {
                 assert_eq!(fields.len(), other_fields.len());
                 for (field, other_field) in fields.iter_mut().zip(other_fields.iter()) {
                     field.append_column(other_field);
                 }
-                *len += other_len;
             }
             (this, other) => unreachable!("unable append {other:?} into {this:?}"),
         }
@@ -1738,10 +2166,10 @@ impl ColumnBuilder {
             ColumnBuilder::Array(builder) => Column::Array(Box::new(builder.build())),
             ColumnBuilder::Map(builder) => Column::Map(Box::new(builder.build())),
             ColumnBuilder::Nullable(builder) => Column::Nullable(Box::new(builder.build())),
-            ColumnBuilder::Tuple { fields, len } => Column::Tuple {
-                fields: fields.into_iter().map(|field| field.build()).collect(),
-                len,
-            },
+            ColumnBuilder::Tuple(fields) => {
+                assert!(fields.iter().map(|field| field.len()).all_equal());
+                Column::Tuple(fields.into_iter().map(|field| field.build()).collect())
+            }
             ColumnBuilder::Variant(builder) => Column::Variant(builder.build()),
         }
     }
@@ -1761,7 +2189,7 @@ impl ColumnBuilder {
             ColumnBuilder::Array(builder) => Scalar::Array(builder.build_scalar()),
             ColumnBuilder::Map(builder) => Scalar::Map(builder.build_scalar()),
             ColumnBuilder::Nullable(builder) => builder.build_scalar().unwrap_or(Scalar::Null),
-            ColumnBuilder::Tuple { fields, .. } => Scalar::Tuple(
+            ColumnBuilder::Tuple(fields) => Scalar::Tuple(
                 fields
                     .into_iter()
                     .map(|field| field.build_scalar())
@@ -1800,7 +2228,7 @@ impl<'a> Iterator for ColumnIterator<'a> {
 unsafe impl<'a> TrustedLen for ColumnIterator<'a> {}
 
 #[macro_export]
-macro_rules! for_all_number_varints{
+macro_rules! for_all_number_varints {
     ($macro:tt $(, $x:tt)*) => {
         $macro! {
             [$($x),*],

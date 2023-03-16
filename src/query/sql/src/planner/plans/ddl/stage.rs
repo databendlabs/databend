@@ -17,13 +17,13 @@ use std::sync::Arc;
 
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
-use common_meta_app::principal::UserStageInfo;
+use common_meta_app::principal::StageInfo;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateStagePlan {
     pub if_not_exists: bool,
     pub tenant: String,
-    pub user_stage_info: UserStageInfo,
+    pub stage_info: StageInfo,
 }
 
 impl CreateStagePlan {
@@ -48,7 +48,7 @@ impl DropStagePlan {
 /// Remove.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RemoveStagePlan {
-    pub stage: UserStageInfo,
+    pub stage: StageInfo,
     pub path: String,
     pub pattern: String,
 }

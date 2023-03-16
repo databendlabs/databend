@@ -16,6 +16,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use common_exception::Result;
+use num_derive::FromPrimitive;
+use num_derive::ToPrimitive;
 
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::SExpr;
@@ -28,17 +30,25 @@ pub trait Rule {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()>;
 
     fn pattern(&self) -> &SExpr;
+
+    fn transformation(&self) -> bool {
+        true
+    }
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+// If add a new rule, please add it to the operator's corresponding `transformation_candidate_rules`
+// Such as `PushDownFilterAggregate` is related to `Filter` operator.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, FromPrimitive, ToPrimitive)]
 pub enum RuleID {
     // Rewrite rules
     NormalizeScalarFilter,
     NormalizeDisjunctiveFilter,
+    PushDownFilterAggregate,
     PushDownFilterEvalScalar,
     PushDownFilterUnion,
     PushDownFilterJoin,
     PushDownFilterScan,
+    PushDownFilterSort,
     PushDownLimitUnion,
     PushDownLimitOuterJoin,
     RulePushDownLimitExpression,
@@ -52,15 +62,16 @@ pub enum RuleID {
     MergeFilter,
     SplitAggregate,
     FoldCountAggregate,
+    PushDownPrewhere,
 
     // Exploration rules
     CommuteJoin,
-    CommuteJoinBaseTable,
-    LeftAssociateJoin,
     RightAssociateJoin,
+    LeftAssociateJoin,
+    ExchangeJoin,
+    CommuteJoinBaseTable,
     LeftExchangeJoin,
     RightExchangeJoin,
-    ExchangeJoin,
 }
 
 impl Display for RuleID {
@@ -70,11 +81,13 @@ impl Display for RuleID {
             RuleID::PushDownFilterEvalScalar => write!(f, "PushDownFilterEvalScalar"),
             RuleID::PushDownFilterJoin => write!(f, "PushDownFilterJoin"),
             RuleID::PushDownFilterScan => write!(f, "PushDownFilterScan"),
+            RuleID::PushDownFilterSort => write!(f, "PushDownFilterSort"),
             RuleID::PushDownLimitUnion => write!(f, "PushDownLimitUnion"),
             RuleID::PushDownLimitOuterJoin => write!(f, "PushDownLimitOuterJoin"),
             RuleID::RulePushDownLimitExpression => write!(f, "PushDownLimitExpression"),
             RuleID::PushDownLimitSort => write!(f, "PushDownLimitSort"),
             RuleID::PushDownLimitAggregate => write!(f, "PushDownLimitAggregate"),
+            RuleID::PushDownFilterAggregate => write!(f, "PushDownFilterAggregate"),
             RuleID::PushDownLimitScan => write!(f, "PushDownLimitScan"),
             RuleID::PushDownSortScan => write!(f, "PushDownSortScan"),
             RuleID::EliminateEvalScalar => write!(f, "EliminateEvalScalar"),
@@ -85,6 +98,7 @@ impl Display for RuleID {
             RuleID::SplitAggregate => write!(f, "SplitAggregate"),
             RuleID::NormalizeDisjunctiveFilter => write!(f, "NormalizeDisjunctiveFilter"),
             RuleID::FoldCountAggregate => write!(f, "FoldCountAggregate"),
+            RuleID::PushDownPrewhere => write!(f, "PushDownPrewhere"),
 
             RuleID::CommuteJoin => write!(f, "CommuteJoin"),
             RuleID::CommuteJoinBaseTable => write!(f, "CommuteJoinBaseTable"),

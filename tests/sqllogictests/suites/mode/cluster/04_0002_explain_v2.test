@@ -19,7 +19,7 @@ explain select t1.a from t1 where a > 0;
 Exchange
 ├── exchange type: Merge
 └── Filter
-    ├── filters: [gt(t1.a (#0), 0)]
+    ├── filters: [t1.a (#0) > 0]
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
@@ -27,7 +27,7 @@ Exchange
         ├── read bytes: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [gt(t1.a (#0), 0)], limit: NONE]
+        ├── push downs: [filters: [t1.a (#0) > 0], limit: NONE]
         ├── output columns: [a]
         └── estimated rows: 0.00
 
@@ -37,7 +37,7 @@ explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a an
 Exchange
 ├── exchange type: Merge
 └── Filter
-    ├── filters: [or(gt(t1.a (#0), 3), and(gt(t2.a (#2), 5), gt(t1.a (#0), 1)))]
+    ├── filters: [t1.a (#0) > 3 OR t2.a (#2) > 5 AND t1.a (#0) > 1]
     ├── estimated rows: 0.00
     └── HashJoin
         ├── join type: INNER
@@ -48,7 +48,7 @@ Exchange
         ├── Exchange(Build)
         │   ├── exchange type: Hash(t2.a (#2))
         │   └── Filter
-        │       ├── filters: [or(gt(t2.a (#2), 3), gt(t2.a (#2), 1))]
+        │       ├── filters: [t2.a (#2) > 3 OR t2.a (#2) > 1]
         │       ├── estimated rows: 0.00
         │       └── TableScan
         │           ├── table: default.default.t2
@@ -56,12 +56,12 @@ Exchange
         │           ├── read bytes: 0
         │           ├── partitions total: 0
         │           ├── partitions scanned: 0
-        │           ├── push downs: [filters: [or(gt(t2.a (#2), 3), gt(t2.a (#2), 1))], limit: NONE]
+        │           ├── push downs: [filters: [t2.a (#2) > 3 OR t2.a (#2) > 1], limit: NONE]
         │           └── estimated rows: 0.00
         └── Exchange(Probe)
             ├── exchange type: Hash(t1.a (#0))
             └── Filter
-                ├── filters: [or(gt(t1.a (#0), 3), gt(t1.a (#0), 1))]
+                ├── filters: [t1.a (#0) > 3 OR t1.a (#0) > 1]
                 ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.default.t1
@@ -69,7 +69,7 @@ Exchange
                     ├── read bytes: 0
                     ├── partitions total: 0
                     ├── partitions scanned: 0
-                    ├── push downs: [filters: [or(gt(t1.a (#0), 3), gt(t1.a (#0), 1))], limit: NONE]
+                    ├── push downs: [filters: [t1.a (#0) > 3 OR t1.a (#0) > 1], limit: NONE]
                     └── estimated rows: 0.00
 
 query T
@@ -157,7 +157,7 @@ Limit
     ├── sort keys: [c ASC NULLS LAST, e ASC NULLS LAST, d ASC NULLS LAST]
     ├── estimated rows: 1.00
     └── EvalScalar
-        ├── expressions: [count(1) (#8), max(a) (#10), count(b) (#9)]
+        ├── expressions: [count(1) (#5), max(a) (#7), count(b) (#6)]
         ├── estimated rows: 1.00
         └── AggregateFinal
             ├── group by: []
@@ -194,7 +194,7 @@ Limit
             ├── sort keys: [c ASC NULLS LAST, d ASC NULLS LAST, e ASC NULLS LAST]
             ├── estimated rows: 0.00
             └── EvalScalar
-                ├── expressions: [plus(t1.a (#0), 1), plus(t1.b (#1), 1), plus(t2.a (#2), 1)]
+                ├── expressions: [t1.a (#0) + 1, t1.b (#1) + 1, t2.a (#2) + 1]
                 ├── estimated rows: 0.00
                 └── HashJoin
                     ├── join type: INNER

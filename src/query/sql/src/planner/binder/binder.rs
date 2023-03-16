@@ -16,10 +16,10 @@ use std::sync::Arc;
 
 use common_ast::ast::format_statement;
 use common_ast::ast::ExplainKind;
+use common_ast::ast::Identifier;
 use common_ast::ast::Statement;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
-use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
@@ -27,6 +27,7 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_meta_app::principal::UserDefinedFunction;
 
+use crate::normalize_identifier;
 use crate::planner::udf_validator::UDFValidator;
 use crate::plans::AlterUDFPlan;
 use crate::plans::CallPlan;
@@ -123,6 +124,10 @@ impl<'a> Binder {
 
             Statement::ShowFunctions { limit } => {
                 self.bind_show_functions(bind_context, limit).await?
+            }
+
+            Statement::ShowTableFunctions { limit } => {
+                self.bind_show_table_functions(bind_context, limit).await?
             }
 
             Statement::Copy(stmt) => self.bind_copy(bind_context, stmt).await?,
@@ -228,6 +233,7 @@ impl<'a> Binder {
                 self.bind_remove_stage(location, pattern).await?
             }
             Statement::Insert(stmt) => self.bind_insert(bind_context, stmt).await?,
+            Statement::Replace(stmt) => self.bind_replace(bind_context, stmt).await?,
             Statement::Delete {
                 table_reference,
                 selection,
@@ -388,8 +394,7 @@ impl<'a> Binder {
         rewrite_kind_r: RewriteKind,
     ) -> Result<Plan> {
         let tokens = tokenize_sql(query)?;
-        let backtrace = Backtrace::new();
-        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace)?;
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
         let mut plan = self.bind_statement(bind_context, &stmt).await?;
 
         if let Plan::Query { rewrite_kind, .. } = &mut plan {
@@ -418,5 +423,25 @@ impl<'a> Binder {
             data_type: Box::new(data_type),
             visibility: Visibility::Visible,
         }
+    }
+
+    /// Normalize [[<catalog>].<database>].<object>
+    /// object like table, view ...
+    pub fn normalize_object_identifier_triple(
+        &self,
+        catalog: &Option<Identifier>,
+        database: &Option<Identifier>,
+        object: &Identifier,
+    ) -> (String, String, String) {
+        let catalog_name = catalog
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database_name = database
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .unwrap_or_else(|| self.ctx.get_current_database());
+        let object_name = normalize_identifier(object, &self.name_resolution_ctx).name;
+        (catalog_name, database_name, object_name)
     }
 }

@@ -49,6 +49,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::plans::Unnest;
 use crate::IndexType;
 use crate::MetadataRef;
 
@@ -146,6 +147,7 @@ impl SubqueryRewriter {
     ) -> Result<(ScalarExpr, SExpr)> {
         match scalar {
             ScalarExpr::BoundColumnRef(_) => Ok((scalar.clone(), s_expr.clone())),
+            ScalarExpr::BoundInternalColumnRef(_) => Ok((scalar.clone(), s_expr.clone())),
 
             ScalarExpr::ConstantExpr(_) => Ok((scalar.clone(), s_expr.clone())),
 
@@ -158,7 +160,6 @@ impl SubqueryRewriter {
                     AndExpr {
                         left: Box::new(left),
                         right: Box::new(right),
-                        return_type: expr.return_type.clone(),
                     }
                     .into(),
                     s_expr,
@@ -172,7 +173,6 @@ impl SubqueryRewriter {
                     OrExpr {
                         left: Box::new(left),
                         right: Box::new(right),
-                        return_type: expr.return_type.clone(),
                     }
                     .into(),
                     s_expr,
@@ -185,7 +185,6 @@ impl SubqueryRewriter {
                 Ok((
                     NotExpr {
                         argument: Box::new(argument),
-                        return_type: expr.return_type.clone(),
                     }
                     .into(),
                     s_expr,
@@ -200,7 +199,6 @@ impl SubqueryRewriter {
                         op: expr.op.clone(),
                         left: Box::new(left),
                         right: Box::new(right),
-                        return_type: expr.return_type.clone(),
                     }
                     .into(),
                     s_expr,
@@ -222,7 +220,6 @@ impl SubqueryRewriter {
                     params: func.params.clone(),
                     arguments: args,
                     func_name: func.func_name.clone(),
-                    return_type: func.return_type.clone(),
                 }
                 .into();
 
@@ -235,8 +232,19 @@ impl SubqueryRewriter {
                     CastExpr {
                         is_try: cast.is_try,
                         argument: Box::new(scalar),
-                        from_type: cast.from_type.clone(),
                         target_type: cast.target_type.clone(),
+                    }
+                    .into(),
+                    s_expr,
+                ))
+            }
+
+            ScalarExpr::Unnest(expr) => {
+                let (scalar, s_expr) = self.try_rewrite_subquery(&expr.argument, s_expr, false)?;
+                Ok((
+                    Unnest {
+                        argument: Box::new(scalar),
+                        return_type: expr.return_type.clone(),
                     }
                     .into(),
                     s_expr,
@@ -319,12 +327,10 @@ impl SubqueryRewriter {
                         params: vec![],
                         arguments: vec![column_ref.clone()],
                         func_name: "is_not_null".to_string(),
-                        return_type: Box::new(DataType::Boolean),
                     });
                     let cast_column_ref_to_uint64 = ScalarExpr::CastExpr(CastExpr {
                         is_try: true,
-                        argument: Box::new(column_ref.clone()),
-                        from_type: Box::new(column_ref.data_type()),
+                        argument: Box::new(column_ref),
                         target_type: Box::new(
                             DataType::Number(NumberDataType::UInt64).wrap_nullable(),
                         ),
@@ -341,11 +347,7 @@ impl SubqueryRewriter {
                             params: vec![],
                             arguments: vec![is_not_null, cast_column_ref_to_uint64, zero],
                             func_name: "if".to_string(),
-                            return_type: Box::new(
-                                DataType::Number(NumberDataType::UInt64).wrap_nullable(),
-                            ),
                         })),
-                        from_type: Box::new(column_ref.data_type()),
                         target_type: Box::new(
                             DataType::Number(NumberDataType::UInt64).wrap_nullable(),
                         ),
@@ -353,7 +355,6 @@ impl SubqueryRewriter {
                 } else if subquery.typ == SubqueryType::NotExists {
                     ScalarExpr::NotExpr(NotExpr {
                         argument: Box::new(column_ref),
-                        return_type: Box::new(DataType::Nullable(Box::new(DataType::Boolean))),
                     })
                 } else {
                     column_ref
@@ -378,6 +379,7 @@ impl SubqueryRewriter {
                     join_type: JoinType::Single,
                     marker_index: None,
                     from_correlated_subquery: false,
+                    contain_runtime_filter: false,
                 }
                 .into();
                 let s_expr =
@@ -419,6 +421,8 @@ impl SubqueryRewriter {
                     from_distinct: false,
                     mode: AggregateMode::Initial,
                     limit: None,
+                    grouping_id_index: 0,
+                    grouping_sets: vec![],
                 };
 
                 let compare = ComparisonExpr {
@@ -447,7 +451,6 @@ impl SubqueryRewriter {
                         }
                         .into(),
                     ),
-                    return_type: Box::new(DataType::Boolean.wrap_nullable()),
                 };
                 let filter = Filter {
                     predicates: vec![compare.into()],
@@ -467,6 +470,7 @@ impl SubqueryRewriter {
                     join_type: JoinType::Cross,
                     marker_index: None,
                     from_correlated_subquery: false,
+                    contain_runtime_filter: false,
                 }
                 .into();
                 Ok((
@@ -502,7 +506,6 @@ impl SubqueryRewriter {
                             op,
                             left: Box::new(right_condition),
                             right: Box::new(left_condition),
-                            return_type: Box::new(DataType::Nullable(Box::new(DataType::Boolean))),
                         });
                         (vec![], vec![], vec![other_condition])
                     };
@@ -529,6 +532,7 @@ impl SubqueryRewriter {
                     join_type: JoinType::RightMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: false,
+                    contain_runtime_filter: false,
                 }
                 .into();
                 let s_expr =

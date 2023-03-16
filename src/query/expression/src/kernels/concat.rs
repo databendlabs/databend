@@ -18,6 +18,7 @@ use itertools::Itertools;
 
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::decimal::DecimalColumn;
+use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumnBuilder;
@@ -28,6 +29,7 @@ use crate::types::BooleanType;
 use crate::types::DateType;
 use crate::types::EmptyArrayType;
 use crate::types::EmptyMapType;
+use crate::types::MapType;
 use crate::types::NullType;
 use crate::types::NullableType;
 use crate::types::NumberType;
@@ -41,7 +43,6 @@ use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
-use crate::TypeDeserializer;
 use crate::Value;
 
 impl DataBlock {
@@ -137,17 +138,29 @@ impl Column {
                 let builder = Vec::with_capacity(capacity);
                 Self::concat_value_types::<DateType>(builder, columns)
             }
-            Column::Array(col) | Column::Map(col) => {
+            Column::Array(col) => {
+                let mut offsets = Vec::with_capacity(capacity + 1);
+                offsets.push(0);
+                let builder = ColumnBuilder::with_capacity(&col.values.data_type(), capacity);
+                let builder = ArrayColumnBuilder { builder, offsets };
+                Self::concat_value_types::<ArrayType<AnyType>>(builder, columns)
+            }
+            Column::Map(col) => {
                 let mut offsets = Vec::with_capacity(capacity + 1);
                 offsets.push(0);
                 let builder = ColumnBuilder::from_column(
-                    col.values
-                        .data_type()
-                        .create_deserializer(capacity)
-                        .finish_to_column(),
+                    ColumnBuilder::with_capacity(&col.values.data_type(), capacity).build(),
                 );
+                let (key_builder, val_builder) = match builder {
+                    ColumnBuilder::Tuple(fields) => (fields[0].clone(), fields[1].clone()),
+                    _ => unreachable!(),
+                };
+                let builder = KvColumnBuilder {
+                    keys: key_builder,
+                    values: val_builder,
+                };
                 let builder = ArrayColumnBuilder { builder, offsets };
-                Self::concat_value_types::<ArrayType<AnyType>>(builder, columns)
+                Self::concat_value_types::<MapType<AnyType, AnyType>>(builder, columns)
             }
             Column::Nullable(_) => {
                 let mut bitmaps = Vec::with_capacity(columns.len());
@@ -164,20 +177,17 @@ impl Column {
 
                 Column::Nullable(Box::new(NullableColumn { column, validity }))
             }
-            Column::Tuple { fields, .. } => {
+            Column::Tuple(fields) => {
                 let fields = (0..fields.len())
                     .map(|idx| {
                         let cs: Vec<Column> = columns
                             .iter()
-                            .map(|col| col.as_tuple().unwrap().0[idx].clone())
+                            .map(|col| col.as_tuple().unwrap()[idx].clone())
                             .collect();
                         Self::concat(&cs)
                     })
                     .collect();
-                Column::Tuple {
-                    fields,
-                    len: capacity,
-                }
+                Column::Tuple(fields)
             }
             Column::Variant(_) => {
                 let data_capacity = columns.iter().map(|c| c.memory_size() - c.len() * 8).sum();

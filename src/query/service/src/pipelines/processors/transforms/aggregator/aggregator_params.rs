@@ -17,16 +17,12 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
-use common_expression::HashMethodKind;
 use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::aggregates::StateAddr;
 use common_sql::IndexType;
 
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::transforms::group_by::Area;
 
 pub struct AggregatorParams {
@@ -90,32 +86,5 @@ impl AggregatorParams {
         self.aggregate_functions
             .iter()
             .any(|f| f.name().contains("DistinctCombinator"))
-    }
-}
-
-pub struct AggregatorTransformParams {
-    pub method: HashMethodKind,
-    pub transform_input_port: Arc<InputPort>,
-    pub transform_output_port: Arc<OutputPort>,
-    pub aggregator_params: Arc<AggregatorParams>,
-}
-
-impl AggregatorTransformParams {
-    pub fn try_create(
-        transform_input_port: Arc<InputPort>,
-        transform_output_port: Arc<OutputPort>,
-        aggregator_params: &Arc<AggregatorParams>,
-    ) -> Result<AggregatorTransformParams> {
-        let group_cols = &aggregator_params.group_columns;
-        let schema_before_group_by = aggregator_params.input_schema.clone();
-        let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
-        let method = DataBlock::choose_hash_method(&sample_block, group_cols)?;
-
-        Ok(AggregatorTransformParams {
-            method,
-            transform_input_port,
-            transform_output_port,
-            aggregator_params: aggregator_params.clone(),
-        })
     }
 }

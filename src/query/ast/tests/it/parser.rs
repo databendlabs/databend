@@ -167,6 +167,7 @@ fn test_statement() {
         r#"ALTER DATABASE c RENAME TO a;"#,
         r#"ALTER DATABASE ctl.c RENAME TO a;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
+        r#"GRANT CREATE, CREATE USER ON * TO 'test-grant'@'localhost';"#,
         r#"GRANT SELECT, CREATE ON * TO 'test-grant'@'localhost';"#,
         r#"GRANT SELECT, CREATE ON *.* TO 'test-grant'@'localhost';"#,
         r#"GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost';"#,
@@ -357,12 +358,25 @@ fn test_statement() {
         r#"SET max_threads = 10*2;"#,
         r#"UNSET max_threads;"#,
         r#"UNSET (max_threads, sql_dialect);"#,
+        r#"SELECT t.c1 FROM @stage1/dir/file
+        ( file_format => 'PARQUET', FILES => ('file1', 'file2')) t;"#,
+        r#"select table0.c1, table1.c2 from
+            @stage1/dir/file ( FILE_FORMAT => 'parquet', FILES => ('file1', 'file2')) table0
+            left join table1;"#,
+        r#"SELECT c1 FROM 's3://test/bucket' (ENDPOINT_URL => 'xxx', PATTERN => '*.parquet') t;"#,
+        r#"CREATE FILE FORMAT my_csv
+            type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;"#,
+        r#"SHOW FILE FORMATS"#,
+        r#"DROP FILE FORMAT my_csv"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS (a, b, c, d)"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS (a, b, (c, d))"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (c), (d, e))"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (), (d, e))"#,
     ];
 
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();
-        let backtrace = Backtrace::new();
-        let (stmt, fmt) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace).unwrap();
+        let (stmt, fmt) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
@@ -388,6 +402,7 @@ fn test_statement_error() {
         r#"create table a (c varch)"#,
         r#"create table a (c tuple())"#,
         r#"create table a (c decimal)"#,
+        r#"create table a (b tuple(c int, uint64));"#,
         r#"drop table if a.b"#,
         r#"truncate table a.b.c.d"#,
         r#"truncate a"#,
@@ -414,12 +429,13 @@ fn test_statement_error() {
         r#"CALL system$test(a"#,
         r#"show settings ilike 'enable%'"#,
         r#"PRESIGN INVALID @my_stage/path/to/file"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS a, b"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS ()"#,
     ];
 
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();
-        let backtrace = Backtrace::new();
-        let err = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace).unwrap_err();
+        let err = parse_sql(&tokens, Dialect::PostgreSQL).unwrap_err();
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
@@ -565,6 +581,17 @@ fn test_expr() {
         r#"1 is distinct from 2"#,
         r#"a is distinct from b"#,
         r#"1 is not distinct from null"#,
+        r#"{'k1':1,'k2':2}"#,
+        // window expr
+        r#"ROW_NUMBER() OVER (ORDER BY salary DESC)"#,
+        r#"SUM(salary) OVER ()"#,
+        r#"AVG(salary) OVER (PARTITION BY department)"#,
+        r#"SUM(salary) OVER (PARTITION BY department ORDER BY salary DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)"#,
+        r#"AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) "#,
+        r#"COUNT() OVER (ORDER BY hire_date RANGE BETWEEN INTERVAL '7' DAY PRECEDING AND CURRENT ROW)"#,
+        r#"COUNT() OVER (ORDER BY hire_date ROWS UNBOUNDED PRECEDING)"#,
+        r#"COUNT() OVER (ORDER BY hire_date ROWS CURRENT ROW)"#,
+        r#"COUNT() OVER (ORDER BY hire_date ROWS 3 PRECEDING)"#,
     ];
 
     for case in cases {

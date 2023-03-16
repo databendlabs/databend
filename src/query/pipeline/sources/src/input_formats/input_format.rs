@@ -16,9 +16,10 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::TableSchemaRef;
-use common_meta_app::principal::UserStageInfo;
+use common_meta_app::principal::StageInfo;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
+use common_storage::StageFileInfo;
 use opendal::Operator;
 
 use crate::input_formats::InputContext;
@@ -28,8 +29,8 @@ use crate::input_formats::SplitInfo;
 pub trait InputFormat: Send + Sync {
     async fn get_splits(
         &self,
-        files: &[String],
-        stage_info: &UserStageInfo,
+        file_infos: Vec<StageFileInfo>,
+        stage_info: &StageInfo,
         op: &Operator,
         settings: &Arc<Settings>,
     ) -> Result<Vec<Arc<SplitInfo>>>;

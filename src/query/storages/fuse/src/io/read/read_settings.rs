@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
+#[derive(Clone)]
 pub struct ReadSettings {
     pub storage_io_min_bytes_for_seek: u64,
     pub storage_io_max_page_bytes_for_read: u64,

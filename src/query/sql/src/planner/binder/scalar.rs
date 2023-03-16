@@ -18,6 +18,7 @@ use common_ast::ast::Expr;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::DataType;
+use common_expression::FunctionContext;
 
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
@@ -60,5 +61,9 @@ impl<'a> ScalarBinder<'a> {
             self.aliases,
         );
         Ok(*type_checker.resolve(expr, None).await?)
+    }
+
+    pub fn get_func_ctx(&self) -> Result<FunctionContext> {
+        self.ctx.get_function_context()
     }
 }

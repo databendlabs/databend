@@ -18,7 +18,9 @@ use std::fmt::Formatter;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
+use super::AggregateExpand;
 use super::DistributedInsertSelect;
+use super::Unnest;
 use crate::executor::AggregateFinal;
 use crate::executor::AggregatePartial;
 use crate::executor::EvalScalar;
@@ -30,6 +32,7 @@ use crate::executor::HashJoin;
 use crate::executor::Limit;
 use crate::executor::PhysicalPlan;
 use crate::executor::Project;
+use crate::executor::RuntimeFilterSource;
 use crate::executor::Sort;
 use crate::executor::TableScan;
 use crate::executor::UnionAll;
@@ -55,6 +58,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::Filter(filter) => write!(f, "{}", filter)?,
             PhysicalPlan::Project(project) => write!(f, "{}", project)?,
             PhysicalPlan::EvalScalar(eval_scalar) => write!(f, "{}", eval_scalar)?,
+            PhysicalPlan::AggregateExpand(aggregate) => write!(f, "{}", aggregate)?,
             PhysicalPlan::AggregatePartial(aggregate) => write!(f, "{}", aggregate)?,
             PhysicalPlan::AggregateFinal(aggregate) => write!(f, "{}", aggregate)?,
             PhysicalPlan::Sort(sort) => write!(f, "{}", sort)?,
@@ -65,6 +69,8 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ExchangeSink(sink) => write!(f, "{}", sink)?,
             PhysicalPlan::UnionAll(union_all) => write!(f, "{}", union_all)?,
             PhysicalPlan::DistributedInsertSelect(insert_select) => write!(f, "{}", insert_select)?,
+            PhysicalPlan::Unnest(unnest) => write!(f, "{}", unnest)?,
+            PhysicalPlan::RuntimeFilterSource(plan) => write!(f, "{}", plan)?,
         }
 
         for node in self.node.children() {
@@ -139,6 +145,24 @@ impl Display for EvalScalar {
             .collect::<Vec<String>>();
 
         write!(f, "EvalScalar: [{}]", scalars.join(", "))
+    }
+}
+
+impl Display for AggregateExpand {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let sets = self
+            .grouping_sets
+            .iter()
+            .map(|set| {
+                set.iter()
+                    .map(|index| index.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            })
+            .map(|s| format!("[{}]", s))
+            .collect::<Vec<String>>()
+            .join(", ");
+        write!(f, "Aggregate(Expand): grouping sets: [{}]", sets)
     }
 }
 
@@ -294,5 +318,17 @@ impl Display for UnionAll {
 impl Display for DistributedInsertSelect {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DistributedInsertSelect")
+    }
+}
+
+impl Display for RuntimeFilterSource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RuntimeFilterSource")
+    }
+}
+
+impl Display for Unnest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Unnest: unnset num : {}", self.num_columns)
     }
 }

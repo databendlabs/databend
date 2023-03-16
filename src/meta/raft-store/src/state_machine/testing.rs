@@ -13,27 +13,27 @@
 // limitations under the License.
 
 use common_meta_sled_store::openraft;
+use common_meta_types::new_log_id;
 use common_meta_types::Cmd;
+use common_meta_types::Entry;
+use common_meta_types::EntryPayload;
 use common_meta_types::LogEntry;
-use common_meta_types::LogId;
 use common_meta_types::RaftTxId;
 use common_meta_types::UpsertKV;
 use maplit::btreeset;
-use openraft::raft::Entry;
-use openraft::raft::EntryPayload;
 use openraft::Membership;
 
 use crate::state_machine::SnapshotKeyValue;
 
 /// Logs and the expected snapshot for testing snapshot.
-pub fn snapshot_logs() -> (Vec<Entry<LogEntry>>, Vec<String>) {
+pub fn snapshot_logs() -> (Vec<Entry>, Vec<String>) {
     let logs = vec![
         Entry {
-            log_id: LogId { term: 1, index: 1 },
-            payload: EntryPayload::Membership(Membership::new_single(btreeset![1, 2, 3])),
+            log_id: new_log_id(1, 0, 1),
+            payload: EntryPayload::Membership(Membership::new(vec![btreeset![1, 2, 3]], ())),
         },
         Entry {
-            log_id: LogId { term: 1, index: 4 },
+            log_id: new_log_id(1, 0, 4),
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
                 time_ms: None,
@@ -41,19 +41,19 @@ pub fn snapshot_logs() -> (Vec<Entry<LogEntry>>, Vec<String>) {
             }),
         },
         Entry {
-            log_id: LogId { term: 1, index: 5 },
-            payload: EntryPayload::Membership(Membership::new_single(btreeset![4, 5, 6])),
+            log_id: new_log_id(1, 0, 5),
+            payload: EntryPayload::Membership(Membership::new(vec![btreeset![4, 5, 6]], ())),
         },
         Entry {
-            log_id: LogId { term: 1, index: 6 },
+            log_id: new_log_id(1, 0, 6),
             payload: EntryPayload::Blank,
         },
         Entry {
-            log_id: LogId { term: 1, index: 8 },
+            log_id: new_log_id(1, 0, 8),
             payload: EntryPayload::Blank,
         },
         Entry {
-            log_id: LogId { term: 1, index: 9 },
+            log_id: new_log_id(1, 0, 9),
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
                 time_ms: None,
@@ -66,12 +66,12 @@ pub fn snapshot_logs() -> (Vec<Entry<LogEntry>>, Vec<String>) {
         },
     ];
     let want = vec![
-        "[2, 0, 0, 0, 0, 0, 0, 0, 5]:{\"name\":\"\",\"endpoint\":{\"addr\":\"\",\"port\":0},\"grpc_api_advertise_address\":null}", // Nodes
-        "[3, 1]:{\"LogId\":{\"term\":1,\"index\":9}}", // sm meta: LastApplied
-        "[3, 2]:{\"Bool\":true}",                      // sm meta: init
-        "[3, 3]:{\"Membership\":{\"log_id\":{\"term\":1,\"index\":5},\"membership\":{\"configs\":[[4,5,6]],\"all_nodes\":[4,5,6]}}}", // membership
-        "[6, 97]:{\"seq\":1,\"meta\":null,\"data\":[65]}", // generic kv
-        "[7, 103, 101, 110, 101, 114, 105, 99, 45, 107, 118]:1", // sequence: by upsertkv
+        r#"[2, 0, 0, 0, 0, 0, 0, 0, 5]:{"name":"","endpoint":{"addr":"","port":0},"grpc_api_advertise_address":null}"#, // Nodes
+        r#"[3, 1]:{"LogId":{"leader_id":{"term":1,"node_id":0},"index":9}}"#, // sm meta: LastApplied
+        r#"[3, 2]:{"Bool":true}"#,                      // sm meta: init
+        r#"[3, 3]:{"Membership":{"log_id":{"leader_id":{"term":1,"node_id":0},"index":5},"membership":{"configs":[[4,5,6]],"nodes":{"4":{},"5":{},"6":{}}}}}"#, // membership
+        r#"[6, 97]:{"seq":1,"meta":null,"data":[65]}"#, // generic kv
+        r#"[7, 103, 101, 110, 101, 114, 105, 99, 45, 107, 118]:1"#, // sequence: by upsertkv
     ]
     .iter()
     .map(|x| x.to_string())

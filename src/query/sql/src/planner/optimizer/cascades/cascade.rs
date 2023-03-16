@@ -19,7 +19,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::optimizer::cascades::explore_rules::get_explore_rule_set;
+use super::explore_rules::get_explore_rule_set;
 use crate::optimizer::cascades::scheduler::Scheduler;
 use crate::optimizer::cascades::tasks::OptimizeGroupTask;
 use crate::optimizer::cascades::tasks::Task;
@@ -28,38 +28,37 @@ use crate::optimizer::cost::CostModel;
 use crate::optimizer::cost::DefaultCostModel;
 use crate::optimizer::format::display_memo;
 use crate::optimizer::memo::Memo;
-use crate::optimizer::rule::RuleSet;
 use crate::optimizer::rule::TransformResult;
+use crate::optimizer::RuleSet;
 use crate::optimizer::SExpr;
 use crate::IndexType;
+use crate::MetadataRef;
 
 /// A cascades-style search engine to enumerate possible alternations of a relational expression and
 /// find the optimal one.
 pub struct CascadesOptimizer {
-    pub memo: Memo,
-    pub explore_rules: RuleSet,
-
-    pub cost_model: Box<dyn CostModel>,
-
+    pub(crate) memo: Memo,
+    pub(crate) cost_model: Box<dyn CostModel>,
     /// group index -> best cost context
-    pub best_cost_map: HashMap<IndexType, CostContext>,
-    _ctx: Arc<dyn TableContext>,
+    pub(crate) best_cost_map: HashMap<IndexType, CostContext>,
+    pub(crate) explore_rule_set: RuleSet,
+    pub(crate) metadata: MetadataRef,
 }
 
 impl CascadesOptimizer {
-    pub fn create(ctx: Arc<dyn TableContext>) -> Result<Self> {
-        let explore_rules = if ctx.get_settings().get_enable_cbo()? {
-            let enable_bushy_join = ctx.get_settings().get_enable_bushy_join()? != 0;
+    pub fn create(ctx: Arc<dyn TableContext>, metadata: MetadataRef) -> Result<Self> {
+        let enable_bushy_join = ctx.get_settings().get_enable_bushy_join()? != 0;
+        let explore_rule_set = if ctx.get_settings().get_enable_cbo()? {
             get_explore_rule_set(enable_bushy_join)
         } else {
-            RuleSet::create_with_ids(vec![]).unwrap()
+            RuleSet::create()
         };
         Ok(CascadesOptimizer {
             memo: Memo::create(),
-            explore_rules,
             cost_model: Box::new(DefaultCostModel),
             best_cost_map: HashMap::new(),
-            _ctx: ctx,
+            explore_rule_set,
+            metadata,
         })
     }
 

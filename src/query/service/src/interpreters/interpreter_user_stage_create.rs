@@ -48,7 +48,7 @@ impl Interpreter for CreateUserStageInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.plan.clone();
         let user_mgr = UserApiProvider::instance();
-        let user_stage = plan.user_stage_info;
+        let user_stage = plan.stage_info;
 
         // Check user stage.
         if user_stage.stage_type == StageType::User {
@@ -69,7 +69,7 @@ impl Interpreter for CreateUserStageInterpreter {
 
         if user_stage.stage_type != StageType::External {
             let op = self.ctx.get_data_operator()?.operator();
-            op.object(&user_stage.stage_prefix()).create().await?
+            op.create_dir(&user_stage.stage_prefix()).await?
         }
 
         let mut user_stage = user_stage;

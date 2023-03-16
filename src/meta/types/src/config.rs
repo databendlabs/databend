@@ -15,8 +15,8 @@
 use once_cell::sync::Lazy;
 
 pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
-    let build_semver = option_env!("VERGEN_BUILD_SEMVER");
-    let git_sha = option_env!("VERGEN_GIT_SHA_SHORT");
+    let build_semver = option_env!("DATABEND_GIT_SEMVER");
+    let git_sha = option_env!("VERGEN_GIT_SHA");
     let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
     let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
 

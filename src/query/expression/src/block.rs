@@ -232,22 +232,6 @@ impl DataBlock {
         }
     }
 
-    /// Convert the columns to fit the type required by schema. This is used to
-    /// restore the lost information (e.g. the scale of decimal) before persisting
-    /// the columns to storage.
-    pub fn fit_schema(&self, schema: DataSchema) -> Self {
-        debug_assert!(self.num_columns() == schema.fields().len());
-        debug_assert!(
-            self.columns
-                .iter()
-                .zip(schema.fields())
-                .all(|(col, field)| { &col.data_type == field.data_type() })
-        );
-
-        // Return block directly, because we don't support decimal yet.
-        self.clone()
-    }
-
     pub fn slice(&self, range: Range<usize>) -> Self {
         let columns = self
             .columns()
@@ -344,6 +328,11 @@ impl DataBlock {
     #[inline]
     pub fn get_meta(&self) -> Option<&BlockMetaInfoPtr> {
         self.meta.as_ref()
+    }
+
+    #[inline]
+    pub fn get_owned_meta(self) -> Option<BlockMetaInfoPtr> {
+        self.meta
     }
 
     pub fn from_arrow_chunk<A: AsRef<dyn Array>>(
@@ -451,8 +440,6 @@ impl DataBlock {
         default_vals: &[Scalar],
     ) -> Result<DataBlock> {
         let num_rows = data_block.num_rows();
-        let mut new_data_block = DataBlock::empty();
-        new_data_block.num_rows = num_rows;
         let mut data_block_columns_idx: usize = 0;
         let data_block_columns = data_block.columns();
 
@@ -463,9 +450,8 @@ impl DataBlock {
             let column = if !block_column_ids.contains(&column_id) {
                 let default_val = &default_vals[i];
                 let table_data_type = field.data_type();
-                let data_type: DataType = table_data_type.into();
                 BlockEntry {
-                    data_type,
+                    data_type: table_data_type.into(),
                     value: Value::Scalar(default_val.to_owned()),
                 }
             } else {
@@ -502,7 +488,7 @@ impl TryFrom<DataBlock> for ArrowChunk<ArrayRef> {
 impl BlockEntry {
     pub fn memory_size(&self) -> usize {
         match &self.value {
-            Value::Scalar(s) => std::mem::size_of_val(&s),
+            Value::Scalar(s) => std::mem::size_of_val(s),
             Value::Column(c) => c.memory_size(),
         }
     }

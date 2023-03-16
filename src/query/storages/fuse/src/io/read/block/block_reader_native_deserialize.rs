@@ -16,12 +16,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_arrow::arrow::array::Array;
 use common_arrow::arrow::chunk::Chunk;
-use common_arrow::arrow::compute;
 use common_arrow::arrow::datatypes::Field;
-use common_arrow::native::read::column_iter_to_arrays;
-use common_arrow::native::read::reader::NativeReader;
-use common_arrow::native::read::ArrayIter;
+use common_arrow::native::read::batch_read::batch_read_array;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
@@ -163,27 +161,25 @@ impl BlockReader {
         data_block
     }
 
-    fn chunks_to_native_array_iter<'a>(
+    fn chunks_to_native_array(
         column_node: &ColumnNode,
         metas: Vec<&ColumnMeta>,
-        chunks: Vec<&'a [u8]>,
+        chunks: Vec<&[u8]>,
         column_descriptors: Vec<ColumnDescriptor>,
         field: Field,
-    ) -> Result<ArrayIter<'a>> {
+    ) -> Result<Box<dyn Array>> {
         let is_nested = column_node.is_nested;
+        let mut page_metas = Vec::with_capacity(chunks.len());
+        let mut readers = Vec::with_capacity(chunks.len());
+        for (chunk, meta) in chunks.into_iter().zip(metas.into_iter()) {
+            let meta = meta.as_native().unwrap();
+            let reader = std::io::Cursor::new(chunk);
+            readers.push(reader);
+            page_metas.push(meta.pages.clone());
+        }
 
-        let readers = chunks
-            .into_iter()
-            .zip(metas.into_iter())
-            .map(|(chunk, meta)| {
-                let meta = meta.as_native().unwrap();
-                let cursor = std::io::Cursor::new(chunk);
-                NativeReader::new(cursor, meta.pages.clone(), vec![])
-            })
-            .collect::<Vec<_>>();
-
-        match column_iter_to_arrays(readers, column_descriptors, field, is_nested) {
-            Ok(array_iter) => Ok(array_iter),
+        match batch_read_array(readers, column_descriptors, field, is_nested, page_metas) {
+            Ok(array) => Ok(array),
             Err(err) => Err(err.into()),
         }
     }
@@ -237,19 +233,13 @@ impl BlockReader {
         }
 
         if !field_column_metas.is_empty() {
-            let array_iter = Self::chunks_to_native_array_iter(
+            let array = Self::chunks_to_native_array(
                 column,
                 field_column_metas,
                 field_column_data,
                 field_column_descriptors,
                 column.field.clone(),
             )?;
-            let mut arrays = vec![];
-            for array in array_iter {
-                arrays.push(array?);
-            }
-            let arrays = arrays.iter().map(|c| c.as_ref()).collect::<Vec<_>>();
-            let array = compute::concatenate::concatenate(&arrays)?;
             // mark the array
             if is_nested {
                 // the array is not intended to be cached

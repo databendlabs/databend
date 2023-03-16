@@ -140,8 +140,43 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                     };
                 }
             }
+
+            if prev != -1 {
+                if let (
+                    ExprElement::UnaryOp {
+                        op: UnaryOperator::Minus,
+                    },
+                    ExprElement::Literal { lit },
+                ) = (
+                    &expr_elements[prev as usize].elem,
+                    &expr_elements[curr as usize].elem,
+                ) {
+                    if matches!(
+                        lit,
+                        Literal::Float(_)
+                            | Literal::UInt64(_)
+                            | Literal::Decimal128 { .. }
+                            | Literal::Decimal256 { .. }
+                    ) {
+                        let span = expr_elements[curr as usize].span;
+                        expr_elements[curr as usize] = WithSpan {
+                            span,
+                            elem: ExprElement::Literal { lit: lit.neg() },
+                        };
+                        let span = expr_elements[prev as usize].span;
+                        expr_elements[prev as usize] = WithSpan {
+                            span,
+                            elem: ExprElement::Skip,
+                        };
+                    }
+                }
+            }
         }
-        let iter = &mut expr_elements.into_iter();
+        let iter = &mut expr_elements
+            .into_iter()
+            .filter(|x| x.elem != ExprElement::Skip)
+            .collect::<Vec<_>>()
+            .into_iter();
         run_pratt_parser(ExprParser, iter, rest, i)
     }
 }
@@ -249,6 +284,7 @@ pub enum ExprElement {
         distinct: bool,
         name: Identifier,
         args: Vec<Expr>,
+        window: Option<WindowSpec>,
         params: Vec<Literal>,
     },
     /// `CASE ... WHEN ... ELSE ...` expression
@@ -286,6 +322,10 @@ pub enum ExprElement {
         // Optional `NULLS FIRST` or `NULLS LAST`
         nulls_first: Option<String>,
     },
+    /// `{'k1':'v1','k2':'v2'}`
+    Map {
+        kvs: Vec<(Expr, Expr)>,
+    },
     Interval {
         expr: Expr,
         unit: IntervalKind,
@@ -304,6 +344,7 @@ pub enum ExprElement {
         unit: IntervalKind,
         date: Expr,
     },
+    Skip,
 }
 
 struct ExprParser;
@@ -328,6 +369,11 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
 
                 UnaryOperator::Plus => Affix::Prefix(Precedence(50)),
                 UnaryOperator::Minus => Affix::Prefix(Precedence(50)),
+                UnaryOperator::BitwiseNot => Affix::Prefix(Precedence(50)),
+                UnaryOperator::SquareRoot => Affix::Prefix(Precedence(60)),
+                UnaryOperator::CubeRoot => Affix::Prefix(Precedence(60)),
+                UnaryOperator::Abs => Affix::Prefix(Precedence(60)),
+                UnaryOperator::Factorial => Affix::Postfix(Precedence(60)),
             },
             ExprElement::BinaryOp { op } => match op {
                 BinaryOperator::Or => Affix::Infix(Precedence(5), Associativity::Left),
@@ -351,6 +397,13 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 BinaryOperator::BitwiseAnd => Affix::Infix(Precedence(22), Associativity::Left),
                 BinaryOperator::BitwiseXor => Affix::Infix(Precedence(22), Associativity::Left),
 
+                BinaryOperator::BitwiseShiftLeft => {
+                    Affix::Infix(Precedence(23), Associativity::Left)
+                }
+                BinaryOperator::BitwiseShiftRight => {
+                    Affix::Infix(Precedence(23), Associativity::Left)
+                }
+
                 BinaryOperator::Xor => Affix::Infix(Precedence(24), Associativity::Left),
 
                 BinaryOperator::Plus => Affix::Infix(Precedence(30), Associativity::Left),
@@ -361,6 +414,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 BinaryOperator::Divide => Affix::Infix(Precedence(40), Associativity::Left),
                 BinaryOperator::Modulo => Affix::Infix(Precedence(40), Associativity::Left),
                 BinaryOperator::StringConcat => Affix::Infix(Precedence(40), Associativity::Left),
+                BinaryOperator::Caret => Affix::Infix(Precedence(40), Associativity::Left),
             },
             ExprElement::PgCast { .. } => Affix::Postfix(Precedence(60)),
             _ => Affix::Nilfix,
@@ -435,12 +489,14 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 name,
                 args,
                 params,
+                window,
             } => Expr::FunctionCall {
                 span: transform_span(elem.span.0),
                 distinct,
                 name,
                 args,
                 params,
+                window,
             },
             ExprElement::Case {
                 operand,
@@ -504,6 +560,10 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                     null_first,
                 }
             }
+            ExprElement::Map { kvs } => Expr::Map {
+                span: transform_span(elem.span.0),
+                kvs,
+            },
             ExprElement::Interval { expr, unit } => Expr::Interval {
                 span: transform_span(elem.span.0),
                 expr: Box::new(expr),
@@ -615,6 +675,11 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 expr: Box::new(lhs),
                 target_type,
                 pg_style: true,
+            },
+            ExprElement::UnaryOp { op } => Expr::UnaryOp {
+                span: transform_span(elem.span.0),
+                op,
+                expr: Box::new(lhs),
             },
             _ => unreachable!(),
         };
@@ -782,34 +847,86 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             }
         },
     );
+
+    let window_frame_between = alt((
+        map(
+            rule! { BETWEEN ~ #window_frame_bound ~ AND ~ #window_frame_bound },
+            |(_, s, _, e)| (s, e),
+        ),
+        map(rule! {#window_frame_bound}, |s| {
+            (s, WindowFrameBound::Following(None))
+        }),
+    ));
+
+    let window_spec = map(
+        rule! {
+            (PARTITION ~ ^BY ~ #comma_separated_list1(subexpr(0)))?
+            ~ ( ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) )?
+            ~ ((ROWS | RANGE) ~ #window_frame_between)?
+        },
+        |(opt_partition, opt_order, between)| WindowSpec {
+            partition_by: opt_partition.map(|x| x.2).unwrap_or_default(),
+            order_by: opt_order.map(|x| x.2).unwrap_or_default(),
+            window_frame: between.map(|x| {
+                let unit = match x.0.kind {
+                    ROWS => WindowFrameUnits::Rows,
+                    RANGE => WindowFrameUnits::Range,
+                    _ => unreachable!(),
+                };
+                let bw = x.1;
+                WindowFrame {
+                    units: unit,
+                    start_bound: bw.0,
+                    end_bound: bw.1,
+                }
+            }),
+        },
+    );
+
     let function_call = map(
         rule! {
             #function_name
-            ~ "("
-            ~ DISTINCT?
-            ~ #comma_separated_list0(subexpr(0))?
-            ~ ")"
+            ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
         },
         |(name, _, opt_distinct, opt_args, _)| ExprElement::FunctionCall {
             distinct: opt_distinct.is_some(),
             name,
             args: opt_args.unwrap_or_default(),
             params: vec![],
+            window: None,
         },
     );
-    let function_call_with_param = map(
+
+    let function_call_with_window = map(
         rule! {
             #function_name
-            ~ "(" ~ #comma_separated_list1(literal) ~ ")"
             ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
+            ~ (OVER ~ "(" ~ #window_spec ~ ")")
         },
-        |(name, _, params, _, _, opt_distinct, opt_args, _)| ExprElement::FunctionCall {
+        |(name, _, opt_distinct, opt_args, _, window)| ExprElement::FunctionCall {
             distinct: opt_distinct.is_some(),
             name,
             args: opt_args.unwrap_or_default(),
-            params,
+            params: vec![],
+            window: Some(window.2),
         },
     );
+
+    let function_call_with_params = map(
+        rule! {
+            #function_name
+            ~ ("(" ~ #comma_separated_list1(literal) ~ ")")?
+            ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
+        },
+        |(name, params, _, opt_distinct, opt_args, _)| ExprElement::FunctionCall {
+            distinct: opt_distinct.is_some(),
+            name,
+            args: opt_args.unwrap_or_default(),
+            params: params.map(|x| x.1).unwrap_or_default(),
+            window: None,
+        },
+    );
+
     let case = map(
         rule! {
             CASE ~ #subexpr(0)?
@@ -889,6 +1006,12 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             nulls_first: opt_null_first.map(|(_, first_last)| first_last),
         },
     );
+
+    let map_expr = map(
+        rule! { "{" ~ #comma_separated_list0(map_element) ~ "}" },
+        |(_, kvs, _)| ExprElement::Map { kvs },
+    );
+
     let date_add = map(
         rule! {
             DATE_ADD ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ ")"
@@ -924,6 +1047,33 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
         |(_, _, unit, _, date, _)| ExprElement::DateTrunc { unit, date },
     );
+
+    let date_expr = map(
+        rule! {
+            DATE ~ #literal_string
+        },
+        |(_, date)| ExprElement::Cast {
+            expr: Box::new(Expr::Literal {
+                span: None,
+                lit: Literal::String(date),
+            }),
+            target_type: TypeName::Date,
+        },
+    );
+
+    let timestamp_expr = map(
+        rule! {
+            TIMESTAMP ~ #literal_string
+        },
+        |(_, date)| ExprElement::Cast {
+            expr: Box::new(Expr::Literal {
+                span: None,
+                lit: Literal::String(date),
+            }),
+            target_type: TypeName::Timestamp,
+        },
+    );
+
     let is_distinct_from = map(
         rule! {
             IS ~ NOT? ~ DISTINCT ~ FROM
@@ -944,19 +1094,22 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #date_add: "`DATE_ADD(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
             | #date_sub: "`DATE_SUB(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
             | #date_trunc: "`DATE_TRUNC((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND), ...)`"
+            | #date_expr: "`DATE <str_literal>`"
+            | #timestamp_expr: "`TIMESTAMP <str_literal>`"
             | #interval: "`INTERVAL ... (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
             | #pg_cast : "`::<type_name>`"
             | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND) FROM ...)`"
-            | #position : "`POSITION(... IN ...)`"
+        ),
+        rule!(
+            #position : "`POSITION(... IN ...)`"
             | #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"
             | #array_sort : "`ARRAY_SORT([...], 'ASC' | 'DESC', 'NULLS FIRST' | 'NULLS LAST')`"
             | #trim : "`TRIM(...)`"
             | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
-        ),
-        rule!(
-            #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
+            | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
             | #count_all : "COUNT(*)"
-            | #function_call_with_param : "<function>"
+            | #function_call_with_window : "<function>"
+            | #function_call_with_params : "<function>"
             | #function_call : "<function>"
             | #case : "`CASE ... END`"
             | #subquery : "`(SELECT ...)`"
@@ -965,15 +1118,43 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #map_access : "[<key>] | .<key> | :<key>"
             | #literal : "<literal>"
             | #array : "`[...]`"
+            | #map_expr : "`{...}`"
         ),
     )))(i)?;
 
     Ok((rest, WithSpan { span, elem }))
 }
 
+pub fn window_frame_bound(i: Input) -> IResult<WindowFrameBound> {
+    alt((
+        value(WindowFrameBound::CurrentRow, rule! { CURRENT ~ ROW }),
+        map(rule! { #subexpr(0) ~ PRECEDING }, |(expr, _)| {
+            WindowFrameBound::Preceding(Some(Box::new(expr)))
+        }),
+        value(
+            WindowFrameBound::Preceding(None),
+            rule! { UNBOUNDED ~ PRECEDING },
+        ),
+        map(rule! { #subexpr(0) ~ FOLLOWING }, |(expr, _)| {
+            WindowFrameBound::Following(Some(Box::new(expr)))
+        }),
+        value(
+            WindowFrameBound::Following(None),
+            rule! { UNBOUNDED ~ FOLLOWING },
+        ),
+    ))(i)
+}
+
 pub fn unary_op(i: Input) -> IResult<UnaryOperator> {
     // Plus and Minus are parsed as binary op at first.
-    value(UnaryOperator::Not, rule! { NOT })(i)
+    alt((
+        value(UnaryOperator::Not, rule! { NOT }),
+        value(UnaryOperator::Factorial, rule! { Factorial}),
+        value(UnaryOperator::SquareRoot, rule! { SquareRoot}),
+        value(UnaryOperator::BitwiseNot, rule! {BitWiseNot}),
+        value(UnaryOperator::CubeRoot, rule! { CubeRoot}),
+        value(UnaryOperator::Abs, rule! { Abs}),
+    ))(i)
 }
 
 pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
@@ -992,6 +1173,7 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
             value(BinaryOperator::Lte, rule! { "<=" }),
             value(BinaryOperator::Eq, rule! { "=" }),
             value(BinaryOperator::NotEq, rule! { "<>" | "!=" }),
+            value(BinaryOperator::Caret, rule! { "^" }),
         )),
         alt((
             value(BinaryOperator::And, rule! { AND }),
@@ -1003,26 +1185,17 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
             value(BinaryOperator::NotRegexp, rule! { NOT ~ REGEXP }),
             value(BinaryOperator::RLike, rule! { RLIKE }),
             value(BinaryOperator::NotRLike, rule! { NOT ~ RLIKE }),
-            value(BinaryOperator::BitwiseOr, rule! { "|" }),
-            value(BinaryOperator::BitwiseAnd, rule! { "&" }),
-            value(BinaryOperator::BitwiseXor, rule! { "^" }),
+            value(BinaryOperator::BitwiseOr, rule! { BitWiseOr }),
+            value(BinaryOperator::BitwiseAnd, rule! { BitWiseAnd }),
+            value(BinaryOperator::BitwiseXor, rule! { BitWiseXor }),
+            value(BinaryOperator::BitwiseShiftLeft, rule! { ShiftLeft }),
+            value(BinaryOperator::BitwiseShiftRight, rule! { ShiftRight }),
         )),
     ))(i)
 }
 
 pub fn literal(i: Input) -> IResult<Literal> {
     let string = map(literal_string, Literal::String);
-    let integer = map(literal_u64, Literal::Integer);
-    let float = map(literal_f64, Literal::Float);
-    let bigint = map(rule!(LiteralInteger), |lit| Literal::BigInt {
-        lit: lit.text().to_string(),
-        is_hex: false,
-    });
-    let bigint_hex = map(literal_hex_str, |lit| Literal::BigInt {
-        lit: lit.to_string(),
-        is_hex: true,
-    });
-
     let boolean = alt((
         value(Literal::Boolean(true), rule! { TRUE }),
         value(Literal::Boolean(false), rule! { FALSE }),
@@ -1032,10 +1205,8 @@ pub fn literal(i: Input) -> IResult<Literal> {
 
     rule!(
         #string
-        | #integer
-        | #float
-        | #bigint
-        | #bigint_hex
+        | #literal_decimal
+        | #literal_hex
         | #boolean
         | #current_timestamp
         | #null
@@ -1086,6 +1257,45 @@ pub fn literal_f64(i: Input) -> IResult<f64> {
             LiteralFloat
         },
         |token| Ok(fast_float::parse(token.text())?),
+    )(i)
+}
+
+pub fn literal_decimal(i: Input) -> IResult<Literal> {
+    let decimal_unit = map_res(
+        rule! {
+            LiteralInteger
+        },
+        |token| Literal::parse_decimal_uint(token.text()),
+    );
+
+    let decimal = map_res(
+        rule! {
+           LiteralFloat
+        },
+        |token| Literal::parse_decimal(token.text()),
+    );
+
+    rule!(
+        #decimal_unit
+        | #decimal
+    )(i)
+}
+
+pub fn literal_hex(i: Input) -> IResult<Literal> {
+    let hex_u64 = map_res(literal_hex_str, |lit| {
+        Ok(Literal::UInt64(u64::from_str_radix(lit, 16)?))
+    });
+    // todo(youngsofun): more accurate precision
+    let hex_u128 = map_res(literal_hex_str, |lit| {
+        Ok(Literal::Decimal128 {
+            value: i128::from_str_radix(lit, 16)?,
+            precision: 38,
+            scale: 0,
+        })
+    });
+    rule!(
+        #hex_u64
+        | #hex_u128
     )(i)
 }
 
@@ -1169,7 +1379,10 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         rule! { ( INT64 | SIGNED | BIGINT ) ~ ( "(" ~ #literal_u64 ~ ")" )? },
     );
     let ty_float32 = value(TypeName::Float32, rule! { FLOAT32 | FLOAT });
-    let ty_float64 = value(TypeName::Float64, rule! { FLOAT64 | DOUBLE });
+    let ty_float64 = value(
+        TypeName::Float64,
+        rule! { (FLOAT64 | DOUBLE)  ~ ( PRECISION )? },
+    );
     let ty_decimal = map_res(
         rule! { DECIMAL ~ "(" ~ #literal_u64 ~ "," ~ #literal_u64 ~ ")" },
         |(_, _, precision, _, scale, _)| {
@@ -1184,9 +1397,14 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         },
     );
     let ty_array = map(
-        rule! { ARRAY ~ ( "(" ~ #type_name ~ ")" )? },
-        |(_, opt_item_type)| TypeName::Array {
-            item_type: opt_item_type.map(|(_, opt_item_type, _)| Box::new(opt_item_type)),
+        rule! { ARRAY ~ "(" ~ #type_name ~ ")" },
+        |(_, _, item_type, _)| TypeName::Array(Box::new(item_type)),
+    );
+    let ty_map = map(
+        rule! { MAP ~ "(" ~ #type_name ~ "," ~ #type_name ~ ")" },
+        |(_, _, key_type, _, val_type, _)| TypeName::Map {
+            key_type: Box::new(key_type),
+            val_type: Box::new(val_type),
         },
     );
     let ty_nullable = map(
@@ -1194,26 +1412,20 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         |(_, item_type)| TypeName::Nullable(Box::new(item_type.1)),
     );
     let ty_tuple = map(
-        rule! { TUPLE ~ "(" ~ #comma_separated_list1(tuple_types) ~ ")" },
-        |(_, _, tuple_types, _)| {
-            let mut fields_name = Vec::with_capacity(tuple_types.len());
-            let mut fields_type = Vec::with_capacity(tuple_types.len());
-            for tuple_type in tuple_types {
-                if let Some(field_name) = tuple_type.0 {
-                    fields_name.push(field_name.name);
-                }
-                fields_type.push(tuple_type.1);
-            }
-            if fields_name.is_empty() {
-                TypeName::Tuple {
-                    fields_name: None,
-                    fields_type,
-                }
-            } else {
-                TypeName::Tuple {
-                    fields_name: Some(fields_name),
-                    fields_type,
-                }
+        rule! { TUPLE ~ "(" ~ #comma_separated_list1(type_name) ~ ")" },
+        |(_, _, fields_type, _)| TypeName::Tuple {
+            fields_name: None,
+            fields_type,
+        },
+    );
+    let ty_named_tuple = map(
+        rule! { TUPLE ~ "(" ~ #comma_separated_list1(rule! { #ident ~ #type_name }) ~ ")" },
+        |(_, _, fields, _)| {
+            let (fields_name, fields_type) =
+                fields.into_iter().map(|(name, ty)| (name.name, ty)).unzip();
+            TypeName::Tuple {
+                fields_name: Some(fields_name),
+                fields_type,
             }
         },
     );
@@ -1226,7 +1438,6 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         TypeName::String,
         rule! { ( STRING | VARCHAR | CHAR | CHARACTER | TEXT  ) ~ ( "(" ~ #literal_u64 ~ ")" )? },
     );
-    let ty_object = value(TypeName::Object, rule! { OBJECT | MAP });
     let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
     map(
         rule! {
@@ -1243,11 +1454,12 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_float64
             | #ty_decimal
             | #ty_array
-            | #ty_tuple
+            | #ty_map
+            | #ty_tuple : "TUPLE(<type>, ...)"
+            | #ty_named_tuple : "TUPLE(<name> <type>, ...)"
             | #ty_date
             | #ty_datetime
             | #ty_string
-            | #ty_object
             | #ty_variant
             | #ty_nullable
             ) ~ NULL? : "type name"
@@ -1259,26 +1471,6 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
                 ty
             }
         },
-    )(i)
-}
-
-pub fn tuple_types(i: Input) -> IResult<(Option<Identifier>, TypeName)> {
-    let tuple_types = map(
-        rule! {
-           #type_name
-        },
-        |type_name| (None, type_name),
-    );
-    let named_tuple_types = map(
-        rule! {
-           #ident ~ #type_name
-        },
-        |(name, type_name)| (Some(name), type_name),
-    );
-
-    rule!(
-        #tuple_types
-        | #named_tuple_types
     )(i)
 }
 
@@ -1370,5 +1562,14 @@ pub fn map_access(i: Input) -> IResult<MapAccessor> {
         | #period
         | #period_number
         | #colon
+    )(i)
+}
+
+pub fn map_element(i: Input) -> IResult<(Expr, Expr)> {
+    map(
+        rule! {
+            #subexpr(0) ~ ":" ~ #subexpr(0)
+        },
+        |(key, _, value)| (key, value),
     )(i)
 }

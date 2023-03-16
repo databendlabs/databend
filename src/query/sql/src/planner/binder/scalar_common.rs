@@ -183,6 +183,7 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
 
     match scalar {
         ScalarExpr::BoundColumnRef(_) => false,
+        ScalarExpr::BoundInternalColumnRef(_) => false,
         ScalarExpr::ConstantExpr(_) => true,
         ScalarExpr::AndExpr(scalar) => {
             prune_by_children(&scalar.left, columns) && prune_by_children(&scalar.right, columns)
@@ -203,6 +204,7 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
             .iter()
             .all(|arg| prune_by_children(arg, columns)),
         ScalarExpr::CastExpr(expr) => prune_by_children(expr.argument.as_ref(), columns),
+        ScalarExpr::Unnest(expr) => prune_by_children(expr.argument.as_ref(), columns),
         ScalarExpr::SubqueryExpr(_) => false,
     }
 }
@@ -212,16 +214,6 @@ pub fn wrap_cast(scalar: &ScalarExpr, target_type: &DataType) -> ScalarExpr {
     ScalarExpr::CastExpr(CastExpr {
         is_try: false,
         argument: Box::new(scalar.clone()),
-        from_type: Box::new(scalar.data_type()),
         target_type: Box::new(target_type.clone()),
     })
-}
-
-/// Wrap a cast expression with given target type if the scalar is not of the target type
-pub fn wrap_cast_if_needed(scalar: &ScalarExpr, target_type: &DataType) -> ScalarExpr {
-    if &scalar.data_type() == target_type {
-        scalar.clone()
-    } else {
-        wrap_cast(scalar, target_type)
-    }
 }

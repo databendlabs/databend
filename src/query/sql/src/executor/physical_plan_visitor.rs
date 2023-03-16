@@ -14,6 +14,7 @@
 
 use common_exception::Result;
 
+use super::AggregateExpand;
 use super::AggregateFinal;
 use super::AggregatePartial;
 use super::DistributedInsertSelect;
@@ -28,6 +29,8 @@ use super::PhysicalPlan;
 use super::Project;
 use super::Sort;
 use super::TableScan;
+use super::Unnest;
+use crate::executor::RuntimeFilterSource;
 use crate::executor::UnionAll;
 
 pub trait PhysicalPlanReplacer {
@@ -37,6 +40,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::Filter(plan) => self.replace_filter(plan),
             PhysicalPlan::Project(plan) => self.replace_project(plan),
             PhysicalPlan::EvalScalar(plan) => self.replace_eval_scalar(plan),
+            PhysicalPlan::AggregateExpand(plan) => self.replace_aggregate_expand(plan),
             PhysicalPlan::AggregatePartial(plan) => self.replace_aggregate_partial(plan),
             PhysicalPlan::AggregateFinal(plan) => self.replace_aggregate_final(plan),
             PhysicalPlan::Sort(plan) => self.replace_sort(plan),
@@ -47,6 +51,8 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ExchangeSink(plan) => self.replace_exchange_sink(plan),
             PhysicalPlan::UnionAll(plan) => self.replace_union(plan),
             PhysicalPlan::DistributedInsertSelect(plan) => self.replace_insert_select(plan),
+            PhysicalPlan::Unnest(plan) => self.replace_unnest(plan),
+            PhysicalPlan::RuntimeFilterSource(plan) => self.replace_runtime_filter_source(plan),
         }
     }
 
@@ -84,6 +90,19 @@ pub trait PhysicalPlanReplacer {
             plan_id: plan.plan_id,
             input: Box::new(input),
             exprs: plan.exprs.clone(),
+            stat_info: plan.stat_info.clone(),
+        }))
+    }
+
+    fn replace_aggregate_expand(&mut self, plan: &AggregateExpand) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+
+        Ok(PhysicalPlan::AggregateExpand(AggregateExpand {
+            plan_id: plan.plan_id,
+            input: Box::new(input),
+            group_bys: plan.group_bys.clone(),
+            grouping_id_index: plan.grouping_id_index,
+            grouping_sets: plan.grouping_sets.clone(),
             stat_info: plan.stat_info.clone(),
         }))
     }
@@ -128,6 +147,7 @@ pub trait PhysicalPlanReplacer {
             join_type: plan.join_type.clone(),
             marker_index: plan.marker_index,
             from_correlated_subquery: plan.from_correlated_subquery,
+            contain_runtime_filter: plan.contain_runtime_filter,
             stat_info: plan.stat_info.clone(),
         }))
     }
@@ -212,6 +232,31 @@ pub trait PhysicalPlanReplacer {
             },
         )))
     }
+
+    fn replace_unnest(&mut self, plan: &Unnest) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::Unnest(Unnest {
+            plan_id: plan.plan_id,
+            input: Box::new(input),
+            num_columns: plan.num_columns,
+            stat_info: plan.stat_info.clone(),
+        }))
+    }
+
+    fn replace_runtime_filter_source(
+        &mut self,
+        plan: &RuntimeFilterSource,
+    ) -> Result<PhysicalPlan> {
+        let left_side = self.replace(&plan.left_side)?;
+        let right_side = self.replace(&plan.right_side)?;
+        Ok(PhysicalPlan::RuntimeFilterSource(RuntimeFilterSource {
+            plan_id: plan.plan_id,
+            left_side: Box::new(left_side),
+            right_side: Box::new(right_side),
+            left_runtime_filters: plan.left_runtime_filters.clone(),
+            right_runtime_filters: plan.right_runtime_filters.clone(),
+        }))
+    }
 }
 
 impl PhysicalPlan {
@@ -232,6 +277,9 @@ impl PhysicalPlan {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::EvalScalar(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::AggregateExpand(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::AggregatePartial(plan) => {
@@ -263,6 +311,13 @@ impl PhysicalPlan {
                 }
                 PhysicalPlan::DistributedInsertSelect(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::Unnest(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit)
+                }
+                PhysicalPlan::RuntimeFilterSource(plan) => {
+                    Self::traverse(&plan.left_side, pre_visit, visit, post_visit);
+                    Self::traverse(&plan.right_side, pre_visit, visit, post_visit);
                 }
             }
             post_visit(plan);

@@ -28,6 +28,15 @@ NULL
 1
 2
 
+query II
+select number  d , max(1-number) c from numbers(4) group by 1  order by 2;
+----
+3 -2
+2 -1
+1 0
+0 1
+
+
 statement ok
 drop table order_test
 
@@ -36,4 +45,3 @@ select number from numbers(10) as a order by b.number
 
 statement error
 select number from (select * from numbers(10) as b) as a order by b.number
-

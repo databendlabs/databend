@@ -241,8 +241,12 @@ impl Processor for FuseTableSink {
 
                 // we need a configuration of block size threshold here
                 let mut data = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
-                let (size, meta_data) =
-                    io::write_block(&self.write_settings, &self.source_schema, block, &mut data)?;
+                let (size, meta_data) = io::serialize_block(
+                    &self.write_settings,
+                    &self.source_schema,
+                    block,
+                    &mut data,
+                )?;
 
                 self.state = State::Serialized {
                     data,
@@ -301,18 +305,17 @@ impl Processor for FuseTableSink {
             } => {
                 let start = Instant::now();
 
+                let data_size = data.len();
+
                 // write data block
-                io::write_data(
-                    &data,
-                    &self.data_accessor,
-                    &block_statistics.block_file_location,
-                )
-                .await?;
+                self.data_accessor
+                    .write(&block_statistics.block_file_location, data)
+                    .await?;
 
                 // Perf.
                 {
                     metrics_inc_block_write_nums(1);
-                    metrics_inc_block_write_bytes(data.len() as u64);
+                    metrics_inc_block_write_bytes(data_size as u64);
                     metrics_inc_block_write_milliseconds(start.elapsed().as_millis() as u64);
                 }
 
@@ -321,7 +324,7 @@ impl Processor for FuseTableSink {
                 // write bloom filter index
                 if let Some(ref bloom_index_state) = bloom_index_state {
                     io::write_data(
-                        &bloom_index_state.data,
+                        bloom_index_state.data.clone(),
                         &self.data_accessor,
                         &bloom_index_state.location.0,
                     )
@@ -366,7 +369,7 @@ impl Processor for FuseTableSink {
                 location,
                 segment,
             } => {
-                self.data_accessor.object(&location).write(data).await?;
+                self.data_accessor.write(&location, data).await?;
 
                 self.state = State::PreCommitSegment { location, segment };
             }

@@ -50,8 +50,8 @@ use common_pipeline_sources::SyncSourcer;
 use common_storage::init_operator;
 use common_storage::DataOperator;
 use futures::TryStreamExt;
-use opendal::ObjectMetakey;
-use opendal::ObjectMode;
+use opendal::EntryMode;
+use opendal::Metakey;
 use opendal::Operator;
 use storages_common_index::RangeIndex;
 
@@ -281,9 +281,7 @@ impl HiveTable {
                 )),
             }
         } else {
-            let col_ids = (0..self.table_info.schema().fields().len())
-                .into_iter()
-                .collect::<Vec<usize>>();
+            let col_ids = (0..self.table_info.schema().fields().len()).collect::<Vec<usize>>();
             Ok(col_ids)
         }
     }
@@ -767,14 +765,13 @@ async fn do_list_files_from_dir(
     sem: Arc<Semaphore>,
 ) -> Result<(Vec<HiveFileInfo>, Vec<String>)> {
     let _a = sem.acquire().await.unwrap();
-    let object = operator.object(&location);
-    let mut m = object.list().await?;
+    let mut m = operator.list(&location).await?;
 
     let mut all_files = vec![];
     let mut all_dirs = vec![];
     while let Some(de) = m.try_next().await? {
-        let meta = de
-            .metadata(ObjectMetakey::Mode | ObjectMetakey::ContentLength)
+        let meta = operator
+            .metadata(&de, Metakey::Mode | Metakey::ContentLength)
             .await?;
 
         let path = de.path();
@@ -784,12 +781,12 @@ async fn do_list_files_from_dir(
         }
 
         match meta.mode() {
-            ObjectMode::FILE => {
+            EntryMode::FILE => {
                 let filename = path.to_string();
                 let length = meta.content_length();
                 all_files.push(HiveFileInfo::create(filename, length));
             }
-            ObjectMode::DIR => {
+            EntryMode::DIR => {
                 all_dirs.push(path.to_string());
             }
             _ => {

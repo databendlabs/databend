@@ -1,6 +1,6 @@
 ---
-title: Tutorial - Load from a Local File
-sidebar_label: Tutorial - Load from a Local File
+title: Load from a Local File
+sidebar_label: Load from a Local File
 description:
   Load data from local file system.
 ---

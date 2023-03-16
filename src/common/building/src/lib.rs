@@ -20,11 +20,9 @@ mod git;
 use std::env;
 use std::path::Path;
 
-use git2::Repository;
+use gix::Repository;
 use tracing::error;
-use vergen::vergen;
-use vergen::Config;
-use vergen::ShaKind;
+use vergen::EmitBuilder;
 
 /// Setup building environment:
 /// - Watch git HEAD to trigger a rebuild;
@@ -38,7 +36,7 @@ pub fn setup() {
 }
 
 pub fn setup_commit_authors() {
-    match Repository::discover(".") {
+    match gix::discover(".") {
         Ok(repo) => {
             add_env_commit_authors(&repo);
         }
@@ -53,30 +51,33 @@ pub fn add_building_env_vars() {
     set_env_config();
     add_env_credits_info();
     add_target_features();
-    match Repository::discover(".") {
+    match gix::discover(".") {
         Ok(repo) => {
             add_env_git_tag(&repo);
         }
         Err(e) => {
-            eprintln!("{}", e);
-            println!("cargo:rustc-env=VERGEN_GIT_SEMVER=unknown");
+            panic!(
+                "{}; The MetaClient is unable to proceed as it relies on the git-tag version for handshaking, which is not found.",
+                e
+            );
         }
     };
 }
 
 pub fn set_env_config() {
-    let mut config = Config::default();
-    *config.git_mut().sha_kind_mut() = ShaKind::Short;
-
-    if let Err(e) = vergen(config) {
-        eprintln!("{}", e);
-    }
+    EmitBuilder::builder()
+        .all_build()
+        .all_cargo()
+        .all_git()
+        .all_rustc()
+        .emit()
+        .expect("Unable to generate build envs");
 }
 
 pub fn add_env_git_tag(repo: &Repository) {
     match git::get_latest_tag(repo) {
-        Ok(tag) => println!("cargo:rustc-env=VERGEN_GIT_SEMVER={}", tag),
-        Err(e) => println!("cargo:rustc-env=VERGEN_GIT_SEMVER={}", e),
+        Ok(tag) => println!("cargo:rustc-env=DATABEND_GIT_SEMVER={}", tag),
+        Err(e) => println!("cargo:rustc-env=DATABEND_GIT_SEMVER={}", e),
     }
 }
 

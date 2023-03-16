@@ -121,6 +121,11 @@ fn replace_column(scalar: &mut ScalarExpr, col_to_scalar: &HashMap<&IndexType, &
             // Safe to unwrap
             *scalar = (*col_to_scalar.get(&column_index).unwrap()).clone();
         }
+        ScalarExpr::BoundInternalColumnRef(column) => {
+            let column_index = column.column.index;
+            // Safe to unwrap
+            *scalar = (*col_to_scalar.get(&column_index).unwrap()).clone();
+        }
         ScalarExpr::AndExpr(expr) => {
             replace_column(&mut expr.left, col_to_scalar);
             replace_column(&mut expr.right, col_to_scalar);
@@ -150,5 +155,8 @@ fn replace_column(scalar: &mut ScalarExpr, col_to_scalar: &HashMap<&IndexType, &
             replace_column(&mut expr.argument, col_to_scalar);
         }
         ScalarExpr::ConstantExpr(_) | ScalarExpr::SubqueryExpr(_) => {}
+        ScalarExpr::Unnest(expr) => {
+            replace_column(&mut expr.argument, col_to_scalar);
+        }
     }
 }

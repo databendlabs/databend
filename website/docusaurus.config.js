@@ -30,6 +30,10 @@ const config = {
         },
     },
 
+    customFields: {
+        blogTags: ['weekly','databend']
+    },
+
     presets: [
         [
             '@docusaurus/preset-classic',
@@ -54,8 +58,11 @@ const config = {
                         }
                         return `https://github.com/datafuselabs/databend/edit/main/website/blog/${blogPath}`;
                       },
-                    blogSidebarCount: 'ALL',
+                    blogSidebarCount: 5,
                     postsPerPage: 'ALL',
+                    blogListComponent: '@site/src/components/CustomBlog/CustomBlogListPage.js',
+                    blogPostComponent: '@site/src/components/CustomBlog/BlogPostDetails.js',
+                    blogTagsPostsComponent: '@site/src/components/CustomBlog/CustomBlogTagsPostsPage.js',
                 },
                 theme: {
                     customCss: require.resolve('./src/css/custom.scss'),
@@ -110,12 +117,12 @@ const config = {
                         label: 'Documentation',
                         position: 'right',
                     },
+                    { to: '/blog', label: 'Blog', position: 'right' }, // or position: 'right'
                     {
                         to: '/download',
                         label: 'Download',
                         position: 'right',
                     },
-                    { to: '/blog', label: 'Blog', position: 'right' }, // or position: 'right'
                 ],
             },
             footer: {
@@ -123,6 +130,10 @@ const config = {
                     {
                         title: 'RESOURCES',
                         items: [
+                            {
+                                label: 'Performance',
+                                to: 'https://databend.rs/blog/clickbench-databend-top'
+                            },
                             {
                                 label: 'Deployment',
                                 to: '/doc/deploy'

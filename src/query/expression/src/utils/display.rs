@@ -15,12 +15,12 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::fmt::Write;
 
 use chrono_tz::Tz;
 use comfy_table::Cell;
 use comfy_table::Table;
-use ethnum::i256;
+use common_io::display_decimal_128;
+use common_io::display_decimal_256;
 use itertools::Itertools;
 use num_traits::FromPrimitive;
 use rust_decimal::Decimal;
@@ -171,11 +171,7 @@ impl Debug for Column {
             Column::Array(col) => write!(f, "{col:?}"),
             Column::Map(col) => write!(f, "{col:?}"),
             Column::Nullable(col) => write!(f, "{col:?}"),
-            Column::Tuple { fields, len } => f
-                .debug_struct("Tuple")
-                .field("fields", fields)
-                .field("len", len)
-                .finish(),
+            Column::Tuple(fields) => f.debug_tuple("Tuple").field(fields).finish(),
             Column::Variant(col) => write!(f, "{col:?}"),
         }
     }
@@ -230,7 +226,7 @@ impl<'a> Display for ScalarRef<'a> {
                 write!(f, ")")
             }
             ScalarRef::Variant(s) => {
-                let value = common_jsonb::to_string(s);
+                let value = jsonb::to_string(s);
                 write!(f, "{value}")
             }
         }
@@ -281,10 +277,22 @@ impl Debug for DecimalScalar {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             DecimalScalar::Decimal128(val, size) => {
-                write!(f, "{}_d128", display_decimal_128(*val, size.scale))
+                write!(
+                    f,
+                    "{}_d128({},{})",
+                    display_decimal_128(*val, size.scale),
+                    size.precision,
+                    size.scale
+                )
             }
             DecimalScalar::Decimal256(val, size) => {
-                write!(f, "{}_d256", display_decimal_256(*val, size.scale))
+                write!(
+                    f,
+                    "{}_d256({},{})",
+                    display_decimal_256(*val, size.scale),
+                    size.precision,
+                    size.scale
+                )
             }
         }
     }
@@ -431,6 +439,28 @@ impl Display for Literal {
             Literal::UInt64(val) => write!(f, "{val}_u64"),
             Literal::Float32(val) => write!(f, "{val}_f32"),
             Literal::Float64(val) => write!(f, "{val}_f64"),
+            Literal::Decimal256 {
+                value,
+                precision,
+                scale,
+            } => write!(
+                f,
+                "{}_decimal({}, {})",
+                display_decimal_256(*value, *scale),
+                precision,
+                scale
+            ),
+            Literal::Decimal128 {
+                value,
+                precision,
+                scale,
+            } => write!(
+                f,
+                "{}_decimal({}, {})",
+                display_decimal_128(*value, *scale),
+                precision,
+                scale
+            ),
             Literal::String(val) => write!(f, "{:?}", String::from_utf8_lossy(val)),
         }
     }
@@ -450,7 +480,12 @@ impl Display for DataType {
             DataType::EmptyArray => write!(f, "Array(Nothing)"),
             DataType::Array(inner) => write!(f, "Array({inner})"),
             DataType::EmptyMap => write!(f, "Map(Nothing)"),
-            DataType::Map(inner) => write!(f, "Map({inner})"),
+            DataType::Map(inner) => match *inner.clone() {
+                DataType::Tuple(fields) => {
+                    write!(f, "Map({}, {})", fields[0], fields[1])
+                }
+                _ => unreachable!(),
+            },
             DataType::Tuple(tys) => {
                 write!(f, "Tuple(")?;
                 for (i, ty) in tys.iter().enumerate() {
@@ -484,12 +519,20 @@ impl Display for TableDataType {
             TableDataType::EmptyArray => write!(f, "Array(Nothing)"),
             TableDataType::Array(inner) => write!(f, "Array({inner})"),
             TableDataType::EmptyMap => write!(f, "Map(Nothing)"),
-            TableDataType::Map(inner) => write!(f, "Map({inner})"),
+            TableDataType::Map(inner) => match *inner.clone() {
+                TableDataType::Tuple {
+                    fields_name: _fields_name,
+                    fields_type,
+                } => {
+                    write!(f, "Map({}, {})", fields_type[0], fields_type[1])
+                }
+                _ => unreachable!(),
+            },
             TableDataType::Tuple {
                 fields_name,
                 fields_type,
             } => {
-                write!(f, "(")?;
+                write!(f, "Tuple(")?;
                 for (i, (name, ty)) in fields_name.iter().zip(fields_type).enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
@@ -552,6 +595,9 @@ impl<Index: ColumnIndex> Display for Expr<Index> {
                 } else {
                     write!(f, "CAST({expr} AS {dest_type})")
                 }
+            }
+            Expr::Catch { expr, .. } => {
+                write!(f, "CATCH({expr})")
             }
             Expr::FunctionCall {
                 function,
@@ -744,6 +790,10 @@ impl Display for Domain {
                 }
                 write!(f, ")")
             }
+            Domain::Map(None) => write!(f, "{{}}"),
+            Domain::Map(Some((key_domain, val_domain))) => {
+                write!(f, "{{[{key_domain}], [{val_domain}]}}")
+            }
             Domain::Undefined => write!(f, "Undefined"),
         }
     }
@@ -771,63 +821,4 @@ fn display_f64(num: f64) -> String {
             .to_string(),
         None => num.to_string(),
     }
-}
-
-fn display_decimal_128(num: i128, scale: u8) -> String {
-    let mut buf = String::new();
-    if scale == 0 {
-        write!(buf, "{}", num).unwrap();
-    } else {
-        let pow_scale = 10_i128.pow(scale as u32);
-        if num >= 0 {
-            write!(
-                buf,
-                "{}.{:0>width$}",
-                num / pow_scale,
-                (num % pow_scale).abs(),
-                width = scale as usize
-            )
-            .unwrap();
-        } else {
-            write!(
-                buf,
-                "-{}.{:0>width$}",
-                -num / pow_scale,
-                (num % pow_scale).abs(),
-                width = scale as usize
-            )
-            .unwrap();
-        }
-    }
-    buf
-}
-
-fn display_decimal_256(num: i256, scale: u8) -> String {
-    let mut buf = String::new();
-    if scale == 0 {
-        write!(buf, "{}", num).unwrap();
-    } else {
-        let pow_scale = i256::from(10).pow(scale as u32);
-        // -1/10 = 0
-        if num >= 0 {
-            write!(
-                buf,
-                "{}.{:0>width$}",
-                num / pow_scale,
-                num % pow_scale.abs(),
-                width = scale as usize
-            )
-            .unwrap();
-        } else {
-            write!(
-                buf,
-                "-{}.{:0>width$}",
-                -num / pow_scale,
-                num % pow_scale,
-                width = scale as usize
-            )
-            .unwrap();
-        }
-    }
-    buf
 }

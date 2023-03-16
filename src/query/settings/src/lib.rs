@@ -136,7 +136,11 @@ impl Settings {
             default_max_memory_usage = conf.query.max_server_memory_usage;
         }
 
-        let default_max_storage_io_requests = if conf.storage.params.is_fs() { 48 } else { 64 };
+        let default_max_storage_io_requests = if conf.storage.params.is_fs() {
+            48
+        } else {
+            std::cmp::min(num_cpus, 64)
+        };
 
         let values = vec![
             // max_block_size
@@ -147,7 +151,7 @@ impl Settings {
                     UserSettingValue::UInt64(65536),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Maximum block size for reading, default value: 65536.",
+                desc: "Sets the maximum byte size of a single data block that can be read.",
                 possible_values: None,
             },
             // max_threads
@@ -158,7 +162,7 @@ impl Settings {
                     UserSettingValue::UInt64(num_cpus),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The maximum number of threads to execute the request. By default the value is determined automatically.",
+                desc: "Sets the maximum number of threads to execute a request.",
                 possible_values: None,
             },
             // max_memory_usage
@@ -170,7 +174,7 @@ impl Settings {
                     UserSettingValue::UInt64(default_max_memory_usage),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The maximum memory usage for processing single query, in bytes. By default the value is determined automatically.",
+                desc: "Sets the maximum memory usage in bytes for processing a single query.",
                 possible_values: None,
             },
             // retention_period
@@ -179,7 +183,7 @@ impl Settings {
                 default_value: UserSettingValue::UInt64(12),
                 user_setting: UserSetting::create("retention_period", UserSettingValue::UInt64(12)),
                 level: ScopeLevel::Session,
-                desc: "The retention_period in hours. By default the value is 12 hours.",
+                desc: "Sets the retention period in hours.",
                 possible_values: None,
             },
             // max_storage_io_requests
@@ -190,7 +194,7 @@ impl Settings {
                     UserSettingValue::UInt64(default_max_storage_io_requests),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The maximum number of concurrent IO requests. By default the value is determined automatically.",
+                desc: "Sets the maximum number of concurrent I/O requests.",
                 possible_values: None,
             },
             // storage_io_min_bytes_for_seek
@@ -201,8 +205,8 @@ impl Settings {
                     UserSettingValue::UInt64(48),
                 ),
                 level: ScopeLevel::Session,
-                desc: "If the distance between two IO ranges to be read in one file is less than storage_io_min_bytes_for_seek, then Databend sequentially reads a range of file that contains both ranges, thus avoiding extra seek. \
-                Default value is 48Bytes",
+                desc: "Sets the minimum byte size of data that must be read from storage in a single I/O operation \
+                when seeking a new location in the data file.",
                 possible_values: None,
             },
             // storage_io_max_page_bytes_for_read
@@ -213,7 +217,7 @@ impl Settings {
                     UserSettingValue::UInt64(512 * 1024),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The maximum bytes of one IO request to read. Default the value is 512KB",
+                desc: "Sets the maximum byte size of data pages that can be read from storage in a single I/O operation.",
                 possible_values: None,
             },
             // flight_client_timeout
@@ -224,7 +228,7 @@ impl Settings {
                     UserSettingValue::UInt64(60),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds.",
+                desc: "Sets the maximum time in seconds that a flight client request can be processed.",
                 possible_values: None,
             },
             // storage_read_buffer_size
@@ -235,7 +239,7 @@ impl Settings {
                     UserSettingValue::UInt64(1024 * 1024),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.",
+                desc: "Sets the byte size of the buffer used for reading data into memory.",
                 possible_values: None,
             },
             SettingValue {
@@ -245,26 +249,7 @@ impl Settings {
                     UserSettingValue::UInt64(1024 * 1024),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The size of buffer in bytes for input with format. By default, it is 1MB.",
-                possible_values: None,
-            },
-            // enable_new_processor_framework
-            SettingValue {
-                default_value: UserSettingValue::UInt64(1),
-                user_setting: UserSetting::create(
-                    "enable_new_processor_framework",
-                    UserSettingValue::UInt64(1),
-                ),
-                level: ScopeLevel::Session,
-                desc: "Enable new processor framework if value != 0, default value: 1.",
-                possible_values: None,
-            },
-            // enable_planner_v2
-            SettingValue {
-                default_value: UserSettingValue::UInt64(1),
-                user_setting: UserSetting::create("enable_planner_v2", UserSettingValue::UInt64(1)),
-                level: ScopeLevel::Session,
-                desc: "Enable planner v2 by setting this variable to 1, default value: 1.",
+                desc: "Sets the memory size in bytes allocated to the buffer used by the buffered reader to read data from storage.",
                 possible_values: None,
             },
             SettingValue {
@@ -274,7 +259,7 @@ impl Settings {
                     UserSettingValue::String("UTC".to_owned()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Timezone, default value: \"UTC\".",
+                desc: "Sets the timezone.",
                 possible_values: None,
             },
             SettingValue {
@@ -284,44 +269,14 @@ impl Settings {
                     UserSettingValue::UInt64(20000),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The threshold of keys to open two-level aggregation, default value: 20000.",
+                desc: "Sets the number of keys in a GROUP BY operation that will trigger a two-level aggregation.",
                 possible_values: None,
             },
             SettingValue {
                 default_value: UserSettingValue::UInt64(3),
                 user_setting: UserSetting::create("max_inlist_to_or", UserSettingValue::UInt64(3)),
                 level: ScopeLevel::Session,
-                desc: "Max size in inlist expression that will convert to or combinator, default value: 3.",
-                possible_values: None,
-            },
-            SettingValue {
-                default_value: UserSettingValue::UInt64(0),
-                user_setting: UserSetting::create(
-                    "enable_async_insert",
-                    UserSettingValue::UInt64(0),
-                ),
-                level: ScopeLevel::Session,
-                desc: "Whether the client open async insert mode, default value: 0.",
-                possible_values: None,
-            },
-            SettingValue {
-                default_value: UserSettingValue::UInt64(1),
-                user_setting: UserSetting::create(
-                    "wait_for_async_insert",
-                    UserSettingValue::UInt64(1),
-                ),
-                level: ScopeLevel::Session,
-                desc: "Whether the client wait for the reply of async insert, default value: 1.",
-                possible_values: None,
-            },
-            SettingValue {
-                default_value: UserSettingValue::UInt64(100),
-                user_setting: UserSetting::create(
-                    "wait_for_async_insert_timeout",
-                    UserSettingValue::UInt64(100),
-                ),
-                level: ScopeLevel::Session,
-                desc: "The timeout in seconds for waiting for processing of async insert, default value: 100.",
+                desc: "Sets the maximum number of values that can be included in an IN expression to be converted to an OR operator.",
                 possible_values: None,
             },
             SettingValue {
@@ -331,7 +286,7 @@ impl Settings {
                     UserSettingValue::UInt64(0),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Case sensitivity of unquoted identifiers, default value: 0 (aka case-insensitive).",
+                desc: "Determines whether Databend treats unquoted identifiers as case-sensitive.",
                 possible_values: None,
             },
             SettingValue {
@@ -341,7 +296,7 @@ impl Settings {
                     UserSettingValue::UInt64(1),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Case sensitivity of quoted identifiers, default value: 1 (aka case-sensitive).",
+                desc: "Determines whether Databend treats quoted identifiers as case-sensitive.",
                 possible_values: None,
             },
             SettingValue {
@@ -351,14 +306,24 @@ impl Settings {
                     UserSettingValue::String("PostgreSQL".to_owned()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "SQL dialect, support \"PostgreSQL\" \"MySQL\" and \"Hive\", default value: \"PostgreSQL\".",
+                desc: "Sets the SQL dialect. Available values include \"PostgreSQL\", \"MySQL\", and \"Hive\".",
                 possible_values: Some(vec!["PostgreSQL", "MySQL", "Hive"]),
             },
             SettingValue {
                 default_value: UserSettingValue::UInt64(1),
                 user_setting: UserSetting::create("enable_cbo", UserSettingValue::UInt64(1)),
                 level: ScopeLevel::Session,
-                desc: "If enable cost based optimization, default value: 1.",
+                desc: "Enables cost-based optimization.",
+                possible_values: None,
+            },
+            SettingValue {
+                default_value: UserSettingValue::UInt64(0),
+                user_setting: UserSetting::create(
+                    "enable_runtime_filter",
+                    UserSettingValue::UInt64(0),
+                ),
+                level: ScopeLevel::Session,
+                desc: "Enables runtime filter optimization for JOIN.",
                 possible_values: None,
             },
             // max_execute_time
@@ -366,7 +331,7 @@ impl Settings {
                 default_value: UserSettingValue::UInt64(0),
                 user_setting: UserSetting::create("max_execute_time", UserSettingValue::UInt64(0)),
                 level: ScopeLevel::Session,
-                desc: "The maximum query execution time. it means no limit if the value is zero. default value: 0.",
+                desc: "Sets the maximum query execution time in seconds. Setting it to 0 means no limit.",
                 possible_values: None,
             },
             SettingValue {
@@ -376,7 +341,7 @@ impl Settings {
                     UserSettingValue::String("binary".to_owned()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Char collation, support \"binary\" \"utf8\" default value: binary",
+                desc: "Sets the character collation. Available values include \"binary\" and \"utf8\".",
                 possible_values: Some(vec!["binary", "utf8"]),
             },
             #[cfg(feature = "hive")]
@@ -405,7 +370,7 @@ impl Settings {
                 default_value: UserSettingValue::UInt64(0),
                 user_setting: UserSetting::create("max_result_rows", UserSettingValue::UInt64(0)),
                 level: ScopeLevel::Session,
-                desc: "Auto limit max result rows if user not specify the limit, default is 0 means no limit",
+                desc: "Sets the maximum number of rows that can be returned in a query result when no specific row count is specified. Setting it to 0 means no limit.",
                 possible_values: None,
             },
             SettingValue {
@@ -415,7 +380,7 @@ impl Settings {
                     UserSettingValue::UInt64(1),
                 ),
                 level: ScopeLevel::Session,
-                desc: "If enable distributed eval index, default value: 1",
+                desc: "Enables evaluated indexes to be created and maintained across multiple nodes.",
                 possible_values: None,
             },
             SettingValue {
@@ -425,7 +390,7 @@ impl Settings {
                     UserSettingValue::UInt64(1),
                 ),
                 level: ScopeLevel::Session,
-                desc: "If enable broadcast join, default value: 1",
+                desc: "Enables broadcast join.",
                 possible_values: None,
             },
             SettingValue {
@@ -435,7 +400,7 @@ impl Settings {
                     UserSettingValue::UInt64(2),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The max number of part each read cycle.",
+                desc: "Sets the number of partitions that are fetched in parallel from storage during query execution.",
                 possible_values: None,
             },
             SettingValue {
@@ -445,7 +410,7 @@ impl Settings {
                     UserSettingValue::UInt64(24 * 7),
                 ),
                 level: ScopeLevel::Session,
-                desc: "How many hours will the COPY file metadata expired in the metasrv, default value: 24*7=7days",
+                desc: "Sets the hours that the metadata of files you load data from with COPY INTO will expire in.",
                 possible_values: None,
             },
             SettingValue {
@@ -455,7 +420,7 @@ impl Settings {
                     UserSettingValue::UInt64(1),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Ignore options while rendering the result of show create table.",
+                desc: "Hides table-relevant information, such as SNAPSHOT_LOCATION and STORAGE_FORMAT, at the end of the result of SHOW TABLE CREATE.",
                 possible_values: None,
             },
             SettingValue {
@@ -465,7 +430,7 @@ impl Settings {
                     UserSettingValue::String("".to_string()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Inject a custom sandbox_tenant into this session, it's only for testing purpose and take effect when the internal_enable_sandbox_tenant is on",
+                desc: "Injects a custom 'sandbox_tenant' into this session. This is only for testing purposes and will take effect only when 'internal_enable_sandbox_tenant' is turned on.",
                 possible_values: None,
             },
             SettingValue {
@@ -475,14 +440,14 @@ impl Settings {
                     UserSettingValue::UInt64(2 * 1024 * 1024),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Parquet decompresses buffer size. default: 2MB",
+                desc: "Sets the byte size of the buffer used for reading Parquet files.",
                 possible_values: None,
             },
             SettingValue {
                 default_value: UserSettingValue::UInt64(0),
                 user_setting: UserSetting::create("enable_bushy_join", UserSettingValue::UInt64(0)),
                 level: ScopeLevel::Session,
-                desc: "Enable generating bushy join plan in optimizer",
+                desc: "Enables generating a bushy join plan with the optimizer.",
                 possible_values: None,
             },
             SettingValue {
@@ -492,10 +457,7 @@ impl Settings {
                     UserSettingValue::UInt64(0),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Enable the query result caching of SQL queries in Databend. \
-                When this setting is enabled, Databend will store the results of queries in storage. \
-                This can improve query performance by reducing the amount of time required to re-execute the same query multiple times. \
-                Default is disabled.",
+                desc: "Enables caching query results to improve performance for identical queries.",
                 possible_values: None,
             },
             SettingValue {
@@ -505,7 +467,7 @@ impl Settings {
                     UserSettingValue::UInt64(1048576),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The maximum bytes of the query result cache for one query, default: 1048576 bytes (1MB).",
+                desc: "Sets the maximum byte size of cache for a single query result.",
                 possible_values: None,
             },
             SettingValue {
@@ -515,9 +477,8 @@ impl Settings {
                     UserSettingValue::UInt64(300),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The time-to-live (TTL) for cached query results, in seconds. \
-                 Once the TTL for a cached result has expired, the result is considered stale and will not be used for new queries. \
-                 Default: 300 seconds (5 minutes).",
+                desc: "Sets the time-to-live (TTL) in seconds for cached query results. \
+                Once the TTL for a cached result has expired, the result is considered stale and will not be used for new queries.",
                 possible_values: None,
             },
             SettingValue {
@@ -527,9 +488,17 @@ impl Settings {
                     UserSettingValue::UInt64(0),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Controls whether inconsistent cached results can be used for queries. \
-                When this setting is set to TRUE, Databend will use cached results even if they may be inconsistent due to changes in the underlying data. \
-                Default is FALSE (disabled).",
+                desc: "Determines whether Databend will return cached query results that are inconsistent with the underlying data.",
+                possible_values: None,
+            },
+            SettingValue {
+                default_value: UserSettingValue::UInt64(0),
+                user_setting: UserSetting::create(
+                    "spilling_bytes_threshold_per_proc",
+                    UserSettingValue::UInt64(0),
+                ),
+                level: ScopeLevel::Session,
+                desc: "Sets the maximum amount of memory in bytes that an aggregator can use before spilling data to storage during query execution.",
                 possible_values: None,
             },
         ];
@@ -676,16 +645,6 @@ impl Settings {
         self.try_get_u64(key)
     }
 
-    pub fn get_enable_new_processor_framework(&self) -> Result<u64> {
-        let key = "enable_new_processor_framework";
-        self.try_get_u64(key)
-    }
-
-    pub fn get_enable_planner_v2(&self) -> Result<u64> {
-        static KEY: &str = "enable_planner_v2";
-        self.try_get_u64(KEY)
-    }
-
     pub fn get_enable_bushy_join(&self) -> Result<u64> {
         static KEY: &str = "enable_bushy_join";
         self.try_get_u64(KEY)
@@ -712,36 +671,6 @@ impl Settings {
     pub fn get_max_inlist_to_or(&self) -> Result<u64> {
         let key = "max_inlist_to_or";
         self.try_get_u64(key)
-    }
-
-    pub fn get_enable_async_insert(&self) -> Result<u64> {
-        let key = "enable_async_insert";
-        self.try_get_u64(key)
-    }
-
-    pub fn set_enable_async_insert(&self, val: u64) -> Result<()> {
-        let key = "enable_async_insert";
-        self.try_set_u64(key, val, false)
-    }
-
-    pub fn get_wait_for_async_insert(&self) -> Result<u64> {
-        let key = "wait_for_async_insert";
-        self.try_get_u64(key)
-    }
-
-    pub fn set_wait_for_async_insert(&self, val: u64) -> Result<()> {
-        let key = "wait_for_async_insert";
-        self.try_set_u64(key, val, false)
-    }
-
-    pub fn get_wait_for_async_insert_timeout(&self) -> Result<u64> {
-        let key = "wait_for_async_insert_timeout";
-        self.try_get_u64(key)
-    }
-
-    pub fn set_wait_for_async_insert_timeout(&self, val: u64) -> Result<()> {
-        let key = "wait_for_async_insert_timeout";
-        self.try_set_u64(key, val, false)
     }
 
     pub fn get_unquoted_ident_case_sensitive(&self) -> Result<bool> {
@@ -794,6 +723,18 @@ impl Settings {
 
     pub fn set_enable_cbo(&self, val: bool) -> Result<()> {
         static KEY: &str = "enable_cbo";
+        let v = u64::from(val);
+        self.try_set_u64(KEY, v, false)
+    }
+
+    pub fn get_runtime_filter(&self) -> Result<bool> {
+        static KEY: &str = "enable_runtime_filter";
+        let v = self.try_get_u64(KEY)?;
+        Ok(v != 0)
+    }
+
+    pub fn set_runtime_filter(&self, val: bool) -> Result<()> {
+        static KEY: &str = "enable_runtime_filter";
         let v = u64::from(val);
         self.try_set_u64(KEY, v, false)
     }
@@ -881,6 +822,16 @@ impl Settings {
     pub fn get_query_result_cache_allow_inconsistent(&self) -> Result<bool> {
         let key = "query_result_cache_allow_inconsistent";
         self.try_get_u64(key).map(|v| v != 0)
+    }
+
+    pub fn get_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
+        let key = "spilling_bytes_threshold_per_proc";
+        self.try_get_u64(key).map(|v| v as usize)
+    }
+
+    pub fn set_spilling_bytes_threshold_per_proc(&self, value: usize) -> Result<()> {
+        let key = "spilling_bytes_threshold_per_proc";
+        self.try_set_u64(key, value as u64, false)
     }
 
     pub fn has_setting(&self, key: &str) -> bool {
@@ -1090,6 +1041,16 @@ impl Settings {
 
         match setting.user_setting.value {
             UserSettingValue::UInt64(_) => {
+                // decimal 10 * 1.5 to string may result in string like "15.0"
+                let val = if let Some(p) = val.find('.') {
+                    if val[(p + 1)..].chars().all(|x| x == '0') {
+                        &val[..p]
+                    } else {
+                        return Err(ErrorCode::BadArguments("not a integer"));
+                    }
+                } else {
+                    &val[..]
+                };
                 let u64_val = val.parse::<u64>()?;
                 self.try_set_u64(&key, u64_val, is_global)?
             }
