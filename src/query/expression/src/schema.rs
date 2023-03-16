@@ -393,8 +393,8 @@ impl TableSchema {
         Ok(())
     }
 
-    pub fn to_column_id_set(&self) -> HashSet<ColumnId> {
-        HashSet::from_iter(self.to_column_ids().iter().cloned())
+    pub fn to_leaf_column_id_set(&self) -> HashSet<ColumnId> {
+        HashSet::from_iter(self.to_leaf_column_ids().iter().cloned())
     }
 
     pub fn to_column_ids(&self) -> Vec<ColumnId> {

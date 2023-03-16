@@ -2110,7 +2110,6 @@ dependencies = [
  "common-storage",
  "futures",
  "futures-util",
- "itertools",
  "jsonb",
  "metrics",
  "opendal",
