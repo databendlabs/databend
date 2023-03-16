@@ -125,7 +125,7 @@ impl Interpreter for UpdateInterpreter {
                     ScalarExpr::FunctionCall(FunctionCall {
                         params: vec![],
                         arguments: vec![predicate.clone(), left, right],
-                        func_name: "multi_if".to_string(),
+                        func_name: "if".to_string(),
                     })
                 };
                 acc.push((*index, scalar.as_expr_with_col_name()?.as_remote_expr()));

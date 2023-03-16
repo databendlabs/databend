@@ -1,95 +1,95 @@
-ast            : multi_if(false, 1, false, 2, NULL)
-raw expr       : multi_if(false, 1_u8, false, 2_u8, NULL)
-checked expr   : multi_if<T0=UInt8 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(false AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(false AS Boolean NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
+ast            : if(false, 1, false, 2, NULL)
+raw expr       : if(false, 1_u8, false, 2_u8, NULL)
+checked expr   : if<T0=UInt8 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(false AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(false AS Boolean NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 optimized expr : NULL
 output type    : UInt8 NULL
 output domain  : {NULL}
 output         : NULL
 
 
-ast            : multi_if(true, 1, NULL, 2, NULL)
-raw expr       : multi_if(true, 1_u8, NULL, 2_u8, NULL)
-checked expr   : multi_if<T0=UInt8 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(true AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(NULL AS Boolean NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
+ast            : if(true, 1, NULL, 2, NULL)
+raw expr       : if(true, 1_u8, NULL, 2_u8, NULL)
+checked expr   : if<T0=UInt8 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(true AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(NULL AS Boolean NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 optimized expr : 1_u8
 output type    : UInt8 NULL
 output domain  : {1..=1}
 output         : 1
 
 
-ast            : multi_if(false, 1, true, 2, NULL)
-raw expr       : multi_if(false, 1_u8, true, 2_u8, NULL)
-checked expr   : multi_if<T0=UInt8 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(false AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(true AS Boolean NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
+ast            : if(false, 1, true, 2, NULL)
+raw expr       : if(false, 1_u8, true, 2_u8, NULL)
+checked expr   : if<T0=UInt8 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(false AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(true AS Boolean NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 optimized expr : 2_u8
 output type    : UInt8 NULL
 output domain  : {2..=2}
 output         : 2
 
 
-ast            : multi_if(true, 1, true, 2, NULL)
-raw expr       : multi_if(true, 1_u8, true, 2_u8, NULL)
-checked expr   : multi_if<T0=UInt8 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(true AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(true AS Boolean NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
+ast            : if(true, 1, true, 2, NULL)
+raw expr       : if(true, 1_u8, true, 2_u8, NULL)
+checked expr   : if<T0=UInt8 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(true AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(true AS Boolean NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 optimized expr : 1_u8
 output type    : UInt8 NULL
 output domain  : {1..=1}
 output         : 1
 
 
-ast            : multi_if(true, 1, true, NULL, 2)
-raw expr       : multi_if(true, 1_u8, true, NULL, 2_u8)
-checked expr   : multi_if<T0=UInt8 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(true AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(true AS Boolean NULL), CAST(NULL AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL))
+ast            : if(true, 1, true, NULL, 2)
+raw expr       : if(true, 1_u8, true, NULL, 2_u8)
+checked expr   : if<T0=UInt8 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(true AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(true AS Boolean NULL), CAST(NULL AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL))
 optimized expr : 1_u8
 output type    : UInt8 NULL
 output domain  : {1..=1}
 output         : 1
 
 
-ast            : multi_if(true, 1, NULL)
-raw expr       : multi_if(true, 1_u8, NULL)
-checked expr   : multi_if<T0=UInt8 NULL><Boolean NULL, T0, T0>(CAST(true AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
+ast            : if(true, 1, NULL)
+raw expr       : if(true, 1_u8, NULL)
+checked expr   : if<T0=UInt8 NULL><Boolean NULL, T0, T0>(CAST(true AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 optimized expr : 1_u8
 output type    : UInt8 NULL
 output domain  : {1..=1}
 output         : 1
 
 
-ast            : multi_if(false, 1, NULL)
-raw expr       : multi_if(false, 1_u8, NULL)
-checked expr   : multi_if<T0=UInt8 NULL><Boolean NULL, T0, T0>(CAST(false AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
+ast            : if(false, 1, NULL)
+raw expr       : if(false, 1_u8, NULL)
+checked expr   : if<T0=UInt8 NULL><Boolean NULL, T0, T0>(CAST(false AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 optimized expr : NULL
 output type    : UInt8 NULL
 output domain  : {NULL}
 output         : NULL
 
 
-ast            : multi_if(true, 1, 1 / 0)
-raw expr       : multi_if(true, 1_u8, divide(1_u8, 0_u8))
-checked expr   : multi_if<T0=Float64><Boolean NULL, T0, T0>(CAST(true AS Boolean NULL), to_float64<UInt8>(1_u8), divide<UInt8, UInt8>(1_u8, 0_u8))
-optimized expr : multi_if<T0=Float64><Boolean NULL, T0, T0>(true, 1_f64, divide<UInt8, UInt8>(1_u8, 0_u8))
+ast            : if(true, 1, 1 / 0)
+raw expr       : if(true, 1_u8, divide(1_u8, 0_u8))
+checked expr   : if<T0=Float64><Boolean NULL, T0, T0>(CAST(true AS Boolean NULL), to_float64<UInt8>(1_u8), divide<UInt8, UInt8>(1_u8, 0_u8))
+optimized expr : if<T0=Float64><Boolean NULL, T0, T0>(true, 1_f64, divide<UInt8, UInt8>(1_u8, 0_u8))
 output type    : Float64
 output domain  : Unknown
 output         : 1
 
 
-ast            : multi_if(false, 1 / 0, 1)
-raw expr       : multi_if(false, divide(1_u8, 0_u8), 1_u8)
-checked expr   : multi_if<T0=Float64><Boolean NULL, T0, T0>(CAST(false AS Boolean NULL), divide<UInt8, UInt8>(1_u8, 0_u8), to_float64<UInt8>(1_u8))
-optimized expr : multi_if<T0=Float64><Boolean NULL, T0, T0>(false, divide<UInt8, UInt8>(1_u8, 0_u8), 1_f64)
+ast            : if(false, 1 / 0, 1)
+raw expr       : if(false, divide(1_u8, 0_u8), 1_u8)
+checked expr   : if<T0=Float64><Boolean NULL, T0, T0>(CAST(false AS Boolean NULL), divide<UInt8, UInt8>(1_u8, 0_u8), to_float64<UInt8>(1_u8))
+optimized expr : if<T0=Float64><Boolean NULL, T0, T0>(false, divide<UInt8, UInt8>(1_u8, 0_u8), 1_f64)
 output type    : Float64
 output domain  : Unknown
 output         : 1
 
 
 error: 
-  --> SQL:1:22
+  --> SQL:1:16
   |
-1 | multi_if(false, 1, 1 / 0)
-  |                      ^ divided by zero while evaluating function `divide(1, 0)`
+1 | if(false, 1, 1 / 0)
+  |                ^ divided by zero while evaluating function `divide(1, 0)`
 
 
 
-ast            : multi_if(cond_a, expr_true, expr_else)
-raw expr       : multi_if(cond_a::Boolean, expr_true::Int64, expr_else::Int64 NULL)
-checked expr   : multi_if<T0=Int64 NULL><Boolean NULL, T0, T0>(CAST(cond_a AS Boolean NULL), CAST(expr_true AS Int64 NULL), expr_else)
+ast            : if(cond_a, expr_true, expr_else)
+raw expr       : if(cond_a::Boolean, expr_true::Int64, expr_else::Int64 NULL)
+checked expr   : if<T0=Int64 NULL><Boolean NULL, T0, T0>(CAST(cond_a AS Boolean NULL), CAST(expr_true AS Int64 NULL), expr_else)
 evaluation:
 +--------+---------------+-----------+------------------+------------------+
 |        | cond_a        | expr_true | expr_else        | Output           |
@@ -112,9 +112,9 @@ evaluation (internal):
 +-----------+------------------------------------------------------------------------+
 
 
-ast            : multi_if(cond_a, expr_true, expr_else)
-raw expr       : multi_if(cond_a::Boolean, expr_true::Int64, expr_else::Int64 NULL)
-checked expr   : multi_if<T0=Int64 NULL><Boolean NULL, T0, T0>(CAST(cond_a AS Boolean NULL), CAST(expr_true AS Int64 NULL), expr_else)
+ast            : if(cond_a, expr_true, expr_else)
+raw expr       : if(cond_a::Boolean, expr_true::Int64, expr_else::Int64 NULL)
+checked expr   : if<T0=Int64 NULL><Boolean NULL, T0, T0>(CAST(cond_a AS Boolean NULL), CAST(expr_true AS Int64 NULL), expr_else)
 evaluation:
 +--------+---------------+-----------+------------------+------------------+
 |        | cond_a        | expr_true | expr_else        | Output           |
@@ -137,9 +137,9 @@ evaluation (internal):
 +-----------+------------------------------------------------------------------------+
 
 
-ast            : multi_if(cond_a, expr_a, cond_b, expr_b, expr_else)
-raw expr       : multi_if(cond_a::Boolean, expr_a::Int64, cond_b::Boolean NULL, expr_b::Int64, expr_else::Int64 NULL)
-checked expr   : multi_if<T0=Int64 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(cond_a AS Boolean NULL), CAST(expr_a AS Int64 NULL), cond_b, CAST(expr_b AS Int64 NULL), expr_else)
+ast            : if(cond_a, expr_a, cond_b, expr_b, expr_else)
+raw expr       : if(cond_a::Boolean, expr_a::Int64, cond_b::Boolean NULL, expr_b::Int64, expr_else::Int64 NULL)
+checked expr   : if<T0=Int64 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(cond_a AS Boolean NULL), CAST(expr_a AS Int64 NULL), cond_b, CAST(expr_b AS Int64 NULL), expr_else)
 evaluation:
 +--------+---------------+---------+-----------------+---------+-------------------+-------------------+
 |        | cond_a        | expr_a  | cond_b          | expr_b  | expr_else         | Output            |
@@ -164,9 +164,9 @@ evaluation (internal):
 +-----------+---------------------------------------------------------------------------+
 
 
-ast            : multi_if(cond_a, expr_a, cond_b, expr_b, expr_else)
-raw expr       : multi_if(cond_a::Boolean, expr_a::Int64, cond_b::Boolean, expr_b::Int64, expr_else::Int64)
-checked expr   : multi_if<T0=Int64><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(cond_a AS Boolean NULL), expr_a, CAST(cond_b AS Boolean NULL), expr_b, expr_else)
+ast            : if(cond_a, expr_a, cond_b, expr_b, expr_else)
+raw expr       : if(cond_a::Boolean, expr_a::Int64, cond_b::Boolean, expr_b::Int64, expr_else::Int64)
+checked expr   : if<T0=Int64><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(cond_a AS Boolean NULL), expr_a, CAST(cond_b AS Boolean NULL), expr_b, expr_else)
 evaluation:
 +--------+---------------+---------+---------------+---------+-----------+----------+
 |        | cond_a        | expr_a  | cond_b        | expr_b  | expr_else | Output   |
@@ -191,10 +191,10 @@ evaluation (internal):
 +-----------+------------------------+
 
 
-ast            : multi_if(cond_a, 1 / expr_a, expr_else)
-raw expr       : multi_if(cond_a::Boolean, divide(1_u8, expr_a::Int64 NULL), expr_else::Int64)
-checked expr   : multi_if<T0=Float64 NULL><Boolean NULL, T0, T0>(CAST(cond_a AS Boolean NULL), divide<UInt8 NULL, Int64 NULL>(CAST(1_u8 AS UInt8 NULL), expr_a), CAST(expr_else AS Float64 NULL))
-optimized expr : multi_if<T0=Float64 NULL><Boolean NULL, T0, T0>(CAST(cond_a AS Boolean NULL), divide<UInt8 NULL, Int64 NULL>(1_u8, expr_a), CAST(expr_else AS Float64 NULL))
+ast            : if(cond_a, 1 / expr_a, expr_else)
+raw expr       : if(cond_a::Boolean, divide(1_u8, expr_a::Int64 NULL), expr_else::Int64)
+checked expr   : if<T0=Float64 NULL><Boolean NULL, T0, T0>(CAST(cond_a AS Boolean NULL), divide<UInt8 NULL, Int64 NULL>(CAST(1_u8 AS UInt8 NULL), expr_a), CAST(expr_else AS Float64 NULL))
+optimized expr : if<T0=Float64 NULL><Boolean NULL, T0, T0>(CAST(cond_a AS Boolean NULL), divide<UInt8 NULL, Int64 NULL>(1_u8, expr_a), CAST(expr_else AS Float64 NULL))
 evaluation:
 +--------+---------------+------------------+-----------+--------------+
 |        | cond_a        | expr_a           | expr_else | Output       |
@@ -218,10 +218,10 @@ evaluation (internal):
 
 
 error: 
-  --> SQL:1:20
+  --> SQL:1:14
   |
-1 | multi_if(cond_a, 1 / expr_a, expr_else)
-  |                    ^ divided by zero while evaluating function `divide(1, 0)`
+1 | if(cond_a, 1 / expr_a, expr_else)
+  |              ^ divided by zero while evaluating function `divide(1, 0)`
 
 
 

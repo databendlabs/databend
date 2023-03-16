@@ -32,9 +32,7 @@ use common_expression::Value;
 use common_expression::ValueRef;
 
 pub fn register(registry: &mut FunctionRegistry) {
-    registry.register_aliases("multi_if", &["if"]);
-
-    registry.register_function_factory("multi_if", |_, args_type| {
+    registry.register_function_factory("if", |_, args_type| {
         if args_type.len() < 3 || args_type.len() % 2 == 0 {
             return None;
         }
@@ -50,7 +48,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "multi_if".to_string(),
+                name: "if".to_string(),
                 args_type: sig_args_type,
                 return_type: DataType::Generic(0),
                 property: FunctionProperty::default(),
@@ -100,7 +98,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     None => args_domain.last().unwrap().clone(),
                 })
             }),
-            eval: Box::new(|_, _| unreachable!("`multi_if` should be handled by the `Evaluator`")),
+            eval: Box::new(|_, _| unreachable!("`if` should be handled by the `Evaluator`")),
         }))
     });
 

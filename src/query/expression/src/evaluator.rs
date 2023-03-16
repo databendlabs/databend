@@ -148,9 +148,7 @@ impl<'a> Evaluator<'a> {
                 args,
                 generics,
                 ..
-            } if function.signature.name == "multi_if" => {
-                self.eval_multi_if(args, generics, validity)
-            }
+            } if function.signature.name == "if" => self.eval_if(args, generics, validity),
             Expr::FunctionCall {
                 span,
                 function,
@@ -711,11 +709,11 @@ impl<'a> Evaluator<'a> {
         Ok(Some(evaluator.run_partially(&cast_expr, validity)?))
     }
 
-    // `multi_if` is a special builtin function that could partially evaluate its arguments
-    // depending on the truthess of the condition. `multi_if` should register it's signature
+    // `if` is a special builtin function that could partially evaluate its arguments
+    // depending on the truthess of the condition. `if` should register it's signature
     // as other functions do in `FunctionRegistry`, but it's does not necessarily implement
     // the eval function because it will be evaluated here.
-    fn eval_multi_if(
+    fn eval_if(
         &self,
         args: &[Expr],
         generics: &[DataType],
@@ -725,17 +723,28 @@ impl<'a> Evaluator<'a> {
             unreachable!()
         }
 
+        let len = self
+            .input_columns
+            .columns()
+            .iter()
+            .find_map(|col| match &col.value {
+                Value::Column(col) => Some(col.len()),
+                _ => None,
+            });
+
         // Evaluate the condition first and then partially evaluate the result branches.
-        let num_rows = self.input_columns.num_rows();
-        let mut validity = validity.unwrap_or_else(|| constant_bitmap(true, num_rows).into());
+        let mut validity =
+            validity.unwrap_or_else(|| constant_bitmap(true, len.unwrap_or(1)).into());
         let mut conds = Vec::new();
         let mut flags = Vec::new();
         let mut results = Vec::new();
         for cond_idx in (0..args.len() - 1).step_by(2) {
             let cond = self.run_partially(&args[cond_idx], Some(validity.clone()))?;
             let flag = match cond.try_downcast::<NullableType<BooleanType>>().unwrap() {
-                Value::Scalar(None | Some(false)) => constant_bitmap(false, num_rows).into(),
-                Value::Scalar(Some(true)) => constant_bitmap(true, num_rows).into(),
+                Value::Scalar(None | Some(false)) => {
+                    constant_bitmap(false, len.unwrap_or(1)).into()
+                }
+                Value::Scalar(Some(true)) => constant_bitmap(true, len.unwrap_or(1)).into(),
                 Value::Column(cond) => (&cond.column) & (&cond.validity),
             };
             let result = self.run_partially(&args[cond_idx + 1], Some((&validity) & (&flag)))?;
@@ -747,10 +756,11 @@ impl<'a> Evaluator<'a> {
         let else_result = self.run_partially(&args[args.len() - 1], Some(validity))?;
 
         // Assert that all the arguments have the same length.
-        let args_iter = conds.iter().chain(results.iter()).chain([&else_result]);
         assert!(
-            args_iter
-                .clone()
+            conds
+                .iter()
+                .chain(results.iter())
+                .chain([&else_result])
                 .filter_map(|val| match val {
                     Value::Column(col) => Some(col.len()),
                     Value::Scalar(_) => None,
@@ -759,10 +769,6 @@ impl<'a> Evaluator<'a> {
         );
 
         // Pick the results from the result branches depending on the condition.
-        let len = args_iter.clone().find_map(|arg| match arg {
-            Value::Column(col) => Some(col.len()),
-            _ => None,
-        });
         let mut output_builder = ColumnBuilder::with_capacity(&generics[0], len.unwrap_or(1));
         for row_idx in 0..(len.unwrap_or(1)) {
             unsafe {
