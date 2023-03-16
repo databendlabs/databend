@@ -2063,6 +2063,7 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-meta-app",
+ "flagset",
  "futures",
  "opendal",
  "regex",
