@@ -634,7 +634,8 @@ pub fn codegen_register() {
 
                 format!(
                     "({arm_pat}) => {{
-                        let validity = {and_validity};
+                        let and_validity = {and_validity};
+                        let validity = ctx.validity.as_ref().map(|valid| valid & (&and_validity)).unwrap_or(and_validity);
                         ctx.validity = Some(validity.clone());
                         let column = func({func_arg} ctx).into_column().unwrap();
                         Value::Column(NullableColumn {{ column, validity }})
@@ -741,11 +742,12 @@ pub fn codegen_register() {
 
                 format!(
                     "({arm_pat}) => {{
-                        let validity = {and_validity};
+                        let and_validity = {and_validity};
+                        let validity = ctx.validity.as_ref().map(|valid| valid & (&and_validity)).unwrap_or(and_validity);
                         ctx.validity = Some(validity.clone());
                         let nullable_column = func({func_arg} ctx).into_column().unwrap();
-                        let merge_validity = common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-                        Value::Column(NullableColumn {{ column: nullable_column.column, validity: merge_validity }})
+                        let combine_validity = common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+                        Value::Column(NullableColumn {{ column: nullable_column.column, validity: combine_validity }})
                     }}"
                 )
             })

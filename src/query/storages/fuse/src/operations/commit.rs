@@ -462,7 +462,7 @@ impl FuseTable {
                 acc.col_stats = if acc.col_stats.is_empty() {
                     stats.col_stats.clone()
                 } else {
-                    statistics::reduce_block_statistics(&[&acc.col_stats, &stats.col_stats], None)?
+                    statistics::reduce_block_statistics(&[&acc.col_stats, &stats.col_stats])?
                 };
                 seg_acc.push(location.clone());
                 Ok::<_, ErrorCode>((acc, seg_acc))
@@ -520,6 +520,13 @@ impl FuseTable {
 
         // potentially concurrently appended segments, init it to empty
         let mut concurrently_appended_segment_locations: &[Location] = &[];
+
+        // Status
+        {
+            let status = "mutation: begin try to commit";
+            ctx.set_status_info(status);
+            info!(status);
+        }
 
         while retries < MAX_RETRIES {
             let mut snapshot_tobe_committed =

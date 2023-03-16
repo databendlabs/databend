@@ -292,11 +292,13 @@ impl Session {
     pub async fn validate_privilege(
         self: &Arc<Self>,
         object: &GrantObject,
-        privilege: UserPrivilegeType,
+        privilege: Vec<UserPrivilegeType>,
     ) -> Result<()> {
         // 1. check user's privilege set
         let current_user = self.get_current_user()?;
-        let user_verified = current_user.grants.verify_privilege(object, privilege);
+        let user_verified = current_user
+            .grants
+            .verify_privilege(object, privilege.clone());
         if user_verified {
             return Ok(());
         }
@@ -305,16 +307,16 @@ impl Session {
         self.ensure_current_role().await?;
         let current_role = self.get_current_role();
         let role_verified = current_role
-            .map(|r| r.grants.verify_privilege(object, privilege))
+            .map(|r| r.grants.verify_privilege(object, privilege.clone()))
             .unwrap_or(false);
         if role_verified {
             return Ok(());
         }
 
         Err(ErrorCode::PermissionDenied(format!(
-            "Permission denied, user {} requires {} privilege on {}",
+            "Permission denied, user {} requires {:?} privilege on {}",
             &current_user.identity(),
-            privilege,
+            privilege.clone(),
             object
         )))
     }

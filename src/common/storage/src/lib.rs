@@ -55,7 +55,6 @@ pub use parquet::read_parquet_schema_async;
 
 mod stage;
 pub use stage::init_stage_operator;
-pub use stage::FileWithMeta;
 pub use stage::StageFileInfo;
 pub use stage::StageFileStatus;
 pub use stage::StageFilesInfo;

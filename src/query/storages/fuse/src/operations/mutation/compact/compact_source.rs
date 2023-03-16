@@ -13,56 +13,70 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::VecDeque;
 use std::sync::Arc;
+use std::time::Instant;
 
-use common_catalog::plan::PartInfoPtr;
+use common_base::base::Progress;
+use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockThresholds;
 use common_expression::DataBlock;
-use storages_common_table_meta::meta::BlockMeta;
+use common_expression::TableSchema;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use opendal::Operator;
 
-use super::compact_meta::CompactSourceMeta;
-use super::compact_part::CompactPartInfo;
-use super::compact_part::CompactTask;
+use crate::io::write_data;
+use crate::io::BlockBuilder;
+use crate::io::BlockReader;
+use crate::io::ReadSettings;
+use crate::io::TableMetaLocationGenerator;
+use crate::io::WriteSettings;
+use crate::metrics::*;
+use crate::operations::mutation::compact::CompactSourceMeta;
+use crate::operations::mutation::CompactPartInfo;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
-use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 
-enum State {
-    ReadData(Option<PartInfoPtr>),
-    Generate {
-        order: usize,
-        tasks: VecDeque<CompactTask>,
-    },
-    Output(Option<PartInfoPtr>, DataBlock),
-    Finish,
-}
-
-// Select the row_count >= min_rows_per_block or block_size >= max_bytes_per_block
-// as the perfect_block condition(N for short). CompactSource gets a set of segments,
-// iterates through the blocks, and finds the blocks >= N and blocks < 2N as a CompactTask.
 pub struct CompactSource {
-    state: State,
     ctx: Arc<dyn TableContext>,
+    dal: Operator,
+    scan_progress: Arc<Progress>,
+
+    block_reader: Arc<BlockReader>,
+    block_builder: BlockBuilder,
+
     output: Arc<OutputPort>,
-    thresholds: BlockThresholds,
+    output_data: Option<DataBlock>,
+    finished: bool,
 }
 
 impl CompactSource {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
+        dal: Operator,
+        write_settings: WriteSettings,
+        meta_locations: TableMetaLocationGenerator,
+        source_schema: Arc<TableSchema>,
+        block_reader: Arc<BlockReader>,
         output: Arc<OutputPort>,
-        thresholds: BlockThresholds,
     ) -> Result<ProcessorPtr> {
+        let scan_progress = ctx.get_scan_progress();
+        let block_builder = BlockBuilder {
+            ctx: ctx.clone(),
+            meta_locations,
+            source_schema,
+            write_settings,
+        };
         Ok(ProcessorPtr::create(Box::new(CompactSource {
-            state: State::ReadData(None),
             ctx,
+            dal,
+            scan_progress,
+            block_reader,
+            block_builder,
             output,
-            thresholds,
+            output_data: None,
+            finished: false,
         })))
     }
 }
@@ -78,19 +92,15 @@ impl Processor for CompactSource {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if matches!(self.state, State::ReadData(None)) {
-            self.state = match self.ctx.get_partition() {
-                None => State::Finish,
-                Some(part) => State::ReadData(Some(part)),
-            }
-        }
-
-        if matches!(self.state, State::Finish) {
+        if self.finished {
             self.output.finish();
             return Ok(Event::Finished);
         }
 
         if self.output.is_finished() {
+            if !self.finished {
+                return Ok(Event::Async);
+            }
             return Ok(Event::Finished);
         }
 
@@ -98,108 +108,95 @@ impl Processor for CompactSource {
             return Ok(Event::NeedConsume);
         }
 
-        if matches!(self.state, State::Output(_, _)) {
-            if let State::Output(part, data_block) =
-                std::mem::replace(&mut self.state, State::Finish)
-            {
-                self.state = match part {
-                    None => State::Finish,
-                    Some(part) => State::ReadData(Some(part)),
-                };
-
-                self.output.push_data(Ok(data_block));
-                return Ok(Event::NeedConsume);
-            }
+        if let Some(block) = self.output_data.take() {
+            self.output.push_data(Ok(block));
         }
-        Ok(Event::Sync)
+
+        Ok(Event::Async)
     }
 
-    fn process(&mut self) -> Result<()> {
-        match std::mem::replace(&mut self.state, State::Finish) {
-            State::ReadData(Some(part)) => {
+    async fn async_process(&mut self) -> Result<()> {
+        match self.ctx.get_partition() {
+            Some(part) => {
+                let block_reader = self.block_reader.as_ref();
+                let block_builder = self.block_builder.clone();
+
+                // block read tasks.
+                let mut task_futures = Vec::new();
                 let part = CompactPartInfo::from_part(&part)?;
-                let mut builder = CompactTaskBuilder::default();
-                let mut tasks = VecDeque::new();
-                // The order of the compact is from old to new.
-                for segment in part.segments.iter().rev() {
-                    for block in segment.blocks.iter() {
-                        let res = builder.add(block, self.thresholds);
-                        tasks.extend(res);
-                    }
+                let mut stats = Vec::with_capacity(part.blocks.len());
+                for block in &part.blocks {
+                    let progress_values = ProgressValues {
+                        rows: block.row_count as usize,
+                        bytes: block.block_size as usize,
+                    };
+                    self.scan_progress.incr(&progress_values);
+
+                    stats.push(block.col_stats.clone());
+
+                    let settings = ReadSettings::from_ctx(&self.ctx)?;
+                    let storage_format = block_builder.write_settings.storage_format;
+                    // read block in parallel.
+                    task_futures.push(async move {
+                        // Perf
+                        {
+                            metrics_inc_compact_block_read_nums(1);
+                            metrics_inc_compact_block_read_bytes(block.block_size);
+                        }
+
+                        block_reader
+                            .read_by_meta(&settings, block.as_ref(), &storage_format)
+                            .await
+                    });
                 }
-                if !builder.is_empty() {
-                    let task = tasks.pop_back();
-                    tasks.push_back(builder.finalize(task));
+
+                let start = Instant::now();
+
+                let blocks = futures::future::try_join_all(task_futures).await?;
+                // Perf.
+                {
+                    metrics_inc_compact_block_read_milliseconds(start.elapsed().as_millis() as u64);
                 }
-                self.state = State::Generate {
-                    order: part.order,
-                    tasks,
+
+                // concat blocks.
+                let new_block = DataBlock::concat(&blocks)?;
+                // build block serialization.
+                let serialized = tokio_rayon::spawn(move || block_builder.build(new_block)).await?;
+
+                let start = Instant::now();
+
+                // Perf.
+                {
+                    metrics_inc_compact_block_write_nums(1);
+                    metrics_inc_compact_block_write_bytes(serialized.block_raw_data.len() as u64);
                 }
+
+                // write block data.
+                write_data(
+                    serialized.block_raw_data,
+                    &self.dal,
+                    &serialized.block_meta.location.0,
+                )
+                .await?;
+
+                // write index data.
+                if let Some(index_state) = serialized.bloom_index_state {
+                    write_data(index_state.data, &self.dal, &index_state.location.0).await?;
+                }
+
+                // Perf
+                {
+                    metrics_inc_compact_block_write_milliseconds(start.elapsed().as_millis() as u64);
+                }
+
+                self.output_data = Some(DataBlock::empty_with_meta(CompactSourceMeta::create(
+                    part.index.clone(),
+                    serialized.block_meta.into(),
+                )));
             }
-            State::Generate { order, tasks } => {
-                let meta = CompactSourceMeta::create(order, tasks);
-                let new_part = self.ctx.get_partition();
-                self.state = State::Output(new_part, DataBlock::empty_with_meta(meta));
-            }
-            _ => return Err(ErrorCode::Internal("It's a bug.")),
-        }
-        Ok(())
-    }
-}
-
-#[derive(Default)]
-struct CompactTaskBuilder {
-    blocks: Vec<Arc<BlockMeta>>,
-    total_rows: usize,
-    total_size: usize,
-}
-
-impl CompactTaskBuilder {
-    fn is_empty(&self) -> bool {
-        self.blocks.is_empty()
-    }
-
-    fn add(&mut self, block: &Arc<BlockMeta>, thresholds: BlockThresholds) -> Vec<CompactTask> {
-        self.total_rows += block.row_count as usize;
-        self.total_size += block.block_size as usize;
-
-        if !thresholds.check_large_enough(self.total_rows, self.total_size) {
-            // blocks < N
-            self.blocks.push(block.clone());
-            return vec![];
-        }
-
-        let tasks = if !thresholds.check_for_compact(self.total_rows, self.total_size) {
-            // blocks > 2N
-            let trivial_task = CompactTask::Trivial(block.clone());
-            if !self.blocks.is_empty() {
-                let compact_task = Self::create_task(std::mem::take(&mut self.blocks));
-                vec![compact_task, trivial_task]
-            } else {
-                vec![trivial_task]
-            }
-        } else {
-            // N <= blocks < 2N
-            self.blocks.push(block.clone());
-            vec![Self::create_task(std::mem::take(&mut self.blocks))]
+            None => self.finished = true,
         };
 
-        self.total_rows = 0;
-        self.total_size = 0;
-        tasks
-    }
-
-    fn finalize(&mut self, task: Option<CompactTask>) -> CompactTask {
-        let mut blocks = task.map_or(vec![], |t| t.get_block_metas());
-        blocks.extend(std::mem::take(&mut self.blocks));
-        Self::create_task(blocks)
-    }
-
-    fn create_task(blocks: Vec<Arc<BlockMeta>>) -> CompactTask {
-        match blocks.len() {
-            0 => panic!("the blocks is empty"),
-            1 => CompactTask::Trivial(blocks[0].clone()),
-            _ => CompactTask::Normal(blocks),
-        }
+        Ok(())
     }
 }

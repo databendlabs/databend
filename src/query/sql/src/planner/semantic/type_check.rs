@@ -237,7 +237,7 @@ impl<'a> TypeChecker<'a> {
                 let (scalar, _) = *self
                     .resolve_function(
                         *span,
-                        "multi_if",
+                        "if",
                         vec![],
                         &[
                             &Expr::BinaryOp {
@@ -602,17 +602,8 @@ impl<'a> TypeChecker<'a> {
                 }
                 let args_ref: Vec<&Expr> = arguments.iter().collect();
 
-                match args_ref.len() {
-                    // faster path
-                    3 => {
-                        self.resolve_function(*span, "if", vec![], &args_ref, required_type)
-                            .await?
-                    }
-                    _ => {
-                        self.resolve_function(*span, "multi_if", vec![], &args_ref, required_type)
-                            .await?
-                    }
-                }
+                self.resolve_function(*span, "if", vec![], &args_ref, required_type)
+                    .await?
             }
 
             Expr::Substring {
@@ -1604,7 +1595,7 @@ impl<'a> TypeChecker<'a> {
             }
             ("coalesce", args) => {
                 // coalesce(arg0, arg1, ..., argN) is essentially
-                // multi_if(is_not_null(arg0), assume_not_null(arg0), is_not_null(arg1), assume_not_null(arg1), ..., argN)
+                // if(is_not_null(arg0), assume_not_null(arg0), is_not_null(arg1), assume_not_null(arg1), ..., argN)
                 // with constant Literal::Null arguments removed.
                 let mut new_args = Vec::with_capacity(args.len() * 2 + 1);
 
@@ -1645,7 +1636,7 @@ impl<'a> TypeChecker<'a> {
                 });
                 let args_ref: Vec<&Expr> = new_args.iter().collect();
                 Some(
-                    self.resolve_function(span, "multi_if", vec![], &args_ref, None)
+                    self.resolve_function(span, "if", vec![], &args_ref, None)
                         .await,
                 )
             }
