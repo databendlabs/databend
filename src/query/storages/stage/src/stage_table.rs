@@ -78,7 +78,6 @@ impl StageTable {
             .list(&op, false)
             .await?
             .into_iter()
-            .map(|file_with_meta| StageFileInfo::new(file_with_meta.path, &file_with_meta.metadata))
             .collect::<Vec<_>>();
         Ok(infos)
     }

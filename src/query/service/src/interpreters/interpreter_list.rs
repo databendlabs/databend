@@ -68,12 +68,7 @@ impl Interpreter for ListInterpreter {
             files: None,
             pattern,
         };
-        let files: Vec<StageFileInfo> = files_info
-            .list(&op, false)
-            .await?
-            .into_iter()
-            .map(|file_with_meta| file_with_meta.into())
-            .collect::<Vec<_>>();
+        let files: Vec<StageFileInfo> = files_info.list(&op, false).await?;
 
         let names: Vec<Vec<u8>> = files
             .iter()
