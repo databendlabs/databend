@@ -484,33 +484,27 @@ impl PhysicalPlanBuilder {
                 let result = match &agg.mode {
                     AggregateMode::Partial => {
                         let agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
-                            if let ScalarExpr::AggregateFunction(agg_func) = &v.scalar {
+                            if let ScalarExpr::AggregateFunction(agg) = &v.scalar {
                                 Ok(AggregateFunctionDesc {
                                     sig: AggregateFunctionSignature {
-                                        name: agg_func.func_name.clone(),
-                                        args: agg_func.args.iter().map(|s| {
+                                        name: agg.func_name.clone(),
+                                        args: agg.args.iter().map(|s| {
                                             s.data_type()
                                         }).collect::<Result<_>>()?,
-                                        params: agg_func.params.clone(),
-                                        return_type: *agg_func.return_type.clone(),
+                                        params: agg.params.clone(),
+                                        return_type: *agg.return_type.clone(),
                                     },
                                     output_column: v.index,
-                                    args: agg_func.args.iter().map(|arg| {
+                                    args: agg.args.iter().map(|arg| {
                                         if let ScalarExpr::BoundColumnRef(col) = arg {
-                                            if !agg.grouping_sets.is_empty() && col.column.index == agg.grouping_id_index {
-                                                // The virtual column is not in the input schema.
-                                                Ok(input_schema.fields().len())
-                                            } else {
-                                                let col_index = input_schema.index_of(&col.column.index.to_string())?;
-                                                Ok(col_index)
-                                            }
+                                            input_schema.index_of(&col.column.index.to_string())
                                         } else {
                                             Err(ErrorCode::Internal(
                                                 "Aggregate function argument must be a BoundColumnRef".to_string()
                                             ))
                                         }
                                     }).collect::<Result<_>>()?,
-                                    arg_indices: agg_func.args.iter().map(|arg| {
+                                    arg_indices: agg.args.iter().map(|arg| {
                                         if let ScalarExpr::BoundColumnRef(col) = arg {
                                             Ok(col.column.index)
                                         } else {
@@ -626,33 +620,27 @@ impl PhysicalPlanBuilder {
                         };
 
                         let agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
-                            if let ScalarExpr::AggregateFunction(agg_func) = &v.scalar {
+                            if let ScalarExpr::AggregateFunction(agg) = &v.scalar {
                                 Ok(AggregateFunctionDesc {
                                     sig: AggregateFunctionSignature {
-                                        name: agg_func.func_name.clone(),
-                                        args: agg_func.args.iter().map(|s| {
+                                        name: agg.func_name.clone(),
+                                        args: agg.args.iter().map(|s| {
                                             s.data_type()
                                         }).collect::<Result<_>>()?,
-                                        params: agg_func.params.clone(),
-                                        return_type: *agg_func.return_type.clone(),
+                                        params: agg.params.clone(),
+                                        return_type: *agg.return_type.clone(),
                                     },
                                     output_column: v.index,
-                                    args: agg_func.args.iter().map(|arg| {
+                                    args: agg.args.iter().map(|arg| {
                                         if let ScalarExpr::BoundColumnRef(col) = arg {
-                                            if !agg.grouping_sets.is_empty() && col.column.index == agg.grouping_id_index {
-                                                // The virtual column is not in the input schema.
-                                                Ok(input_schema.fields().len())
-                                            } else {
-                                                let col_index = input_schema.index_of(&col.column.index.to_string())?;
-                                                Ok(col_index)
-                                            }
+                                            input_schema.index_of(&col.column.index.to_string())
                                         } else {
                                             Err(ErrorCode::Internal(
                                                 "Aggregate function argument must be a BoundColumnRef".to_string()
                                             ))
                                         }
                                     }).collect::<Result<_>>()?,
-                                    arg_indices: agg_func.args.iter().map(|arg| {
+                                    arg_indices: agg.args.iter().map(|arg| {
                                         if let ScalarExpr::BoundColumnRef(col) = arg {
                                             Ok(col.column.index)
                                         } else {

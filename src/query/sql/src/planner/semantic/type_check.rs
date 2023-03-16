@@ -685,22 +685,6 @@ impl<'a> TypeChecker<'a> {
                     }
                     self.in_aggregate_function = false;
 
-                    if func_name.eq_ignore_ascii_case("grouping") {
-                        // `grouping` will be rewrite after resolving grouping sets.
-                        return Ok(Box::new((
-                            AggregateFunction {
-                                display_name: format!("{:#}", expr),
-                                func_name: func_name.to_string(),
-                                distinct: false,
-                                params,
-                                args: arguments,
-                                return_type: Box::new(DataType::Number(NumberDataType::UInt32)),
-                            }
-                            .into(),
-                            DataType::Number(NumberDataType::UInt32),
-                        )));
-                    }
-
                     // Rewrite `xxx(distinct)` to `xxx_distinct(...)`
                     let (func_name, distinct) =
                         if func_name.eq_ignore_ascii_case("count") && *distinct {
@@ -1005,6 +989,18 @@ impl<'a> TypeChecker<'a> {
                 .substr_index_zero_literal_as_one()
         {
             Self::rewrite_substring(&mut args);
+        }
+
+        if func_name == "grouping" {
+            // `grouping` will be rewritten again after resolving grouping sets.
+            return Ok(Box::new((
+                ScalarExpr::FunctionCall(FunctionCall {
+                    params: vec![],
+                    arguments: args,
+                    func_name: "grouping".to_string(),
+                }),
+                DataType::Number(NumberDataType::UInt32),
+            )));
         }
 
         // rewrite_collation
