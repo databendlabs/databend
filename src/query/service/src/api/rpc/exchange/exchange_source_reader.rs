@@ -33,7 +33,6 @@ use crate::api::DataPacket;
 
 pub struct ExchangeSourceReader {
     finished: bool,
-    initialized: bool,
     query_id: String,
     fragment: usize,
     output: Arc<OutputPort>,
@@ -48,12 +47,13 @@ impl ExchangeSourceReader {
         query_id: String,
         fragment: usize,
     ) -> ProcessorPtr {
+        flight_exchange.dec_output_ref();
+
         ProcessorPtr::create(Box::new(ExchangeSourceReader {
             output,
             flight_exchange,
             finished: false,
             output_data: None,
-            initialized: false,
             fragment,
             query_id,
         }))
@@ -98,20 +98,6 @@ impl Processor for ExchangeSourceReader {
     }
 
     async fn async_process(&mut self) -> common_exception::Result<()> {
-        if !self.initialized {
-            self.initialized = true;
-            info!(
-                "Start query:{:?}, fragment:{:?} exchange read.",
-                self.query_id, self.fragment
-            );
-            let res = self.flight_exchange.close_output().await;
-
-            info!(
-                "Started query:{:?}, fragment:{:?} exchange read. {}",
-                self.query_id, self.fragment, res
-            );
-        }
-
         if self.output_data.is_none() {
             if let Some(output_data) = self.flight_exchange.recv().await? {
                 self.output_data = Some(output_data);

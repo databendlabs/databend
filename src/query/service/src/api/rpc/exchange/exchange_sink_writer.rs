@@ -55,6 +55,11 @@ impl AsyncSink for ExchangeWriterSink {
     const NAME: &'static str = "ExchangeWriterSink";
 
     async fn on_start(&mut self) -> Result<()> {
+        info!(
+            "Start query:{:?}, fragment:{:?} exchange write.",
+            self.query_id, self.fragment
+        );
+
         let res = self.exchange.close_input().await;
         info!(
             "Started query:{:?}, fragment:{:?} exchange write. {}",
@@ -64,6 +69,11 @@ impl AsyncSink for ExchangeWriterSink {
     }
 
     async fn on_finish(&mut self) -> Result<()> {
+        info!(
+            "Finish query:{:?}, fragment:{:?} exchange write.",
+            self.query_id, self.fragment
+        );
+
         let res = self.exchange.close_output().await;
         info!(
             "Finished query:{:?}, fragment:{:?} exchange write. {}",
