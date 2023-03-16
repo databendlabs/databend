@@ -752,16 +752,19 @@ impl ClientFlightExchange {
 
             // Notify remote not to send messages.
             // We send it directly to the network channel avoid response channel is closed
-            if let Some(network_tx) = self.network_tx.upgrade() {
-                let packet = FlightData::from(DataPacket::ClosingInput);
-                if network_tx.send(packet).await.is_ok() {
-                    if self.state.close_input() {
-                        self.state.shutdown_notify.notify_waiters();
-                    }
-
-                    return true;
+            let res = match self.network_tx.upgrade() {
+                None => false,
+                Some(network_tx) => {
+                    let packet = FlightData::from(DataPacket::ClosingInput);
+                    network_tx.send(packet).await.is_ok()
                 }
+            };
+
+            if self.state.close_input() {
+                self.state.shutdown_notify.notify_waiters();
             }
+
+            return res;
         }
 
         false
@@ -771,13 +774,13 @@ impl ClientFlightExchange {
         if self.state.acquire_close_output() {
             // Notify remote that no message will be sent.
             let packet = FlightData::from(DataPacket::ClosingOutput);
-            if self.response_tx.send(packet).await.is_ok() {
-                if self.state.close_output() {
-                    self.state.shutdown_notify.notify_waiters();
-                }
+            let res = self.response_tx.send(packet).await.is_ok();
 
-                return true;
+            if self.state.close_output() {
+                self.state.shutdown_notify.notify_waiters();
             }
+
+            return res;
         }
 
         false
@@ -841,16 +844,19 @@ impl ServerFlightExchange {
 
             // Notify remote not to send messages.
             // We send it directly to the network channel avoid response channel is closed
-            if let Some(network_tx) = self.network_tx.upgrade() {
-                let packet = FlightData::from(DataPacket::ClosingInput);
-                if network_tx.send(Ok(packet)).await.is_ok() {
-                    if self.state.close_input() {
-                        self.state.shutdown_notify.notify_waiters();
-                    }
-
-                    return true;
+            let res = match self.network_tx.upgrade() {
+                None => false,
+                Some(network_tx) => {
+                    let packet = FlightData::from(DataPacket::ClosingInput);
+                    network_tx.send(Ok(packet)).await.is_ok()
                 }
+            };
+
+            if self.state.close_input() {
+                self.state.shutdown_notify.notify_waiters();
             }
+
+            return res;
         }
 
         false
@@ -860,13 +866,13 @@ impl ServerFlightExchange {
         if self.state.acquire_close_output() {
             // Notify remote that no message will be sent.
             let packet = FlightData::from(DataPacket::ClosingOutput);
-            if self.response_tx.send(Ok(packet)).await.is_ok() {
-                if self.state.close_output() {
-                    self.state.shutdown_notify.notify_waiters();
-                }
+            let res = self.response_tx.send(Ok(packet)).await.is_ok();
 
-                return true;
+            if self.state.close_output() {
+                self.state.shutdown_notify.notify_waiters();
             }
+
+            return res;
         }
 
         false
