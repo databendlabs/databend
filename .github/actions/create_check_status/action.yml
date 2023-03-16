@@ -45,7 +45,8 @@ runs:
       with:
         github-token: ${{ inputs.github_token }}
         script: |
-          let summary = `${process.env.param_summary}
+          let summary = `
+          ${process.env.param_summary}
           [View Details](https://github.com/datafuselabs/databend/actions/runs/${context.runId})`;
           let data = {
             owner: context.repo.owner,

@@ -301,14 +301,15 @@
     padding-bottom: 40px;
     margin-top: 20px;
   }
-
   h1:not(:first-child),h2,h3{
     font-weight: 700;
   }
   h4,h5,h6{
     font-weight: 500;
   }
-
+  ul li{
+    list-style: disc;
+  }
   img{
     object-fit: contain;
     max-height: 520px;
@@ -485,4 +486,7 @@ ul li{
   width: 100%;
   max-width: 100%;
   margin-top: 20px;
+}
+.tabs-container p{
+  margin-bottom: var(--ifm-leading);
 }

@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use async_channel::Receiver;
 use async_channel::Sender;
-use common_base::runtime::GlobalQueryRuntime;
+use common_base::base::tokio::task::JoinHandle;
 use common_base::runtime::TrySpawn;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -38,6 +38,7 @@ pub struct StatisticsSender {
     shutdown_flag: Arc<AtomicBool>,
     shutdown_flag_sender: Sender<Option<ErrorCode>>,
     shutdown_flag_receiver: Receiver<Option<ErrorCode>>,
+    join_handle: Option<JoinHandle<()>>,
 }
 
 impl StatisticsSender {
@@ -54,6 +55,7 @@ impl StatisticsSender {
             exchange: Some(exchange),
             query_id: query_id.to_string(),
             shutdown_flag: Arc::new(AtomicBool::new(false)),
+            join_handle: None,
         }
     }
 
@@ -64,8 +66,8 @@ impl StatisticsSender {
         let shutdown_flag = self.shutdown_flag.clone();
         let shutdown_flag_receiver = self.shutdown_flag_receiver.clone();
 
-        let spawner = GlobalQueryRuntime::instance();
-        spawner.runtime().spawn(async move {
+        let spawner = ctx.clone();
+        self.join_handle = Some(spawner.spawn(async move {
             let mut recv = Box::pin(flight_exchange.recv());
             let mut notified = Box::pin(shutdown_flag_receiver.recv());
 
@@ -113,13 +115,14 @@ impl StatisticsSender {
 
             flight_exchange.close_input().await;
             flight_exchange.close_output().await;
-        });
+        }));
     }
 
     pub fn shutdown(&mut self, error: Option<ErrorCode>) {
         self.shutdown_flag.store(true, Ordering::Release);
         let shutdown_flag_sender = self.shutdown_flag_sender.clone();
 
+        let join_handle = self.join_handle.take();
         futures::executor::block_on(async move {
             if let Err(error_code) = shutdown_flag_sender.send(error).await {
                 tracing::warn!(
@@ -129,6 +132,10 @@ impl StatisticsSender {
             }
 
             shutdown_flag_sender.close();
+
+            if let Some(join_handle) = join_handle {
+                let _ = join_handle.await;
+            }
         });
     }
 
