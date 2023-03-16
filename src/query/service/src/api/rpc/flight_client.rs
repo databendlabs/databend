@@ -243,7 +243,7 @@ impl FlightExchange {
                             return;
                         }
                         Either::Right((None, _notified)) => {
-                            if !state.acquire_close_input() {
+                            if state.acquire_close_input() {
                                 futures.push(Box::pin(common_base::base::tokio::spawn({
                                     let f = f.clone();
                                     let network_tx = network_tx.clone();
@@ -260,7 +260,7 @@ impl FlightExchange {
                                 })));
                             }
 
-                            if !state.acquire_close_output() {
+                            if state.acquire_close_output() {
                                 futures.push(Box::pin(common_base::base::tokio::spawn({
                                     let f = f.clone();
                                     let response_tx = response_tx.clone();
@@ -284,7 +284,7 @@ impl FlightExchange {
 
                             match message {
                                 Ok(message) if DataPacket::is_closing_input(&message) => {
-                                    if !channel_state.acquire_close_output() {
+                                    if channel_state.acquire_close_output() {
                                         if let Some(query_id) = &query_id {
                                             info!(
                                                 "First recv closing input query: {:?}, fragment:{}",
