@@ -322,7 +322,7 @@ impl SubqueryRewriter {
                 });
 
                 let scalar = if flatten_info.from_count_func {
-                    // convert count aggregate function to multi_if function, if count() is not null, then count() else 0
+                    // convert count aggregate function to `if(count() is not null, count(), 0)`
                     let is_not_null = ScalarExpr::FunctionCall(FunctionCall {
                         params: vec![],
                         arguments: vec![column_ref.clone()],

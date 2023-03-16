@@ -193,6 +193,8 @@ impl<'a, T: ValueType> ValueRef<'a, T> {
     }
 
     /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     pub unsafe fn index_unchecked(&'a self, index: usize) -> T::ScalarRef<'a> {
         match self {
             ValueRef::Scalar(scalar) => scalar.clone(),
@@ -213,6 +215,23 @@ impl<'a, T: ValueType> Value<T> {
         match self {
             Value::Scalar(scalar) => ValueRef::Scalar(T::to_scalar_ref(scalar)),
             Value::Column(col) => ValueRef::Column(col.clone()),
+        }
+    }
+
+    pub fn index(&'a self, index: usize) -> Option<T::ScalarRef<'a>> {
+        match self {
+            Value::Scalar(scalar) => Some(T::to_scalar_ref(scalar)),
+            Value::Column(col) => T::index_column(col, index),
+        }
+    }
+
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    pub unsafe fn index_unchecked(&'a self, index: usize) -> T::ScalarRef<'a> {
+        match self {
+            Value::Scalar(scalar) => T::to_scalar_ref(scalar),
+            Value::Column(c) => T::index_column_unchecked(c, index),
         }
     }
 }
@@ -669,7 +688,8 @@ impl Column {
     }
 
     /// # Safety
-    /// Assumes that the `index` is not out of range.
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     pub unsafe fn index_unchecked(&self, index: usize) -> ScalarRef {
         match self {
             Column::Null { .. } => ScalarRef::Null,
