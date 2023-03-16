@@ -54,17 +54,16 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
 use common_pipeline_transforms::processors::transforms::Transform;
+use common_sql::binder::wrap_cast;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::PhysicalPlanBuilder;
-use common_sql::plans::CastExpr;
 use common_sql::plans::Insert;
 use common_sql::plans::InsertInputSource;
 use common_sql::plans::Plan;
-use common_sql::plans::ScalarExpr;
 use common_sql::BindContext;
 use common_sql::Metadata;
 use common_sql::MetadataRef;
@@ -759,11 +758,7 @@ async fn fill_default_value(
         let tokens = tokenize_sql(default_expr)?;
         let ast = parse_expr(&tokens, Dialect::PostgreSQL)?;
         let (mut scalar, _) = binder.bind(&ast).await?;
-        scalar = ScalarExpr::CastExpr(CastExpr {
-            is_try: false,
-            argument: Box::new(scalar),
-            target_type: Box::new(field.data_type().clone()),
-        });
+        scalar = wrap_cast(&scalar, field.data_type());
 
         let expr = scalar
             .as_expr_with_col_index()?
@@ -829,11 +824,7 @@ async fn exprs_to_scalar(
 
         let (mut scalar, _) = scalar_binder.bind(expr).await?;
         let field_data_type = schema.field(i).data_type();
-        scalar = ScalarExpr::CastExpr(CastExpr {
-            is_try: false,
-            argument: Box::new(scalar),
-            target_type: Box::new(field_data_type.clone()),
-        });
+        scalar = wrap_cast(&scalar, field_data_type);
         let expr = scalar
             .as_expr_with_col_index()?
             .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());

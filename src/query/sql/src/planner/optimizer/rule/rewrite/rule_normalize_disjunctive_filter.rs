@@ -220,6 +220,7 @@ fn process_duplicate_or_exprs(or_args: &[PredicateScalar]) -> (PredicateScalar, 
         return (
             PredicateScalar::Other {
                 expr: Box::from(ScalarExpr::ConstantExpr(ConstantExpr {
+                    span: None,
                     value: Literal::Boolean(false),
                     data_type: Box::new(DataType::Boolean),
                 })),

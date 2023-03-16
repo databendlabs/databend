@@ -130,13 +130,15 @@ impl<'a> AggregateRewriter<'a> {
                     .map(|arg| self.visit(arg))
                     .collect::<Result<Vec<_>>>()?;
                 Ok(FunctionCall {
+                    span: func.span,
+                    func_name: func.func_name.clone(),
                     params: func.params.clone(),
                     arguments: new_args,
-                    func_name: func.func_name.clone(),
                 }
                 .into())
             }
             ScalarExpr::CastExpr(cast) => Ok(CastExpr {
+                span: cast.span,
                 is_try: cast.is_try,
                 argument: Box::new(self.visit(&cast.argument)?),
                 target_type: cast.target_type.clone(),
@@ -189,6 +191,7 @@ impl<'a> AggregateRewriter<'a> {
                 };
                 replaced_args.push(
                     BoundColumnRef {
+                        span: arg.span(),
                         column: column_binding.clone(),
                     }
                     .into(),
@@ -388,6 +391,7 @@ impl Binder {
         bind_context.aggregate_info.group_items.push(ScalarItem {
             index,
             scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: None,
                 column: grouping_id_column,
             }),
         });
@@ -466,6 +470,7 @@ impl Binder {
             let group_item_name = format!("{:#}", expr);
             let index = if let ScalarExpr::BoundColumnRef(BoundColumnRef {
                 column: ColumnBinding { index, .. },
+                ..
             }) = &scalar_expr
             {
                 *index
@@ -587,6 +592,7 @@ impl Binder {
 
             // Add a mapping (alias -> scalar), so we can resolve the alias later
             let column_ref: ScalarExpr = BoundColumnRef {
+                span: scalar.span(),
                 column: column_binding,
             }
             .into();

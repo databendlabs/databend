@@ -28,6 +28,7 @@ use common_ast::ast::SetOperator;
 use common_ast::ast::TableReference;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::Span;
 use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
@@ -143,7 +144,13 @@ impl Binder {
         }
 
         if stmt.distinct {
-            s_expr = self.bind_distinct(&from_context, &projections, &mut scalar_items, s_expr)?;
+            s_expr = self.bind_distinct(
+                stmt.span,
+                &from_context,
+                &projections,
+                &mut scalar_items,
+                s_expr,
+            )?;
         }
 
         if !order_by.is_empty() {
@@ -321,13 +328,29 @@ impl Binder {
         match (op, all) {
             (SetOperator::Intersect, false) => {
                 // Transfer Intersect to Semi join
-                self.bind_intersect(left_bind_context, right_bind_context, left_expr, right_expr)
+                self.bind_intersect(
+                    left.span(),
+                    right.span(),
+                    left_bind_context,
+                    right_bind_context,
+                    left_expr,
+                    right_expr,
+                )
             }
             (SetOperator::Except, false) => {
                 // Transfer Except to Anti join
-                self.bind_except(left_bind_context, right_bind_context, left_expr, right_expr)
+                self.bind_except(
+                    left.span(),
+                    right.span(),
+                    left_bind_context,
+                    right_bind_context,
+                    left_expr,
+                    right_expr,
+                )
             }
             (SetOperator::Union, true) => self.bind_union(
+                left.span(),
+                right.span(),
                 left_bind_context,
                 right_bind_context,
                 coercion_types,
@@ -336,6 +359,8 @@ impl Binder {
                 false,
             ),
             (SetOperator::Union, false) => self.bind_union(
+                left.span(),
+                right.span(),
                 left_bind_context,
                 right_bind_context,
                 coercion_types,
@@ -351,6 +376,8 @@ impl Binder {
 
     fn bind_union(
         &mut self,
+        left_span: Span,
+        right_span: Span,
         left_context: BindContext,
         right_context: BindContext,
         coercion_types: Vec<DataType>,
@@ -359,6 +386,8 @@ impl Binder {
         distinct: bool,
     ) -> Result<(SExpr, BindContext)> {
         let (new_bind_context, pairs, left_expr, right_expr) = self.coercion_union_type(
+            left_span,
+            right_span,
             left_context,
             right_context,
             left_expr,
@@ -370,6 +399,7 @@ impl Binder {
         let mut new_expr = SExpr::create_binary(union_plan.into(), left_expr, right_expr);
         if distinct {
             new_expr = self.bind_distinct(
+                left_span,
                 &new_bind_context,
                 new_bind_context.all_column_bindings(),
                 &mut HashMap::new(),
@@ -382,12 +412,16 @@ impl Binder {
 
     fn bind_intersect(
         &mut self,
+        left_span: Span,
+        right_span: Span,
         left_context: BindContext,
         right_context: BindContext,
         left_expr: SExpr,
         right_expr: SExpr,
     ) -> Result<(SExpr, BindContext)> {
         self.bind_intersect_or_except(
+            left_span,
+            right_span,
             left_context,
             right_context,
             left_expr,
@@ -398,12 +432,16 @@ impl Binder {
 
     fn bind_except(
         &mut self,
+        left_span: Span,
+        right_span: Span,
         left_context: BindContext,
         right_context: BindContext,
         left_expr: SExpr,
         right_expr: SExpr,
     ) -> Result<(SExpr, BindContext)> {
         self.bind_intersect_or_except(
+            left_span,
+            right_span,
             left_context,
             right_context,
             left_expr,
@@ -414,6 +452,8 @@ impl Binder {
 
     fn bind_intersect_or_except(
         &mut self,
+        left_span: Span,
+        right_span: Span,
         left_context: BindContext,
         right_context: BindContext,
         left_expr: SExpr,
@@ -421,6 +461,7 @@ impl Binder {
         join_type: JoinType,
     ) -> Result<(SExpr, BindContext)> {
         let left_expr = self.bind_distinct(
+            left_span,
             &left_context,
             left_context.all_column_bindings(),
             &mut HashMap::new(),
@@ -436,12 +477,14 @@ impl Binder {
         {
             left_conditions.push(
                 BoundColumnRef {
+                    span: left_span,
                     column: left_column.clone(),
                 }
                 .into(),
             );
             right_conditions.push(
                 BoundColumnRef {
+                    span: right_span,
                     column: right_column.clone(),
                 }
                 .into(),
@@ -460,6 +503,8 @@ impl Binder {
     #[allow(clippy::type_complexity)]
     fn coercion_union_type(
         &self,
+        left_span: Span,
+        right_span: Span,
         left_bind_context: BindContext,
         right_bind_context: BindContext,
         mut left_expr: SExpr,
@@ -490,9 +535,11 @@ impl Binder {
                     visibility: Visibility::Visible,
                 };
                 let left_coercion_expr = CastExpr {
+                    span: left_span,
                     is_try: false,
                     argument: Box::new(
                         BoundColumnRef {
+                            span: left_span,
                             column: left_col.clone(),
                         }
                         .into(),
@@ -515,9 +562,11 @@ impl Binder {
                     .write()
                     .add_derived_column(right_col.column_name.clone(), coercion_types[idx].clone());
                 let right_coercion_expr = CastExpr {
+                    span: right_span,
                     is_try: false,
                     argument: Box::new(
                         BoundColumnRef {
+                            span: right_span,
                             column: right_col.clone(),
                         }
                         .into(),

@@ -49,22 +49,26 @@ impl<'a> GroupingChecker<'a> {
             .get(&format!("{:?}", scalar))
         {
             let column = &self.bind_context.aggregate_info.group_items[*index];
-            let column_binding = if let ScalarExpr::BoundColumnRef(column_ref) = &column.scalar {
-                column_ref.column.clone()
-            } else {
-                ColumnBinding {
-                    database_name: None,
-                    table_name: None,
-                    column_name: "group_item".to_string(),
-                    index: column.index,
-                    data_type: Box::new(column.scalar.data_type()?),
-                    visibility: Visibility::Visible,
+            if let ScalarExpr::BoundColumnRef(column_ref) = &column.scalar {
+                return Ok(BoundColumnRef {
+                    span: column_ref.span,
+                    column: column_ref.column.clone(),
                 }
+                .into());
+            } else {
+                return Ok(BoundColumnRef {
+                    span: None,
+                    column: ColumnBinding {
+                        database_name: None,
+                        table_name: None,
+                        column_name: "group_item".to_string(),
+                        index: column.index,
+                        data_type: Box::new(column.scalar.data_type()?),
+                        visibility: Visibility::Visible,
+                    },
+                }
+                .into());
             };
-            return Ok(BoundColumnRef {
-                column: column_binding,
-            }
-            .into());
         }
 
         match scalar {
@@ -110,6 +114,7 @@ impl<'a> GroupingChecker<'a> {
                     .map(|arg| self.resolve(arg, span))
                     .collect::<Result<Vec<ScalarExpr>>>()?;
                 Ok(FunctionCall {
+                    span: func.span,
                     params: func.params.clone(),
                     arguments: args,
                     func_name: func.func_name.clone(),
@@ -117,6 +122,7 @@ impl<'a> GroupingChecker<'a> {
                 .into())
             }
             ScalarExpr::CastExpr(cast) => Ok(CastExpr {
+                span: cast.span,
                 is_try: cast.is_try,
                 argument: Box::new(self.resolve(&cast.argument, span)?),
                 target_type: cast.target_type.clone(),
@@ -149,6 +155,7 @@ impl<'a> GroupingChecker<'a> {
                         visibility: Visibility::Visible,
                     };
                     return Ok(BoundColumnRef {
+                        span: None,
                         column: column_binding,
                     }
                     .into());

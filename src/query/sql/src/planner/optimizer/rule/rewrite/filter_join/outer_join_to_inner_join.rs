@@ -271,6 +271,7 @@ fn remove_column_nullable(
                 _ => {}
             };
             ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: column.span,
                 column: ColumnBinding {
                     database_name: column.column.database_name.clone(),
                     table_name: column.column.table_name.clone(),
@@ -370,6 +371,7 @@ fn remove_column_nullable(
                 )?);
             }
             ScalarExpr::FunctionCall(FunctionCall {
+                span: expr.span,
                 params: expr.params.clone(),
                 arguments: args,
                 func_name: expr.func_name.clone(),
@@ -379,6 +381,7 @@ fn remove_column_nullable(
             let new_expr =
                 remove_column_nullable(&expr.argument, left_prop, right_prop, join_type, metadata)?;
             ScalarExpr::CastExpr(CastExpr {
+                span: expr.span,
                 is_try: expr.is_try,
                 argument: Box::new(new_expr),
                 target_type: expr.target_type.clone(),

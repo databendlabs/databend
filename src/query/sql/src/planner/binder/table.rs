@@ -89,11 +89,11 @@ impl Binder {
             } = select_target
             {
                 for indirect in names {
-                    if indirect == &Indirection::Star {
+                    if let Indirection::Star(span) = indirect {
                         return Err(ErrorCode::SemanticError(
                             "SELECT * with no tables specified is not valid".to_string(),
                         )
-                        .set_span(stmt.span));
+                        .set_span(*span));
                     }
                 }
             }

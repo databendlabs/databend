@@ -150,7 +150,7 @@ pub enum Indirection {
     // Field name
     Identifier(Identifier),
     // Wildcard star
-    Star,
+    Star(Span),
 }
 
 /// Time Travel specification
@@ -233,6 +233,16 @@ pub enum JoinCondition {
     Using(Vec<Identifier>),
     Natural,
     None,
+}
+
+impl SetExpr {
+    pub fn span(&self) -> Span {
+        match self {
+            SetExpr::Select(stmt) => stmt.span,
+            SetExpr::Query(query) => query.span,
+            SetExpr::SetOperation(op) => op.span,
+        }
+    }
 }
 
 impl Display for OrderByExpr {
@@ -399,7 +409,7 @@ impl Display for Indirection {
             Indirection::Identifier(ident) => {
                 write!(f, "{ident}")?;
             }
-            Indirection::Star => {
+            Indirection::Star(_) => {
                 write!(f, "*")?;
             }
         }
