@@ -40,6 +40,19 @@ SELECT * FROM c WHERE EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id) ORDER BY c_id
 6  FL
 
 query IT
+SELECT * FROM c, o WHERE c.c_id = o.c_id AND (EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id) OR EXISTS(SELECT * FROM o where o.ship = c.bill)) ORDER BY c_id
+----
+1  CA   10 1  CA   
+1  CA   20 1  CA   
+1  CA   30 1  CA   
+2  TX   40 2  CA   
+2  TX   50 2  TX   
+2  TX   60 2  NULL 
+4  TX   70 4  WY
+4  TX   80 4  NULL 
+6  FL   90 6  WA   
+
+query IT
 SELECT * FROM c WHERE NOT EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id) ORDER BY c_id
 ----
 3  MA

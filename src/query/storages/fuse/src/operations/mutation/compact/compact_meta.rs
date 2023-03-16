@@ -13,23 +13,19 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
-use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::BlockMeta;
 
-use super::compact_part::CompactTask;
-use crate::operations::mutation::AbortOperation;
+use crate::operations::merge_into::mutation_meta::mutation_log::BlockMetaIndex;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CompactSourceMeta {
-    pub order: usize,
-    pub tasks: VecDeque<CompactTask>,
+    pub block: Arc<BlockMeta>,
+    pub index: BlockMetaIndex,
 }
 
 #[typetag::serde(name = "compact_source_meta")]
@@ -51,67 +47,7 @@ impl BlockMetaInfo for CompactSourceMeta {
 }
 
 impl CompactSourceMeta {
-    pub fn create(order: usize, tasks: VecDeque<CompactTask>) -> BlockMetaInfoPtr {
-        Box::new(CompactSourceMeta { order, tasks })
-    }
-
-    pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&CompactSourceMeta> {
-        match CompactSourceMeta::downcast_ref_from(info) {
-            Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::Internal(
-                "Cannot downcast from BlockMetaInfo to CompactSourceMeta.",
-            )),
-        }
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct CompactSinkMeta {
-    pub order: usize,
-    pub segment_location: String,
-    pub segment_info: Arc<SegmentInfo>,
-    pub abort_operation: AbortOperation,
-}
-
-#[typetag::serde(name = "compact_sink_meta")]
-impl BlockMetaInfo for CompactSinkMeta {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        match CompactSinkMeta::downcast_ref_from(info) {
-            None => false,
-            Some(other) => self == other,
-        }
-    }
-
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        Box::new(self.clone())
-    }
-}
-
-impl CompactSinkMeta {
-    pub fn create(
-        order: usize,
-        segment_location: String,
-        segment_info: Arc<SegmentInfo>,
-        abort_operation: AbortOperation,
-    ) -> BlockMetaInfoPtr {
-        Box::new(CompactSinkMeta {
-            order,
-            segment_location,
-            segment_info,
-            abort_operation,
-        })
-    }
-
-    pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&CompactSinkMeta> {
-        match CompactSinkMeta::downcast_ref_from(info) {
-            Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::Internal(
-                "Cannot downcast from BlockMetaInfo to CompactSinkMeta.",
-            )),
-        }
+    pub fn create(index: BlockMetaIndex, block: Arc<BlockMeta>) -> BlockMetaInfoPtr {
+        Box::new(CompactSourceMeta { index, block })
     }
 }

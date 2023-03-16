@@ -163,7 +163,7 @@ async fn test_block_pruner() -> Result<()> {
         location: snapshot_loc.clone(),
         len_hint: None,
         ver: TableSnapshot::VERSION,
-        put_cache: true,
+        put_cache: false,
     };
 
     let snapshot = reader.read(&load_params).await?;
