@@ -25,11 +25,9 @@ use common_exception::Result;
 use crate::binder::select::SelectList;
 use crate::binder::sort::OrderItem;
 use crate::binder::sort::OrderItems;
-use crate::binder::NameResolutionResult;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::plans::AggregateFunction;
-use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::ScalarItem;
@@ -51,29 +49,22 @@ impl Binder {
     pub(super) async fn fetch_window_order_by_expr(
         &mut self,
         select_list: &[SelectTarget],
-    ) -> Vec<OrderByExpr> {
-        let mut window_order_by = vec![];
+    ) -> Vec<Vec<OrderByExpr>> {
+        let mut window_order_bys = vec![];
         for select_target in select_list {
             match select_target {
                 SelectTarget::QualifiedName { .. } => continue,
-                SelectTarget::AliasedExpr { expr, alias } => match expr.as_ref() {
-                    Expr::FunctionCall {
-                        span,
-                        distinct,
-                        name,
-                        args,
-                        params,
-                        window,
-                    } => {
+                SelectTarget::AliasedExpr { expr, .. } => match expr.as_ref() {
+                    Expr::FunctionCall { window, .. } => {
                         if let Some(window) = window {
-                            window_order_by.extend_from_slice(&window.order_by);
+                            window_order_bys.push(window.order_by.clone());
                         }
                     }
                     _ => continue,
                 },
             }
         }
-        window_order_by
+        window_order_bys
     }
 
     pub(super) async fn fetch_window_order_items(
@@ -82,7 +73,6 @@ impl Binder {
         scalar_items: &mut HashMap<IndexType, ScalarItem>,
         projections: &[ColumnBinding],
         window_order_by: &[OrderByExpr],
-        distinct: bool,
     ) -> Result<OrderItems> {
         let mut order_items = Vec::with_capacity(window_order_by.len());
         for order in window_order_by {
@@ -133,42 +123,11 @@ impl Binder {
                         continue;
                     }
 
-                    // If there isn't a matched alias in select list, we will fallback to
-                    // from clause.
-                    let result = from_context.resolve_name(
-                        database.as_deref(),
-                        table.as_deref(),
-                        &column,
-                        ident.span,
-                        &[])
-                        .and_then(|v| {
-                            if distinct {
-                                Err(ErrorCode::SemanticError("for SELECT DISTINCT, ORDER BY expressions must appear in select list".to_string()).set_span(order.expr.span()))
-                            } else {
-                                Ok(v)
-                            }
-                        })?;
-                    match result {
-                        NameResolutionResult::Column(column) => {
-                            order_items.push(OrderItem {
-                                expr: order.clone(),
-                                name: column.column_name.clone(),
-                                index: column.index,
-                                need_eval_scalar: false,
-                            });
-                        }
-                        NameResolutionResult::InternalColumn(column) => {
-                            order_items.push(OrderItem {
-                                expr: order.clone(),
-                                name: column.internal_column.column_name().clone(),
-                                index: column.index,
-                                need_eval_scalar: false,
-                            });
-                        }
-                        NameResolutionResult::Alias { .. } => {
-                            return Err(ErrorCode::Internal("Invalid name resolution result"));
-                        }
-                    }
+                    return Err(ErrorCode::SemanticError(
+                        "for WINDOW FUNCTION, ORDER BY expressions must appear in select list"
+                            .to_string(),
+                    )
+                    .set_span(order.expr.span()));
                 }
                 Expr::Literal {
                     lit: Literal::UInt64(index),
@@ -247,9 +206,9 @@ impl Binder {
 
     pub(crate) async fn bind_window_order_by(
         &mut self,
-        from_context: &BindContext,
+        _from_context: &BindContext,
         order_by: OrderItems,
-        select_list: &SelectList<'_>,
+        _select_list: &SelectList<'_>,
         scalar_items: &mut HashMap<IndexType, ScalarItem>,
         child: SExpr,
     ) -> Result<SExpr> {
@@ -278,12 +237,10 @@ impl Binder {
             if order.need_eval_scalar {
                 if let Entry::Occupied(entry) = scalar_items.entry(order.index) {
                     let (index, item) = entry.remove_entry();
-                    let mut scalar = item.scalar;
-                    let mut need_group_check = false;
-                    if let ScalarExpr::AggregateFunction(_) = scalar {
-                        need_group_check = true;
-                    }
-                    scalars.push(ScalarItem { scalar, index });
+                    scalars.push(ScalarItem {
+                        scalar: item.scalar,
+                        index,
+                    });
                 }
             }
 
@@ -321,34 +278,18 @@ impl Binder {
 
     pub(super) async fn bind_window_function(
         &mut self,
-        bind_context: &mut BindContext,
+        window_info: &WindowInfo,
         child: SExpr,
     ) -> Result<SExpr> {
-        // Enter in_grouping state
-        bind_context.in_grouping = true;
-
         // Build a ProjectPlan, which will produce aggregate arguments and window partitions
-        let agg_info = &bind_context.aggregate_info;
         let mut scalar_items: Vec<ScalarItem> = Vec::with_capacity(
-            agg_info.aggregate_arguments.len()
-                + agg_info
-                    .window_info
-                    .as_ref()
-                    .unwrap()
-                    .partition_by_items
-                    .len(),
+            window_info.aggregate_arguments.len() + window_info.partition_by_items.len(),
         );
-        for arg in agg_info.aggregate_arguments.iter() {
+        for arg in window_info.aggregate_arguments.iter() {
             scalar_items.push(arg.clone());
         }
-        for item in agg_info
-            .window_info
-            .as_ref()
-            .unwrap()
-            .partition_by_items
-            .iter()
-        {
-            scalar_items.push(item.clone());
+        for part in window_info.partition_by_items.iter() {
+            scalar_items.push(part.clone());
         }
 
         let mut new_expr = child;
@@ -359,14 +300,12 @@ impl Binder {
             new_expr = SExpr::create_unary(eval_scalar.into(), new_expr);
         }
 
-        for window in bind_context.windows {
-            let window_plan = Window {
-                aggregate_function: window.aggregate_function,
-                partition_by: window.partition_by_items.clone(),
-                frame: window.frame,
-            };
-            new_expr = SExpr::create_unary(window_plan.into(), new_expr);
-        }
+        let window_plan = Window {
+            aggregate_function: window_info.aggregate_function.clone(),
+            partition_by: window_info.partition_by_items.clone(),
+            frame: window_info.frame.clone(),
+        };
+        new_expr = SExpr::create_unary(window_plan.into(), new_expr);
 
         Ok(new_expr)
     }
@@ -394,21 +333,18 @@ impl Binder {
         metadata: MetadataRef,
         window: &WindowFunc,
     ) -> Result<ScalarExpr> {
-        let agg_info = &mut bind_context.aggregate_info;
         let window_infos = &mut bind_context.windows;
         let mut replaced_args: Vec<ScalarExpr> = Vec::with_capacity(window.agg_func.args.len());
         let mut replaced_partition_items: Vec<ScalarExpr> =
             Vec::with_capacity(window.partition_by.len());
 
-        let mut window_info = WindowInfo::default();
-        window_info.frame = Some(window.frame.clone());
-
         // resolve aggregate function args in window function.
+        let mut agg_args = vec![];
         for (i, arg) in window.agg_func.args.iter().enumerate() {
             let name = format!("{}_arg_{}", &window.agg_func.func_name, i);
             if let ScalarExpr::BoundColumnRef(column_ref) = arg {
                 replaced_args.push(column_ref.clone().into());
-                agg_info.aggregate_arguments.push(ScalarItem {
+                agg_args.push(ScalarItem {
                     index: column_ref.column.index,
                     scalar: arg.clone(),
                 });
@@ -432,7 +368,7 @@ impl Binder {
                     }
                     .into(),
                 );
-                agg_info.aggregate_arguments.push(ScalarItem {
+                agg_args.push(ScalarItem {
                     index,
                     scalar: arg.clone(),
                 });
@@ -440,11 +376,12 @@ impl Binder {
         }
 
         // resolve partition by
+        let mut partition_by_items = vec![];
         for (i, part) in window.partition_by.iter().enumerate() {
             let name = format!("{}_part_{}", &window.agg_func.func_name, i);
             if let ScalarExpr::BoundColumnRef(column_ref) = part {
                 replaced_partition_items.push(column_ref.clone().into());
-                window_info.partition_by_items.push(ScalarItem {
+                partition_by_items.push(ScalarItem {
                     index: column_ref.column.index,
                     scalar: part.clone(),
                 });
@@ -468,7 +405,7 @@ impl Binder {
                     }
                     .into(),
                 );
-                window_info.partition_by_items.push(ScalarItem {
+                partition_by_items.push(ScalarItem {
                     index,
                     scalar: part.clone(),
                 });
@@ -488,17 +425,18 @@ impl Binder {
             return_type: window.agg_func.return_type.clone(),
         };
 
-        agg_info.aggregate_functions.push(ScalarItem {
-            scalar: replaced_agg.clone().into(),
-            index,
-        });
-        agg_info.aggregate_functions_map.insert(
-            replaced_agg.display_name.clone(),
-            agg_info.aggregate_functions.len() - 1,
-        );
+        // create window info
+        let window_info = WindowInfo {
+            aggregate_function: ScalarItem {
+                scalar: replaced_agg.clone().into(),
+                index,
+            },
+            aggregate_arguments: agg_args,
+            partition_by_items,
+            frame: window.frame.clone(),
+        };
 
-        window_info.aggregate_function = replaced_agg.clone().into();
-
+        // push window info to BindContext
         window_infos.push(window_info);
 
         let replaced_window = WindowFunc {
@@ -511,9 +449,10 @@ impl Binder {
     }
 }
 
-#[derive(Default, Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct WindowInfo {
     pub aggregate_function: ScalarItem,
+    pub aggregate_arguments: Vec<ScalarItem>,
     pub partition_by_items: Vec<ScalarItem>,
-    pub frame: Option<WindowFuncFrame>,
+    pub frame: WindowFuncFrame,
 }

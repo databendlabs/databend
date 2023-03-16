@@ -15,7 +15,6 @@
 use std::hash::Hash;
 
 use common_ast::ast::BinaryOperator;
-use common_ast::ast::OrderByExpr;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;

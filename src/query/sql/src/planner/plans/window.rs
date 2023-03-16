@@ -24,11 +24,9 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::Statistics;
-use crate::plans::AggregateMode;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
-use crate::plans::WindowFunc;
 use crate::plans::WindowFuncFrame;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -38,7 +36,7 @@ pub struct Window {
     // partition by scalar expressions
     pub partition_by: Vec<ScalarItem>,
     // window frames
-    pub frame: Option<WindowFuncFrame>,
+    pub frame: WindowFuncFrame,
 }
 
 impl Window {
@@ -80,30 +78,14 @@ impl Operator for Window {
             return Ok(required);
         }
 
-        match self.mode {
-            AggregateMode::Partial => {
-                if self.partition_by.is_empty() {
-                    // Scalar aggregation
-                    required.distribution = Distribution::Any;
-                } else {
-                    // Partition aggregation, enforce `Hash` distribution
-                    required.distribution =
-                        Distribution::Hash(vec![self.partition_by[0].scalar.clone()]);
-                }
-            }
-
-            AggregateMode::Final => {
-                if self.partition_by.is_empty() {
-                    // Scalar aggregation
-                    required.distribution = Distribution::Serial;
-                } else {
-                    // The distribution should have been derived by partial aggregation
-                    required.distribution = Distribution::Any;
-                }
-            }
-
-            AggregateMode::Initial => unreachable!(),
+        if self.partition_by.is_empty() {
+            // Scalar aggregation
+            required.distribution = Distribution::Any;
+        } else {
+            // Partition aggregation, enforce `Hash` distribution
+            required.distribution = Distribution::Hash(vec![self.partition_by[0].scalar.clone()]);
         }
+
         Ok(required)
     }
 

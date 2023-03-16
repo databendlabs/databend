@@ -253,10 +253,7 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
             op.partition_by
                 .iter()
                 .any(|expr| find_subquery_in_expr(&expr.scalar))
-                || op
-                    .aggregate_functions
-                    .iter()
-                    .any(|expr| find_subquery_in_expr(&expr.scalar))
+                || find_subquery_in_expr(&op.aggregate_function.scalar)
         }
     }
 }
