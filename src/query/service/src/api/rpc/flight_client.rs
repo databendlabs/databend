@@ -297,8 +297,8 @@ impl FlightExchange {
                                         futures.push(Box::pin(common_base::base::tokio::spawn({
                                             let f = f.clone();
                                             let response_tx = response_tx.clone();
+                                            let fragment = fragment;
                                             let query_id = query_id.clone();
-                                            let fragment = fragment.clone();
                                             let channel_state = channel_state.clone();
 
                                             async move {
@@ -349,8 +349,8 @@ impl FlightExchange {
                                         futures.push(Box::pin(common_base::base::tokio::spawn({
                                             let f = f.clone();
                                             let network_tx = network_tx.clone();
+                                            let fragment = fragment;
                                             let query_id = query_id.clone();
-                                            let fragment = fragment.clone();
                                             let channel_state = channel_state.clone();
 
                                             async move {
@@ -671,7 +671,7 @@ impl ChannelState {
 
     pub fn closed_both(&self) -> bool {
         let flags = self.flags.load(Ordering::Acquire);
-        (flags & SENT_CLOSING_INPUT != 0) && (flags & SENDING_CLOSING_OUTPUT != 0)
+        (flags & SENT_CLOSING_INPUT != 0) && (flags & SENT_CLOSING_OUTPUT != 0)
     }
 
     pub fn close_input(&self) -> bool {
