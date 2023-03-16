@@ -17,11 +17,15 @@ use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::InternalColumn;
+use common_catalog::plan::PartStatistics;
+use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::FieldIndex;
+use common_expression::RemoteExpr;
+use common_expression::Scalar;
 
 #[async_trait::async_trait]
 pub trait ToReadDataSourcePlan {
@@ -53,9 +57,19 @@ impl ToReadDataSourcePlan for dyn Table {
         push_downs: Option<PushDownInfo>,
         internal_columns: Option<BTreeMap<FieldIndex, InternalColumn>>,
     ) -> Result<DataSourcePlan> {
-        let (statistics, parts) = self
-            .read_partitions(ctx.clone(), push_downs.clone())
-            .await?;
+        let (statistics, parts) = if let Some(PushDownInfo {
+            filter:
+                Some(RemoteExpr::Constant {
+                    scalar: Scalar::Boolean(false),
+                    ..
+                }),
+            ..
+        }) = &push_downs
+        {
+            Ok((PartStatistics::default(), Partitions::default()))
+        } else {
+            self.read_partitions(ctx.clone(), push_downs.clone()).await
+        }?;
 
         // We need the partition sha256 to specify the result cache.
         if ctx.get_settings().get_enable_query_result_cache()? {

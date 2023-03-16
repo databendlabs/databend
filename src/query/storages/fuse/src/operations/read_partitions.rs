@@ -56,7 +56,6 @@ impl FuseTable {
         push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         debug!("fuse table do read partitions, push downs:{:?}", push_downs);
-
         let snapshot = self.read_table_snapshot().await?;
         match snapshot {
             Some(snapshot) => {

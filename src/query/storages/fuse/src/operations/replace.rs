@@ -25,6 +25,7 @@ use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::create_dummy_item;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
+use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
@@ -37,6 +38,7 @@ use crate::operations::merge_into::CommitSink;
 use crate::operations::merge_into::MergeIntoOperationAggregator;
 use crate::operations::merge_into::OnConflictField;
 use crate::operations::merge_into::TableMutationAggregator;
+use crate::operations::mutation::base_mutator::SegmentIndex;
 use crate::operations::replace_into::processor_replace_into::ReplaceIntoProcessor;
 use crate::pipelines::Pipeline;
 use crate::FuseTable;
@@ -259,28 +261,7 @@ impl FuseTable {
         on_conflicts: Vec<OnConflictField>,
         table_snapshot: &TableSnapshot,
     ) -> Result<Vec<PipeItem>> {
-        let segments = table_snapshot.segments.as_slice();
-        let chunk_size = segments.len() / num_partition;
-        // caller site should guarantee this
-        assert!(chunk_size >= 1);
-
-        let mut chunks = vec![];
-        let mut chunk = vec![];
-        for (segment_idx, segment_location) in segments.iter().enumerate() {
-            chunk.push((segment_idx, segment_location.clone()));
-            if (segment_idx + 1) % chunk_size == 0 {
-                chunks.push(std::mem::take(&mut chunk))
-            }
-        }
-
-        if !chunk.is_empty() {
-            if chunks.len() == num_partition {
-                chunks.last_mut().unwrap().append(&mut chunk);
-            } else {
-                chunks.push(std::mem::take(&mut chunk))
-            }
-        }
-
+        let chunks = Self::partition_segments(&table_snapshot.segments, num_partition);
         let read_settings = ReadSettings::from_ctx(&ctx)?;
         let mut items = vec![];
         for chunk_of_segment_locations in chunks {
@@ -297,6 +278,28 @@ impl FuseTable {
             items.push(item.into_pipe_item());
         }
         Ok(items)
+    }
+
+    pub fn partition_segments(
+        segments: &[Location],
+        num_partition: usize,
+    ) -> Vec<Vec<(SegmentIndex, Location)>> {
+        let chunk_size = segments.len() / num_partition;
+        // caller site guarantees this
+        assert!(chunk_size >= 1);
+
+        let mut chunks = vec![];
+        for (chunk_idx, chunk) in segments.chunks(chunk_size).enumerate() {
+            let mut segment_chunk = (chunk_idx * chunk_size..)
+                .zip(chunk.to_vec())
+                .collect::<Vec<_>>();
+            if chunks.len() < num_partition {
+                chunks.push(segment_chunk);
+            } else {
+                chunks.last_mut().unwrap().append(&mut segment_chunk);
+            }
+        }
+        chunks
     }
 
     fn create_append_transform(&self, ctx: Arc<dyn TableContext>) -> AppendTransform {

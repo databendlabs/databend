@@ -95,7 +95,7 @@ function run_query() {
     fi
 }
 
-TRIES=6
+TRIES=5
 QUERY_NUM=1
 while read -r query; do
     echo "Running Q${QUERY_NUM}: ${query}"
