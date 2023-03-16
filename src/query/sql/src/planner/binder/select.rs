@@ -374,6 +374,7 @@ impl Binder {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn bind_union(
         &mut self,
         left_span: Span,
@@ -450,6 +451,7 @@ impl Binder {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn bind_intersect_or_except(
         &mut self,
         left_span: Span,
@@ -501,6 +503,7 @@ impl Binder {
     }
 
     #[allow(clippy::type_complexity)]
+    #[allow(clippy::too_many_arguments)]
     fn coercion_union_type(
         &self,
         left_span: Span,
