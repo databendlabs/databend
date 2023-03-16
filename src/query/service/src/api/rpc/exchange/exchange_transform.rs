@@ -59,7 +59,11 @@ impl ExchangeTransform {
                     items.push(match destination_id == &params.executor_id {
                         true if max_threads == 1 => create_dummy_item(),
                         true => create_resize_item(1, max_threads),
-                        false => create_writer_item(exchange),
+                        false => create_writer_item(
+                            exchange,
+                            params.query_id.clone(),
+                            params.fragment_id,
+                        ),
                     });
                 }
 
@@ -68,7 +72,11 @@ impl ExchangeTransform {
                 for (destination_id, exchange) in params.destination_ids.iter().zip(exchanges) {
                     if destination_id != &params.executor_id {
                         nodes_source += 1;
-                        items.push(create_reader_item(exchange));
+                        items.push(create_reader_item(
+                            exchange,
+                            params.query_id.clone(),
+                            params.fragment_id,
+                        ));
                     }
                 }
 
