@@ -27,8 +27,6 @@ use common_catalog::plan::TopK;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::RemoteExpr;
-use common_expression::Scalar;
 use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableInfo;
 use common_storage::ColumnNodes;
@@ -58,19 +56,6 @@ impl FuseTable {
         push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         debug!("fuse table do read partitions, push downs:{:?}", push_downs);
-
-        if let Some(PushDownInfo {
-            filter:
-                Some(RemoteExpr::Constant {
-                    scalar: Scalar::Boolean(false),
-                    ..
-                }),
-            ..
-        }) = &push_downs
-        {
-            return Ok((PartStatistics::default(), Partitions::default()));
-        }
-
         let snapshot = self.read_table_snapshot().await?;
         match snapshot {
             Some(snapshot) => {
