@@ -45,22 +45,19 @@ impl Interpreter for RenameTableInterpreter {
         // TODO check privileges
         // You must have ALTER and DROP privileges for the original table,
         // and CREATE and INSERT privileges for the new table.
-        for entity in &self.plan.entities {
-            let tenant = self.plan.tenant.clone();
-            let catalog = self.ctx.get_catalog(&entity.catalog)?;
-            catalog
-                .rename_table(RenameTableReq {
-                    if_exists: entity.if_exists,
-                    name_ident: TableNameIdent {
-                        tenant,
-                        db_name: entity.database.clone(),
-                        table_name: entity.table.clone(),
-                    },
-                    new_db_name: entity.new_database.clone(),
-                    new_table_name: entity.new_table.clone(),
-                })
-                .await?;
-        }
+        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
+        catalog
+            .rename_table(RenameTableReq {
+                if_exists: self.plan.if_exists,
+                name_ident: TableNameIdent {
+                    tenant: self.plan.tenant.clone(),
+                    db_name: self.plan.database.clone(),
+                    table_name: self.plan.table.clone(),
+                },
+                new_db_name: self.plan.new_database.clone(),
+                new_table_name: self.plan.new_table.clone(),
+            })
+            .await?;
 
         Ok(PipelineBuildResult::create())
     }

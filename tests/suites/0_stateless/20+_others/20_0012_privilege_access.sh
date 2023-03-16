@@ -4,7 +4,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 export TEST_USER_PASSWORD="password"
-export TEST_USER_CONNECT="mysql --defaults-extra-file=password.out --port ${QUERY_MYSQL_HANDLER_PORT} ${MYSQL_DATABASE} -s"
+export TEST_USER_CONNECT="mysql --defaults-extra-file=password.out --port ${QUERY_MYSQL_HANDLER_PORT} -s"
 echo -e "[mysql]\nhost=${QUERY_MYSQL_HANDLER_HOST}\nuser=test-user\npassword=${TEST_USER_PASSWORD}" >> password.out
 
 ## create user
