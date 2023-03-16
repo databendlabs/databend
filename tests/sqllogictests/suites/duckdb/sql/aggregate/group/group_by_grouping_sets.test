@@ -32,3 +32,6 @@ NULL A 8 0 1 2 1
 NULL B 10 0 1 2 1
 b NULL 11 1 0 1 2
 NULL NULL 18 1 1 3 3
+
+statement ok
+drop table t all;
