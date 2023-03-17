@@ -174,9 +174,9 @@ pub struct AggregateExpand {
     pub plan_id: u32,
 
     pub input: Box<PhysicalPlan>,
-    pub group_bys: Vec<usize>,
+    pub group_bys: Vec<IndexType>,
     pub grouping_id_index: IndexType,
-    pub grouping_sets: Vec<Vec<usize>>,
+    pub grouping_sets: Vec<Vec<IndexType>>,
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
@@ -184,14 +184,19 @@ pub struct AggregateExpand {
 impl AggregateExpand {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
-        let input_fields = input_schema.fields();
-        let mut output_fields = Vec::with_capacity(input_fields.len() + 1);
-        for field in input_fields {
-            output_fields.push(DataField::new(
-                field.name(),
-                field.data_type().wrap_nullable(),
-            ));
+        let mut output_fields = input_schema.fields().clone();
+
+        for group_by in self
+            .group_bys
+            .iter()
+            .filter(|&index| *index != self.grouping_id_index)
+        {
+            // All group by columns will wrap nullable.
+            let i = input_schema.index_of(&group_by.to_string())?;
+            let f = &mut output_fields[i];
+            *f = DataField::new(f.name(), f.data_type().wrap_nullable())
         }
+
         output_fields.push(DataField::new(
             &self.grouping_id_index.to_string(),
             DataType::Number(NumberDataType::UInt32),
