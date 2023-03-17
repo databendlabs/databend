@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_base::base::tokio;
@@ -19,6 +20,8 @@ use common_catalog::table::CompactTarget;
 use common_catalog::table::Table;
 use common_exception::Result;
 use common_expression::BlockThresholds;
+use common_storages_fuse::io::MetaReaders;
+use common_storages_fuse::io::SegmentInfoReader;
 use common_storages_fuse::io::SegmentWriter;
 use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::operations::BlockCompactMutator;
@@ -32,6 +35,7 @@ use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use rand::thread_rng;
 use rand::Rng;
+use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
@@ -139,9 +143,10 @@ async fn test_safety() -> Result<()> {
     let block_writer = BlockWriter::new(&data_accessor, &location_gen);
     let schema = TestFixture::default_table_schema();
     let segment_writer = SegmentWriter::new(&data_accessor, &location_gen);
+    let segment_reader = MetaReaders::segment_info_reader(operator.clone(), schema.clone());
     let mut rand = thread_rng();
 
-    for r in 1..100 {
+    for r in 1..200 {
         eprintln!("round {}", r);
         let number_of_segments: usize = rand.gen_range(1..10);
 
@@ -152,10 +157,11 @@ async fn test_safety() -> Result<()> {
         }
 
         let number_of_blocks: usize = block_number_of_segments.iter().sum();
-        if number_of_blocks < 2 {
-            eprintln!("number_of_blocks must large than 1");
-            continue;
-        }
+
+        //        if number_of_blocks < 2 {
+        //            eprintln!("number_of_blocks must large than 1");
+        //            continue;
+        //        }
         eprintln!(
             "generating segments number of segments {},  number of blocks {}",
             number_of_segments, number_of_blocks,
@@ -171,8 +177,15 @@ async fn test_safety() -> Result<()> {
         eprintln!("data ready");
 
         let mut summary = Statistics::default();
-        for seg in segment_infos {
+        for seg in &segment_infos {
             merge_statistics_mut(&mut summary, &seg.summary)?;
+        }
+
+        let mut block_ids = HashSet::new();
+        for seg in &segment_infos {
+            for b in &seg.blocks {
+                block_ids.insert(b.location.clone());
+            }
         }
 
         let id = Uuid::new_v4();
@@ -189,7 +202,7 @@ async fn test_safety() -> Result<()> {
 
         let compact_params = CompactOptions {
             base_snapshot: Arc::new(snapshot),
-            block_per_seg: 30,
+            block_per_seg: 10,
             limit: None,
         };
 
@@ -199,10 +212,39 @@ async fn test_safety() -> Result<()> {
         block_compact_mutator.target_select().await?;
         let selections = block_compact_mutator.compact_tasks;
         let mut blocks_number = 0;
+
+        let mut c_block_ids = HashSet::new();
         for part in selections.partitions.into_iter() {
             let part = CompactPartInfo::from_part(&part)?;
             blocks_number += part.blocks.len();
+            for b in &part.blocks {
+                c_block_ids.insert(b.location.clone());
+            }
         }
+
+        for unchanged in block_compact_mutator.unchanged_blocks_map.values() {
+            blocks_number += unchanged.len();
+            for b in unchanged.values() {
+                c_block_ids.insert(b.location.clone());
+            }
+        }
+
+        for (idx, unchanged_segment) in block_compact_mutator.unchanged_segments_map {
+            let param = LoadParams {
+                location: unchanged_segment.0.clone(),
+                len_hint: None,
+                ver: unchanged_segment.1,
+                put_cache: false,
+            };
+            let segment = segment_reader.read(&param).await?;
+            blocks_number += segment.blocks.len();
+
+            for b in &segment.blocks {
+                c_block_ids.insert(b.location.clone());
+            }
+        }
+
+        assert_eq!(c_block_ids, block_ids);
 
         assert_eq!(number_of_blocks, blocks_number);
     }
