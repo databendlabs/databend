@@ -18,7 +18,7 @@ Random engine is used to generate random data for testing purposes. If limit is 
 
 Example:
 
-```
+```sql
 > create table r (a int, b timestamp, c String, d Variant) Engine = Random;
 
 > select * from r limit 3;
