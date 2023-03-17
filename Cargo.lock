@@ -8906,7 +8906,7 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 [[package]]
 name = "strawboat"
 version = "0.2.0"
-source = "git+https://github.com/sundy-li/strawboat?rev=81e616e#81e616eca51a9609feb5783e0778adafdf83c4f4"
+source = "git+https://github.com/sundy-li/strawboat?rev=0273b76#0273b76a8f1a6236fb1a84e925c459296eaec1f7"
 dependencies = [
  "arrow2",
  "bytemuck",
