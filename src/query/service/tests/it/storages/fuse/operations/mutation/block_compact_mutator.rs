@@ -132,8 +132,8 @@ async fn test_safety() -> Result<()> {
     let operator = ctx.get_data_operator()?.operator();
 
     let threshold = BlockThresholds {
-        max_rows_per_block: 200,
-        min_rows_per_block: 100,
+        max_rows_per_block: 5,
+        min_rows_per_block: 4,
         max_bytes_per_block: 1024,
     };
 
@@ -150,9 +150,11 @@ async fn test_safety() -> Result<()> {
         let number_of_segments: usize = rand.gen_range(1..10);
 
         let mut block_number_of_segments = Vec::with_capacity(number_of_segments);
+        let mut rows_per_blocks = Vec::with_capacity(number_of_segments);
 
         for _ in 0..number_of_segments {
             block_number_of_segments.push(rand.gen_range(1..30));
+            rows_per_blocks.push(rand.gen_range(1..8));
         }
 
         let number_of_blocks: usize = block_number_of_segments.iter().sum();
@@ -164,12 +166,11 @@ async fn test_safety() -> Result<()> {
             "generating segments number of segments {},  number of blocks {}",
             number_of_segments, number_of_blocks,
         );
-        let rows_per_block = 1;
         let (locations, _, segment_infos) = CompactSegmentTestFixture::gen_segments(
             &block_writer,
             &segment_writer,
             &block_number_of_segments,
-            rows_per_block,
+            &rows_per_blocks,
         )
         .await?;
 
