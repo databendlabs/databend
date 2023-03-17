@@ -205,6 +205,8 @@ async fn test_safety() -> Result<()> {
         }
 
         assert_eq!(number_of_blocks, blocks_number);
+        assert_eq!(0, block_compact_mutator.unchanged_segments_map.len());
+        assert_eq!(0, block_compact_mutator.unchanged_blocks_map.len());
     }
 
     Ok(())
