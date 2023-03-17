@@ -176,11 +176,10 @@ jobs:
         with:
           name: test-sqllogic-standalone-${{ matrix.handlers }}-${{ matrix.dirs }}
 
-
   test_sqllogic_management_mode_linux:
     timeout-minutes: 30
     name: test_sqllogic_${{ matrix.dirs }}_linux
-    runs-on: [ self-hosted, X64, Linux, dev ]
+    runs-on: [self-hosted, X64, Linux, dev]
     needs: build_gnu
     strategy:
       matrix:
@@ -223,7 +222,6 @@ jobs:
         with:
           name: test-sqllogic-cluster-${{ matrix.handlers }}-${{ matrix.dirs }}
 
-
   test_stateless_standalone_linux:
     timeout-minutes: 20
     runs-on: [self-hosted, X64, Linux, dev]
@@ -255,6 +253,15 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_cluster_linux
+
+  test_stateful_large_data:
+    timeout-minutes: 60
+    if: contains(github.event.pull_request.labels.*.name, 'ci-largedata')
+    runs-on: [self-hosted, X64, Linux, dev]
+    needs: build_gnu
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/test_stateful_large_data
 
   test_fuzz_standalone_linux:
     timeout-minutes: 10
