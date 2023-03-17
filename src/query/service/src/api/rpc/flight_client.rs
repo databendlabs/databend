@@ -111,30 +111,7 @@ impl FlightClient {
             }
         });
 
-        Ok(NewFlightExchange::Receiver(rx))
-    }
-
-    pub async fn do_exchange(
-        &mut self,
-        query_id: &str,
-        source: &str,
-        fragment_id: usize,
-    ) -> Result<FlightExchange> {
-        let (tx, rx) = async_channel::bounded(8);
-        Ok(FlightExchange::from_client(
-            Some(query_id.to_string()),
-            Some(fragment_id),
-            tx,
-            self.exchange_streaming(
-                RequestBuilder::create(Box::pin(rx))
-                    .with_metadata("x-type", "exchange_fragment")?
-                    .with_metadata("x-source", source)?
-                    .with_metadata("x-query-id", query_id)?
-                    .with_metadata("x-fragment-id", &fragment_id.to_string())?
-                    .build(),
-            )
-            .await?,
-        ))
+        Ok(NewFlightExchange::create_receiver(rx))
     }
 
     async fn get_streaming(&mut self, request: Request<Ticket>) -> Result<Streaming<FlightData>> {
@@ -176,12 +153,13 @@ impl FlightClient {
 }
 
 pub struct FlightReceiver {
+    state: Arc<NewState>,
     rx: Receiver<Result<FlightData>>,
 }
 
 impl FlightReceiver {
     pub fn create(rx: Receiver<Result<FlightData>>) -> FlightReceiver {
-        FlightReceiver { rx }
+        FlightReceiver { rx, state }
     }
 
     pub async fn recv(&self) -> Result<Option<DataPacket>> {
@@ -193,19 +171,24 @@ impl FlightReceiver {
     }
 
     pub fn close(&self) {
-        //
-        unimplemented!()
+        if self.state.strong_count.fetch_sub(1, Ordering::SeqCst) == 1 {
+            self.rx.close();
+        }
     }
 }
 
 #[derive(Clone)]
 pub struct FlightSender {
+    state: Arc<NewState>,
     tx: Sender<Result<FlightData, Status>>,
 }
 
 impl FlightSender {
     pub fn create(tx: Sender<Result<FlightData, Status>>) -> FlightSender {
-        FlightSender { tx }
+        FlightSender {
+            state: NewState::create(),
+            tx,
+        }
     }
 
     pub async fn send(&self, data: DataPacket) -> Result<()> {
@@ -219,28 +202,68 @@ impl FlightSender {
     }
 
     pub fn close(&self) {
-        //
-        unimplemented!()
+        if self.state.strong_count.fetch_sub(1, Ordering::SeqCst) == 1 {
+            self.tx.close();
+        }
+    }
+}
+
+struct NewState {
+    strong_count: AtomicUsize,
+}
+
+impl NewState {
+    pub fn create() -> Arc<NewState> {
+        Arc::new(NewState {
+            strong_count: AtomicUsize::new(0),
+        })
     }
 }
 
 pub enum NewFlightExchange {
     Dummy,
-    Receiver(Receiver<Result<FlightData>>),
-    Sender(Sender<Result<FlightData, Status>>),
+    Receiver {
+        state: Arc<NewState>,
+        receiver: Receiver<Result<FlightData>>,
+    },
+    Sender {
+        state: Arc<NewState>,
+        sender: Sender<Result<FlightData, Status>>,
+    },
 }
 
 impl NewFlightExchange {
+    pub fn create_receiver(receiver: Receiver<Result<FlightData>>) -> NewFlightExchange {
+        NewFlightExchange::Receiver {
+            receiver,
+            state: NewState::create(),
+        }
+    }
+
     pub fn as_sender(&self) -> FlightSender {
         match self {
-            NewFlightExchange::Sender(tx) => FlightSender::create(tx.clone()),
+            NewFlightExchange::Sender { state, sender } => {
+                state.strong_count.fetch_add(1, Ordering::SeqCst);
+
+                FlightSender {
+                    state: state.clone(),
+                    tx: sender.clone(),
+                }
+            }
             _ => unreachable!(),
         }
     }
 
     pub fn as_receiver(&self) -> FlightReceiver {
         match self {
-            NewFlightExchange::Receiver(rx) => FlightReceiver::create(rx.clone()),
+            NewFlightExchange::Receiver { state, receiver } => {
+                state.strong_count.fetch_add(1, Ordering::SeqCst);
+
+                FlightReceiver {
+                    rx: receiver.clone(),
+                    state: state.clone(),
+                }
+            }
             _ => unreachable!(),
         }
     }

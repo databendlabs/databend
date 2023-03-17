@@ -154,7 +154,7 @@ impl DataExchangeManager {
                             None,
                             Some(config.query.to_rpc_client_tls_config()),
                         )
-                            .await?,
+                        .await?,
                     ))),
                     false => Ok(FlightClient::new(FlightServiceClient::new(
                         ConnectionFactory::create_rpc_channel(address.to_owned(), None, None)
@@ -198,16 +198,6 @@ impl DataExchangeManager {
             Some(query_coordinator) => query_coordinator.prepare_pipeline(ctx, packet),
         }
     }
-
-    // pub fn new_handle_statistics_exchange(&self, id: String, exchange: NewFlightExchange) -> Result<()> {
-    //     let queries_coordinator_guard = self.queries_coordinator.lock();
-    //     let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
-    //
-    //     match queries_coordinator.entry(id) {
-    //         Entry::Occupied(mut v) => v.get_mut().add_statistics_exchange(vec![exchange]),
-    //         Entry::Vacant(v) => v.insert(QueryCoordinator::create()).add_statistics_exchange(vec![exchange]),
-    //     }
-    // }
 
     pub fn handle_statistics_exchange(&self, id: String, exchange: FlightExchange) -> Result<()> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
@@ -350,16 +340,6 @@ impl DataExchangeManager {
             Some(coordinator) => coordinator.get_flight_senders(params),
         }
     }
-
-    // pub fn get_flight_sender(&self, params: &ExchangeParams) -> Result<Vec<FlightExchangeRef>> {
-    //     let queries_coordinator_guard = self.queries_coordinator.lock();
-    //     let queries_coordinator = unsafe { &*queries_coordinator_guard.deref().get() };
-    //
-    //     match queries_coordinator.get(&params.get_query_id()) {
-    //         None => Err(ErrorCode::Internal("Query not exists.")),
-    //         Some(coordinator) => coordinator.get_flight_exchanges(params),
-    //     }
-    // }
 
     pub fn get_flight_receiver(&self, params: &ExchangeParams) -> Result<Vec<FlightReceiver>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
