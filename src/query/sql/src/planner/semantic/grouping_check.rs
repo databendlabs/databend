@@ -44,26 +44,32 @@ impl<'a> GroupingChecker<'a> {
     pub fn resolve(&mut self, scalar: &ScalarExpr, span: Span) -> Result<ScalarExpr> {
         if let Some(index) = self.bind_context.aggregate_info.group_items_map.get(scalar) {
             let column = &self.bind_context.aggregate_info.group_items[*index];
-            if let ScalarExpr::BoundColumnRef(column_ref) = &column.scalar {
-                return Ok(BoundColumnRef {
-                    span: column_ref.span,
-                    column: column_ref.column.clone(),
-                }
-                .into());
+            let mut column_binding = if let ScalarExpr::BoundColumnRef(column_ref) = &column.scalar
+            {
+                column_ref.column.clone()
             } else {
-                return Ok(BoundColumnRef {
-                    span: None,
-                    column: ColumnBinding {
-                        database_name: None,
-                        table_name: None,
-                        column_name: "group_item".to_string(),
-                        index: column.index,
-                        data_type: Box::new(column.scalar.data_type()?),
-                        visibility: Visibility::Visible,
-                    },
+                ColumnBinding {
+                    database_name: None,
+                    table_name: None,
+                    column_name: "group_item".to_string(),
+                    index: column.index,
+                    data_type: Box::new(column.scalar.data_type()?),
+                    visibility: Visibility::Visible,
                 }
-                .into());
+                .into()
             };
+
+            if let Some(grouping_id) = &self.bind_context.aggregate_info.grouping_id_column {
+                if grouping_id.index != column_binding.index {
+                    column_binding.data_type = Box::new(column_binding.data_type.wrap_nullable());
+                }
+            }
+
+            return Ok(BoundColumnRef {
+                span: scalar.span(),
+                column: column_binding,
+            }
+            .into());
         }
 
         match scalar {

@@ -1002,6 +1002,18 @@ impl<'a> TypeChecker<'a> {
             Self::rewrite_substring(&mut args);
         }
 
+        if func_name == "grouping" {
+            // `grouping` will be rewritten again after resolving grouping sets.
+            return Ok(Box::new((
+                ScalarExpr::FunctionCall(FunctionCall {
+                    params: vec![],
+                    arguments: args,
+                    func_name: "grouping".to_string(),
+                }),
+                DataType::Number(NumberDataType::UInt32),
+            )));
+        }
+
         // rewrite_collation
         let func_name = if self.function_need_collation(func_name, &args)?
             && self.ctx.get_settings().get_collation()? == "utf8"
