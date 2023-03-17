@@ -35,6 +35,7 @@ pub enum ScalarExpr {
     OrExpr(OrExpr),
     NotExpr(NotExpr),
     ComparisonExpr(ComparisonExpr),
+    WindowFunction(WindowFunc),
     AggregateFunction(AggregateFunction),
     FunctionCall(FunctionCall),
     Unnest(Unnest),
@@ -69,6 +70,13 @@ impl ScalarExpr {
                 let left: ColumnSet = scalar.left.used_columns();
                 let right: ColumnSet = scalar.right.used_columns();
                 left.union(&right).cloned().collect()
+            }
+            ScalarExpr::WindowFunction(scalar) => {
+                let mut result = ColumnSet::new();
+                for scalar in &scalar.agg_func.args {
+                    result = result.union(&scalar.used_columns()).cloned().collect();
+                }
+                result
             }
             ScalarExpr::AggregateFunction(scalar) => {
                 let mut result = ColumnSet::new();
@@ -256,6 +264,24 @@ impl TryFrom<ScalarExpr> for AggregateFunction {
     }
 }
 
+impl From<WindowFunc> for ScalarExpr {
+    fn from(v: WindowFunc) -> Self {
+        Self::WindowFunction(v)
+    }
+}
+
+impl TryFrom<ScalarExpr> for WindowFunc {
+    type Error = ErrorCode;
+
+    fn try_from(value: ScalarExpr) -> Result<Self> {
+        if let ScalarExpr::WindowFunction(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal("Cannot downcast Scalar to WindowFunc"))
+        }
+    }
+}
+
 impl From<Unnest> for ScalarExpr {
     fn from(v: Unnest) -> Self {
         Self::Unnest(v)
@@ -427,6 +453,42 @@ pub struct AggregateFunction {
     pub params: Vec<Literal>,
     pub args: Vec<ScalarExpr>,
     pub return_type: Box<DataType>,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct WindowFunc {
+    pub agg_func: AggregateFunction,
+    pub partition_by: Vec<ScalarExpr>,
+    pub frame: WindowFuncFrame,
+}
+
+impl WindowFunc {
+    pub fn display_name(&self) -> String {
+        format!("{}_with_window", self.agg_func.func_name)
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct WindowFuncFrame {
+    pub units: WindowFuncFrameUnits,
+    pub start: WindowFuncFrameBound,
+    pub end: WindowFuncFrameBound,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub enum WindowFuncFrameBound {
+    /// `CURRENT ROW`
+    CurrentRow,
+    /// `<N> PRECEDING` or `UNBOUNDED PRECEDING`
+    Preceding(Option<Box<ScalarExpr>>),
+    /// `<N> FOLLOWING` or `UNBOUNDED FOLLOWING`.
+    Following(Option<Box<ScalarExpr>>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum WindowFuncFrameUnits {
+    Rows,
+    Range,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

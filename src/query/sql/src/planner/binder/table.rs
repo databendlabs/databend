@@ -521,6 +521,7 @@ impl Binder {
             bound_internal_columns: BTreeMap::new(),
             columns: vec![],
             aggregate_info: Default::default(),
+            windows: vec![],
             in_grouping: false,
             ctes_map: Box::new(DashMap::new()),
             is_view: false,

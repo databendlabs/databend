@@ -95,6 +95,12 @@ impl ScalarExpr {
                     expr.right.as_raw_expr_with_col_name(),
                 ],
             },
+            ScalarExpr::WindowFunction(win) => RawExpr::ColumnRef {
+                span: None,
+                id: format!("{}-with-window", win.agg_func.display_name.clone()),
+                data_type: (*win.agg_func.return_type).clone(),
+                display_name: format!("{}-with-window", win.agg_func.display_name.clone()),
+            },
             ScalarExpr::AggregateFunction(agg) => RawExpr::ColumnRef {
                 span: None,
                 id: agg.display_name.clone(),
@@ -207,6 +213,12 @@ impl ScalarExpr {
                     expr.left.as_raw_expr_with_col_index(),
                     expr.right.as_raw_expr_with_col_index(),
                 ],
+            },
+            ScalarExpr::WindowFunction(win) => RawExpr::ColumnRef {
+                span: None,
+                id: DUMMY_INDEX,
+                data_type: (*win.agg_func.return_type).clone(),
+                display_name: format!("{}-with-window", win.agg_func.display_name.clone()),
             },
             ScalarExpr::AggregateFunction(agg) => RawExpr::ColumnRef {
                 span: None,
