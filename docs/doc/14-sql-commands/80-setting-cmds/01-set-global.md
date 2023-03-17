@@ -4,7 +4,7 @@ title: SET
 
 Changes the value of a setting. To show all the current settings, use [SHOW SETTINGS](show-settings.md).
 
-See also: [UNSET](unset.md)
+See also: [UNSET](02-unset.md)
 
 ## Syntax
 
