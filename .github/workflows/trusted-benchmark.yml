@@ -53,7 +53,7 @@ jobs:
               echo "head_sha=${{ github.sha }}" >> $GITHUB_OUTPUT
               echo "run_id=${{ github.run_id }}" >> $GITHUB_OUTPUT
               echo "source=release" >> $GITHUB_OUTPUT
-              echo "source_id=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+              echo "source_id=${{ inputs.tag }}" >> $GITHUB_OUTPUT
               ;;
           esac
       - uses: ./.github/actions/create_check_status
