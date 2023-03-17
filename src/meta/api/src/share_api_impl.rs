@@ -640,7 +640,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                         share_spec: Some(
                             get_tenant_share_spec_vec(self, share_name_key.tenant.clone()).await?,
                         ),
-                        share_table_info: get_share_table_info(self, &share_name_key, &share_meta)
+                        share_table_info: get_share_table_info(self, share_name_key, &share_meta)
                             .await?,
                     });
                 }
@@ -754,7 +754,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                         share_spec: Some(
                             get_tenant_share_spec_vec(self, share_name_key.tenant.clone()).await?,
                         ),
-                        share_table_info: get_share_table_info(self, &share_name_key, &share_meta)
+                        share_table_info: get_share_table_info(self, share_name_key, &share_meta)
                             .await?,
                     });
                 }
@@ -1525,7 +1525,7 @@ async fn get_share_table_info(
     match db_name {
         Some(db_name) => {
             let mut table_ids = HashSet::new();
-            for (_, entry) in &share_meta.entries {
+            for entry in share_meta.entries.values() {
                 if let ShareGrantObject::Table(table_id) = entry.object {
                     table_ids.insert(table_id);
                 } else {

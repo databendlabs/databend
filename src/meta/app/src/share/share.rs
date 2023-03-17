@@ -170,7 +170,8 @@ pub enum ShareGrantObjectSeqAndId {
 }
 
 // share name and shared (table name, table info) map
-pub type ShareTableInfoMap = (String, Option<BTreeMap<String, TableInfo>>);
+pub type TableInfoMap = BTreeMap<String, TableInfo>;
+pub type ShareTableInfoMap = (String, Option<TableInfoMap>);
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GrantShareObjectReq {

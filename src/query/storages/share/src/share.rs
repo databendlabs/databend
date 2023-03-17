@@ -28,6 +28,13 @@ pub struct ShareSpecVec {
     share_specs: BTreeMap<String, ext::ShareSpecExt>,
 }
 
+pub fn share_table_info_location(tenant: &str, share_name: &str) -> String {
+    format!(
+        "{}/{}/{}_table_info.json",
+        tenant, SHARE_CONFIG_PREFIX, share_name
+    )
+}
+
 pub async fn save_share_spec(
     tenant: &String,
     operator: Operator,
@@ -52,10 +59,7 @@ pub async fn save_share_spec(
     // save share table info
     if let Some((share_name, share_table_info)) = share_table_info {
         let share_name = share_name.clone();
-        let location = format!(
-            "{}/{}/{}_table_info.json",
-            tenant, SHARE_CONFIG_PREFIX, share_name
-        );
+        let location = share_table_info_location(tenant, &share_name);
         match share_table_info {
             Some(table_info_map) => {
                 operator

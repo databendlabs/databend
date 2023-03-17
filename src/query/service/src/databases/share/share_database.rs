@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::str;
 use std::sync::Arc;
 
 use common_catalog::table::Table;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
 use common_meta_app::schema::CreateTableReq;
@@ -23,8 +25,6 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
-use common_meta_app::schema::GetTableReq;
-use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableInfo;
@@ -38,21 +38,43 @@ use common_meta_app::schema::UpsertTableCopiedFileReply;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
+use common_meta_app::share::TableInfoMap;
+use common_storage::DataOperator;
+use common_storage::StorageMetrics;
+use common_storage::StorageMetricsLayer;
+use common_storages_share::share_table_info_location;
+use opendal::Operator;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
 
+// Share Database implementation for `Database` trait.
 #[derive(Clone)]
 pub struct ShareDatabase {
     ctx: DatabaseContext,
 
     db_info: DatabaseInfo,
+
+    operator: Operator,
+
+    table_info_location: String,
 }
 
 impl ShareDatabase {
     pub const NAME: &'static str = "SHARE";
     pub fn try_create(ctx: DatabaseContext, db_info: DatabaseInfo) -> Result<Box<dyn Database>> {
-        Ok(Box::new(Self { ctx, db_info }))
+        let mut operator = DataOperator::instance().operator();
+        let data_metrics = Arc::new(StorageMetrics::default());
+        operator = operator.layer(StorageMetricsLayer::new(data_metrics));
+        let share_name = db_info.meta.from_share.clone().unwrap();
+        let table_info_location =
+            share_table_info_location(&share_name.tenant, &share_name.share_name);
+        Ok(Box::new(Self {
+            ctx,
+            db_info,
+            operator,
+            table_info_location,
+        }))
     }
 
     fn load_tables(&self, table_infos: Vec<Arc<TableInfo>>) -> Result<Vec<Arc<dyn Table>>> {
@@ -61,6 +83,33 @@ impl ShareDatabase {
             acc.push(tbl);
             Ok(acc)
         })
+    }
+
+    // Read table info map from operator
+    async fn get_table_info_map(&self) -> Result<TableInfoMap> {
+        let data = self.operator.read(&self.table_info_location).await?;
+        let s = str::from_utf8(&data)?;
+        Ok(serde_json::from_str(s)?)
+    }
+
+    async fn get_table_info(&self, table_name: &str) -> Result<Arc<TableInfo>> {
+        let table_info_map = self.get_table_info_map().await?;
+        match table_info_map.get(table_name) {
+            None => Err(ErrorCode::UnknownTable(format!(
+                "share table {} is unknown",
+                table_name
+            ))),
+            Some(table_info) => Ok(Arc::new(table_info.clone())),
+        }
+    }
+
+    async fn list_tables(&self) -> Result<Vec<Arc<TableInfo>>> {
+        let table_info_map = self.get_table_info_map().await?;
+        let table_infos: Vec<Arc<TableInfo>> = table_info_map
+            .values()
+            .map(|table_info| Arc::new(table_info.to_owned()))
+            .collect();
+        Ok(table_infos)
     }
 }
 
@@ -81,83 +130,59 @@ impl Database for ShareDatabase {
 
     // Get one table by db and table name.
     async fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
-        let table_info = self
-            .ctx
-            .meta
-            .get_table(GetTableReq::new(
-                self.get_tenant(),
-                self.get_db_name(),
-                table_name,
-            ))
-            .await?;
+        let table_info = self.get_table_info(table_name).await?;
         self.get_table_by_info(table_info.as_ref())
     }
 
     async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
-        let table_infos = self
-            .ctx
-            .meta
-            .list_tables(ListTableReq::new(self.get_tenant(), self.get_db_name()))
-            .await?;
+        let table_infos = self.list_tables().await?;
 
         self.load_tables(table_infos)
     }
 
     async fn list_tables_history(&self) -> Result<Vec<Arc<dyn Table>>> {
-        // `get_table_history` will not fetch the tables that created before the
-        // "metasrv time travel functions" is added.
-        // thus, only the table-infos of dropped tables are used.
-        let mut dropped = self
-            .ctx
-            .meta
-            .get_table_history(ListTableReq::new(self.get_tenant(), self.get_db_name()))
-            .await?
-            .into_iter()
-            .filter(|i| i.meta.drop_on.is_some())
-            .collect::<Vec<_>>();
-
-        let mut table_infos = self
-            .ctx
-            .meta
-            .list_tables(ListTableReq::new(self.get_tenant(), self.get_db_name()))
-            .await?;
-
-        table_infos.append(&mut dropped);
-
-        self.load_tables(table_infos)
+        Err(ErrorCode::PermissionDenied(
+            "Permission denied, cannot list table history from a shared database".to_string(),
+        ))
     }
 
-    async fn create_table(&self, req: CreateTableReq) -> Result<()> {
-        self.ctx.meta.create_table(req).await?;
-        Ok(())
+    async fn create_table(&self, _req: CreateTableReq) -> Result<()> {
+        Err(ErrorCode::PermissionDenied(
+            "Permission denied, cannot create table from a shared database".to_string(),
+        ))
     }
 
-    async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply> {
-        let res = self.ctx.meta.drop_table_by_id(req).await?;
-        Ok(res)
+    async fn drop_table_by_id(&self, _req: DropTableByIdReq) -> Result<DropTableReply> {
+        Err(ErrorCode::PermissionDenied(
+            "Permission denied, cannot drop table from a shared database".to_string(),
+        ))
     }
 
-    async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
-        let res = self.ctx.meta.undrop_table(req).await?;
-        Ok(res)
+    async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
+        Err(ErrorCode::PermissionDenied(
+            "Permission denied, cannot undrop table from a shared database".to_string(),
+        ))
     }
 
-    async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
-        let res = self.ctx.meta.rename_table(req).await?;
-        Ok(res)
+    async fn rename_table(&self, _req: RenameTableReq) -> Result<RenameTableReply> {
+        Err(ErrorCode::PermissionDenied(
+            "Permission denied, cannot rename table from a shared database".to_string(),
+        ))
     }
 
     async fn upsert_table_option(
         &self,
-        req: UpsertTableOptionReq,
+        _req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
-        let res = self.ctx.meta.upsert_table_option(req).await?;
-        Ok(res)
+        Err(ErrorCode::PermissionDenied(
+            "Permission denied, cannot upsert table option from a shared database".to_string(),
+        ))
     }
 
-    async fn update_table_meta(&self, req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
-        let res = self.ctx.meta.update_table_meta(req).await?;
-        Ok(res)
+    async fn update_table_meta(&self, _req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
+        Err(ErrorCode::PermissionDenied(
+            "Permission denied, cannot upsert table meta from a shared database".to_string(),
+        ))
     }
 
     async fn get_table_copied_file_info(
@@ -176,8 +201,9 @@ impl Database for ShareDatabase {
         Ok(res)
     }
 
-    async fn truncate_table(&self, req: TruncateTableReq) -> Result<TruncateTableReply> {
-        let res = self.ctx.meta.truncate_table(req).await?;
-        Ok(res)
+    async fn truncate_table(&self, _req: TruncateTableReq) -> Result<TruncateTableReply> {
+        Err(ErrorCode::PermissionDenied(
+            "Permission denied, cannot truncate table from a shared database".to_string(),
+        ))
     }
 }
