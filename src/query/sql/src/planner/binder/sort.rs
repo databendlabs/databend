@@ -46,7 +46,7 @@ use crate::BindContext;
 use crate::IndexType;
 
 pub struct OrderItems {
-    items: Vec<OrderItem>,
+    pub(crate) items: Vec<OrderItem>,
 }
 
 pub struct OrderItem {
@@ -364,7 +364,7 @@ impl Binder {
     }
 
     #[allow(clippy::only_used_in_recursion)]
-    fn rewrite_scalar_with_replacement<F>(
+    pub(crate) fn rewrite_scalar_with_replacement<F>(
         &self,
         original_scalar: &ScalarExpr,
         replacement_fn: &F,
