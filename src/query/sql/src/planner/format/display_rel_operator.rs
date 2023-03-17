@@ -79,6 +79,7 @@ impl Display for FormatContext {
                 RelOperator::Pattern(_) => write!(f, "Pattern"),
                 RelOperator::DummyTableScan(_) => write!(f, "DummyTableScan"),
                 RelOperator::RuntimeFilterSource(_) => write!(f, "RuntimeFilterSource"),
+                RelOperator::Window(_) => write!(f, "WindowFunc"),
             },
             Self::Text(text) => write!(f, "{}", text),
         }
@@ -134,6 +135,7 @@ pub fn format_scalar(_metadata: &MetadataRef, scalar: &ScalarExpr) -> String {
             comp.op.to_func_name(),
             format_scalar(_metadata, &comp.right)
         ),
+        ScalarExpr::WindowFunction(win) => win.agg_func.display_name.clone(),
         ScalarExpr::AggregateFunction(agg) => agg.display_name.clone(),
         ScalarExpr::FunctionCall(func) => {
             format!(
