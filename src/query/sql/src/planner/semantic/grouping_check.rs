@@ -42,12 +42,7 @@ impl<'a> GroupingChecker<'a> {
     }
 
     pub fn resolve(&mut self, scalar: &ScalarExpr, span: Span) -> Result<ScalarExpr> {
-        if let Some(index) = self
-            .bind_context
-            .aggregate_info
-            .group_items_map
-            .get(scalar)
-        {
+        if let Some(index) = self.bind_context.aggregate_info.group_items_map.get(scalar) {
             let column = &self.bind_context.aggregate_info.group_items[*index];
             if let ScalarExpr::BoundColumnRef(column_ref) = &column.scalar {
                 return Ok(BoundColumnRef {
