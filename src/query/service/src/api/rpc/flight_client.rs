@@ -235,8 +235,20 @@ impl FlightExchange {
                             drop(network_tx);
                             response_tx.close();
 
+                            if let Some(query_id) = &query_id {
+                                info!("Notify shutdown query {:?}, fragment: {}", query_id, fragment.unwrap());
+                            }
+
                             if let Some(Ok(_message)) = right.await {
                                 let _ = StreamExt::count(streaming).await;
+                            }
+
+                            if let Some(query_id) = query_id {
+                                info!(
+                                    "Shutdown flight listener query: {:?}, fragment:{}",
+                                    query_id,
+                                    fragment.unwrap()
+                                );
                             }
 
                             return;
