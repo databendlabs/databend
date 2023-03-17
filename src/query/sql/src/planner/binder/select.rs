@@ -97,6 +97,8 @@ impl Binder {
             s_expr = self.bind_where(&mut from_context, expr, s_expr).await?;
         }
 
+        let window_order_by_exprs = self.fetch_window_order_by_expr(&stmt.select_list).await;
+
         // Generate a analyzed select list with from context
         let mut select_list = self
             .normalize_select_list(&mut from_context, &stmt.select_list)
@@ -107,6 +109,8 @@ impl Binder {
             self.analyze_group_items(&mut from_context, &select_list, group_by)
                 .await?;
         }
+
+        self.analyze_window_select(&mut from_context, &mut select_list)?;
 
         self.analyze_aggregate_select(&mut from_context, &mut select_list)?;
 
@@ -121,6 +125,20 @@ impl Binder {
         } else {
             None
         };
+
+        let mut window_order_by_items = vec![];
+
+        for order_by_expr in window_order_by_exprs.iter() {
+            window_order_by_items.push(
+                self.fetch_window_order_items(
+                    &from_context,
+                    &mut scalar_items,
+                    &projections,
+                    order_by_expr,
+                )
+                .await?,
+            );
+        }
 
         let order_items = self
             .analyze_order_items(
@@ -142,6 +160,25 @@ impl Binder {
             s_expr = self
                 .bind_having(&from_context, having, span, s_expr)
                 .await?;
+        }
+
+        // bind window order by
+        for window_order_items in window_order_by_items {
+            s_expr = self
+                .bind_window_order_by(
+                    &from_context,
+                    window_order_items,
+                    &select_list,
+                    &mut scalar_items,
+                    s_expr,
+                )
+                .await?;
+        }
+
+        // bind window
+        // window run after the HAVING clause but before the ORDER BY clause.
+        for window_info in bind_context.windows.iter() {
+            s_expr = self.bind_window_function(window_info, s_expr).await?;
         }
 
         if stmt.distinct {

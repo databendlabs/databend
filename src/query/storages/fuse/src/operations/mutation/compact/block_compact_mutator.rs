@@ -114,18 +114,22 @@ impl BlockCompactMutator {
             // Check the segment to be compacted.
             // Size of compacted segment should be in range R == [threshold, 2 * threshold)
             for (idx, segment) in segment_infos.iter().enumerate() {
-                let segments_vec = checker.add(segment.clone());
+                let segments_vec = checker.add(chunk[idx].clone(), segment.clone());
                 for segments in segments_vec {
                     if SegmentCompactChecker::check_for_compact(&segments) {
                         compacted_segment_cnt += segments.len();
                         // build the compact tasks.
-                        self.build_compact_tasks(segments, segment_idx);
+                        self.build_compact_tasks(
+                            segments.into_iter().map(|s| s.1).collect(),
+                            segment_idx,
+                        );
                     } else {
+                        let (location, unchanged) = &segments[0];
                         self.unchanged_segments_map
-                            .insert(segment_idx, chunk[idx].clone());
+                            .insert(segment_idx, location.clone());
                         merge_statistics_mut(
                             &mut self.unchanged_segment_statistics,
-                            &segment.summary,
+                            &unchanged.summary,
                         )?;
                     }
                     segment_idx += 1;
@@ -154,11 +158,14 @@ impl BlockCompactMutator {
             let segments = std::mem::take(&mut checker.segments);
             if SegmentCompactChecker::check_for_compact(&segments) {
                 compacted_segment_cnt += segments.len();
-                self.build_compact_tasks(segments, segment_idx);
+                self.build_compact_tasks(segments.into_iter().map(|s| s.1).collect(), segment_idx);
             } else {
                 self.unchanged_segments_map
                     .insert(segment_idx, segment_locations[checked_end_at - 1].clone());
-                merge_statistics_mut(&mut self.unchanged_segment_statistics, &segments[0].summary)?;
+                merge_statistics_mut(
+                    &mut self.unchanged_segment_statistics,
+                    &segments[0].1.summary,
+                )?;
             }
             segment_idx += 1;
         }
@@ -237,14 +244,18 @@ impl BlockCompactMutator {
         }
 
         if !builder.is_empty() {
-            let (index, mut blocks) = tasks.pop_back().unwrap_or(
+            let (index, mut blocks) = if let Some((k, v)) = tasks.pop_back() {
+                (k, v)
+            } else {
                 unchanged_blocks
                     .pop_last()
-                    .map_or((0, vec![]), |(k, v)| (k, vec![v])),
-            );
+                    .map_or((0, vec![]), |(k, v)| (k, vec![v]))
+            };
             blocks.extend(builder.take_blocks());
             if blocks.len() > 1 || builder.check_column_ids(&blocks[0]) {
                 tasks.push_back((index, blocks));
+            } else {
+                unreachable!("expect more than one block");
             }
         }
 
@@ -259,13 +270,15 @@ impl BlockCompactMutator {
             })
             .collect();
         self.compact_tasks.partitions.append(&mut partitions);
-        self.unchanged_blocks_map
-            .insert(segment_idx, unchanged_blocks);
+        if !unchanged_blocks.is_empty() {
+            self.unchanged_blocks_map
+                .insert(segment_idx, unchanged_blocks);
+        }
     }
 }
 
 struct SegmentCompactChecker {
-    segments: Vec<Arc<SegmentInfo>>,
+    segments: Vec<(Location, Arc<SegmentInfo>)>,
     total_block_count: u64,
     threshold: u64,
 }
@@ -279,22 +292,26 @@ impl SegmentCompactChecker {
         }
     }
 
-    fn check_for_compact(segments: &Vec<Arc<SegmentInfo>>) -> bool {
+    fn check_for_compact(segments: &Vec<(Location, Arc<SegmentInfo>)>) -> bool {
         segments.len() != 1
-            || (segments[0].summary.block_count > 1
-                && segments[0].summary.perfect_block_count != segments[0].summary.block_count)
+            || (segments[0].1.summary.block_count > 1
+                && segments[0].1.summary.perfect_block_count != segments[0].1.summary.block_count)
     }
 
-    fn add(&mut self, segment: Arc<SegmentInfo>) -> Vec<Vec<Arc<SegmentInfo>>> {
+    fn add(
+        &mut self,
+        location: Location,
+        segment: Arc<SegmentInfo>,
+    ) -> Vec<Vec<(Location, Arc<SegmentInfo>)>> {
         self.total_block_count += segment.summary.block_count;
         if self.total_block_count < self.threshold {
-            self.segments.push(segment);
+            self.segments.push((location, segment));
             return vec![];
         }
 
         if self.total_block_count > 2 * self.threshold {
             self.total_block_count = 0;
-            let trivial = vec![segment];
+            let trivial = vec![(location, segment)];
             if self.segments.is_empty() {
                 return vec![trivial];
             } else {
@@ -303,7 +320,7 @@ impl SegmentCompactChecker {
         }
 
         self.total_block_count = 0;
-        self.segments.push(segment);
+        self.segments.push((location, segment));
         vec![std::mem::take(&mut self.segments)]
     }
 }

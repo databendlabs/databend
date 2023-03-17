@@ -242,7 +242,8 @@ impl<'a> SegmentCompactor<'a> {
         if fragments_compacted {
             // if some compaction occurred, the reminders
             // which are outside of the limit should also be collected
-            for chunk in reverse_locations[checked_end_at..].chunks(chunk_size) {
+            let start_pos = checked_end_at;
+            for chunk in reverse_locations[start_pos..].chunks(chunk_size) {
                 let segment_infos = segments_io
                     .read_segments(chunk)
                     .await?

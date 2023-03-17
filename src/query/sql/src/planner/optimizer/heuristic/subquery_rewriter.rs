@@ -205,6 +205,8 @@ impl SubqueryRewriter {
                 ))
             }
 
+            ScalarExpr::WindowFunction(_) => Ok((scalar.clone(), s_expr.clone())),
+
             ScalarExpr::AggregateFunction(_) => Ok((scalar.clone(), s_expr.clone())),
 
             ScalarExpr::FunctionCall(func) => {

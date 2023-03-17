@@ -195,6 +195,11 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
         ScalarExpr::ComparisonExpr(scalar) => {
             prune_by_children(&scalar.left, columns) && prune_by_children(&scalar.right, columns)
         }
+        ScalarExpr::WindowFunction(scalar) => scalar
+            .agg_func
+            .args
+            .iter()
+            .all(|arg| prune_by_children(arg, columns)),
         ScalarExpr::AggregateFunction(scalar) => scalar
             .args
             .iter()

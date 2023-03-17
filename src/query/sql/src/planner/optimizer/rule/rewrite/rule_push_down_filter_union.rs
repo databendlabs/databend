@@ -34,6 +34,7 @@ use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::UnionAll;
 use crate::plans::Unnest;
+use crate::plans::WindowFunc;
 use crate::ColumnBinding;
 use crate::IndexType;
 use crate::Visibility;
@@ -169,6 +170,23 @@ fn replace_column_binding(
             op: expr.op,
             left: Box::new(replace_column_binding(index_pairs, *expr.left)?),
             right: Box::new(replace_column_binding(index_pairs, *expr.right)?),
+        })),
+        ScalarExpr::WindowFunction(expr) => Ok(ScalarExpr::WindowFunction(WindowFunc {
+            agg_func: AggregateFunction {
+                display_name: expr.agg_func.display_name,
+                func_name: expr.agg_func.func_name,
+                distinct: expr.agg_func.distinct,
+                params: expr.agg_func.params,
+                args: expr
+                    .agg_func
+                    .args
+                    .into_iter()
+                    .map(|arg| replace_column_binding(index_pairs, arg))
+                    .collect::<Result<Vec<_>>>()?,
+                return_type: expr.agg_func.return_type,
+            },
+            partition_by: expr.partition_by,
+            frame: expr.frame,
         })),
         ScalarExpr::AggregateFunction(expr) => {
             Ok(ScalarExpr::AggregateFunction(AggregateFunction {

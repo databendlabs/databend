@@ -32,6 +32,7 @@ use crate::plans::JoinType;
 use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::Unnest;
+use crate::plans::WindowFunc;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::ColumnSet;
@@ -337,6 +338,30 @@ fn remove_column_nullable(
                 op: expr.op.clone(),
                 left: Box::new(left_expr),
                 right: Box::new(right_expr),
+            })
+        }
+        ScalarExpr::WindowFunction(expr) => {
+            let mut args = Vec::with_capacity(expr.agg_func.args.len());
+            for arg in expr.agg_func.args.iter() {
+                args.push(remove_column_nullable(
+                    arg,
+                    left_prop,
+                    right_prop,
+                    join_type,
+                    metadata.clone(),
+                )?);
+            }
+            ScalarExpr::WindowFunction(WindowFunc {
+                agg_func: AggregateFunction {
+                    display_name: expr.agg_func.display_name.clone(),
+                    func_name: expr.agg_func.func_name.clone(),
+                    distinct: expr.agg_func.distinct,
+                    params: expr.agg_func.params.clone(),
+                    args,
+                    return_type: expr.agg_func.return_type.clone(),
+                },
+                partition_by: expr.partition_by.clone(),
+                frame: expr.frame.clone(),
             })
         }
         ScalarExpr::AggregateFunction(expr) => {

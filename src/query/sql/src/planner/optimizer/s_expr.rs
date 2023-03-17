@@ -252,6 +252,12 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
                     .iter()
                     .any(|expr| find_subquery_in_expr(&expr.scalar))
         }
+        RelOperator::Window(op) => {
+            op.partition_by
+                .iter()
+                .any(|expr| find_subquery_in_expr(&expr.scalar))
+                || find_subquery_in_expr(&op.aggregate_function.scalar)
+        }
     }
 }
 
@@ -270,6 +276,7 @@ fn find_subquery_in_expr(expr: &ScalarExpr) -> bool {
         ScalarExpr::ComparisonExpr(expr) => {
             find_subquery_in_expr(&expr.left) || find_subquery_in_expr(&expr.right)
         }
+        ScalarExpr::WindowFunction(expr) => expr.agg_func.args.iter().any(find_subquery_in_expr),
         ScalarExpr::AggregateFunction(expr) => expr.args.iter().any(find_subquery_in_expr),
         ScalarExpr::FunctionCall(expr) => expr.arguments.iter().any(find_subquery_in_expr),
         ScalarExpr::CastExpr(expr) => find_subquery_in_expr(&expr.argument),

@@ -154,6 +154,10 @@ impl<'a> AggregateRewriter<'a> {
             ScalarExpr::SubqueryExpr(_) => Ok(scalar.clone()),
 
             ScalarExpr::AggregateFunction(agg_func) => self.replace_aggregate_function(agg_func),
+
+            ScalarExpr::WindowFunction(_) => Err(ErrorCode::SemanticError(
+                "bind aggregate functions should not reach to window functions.",
+            )),
         }
     }
 
