@@ -155,6 +155,7 @@ impl<'a> GroupingChecker<'a> {
                         visibility: Visibility::Visible,
                     };
                     return Ok(BoundColumnRef {
+                        span: None,
                         column: column_binding,
                     }
                     .into());
