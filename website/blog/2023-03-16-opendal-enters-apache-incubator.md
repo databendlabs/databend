@@ -79,7 +79,7 @@ We expect OpenDAL to be widely used in the following application scenarios:
 
 **_From Xuanwo_**
 
-Hello everyone, I'm Xuanwo, the creator of Apache OpenDAL (Incubating).
+Hello everyone, I'm Xuanwo, the Committer of Apache OpenDAL (Incubating).
 
 The OpenDAL project embodies my personal dream. Now it has entered the Apache incubator with the collaboration of the community. I feel very happy at this moment. Thank you all contributors for your contributions, thank Databend Labs for your support, thank Champion tison for your guidance, thank Mentors ningjiang, wusheng, tedliu and hexiaoqiao for your advice.
 
