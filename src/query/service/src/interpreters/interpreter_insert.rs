@@ -379,8 +379,7 @@ impl Interpreter for InsertInterpreter {
                     .format
                     .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
 
-                let format = StageFileFormatType::from_str(format)?;
-                if StageFileFormatType::Parquet == format {
+                if Ok(StageFileFormatType::Parquet) == StageFileFormatType::from_str(format) {
                     let dest_schema = plan.schema();
                     let func_ctx = self.ctx.get_function_context()?;
 
