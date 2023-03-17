@@ -367,7 +367,7 @@ impl BlockBuilderTrait for ParquetBlockBuilder {
             let fields: Vec<DataField> = rg
                 .fields_to_read
                 .iter()
-                .map(|f| DataField::from(f))
+                .map(DataField::from)
                 .collect::<Vec<_>>();
 
             let input_schema = DataSchema::new(fields);
