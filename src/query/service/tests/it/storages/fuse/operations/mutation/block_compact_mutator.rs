@@ -37,7 +37,6 @@ use storages_common_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
 
 use crate::storages::fuse::block_writer::BlockWriter;
-use crate::storages::fuse::operations::mutation::block_compact_mutator;
 use crate::storages::fuse::operations::mutation::segments_compact_mutator::CompactSegmentTestFixture;
 use crate::storages::fuse::table_test_fixture::execute_command;
 use crate::storages::fuse::table_test_fixture::execute_query;
@@ -153,12 +152,16 @@ async fn test_safety() -> Result<()> {
         }
 
         let number_of_blocks: usize = block_number_of_segments.iter().sum();
+        if number_of_blocks < 2 {
+            eprintln!("number_of_blocks must large than 1");
+            continue;
+        }
         eprintln!(
             "generating segments number of segments {},  number of blocks {}",
             number_of_segments, number_of_blocks,
         );
 
-        let (locations, blocks, segment_infos) = CompactSegmentTestFixture::gen_segments(
+        let (locations, _, segment_infos) = CompactSegmentTestFixture::gen_segments(
             &block_writer,
             &segment_writer,
             &block_number_of_segments,
@@ -186,7 +189,7 @@ async fn test_safety() -> Result<()> {
 
         let compact_params = CompactOptions {
             base_snapshot: Arc::new(snapshot),
-            block_per_seg: 10,
+            block_per_seg: 30,
             limit: None,
         };
 
