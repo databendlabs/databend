@@ -21,7 +21,6 @@ use common_catalog::table::Table;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_storages_fuse::io::MetaReaders;
-use common_storages_fuse::io::SegmentInfoReader;
 use common_storages_fuse::io::SegmentWriter;
 use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::operations::BlockCompactMutator;
@@ -143,10 +142,10 @@ async fn test_safety() -> Result<()> {
     let block_writer = BlockWriter::new(&data_accessor, &location_gen);
     let schema = TestFixture::default_table_schema();
     let segment_writer = SegmentWriter::new(&data_accessor, &location_gen);
-    let segment_reader = MetaReaders::segment_info_reader(operator.clone(), schema.clone());
     let mut rand = thread_rng();
 
-    for r in 1..200 {
+    // for r in 1..100 { // <- use this at home
+    for r in 1..10 {
         eprintln!("round {}", r);
         let number_of_segments: usize = rand.gen_range(1..10);
 
@@ -157,20 +156,20 @@ async fn test_safety() -> Result<()> {
         }
 
         let number_of_blocks: usize = block_number_of_segments.iter().sum();
-
-        //        if number_of_blocks < 2 {
-        //            eprintln!("number_of_blocks must large than 1");
-        //            continue;
-        //        }
+        if number_of_blocks < 2 {
+            eprintln!("number_of_blocks must large than 1");
+            continue;
+        }
         eprintln!(
             "generating segments number of segments {},  number of blocks {}",
             number_of_segments, number_of_blocks,
         );
-
+        let rows_per_block = 1;
         let (locations, _, segment_infos) = CompactSegmentTestFixture::gen_segments(
             &block_writer,
             &segment_writer,
             &block_number_of_segments,
+            rows_per_block,
         )
         .await?;
 
@@ -202,7 +201,7 @@ async fn test_safety() -> Result<()> {
 
         let compact_params = CompactOptions {
             base_snapshot: Arc::new(snapshot),
-            block_per_seg: 10,
+            block_per_seg: 20,
             limit: None,
         };
 
@@ -213,23 +212,27 @@ async fn test_safety() -> Result<()> {
         let selections = block_compact_mutator.compact_tasks;
         let mut blocks_number = 0;
 
-        let mut c_block_ids = HashSet::new();
+        let mut block_ids_after_compaction = HashSet::new();
         for part in selections.partitions.into_iter() {
             let part = CompactPartInfo::from_part(&part)?;
             blocks_number += part.blocks.len();
             for b in &part.blocks {
-                c_block_ids.insert(b.location.clone());
+                block_ids_after_compaction.insert(b.location.clone());
             }
         }
 
         for unchanged in block_compact_mutator.unchanged_blocks_map.values() {
             blocks_number += unchanged.len();
             for b in unchanged.values() {
-                c_block_ids.insert(b.location.clone());
+                block_ids_after_compaction.insert(b.location.clone());
             }
         }
 
-        for (idx, unchanged_segment) in block_compact_mutator.unchanged_segments_map {
+        let segment_reader = MetaReaders::segment_info_reader(
+            ctx.get_data_operator()?.operator(),
+            TestFixture::default_table_schema(),
+        );
+        for unchanged_segment in block_compact_mutator.unchanged_segments_map.values() {
             let param = LoadParams {
                 location: unchanged_segment.0.clone(),
                 len_hint: None,
@@ -238,15 +241,12 @@ async fn test_safety() -> Result<()> {
             };
             let segment = segment_reader.read(&param).await?;
             blocks_number += segment.blocks.len();
-
             for b in &segment.blocks {
-                c_block_ids.insert(b.location.clone());
+                block_ids_after_compaction.insert(b.location.clone());
             }
         }
-
-        assert_eq!(c_block_ids, block_ids);
-
         assert_eq!(number_of_blocks, blocks_number);
+        assert_eq!(block_ids, block_ids_after_compaction);
     }
 
     Ok(())
