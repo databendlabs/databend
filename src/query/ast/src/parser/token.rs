@@ -985,7 +985,7 @@ impl TokenKind {
             | TokenKind::FLOAT
             // | TokenKind::FOREIGN
             // | TokenKind::GREATEST
-            | TokenKind::GROUPING
+            // | TokenKind::GROUPING
             | TokenKind::CUBE
             | TokenKind::ROLLUP
             // | TokenKind::IFNULL
