@@ -99,7 +99,7 @@ query T
 explain select t1.a from (select number + 1 as a, number + 1 as b from numbers(1)) as t1 where t1.a = (select count(*) from (select t2.a, t3.a from (select number + 1 as a, number + 1 as b, number + 1 as c, number + 1 as d from numbers(1)) as t2, (select number + 1 as a, number + 1 as b, number + 1 as c from numbers(1)) as t3 where t2.b = t3.b and t2.c = 1))
 ----
 Filter
-├── filters: [is_true(CAST(t1.a (#1) AS UInt64 NULL) = scalar_subquery_12 (#12))]
+├── filters: [is_true(CAST(t1.a (#1) AS UInt64 NULL) = scalar_subquery_13 (#13))]
 ├── estimated rows: 0.33
 └── HashJoin
     ├── join type: SINGLE
@@ -108,7 +108,7 @@ Filter
     ├── filters: []
     ├── estimated rows: 1.00
     ├── EvalScalar(Build)
-    │   ├── expressions: [COUNT(*) (#13)]
+    │   ├── expressions: [COUNT(*) (#12)]
     │   ├── estimated rows: 1.00
     │   └── AggregateFinal
     │       ├── group by: []
@@ -231,7 +231,7 @@ query T
 explain select count(*) from t where t.b = 2
 ----
 EvalScalar
-├── expressions: [COUNT(*) (#3)]
+├── expressions: [COUNT(*) (#2)]
 ├── estimated rows: 1.00
 └── AggregateFinal
     ├── group by: []
