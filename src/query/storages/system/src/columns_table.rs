@@ -144,16 +144,18 @@ impl ColumnsTable {
                 .await?
             {
                 let fields = if table.engine() == VIEW_ENGINE {
-                    if let Some(query) = table.options().get(QUERY) {
-                        let mut planner = Planner::new(ctx.clone());
-                        let (plan, _) = planner.plan_sql(query).await?;
-                        let schema = infer_table_schema(&plan.schema())?;
-                        schema.fields().clone()
-                    } else {
-                        return Err(ErrorCode::Internal(
-                            "Logical error, View Table must have a SelectQuery inside.",
-                        ));
-                    }
+                    // information_schema.columns is a view that will query system.columns
+                    // if let Some(query) = table.options().get(QUERY) {
+                    //     let mut planner = Planner::new(ctx.clone());
+                    //     let (plan, _) = planner.plan_sql(query).await?;
+                    //     let schema = infer_table_schema(&plan.schema())?;
+                    //     schema.fields().clone()
+                    // } else {
+                    //     return Err(ErrorCode::Internal(
+                    //         "Logical error, View Table must have a SelectQuery inside.",
+                    //     ));
+                    // }
+                    continue;
                 } else {
                     table.schema().fields().clone()
                 };
