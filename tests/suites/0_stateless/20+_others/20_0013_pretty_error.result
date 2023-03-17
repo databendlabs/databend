@@ -44,7 +44,6 @@ ERROR 1105 (HY000) at line 1: Code: 1025, displayText = error:
   |                    ^ Unknown table 't'
 
 .
-ERROR 1105 (HY000) at line 1: Code: 2302, displayText = Table 't3' already exists.
 ERROR 1105 (HY000) at line 1: Code: 1065, displayText = error: 
   --> SQL:1:33
   |
