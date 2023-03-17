@@ -2,6 +2,11 @@ name: Dev Linux
 
 on:
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
     branches:
       - main
     paths-ignore:
@@ -22,9 +27,6 @@ concurrency:
 env:
   BUILD_PROFILE: debug
   RUNNER_PROVIDER: aws
-  CARGO_INCREMENTAL: 0
-  # Remove this env after rust 1.68 has been released.
-  CARGO_UNSTABLE_SPARSE_REGISTRY: true
 
 jobs:
   check:
