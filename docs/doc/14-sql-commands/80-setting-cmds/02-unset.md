@@ -4,7 +4,7 @@ title: UNSET
 
 Sets one or more settings back to their default values. The settings will also be reset to the initial SESSION level if they were set to GLOBAL level. See [Examples](#examples) for how to reset a GLOBAL setting with UNSET.
 
-See also: [SET](set-global.md)
+See also: [SET](01-set-global.md)
 
 ## Syntax
 

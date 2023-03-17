@@ -99,7 +99,7 @@ SELECT number FROM numbers(3) AS a;
 
 ## AT Clause
 
-The AT clause enables you to query previous versions of your data. For more information, see [AT](./dml-at.md).
+The AT clause enables you to query previous versions of your data. For more information, see [AT](./03-dml-at.md).
 
 ## WHERE Clause
 
