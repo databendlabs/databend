@@ -19,6 +19,7 @@ use common_catalog::table::CompactTarget;
 use common_catalog::table::Table;
 use common_exception::Result;
 use common_expression::BlockThresholds;
+use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::io::SegmentWriter;
 use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::operations::BlockCompactMutator;
@@ -32,6 +33,7 @@ use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use rand::thread_rng;
 use rand::Rng;
+use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
@@ -204,9 +206,25 @@ async fn test_safety() -> Result<()> {
             blocks_number += part.blocks.len();
         }
 
+        for unchanged in block_compact_mutator.unchanged_blocks_map.values() {
+            blocks_number += unchanged.len();
+        }
+
+        let segment_reader = MetaReaders::segment_info_reader(
+            ctx.get_data_operator()?.operator(),
+            TestFixture::default_table_schema(),
+        );
+        for unchanged_segment in block_compact_mutator.unchanged_segments_map.values() {
+            let param = LoadParams {
+                location: unchanged_segment.0.clone(),
+                len_hint: None,
+                ver: unchanged_segment.1,
+                put_cache: false,
+            };
+            let segment = segment_reader.read(&param).await?;
+            blocks_number += segment.blocks.len();
+        }
         assert_eq!(number_of_blocks, blocks_number);
-        assert_eq!(0, block_compact_mutator.unchanged_segments_map.len());
-        assert_eq!(0, block_compact_mutator.unchanged_blocks_map.len());
     }
 
     Ok(())

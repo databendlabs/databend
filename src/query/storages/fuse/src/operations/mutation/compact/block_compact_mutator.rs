@@ -270,8 +270,10 @@ impl BlockCompactMutator {
             })
             .collect();
         self.compact_tasks.partitions.append(&mut partitions);
-        self.unchanged_blocks_map
-            .insert(segment_idx, unchanged_blocks);
+        if !unchanged_blocks.is_empty() {
+            self.unchanged_blocks_map
+                .insert(segment_idx, unchanged_blocks);
+        }
     }
 }
 
