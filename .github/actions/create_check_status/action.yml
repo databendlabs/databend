@@ -1,0 +1,69 @@
+name: "Create Check Status"
+description: "Create check status on github commit"
+inputs:
+  github_token:
+    description: "Github Token"
+    required: true
+  sha:
+    description: "commit sha"
+    required: true
+  name:
+    description: "check name"
+    required: true
+  status:
+    description: "check status, Default: queued, Can be one of: queued, in_progress, completed"
+    required: true
+  conclusion:
+    description: "check conclusion, Can be one of: action_required, cancelled, failure, neutral, success, skipped, stale, timed_out"
+    required: false
+  run_id:
+    description: "external id to associate with the check run"
+    required: false
+  title:
+    description: "check title"
+    required: true
+  summary:
+    description: "check summary"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    # Docs: https://docs.github.com/en/rest/checks/runs#create-a-check-run
+    # Rest: https://octokit.github.io/rest.js/v18#checks-create
+    - name: Create a check run
+      uses: actions/github-script@v6
+      env:
+        param_sha: ${{ inputs.sha }}
+        param_name: ${{ inputs.name }}
+        param_status: ${{ inputs.status }}
+        param_conclusion: ${{ inputs.conclusion }}
+        param_run_id: ${{ inputs.run_id }}
+        param_title: ${{ inputs.title }}
+        param_summary: ${{ inputs.summary }}
+        param_url: https://github.com/datafuselabs/databend/actions/runs/${{ github.run_id }}
+      with:
+        github-token: ${{ inputs.github_token }}
+        script: |
+          let summary = `
+          ${process.env.param_summary}
+          [View Details](https://github.com/datafuselabs/databend/actions/runs/${context.runId})`;
+          let data = {
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            head_sha: process.env.param_sha,
+            name: process.env.param_name,
+            status: process.env.param_status,
+            details_url: process.env.param_url,
+            output: {
+              title: process.env.param_title,
+              summary: summary,
+            },
+          };
+          if (process.env.param_status === 'completed') {
+            data.conclusion = process.env.param_conclusion;
+          }
+          if (process.env.param_run_id) {
+            data.external_id = process.env.param_run_id;
+          }
+          await github.rest.checks.create(data);

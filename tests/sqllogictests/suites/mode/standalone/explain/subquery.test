@@ -2,7 +2,7 @@ query T
 explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = (select count(*) from numbers(1) as t2, numbers(1) as t3 where t.number = t2.number)
 ----
 Filter
-├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = TRY_CAST(if(CAST(is_not_null(scalar_subquery_4 (#4)) AS Boolean NULL), CAST(CATCH(scalar_subquery_4 (#4)) AS Tuple(Int64 NULL, String NULL)), (0, NULL)) AS UInt64 NULL))]
+├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = TRY_CAST(if(CAST(is_not_null(scalar_subquery_4 (#4)) AS Boolean NULL), CAST(scalar_subquery_4 (#4) AS Int64 NULL), 0) AS UInt64 NULL))]
 ├── estimated rows: 0.33
 └── HashJoin
     ├── join type: SINGLE
@@ -337,7 +337,7 @@ query T
 explain select t.number from numbers(1) as t, numbers(1) as t1 where (select count(*) = 1 from numbers(1) where t.number = number) and t.number = t1.number
 ----
 Filter
-├── filters: [is_true(try_to_boolean(TRY_CAST(if(CAST(is_not_null(scalar_subquery_3 (#3)) AS Boolean NULL), CAST(CATCH(TRY_CAST(scalar_subquery_3 (#3) AS UInt64 NULL)) AS Tuple(Int64 NULL, String NULL)), (0, NULL)) AS UInt64 NULL)))]
+├── filters: [is_true(try_to_boolean(TRY_CAST(if(CAST(is_not_null(scalar_subquery_3 (#3)) AS Boolean NULL), CAST(TRY_CAST(scalar_subquery_3 (#3) AS UInt64 NULL) AS Int64 NULL), 0) AS UInt64 NULL)))]
 ├── estimated rows: 0.33
 └── HashJoin
     ├── join type: SINGLE

@@ -329,7 +329,7 @@ impl MemoryTableSource {
         match &entry.data_type {
             DataType::Tuple(inner_tys) => {
                 let col = entry.value.clone().into_column().unwrap();
-                let (inner_columns, _) = col.into_tuple().unwrap();
+                let inner_columns = col.into_tuple().unwrap();
                 let mut values = Vec::with_capacity(inner_tys.len());
                 for (col, ty) in inner_columns.iter().zip(inner_tys.iter()) {
                     values.push(BlockEntry {

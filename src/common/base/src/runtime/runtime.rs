@@ -21,6 +21,7 @@ use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use futures::future;
 use tokio::runtime::Builder;
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
@@ -324,4 +325,33 @@ pub async fn match_join_handle<T>(handle: JoinHandle<Result<T>>) -> Result<T> {
             }
         },
     }
+}
+
+/// Run multiple futures parallel
+/// using a semaphore to limit the parallelism number, and a specified thread pool to run the futures.
+/// It waits for all futures to complete and returns their results.
+pub async fn execute_futures_in_parallel<Fut>(
+    futures: impl IntoIterator<Item = Fut>,
+    thread_nums: usize,
+    permit_nums: usize,
+    thread_name: String,
+) -> Result<Vec<Fut::Output>>
+where
+    Fut: Future + Send + 'static,
+    Fut::Output: Send + 'static,
+{
+    // 1. build the runtime.
+    let semaphore = Semaphore::new(permit_nums);
+    let runtime = Arc::new(Runtime::with_worker_threads(
+        thread_nums,
+        Some(thread_name),
+    )?);
+
+    // 2. spawn all the tasks to the runtime with semaphore.
+    let join_handlers = runtime.try_spawn_batch(semaphore, futures).await?;
+
+    // 3. get all the result.
+    future::try_join_all(join_handlers)
+        .await
+        .map_err(|e| ErrorCode::Internal(format!("try join all futures failure, {}", e)))
 }

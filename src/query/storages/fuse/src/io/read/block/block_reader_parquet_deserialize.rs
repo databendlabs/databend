@@ -138,7 +138,7 @@ impl BlockReader {
         // build data block
         let chunk = Chunk::try_new(chunk_arrays)?;
         let data_block = if !need_to_fill_default_val {
-            DataBlock::from_arrow_chunk(&chunk, &self.data_schema())
+            DataBlock::from_arrow_chunk(&chunk, &self.data_schema())?
         } else {
             let data_schema = self.data_schema();
             let mut default_vals = Vec::with_capacity(need_default_vals.len());
@@ -154,7 +154,7 @@ impl BlockReader {
                 &chunk,
                 &default_vals,
                 num_rows,
-            )
+            )?
         };
 
         // populate cache if necessary
@@ -167,7 +167,7 @@ impl BlockReader {
                 }
             }
         }
-        data_block
+        Ok(data_block)
     }
 
     fn chunks_to_parquet_array_iter<'a>(

@@ -14,6 +14,9 @@
 
 #![allow(clippy::absurd_extreme_comparisons)]
 
+use std::ops::BitAnd;
+use std::ops::BitOr;
+use std::ops::BitXor;
 use std::sync::Arc;
 
 use common_expression::types::decimal::Decimal;
@@ -37,6 +40,7 @@ use common_expression::types::ALL_FLOAT_TYPES;
 use common_expression::types::ALL_INTEGER_TYPES;
 use common_expression::types::ALL_NUMBER_CLASSES;
 use common_expression::types::ALL_NUMERICS_TYPES;
+use common_expression::types::ALL_UNSIGNED_INTEGER_TYPES;
 use common_expression::utils::arithmetics_type::ResultTypeOfBinary;
 use common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use common_expression::utils::arrow::constant_bitmap;
@@ -48,6 +52,7 @@ use common_expression::vectorize_with_builder_2_arg;
 use common_expression::with_float_mapped_type;
 use common_expression::with_integer_mapped_type;
 use common_expression::with_number_mapped_type;
+use common_expression::with_unsigned_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::EvalContext;
@@ -57,13 +62,11 @@ use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::Scalar;
-use common_expression::TypeDeserializer;
 use common_io::display_decimal_128;
 use common_io::display_decimal_256;
 use ethnum::i256;
 use lexical_core::FormattedSize;
 use num_traits::AsPrimitive;
-use ordered_float::OrderedFloat;
 
 use super::arithmetic_modulo::vectorize_modulo;
 use super::decimal::register_decimal_to_float32;
@@ -75,13 +78,13 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("minus", &["subtract", "neg", "negate"]);
     registry.register_aliases("div", &["intdiv"]);
     registry.register_aliases("modulo", &["mod"]);
-    registry.register_aliases("caret", &["exponentiation"]);
 
     register_unary_minus(registry);
     register_string_to_number(registry);
     register_number_to_string(registry);
     register_number_to_number(registry);
-    register_arithmetic(registry);
+    register_binary_arithmetic(registry);
+    register_unary_arithmetic(registry);
 }
 
 macro_rules! register_plus {
@@ -193,20 +196,6 @@ macro_rules! register_divide {
     };
 }
 
-macro_rules! register_caret {
-    ( $lt:ty, $rt:ty, $registry:expr) => {
-        type L = $lt;
-        type R = $rt;
-        type T = F64;
-        $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
-            "caret",
-            FunctionProperty::default(),
-            |_, _| FunctionDomain::Full,
-            |a, b, _| OrderedFloat((a.as_(): f64).powf(b.as_(): f64)),
-        );
-    };
-}
-
 macro_rules! register_div {
     ( $lt:ty, $rt:ty, $registry:expr) => {
         type L = $lt;
@@ -274,7 +263,7 @@ macro_rules! register_modulo {
     };
 }
 
-macro_rules! register_arithmetic {
+macro_rules! register_basic_arithmetic {
     ( $lt:ty, $rt:ty, $registry:expr) => {{
         register_plus!($lt, $rt, $registry);
     }
@@ -292,35 +281,119 @@ macro_rules! register_arithmetic {
     }
     {
         register_modulo!($lt, $rt, $registry);
-    }
-    {
-        register_caret!($lt, $rt, $registry);
     }};
 }
 
-fn register_arithmetic(registry: &mut FunctionRegistry) {
-    for left in ALL_INTEGER_TYPES {
-        for right in ALL_INTEGER_TYPES {
-            with_integer_mapped_type!(|L| match left {
-                NumberDataType::L => with_integer_mapped_type!(|R| match right {
-                    NumberDataType::R => {
-                        register_arithmetic!(L, R, registry);
-                    }
-                    _ => unreachable!(),
-                }),
-                _ => unreachable!(),
-            });
-        }
-    }
+macro_rules! register_bitwise_and {
+    ( $lt:ty, $rt:ty, $registry:expr) => {
+        type L = $lt;
+        type R = $rt;
+        $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _, _>(
+            "bit_and",
+            FunctionProperty::default(),
+            |_, _| FunctionDomain::Full,
+            |a, b, _| (a.as_(): i64).bitand(b.as_(): i64),
+        );
+    };
+}
 
+macro_rules! register_bitwise_or {
+    ( $lt:ty, $rt:ty, $registry:expr) => {
+        type L = $lt;
+        type R = $rt;
+        $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _, _>(
+            "bit_or",
+            FunctionProperty::default(),
+            |_, _| FunctionDomain::Full,
+            |a, b, _| (a.as_(): i64).bitor(b.as_(): i64),
+        );
+    };
+}
+
+macro_rules! register_bitwise_xor {
+    ( $lt:ty, $rt:ty, $registry:expr) => {
+        type L = $lt;
+        type R = $rt;
+        $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _, _>(
+            "bit_xor",
+            FunctionProperty::default(),
+            |_, _| FunctionDomain::Full,
+            |a, b, _| (a.as_(): i64).bitxor(b.as_(): i64),
+        );
+    };
+}
+
+macro_rules! register_bitwise_shift_left {
+    ( $lt:ty, $rt:ty, $registry:expr) => {
+        type L = $lt;
+        type R = $rt;
+        $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _, _>(
+            "bit_shift_left",
+            FunctionProperty::default(),
+            |_, _| FunctionDomain::Full,
+            |a, b, _| (a.as_(): i64) << (b.as_(): u64),
+        );
+    };
+}
+
+macro_rules! register_bitwise_shift_right {
+    ( $lt:ty, $rt:ty, $registry:expr) => {
+        type L = $lt;
+        type R = $rt;
+        $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _, _>(
+            "bit_shift_right",
+            FunctionProperty::default(),
+            |_, _| FunctionDomain::Full,
+            |a, b, _| (a.as_(): i64) >> (b.as_(): u64),
+        );
+    };
+}
+
+macro_rules! register_bitwise_operation {
+    ( $lt:ty, $rt:ty, $registry:expr) => {{
+        register_bitwise_and!($lt, $rt, $registry);
+    }
+    {
+        register_bitwise_or!($lt, $rt, $registry);
+    }
+    {
+        register_bitwise_xor!($lt, $rt, $registry);
+    }};
+}
+
+macro_rules! register_bitwise_shift {
+    ( $lt:ty, $rt:ty, $registry:expr) => {{
+        register_bitwise_shift_left!($lt, $rt, $registry);
+    }
+    {
+        register_bitwise_shift_right!($lt, $rt, $registry);
+    }};
+}
+
+fn register_binary_arithmetic(registry: &mut FunctionRegistry) {
+    // register basic arithmetic operation (+ - * / %)
     register_decimal_arithmetic(registry);
 
     for left in ALL_INTEGER_TYPES {
+        for right in ALL_INTEGER_TYPES {
+            with_integer_mapped_type!(|L| match left {
+                NumberDataType::L => with_integer_mapped_type!(|R| match right {
+                    NumberDataType::R => {
+                        register_basic_arithmetic!(L, R, registry);
+                    }
+                    _ => unreachable!(),
+                }),
+                _ => unreachable!(),
+            });
+        }
+    }
+
+    for left in ALL_INTEGER_TYPES {
         for right in ALL_FLOAT_TYPES {
             with_integer_mapped_type!(|L| match left {
                 NumberDataType::L => with_float_mapped_type!(|R| match right {
                     NumberDataType::R => {
-                        register_arithmetic!(L, R, registry);
+                        register_basic_arithmetic!(L, R, registry);
                     }
                     _ => unreachable!(),
                 }),
@@ -334,7 +407,7 @@ fn register_arithmetic(registry: &mut FunctionRegistry) {
             with_float_mapped_type!(|L| match left {
                 NumberDataType::L => with_integer_mapped_type!(|R| match right {
                     NumberDataType::R => {
-                        register_arithmetic!(L, R, registry);
+                        register_basic_arithmetic!(L, R, registry);
                     }
                     _ => unreachable!(),
                 }),
@@ -348,13 +421,72 @@ fn register_arithmetic(registry: &mut FunctionRegistry) {
             with_float_mapped_type!(|L| match left {
                 NumberDataType::L => with_float_mapped_type!(|R| match right {
                     NumberDataType::R => {
-                        register_arithmetic!(L, R, registry);
+                        register_basic_arithmetic!(L, R, registry);
                     }
                     _ => unreachable!(),
                 }),
                 _ => unreachable!(),
             });
         }
+    }
+
+    // register bitwise operation : AND/OR/XOR
+    for left in ALL_INTEGER_TYPES {
+        for right in ALL_INTEGER_TYPES {
+            with_integer_mapped_type!(|L| match left {
+                NumberDataType::L => with_integer_mapped_type!(|R| match right {
+                    NumberDataType::R => {
+                        register_bitwise_operation!(L, R, registry);
+                    }
+                    _ => unreachable!(),
+                }),
+                _ => unreachable!(),
+            });
+        }
+    }
+
+    // register shift operation : shift left/shift right
+    for left in ALL_INTEGER_TYPES {
+        for right in ALL_UNSIGNED_INTEGER_TYPES {
+            with_integer_mapped_type!(|L| match left {
+                NumberDataType::L => with_unsigned_number_mapped_type!(|R| match right {
+                    NumberDataType::R => {
+                        register_bitwise_shift!(L, R, registry);
+                    }
+                    _ => unreachable!(),
+                }),
+                _ => unreachable!(),
+            });
+        }
+    }
+}
+
+macro_rules! register_bitwise_not {
+    ( $n:ty, $registry:expr) => {
+        type N = $n;
+        $registry.register_1_arg::<NumberType<N>, NumberType<i64>, _, _>(
+            "bit_not",
+            FunctionProperty::default(),
+            |_| FunctionDomain::Full,
+            |a, _| !(a.as_(): i64),
+        );
+    };
+}
+
+macro_rules! register_unary_arithmetic {
+    ( $n:ty, $registry:expr) => {{
+        register_bitwise_not!($n, $registry);
+    }};
+}
+
+fn register_unary_arithmetic(registry: &mut FunctionRegistry) {
+    for dest_ty in ALL_INTEGER_TYPES {
+        with_integer_mapped_type!(|DEST_TYPE| match dest_ty {
+            NumberDataType::DEST_TYPE => {
+                register_unary_arithmetic!(DEST_TYPE, registry);
+            }
+            _ => unreachable!(),
+        });
     }
 }
 
@@ -743,34 +875,30 @@ fn decimal_to_string(
 
     let from_type = from_type.as_decimal().unwrap();
 
-    let result = match from_type {
+    let column = match from_type {
         DecimalDataType::Decimal128(_) => {
             let (buffer, from_size) = i128::try_downcast_column(&column).unwrap();
-
             let mut builder = StringColumnBuilder::with_capacity(buffer.len(), buffer.len() * 10);
             for x in buffer {
                 builder.put_str(&display_decimal_128(x, from_size.scale));
                 builder.commit_row();
             }
-            builder.finish_to_column()
+            builder
         }
-
         DecimalDataType::Decimal256(_) => {
             let (buffer, from_size) = i256::try_downcast_column(&column).unwrap();
-
             let mut builder = StringColumnBuilder::with_capacity(buffer.len(), buffer.len() * 10);
             for x in buffer {
                 builder.put_str(&display_decimal_256(x, from_size.scale));
                 builder.commit_row();
             }
-            builder.finish_to_column()
+            builder
         }
     };
 
     if is_scalar {
-        let scalar = result.index(0).unwrap();
-        Value::Scalar(scalar.to_owned())
+        Value::Scalar(Scalar::String(column.build_scalar()))
     } else {
-        Value::Column(result)
+        Value::Column(Column::String(column.build()))
     }
 }

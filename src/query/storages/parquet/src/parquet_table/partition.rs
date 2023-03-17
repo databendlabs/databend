@@ -107,14 +107,20 @@ impl ParquetTable {
             None
         };
 
-        let file_locations = if self.operator.info().can_blocking() {
-            self.files_info.blocking_list(&self.operator, false)
-        } else {
-            self.files_info.list(&self.operator, false).await
-        }?
-        .into_iter()
-        .map(|f| f.path)
-        .collect::<Vec<_>>();
+        let file_locations = match &self.files_to_read {
+            Some(files) => files
+                .iter()
+                .map(|f| (f.path.clone(), f.size))
+                .collect::<Vec<_>>(),
+            None => if self.operator.info().can_blocking() {
+                self.files_info.blocking_list(&self.operator, false)
+            } else {
+                self.files_info.list(&self.operator, false).await
+            }?
+            .into_iter()
+            .map(|f| (f.path, f.size))
+            .collect::<Vec<_>>(),
+        };
 
         let pruner = PartitionPruner {
             schema,

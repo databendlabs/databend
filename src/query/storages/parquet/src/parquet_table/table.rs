@@ -38,6 +38,7 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_pipeline_core::Pipeline;
 use common_storage::init_stage_operator;
+use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
 use opendal::Operator;
 
@@ -50,6 +51,7 @@ pub struct ParquetTable {
 
     pub(super) table_info: TableInfo,
     pub(super) arrow_schema: ArrowSchema,
+    pub(super) files_to_read: Option<Vec<StageFileInfo>>,
 }
 
 impl ParquetTable {
@@ -63,6 +65,7 @@ impl ParquetTable {
             read_options: info.read_options,
             stage_info: info.stage_info.clone(),
             files_info: info.files_info.clone(),
+            files_to_read: info.files_to_read.clone(),
         }))
     }
 }
@@ -100,6 +103,7 @@ impl Table for ParquetTable {
             read_options: self.read_options,
             stage_info: self.stage_info.clone(),
             files_info: self.files_info.clone(),
+            files_to_read: self.files_to_read.clone(),
         })
     }
 

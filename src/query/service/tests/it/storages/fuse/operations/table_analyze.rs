@@ -75,7 +75,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     // delete
     let query = "delete from default.t where c=1";
     let mut planner = Planner::new(ctx.clone());
-    let (plan, _, _) = planner.plan_sql(query).await?;
+    let (plan, _) = planner.plan_sql(query).await?;
     if let Plan::Delete(delete) = plan {
         do_deletion(ctx.clone(), table.clone(), *delete).await?;
     }

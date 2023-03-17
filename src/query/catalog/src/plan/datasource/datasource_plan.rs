@@ -35,6 +35,7 @@ pub struct DataSourcePlan {
 
     pub tbl_args: Option<TableArgs>,
     pub push_downs: Option<PushDownInfo>,
+    pub query_internal_columns: bool,
 }
 
 impl DataSourcePlan {

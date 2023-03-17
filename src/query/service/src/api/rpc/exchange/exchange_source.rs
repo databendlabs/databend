@@ -54,7 +54,13 @@ pub fn via_exchange_source(
 
     let last_output_len = pipeline.output_len();
     let flight_exchanges_len = flight_exchanges.len();
-    exchange_source_reader::via_reader(last_output_len, flight_exchanges, pipeline);
+    exchange_source_reader::via_reader(
+        last_output_len,
+        flight_exchanges,
+        pipeline,
+        params.query_id.clone(),
+        params.fragment_id,
+    );
 
     injector.apply_merge_deserializer(flight_exchanges_len, params, pipeline)
 }

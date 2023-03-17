@@ -324,21 +324,21 @@ statement ok
 CREATE TABLE t15(id Int, arr Array(String)) Engine = Fuse
 
 statement ok
-INSERT INTO t15 (id, arr) VALUES(1, ['aa', 'bb']), (2, ['cc', 'dd']), (3, ['ee', 'ff'])
+INSERT INTO t15 (id, arr) VALUES(1, ['aa', 'bb']), (2, ['cc', 'dd']), (3, [12, 34])
 
 query IT
 select * from t15
 ----
 1 ['aa','bb']
 2 ['cc','dd']
-3 ['ee','ff']
+3 ['12','34']
 
 query TT
 select arr[1], arr[2] from t15
 ----
 aa bb
 cc dd
-ee ff
+12 34
 
 statement ok
 drop table if exists t16
@@ -347,19 +347,21 @@ statement ok
 CREATE TABLE t16(id Int, arr Array(Int64)) Engine = Fuse
 
 statement ok
-INSERT INTO t16 (id, arr) VALUES(1, [1,2,3,4]), (2, [5,6,7,8])
+INSERT INTO t16 (id, arr) VALUES(1, [1,2,3,4]), (2, [5,6,7,8]), (3, ['9','10','11'])
 
 query IT
 select * from t16
 ----
 1 [1,2,3,4]
 2 [5,6,7,8]
+3 [9,10,11]
 
 query II
 select arr[1], arr[2] from t16
 ----
 1 2
 5 6
+9 10
 
 query II
 select arr[1], arr[2] from t16 where arr[2] = 6 order by arr[3] desc

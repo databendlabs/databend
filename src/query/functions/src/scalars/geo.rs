@@ -100,7 +100,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_,_,_|FunctionDomain::Full,
         vectorize_with_builder_3_arg::<NumberType<F64>, NumberType<F64>, NumberType<u8>, NumberType<u64>>(
             |lon, lat, r, builder, ctx| {
-                match LatLng::from_degrees(lat.into(), lon.into()) {
+                match LatLng::new(lat.into(), lon.into()) {
                     Ok(coord) => {
                         let h3_cell =  coord.to_cell(Resolution::try_from(r).unwrap());
                         builder.push(h3_cell.into())
@@ -365,7 +365,7 @@ fn point_in_polygon_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value
                     _ => unreachable!(),
                 })
                 .collect(),
-            ValueRef::Column(Column::Tuple { fields, .. }) => fields
+            ValueRef::Column(Column::Tuple(fields)) => fields
                 .iter()
                 .cloned()
                 .map(|c| ValueRef::Column(Float64Type::try_downcast_column(&c).unwrap()))

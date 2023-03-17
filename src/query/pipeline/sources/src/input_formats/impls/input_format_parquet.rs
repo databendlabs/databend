@@ -31,10 +31,10 @@ use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::arrow::io::parquet::read::to_deserializer;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
 use common_arrow::parquet::metadata::ColumnChunkMetaData;
+use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::read_metadata;
 use common_arrow::read_columns_async;
-use common_catalog::plan::StageFileInfo;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -44,6 +44,8 @@ use common_expression::TableSchemaRef;
 use common_meta_app::principal::StageInfo;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
+use common_storage::read_parquet_metas_in_parallel;
+use common_storage::StageFileInfo;
 use futures::AsyncRead;
 use futures::AsyncSeek;
 use opendal::Operator;
@@ -63,27 +65,16 @@ use crate::input_formats::SplitInfo;
 
 pub struct InputFormatParquet;
 
-fn col_offset(meta: &ColumnChunkMetaData) -> i64 {
-    meta.data_page_offset()
-}
-
-#[async_trait::async_trait]
-impl InputFormat for InputFormatParquet {
-    async fn get_splits(
-        &self,
+impl InputFormatParquet {
+    fn make_splits(
         file_infos: Vec<StageFileInfo>,
-        _stage_info: &StageInfo,
-        op: &Operator,
-        _settings: &Arc<Settings>,
+        metas: Vec<FileMetaData>,
     ) -> Result<Vec<Arc<SplitInfo>>> {
         let mut infos = vec![];
         let mut schema = None;
-        for info in file_infos {
+        for (info, mut file_meta) in file_infos.into_iter().zip(metas.into_iter()) {
             let size = info.size as usize;
             let path = info.path.clone();
-
-            let mut reader = op.reader(&path).await?;
-            let mut file_meta = read_metadata_async(&mut reader).await?;
             let row_groups = mem::take(&mut file_meta.row_groups);
             if schema.is_none() {
                 schema = Some(infer_schema(&file_meta)?);
@@ -124,7 +115,30 @@ impl InputFormat for InputFormatParquet {
                 }
             }
         }
+
         Ok(infos)
+    }
+}
+
+fn col_offset(meta: &ColumnChunkMetaData) -> i64 {
+    meta.data_page_offset()
+}
+
+#[async_trait::async_trait]
+impl InputFormat for InputFormatParquet {
+    async fn get_splits(
+        &self,
+        file_infos: Vec<StageFileInfo>,
+        _stage_info: &StageInfo,
+        op: &Operator,
+        _settings: &Arc<Settings>,
+    ) -> Result<Vec<Arc<SplitInfo>>> {
+        let files = file_infos
+            .iter()
+            .map(|f| (f.path.clone(), f.size))
+            .collect::<Vec<_>>();
+        let metas = read_parquet_metas_in_parallel(op.clone(), files, 16, 64).await?;
+        Self::make_splits(file_infos, metas)
     }
 
     async fn infer_schema(&self, path: &str, op: &Operator) -> Result<TableSchemaRef> {
@@ -161,7 +175,14 @@ impl InputFormatPipe for ParquetFormatPipe {
         let op = ctx.source.get_operator()?;
         let mut reader = op.reader(&split_info.file.path).await?;
         let input_fields = Arc::new(get_used_fields(&meta.file.fields, &ctx.schema)?);
-        RowGroupInMemory::read_async(&mut reader, meta.meta.clone(), input_fields).await
+
+        RowGroupInMemory::read_async(
+            split_info.to_string(),
+            &mut reader,
+            meta.meta.clone(),
+            input_fields,
+        )
+        .await
     }
 }
 
@@ -203,6 +224,7 @@ impl DynData for SplitMeta {
 }
 
 pub struct RowGroupInMemory {
+    pub split_info: String,
     pub meta: RowGroupMetaData,
     // for input, they are in the order of schema.
     // for select, they are the fields used in query.
@@ -224,6 +246,7 @@ impl RowBatchTrait for RowGroupInMemory {
 
 impl RowGroupInMemory {
     fn read<R: Read + Seek>(
+        split_info: String,
         reader: &mut R,
         meta: RowGroupMetaData,
         fields: Arc<Vec<Field>>,
@@ -237,6 +260,7 @@ impl RowGroupInMemory {
             filed_arrays.push(data)
         }
         Ok(Self {
+            split_info,
             meta,
             field_meta_indexes,
             field_arrays: filed_arrays,
@@ -245,6 +269,7 @@ impl RowGroupInMemory {
     }
 
     async fn read_async<R: AsyncRead + AsyncSeek + Send + Unpin>(
+        split_info: String,
         reader: &mut R,
         meta: RowGroupMetaData,
         fields: Arc<Vec<Field>>,
@@ -258,6 +283,7 @@ impl RowGroupInMemory {
             filed_arrays.push(data)
         }
         Ok(Self {
+            split_info,
             meta,
             field_meta_indexes,
             field_arrays: filed_arrays,
@@ -284,9 +310,10 @@ impl RowGroupInMemory {
         }
 
         match RowGroupDeserializer::new(column_chunks, self.meta.num_rows(), None).next() {
-            None => Err(ErrorCode::Internal(
-                "deserialize from raw group: fail to get a chunk",
-            )),
+            None => Err(ErrorCode::Internal(format!(
+                "no chunk when deserialize row group {}",
+                self.split_info
+            ))),
             Some(Ok(chunk)) => Ok(chunk),
             Some(Err(e)) => Err(e.into()),
         }
@@ -375,6 +402,7 @@ impl AligningStateTrait for AligningState {
     }
 
     fn align(&mut self, read_batch: Option<ReadBatch>) -> Result<Vec<RowGroupInMemory>> {
+        let split_info = self.split_info.to_string();
         if let Some(rb) = read_batch {
             if let ReadBatch::Buffer(b) = rb {
                 self.buffers.push(b)
@@ -399,6 +427,7 @@ impl AligningStateTrait for AligningState {
             let mut row_batches = Vec::with_capacity(file_meta.row_groups.len());
             for row_group in file_meta.row_groups.into_iter() {
                 row_batches.push(RowGroupInMemory::read(
+                    split_info.clone(),
                     &mut cursor,
                     row_group,
                     fields.clone(),

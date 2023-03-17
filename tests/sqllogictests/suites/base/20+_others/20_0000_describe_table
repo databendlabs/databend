@@ -62,6 +62,7 @@ ordinal_position TINYINT UNSIGNED NO 0 (empty)
 column_default NULL NO NULL (empty)
 column_comment NULL NO NULL (empty)
 column_key NULL NO NULL (empty)
+nullable TINYINT UNSIGNED YES NULL (empty)
 is_nullable VARCHAR NO "" (empty)
 data_type VARCHAR NO "" (empty)
 column_type VARCHAR NO "" (empty)
@@ -81,6 +82,12 @@ domain_catalog NULL NO NULL (empty)
 domain_schema NULL NO NULL (empty)
 domain_name NULL NO NULL (empty)
 extra NULL NO NULL (empty)
+
+query TTT
+select column_name, nullable, is_nullable from INFORMATION_SCHEMA.COLUMNS where table_name='tables_with_history' and column_name in ('num_rows', 'dropped_on') order by column_name
+----
+dropped_on 0 NO
+num_rows 1 YES
 
 statement ok
 DROP TABLE IF EXISTS t

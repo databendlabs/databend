@@ -24,6 +24,7 @@ pub use mysql_client::MySQLClient;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 use sqllogictest::DBOutput;
+use sqllogictest::DefaultColumnType;
 
 use crate::error::Result;
 
@@ -47,7 +48,7 @@ pub enum Client {
 }
 
 impl Client {
-    pub async fn query(&mut self, sql: &str) -> Result<DBOutput> {
+    pub async fn query(&mut self, sql: &str) -> Result<DBOutput<DefaultColumnType>> {
         match self {
             Client::MySQL(client) => client.query(sql).await,
             Client::Http(client) => client.query(sql).await,

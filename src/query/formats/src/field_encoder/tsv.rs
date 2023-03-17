@@ -93,7 +93,7 @@ impl FieldEncoderRowBased for FieldEncoderTSV {
         out_buf.push(b'{');
         let inner = &T::upcast_column(column.values.clone());
         match inner {
-            Column::Tuple { fields, .. } => {
+            Column::Tuple(fields) => {
                 for i in start..end {
                     if i != start {
                         out_buf.extend_from_slice(b",");

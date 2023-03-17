@@ -139,6 +139,14 @@ impl Binder {
                                 need_eval_scalar: false,
                             });
                         }
+                        NameResolutionResult::InternalColumn(column) => {
+                            order_items.push(OrderItem {
+                                expr: order.clone(),
+                                name: column.internal_column.column_name().clone(),
+                                index: column.index,
+                                need_eval_scalar: false,
+                            });
+                        }
                         NameResolutionResult::Alias { .. } => {
                             return Err(ErrorCode::Internal("Invalid name resolution result"));
                         }

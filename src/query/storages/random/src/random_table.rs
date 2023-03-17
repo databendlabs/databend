@@ -25,8 +25,11 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::BlockEntry;
+use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
+use common_expression::Value;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -120,7 +123,13 @@ impl Table for RandomTable {
         let columns = schema
             .fields()
             .iter()
-            .map(|f| f.data_type().create_random_column(1))
+            .map(|f| {
+                let data_type = f.data_type().into();
+                BlockEntry {
+                    value: Value::Column(Column::random(&data_type, 1)),
+                    data_type,
+                }
+            })
             .collect::<Vec<_>>();
         let block = DataBlock::new(columns, 1);
         let one_row_bytes = block.memory_size();
@@ -208,7 +217,13 @@ impl SyncSource for RandomSource {
             .schema
             .fields()
             .iter()
-            .map(|f| f.data_type().create_random_column(self.rows))
+            .map(|f| {
+                let data_type = f.data_type().into();
+                BlockEntry {
+                    value: Value::Column(Column::random(&data_type, self.rows)),
+                    data_type,
+                }
+            })
             .collect();
 
         // The partition guarantees the number of rows is less than or equal to `max_block_size`.

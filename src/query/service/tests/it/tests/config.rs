@@ -69,27 +69,6 @@ impl ConfigBuilder {
         self
     }
 
-    /// TODO: remove this settings in the future?
-    #[allow(dead_code)]
-    pub fn async_insert_busy_timeout(mut self, value: u64) -> ConfigBuilder {
-        self.conf.query.async_insert_busy_timeout = value;
-        self
-    }
-
-    /// TODO: remove this settings in the future?
-    #[allow(dead_code)]
-    pub fn async_insert_max_data_size(mut self, value: u64) -> ConfigBuilder {
-        self.conf.query.async_insert_max_data_size = value;
-        self
-    }
-
-    /// TODO: remove this settings in the future?
-    #[allow(dead_code)]
-    pub fn async_insert_stale_timeout(mut self, value: u64) -> ConfigBuilder {
-        self.conf.query.async_insert_stale_timeout = value;
-        self
-    }
-
     pub fn http_handler_result_timeout(mut self, value: impl Into<u64>) -> ConfigBuilder {
         self.conf.query.http_handler_result_timeout_secs = value.into();
         self

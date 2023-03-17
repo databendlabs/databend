@@ -13,6 +13,6 @@
 // limitations under the License.
 
 fn main() {
-    codegen::writes::codegen_arithmetic_type_v2();
+    codegen::writes::codegen_arithmetic_type();
     codegen::writes::codegen_register();
 }

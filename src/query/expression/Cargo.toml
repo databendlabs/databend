@@ -20,14 +20,13 @@ common-io = { path = "../../common/io" }
 # Github dependencies
 
 # Crates.io dependencies
-base64 = "0.13.0"
+base64 = "0.21.0"
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 comfy-table = "6"
 dashmap = "5.4"
 educe = "0.4"
 enum-as-inner = "0.5"
-enum_dispatch = "0.3.8"
 ethnum = { version = "1.3", features = ["serde", "macros"] }
 futures = "0.3.24"
 hex = "0.4.3"
@@ -35,7 +34,7 @@ itertools = "0.10"
 jsonb = { workspace = true }
 lexical-core = "0.8.5"
 match-template = "0.0.1"
-micromarshal = "0.2.1"
+micromarshal = "0.3.0"
 num-traits = "0.2.15"
 once_cell = "1.15.0"
 ordered-float = { workspace = true, features = ["serde", "rand"] }

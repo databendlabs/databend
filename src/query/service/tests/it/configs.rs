@@ -707,9 +707,6 @@ wait_timeout_mills = 5000
 max_query_log_size = 10000
 management_mode = false
 jwt_key_file = ""
-async_insert_max_data_size = 10000
-async_insert_busy_timeout = 200
-async_insert_stale_timeout = 0
 users = []
 share_endpoint_address = ""
 

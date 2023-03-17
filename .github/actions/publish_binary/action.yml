@@ -37,7 +37,7 @@ runs:
         GH_TOKEN: ${{ inputs.github_token }}
 
     - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v1
+      uses: aws-actions/configure-aws-credentials@v2
       with:
         role-duration-seconds: 900
         role-to-assume: ${{ inputs.repo_role_arn }}
@@ -47,7 +47,7 @@ runs:
       shell: bash
       if: inputs.mode == 'normal'
       run: |
-        aws s3 cp databend-${{ inputs.version }}-${{ inputs.target }}.tar.gz s3://repo.databend.rs/databend/${{ inputs.version }}/databend-${{ inputs.version }}-${{ inputs.target }}.tar.gz
+        aws s3 cp databend-${{ inputs.version }}-${{ inputs.target }}.tar.gz s3://repo.databend.rs/databend/${{ inputs.version }}/databend-${{ inputs.version }}-${{ inputs.target }}.tar.gz --no-progress
         curl --retry 3 -fsSLo tags.json \
             --header 'content-type: application/json' \
             --header 'authorization: Bearer ${{ inputs.github_token }}' \
@@ -65,7 +65,7 @@ runs:
       shell: bash
       if: inputs.mode == 'hive'
       run: |
-        aws s3 cp databend-hive-${{ inputs.version }}-${{ inputs.target }}.tar.gz s3://repo.databend.rs/databend/${{ inputs.version }}/databend-hive-${{ inputs.version }}-${{ inputs.target }}.tar.gz
+        aws s3 cp databend-hive-${{ inputs.version }}-${{ inputs.target }}.tar.gz s3://repo.databend.rs/databend/${{ inputs.version }}/databend-hive-${{ inputs.version }}-${{ inputs.target }}.tar.gz --no-progress
         curl --retry 3 -fsSLo tags.json \
             --header 'content-type: application/json' \
             --header 'authorization: Bearer ${{ inputs.github_token }}' \

@@ -75,7 +75,7 @@ async fn check_segment_column_ids(
         location: snapshot_loc.clone(),
         len_hint: None,
         ver: TableSnapshot::VERSION,
-        put_cache: true,
+        put_cache: false,
     };
 
     let snapshot = snapshot_reader.read(&params).await?;
@@ -100,7 +100,7 @@ async fn check_segment_column_ids(
                 location: seg_loc.clone(),
                 len_hint: None,
                 ver: SegmentInfo::VERSION,
-                put_cache: true,
+                put_cache: false,
             };
             let segment_info = segment_reader.read(&params).await?;
 
@@ -188,10 +188,7 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
         let column0 = Int32Type::from_data(vec![1, 2]);
         let column3 = UInt64Type::from_data(vec![3, 4]);
         let column4 = Float64Type::from_data(vec![13.0, 14.0]);
-        let tuple_column = Column::Tuple {
-            fields: vec![column3, column4],
-            len: 2,
-        };
+        let tuple_column = Column::Tuple(vec![column3, column4]);
 
         DataBlock::new_from_columns(vec![column0, tuple_column])
     };
@@ -241,7 +238,7 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
     // do compact
     let query = format!("optimize table {db_name}.{tbl_name} compact");
     let mut planner = Planner::new(ctx.clone());
-    let (plan, _, _) = planner.plan_sql(&query).await?;
+    let (plan, _) = planner.plan_sql(&query).await?;
     let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
     ctx.get_settings().set_max_threads(1)?;
     let data_stream = interpreter.execute(ctx.clone()).await?;

@@ -12,24 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::default::Default;
 use std::sync::Arc;
 
+use async_recursion::async_recursion;
 use chrono::TimeZone;
 use chrono::Utc;
-use common_ast::ast::FileLocation;
 use common_ast::ast::Indirection;
+use common_ast::ast::Join;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::Statement;
 use common_ast::ast::TableAlias;
 use common_ast::ast::TableReference;
 use common_ast::ast::TimeTravelPoint;
-use common_ast::ast::UriLocation;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
-use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::ParquetReadOptions;
@@ -38,7 +38,6 @@ use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
-use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -49,6 +48,7 @@ use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
 use common_storage::DataOperator;
+use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
 use common_storages_parquet::ParquetTable;
 use common_storages_result_cache::ResultCacheMetaManager;
@@ -56,9 +56,9 @@ use common_storages_result_cache::ResultCacheReader;
 use common_storages_result_cache::ResultScan;
 use common_storages_view::view_table::QUERY;
 use common_users::UserApiProvider;
+use dashmap::DashMap;
 
-use crate::binder::copy::parse_stage_location_v2;
-use crate::binder::location::parse_uri_location;
+use crate::binder::copy::parse_file_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::table_args::bind_table_args;
 use crate::binder::Binder;
@@ -75,6 +75,7 @@ use crate::BindContext;
 use crate::ColumnEntry;
 use crate::DerivedColumn;
 use crate::IndexType;
+use crate::TableInternalColumn;
 
 impl Binder {
     pub(super) async fn bind_one_table(
@@ -115,7 +116,8 @@ impl Binder {
             .await
     }
 
-    pub(super) async fn bind_table_reference(
+    #[async_recursion]
+    async fn bind_single_table(
         &mut self,
         bind_context: &BindContext,
         table_ref: &TableReference,
@@ -138,7 +140,9 @@ impl Binder {
                 };
                 // Check and bind common table expression
                 if let Some(cte_info) = bind_context.ctes_map.get(&table_name) {
-                    return self.bind_cte(bind_context, &table_name, alias, &cte_info);
+                    return self
+                        .bind_cte(bind_context, &table_name, alias, &cte_info)
+                        .await;
                 }
 
                 if database == "system" {
@@ -153,7 +157,7 @@ impl Binder {
                 };
 
                 // Resolve table with catalog
-                let table_meta: Arc<dyn Table> = self
+                let table_meta = match self
                     .resolve_data_source(
                         tenant.as_str(),
                         catalog.as_str(),
@@ -161,7 +165,28 @@ impl Binder {
                         table_name.as_str(),
                         &navigation_point,
                     )
-                    .await?;
+                    .await
+                {
+                    Ok(table) => table,
+                    Err(_) => {
+                        let mut parent = bind_context.parent.as_ref();
+                        loop {
+                            if parent.is_none() {
+                                break;
+                            }
+                            if let Some(cte_info) = parent.unwrap().ctes_map.get(&table_name) {
+                                return self
+                                    .bind_cte(bind_context, &table_name, alias, &cte_info)
+                                    .await;
+                            }
+                            parent = parent.unwrap().parent.as_ref();
+                        }
+                        return Err(ErrorCode::UnknownTable(format!(
+                            "Unknown table '{table_name}'"
+                        )));
+                    }
+                };
+
                 match table_meta.engine() {
                     "VIEW" => {
                         let query = table_meta
@@ -169,8 +194,7 @@ impl Binder {
                             .get(QUERY)
                             .ok_or_else(|| ErrorCode::Internal("Invalid VIEW object"))?;
                         let tokens = tokenize_sql(query.as_str())?;
-                        let backtrace = Backtrace::new();
-                        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace)?;
+                        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
                         // For view, we need use a new context to bind it.
                         let mut new_bind_context =
                             BindContext::with_parent(Box::new(bind_context.clone()));
@@ -329,7 +353,6 @@ impl Binder {
                 }
                 Ok((s_expr, bind_context))
             }
-            TableReference::Join { span: _, join } => self.bind_join(bind_context, join).await,
             TableReference::Subquery {
                 span: _,
                 subquery,
@@ -350,82 +373,160 @@ impl Binder {
                 options,
                 alias,
             } => {
-                let (stage_info, path) = match location.clone() {
-                    FileLocation::Stage(location) => {
-                        parse_stage_location_v2(&self.ctx, &location.name, &location.path).await?
-                    }
-                    FileLocation::Uri(uri) => {
-                        let mut location =
-                            UriLocation::from_uri(uri, "".to_string(), options.connection.clone())?;
-                        let (storage_params, path) = parse_uri_location(&mut location)?;
-                        if !storage_params.is_secure()
-                            && !GlobalConfig::instance().storage.allow_insecure
-                        {
-                            return Err(ErrorCode::StorageInsecure(
-                                "copy from insecure storage is not allowed",
-                            ));
-                        }
-                        let stage_info = StageInfo::new_external_stage(storage_params, &path);
-                        (stage_info, path)
-                    }
-                };
-
-                let file_format_options = match &options.file_format {
-                    Some(f) => self.ctx.get_file_format(f).await?,
-                    None => stage_info.file_format_options.clone(),
-                };
-                if matches!(file_format_options.format, StageFileFormatType::Parquet) {
-                    let files_info = StageFilesInfo {
-                        path,
-                        pattern: options.pattern.clone(),
-                        files: options.files.clone(),
-                    };
-                    let read_options = ParquetReadOptions::default();
-
-                    let table =
-                        ParquetTable::create(stage_info.clone(), files_info, read_options).await?;
-
-                    let table_alias_name = if let Some(table_alias) = alias {
-                        Some(
-                            normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name,
-                        )
-                    } else {
-                        None
-                    };
-
-                    let table_index = self.metadata.write().add_table(
-                        CATALOG_DEFAULT.to_string(),
-                        "system".to_string(),
-                        table.clone(),
-                        table_alias_name,
-                        false,
-                    );
-
-                    let (s_expr, mut bind_context) = self
-                        .bind_base_table(bind_context, "system", table_index)
-                        .await?;
-                    if let Some(alias) = alias {
-                        bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
-                    }
-                    Ok((s_expr, bind_context))
-                } else {
-                    Err(ErrorCode::Unimplemented(
-                        "only support parquet format for 'select from stage' for now.",
-                    ))
+                let (mut stage_info, path) =
+                    parse_file_location(&self.ctx, location, options.connection.clone()).await?;
+                if let Some(f) = &options.file_format {
+                    stage_info.file_format_options = self.ctx.get_file_format(f).await?;
                 }
+                let files_info = StageFilesInfo {
+                    path,
+                    pattern: options.pattern.clone(),
+                    files: options.files.clone(),
+                };
+                self.bind_stage_table(bind_context, stage_info, files_info, alias, None)
+                    .await
             }
+            TableReference::Join { .. } => unreachable!(),
         }
     }
 
-    fn bind_cte(
+    pub(crate) async fn bind_stage_table(
+        &mut self,
+        bind_context: &BindContext,
+        stage_info: StageInfo,
+        files_info: StageFilesInfo,
+        alias: &Option<TableAlias>,
+        files_to_copy: Option<Vec<StageFileInfo>>,
+    ) -> Result<(SExpr, BindContext)> {
+        if matches!(
+            stage_info.file_format_options.format,
+            StageFileFormatType::Parquet
+        ) {
+            let read_options = ParquetReadOptions::default();
+
+            let table =
+                ParquetTable::create(stage_info.clone(), files_info, read_options, files_to_copy)
+                    .await?;
+
+            let table_alias_name = if let Some(table_alias) = alias {
+                Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
+            } else {
+                None
+            };
+
+            let table_index = self.metadata.write().add_table(
+                CATALOG_DEFAULT.to_string(),
+                "system".to_string(),
+                table.clone(),
+                table_alias_name,
+                false,
+            );
+
+            let (s_expr, mut bind_context) = self
+                .bind_base_table(bind_context, "system", table_index)
+                .await?;
+            if let Some(alias) = alias {
+                bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+            }
+            Ok((s_expr, bind_context))
+        } else {
+            Err(ErrorCode::Unimplemented(
+                "stage table function only support parquet format for now",
+            ))
+        }
+    }
+
+    pub(super) async fn bind_table_reference(
+        &mut self,
+        bind_context: &BindContext,
+        table_ref: &TableReference,
+    ) -> Result<(SExpr, BindContext)> {
+        let mut current_ref = table_ref;
+        let current_ctx = bind_context;
+
+        // Stack to keep track of the joins
+        let mut join_stack: Vec<&Join> = Vec::new();
+
+        // Traverse the table reference hierarchy to get to the innermost table
+        while let TableReference::Join { join, .. } = current_ref {
+            join_stack.push(join);
+
+            // Check whether the right-hand side is a Join or a TableReference
+            match &*join.right {
+                TableReference::Join { .. } => {
+                    // Traverse the right-hand side if the right-hand side is a Join
+                    current_ref = &join.right;
+                }
+                _ => {
+                    // Traverse the left-hand side if the right-hand side is a TableReference
+                    current_ref = &join.left;
+                }
+            }
+        }
+
+        // Bind the innermost table
+        // current_ref must be left table in its join
+        let (mut result_expr, mut result_ctx) =
+            self.bind_single_table(current_ctx, current_ref).await?;
+
+        for join in join_stack.iter().rev() {
+            match &*join.right {
+                TableReference::Join { .. } => {
+                    let (left_expr, left_ctx) =
+                        self.bind_single_table(current_ctx, &join.left).await?;
+                    let (join_expr, ctx) = self
+                        .bind_join(
+                            current_ctx,
+                            left_ctx,
+                            result_ctx,
+                            left_expr,
+                            result_expr,
+                            join,
+                        )
+                        .await?;
+                    result_expr = join_expr;
+                    result_ctx = ctx;
+                }
+                _ => {
+                    let (right_expr, right_ctx) =
+                        self.bind_single_table(current_ctx, &join.right).await?;
+                    let (join_expr, ctx) = self
+                        .bind_join(
+                            current_ctx,
+                            result_ctx,
+                            right_ctx,
+                            result_expr,
+                            right_expr,
+                            join,
+                        )
+                        .await?;
+                    result_expr = join_expr;
+                    result_ctx = ctx;
+                }
+            }
+        }
+
+        Ok((result_expr, result_ctx))
+    }
+
+    async fn bind_cte(
         &mut self,
         bind_context: &BindContext,
         table_name: &str,
         alias: &Option<TableAlias>,
         cte_info: &CteInfo,
     ) -> Result<(SExpr, BindContext)> {
-        let mut new_bind_context = bind_context.clone();
-        new_bind_context.columns = cte_info.bind_context.columns.clone();
+        let new_bind_context = BindContext {
+            parent: Some(Box::new(bind_context.clone())),
+            bound_internal_columns: BTreeMap::new(),
+            columns: vec![],
+            aggregate_info: Default::default(),
+            in_grouping: false,
+            ctes_map: Box::new(DashMap::new()),
+            is_view: false,
+        };
+        let (s_expr, mut new_bind_context) =
+            self.bind_query(&new_bind_context, &cte_info.query).await?;
         let mut cols_alias = cte_info.columns_alias.clone();
         if let Some(alias) = alias {
             for (idx, col_alias) in alias.columns.iter().enumerate() {
@@ -455,7 +556,7 @@ impl Binder {
         for (index, column_name) in cols_alias.iter().enumerate() {
             new_bind_context.columns[index].column_name = column_name.clone();
         }
-        Ok((cte_info.s_expr.clone(), new_bind_context))
+        Ok((s_expr, new_bind_context))
     }
 
     async fn bind_base_table(
@@ -522,6 +623,10 @@ impl Binder {
                             ColumnEntry::DerivedColumn(DerivedColumn { column_index, .. }) => {
                                 column_index
                             }
+                            ColumnEntry::InternalColumn(TableInternalColumn {
+                                column_index,
+                                ..
+                            }) => column_index,
                         })
                         .collect(),
                     push_down_predicates: None,

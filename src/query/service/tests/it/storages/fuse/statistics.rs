@@ -127,10 +127,7 @@ fn test_ft_tuple_stats_block_stats() -> common_exception::Result<()> {
         Int32Type::from_data(vec![1, 2, 3]),
         Int32Type::from_data(vec![4, 5, 6]),
     ];
-    let column = Column::Tuple {
-        fields: inner_columns,
-        len: 3,
-    };
+    let column = Column::Tuple(inner_columns);
 
     let block = DataBlock::new_from_columns(vec![column]);
 
@@ -158,7 +155,7 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
         .iter()
         .map(|b| gen_columns_statistics(&b.clone().unwrap(), None, &schema))
         .collect::<common_exception::Result<Vec<_>>>()?;
-    let r = reducers::reduce_block_statistics(&col_stats, None);
+    let r = reducers::reduce_block_statistics(&col_stats);
     assert!(r.is_ok());
     let r = r.unwrap();
     assert_eq!(3, r.len());
@@ -213,7 +210,7 @@ fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()>
     // combine two statistics
     let col_stats_left = HashMap::from_iter(iter(0).take(num_of_cols));
     let col_stats_right = HashMap::from_iter(iter(0).take(num_of_cols));
-    let r = reducers::reduce_block_statistics(&[col_stats_left, col_stats_right], None)?;
+    let r = reducers::reduce_block_statistics(&[col_stats_left, col_stats_right])?;
     assert_eq!(num_of_cols, r.len());
     // there should be 100 columns in the result
     for idx in 1..=100 {

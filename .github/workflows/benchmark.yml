@@ -15,12 +15,6 @@ on:
       - "**.md"
       - "docker/**"
       - ".devcontainer/**"
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: The tag to run benchmark
-        required: true
-        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
@@ -29,13 +23,10 @@ concurrency:
 env:
   BUILD_PROFILE: release
   RUNNER_PROVIDER: aws
-  CARGO_INCREMENTAL: 0
-  # Remove this env after rust 1.68 has been released.
-  CARGO_UNSTABLE_SPARSE_REGISTRY: true
 
 jobs:
   build_release:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'ci-benchmark')
+    if: contains(github.event.pull_request.labels.*.name, 'ci-benchmark')
     timeout-minutes: 30
     runs-on: [self-hosted, X64, Linux, perf]
     steps:
@@ -47,40 +38,15 @@ jobs:
         with:
           target: x86_64-unknown-linux-gnu
           profile: release
-
-  clickbench:
-    needs: build_release
-    timeout-minutes: 30
-    runs-on: [self-hosted, X64, Linux, perf]
-    strategy:
-      matrix:
-        storage:
-          - s3
-          - fs
-        dataset:
-          - hits
-          - tpch
-    steps:
-      - uses: actions/checkout@v3
-      - name: Get benchmark source
+      - name: Generate benchmark metadata
         run: |
-          case ${{ github.event_name }} in
-            pull_request)
-              echo "BENCHMARK_SOURCE=pr" > $GITHUB_ENV
-              echo "BENCHMARK_SOURCE_ID=${{ github.event.pull_request.number }}" >> $GITHUB_ENV
-              ;;
-            workflow_dispatch)
-              echo "BENCHMARK_SOURCE=release" > $GITHUB_ENV
-              echo "BENCHMARK_SOURCE_ID=${{ github.event.inputs.tag }}" >> $GITHUB_ENV
-              ;;
-            *)
-              echo "Unknown event name: ${{ github.event_name }}"
-              exit 1
-              ;;
-          esac
-      - uses: ./.github/actions/benchmark
+          echo '{}' > metadata.json
+          jq ".sha = \"${{ github.sha }}\"" <metadata.json >metadata.json.tmp && mv metadata.json.tmp metadata.json
+          jq ".run_id = \"${{ github.run_id }}\"" <metadata.json >metadata.json.tmp && mv metadata.json.tmp metadata.json
+          jq ".pr_id = \"${{ github.event.pull_request.number }}\"" <metadata.json >metadata.json.tmp && mv metadata.json.tmp metadata.json
+          jq ".head_sha = \"${{ github.event.pull_request.head.sha }}\"" <metadata.json >metadata.json.tmp && mv metadata.json.tmp metadata.json
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
         with:
-          storage: ${{ matrix.storage }}
-          dataset: ${{ matrix.dataset }}
-          source: ${{ env.BENCHMARK_SOURCE }}
-          source_id: ${{ env.BENCHMARK_SOURCE_ID }}
+          name: benchmark-metadata
+          path: metadata.json

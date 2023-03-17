@@ -77,21 +77,10 @@ pub fn check<Index: ColumnIndex>(
             args,
             params,
         } => {
-            let mut args_expr: Vec<_> = args
+            let args_expr: Vec<_> = args
                 .iter()
                 .map(|arg| check(arg, fn_registry))
                 .try_collect()?;
-
-            if name == "if" || name == "multi_if" {
-                args_expr
-                    .iter_mut()
-                    .skip(1)
-                    .step_by(2)
-                    .for_each(|expr| *expr = expr.wrap_catch());
-                let last = args_expr.last_mut().unwrap();
-                *last = last.wrap_catch()
-            }
-
             check_function(*span, name, params, &args_expr, fn_registry)
         }
     }
@@ -559,11 +548,10 @@ pub fn can_auto_cast_to(
                 .zip(dest_tys)
                 .all(|(src_ty, dest_ty)| can_auto_cast_to(src_ty, dest_ty, auto_cast_rules))
         }
-        (DataType::Number(n), DataType::Decimal(_)) if !n.is_float() => true,
         (DataType::String, DataType::Decimal(_)) => true,
         (DataType::Decimal(x), DataType::Decimal(y)) => x.precision() <= y.precision(),
-        (DataType::Decimal(_), DataType::Number(NumberDataType::Float32)) => true,
-        (DataType::Decimal(_), DataType::Number(NumberDataType::Float64)) => true,
+        (DataType::Number(n), DataType::Decimal(_)) if !n.is_float() => true,
+        (DataType::Decimal(_), DataType::Number(n)) if n.is_float() => true,
         _ => false,
     }
 }
@@ -602,11 +590,18 @@ pub fn common_super_type(
                 .collect::<Option<Vec<_>>>()?;
             Some(DataType::Tuple(tys))
         }
-        (DataType::Number(_), DataType::Decimal(ty))
-        | (DataType::Decimal(ty), DataType::Number(_)) => {
-            let max_precision = ty.max_precision();
-            let scale = ty.scale();
-
+        (DataType::String, decimal_ty @ DataType::Decimal(_))
+        | (decimal_ty @ DataType::Decimal(_), DataType::String) => Some(decimal_ty),
+        (DataType::Decimal(a), DataType::Decimal(b)) => {
+            let ty = DecimalDataType::binary_result_type(&a, &b, false, false, true).ok();
+            ty.map(DataType::Decimal)
+        }
+        (DataType::Number(num_ty), DataType::Decimal(decimal_ty))
+        | (DataType::Decimal(decimal_ty), DataType::Number(num_ty))
+            if !num_ty.is_float() =>
+        {
+            let max_precision = decimal_ty.max_precision();
+            let scale = decimal_ty.scale();
             DecimalDataType::from_size(DecimalSize {
                 precision: max_precision,
                 scale,
@@ -614,12 +609,12 @@ pub fn common_super_type(
             .ok()
             .map(DataType::Decimal)
         }
-
-        (DataType::Decimal(a), DataType::Decimal(b)) => {
-            let ty = DecimalDataType::binary_result_type(&a, &b, false, false, true).ok();
-            ty.map(DataType::Decimal)
+        (DataType::Number(num_ty), DataType::Decimal(_))
+        | (DataType::Decimal(_), DataType::Number(num_ty))
+            if num_ty.is_float() =>
+        {
+            Some(DataType::Number(num_ty))
         }
-
         (ty1, ty2) => {
             let ty1_can_cast_to = auto_cast_rules
                 .iter()

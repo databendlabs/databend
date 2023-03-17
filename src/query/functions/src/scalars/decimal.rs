@@ -17,7 +17,7 @@ use std::ops::*;
 use std::sync::Arc;
 
 use common_arrow::arrow::buffer::Buffer;
-use common_expression::read_decimal_with_size;
+use common_expression::serialize::read_decimal_with_size;
 use common_expression::types::decimal::*;
 use common_expression::types::string::StringColumn;
 use common_expression::types::*;

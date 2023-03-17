@@ -547,3 +547,70 @@ drop table t1
 
 statement ok
 drop table t2
+
+
+# https://github.com/datafuselabs/databend/issues/10523
+statement ok
+create table t1 as select * from numbers(1)
+
+statement ok
+set enable_cbo = 0
+
+query I
+select t1.number FROM
+t1
+CROSS JOIN
+t1 AS t2,
+t1 AS t3,
+t1 AS t4,
+t1 AS t5,
+t1 AS t6,
+t1 AS t7,
+t1 AS t8,
+t1 AS t9,
+t1 AS t10,
+t1 AS t11,
+t1 AS t12,
+t1 AS t13,
+t1 AS t14,
+t1 AS t15,
+t1 AS t16,
+t1 AS t17,
+t1 AS t18,
+t1 AS t19,
+t1 AS t20
+----
+0
+
+query I
+SELECT t20.number
+FROM
+((((((((((((((((((
+t1 AS t20
+CROSS JOIN t1 AS t19)
+CROSS JOIN t1 AS t18)
+CROSS JOIN t1 AS t17)
+CROSS JOIN t1 AS t16)
+CROSS JOIN t1 AS t15)
+CROSS JOIN t1 AS t14)
+CROSS JOIN t1 AS t13)
+CROSS JOIN t1 AS t12)
+CROSS JOIN t1 AS t11)
+CROSS JOIN t1 AS t10)
+CROSS JOIN t1 AS t9)
+CROSS JOIN t1 AS t8)
+CROSS JOIN t1 AS t7)
+CROSS JOIN t1 AS t6)
+CROSS JOIN t1 AS t5)
+CROSS JOIN t1 AS t4)
+CROSS JOIN t1 AS t3)
+CROSS JOIN t1 AS t2)
+CROSS JOIN t1
+----
+0
+
+statement ok
+set enable_cbo = 1
+
+statement ok
+drop table t1

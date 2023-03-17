@@ -24,17 +24,27 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_sinks::AsyncSink;
 use common_pipeline_sinks::AsyncSinker;
+use tracing::info;
 
 use crate::api::rpc::exchange::serde::exchange_serializer::ExchangeSerializeMeta;
 use crate::api::rpc::flight_client::FlightExchangeRef;
 
 pub struct ExchangeWriterSink {
+    query_id: String,
+    fragment: usize,
     exchange: FlightExchangeRef,
 }
 
 impl ExchangeWriterSink {
-    pub fn create(input: Arc<InputPort>, flight_exchange: FlightExchangeRef) -> Box<dyn Processor> {
+    pub fn create(
+        input: Arc<InputPort>,
+        flight_exchange: FlightExchangeRef,
+        query_id: String,
+        fragment: usize,
+    ) -> Box<dyn Processor> {
         AsyncSinker::create(input, ExchangeWriterSink {
+            query_id,
+            fragment,
             exchange: flight_exchange,
         })
     }
@@ -45,12 +55,30 @@ impl AsyncSink for ExchangeWriterSink {
     const NAME: &'static str = "ExchangeWriterSink";
 
     async fn on_start(&mut self) -> Result<()> {
-        self.exchange.close_input().await;
+        info!(
+            "Start query:{:?}, fragment:{:?} exchange write.",
+            self.query_id, self.fragment
+        );
+
+        let res = self.exchange.close_input().await;
+        info!(
+            "Started query:{:?}, fragment:{:?} exchange write. {}",
+            self.query_id, self.fragment, res
+        );
         Ok(())
     }
 
     async fn on_finish(&mut self) -> Result<()> {
-        self.exchange.close_output().await;
+        info!(
+            "Finish query:{:?}, fragment:{:?} exchange write.",
+            self.query_id, self.fragment
+        );
+
+        let res = self.exchange.close_output().await;
+        info!(
+            "Finished query:{:?}, fragment:{:?} exchange write. {}",
+            self.query_id, self.fragment, res
+        );
         Ok(())
     }
 
@@ -79,15 +107,34 @@ impl AsyncSink for ExchangeWriterSink {
     }
 }
 
-pub fn create_writer_item(exchange: FlightExchangeRef) -> PipeItem {
+pub fn create_writer_item(
+    exchange: FlightExchangeRef,
+    query_id: String,
+    fragment: usize,
+) -> PipeItem {
     let input = InputPort::create();
     PipeItem::create(
-        ProcessorPtr::create(ExchangeWriterSink::create(input.clone(), exchange)),
+        ProcessorPtr::create(ExchangeWriterSink::create(
+            input.clone(),
+            exchange,
+            query_id,
+            fragment,
+        )),
         vec![input],
         vec![],
     )
 }
 
-pub fn create_writer_items(exchanges: Vec<FlightExchangeRef>) -> Vec<PipeItem> {
-    exchanges.into_iter().map(create_writer_item).collect()
+pub fn create_writer_items(
+    exchanges: Vec<FlightExchangeRef>,
+    query_id: String,
+    fragment: usize,
+) -> Vec<PipeItem> {
+    let mut items = Vec::with_capacity(exchanges.len());
+
+    for exchange in exchanges {
+        items.push(create_writer_item(exchange, query_id.clone(), fragment));
+    }
+
+    items
 }

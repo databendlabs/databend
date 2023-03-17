@@ -257,6 +257,16 @@ SELECT sqrt(-4)
 ----
 NaN
 
+query F
+SELECT cbrt(0)
+----
+0.0
+
+query F
+SELECT cbrt(-64)
+----
+-4.0
+
 statement error 1001
 SELECT sqrt('a')
 
@@ -297,6 +307,15 @@ SELECT pow(number, NULL) from numbers(2)
 NULL
 NULL
 
+query T
+SELECT factorial(3)
+----
+6
+
+query T
+SELECT factorial(5)
+----
+120
 
 statement error 1001
 SELECT pow('a', 2)
