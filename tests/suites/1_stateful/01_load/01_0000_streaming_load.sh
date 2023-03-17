@@ -9,12 +9,12 @@ echo "drop table if exists ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT
 cat $CURDIR/../ddl/ontime.sql | sed 's/ontime/ontime_streaming_load/g' | $MYSQL_CLIENT_CONNECT
 
 
-aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv /tmp/ontime_200.csv > /dev/null 2>&1
-aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv.gz /tmp/ontime_200.csv.gz > /dev/null 2>&1
-aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv.zst /tmp/ontime_200.csv.zst > /dev/null 2>&1
-aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv.bz2 /tmp/ontime_200.csv.bz2 > /dev/null 2>&1
-aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.parquet /tmp/ontime_200.parquet  > /dev/null 2>&1
-aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.ndjson /tmp/ontime_200.ndjson  > /dev/null 2>&1
+# aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv /tmp/ontime_200.csv > /dev/null 2>&1
+# aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv.gz /tmp/ontime_200.csv.gz > /dev/null 2>&1
+# aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv.zst /tmp/ontime_200.csv.zst > /dev/null 2>&1
+# aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv.bz2 /tmp/ontime_200.csv.bz2 > /dev/null 2>&1
+# aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.parquet /tmp/ontime_200.parquet  > /dev/null 2>&1
+# aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.ndjson /tmp/ontime_200.ndjson  > /dev/null 2>&1
 
 
 # do the Data integrity check
@@ -87,12 +87,13 @@ echo "--parquet less"
 curl -s -H "insert_sql:insert into ontime_less file_format = (type = Parquet)" -F "upload=@/tmp/ontime_200.parquet" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load"  > /dev/null 2>&1
 echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime_less;" | $MYSQL_CLIENT_CONNECT
 
-# load parquet with mismatch schema
+# load parquet with mismatch schema, will auto cast
 echo "--parquet mismatch schema"
-cat $CURDIR/../ddl/ontime.sql | sed 's/ontime/ontime_test_mismatch/g' | sed 's/DATE/VARCHAR/g' | $MYSQL_CLIENT_CONNECT
-curl -s -H "insert_sql:insert into ontime_test_mismatch file_format = (type = Parquet)" -F "upload=@/tmp/ontime_200.parquet" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c 'parquet schema mismatch'
+cat $CURDIR/../ddl/ontime.sql | sed 's/ontime/ontime_test_schmea_mismatch/g' | sed 's/DATE/TIMESTAMP/g' | $MYSQL_CLIENT_CONNECT
+curl -s -H "insert_sql:insert into ontime_test_schmea_mismatch file_format = (type = Parquet)" -F "upload=@/tmp/ontime_200.parquet" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load"  > /dev/null 2>&1
+echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime_test_schmea_mismatch;" | $MYSQL_CLIENT_CONNECT
 
 
 echo "drop table ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT
-echo "drop table ontime_test_mismatch;" | $MYSQL_CLIENT_CONNECT
+echo "drop table ontime_test_schmea_mismatch;" | $MYSQL_CLIENT_CONNECT
 echo "drop table ontime_less;" | $MYSQL_CLIENT_CONNECT

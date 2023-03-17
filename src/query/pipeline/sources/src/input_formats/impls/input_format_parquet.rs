@@ -38,7 +38,8 @@ use common_arrow::read_columns_async;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_expression::TableField;
+use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_meta_app::principal::StageInfo;
@@ -362,7 +363,15 @@ impl BlockBuilderTrait for ParquetBlockBuilder {
     fn deserialize(&mut self, mut batch: Option<RowGroupInMemory>) -> Result<Vec<DataBlock>> {
         if let Some(rg) = batch.as_mut() {
             let chunk = rg.get_arrow_chunk()?;
-            let block = DataBlock::from_arrow_chunk(&chunk, &self.ctx.data_schema())?;
+
+            let fields: Vec<DataField> = rg
+                .fields_to_read
+                .iter()
+                .map(|f| DataField::from(f))
+                .collect::<Vec<_>>();
+
+            let input_schema = DataSchema::new(fields);
+            let block = DataBlock::from_arrow_chunk(&chunk, &input_schema)?;
 
             let block_total_rows = block.num_rows();
             let num_rows_per_block = self.ctx.block_compact_thresholds.max_rows_per_block;
@@ -446,20 +455,12 @@ impl AligningStateTrait for AligningState {
 
 fn get_used_fields(fields: &Vec<Field>, schema: &TableSchemaRef) -> Result<Vec<Field>> {
     let mut read_fields = Vec::with_capacity(fields.len());
-    for (idx, f) in schema.fields().iter().enumerate() {
+    for f in schema.fields().iter() {
         if let Some(m) = fields
             .iter()
             .filter(|c| c.name.eq_ignore_ascii_case(f.name()))
             .last()
         {
-            let tf = TableField::from(m);
-            if tf.data_type().remove_nullable() != f.data_type().remove_nullable() {
-                return Err(ErrorCode::TableSchemaMismatch(format!(
-                    "parquet schema mismatch for field {}(start from 0), expect: {:?}, got {:?}",
-                    idx, f, tf
-                )));
-            }
-
             read_fields.push(m.clone());
         } else {
             return Err(ErrorCode::TableSchemaMismatch(format!(

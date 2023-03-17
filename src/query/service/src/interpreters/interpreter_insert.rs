@@ -16,6 +16,7 @@ use std::collections::VecDeque;
 use std::io::BufRead;
 use std::io::Cursor;
 use std::ops::Not;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -49,6 +50,7 @@ use common_formats::FastFieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
 use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::AsyncSource;
@@ -85,6 +87,7 @@ use crate::interpreters::common::append2table;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
+use crate::pipelines::processors::transforms::TransformRuntimeCastSchema;
 use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
@@ -370,17 +373,50 @@ impl Interpreter for InsertInterpreter {
                     1,
                 )?;
             }
-            InsertInputSource::StreamingWithFormat(_, _, input_context) => {
+            InsertInputSource::StreamingWithFormat(format, _, input_context) => {
                 let input_context = input_context.as_ref().expect("must success").clone();
                 input_context
                     .format
                     .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
+
+                let format = StageFileFormatType::from_str(format)?;
+                if StageFileFormatType::Parquet == format {
+                    let dest_schema = plan.schema();
+                    let func_ctx = self.ctx.get_function_context()?;
+
+                    build_res.main_pipeline.add_transform(
+                        |transform_input_port, transform_output_port| {
+                            TransformRuntimeCastSchema::try_create(
+                                transform_input_port,
+                                transform_output_port,
+                                dest_schema.clone(),
+                                func_ctx,
+                            )
+                        },
+                    )?;
+                }
             }
-            InsertInputSource::StreamingWithFileFormat(_, _, input_context) => {
+            InsertInputSource::StreamingWithFileFormat(format_options, _, input_context) => {
                 let input_context = input_context.as_ref().expect("must success").clone();
                 input_context
                     .format
                     .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
+
+                if StageFileFormatType::Parquet == format_options.format {
+                    let dest_schema = plan.schema();
+                    let func_ctx = self.ctx.get_function_context()?;
+
+                    build_res.main_pipeline.add_transform(
+                        |transform_input_port, transform_output_port| {
+                            TransformRuntimeCastSchema::try_create(
+                                transform_input_port,
+                                transform_output_port,
+                                dest_schema.clone(),
+                                func_ctx,
+                            )
+                        },
+                    )?;
+                }
             }
             InsertInputSource::Stage(opts) => {
                 tracing::info!("insert: from stage with options {:?}", opts);
