@@ -1006,6 +1006,7 @@ impl<'a> TypeChecker<'a> {
             // `grouping` will be rewritten again after resolving grouping sets.
             return Ok(Box::new((
                 ScalarExpr::FunctionCall(FunctionCall {
+                    span,
                     params: vec![],
                     arguments: args,
                     func_name: "grouping".to_string(),

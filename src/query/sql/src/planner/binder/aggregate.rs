@@ -249,7 +249,7 @@ impl<'a> AggregateRewriter<'a> {
         // grouping(b, a) will be rewritten to grouping<1, 0>(grouping_id).
         let mut replaced_params = Vec::with_capacity(function.arguments.len());
         for arg in &function.arguments {
-            if let Some(index) = agg_info.group_items_map.get(&format!("{:?}", arg)) {
+            if let Some(index) = agg_info.group_items_map.get(arg) {
                 replaced_params.push(*index);
             } else {
                 return Err(ErrorCode::BadArguments(
@@ -259,9 +259,11 @@ impl<'a> AggregateRewriter<'a> {
         }
 
         let replaced_func = FunctionCall {
+            span: function.span,
             func_name: function.func_name.clone(),
             params: replaced_params,
             arguments: vec![ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: function.span,
                 column: grouping_id_column,
             })],
         };
@@ -434,12 +436,10 @@ impl Binder {
         let index = grouping_id_column.index;
         agg_info.grouping_id_column = Some(grouping_id_column.clone());
         agg_info.group_items_map.insert(
-            format!(
-                "{:?}",
-                ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    column: grouping_id_column.clone()
-                })
-            ),
+            ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: None,
+                column: grouping_id_column.clone(),
+            }),
             agg_info.group_items.len(),
         );
         agg_info.group_items.push(ScalarItem {
