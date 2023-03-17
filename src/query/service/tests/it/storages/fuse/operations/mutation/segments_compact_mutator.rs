@@ -616,7 +616,7 @@ async fn test_segment_compactor() -> Result<()> {
     Ok(())
 }
 
-struct CompactSegmentTestFixture {
+pub struct CompactSegmentTestFixture {
     threshold: u64,
     ctx: Arc<dyn TableContext>,
     data_accessor: DataOperator,
@@ -660,7 +660,7 @@ impl CompactSegmentTestFixture {
             segment_writer.clone(),
         );
 
-        let (locations, blocks) =
+        let (locations, blocks, _) =
             Self::gen_segments(&block_writer, &segment_writer, num_block_of_segments).await?;
         self.input_blocks = blocks;
         let limit = limit.unwrap_or(usize::MAX);
@@ -671,13 +671,14 @@ impl CompactSegmentTestFixture {
             .await
     }
 
-    async fn gen_segments(
+    pub async fn gen_segments(
         block_writer: &BlockWriter<'_>,
         segment_writer: &SegmentWriter<'_>,
         block_num_of_segments: &[usize],
-    ) -> Result<(Vec<Location>, Vec<BlockMeta>)> {
+    ) -> Result<(Vec<Location>, Vec<BlockMeta>, Vec<SegmentInfo>)> {
         let mut locations = vec![];
         let mut collected_blocks = vec![];
+        let mut segment_infos = vec![];
         for num_blocks in block_num_of_segments.iter().rev() {
             let (schema, blocks) = TestFixture::gen_sample_blocks_ex(*num_blocks, 1, 1);
             let mut stats_acc = StatisticsAccumulator::default();
@@ -703,10 +704,11 @@ impl CompactSegmentTestFixture {
                 col_stats,
             });
             let location = segment_writer.write_segment_no_cache(&segment_info).await?;
+            segment_infos.push(segment_info);
             locations.push(location);
         }
 
-        Ok((locations, collected_blocks))
+        Ok((locations, collected_blocks, segment_infos))
     }
 
     // verify that newly generated segments contain the proper number of blocks

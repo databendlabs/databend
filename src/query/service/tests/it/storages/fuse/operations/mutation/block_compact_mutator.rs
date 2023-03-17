@@ -18,12 +18,27 @@ use common_base::base::tokio;
 use common_catalog::table::CompactTarget;
 use common_catalog::table::Table;
 use common_exception::Result;
+use common_expression::BlockThresholds;
+use common_storages_fuse::io::SegmentWriter;
+use common_storages_fuse::io::TableMetaLocationGenerator;
+use common_storages_fuse::operations::BlockCompactMutator;
+use common_storages_fuse::operations::CompactOptions;
+use common_storages_fuse::operations::CompactPartInfo;
+use common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use common_storages_fuse::FuseTable;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
+use rand::thread_rng;
+use rand::Rng;
+use storages_common_table_meta::meta::Statistics;
+use storages_common_table_meta::meta::TableSnapshot;
+use uuid::Uuid;
 
+use crate::storages::fuse::block_writer::BlockWriter;
+use crate::storages::fuse::operations::mutation::block_compact_mutator;
+use crate::storages::fuse::operations::mutation::segments_compact_mutator::CompactSegmentTestFixture;
 use crate::storages::fuse::table_test_fixture::execute_command;
 use crate::storages::fuse::table_test_fixture::execute_query;
 use crate::storages::fuse::table_test_fixture::expects_ok;
@@ -106,4 +121,88 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
     } else {
         Ok(false)
     }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_safety() -> Result<()> {
+    let fixture = TestFixture::new().await;
+    let ctx = fixture.ctx();
+    let operator = ctx.get_data_operator()?.operator();
+
+    let threshold = BlockThresholds {
+        max_rows_per_block: 200,
+        min_rows_per_block: 100,
+        max_bytes_per_block: 1024,
+    };
+
+    let data_accessor = operator.clone();
+    let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
+    let block_writer = BlockWriter::new(&data_accessor, &location_gen);
+    let schema = TestFixture::default_table_schema();
+    let segment_writer = SegmentWriter::new(&data_accessor, &location_gen);
+    let mut rand = thread_rng();
+
+    for r in 1..100 {
+        eprintln!("round {}", r);
+        let number_of_segments: usize = rand.gen_range(1..10);
+
+        let mut block_number_of_segments = Vec::with_capacity(number_of_segments);
+
+        for _ in 0..number_of_segments {
+            block_number_of_segments.push(rand.gen_range(1..30));
+        }
+
+        let number_of_blocks: usize = block_number_of_segments.iter().sum();
+        eprintln!(
+            "generating segments number of segments {},  number of blocks {}",
+            number_of_segments, number_of_blocks,
+        );
+
+        let (locations, blocks, segment_infos) = CompactSegmentTestFixture::gen_segments(
+            &block_writer,
+            &segment_writer,
+            &block_number_of_segments,
+        )
+        .await?;
+
+        eprintln!("data ready");
+
+        let mut summary = Statistics::default();
+        for seg in segment_infos {
+            merge_statistics_mut(&mut summary, &seg.summary)?;
+        }
+
+        let id = Uuid::new_v4();
+        let snapshot = TableSnapshot::new(
+            id,
+            &None,
+            None,
+            schema.as_ref().clone(),
+            summary,
+            locations,
+            None,
+            None,
+        );
+
+        let compact_params = CompactOptions {
+            base_snapshot: Arc::new(snapshot),
+            block_per_seg: 10,
+            limit: None,
+        };
+
+        eprintln!("running target select");
+        let mut block_compact_mutator =
+            BlockCompactMutator::new(ctx.clone(), threshold, compact_params, operator.clone());
+        block_compact_mutator.target_select().await?;
+        let selections = block_compact_mutator.compact_tasks;
+        let mut blocks_number = 0;
+        for part in selections.partitions.into_iter() {
+            let part = CompactPartInfo::from_part(&part)?;
+            blocks_number += part.blocks.len();
+        }
+
+        assert_eq!(number_of_blocks, blocks_number);
+    }
+
+    Ok(())
 }
