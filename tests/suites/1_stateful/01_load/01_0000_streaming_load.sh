@@ -9,12 +9,12 @@ echo "drop table if exists ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT
 cat $CURDIR/../ddl/ontime.sql | sed 's/ontime/ontime_streaming_load/g' | $MYSQL_CLIENT_CONNECT
 
 
-# aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv /tmp/ontime_200.csv > /dev/null 2>&1
-# aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv.gz /tmp/ontime_200.csv.gz > /dev/null 2>&1
-# aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv.zst /tmp/ontime_200.csv.zst > /dev/null 2>&1
-# aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv.bz2 /tmp/ontime_200.csv.bz2 > /dev/null 2>&1
-# aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.parquet /tmp/ontime_200.parquet  > /dev/null 2>&1
-# aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.ndjson /tmp/ontime_200.ndjson  > /dev/null 2>&1
+aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv /tmp/ontime_200.csv > /dev/null 2>&1
+aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv.gz /tmp/ontime_200.csv.gz > /dev/null 2>&1
+aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv.zst /tmp/ontime_200.csv.zst > /dev/null 2>&1
+aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv.bz2 /tmp/ontime_200.csv.bz2 > /dev/null 2>&1
+aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.parquet /tmp/ontime_200.parquet  > /dev/null 2>&1
+aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.ndjson /tmp/ontime_200.ndjson  > /dev/null 2>&1
 
 
 # do the Data integrity check
