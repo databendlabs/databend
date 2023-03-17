@@ -41,7 +41,6 @@ use serde::Serialize;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::assert_params;
 use crate::aggregates::assert_unary_arguments;
-use crate::aggregates::assert_unary_params;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::StateAddr;
@@ -56,7 +55,7 @@ pub trait QuantileStateFunc<T: ValueType>: Send + Sync + 'static {
     fn add(&mut self, other: T::ScalarRef<'_>);
     fn add_batch(&mut self, column: &T::Column, validity: Option<&Bitmap>) -> Result<()>;
     fn merge(&mut self, rhs: &Self) -> Result<()>;
-    fn merge_result(&mut self, builder: &mut ColumnBuilder, level: f64) -> Result<()>;
+    fn merge_result(&mut self, builder: &mut ColumnBuilder, levels: Vec<f64>) -> Result<()>;
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()>;
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()>;
 }
@@ -129,16 +128,36 @@ where
         Ok(())
     }
 
-    fn merge_result(&mut self, builder: &mut ColumnBuilder, level: f64) -> Result<()> {
-        let builder = T::try_downcast_builder(builder).unwrap();
+    fn merge_result(&mut self, builder: &mut ColumnBuilder, levels: Vec<f64>) -> Result<()> {
         let value_len = self.value.len();
-        let idx = ((value_len - 1) as f64 * level).floor() as usize;
-        if idx >= value_len {
-            T::push_default(builder);
+        if levels.len() > 1 {
+            let builder = match builder {
+                ColumnBuilder::Array(box b) => b,
+                _ => unreachable!(),
+            };
+            let indices = levels
+                .iter()
+                .map(|level| ((value_len - 1) as f64 * (*level)).floor() as usize)
+                .collect::<Vec<usize>>();
+            for idx in indices {
+                if idx < value_len {
+                    self.value.as_mut_slice().select_nth_unstable(idx);
+                    let value = self.value.get(idx).unwrap();
+                    builder.put_item(T::to_scalar_ref(value));
+                } else {
+                    builder.push_default();
+                }
+            }
         } else {
-            self.value.as_mut_slice().select_nth_unstable(idx);
-            let value = self.value.get(idx).unwrap();
-            T::push_item(builder, T::to_scalar_ref(value));
+            let builder = T::try_downcast_builder(builder).unwrap();
+            let idx = ((value_len - 1) as f64 * levels[0]).floor() as usize;
+            if idx >= value_len {
+                T::push_default(builder);
+            } else {
+                self.value.as_mut_slice().select_nth_unstable(idx);
+                let value = self.value.get(idx).unwrap();
+                T::push_item(builder, T::to_scalar_ref(value));
+            }
         }
         Ok(())
     }
@@ -157,7 +176,7 @@ where
 pub struct AggregateQuantileContFunction<T, State> {
     display_name: String,
     return_type: DataType,
-    level: f64,
+    levels: Vec<f64>,
     _arguments: Vec<DataType>,
     _t: PhantomData<T>,
     _state: PhantomData<State>,
@@ -252,7 +271,7 @@ where
 
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<State>();
-        state.merge_result(builder, self.level)
+        state.merge_result(builder, self.levels.clone())
     }
 }
 
@@ -267,7 +286,7 @@ where
         params: Vec<Scalar>,
         arguments: Vec<DataType>,
     ) -> Result<Arc<dyn AggregateFunction>> {
-        let level = if params.len() == 1 {
+        let levels = if params.len() == 1 {
             let level: F64 = check_number(
                 None,
                 FunctionContext::default(),
@@ -283,22 +302,50 @@ where
                 },
                 &BUILTIN_FUNCTIONS,
             )?;
-            level.0
+            let level = level.0;
+            if !(0.0..=1.0).contains(&level) {
+                return Err(ErrorCode::BadDataValueType(format!(
+                    "level range between [0, 1], got: {:?}",
+                    level
+                )));
+            }
+            vec![level]
+        } else if params.len() == 0 {
+            vec![0.5f64]
         } else {
-            0.5f64
+            let mut levels = Vec::with_capacity(params.len());
+            for param in params {
+                let level: F64 = check_number(
+                    None,
+                    FunctionContext::default(),
+                    &Expr::<usize>::Cast {
+                        span: None,
+                        is_try: false,
+                        expr: Box::new(Expr::Constant {
+                            span: None,
+                            scalar: param.clone(),
+                            data_type: param.as_ref().infer_data_type(),
+                        }),
+                        dest_type: DataType::Number(NumberDataType::Float64),
+                    },
+                    &BUILTIN_FUNCTIONS,
+                )?;
+                let level = level.0;
+                if !(0.0..=1.0).contains(&level) {
+                    return Err(ErrorCode::BadDataValueType(format!(
+                        "level range between [0, 1], got: {:?} in levels",
+                        level
+                    )));
+                }
+                levels.push(level);
+            }
+            levels
         };
-
-        if !(0.0..=1.0).contains(&level) {
-            return Err(ErrorCode::BadDataValueType(format!(
-                "level range between [0, 1], got: {:?}",
-                level
-            )));
-        }
 
         let func = AggregateQuantileContFunction::<T, State> {
             display_name: display_name.to_string(),
             return_type,
-            level,
+            levels,
             _arguments: arguments,
             _t: PhantomData,
             _state: PhantomData,
@@ -313,9 +360,7 @@ pub fn try_create_aggregate_quantile_function<const TYPE: u8>(
     params: Vec<Scalar>,
     arguments: Vec<DataType>,
 ) -> Result<AggregateFunctionRef> {
-    if TYPE == QUANTILE {
-        assert_unary_params(display_name, params.len())?;
-    } else {
+    if TYPE == MEDIAN {
         assert_params(display_name, params.len(), 0)?;
     }
 
@@ -327,9 +372,14 @@ pub fn try_create_aggregate_quantile_function<const TYPE: u8>(
             with_number_mapped_type!(|NUM| match num_type {
                 NumberDataType::NUM => {
                     type State = QuantileState<NumberType<NUM>>;
+                    let return_type = if params.len() > 1 {
+                        DataType::Array(Box::new(data_type))
+                    } else {
+                        data_type
+                    };
                     AggregateQuantileContFunction::<NumberType<NUM>, State>::try_create(
                         display_name,
-                        data_type,
+                        return_type,
                         params,
                         arguments,
                     )
@@ -341,10 +391,16 @@ pub fn try_create_aggregate_quantile_function<const TYPE: u8>(
                 precision: s.precision,
                 scale: s.scale,
             };
+            let data_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
+            let return_type = if params.len() > 1 {
+                DataType::Array(Box::new(data_type))
+            } else {
+                data_type
+            };
             type State = QuantileState<DecimalType<i128>>;
             AggregateQuantileContFunction::<DecimalType<i128>, State>::try_create(
                 display_name,
-                DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
+                return_type,
                 params,
                 arguments,
             )
@@ -354,10 +410,16 @@ pub fn try_create_aggregate_quantile_function<const TYPE: u8>(
                 precision: s.precision,
                 scale: s.scale,
             };
+            let data_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
+            let return_type = if params.len() > 1 {
+                DataType::Array(Box::new(data_type))
+            } else {
+                data_type
+            };
             type State = QuantileState<DecimalType<i256>>;
             AggregateQuantileContFunction::<DecimalType<i256>, State>::try_create(
                 display_name,
-                DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
+                return_type,
                 params,
                 arguments,
             )
