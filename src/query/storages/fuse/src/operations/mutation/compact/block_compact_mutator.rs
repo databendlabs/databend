@@ -255,8 +255,7 @@ impl BlockCompactMutator {
             if blocks.len() > 1 || builder.check_column_ids(&blocks[0]) {
                 tasks.push_back((index, blocks));
             } else {
-                // unreachable.
-                unchanged_blocks.insert(index, blocks[0].clone());
+                unreachable!("expect more than one block");
             }
         }
 
