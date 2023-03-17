@@ -25,7 +25,7 @@ use crate::api::FlightAction;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ConnectionInfo {
-    pub target: Arc<NodeInfo>,
+    pub source: Arc<NodeInfo>,
     pub fragments: Vec<usize>,
     pub create_request_channel: bool,
 }

@@ -20,11 +20,13 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use async_channel::bounded;
 use async_channel::Receiver;
 use async_channel::Sender;
 use async_channel::WeakSender;
 use common_arrow::arrow_format::flight::data::Action;
 use common_arrow::arrow_format::flight::data::FlightData;
+use common_arrow::arrow_format::flight::data::Ticket;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::time::Duration;
@@ -38,6 +40,7 @@ use futures_util::future::Either;
 use parking_lot::Mutex;
 use tonic::transport::channel::Channel;
 use tonic::Request;
+use tonic::Response;
 use tonic::Status;
 use tonic::Streaming;
 use tracing::info;
@@ -80,6 +83,37 @@ impl FlightClient {
         ))
     }
 
+    pub async fn do_get(
+        &mut self,
+        query_id: &str,
+        target: &str,
+        fragment: usize,
+    ) -> Result<NewFlightExchange> {
+        let mut streaming = self
+            .get_streaming(
+                RequestBuilder::create(Ticket::default())
+                    .with_metadata("x-type", "exchange_fragment")?
+                    .with_metadata("x-target", target)?
+                    .with_metadata("x-query-id", query_id)?
+                    .with_metadata("x-fragment-id", &fragment.to_string())?
+                    .build(),
+            )
+            .await?;
+
+        let (tx, rx) = async_channel::bounded(1);
+        GlobalIORuntime::instance().spawn({
+            async move {
+                while let Some(message) = streaming.next().await {
+                    if tx.send(message.map_err(ErrorCode::from)).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        });
+
+        Ok(NewFlightExchange::Receiver(rx))
+    }
+
     pub async fn do_exchange(
         &mut self,
         query_id: &str,
@@ -101,6 +135,13 @@ impl FlightClient {
             )
             .await?,
         ))
+    }
+
+    async fn get_streaming(&mut self, request: Request<Ticket>) -> Result<Streaming<FlightData>> {
+        match self.inner.do_get(request).await {
+            Ok(res) => Ok(res.into_inner()),
+            Err(status) => Err(ErrorCode::from(status).add_message_back("(while in query flight)")),
+        }
     }
 
     async fn exchange_streaming(
@@ -130,6 +171,77 @@ impl FlightClient {
                 "Can not receive data from flight server, action: {:?}",
                 action_type
             ))),
+        }
+    }
+}
+
+pub struct FlightReceiver {
+    rx: Receiver<Result<FlightData>>,
+}
+
+impl FlightReceiver {
+    pub fn create(rx: Receiver<Result<FlightData>>) -> FlightReceiver {
+        FlightReceiver { rx }
+    }
+
+    pub async fn recv(&self) -> Result<Option<DataPacket>> {
+        match self.rx.recv().await {
+            Err(_) => Ok(None),
+            Ok(Err(error)) => Err(error),
+            Ok(Ok(message)) => Ok(Some(DataPacket::try_from(message)?)),
+        }
+    }
+
+    pub fn close(&self) {
+        //
+        unimplemented!()
+    }
+}
+
+#[derive(Clone)]
+pub struct FlightSender {
+    tx: Sender<Result<FlightData, Status>>,
+}
+
+impl FlightSender {
+    pub fn create(tx: Sender<Result<FlightData, Status>>) -> FlightSender {
+        FlightSender { tx }
+    }
+
+    pub async fn send(&self, data: DataPacket) -> Result<()> {
+        if let Err(_cause) = self.tx.send(Ok(FlightData::from(data))).await {
+            return Err(ErrorCode::AbortedQuery(
+                "Aborted query, because the remote flight channel is closed.",
+            ));
+        }
+
+        Ok(())
+    }
+
+    pub fn close(&self) {
+        //
+        unimplemented!()
+    }
+}
+
+pub enum NewFlightExchange {
+    Dummy,
+    Receiver(Receiver<Result<FlightData>>),
+    Sender(Sender<Result<FlightData, Status>>),
+}
+
+impl NewFlightExchange {
+    pub fn as_sender(&self) -> FlightSender {
+        match self {
+            NewFlightExchange::Sender(tx) => FlightSender::create(tx.clone()),
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn as_receiver(&self) -> FlightReceiver {
+        match self {
+            NewFlightExchange::Receiver(rx) => FlightReceiver::create(rx.clone()),
+            _ => unreachable!(),
         }
     }
 }
