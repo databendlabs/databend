@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::hash::Hash;
+use std::hash::Hasher;
 
 use common_ast::ast::BinaryOperator;
 use common_exception::ErrorCode;
@@ -482,8 +483,10 @@ pub enum SubqueryType {
     NotExists,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq, Hash)]
 pub struct SubqueryExpr {
+    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
     pub span: Span,
     pub typ: SubqueryType,
     pub subquery: Box<SExpr>,
@@ -495,6 +498,7 @@ pub struct SubqueryExpr {
     pub output_column: ColumnBinding,
     pub projection_index: Option<IndexType>,
     pub(crate) data_type: Box<DataType>,
+    #[educe(Hash(method = "hash_column_set"))]
     pub outer_columns: ColumnSet,
 }
 
@@ -510,16 +514,6 @@ impl SubqueryExpr {
     }
 }
 
-impl PartialEq for SubqueryExpr {
-    fn eq(&self, _other: &Self) -> bool {
-        false
-    }
-}
-
-impl Eq for SubqueryExpr {}
-
-impl Hash for SubqueryExpr {
-    fn hash<H: std::hash::Hasher>(&self, _state: &mut H) {
-        unreachable!()
-    }
+fn hash_column_set<H: Hasher>(columns: &ColumnSet, state: &mut H) {
+    columns.iter().for_each(|c| c.hash(state));
 }
