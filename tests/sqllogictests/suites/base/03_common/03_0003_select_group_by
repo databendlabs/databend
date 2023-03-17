@@ -189,3 +189,20 @@ select (number % 3)::Decimal(19, 2) c, to_string(number % 3) d, count() from num
 0.00 0 34
 1.00 1 33
 2.00 2 33
+
+
+## group by variant  https://github.com/datafuselabs/databend/issues/10603
+
+query TI
+select number::Variant a, count()  from numbers(3) group by a order by a;
+----
+0 1
+1 1
+2 1
+
+query TI
+select number::Variant a, number as b, count()  from numbers(3) group by a, b order by a;
+----
+0 0 1
+1 1 1
+2 2 1
