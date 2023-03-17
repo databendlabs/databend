@@ -56,7 +56,6 @@ impl<'a> GroupingChecker<'a> {
                     data_type: Box::new(column.scalar.data_type()?),
                     visibility: Visibility::Visible,
                 }
-                .into()
             };
 
             if let Some(grouping_id) = &self.bind_context.aggregate_info.grouping_id_column {
