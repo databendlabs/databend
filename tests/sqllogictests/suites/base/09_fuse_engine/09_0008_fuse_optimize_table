@@ -298,6 +298,86 @@ select segment_count, block_count from fuse_snapshot('db_09_0008', 't4') limit 1
 
 
 statement ok
+create table t5(c int)  block_per_segment=3 row_per_block=3
+
+statement ok
+insert into t5 select number from numbers(6)
+
+statement ok
+insert into t5 select number from numbers(12) where number>5
+
+statement ok
+optimize table t5 compact segment
+
+statement ok
+insert into t5 select number from numbers(19) where number>11
+
+statement ok
+insert into t5 values(19)
+
+statement ok
+insert into t5 values(20)
+
+statement ok
+optimize table t5 compact
+
+query I
+select count() from t5
+----
+21
+
+query II
+select segment_count, block_count from fuse_snapshot('db_09_0008', 't5') limit 2
+----
+2 7
+4 9
+
+
+
+statement ok
+create table t6(c int)  block_per_segment=4 row_per_block=3
+
+statement ok
+insert into t6 select number from numbers(9)
+
+statement ok
+insert into t6 select number from numbers(18) where number>8
+
+statement ok
+optimize table t6 compact segment
+
+statement ok
+insert into t6 select number from numbers(27) where number>17
+
+statement ok
+insert into t6 values(27)
+
+statement ok
+insert into t6 values(28)
+
+statement ok
+insert into t6 values(29)
+
+statement ok
+insert into t6 values(30)
+
+statement ok
+optimize table t6 compact
+
+query I
+select count() from t6
+----
+31
+
+query II
+select segment_count, block_count from fuse_snapshot('db_09_0008', 't6') limit 2
+----
+3 11
+6 13
+
+
+
+statement ok
 DROP TABLE m
 
 statement ok
@@ -314,6 +394,12 @@ DROP TABLE t3
 
 statement ok
 DROP TABLE t4
+
+statement ok
+DROP TABLE t5
+
+statement ok
+DROP TABLE t6
 
 statement ok
 DROP DATABASE db_09_0008
