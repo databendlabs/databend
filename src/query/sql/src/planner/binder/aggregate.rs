@@ -542,6 +542,11 @@ impl Binder {
             );
         }
 
+        // If it's `GROUP BY GROUPING SETS`, ignore the optimization below.
+        if collect_grouping_sets {
+            return Ok(());
+        }
+
         // Remove dependent group items, group by a, f(a, b), f(a), b ---> group by a,b
         let mut results = vec![];
         for item in bind_context.aggregate_info.group_items.iter() {
