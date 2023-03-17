@@ -27,11 +27,7 @@ impl From<ErrorCode> for FlightData {
             code: error.code(),
             message: error.message(),
             span: error.span(),
-            backtrace: {
-                let mut str = error.backtrace_str();
-                str.truncate(2 * 1024);
-                str
-            },
+            backtrace: error.backtrace_str(),
         })
         .unwrap();
 
@@ -48,7 +44,7 @@ impl TryFrom<FlightData> for ErrorCode {
     type Error = ErrorCode;
 
     fn try_from(flight_data: FlightData) -> Result<Self> {
-        match serde_json::from_slice::<SerializedError>(&flight_data.data_header) {
+        match serde_json::from_slice::<SerializedError>(&flight_data.data_body) {
             Err(error) => Ok(ErrorCode::from(error)),
             Ok(serialized_error) => match serialized_error.backtrace.len() {
                 0 => Ok(ErrorCode::create(

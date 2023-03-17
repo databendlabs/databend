@@ -69,15 +69,12 @@ pub struct AggregateInfo {
     /// This is used to find a aggregate function in current context.
     pub aggregate_functions_map: HashMap<String, usize>,
 
-    /// Mapping: (group item display name) -> (index of group item in `group_items`)
+    /// Mapping: (group item) -> (index of group item in `group_items`)
     /// This is used to check if a scalar expression is a group item.
     /// For example, `SELECT count(*) FROM t GROUP BY a+1 HAVING a+1+1`.
     /// The group item `a+1` is involved in `a+1+1`, so it's a valid `HAVING`.
     /// We will check the validity by lookup this map with display name.
-    ///
-    /// TODO(leiysky): so far we are using `Debug` string of `Scalar` as identifier,
-    /// maybe a more reasonable way is needed
-    pub group_items_map: HashMap<String, usize>,
+    pub group_items_map: HashMap<ScalarExpr, usize>,
 
     /// Index for virtual column `grouping_id`. It's valid only if `grouping_sets` is not empty.
     pub grouping_id_index: IndexType,
@@ -405,7 +402,7 @@ impl Binder {
         group_by: &[Expr],
         available_aliases: &[(ColumnBinding, ScalarExpr)],
         collect_grouping_sets: bool,
-        grouping_sets: &mut Vec<Vec<String>>,
+        grouping_sets: &mut Vec<Vec<ScalarExpr>>,
     ) -> Result<()> {
         if collect_grouping_sets {
             grouping_sets.push(Vec::with_capacity(group_by.len()));
@@ -420,8 +417,10 @@ impl Binder {
             } = expr
             {
                 let (scalar, alias) = Self::resolve_index_item(expr, *index, select_list)?;
-                let key = format!("{:?}", &scalar);
-                if let Entry::Vacant(entry) = bind_context.aggregate_info.group_items_map.entry(key)
+                if let Entry::Vacant(entry) = bind_context
+                    .aggregate_info
+                    .group_items_map
+                    .entry(scalar.clone())
                 {
                     // Add group item if it's not duplicated
                     let column_binding = if let ScalarExpr::BoundColumnRef(ref column_ref) = scalar
@@ -452,15 +451,14 @@ impl Binder {
                 .await
                 .or_else(|e| Self::resolve_alias_item(bind_context, expr, available_aliases, e))?;
 
-            let scalar_str = format!("{:?}", scalar_expr);
-            if collect_grouping_sets && !grouping_sets.last().unwrap().contains(&scalar_str) {
-                grouping_sets.last_mut().unwrap().push(scalar_str.clone());
+            if collect_grouping_sets && !grouping_sets.last().unwrap().contains(&scalar_expr) {
+                grouping_sets.last_mut().unwrap().push(scalar_expr.clone());
             }
 
             if bind_context
                 .aggregate_info
                 .group_items_map
-                .get(&scalar_str)
+                .get(&scalar_expr)
                 .is_some()
             {
                 // The group key is duplicated
@@ -485,7 +483,7 @@ impl Binder {
                 index,
             });
             bind_context.aggregate_info.group_items_map.insert(
-                scalar_str,
+                scalar_expr,
                 bind_context.aggregate_info.group_items.len() - 1,
             );
         }
@@ -512,7 +510,7 @@ impl Binder {
             bind_context
                 .aggregate_info
                 .group_items_map
-                .insert(format!("{:?}", &item.scalar), i);
+                .insert(item.scalar.clone(), i);
         }
         bind_context.aggregate_info.group_items = results;
         Ok(())
@@ -586,7 +584,7 @@ impl Binder {
                 index,
             });
             bind_context.aggregate_info.group_items_map.insert(
-                format!("{:?}", &scalar),
+                scalar.clone(),
                 bind_context.aggregate_info.group_items.len() - 1,
             );
 
@@ -597,7 +595,7 @@ impl Binder {
             }
             .into();
             bind_context.aggregate_info.group_items_map.insert(
-                format!("{:?}", &column_ref),
+                column_ref,
                 bind_context.aggregate_info.group_items.len() - 1,
             );
 

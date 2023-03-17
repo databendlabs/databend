@@ -46,7 +46,7 @@ impl<'a> GroupingChecker<'a> {
             .bind_context
             .aggregate_info
             .group_items_map
-            .get(&format!("{:?}", scalar))
+            .get(&scalar)
         {
             let column = &self.bind_context.aggregate_info.group_items[*index];
             if let ScalarExpr::BoundColumnRef(column_ref) = &column.scalar {
