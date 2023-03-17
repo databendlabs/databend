@@ -660,8 +660,14 @@ impl CompactSegmentTestFixture {
             segment_writer.clone(),
         );
 
-        let (locations, blocks, _) =
-            Self::gen_segments(&block_writer, &segment_writer, num_block_of_segments).await?;
+        let rows_per_block = 1;
+        let (locations, blocks, _) = Self::gen_segments(
+            &block_writer,
+            &segment_writer,
+            num_block_of_segments,
+            rows_per_block,
+        )
+        .await?;
         self.input_blocks = blocks;
         let limit = limit.unwrap_or(usize::MAX);
         seg_acc
@@ -675,12 +681,14 @@ impl CompactSegmentTestFixture {
         block_writer: &BlockWriter<'_>,
         segment_writer: &SegmentWriter<'_>,
         block_num_of_segments: &[usize],
+        rows_per_block: usize,
     ) -> Result<(Vec<Location>, Vec<BlockMeta>, Vec<SegmentInfo>)> {
         let mut locations = vec![];
         let mut collected_blocks = vec![];
         let mut segment_infos = vec![];
         for num_blocks in block_num_of_segments.iter().rev() {
-            let (schema, blocks) = TestFixture::gen_sample_blocks_ex(*num_blocks, 1, 1);
+            let (schema, blocks) =
+                TestFixture::gen_sample_blocks_ex(*num_blocks, rows_per_block, 1);
             let mut stats_acc = StatisticsAccumulator::default();
             for block in blocks {
                 let block = block?;

@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_base::base::tokio;
@@ -143,7 +144,8 @@ async fn test_safety() -> Result<()> {
     let segment_writer = SegmentWriter::new(&data_accessor, &location_gen);
     let mut rand = thread_rng();
 
-    for r in 1..100 {
+    // for r in 1..100 { // <- use this at home
+    for r in 1..10 {
         eprintln!("round {}", r);
         let number_of_segments: usize = rand.gen_range(1..10);
 
@@ -162,19 +164,27 @@ async fn test_safety() -> Result<()> {
             "generating segments number of segments {},  number of blocks {}",
             number_of_segments, number_of_blocks,
         );
-
+        let rows_per_block = 1;
         let (locations, _, segment_infos) = CompactSegmentTestFixture::gen_segments(
             &block_writer,
             &segment_writer,
             &block_number_of_segments,
+            rows_per_block,
         )
         .await?;
 
         eprintln!("data ready");
 
         let mut summary = Statistics::default();
-        for seg in segment_infos {
+        for seg in &segment_infos {
             merge_statistics_mut(&mut summary, &seg.summary)?;
+        }
+
+        let mut block_ids = HashSet::new();
+        for seg in &segment_infos {
+            for b in &seg.blocks {
+                block_ids.insert(b.location.clone());
+            }
         }
 
         let id = Uuid::new_v4();
@@ -191,7 +201,7 @@ async fn test_safety() -> Result<()> {
 
         let compact_params = CompactOptions {
             base_snapshot: Arc::new(snapshot),
-            block_per_seg: 30,
+            block_per_seg: 20,
             limit: None,
         };
 
@@ -201,13 +211,21 @@ async fn test_safety() -> Result<()> {
         block_compact_mutator.target_select().await?;
         let selections = block_compact_mutator.compact_tasks;
         let mut blocks_number = 0;
+
+        let mut block_ids_after_compaction = HashSet::new();
         for part in selections.partitions.into_iter() {
             let part = CompactPartInfo::from_part(&part)?;
             blocks_number += part.blocks.len();
+            for b in &part.blocks {
+                block_ids_after_compaction.insert(b.location.clone());
+            }
         }
 
         for unchanged in block_compact_mutator.unchanged_blocks_map.values() {
             blocks_number += unchanged.len();
+            for b in unchanged.values() {
+                block_ids_after_compaction.insert(b.location.clone());
+            }
         }
 
         let segment_reader = MetaReaders::segment_info_reader(
@@ -223,8 +241,12 @@ async fn test_safety() -> Result<()> {
             };
             let segment = segment_reader.read(&param).await?;
             blocks_number += segment.blocks.len();
+            for b in &segment.blocks {
+                block_ids_after_compaction.insert(b.location.clone());
+            }
         }
         assert_eq!(number_of_blocks, blocks_number);
+        assert_eq!(block_ids, block_ids_after_compaction);
     }
 
     Ok(())
