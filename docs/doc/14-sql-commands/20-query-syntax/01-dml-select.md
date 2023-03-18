@@ -142,6 +142,9 @@ SELECT number%2 as c1, number%3 as c2, MAX(number) FROM numbers(10000) GROUP BY 
 
 ```
 
+
+`GROUP BY` can be extended with [GROUPING SETS](./21-grouping-sets.md) to do more complex grouping operations.
+
 ## HAVING Clause
 
 ```sql

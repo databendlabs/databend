@@ -48,7 +48,7 @@ impl Binder {
         );
         let variable = variable.name.clone();
 
-        let (scalar, _) = *type_checker.resolve(value, None).await?;
+        let (scalar, _) = *type_checker.resolve(value).await?;
         let scalar = wrap_cast(&scalar, &DataType::String);
         let expr = scalar.as_expr_with_col_index()?;
 

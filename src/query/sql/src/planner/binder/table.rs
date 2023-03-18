@@ -685,7 +685,7 @@ impl Binder {
                     self.metadata.clone(),
                     &[],
                 );
-                let box (scalar, _) = type_checker.resolve(expr, None).await?;
+                let box (scalar, _) = type_checker.resolve(expr).await?;
                 let scalar_expr = scalar.as_expr_with_col_name()?;
 
                 let (new_expr, _) = ConstantFolder::fold(
