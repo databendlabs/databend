@@ -279,6 +279,15 @@ impl<Index: ColumnIndex> RawExpr<Index> {
 }
 
 impl<Index: ColumnIndex> Expr<Index> {
+    pub fn span(&self) -> Span {
+        match self {
+            Expr::Constant { span, .. } => *span,
+            Expr::ColumnRef { span, .. } => *span,
+            Expr::Cast { span, .. } => *span,
+            Expr::FunctionCall { span, .. } => *span,
+        }
+    }
+
     pub fn data_type(&self) -> &DataType {
         match self {
             Expr::Constant { data_type, .. } => data_type,

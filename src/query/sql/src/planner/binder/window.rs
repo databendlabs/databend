@@ -172,7 +172,7 @@ impl Binder {
                     let (bound_expr, _) = scalar_binder.bind(&order.expr).await?;
                     let rewrite_scalar = self
                         .rewrite_scalar_with_replacement(&bound_expr, &|nest_scalar| {
-                            if let ScalarExpr::BoundColumnRef(BoundColumnRef { column }) =
+                            if let ScalarExpr::BoundColumnRef(BoundColumnRef { column, .. }) =
                                 nest_scalar
                             {
                                 if let Some(scalar_item) = scalar_items.get(&column.index) {
@@ -364,6 +364,7 @@ impl Binder {
                 };
                 replaced_args.push(
                     BoundColumnRef {
+                        span: arg.span(),
                         column: column_binding.clone(),
                     }
                     .into(),
@@ -401,6 +402,7 @@ impl Binder {
                 };
                 replaced_partition_items.push(
                     BoundColumnRef {
+                        span: part.span(),
                         column: column_binding.clone(),
                     }
                     .into(),

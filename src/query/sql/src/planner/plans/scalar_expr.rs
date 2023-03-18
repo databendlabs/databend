@@ -13,12 +13,15 @@
 // limitations under the License.
 
 use std::hash::Hash;
+use std::hash::Hasher;
 
 use common_ast::ast::BinaryOperator;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::Span;
 use common_expression::types::DataType;
 use common_expression::Literal;
+use educe::Educe;
 
 use crate::binder::ColumnBinding;
 use crate::binder::InternalColumnBinding;
@@ -127,6 +130,17 @@ impl ScalarExpr {
             ScalarExpr::CastExpr(scalar) => scalar.argument.collect_before_unnest_scalars(scalars),
             ScalarExpr::Unnest(scalar) => scalars.push(scalar.argument.clone()),
             _ => {}
+        }
+    }
+
+    pub fn span(&self) -> Span {
+        match self {
+            ScalarExpr::BoundColumnRef(expr) => expr.span,
+            ScalarExpr::ConstantExpr(expr) => expr.span,
+            ScalarExpr::FunctionCall(expr) => expr.span,
+            ScalarExpr::CastExpr(expr) => expr.span,
+            ScalarExpr::SubqueryExpr(expr) => expr.span,
+            _ => None,
         }
     }
 }
@@ -354,8 +368,11 @@ impl TryFrom<ScalarExpr> for SubqueryExpr {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq, Hash)]
 pub struct BoundColumnRef {
+    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    pub span: Span,
     pub column: ColumnBinding,
 }
 
@@ -364,10 +381,12 @@ pub struct BoundInternalColumnRef {
     pub column: InternalColumnBinding,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq, Hash)]
 pub struct ConstantExpr {
+    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    pub span: Span,
     pub value: Literal,
-
     pub data_type: Box<DataType>,
 }
 
@@ -446,13 +465,13 @@ pub struct ComparisonExpr {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct AggregateFunction {
-    pub display_name: String,
-
     pub func_name: String,
     pub distinct: bool,
     pub params: Vec<Literal>,
     pub args: Vec<ScalarExpr>,
     pub return_type: Box<DataType>,
+
+    pub display_name: String,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -491,12 +510,14 @@ pub enum WindowFuncFrameUnits {
     Range,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq, Hash)]
 pub struct FunctionCall {
+    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    pub span: Span,
+    pub func_name: String,
     pub params: Vec<usize>,
     pub arguments: Vec<ScalarExpr>,
-
-    pub func_name: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -505,8 +526,11 @@ pub struct Unnest {
     pub return_type: Box<DataType>,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq, Hash)]
 pub struct CastExpr {
+    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    pub span: Span,
     pub is_try: bool,
     pub argument: Box<ScalarExpr>,
     pub target_type: Box<DataType>,
@@ -521,8 +545,11 @@ pub enum SubqueryType {
     NotExists,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq, Hash)]
 pub struct SubqueryExpr {
+    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    pub span: Span,
     pub typ: SubqueryType,
     pub subquery: Box<SExpr>,
     // The expr that is used to compare the result of the subquery (IN/ANY/ALL), such as `t1.a in (select t2.a from t2)`, t1.a is `child_expr`.
@@ -533,6 +560,7 @@ pub struct SubqueryExpr {
     pub output_column: ColumnBinding,
     pub projection_index: Option<IndexType>,
     pub(crate) data_type: Box<DataType>,
+    #[educe(Hash(method = "hash_column_set"))]
     pub outer_columns: ColumnSet,
 }
 
@@ -548,16 +576,6 @@ impl SubqueryExpr {
     }
 }
 
-impl PartialEq for SubqueryExpr {
-    fn eq(&self, _other: &Self) -> bool {
-        false
-    }
-}
-
-impl Eq for SubqueryExpr {}
-
-impl Hash for SubqueryExpr {
-    fn hash<H: std::hash::Hasher>(&self, _state: &mut H) {
-        unreachable!()
-    }
+fn hash_column_set<H: Hasher>(columns: &ColumnSet, state: &mut H) {
+    columns.iter().for_each(|c| c.hash(state));
 }

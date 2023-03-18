@@ -69,15 +69,12 @@ pub struct AggregateInfo {
     /// This is used to find a aggregate function in current context.
     pub aggregate_functions_map: HashMap<String, usize>,
 
-    /// Mapping: (group item display name) -> (index of group item in `group_items`)
+    /// Mapping: (group item) -> (index of group item in `group_items`)
     /// This is used to check if a scalar expression is a group item.
     /// For example, `SELECT count(*) FROM t GROUP BY a+1 HAVING a+1+1`.
     /// The group item `a+1` is involved in `a+1+1`, so it's a valid `HAVING`.
     /// We will check the validity by lookup this map with display name.
-    ///
-    /// TODO(leiysky): so far we are using `Debug` string of `Scalar` as identifier,
-    /// maybe a more reasonable way is needed
-    pub group_items_map: HashMap<String, usize>,
+    pub group_items_map: HashMap<ScalarExpr, usize>,
 
     /// Index for virtual column `grouping_id`. It's valid only if `grouping_sets` is not empty.
     pub grouping_id_column: Option<ColumnBinding>,
@@ -133,13 +130,15 @@ impl<'a> AggregateRewriter<'a> {
                     .map(|arg| self.visit(arg))
                     .collect::<Result<Vec<_>>>()?;
                 Ok(FunctionCall {
+                    span: func.span,
+                    func_name: func.func_name.clone(),
                     params: func.params.clone(),
                     arguments: new_args,
-                    func_name: func.func_name.clone(),
                 }
                 .into())
             }
             ScalarExpr::CastExpr(cast) => Ok(CastExpr {
+                span: cast.span,
                 is_try: cast.is_try,
                 argument: Box::new(self.visit(&cast.argument)?),
                 target_type: cast.target_type.clone(),
@@ -196,6 +195,7 @@ impl<'a> AggregateRewriter<'a> {
                 };
                 replaced_args.push(
                     BoundColumnRef {
+                        span: arg.span(),
                         column: column_binding.clone(),
                     }
                     .into(),
@@ -253,7 +253,7 @@ impl<'a> AggregateRewriter<'a> {
         // grouping(b, a) will be rewritten to grouping<1, 0>(grouping_id).
         let mut replaced_params = Vec::with_capacity(function.arguments.len());
         for arg in &function.arguments {
-            if let Some(index) = agg_info.group_items_map.get(&format!("{:?}", arg)) {
+            if let Some(index) = agg_info.group_items_map.get(arg) {
                 replaced_params.push(*index);
             } else {
                 return Err(ErrorCode::BadArguments(
@@ -263,9 +263,11 @@ impl<'a> AggregateRewriter<'a> {
         }
 
         let replaced_func = FunctionCall {
+            span: function.span,
             func_name: function.func_name.clone(),
             params: replaced_params,
             arguments: vec![ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: function.span,
                 column: grouping_id_column,
             })],
         };
@@ -456,17 +458,16 @@ impl Binder {
         let index = grouping_id_column.index;
         agg_info.grouping_id_column = Some(grouping_id_column.clone());
         agg_info.group_items_map.insert(
-            format!(
-                "{:?}",
-                ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    column: grouping_id_column.clone()
-                })
-            ),
+            ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: None,
+                column: grouping_id_column.clone(),
+            }),
             agg_info.group_items.len(),
         );
         agg_info.group_items.push(ScalarItem {
             index,
             scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: None,
                 column: grouping_id_column,
             }),
         });
@@ -480,7 +481,7 @@ impl Binder {
         group_by: &[Expr],
         available_aliases: &[(ColumnBinding, ScalarExpr)],
         collect_grouping_sets: bool,
-        grouping_sets: &mut Vec<Vec<String>>,
+        grouping_sets: &mut Vec<Vec<ScalarExpr>>,
     ) -> Result<()> {
         if collect_grouping_sets {
             grouping_sets.push(Vec::with_capacity(group_by.len()));
@@ -495,8 +496,10 @@ impl Binder {
             } = expr
             {
                 let (scalar, alias) = Self::resolve_index_item(expr, *index, select_list)?;
-                let key = format!("{:?}", &scalar);
-                if let Entry::Vacant(entry) = bind_context.aggregate_info.group_items_map.entry(key)
+                if let Entry::Vacant(entry) = bind_context
+                    .aggregate_info
+                    .group_items_map
+                    .entry(scalar.clone())
                 {
                     // Add group item if it's not duplicated
                     let column_binding = if let ScalarExpr::BoundColumnRef(ref column_ref) = scalar
@@ -527,15 +530,14 @@ impl Binder {
                 .await
                 .or_else(|e| Self::resolve_alias_item(bind_context, expr, available_aliases, e))?;
 
-            let scalar_str = format!("{:?}", scalar_expr);
-            if collect_grouping_sets && !grouping_sets.last().unwrap().contains(&scalar_str) {
-                grouping_sets.last_mut().unwrap().push(scalar_str.clone());
+            if collect_grouping_sets && !grouping_sets.last().unwrap().contains(&scalar_expr) {
+                grouping_sets.last_mut().unwrap().push(scalar_expr.clone());
             }
 
             if bind_context
                 .aggregate_info
                 .group_items_map
-                .get(&scalar_str)
+                .get(&scalar_expr)
                 .is_some()
             {
                 // The group key is duplicated
@@ -545,6 +547,7 @@ impl Binder {
             let group_item_name = format!("{:#}", expr);
             let index = if let ScalarExpr::BoundColumnRef(BoundColumnRef {
                 column: ColumnBinding { index, .. },
+                ..
             }) = &scalar_expr
             {
                 *index
@@ -559,7 +562,7 @@ impl Binder {
                 index,
             });
             bind_context.aggregate_info.group_items_map.insert(
-                scalar_str,
+                scalar_expr,
                 bind_context.aggregate_info.group_items.len() - 1,
             );
         }
@@ -591,7 +594,7 @@ impl Binder {
             bind_context
                 .aggregate_info
                 .group_items_map
-                .insert(format!("{:?}", &item.scalar), i);
+                .insert(item.scalar.clone(), i);
         }
         bind_context.aggregate_info.group_items = results;
         Ok(())
@@ -665,17 +668,18 @@ impl Binder {
                 index,
             });
             bind_context.aggregate_info.group_items_map.insert(
-                format!("{:?}", &scalar),
+                scalar.clone(),
                 bind_context.aggregate_info.group_items.len() - 1,
             );
 
             // Add a mapping (alias -> scalar), so we can resolve the alias later
             let column_ref: ScalarExpr = BoundColumnRef {
+                span: scalar.span(),
                 column: column_binding,
             }
             .into();
             bind_context.aggregate_info.group_items_map.insert(
-                format!("{:?}", &column_ref),
+                column_ref,
                 bind_context.aggregate_info.group_items.len() - 1,
             );
 

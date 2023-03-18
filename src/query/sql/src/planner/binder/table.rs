@@ -40,6 +40,7 @@ use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::Span;
 use common_expression::types::DataType;
 use common_expression::ColumnId;
 use common_expression::ConstantFolder;
@@ -89,11 +90,11 @@ impl Binder {
             } = select_target
             {
                 for indirect in names {
-                    if indirect == &Indirection::Star {
+                    if let Indirection::Star(span) = indirect {
                         return Err(ErrorCode::SemanticError(
                             "SELECT * with no tables specified is not valid".to_string(),
                         )
-                        .set_span(stmt.span));
+                        .set_span(*span));
                     }
                 }
             }
@@ -124,7 +125,7 @@ impl Binder {
     ) -> Result<(SExpr, BindContext)> {
         match table_ref {
             TableReference::Table {
-                span: _,
+                span,
                 catalog,
                 database,
                 table,
@@ -141,7 +142,7 @@ impl Binder {
                 // Check and bind common table expression
                 if let Some(cte_info) = bind_context.ctes_map.get(&table_name) {
                     return self
-                        .bind_cte(bind_context, &table_name, alias, &cte_info)
+                        .bind_cte(*span, bind_context, &table_name, alias, &cte_info)
                         .await;
                 }
 
@@ -176,14 +177,15 @@ impl Binder {
                             }
                             if let Some(cte_info) = parent.unwrap().ctes_map.get(&table_name) {
                                 return self
-                                    .bind_cte(bind_context, &table_name, alias, &cte_info)
+                                    .bind_cte(*span, bind_context, &table_name, alias, &cte_info)
                                     .await;
                             }
                             parent = parent.unwrap().parent.as_ref();
                         }
                         return Err(ErrorCode::UnknownTable(format!(
                             "Unknown table '{table_name}'"
-                        )));
+                        ))
+                        .set_span(*span));
                     }
                 };
 
@@ -227,7 +229,8 @@ impl Binder {
                             Err(ErrorCode::Internal(format!(
                                 "Invalid VIEW object: {}",
                                 table_meta.name()
-                            )))
+                            ))
+                            .set_span(*span))
                         }
                     }
                     _ => {
@@ -250,7 +253,7 @@ impl Binder {
                 }
             }
             TableReference::TableFunction {
-                span: _,
+                span,
                 name,
                 params,
                 named_params,
@@ -272,14 +275,15 @@ impl Binder {
                     if query_id.is_empty() {
                         return Err(ErrorCode::InvalidArgument(
                             "query_id must be specified when using `RESULT_SCAN`",
-                        ));
+                        )
+                        .set_span(*span));
                     }
                     let kv_store = UserApiProvider::instance().get_meta_store_client();
                     let meta_key = self.ctx.get_result_cache_key(&query_id);
                     if meta_key.is_none() {
                         return Err(ErrorCode::EmptyData(format!(
                             "`RESULT_SCAN` could not find related cache key in current session for this query id: {query_id}"
-                        )));
+                        )).set_span(*span));
                     }
                     let result_cache_mgr = ResultCacheMetaManager::create(kv_store, 0);
                     let meta_key = meta_key.unwrap();
@@ -296,7 +300,7 @@ impl Binder {
                             return Err(ErrorCode::EmptyData(format!(
                                 "`RESULT_SCAN` could not fetch cache value, maybe the data has touched ttl and was cleaned up.\n\
                             query id: {query_id}, cache key: {meta_key}"
-                            )));
+                            )).set_span(*span));
                         }
                     };
                     let table = ResultScan::try_create(table_schema, query_id, block_raw_data)?;
@@ -511,6 +515,7 @@ impl Binder {
 
     async fn bind_cte(
         &mut self,
+        span: Span,
         bind_context: &BindContext,
         table_name: &str,
         alias: &Option<TableAlias>,
@@ -552,7 +557,8 @@ impl Binder {
                 "table has {} columns available but {} columns specified",
                 new_bind_context.columns.len(),
                 cols_alias.len()
-            )));
+            ))
+            .set_span(span));
         }
         for (index, column_name) in cols_alias.iter().enumerate() {
             new_bind_context.columns[index].column_name = column_name.clone();

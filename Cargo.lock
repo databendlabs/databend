@@ -2031,6 +2031,7 @@ dependencies = [
  "common-users",
  "ctor",
  "dashmap",
+ "educe",
  "globiter",
  "itertools",
  "num-derive",

@@ -29,7 +29,7 @@ impl ScalarExpr {
     pub fn as_raw_expr_with_col_name(&self) -> RawExpr<String> {
         match self {
             ScalarExpr::BoundColumnRef(column_ref) => RawExpr::ColumnRef {
-                span: None,
+                span: column_ref.span,
                 id: column_ref.column.column_name.clone(),
                 data_type: *column_ref.column.data_type.clone(),
                 display_name: format!(
@@ -59,7 +59,7 @@ impl ScalarExpr {
                 ),
             },
             ScalarExpr::ConstantExpr(constant) => RawExpr::Literal {
-                span: None,
+                span: constant.span,
                 lit: constant.value.clone(),
             },
             ScalarExpr::AndExpr(expr) => RawExpr::FunctionCall {
@@ -108,7 +108,7 @@ impl ScalarExpr {
                 display_name: agg.display_name.clone(),
             },
             ScalarExpr::FunctionCall(func) => RawExpr::FunctionCall {
-                span: None,
+                span: func.span,
                 name: func.func_name.clone(),
                 params: func.params.clone(),
                 args: func
@@ -118,13 +118,13 @@ impl ScalarExpr {
                     .collect(),
             },
             ScalarExpr::CastExpr(cast) => RawExpr::Cast {
-                span: None,
+                span: cast.span,
                 is_try: cast.is_try,
                 expr: Box::new(cast.argument.as_raw_expr_with_col_name()),
                 dest_type: (*cast.target_type).clone(),
             },
             ScalarExpr::SubqueryExpr(subquery) => RawExpr::ColumnRef {
-                span: None,
+                span: subquery.span,
                 id: DUMMY_NAME.to_string(),
                 data_type: subquery.data_type(),
                 display_name: DUMMY_NAME.to_string(),
@@ -148,7 +148,7 @@ impl ScalarExpr {
     pub fn as_raw_expr_with_col_index(&self) -> RawExpr {
         match self {
             ScalarExpr::BoundColumnRef(column_ref) => RawExpr::ColumnRef {
-                span: None,
+                span: column_ref.span,
                 id: column_ref.column.index,
                 data_type: *column_ref.column.data_type.clone(),
                 display_name: format!(
@@ -178,7 +178,7 @@ impl ScalarExpr {
                 ),
             },
             ScalarExpr::ConstantExpr(constant) => RawExpr::Literal {
-                span: None,
+                span: constant.span,
                 lit: constant.value.clone(),
             },
             ScalarExpr::AndExpr(expr) => RawExpr::FunctionCall {
@@ -227,7 +227,7 @@ impl ScalarExpr {
                 display_name: agg.display_name.clone(),
             },
             ScalarExpr::FunctionCall(func) => RawExpr::FunctionCall {
-                span: None,
+                span: func.span,
                 name: func.func_name.clone(),
                 params: func.params.clone(),
                 args: func
@@ -237,13 +237,13 @@ impl ScalarExpr {
                     .collect(),
             },
             ScalarExpr::CastExpr(cast) => RawExpr::Cast {
-                span: None,
+                span: cast.span,
                 is_try: cast.is_try,
                 expr: Box::new(cast.argument.as_raw_expr_with_col_index()),
                 dest_type: (*cast.target_type).clone(),
             },
             ScalarExpr::SubqueryExpr(subquery) => RawExpr::ColumnRef {
-                span: None,
+                span: subquery.span,
                 id: DUMMY_INDEX,
                 data_type: subquery.data_type(),
                 display_name: DUMMY_NAME.to_string(),

@@ -17,6 +17,7 @@ use std::sync::Mutex;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use educe::Educe;
 
 use super::RelationalProperty;
 use crate::optimizer::rule::AppliedRules;
@@ -29,7 +30,8 @@ use crate::IndexType;
 use crate::ScalarExpr;
 
 /// `SExpr` is abbreviation of single expression, which is a tree of relational operators.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq, Hash)]
 pub struct SExpr {
     pub(crate) plan: RelOperator,
     pub(crate) children: Arc<Vec<SExpr>>,
@@ -42,6 +44,7 @@ pub struct SExpr {
     ///
     /// Since `SExpr` is `Send + Sync`, we use `Mutex` to protect
     /// the cache.
+    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
     pub(crate) rel_prop: Arc<Mutex<Option<RelationalProperty>>>,
 
     /// A bitmap to record applied rules on current SExpr, to prevent

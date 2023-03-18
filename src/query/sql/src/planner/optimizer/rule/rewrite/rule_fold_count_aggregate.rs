@@ -103,6 +103,7 @@ impl Rule for RuleFoldCountAggregate {
             let mut scalars = agg.aggregate_functions;
             for item in scalars.iter_mut() {
                 item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
+                    span: item.scalar.span(),
                     value: Literal::UInt64(card),
                     data_type: Box::new(item.scalar.data_type()?),
                 });
@@ -124,6 +125,7 @@ impl Rule for RuleFoldCountAggregate {
                 if let ScalarExpr::AggregateFunction(agg_func) = item.scalar.clone() {
                     if agg_func.args.is_empty() {
                         item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
+                            span: item.scalar.span(),
                             value: Literal::UInt64(table_card),
                             data_type: Box::new(item.scalar.data_type()?),
                         });
@@ -134,6 +136,7 @@ impl Rule for RuleFoldCountAggregate {
                             let col_stat = column_stats.get(&index);
                             if let Some(card) = col_stat {
                                 item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
+                                    span: item.scalar.span(),
                                     value: Literal::UInt64(table_card - card.null_count),
                                     data_type: Box::new(item.scalar.data_type()?),
                                 });

@@ -145,6 +145,7 @@ fn replace_column_binding(
                     visibility: Visibility::Visible,
                 };
                 return Ok(ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: column.span,
                     column: new_column,
                 }));
             }
@@ -202,15 +203,17 @@ fn replace_column_binding(
             }))
         }
         ScalarExpr::FunctionCall(expr) => Ok(ScalarExpr::FunctionCall(FunctionCall {
+            span: expr.span,
+            func_name: expr.func_name,
             params: expr.params,
             arguments: expr
                 .arguments
                 .into_iter()
                 .map(|arg| replace_column_binding(index_pairs, arg))
                 .collect::<Result<Vec<_>>>()?,
-            func_name: expr.func_name,
         })),
         ScalarExpr::CastExpr(expr) => Ok(ScalarExpr::CastExpr(CastExpr {
+            span: expr.span,
             is_try: expr.is_try,
             argument: Box::new(replace_column_binding(index_pairs, *(expr.argument))?),
             target_type: expr.target_type,

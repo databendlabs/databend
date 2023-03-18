@@ -62,18 +62,18 @@ output         : true
 
 
 error: 
-  --> SQL:1:5
+  --> SQL:1:1
   |
 1 | 'a' and 1
-  |     ^^^ unable to parse string to type `BOOLEAN` while evaluating function `to_boolean("a")`
+  | ^^^ cannot parse to type `BOOLEAN` while evaluating function `to_boolean("a")`
 
 
 
 error: 
-  --> SQL:1:5
+  --> SQL:1:9
   |
 1 | NOT NOT 'a'
-  |     ^^^ unable to parse string to type `BOOLEAN` while evaluating function `to_boolean("a")`
+  |         ^^^ cannot parse to type `BOOLEAN` while evaluating function `to_boolean("a")`
 
 
 

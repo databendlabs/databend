@@ -110,23 +110,26 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
         rule! {
             ( #ident ~ "." ~ ( #ident ~ "." )? )? ~ "*" ~ ( EXCLUDE ~ #exclude_col )?
         },
-        |(res, _, opt_exclude)| {
+        |(res, star, opt_exclude)| {
             let exclude = opt_exclude.map(|(_, exclude)| exclude);
             match res {
                 Some((fst, _, Some((snd, _)))) => SelectTarget::QualifiedName {
                     qualified: vec![
                         Indirection::Identifier(fst),
                         Indirection::Identifier(snd),
-                        Indirection::Star,
+                        Indirection::Star(Some(star.span)),
                     ],
                     exclude,
                 },
                 Some((fst, _, None)) => SelectTarget::QualifiedName {
-                    qualified: vec![Indirection::Identifier(fst), Indirection::Star],
+                    qualified: vec![
+                        Indirection::Identifier(fst),
+                        Indirection::Star(Some(star.span)),
+                    ],
                     exclude,
                 },
                 None => SelectTarget::QualifiedName {
-                    qualified: vec![Indirection::Star],
+                    qualified: vec![Indirection::Star(Some(star.span))],
                     exclude,
                 },
             }

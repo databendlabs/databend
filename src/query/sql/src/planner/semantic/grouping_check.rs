@@ -42,12 +42,7 @@ impl<'a> GroupingChecker<'a> {
     }
 
     pub fn resolve(&mut self, scalar: &ScalarExpr, span: Span) -> Result<ScalarExpr> {
-        if let Some(index) = self
-            .bind_context
-            .aggregate_info
-            .group_items_map
-            .get(&format!("{:?}", scalar))
-        {
+        if let Some(index) = self.bind_context.aggregate_info.group_items_map.get(scalar) {
             let column = &self.bind_context.aggregate_info.group_items[*index];
             let mut column_binding = if let ScalarExpr::BoundColumnRef(column_ref) = &column.scalar
             {
@@ -70,6 +65,7 @@ impl<'a> GroupingChecker<'a> {
             }
 
             return Ok(BoundColumnRef {
+                span: scalar.span(),
                 column: column_binding,
             }
             .into());
@@ -118,6 +114,7 @@ impl<'a> GroupingChecker<'a> {
                     .map(|arg| self.resolve(arg, span))
                     .collect::<Result<Vec<ScalarExpr>>>()?;
                 Ok(FunctionCall {
+                    span: func.span,
                     params: func.params.clone(),
                     arguments: args,
                     func_name: func.func_name.clone(),
@@ -125,6 +122,7 @@ impl<'a> GroupingChecker<'a> {
                 .into())
             }
             ScalarExpr::CastExpr(cast) => Ok(CastExpr {
+                span: cast.span,
                 is_try: cast.is_try,
                 argument: Box::new(self.resolve(&cast.argument, span)?),
                 target_type: cast.target_type.clone(),
@@ -157,6 +155,7 @@ impl<'a> GroupingChecker<'a> {
                         visibility: Visibility::Visible,
                     };
                     return Ok(BoundColumnRef {
+                        span: None,
                         column: column_binding,
                     }
                     .into());
@@ -181,6 +180,7 @@ impl<'a> GroupingChecker<'a> {
                         visibility: Visibility::Visible,
                     };
                     return Ok(BoundColumnRef {
+                        span: None,
                         column: column_binding,
                     }
                     .into());
