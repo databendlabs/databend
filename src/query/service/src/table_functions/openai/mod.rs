@@ -1,4 +1,4 @@
-//  Copyright 2021 Datafuse Labs.
+//  Copyright 2023 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -12,18 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod async_crash_me;
-mod numbers;
-mod openai;
-mod sync_crash_me;
-mod table_function;
-mod table_function_factory;
-mod unnest;
+mod gpt_to_sql;
 
-pub use numbers::generate_numbers_parts;
-pub use numbers::NumbersPartInfo;
-pub use numbers::NumbersTable;
-pub use openai::GPT2SQLTable;
-pub use table_function::TableFunction;
-pub use table_function_factory::TableFunctionFactory;
-pub use unnest::UnnestTable;
+pub use gpt_to_sql::GPT2SQLTable;

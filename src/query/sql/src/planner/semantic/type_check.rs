@@ -48,8 +48,6 @@ use common_expression::types::decimal::DecimalSize;
 use common_expression::types::number::F64;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::DataBlock;
-use common_expression::Evaluator;
 use common_expression::RawExpr;
 use common_expression::TableDataType;
 use common_functions::aggregates::AggregateCountFunction;
@@ -163,12 +161,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    pub async fn resolve(
-        &mut self,
-        expr: &Expr,
-        // TODO(andylokandy): remove me
-        required_type: Option<DataType>,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
+    pub async fn resolve(&mut self, expr: &Expr) -> Result<Box<(ScalarExpr, DataType)>> {
         let box (scalar, data_type): Box<(ScalarExpr, DataType)> = match expr {
             Expr::ColumnRef {
                 span,
@@ -219,10 +212,10 @@ impl<'a> TypeChecker<'a> {
             } => {
                 let args = &[expr.as_ref()];
                 if *not {
-                    self.resolve_function(*span, "is_not_null", vec![], args, required_type)
+                    self.resolve_function(*span, "is_not_null", vec![], args)
                         .await?
                 } else {
-                    self.resolve_function(*span, "is_null", vec![], args, required_type)
+                    self.resolve_function(*span, "is_null", vec![], args)
                         .await?
                 }
             }
@@ -249,49 +242,37 @@ impl<'a> TypeChecker<'a> {
                     BinaryOperator::NotEq
                 };
                 let (scalar, _) = *self
-                    .resolve_function(
-                        *span,
-                        "if",
-                        vec![],
-                        &[
-                            &Expr::BinaryOp {
-                                span: *span,
-                                op: BinaryOperator::And,
-                                left: left_null_expr.clone(),
-                                right: right_null_expr.clone(),
-                            },
-                            &Expr::Literal {
-                                span: *span,
-                                lit: Literal::Boolean(*not),
-                            },
-                            &Expr::BinaryOp {
-                                span: *span,
-                                op: BinaryOperator::Or,
-                                left: left_null_expr.clone(),
-                                right: right_null_expr.clone(),
-                            },
-                            &Expr::Literal {
-                                span: *span,
-                                lit: Literal::Boolean(!*not),
-                            },
-                            &Expr::BinaryOp {
-                                span: *span,
-                                op,
-                                left: left.clone(),
-                                right: right.clone(),
-                            },
-                        ],
-                        None,
-                    )
+                    .resolve_function(*span, "if", vec![], &[
+                        &Expr::BinaryOp {
+                            span: *span,
+                            op: BinaryOperator::And,
+                            left: left_null_expr.clone(),
+                            right: right_null_expr.clone(),
+                        },
+                        &Expr::Literal {
+                            span: *span,
+                            lit: Literal::Boolean(*not),
+                        },
+                        &Expr::BinaryOp {
+                            span: *span,
+                            op: BinaryOperator::Or,
+                            left: left_null_expr.clone(),
+                            right: right_null_expr.clone(),
+                        },
+                        &Expr::Literal {
+                            span: *span,
+                            lit: Literal::Boolean(!*not),
+                        },
+                        &Expr::BinaryOp {
+                            span: *span,
+                            op,
+                            left: left.clone(),
+                            right: right.clone(),
+                        },
+                    ])
                     .await?;
-                self.resolve_scalar_function_call(
-                    *span,
-                    "assume_not_null",
-                    vec![],
-                    vec![scalar],
-                    required_type,
-                )
-                .await?
+                self.resolve_scalar_function_call(*span, "assume_not_null", vec![], vec![scalar])
+                    .await?
             }
 
             Expr::InList {
@@ -313,26 +294,21 @@ impl<'a> TypeChecker<'a> {
                     };
                     let args = vec![&array_expr, expr.as_ref()];
                     if *not {
-                        self.resolve_unary_op(
-                            *span,
-                            &UnaryOperator::Not,
-                            &Expr::FunctionCall {
+                        self.resolve_unary_op(*span, &UnaryOperator::Not, &Expr::FunctionCall {
+                            span: *span,
+                            distinct: false,
+                            name: Identifier {
+                                name: "contains".to_string(),
+                                quote: None,
                                 span: *span,
-                                distinct: false,
-                                name: Identifier {
-                                    name: "contains".to_string(),
-                                    quote: None,
-                                    span: *span,
-                                },
-                                args: args.iter().copied().cloned().collect(),
-                                params: vec![],
-                                window: None,
                             },
-                            None,
-                        )
+                            args: args.iter().copied().cloned().collect(),
+                            params: vec![],
+                            window: None,
+                        })
                         .await?
                     } else {
-                        self.resolve_function(*span, "contains", vec![], &args, required_type)
+                        self.resolve_function(*span, "contains", vec![], &args)
                             .await?
                     }
                 } else {
@@ -367,7 +343,7 @@ impl<'a> TypeChecker<'a> {
                             expr: Box::new(result),
                         };
                     }
-                    self.resolve(&result, required_type).await?
+                    self.resolve(&result).await?
                 }
             }
 
@@ -383,13 +359,7 @@ impl<'a> TypeChecker<'a> {
                     // Rewrite `expr BETWEEN low AND high`
                     // into `expr >= low AND expr <= high`
                     let (ge_func, _left_type) = *self
-                        .resolve_binary_op(
-                            *span,
-                            &BinaryOperator::Gte,
-                            expr.as_ref(),
-                            low.as_ref(),
-                            None,
-                        )
+                        .resolve_binary_op(*span, &BinaryOperator::Gte, expr.as_ref(), low.as_ref())
                         .await?;
                     let (le_func, _right_type) = *self
                         .resolve_binary_op(
@@ -397,18 +367,14 @@ impl<'a> TypeChecker<'a> {
                             &BinaryOperator::Lte,
                             expr.as_ref(),
                             high.as_ref(),
-                            None,
                         )
                         .await?;
 
                     let (_, data_type) = *self
-                        .resolve_scalar_function_call(
-                            *span,
-                            "and",
-                            vec![],
-                            vec![ge_func.clone(), le_func.clone()],
-                            required_type,
-                        )
+                        .resolve_scalar_function_call(*span, "and", vec![], vec![
+                            ge_func.clone(),
+                            le_func.clone(),
+                        ])
                         .await?;
 
                     Box::new((
@@ -423,32 +389,17 @@ impl<'a> TypeChecker<'a> {
                     // Rewrite `expr NOT BETWEEN low AND high`
                     // into `expr < low OR expr > high`
                     let (lt_func, _left_type) = *self
-                        .resolve_binary_op(
-                            *span,
-                            &BinaryOperator::Lt,
-                            expr.as_ref(),
-                            low.as_ref(),
-                            None,
-                        )
+                        .resolve_binary_op(*span, &BinaryOperator::Lt, expr.as_ref(), low.as_ref())
                         .await?;
                     let (gt_func, _right_type) = *self
-                        .resolve_binary_op(
-                            *span,
-                            &BinaryOperator::Gt,
-                            expr.as_ref(),
-                            high.as_ref(),
-                            None,
-                        )
+                        .resolve_binary_op(*span, &BinaryOperator::Gt, expr.as_ref(), high.as_ref())
                         .await?;
 
                     let (_, data_type) = *self
-                        .resolve_scalar_function_call(
-                            *span,
-                            "or",
-                            vec![],
-                            vec![lt_func.clone(), gt_func.clone()],
-                            required_type,
-                        )
+                        .resolve_scalar_function_call(*span, "or", vec![], vec![
+                            lt_func.clone(),
+                            gt_func.clone(),
+                        ])
                         .await?;
 
                     Box::new((
@@ -482,7 +433,6 @@ impl<'a> TypeChecker<'a> {
                                     subquery,
                                     Some(*left.clone()),
                                     Some(comparison_op),
-                                    None,
                                 )
                                 .await?
                             }
@@ -493,45 +443,33 @@ impl<'a> TypeChecker<'a> {
                                     modifier: Some(SubqueryModifier::Any),
                                     subquery: (*subquery).clone(),
                                 };
-                                self.resolve_unary_op(
-                                    *span,
-                                    &UnaryOperator::Not,
-                                    &Expr::BinaryOp {
-                                        span: *span,
-                                        op: contrary_op,
-                                        left: (*left).clone(),
-                                        right: Box::new(rewritten_subquery),
-                                    },
-                                    None,
-                                )
+                                self.resolve_unary_op(*span, &UnaryOperator::Not, &Expr::BinaryOp {
+                                    span: *span,
+                                    op: contrary_op,
+                                    left: (*left).clone(),
+                                    right: Box::new(rewritten_subquery),
+                                })
                                 .await?
                             }
                         }
                     } else {
-                        self.resolve_binary_op(
-                            *span,
-                            op,
-                            left.as_ref(),
-                            right.as_ref(),
-                            required_type,
-                        )
-                        .await?
+                        self.resolve_binary_op(*span, op, left.as_ref(), right.as_ref())
+                            .await?
                     }
                 } else {
-                    self.resolve_binary_op(*span, op, left.as_ref(), right.as_ref(), required_type)
+                    self.resolve_binary_op(*span, op, left.as_ref(), right.as_ref())
                         .await?
                 }
             }
 
             Expr::UnaryOp { span, op, expr, .. } => {
-                self.resolve_unary_op(*span, op, expr.as_ref(), required_type)
-                    .await?
+                self.resolve_unary_op(*span, op, expr.as_ref()).await?
             }
 
             Expr::Cast {
                 expr, target_type, ..
             } => {
-                let box (scalar, _) = self.resolve(expr, required_type).await?;
+                let box (scalar, _) = self.resolve(expr).await?;
                 let raw_expr = RawExpr::Cast {
                     span: expr.span(),
                     is_try: false,
@@ -555,7 +493,7 @@ impl<'a> TypeChecker<'a> {
             Expr::TryCast {
                 expr, target_type, ..
             } => {
-                let box (scalar, _) = self.resolve(expr, required_type).await?;
+                let box (scalar, _) = self.resolve(expr).await?;
                 let raw_expr = RawExpr::Cast {
                     span: expr.span(),
                     is_try: true,
@@ -618,7 +556,7 @@ impl<'a> TypeChecker<'a> {
                 }
                 let args_ref: Vec<&Expr> = arguments.iter().collect();
 
-                self.resolve_function(*span, "if", vec![], &args_ref, required_type)
+                self.resolve_function(*span, "if", vec![], &args_ref)
                     .await?
             }
 
@@ -633,12 +571,12 @@ impl<'a> TypeChecker<'a> {
                 if let Some(substring_for) = substring_for {
                     arguments.push(substring_for.as_ref());
                 }
-                self.resolve_function(*span, "substring", vec![], &arguments, required_type)
+                self.resolve_function(*span, "substring", vec![], &arguments)
                     .await?
             }
 
             Expr::Literal { span, lit } => {
-                let box (value, data_type) = self.resolve_literal(lit, required_type)?;
+                let box (value, data_type) = self.resolve_literal(lit)?;
                 Box::new((
                     ConstantExpr {
                         span: *span,
@@ -681,10 +619,7 @@ impl<'a> TypeChecker<'a> {
                     // Check aggregate function
                     let params = params
                         .iter()
-                        .map(|literal| {
-                            self.resolve_literal(literal, None)
-                                .map(|box (value, _)| value)
-                        })
+                        .map(|literal| self.resolve_literal(literal).map(|box (value, _)| value))
                         .collect::<Result<Vec<_>>>()?;
 
                     let scalar_params = params
@@ -696,7 +631,7 @@ impl<'a> TypeChecker<'a> {
                     let mut arguments = vec![];
                     let mut arg_types = vec![];
                     for arg in args.iter() {
-                        let box (argument, arg_type) = self.resolve(arg, None).await?;
+                        let box (argument, arg_type) = self.resolve(arg).await?;
                         arguments.push(argument);
                         arg_types.push(arg_type);
                     }
@@ -742,7 +677,7 @@ impl<'a> TypeChecker<'a> {
                         // window function
                         let mut partitions = vec![];
                         for p in window.partition_by.iter() {
-                            let box (part, _part_type) = self.resolve(p, None).await?;
+                            let box (part, _part_type) = self.resolve(p).await?;
                             partitions.push(part);
                         }
                         self.resolve_window(
@@ -769,7 +704,7 @@ impl<'a> TypeChecker<'a> {
                         })
                         .collect::<Result<Vec<_>>>()?;
 
-                    self.resolve_function(*span, func_name, params, &args, required_type)
+                    self.resolve_function(*span, func_name, params, &args)
                         .await?
                 }
             }
@@ -801,13 +736,12 @@ impl<'a> TypeChecker<'a> {
                     subquery,
                     None,
                     None,
-                    None,
                 )
                 .await?
             }
 
             Expr::Subquery { subquery, .. } => {
-                self.resolve_subquery(SubqueryType::Scalar, subquery, None, None, None)
+                self.resolve_subquery(SubqueryType::Scalar, subquery, None, None)
                     .await?
             }
 
@@ -820,17 +754,12 @@ impl<'a> TypeChecker<'a> {
                 // Not in subquery will be transformed to not(Expr = Any(...))
                 if *not {
                     return self
-                        .resolve_unary_op(
-                            *span,
-                            &UnaryOperator::Not,
-                            &Expr::InSubquery {
-                                subquery: subquery.clone(),
-                                not: false,
-                                expr: expr.clone(),
-                                span: *span,
-                            },
-                            required_type,
-                        )
+                        .resolve_unary_op(*span, &UnaryOperator::Not, &Expr::InSubquery {
+                            subquery: subquery.clone(),
+                            not: false,
+                            expr: expr.clone(),
+                            span: *span,
+                        })
                         .await;
                 }
                 // InSubquery will be transformed to Expr = Any(...)
@@ -839,7 +768,6 @@ impl<'a> TypeChecker<'a> {
                     subquery,
                     Some(*expr.clone()),
                     Some(ComparisonOp::Equal),
-                    None,
                 )
                 .await?
             }
@@ -877,10 +805,7 @@ impl<'a> TypeChecker<'a> {
 
             Expr::Extract {
                 span, kind, expr, ..
-            } => {
-                self.resolve_extract_expr(*span, kind, expr, required_type)
-                    .await?
-            }
+            } => self.resolve_extract_expr(*span, kind, expr).await?,
 
             Expr::Interval { span, .. } => {
                 return Err(ErrorCode::SemanticError(
@@ -894,10 +819,7 @@ impl<'a> TypeChecker<'a> {
                 interval,
                 date,
                 ..
-            } => {
-                self.resolve_date_add(*span, unit, interval, date, required_type)
-                    .await?
-            }
+            } => self.resolve_date_add(*span, unit, interval, date).await?,
             Expr::DateSub {
                 span,
                 unit,
@@ -914,16 +836,12 @@ impl<'a> TypeChecker<'a> {
                         expr: interval.clone(),
                     },
                     date,
-                    required_type,
                 )
                 .await?
             }
             Expr::DateTrunc {
                 span, unit, date, ..
-            } => {
-                self.resolve_date_trunc(*span, date, unit, required_type)
-                    .await?
-            }
+            } => self.resolve_date_trunc(*span, date, unit).await?,
             Expr::Trim {
                 span,
                 expr,
@@ -950,13 +868,10 @@ impl<'a> TypeChecker<'a> {
                 span,
                 ..
             } => {
-                self.resolve_function(
-                    *span,
-                    "locate",
-                    vec![],
-                    &[substr_expr.as_ref(), str_expr.as_ref()],
-                    None,
-                )
+                self.resolve_function(*span, "locate", vec![], &[
+                    substr_expr.as_ref(),
+                    str_expr.as_ref(),
+                ])
                 .await?
             }
 
@@ -1000,7 +915,7 @@ impl<'a> TypeChecker<'a> {
             WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
             WindowFrameBound::Preceding(f) => {
                 if let Some(box expr) = f {
-                    let box (result_expr, _) = self.resolve(&expr, None).await?;
+                    let box (result_expr, _) = self.resolve(&expr).await?;
                     WindowFuncFrameBound::Preceding(Some(Box::new(result_expr)))
                 } else {
                     WindowFuncFrameBound::Preceding(None)
@@ -1008,7 +923,7 @@ impl<'a> TypeChecker<'a> {
             }
             WindowFrameBound::Following(f) => {
                 if let Some(box expr) = f {
-                    let box (result_expr, _) = self.resolve(&expr, None).await?;
+                    let box (result_expr, _) = self.resolve(&expr).await?;
                     WindowFuncFrameBound::Following(Some(Box::new(result_expr)))
                 } else {
                     WindowFuncFrameBound::Following(None)
@@ -1020,7 +935,7 @@ impl<'a> TypeChecker<'a> {
             WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
             WindowFrameBound::Preceding(f) => {
                 if let Some(box expr) = f {
-                    let box (result_expr, _) = self.resolve(&expr, None).await?;
+                    let box (result_expr, _) = self.resolve(&expr).await?;
                     WindowFuncFrameBound::Preceding(Some(Box::new(result_expr)))
                 } else {
                     WindowFuncFrameBound::Preceding(None)
@@ -1028,7 +943,7 @@ impl<'a> TypeChecker<'a> {
             }
             WindowFrameBound::Following(f) => {
                 if let Some(box expr) = f {
-                    let box (result_expr, _) = self.resolve(&expr, None).await?;
+                    let box (result_expr, _) = self.resolve(&expr).await?;
                     WindowFuncFrameBound::Following(Some(Box::new(result_expr)))
                 } else {
                     WindowFuncFrameBound::Following(None)
@@ -1053,7 +968,6 @@ impl<'a> TypeChecker<'a> {
         func_name: &str,
         params: Vec<usize>,
         arguments: &[&Expr],
-        required_type: Option<DataType>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Check if current function is a virtual function, e.g. `database`, `version`
         if let Some(rewritten_func_result) = self
@@ -1067,7 +981,7 @@ impl<'a> TypeChecker<'a> {
         let mut arg_types = vec![];
 
         for argument in arguments {
-            let box (arg, mut arg_type) = self.resolve(argument, None).await?;
+            let box (arg, mut arg_type) = self.resolve(argument).await?;
             if let ScalarExpr::SubqueryExpr(subquery) = &arg {
                 if subquery.typ == SubqueryType::Scalar && !arg.data_type()?.is_nullable() {
                     arg_type = arg_type.wrap_nullable();
@@ -1111,7 +1025,7 @@ impl<'a> TypeChecker<'a> {
             func_name.to_owned()
         };
 
-        self.resolve_scalar_function_call(span, &func_name, params, args, required_type)
+        self.resolve_scalar_function_call(span, &func_name, params, args)
             .await
     }
 
@@ -1122,7 +1036,6 @@ impl<'a> TypeChecker<'a> {
         func_name: &str,
         params: Vec<usize>,
         args: Vec<ScalarExpr>,
-        _required_type: Option<DataType>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Type check
         let arguments = args
@@ -1164,7 +1077,6 @@ impl<'a> TypeChecker<'a> {
         op: &BinaryOperator,
         left: &Expr,
         right: &Expr,
-        required_type: Option<DataType>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         match op {
             BinaryOperator::NotLike | BinaryOperator::NotRegexp | BinaryOperator::NotRLike => {
@@ -1175,7 +1087,7 @@ impl<'a> TypeChecker<'a> {
                     _ => unreachable!(),
                 };
                 let (positive, data_type) = *self
-                    .resolve_binary_op(span, &positive_op, left, right, required_type)
+                    .resolve_binary_op(span, &positive_op, left, right)
                     .await?;
                 let scalar = ScalarExpr::NotExpr(NotExpr {
                     argument: Box::new(positive),
@@ -1189,17 +1101,14 @@ impl<'a> TypeChecker<'a> {
             | BinaryOperator::Eq
             | BinaryOperator::NotEq => {
                 let op = ComparisonOp::try_from(op)?;
-                let box (left, _) = self.resolve(left, None).await?;
-                let box (right, _) = self.resolve(right, None).await?;
+                let box (left, _) = self.resolve(left).await?;
+                let box (right, _) = self.resolve(right).await?;
 
                 let (_, data_type) = *self
-                    .resolve_scalar_function_call(
-                        span,
-                        op.to_func_name(),
-                        vec![],
-                        vec![left.clone(), right.clone()],
-                        required_type,
-                    )
+                    .resolve_scalar_function_call(span, op.to_func_name(), vec![], vec![
+                        left.clone(),
+                        right.clone(),
+                    ])
                     .await?;
 
                 Ok(Box::new((
@@ -1213,17 +1122,14 @@ impl<'a> TypeChecker<'a> {
                 )))
             }
             BinaryOperator::And => {
-                let box (left, _) = self.resolve(left, None).await?;
-                let box (right, _) = self.resolve(right, None).await?;
+                let box (left, _) = self.resolve(left).await?;
+                let box (right, _) = self.resolve(right).await?;
 
                 let (_, data_type) = *self
-                    .resolve_scalar_function_call(
-                        span,
-                        "and",
-                        vec![],
-                        vec![left.clone(), right.clone()],
-                        required_type,
-                    )
+                    .resolve_scalar_function_call(span, "and", vec![], vec![
+                        left.clone(),
+                        right.clone(),
+                    ])
                     .await?;
 
                 Ok(Box::new((
@@ -1236,17 +1142,14 @@ impl<'a> TypeChecker<'a> {
                 )))
             }
             BinaryOperator::Or => {
-                let box (left, _) = self.resolve(left, None).await?;
-                let box (right, _) = self.resolve(right, None).await?;
+                let box (left, _) = self.resolve(left).await?;
+                let box (right, _) = self.resolve(right).await?;
 
                 let (_, data_type) = *self
-                    .resolve_scalar_function_call(
-                        span,
-                        "or",
-                        vec![],
-                        vec![left.clone(), right.clone()],
-                        required_type,
-                    )
+                    .resolve_scalar_function_call(span, "or", vec![], vec![
+                        left.clone(),
+                        right.clone(),
+                    ])
                     .await?;
 
                 Ok(Box::new((
@@ -1260,7 +1163,7 @@ impl<'a> TypeChecker<'a> {
             }
             other => {
                 let name = other.to_func_name();
-                self.resolve_function(span, name.as_str(), vec![], &[left, right], required_type)
+                self.resolve_function(span, name.as_str(), vec![], &[left, right])
                     .await
             }
         }
@@ -1273,25 +1176,18 @@ impl<'a> TypeChecker<'a> {
         span: Span,
         op: &UnaryOperator,
         child: &Expr,
-        required_type: Option<DataType>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         match op {
             UnaryOperator::Plus => {
                 // Omit unary + operator
-                self.resolve(child, required_type).await
+                self.resolve(child).await
             }
 
             UnaryOperator::Not => {
-                let (argument, _) = *self.resolve(child, None).await?;
+                let (argument, _) = *self.resolve(child).await?;
 
                 let (_, data_type) = *self
-                    .resolve_scalar_function_call(
-                        span,
-                        "not",
-                        vec![],
-                        vec![argument.clone()],
-                        required_type,
-                    )
+                    .resolve_scalar_function_call(span, "not", vec![], vec![argument.clone()])
                     .await?;
 
                 Ok(Box::new((
@@ -1305,7 +1201,7 @@ impl<'a> TypeChecker<'a> {
 
             other => {
                 let name = other.to_func_name();
-                self.resolve_function(span, name.as_str(), vec![], &[child], required_type)
+                self.resolve_function(span, name.as_str(), vec![], &[child])
                     .await
             }
         }
@@ -1317,43 +1213,36 @@ impl<'a> TypeChecker<'a> {
         span: Span,
         interval_kind: &ASTIntervalKind,
         arg: &Expr,
-        _required_type: Option<DataType>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         match interval_kind {
-            ASTIntervalKind::Year => {
-                self.resolve_function(span, "to_year", vec![], &[arg], None)
-                    .await
-            }
+            ASTIntervalKind::Year => self.resolve_function(span, "to_year", vec![], &[arg]).await,
             ASTIntervalKind::Quarter => {
-                self.resolve_function(span, "to_quarter", vec![], &[arg], None)
+                self.resolve_function(span, "to_quarter", vec![], &[arg])
                     .await
             }
             ASTIntervalKind::Month => {
-                self.resolve_function(span, "to_month", vec![], &[arg], None)
+                self.resolve_function(span, "to_month", vec![], &[arg])
                     .await
             }
             ASTIntervalKind::Day => {
-                self.resolve_function(span, "to_day_of_month", vec![], &[arg], None)
+                self.resolve_function(span, "to_day_of_month", vec![], &[arg])
                     .await
             }
-            ASTIntervalKind::Hour => {
-                self.resolve_function(span, "to_hour", vec![], &[arg], None)
-                    .await
-            }
+            ASTIntervalKind::Hour => self.resolve_function(span, "to_hour", vec![], &[arg]).await,
             ASTIntervalKind::Minute => {
-                self.resolve_function(span, "to_minute", vec![], &[arg], None)
+                self.resolve_function(span, "to_minute", vec![], &[arg])
                     .await
             }
             ASTIntervalKind::Second => {
-                self.resolve_function(span, "to_second", vec![], &[arg], None)
+                self.resolve_function(span, "to_second", vec![], &[arg])
                     .await
             }
             ASTIntervalKind::Doy => {
-                self.resolve_function(span, "to_day_of_year", vec![], &[arg], None)
+                self.resolve_function(span, "to_day_of_year", vec![], &[arg])
                     .await
             }
             ASTIntervalKind::Dow => {
-                self.resolve_function(span, "to_day_of_week", vec![], &[arg], None)
+                self.resolve_function(span, "to_day_of_week", vec![], &[arg])
                     .await
             }
         }
@@ -1366,23 +1255,22 @@ impl<'a> TypeChecker<'a> {
         interval_kind: &ASTIntervalKind,
         interval: &Expr,
         date: &Expr,
-        required_type: Option<DataType>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let func_name = format!("add_{}s", interval_kind.to_string().to_lowercase());
 
         let mut args = vec![];
         let mut arg_types = vec![];
 
-        let (date, date_type) = *self.resolve(date, None).await?;
+        let (date, date_type) = *self.resolve(date).await?;
         args.push(date);
         arg_types.push(date_type);
 
-        let (interval, interval_type) = *self.resolve(interval, None).await?;
+        let (interval, interval_type) = *self.resolve(interval).await?;
 
         args.push(interval);
         arg_types.push(interval_type);
 
-        self.resolve_scalar_function_call(span, &func_name, vec![], args, required_type)
+        self.resolve_scalar_function_call(span, &func_name, vec![], args)
             .await
     }
 
@@ -1392,7 +1280,6 @@ impl<'a> TypeChecker<'a> {
         span: Span,
         date: &Expr,
         kind: &ASTIntervalKind,
-        _required_type: Option<DataType>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         match kind {
             ASTIntervalKind::Year => {
@@ -1400,7 +1287,6 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_start_of_year", vec![],
                     &[date],
-                    None,
                 )
                     .await
             }
@@ -1409,7 +1295,6 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_start_of_quarter", vec![],
                     &[date],
-                    None,
                 )
                     .await
             }
@@ -1418,7 +1303,6 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_start_of_month", vec![],
                     &[date],
-                    None,
                 )
                     .await
             }
@@ -1427,7 +1311,6 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_start_of_day", vec![],
                     &[date],
-                    None,
                 )
                     .await
             }
@@ -1436,7 +1319,6 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_start_of_hour", vec![],
                     &[date],
-                    None,
                 )
                     .await
             }
@@ -1445,7 +1327,6 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_start_of_minute", vec![],
                     &[date],
-                    None,
                 )
                     .await
             }
@@ -1454,7 +1335,6 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_start_of_second", vec![],
                     &[date],
-                    None,
                 )
                     .await
             }
@@ -1468,7 +1348,6 @@ impl<'a> TypeChecker<'a> {
         subquery: &Query,
         child_expr: Option<Expr>,
         compare_op: Option<ComparisonOp>,
-        _required_type: Option<DataType>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut binder = Binder::new(
             self.ctx.clone(),
@@ -1498,7 +1377,7 @@ impl<'a> TypeChecker<'a> {
         let mut child_scalar = None;
         if let Some(expr) = child_expr {
             assert_eq!(output_context.columns.len(), 1);
-            let box (mut scalar, scalar_data_type) = self.resolve(&expr, None).await?;
+            let box (mut scalar, scalar_data_type) = self.resolve(&expr).await?;
             if scalar_data_type != *data_type {
                 // Make comparison scalar type keep consistent
                 let coercion_type = common_super_type(
@@ -1567,142 +1446,107 @@ impl<'a> TypeChecker<'a> {
     ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
         match (func_name.to_lowercase().as_str(), args) {
             ("database" | "currentdatabase" | "current_database", &[]) => Some(
-                self.resolve(
-                    &Expr::Literal {
-                        span,
-                        lit: Literal::String(self.ctx.get_current_database()),
-                    },
-                    None,
-                )
+                self.resolve(&Expr::Literal {
+                    span,
+                    lit: Literal::String(self.ctx.get_current_database()),
+                })
                 .await,
             ),
             ("version", &[]) => Some(
-                self.resolve(
-                    &Expr::Literal {
-                        span,
-                        lit: Literal::String(self.ctx.get_fuse_version()),
-                    },
-                    None,
-                )
+                self.resolve(&Expr::Literal {
+                    span,
+                    lit: Literal::String(self.ctx.get_fuse_version()),
+                })
                 .await,
             ),
             ("user" | "currentuser" | "current_user", &[]) => match self.ctx.get_current_user() {
                 Ok(user) => Some(
-                    self.resolve(
-                        &Expr::Literal {
-                            span,
-                            lit: Literal::String(user.identity().to_string()),
-                        },
-                        None,
-                    )
+                    self.resolve(&Expr::Literal {
+                        span,
+                        lit: Literal::String(user.identity().to_string()),
+                    })
                     .await,
                 ),
                 Err(e) => Some(Err(e)),
             },
             ("current_role", &[]) => Some(
-                self.resolve(
-                    &Expr::Literal {
-                        span,
-                        lit: Literal::String(
-                            self.ctx
-                                .get_current_role()
-                                .map(|r| r.name)
-                                .unwrap_or_else(|| "".to_string()),
-                        ),
-                    },
-                    None,
-                )
+                self.resolve(&Expr::Literal {
+                    span,
+                    lit: Literal::String(
+                        self.ctx
+                            .get_current_role()
+                            .map(|r| r.name)
+                            .unwrap_or_else(|| "".to_string()),
+                    ),
+                })
                 .await,
             ),
             ("connection_id", &[]) => Some(
-                self.resolve(
-                    &Expr::Literal {
-                        span,
-                        lit: Literal::String(self.ctx.get_connection_id()),
-                    },
-                    None,
-                )
+                self.resolve(&Expr::Literal {
+                    span,
+                    lit: Literal::String(self.ctx.get_connection_id()),
+                })
                 .await,
             ),
             ("timezone", &[]) => {
                 let tz = self.ctx.get_settings().get_timezone().unwrap();
                 Some(
-                    self.resolve(
-                        &Expr::Literal {
-                            span,
-                            lit: Literal::String(tz),
-                        },
-                        None,
-                    )
+                    self.resolve(&Expr::Literal {
+                        span,
+                        lit: Literal::String(tz),
+                    })
                     .await,
                 )
             }
             ("nullif", &[arg_x, arg_y]) => {
                 // Rewrite nullif(x, y) to if(x = y, null, x)
                 Some(
-                    self.resolve_function(
-                        span,
-                        "if",
-                        vec![],
-                        &[
-                            &Expr::BinaryOp {
-                                span,
-                                op: BinaryOperator::Eq,
-                                left: Box::new(arg_x.clone()),
-                                right: Box::new(arg_y.clone()),
-                            },
-                            &Expr::Literal {
-                                span,
-                                lit: Literal::Null,
-                            },
-                            arg_x,
-                        ],
-                        None,
-                    )
+                    self.resolve_function(span, "if", vec![], &[
+                        &Expr::BinaryOp {
+                            span,
+                            op: BinaryOperator::Eq,
+                            left: Box::new(arg_x.clone()),
+                            right: Box::new(arg_y.clone()),
+                        },
+                        &Expr::Literal {
+                            span,
+                            lit: Literal::Null,
+                        },
+                        arg_x,
+                    ])
                     .await,
                 )
             }
             ("ifnull", &[arg_x, arg_y]) => {
                 // Rewrite ifnull(x, y) to if(is_null(x), y, x)
                 Some(
-                    self.resolve_function(
-                        span,
-                        "if",
-                        vec![],
-                        &[
-                            &Expr::IsNull {
-                                span,
-                                expr: Box::new(arg_x.clone()),
-                                not: false,
-                            },
-                            arg_y,
-                            arg_x,
-                        ],
-                        None,
-                    )
+                    self.resolve_function(span, "if", vec![], &[
+                        &Expr::IsNull {
+                            span,
+                            expr: Box::new(arg_x.clone()),
+                            not: false,
+                        },
+                        arg_y,
+                        arg_x,
+                    ])
                     .await,
                 )
             }
             ("is_null", &[arg_x]) => {
                 // Rewrite is_null(x) to not(is_not_null(x))
                 Some(
-                    self.resolve_unary_op(
+                    self.resolve_unary_op(span, &UnaryOperator::Not, &Expr::FunctionCall {
                         span,
-                        &UnaryOperator::Not,
-                        &Expr::FunctionCall {
+                        distinct: false,
+                        name: Identifier {
+                            name: "is_not_null".to_string(),
+                            quote: None,
                             span,
-                            distinct: false,
-                            name: Identifier {
-                                name: "is_not_null".to_string(),
-                                quote: None,
-                                span,
-                            },
-                            args: vec![arg_x.clone()],
-                            params: vec![],
-                            window: None,
                         },
-                        None,
-                    )
+                        args: vec![arg_x.clone()],
+                        params: vec![],
+                        window: None,
+                    })
                     .await,
                 )
             }
@@ -1748,10 +1592,7 @@ impl<'a> TypeChecker<'a> {
                     lit: Literal::Null,
                 });
                 let args_ref: Vec<&Expr> = new_args.iter().collect();
-                Some(
-                    self.resolve_function(span, "if", vec![], &args_ref, None)
-                        .await,
-                )
+                Some(self.resolve_function(span, "if", vec![], &args_ref).await)
             }
 
             ("last_query_id", args) => {
@@ -1766,9 +1607,7 @@ impl<'a> TypeChecker<'a> {
                     if args.is_empty() {
                         -1
                     } else {
-                        let box (scalar, _) = self
-                            .resolve(args[0], Some(DataType::Number(NumberDataType::Int64)))
-                            .await?;
+                        let box (scalar, _) = self.resolve(args[0]).await?;
 
                         let expr = scalar.as_expr_with_col_index()?;
                         check_number::<_, i64>(
@@ -1783,13 +1622,10 @@ impl<'a> TypeChecker<'a> {
                 Some(match res {
                     Ok(index) => {
                         let query_id = self.ctx.get_last_query_id(index as i32);
-                        self.resolve(
-                            &Expr::Literal {
-                                span,
-                                lit: Literal::String(query_id),
-                            },
-                            None,
-                        )
+                        self.resolve(&Expr::Literal {
+                            span,
+                            lit: Literal::String(query_id),
+                        })
                         .await
                     }
                     Err(e) => Err(e),
@@ -1802,7 +1638,7 @@ impl<'a> TypeChecker<'a> {
                     )
                     .set_span(span)));
                 }
-                let inner_res = self.resolve(args[0], None).await;
+                let inner_res = self.resolve(args[0]).await;
                 if inner_res.is_err() {
                     return Some(inner_res);
                 }
@@ -1843,7 +1679,7 @@ impl<'a> TypeChecker<'a> {
                 TrimWhere::Both => "trim_both",
             };
 
-            let box (trim_scalar, trim_type) = self.resolve(trim_expr, None).await?;
+            let box (trim_scalar, trim_type) = self.resolve(trim_expr).await?;
             (func_name, trim_scalar, trim_type)
         } else {
             let trim_scalar = ConstantExpr {
@@ -1855,10 +1691,10 @@ impl<'a> TypeChecker<'a> {
             ("trim_both", trim_scalar, DataType::String)
         };
 
-        let box (trim_source, _source_type) = self.resolve(expr, None).await?;
+        let box (trim_source, _source_type) = self.resolve(expr).await?;
         let args = vec![trim_source, trim_scalar];
 
-        self.resolve_scalar_function_call(span, func_name, vec![], args, None)
+        self.resolve_scalar_function_call(span, func_name, vec![], args)
             .await
     }
 
@@ -1866,7 +1702,6 @@ impl<'a> TypeChecker<'a> {
     pub fn resolve_literal(
         &self,
         literal: &common_ast::ast::Literal,
-        required_type: Option<DataType>,
     ) -> Result<Box<(common_expression::Literal, DataType)>> {
         let value = match literal {
             Literal::UInt64(uint) => {
@@ -1920,35 +1755,7 @@ impl<'a> TypeChecker<'a> {
                 "Unsupported literal value: {literal}"
             )))?,
         };
-        let (scalar, data_type) = check_literal(&value);
-        if let Some(required_type) = required_type {
-            if required_type != data_type {
-                let block = DataBlock::empty();
-                let func_ctx = self.ctx.get_function_context()?;
-                let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
-                let src_expr = common_expression::Expr::Constant {
-                    span: None,
-                    scalar,
-                    data_type,
-                };
-                let cast_expr = common_expression::Expr::Cast {
-                    span: None,
-                    is_try: false,
-                    expr: Box::new(src_expr),
-                    dest_type: required_type.clone(),
-                };
-                let val = evaluator.run(&cast_expr).map_err(|_| {
-                    ErrorCode::SemanticError(format!(
-                        "Failed to cast to data type: {}",
-                        required_type
-                    ))
-                })?;
-                let required_val =
-                    common_expression::Literal::try_from(val.into_scalar().unwrap())?;
-                return Ok(Box::new((required_val, required_type)));
-            }
-        }
-
+        let (_, data_type) = check_literal(&value);
         Ok(Box::new((value, data_type)))
     }
 
@@ -1962,11 +1769,11 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut elems = Vec::with_capacity(exprs.len());
         for expr in exprs {
-            let box (arg, _data_type) = self.resolve(expr, None).await?;
+            let box (arg, _data_type) = self.resolve(expr).await?;
             elems.push(arg);
         }
 
-        self.resolve_scalar_function_call(span, "array", vec![], elems, None)
+        self.resolve_scalar_function_call(span, "array", vec![], elems)
             .await
     }
 
@@ -1978,14 +1785,14 @@ impl<'a> TypeChecker<'a> {
         asc: &bool,
         null_first: &bool,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let box (arg, _type) = self.resolve(expr, None).await?;
+        let box (arg, _type) = self.resolve(expr).await?;
         let func_name = match (*asc, *null_first) {
             (true, true) => "array_sort_asc_null_first",
             (true, false) => "array_sort_asc_null_last",
             (false, true) => "array_sort_desc_null_first",
             (false, false) => "array_sort_desc_null_last",
         };
-        self.resolve_scalar_function_call(span, func_name, vec![], vec![arg], None)
+        self.resolve_scalar_function_call(span, func_name, vec![], vec![arg])
             .await
     }
 
@@ -1998,20 +1805,20 @@ impl<'a> TypeChecker<'a> {
         let mut keys = Vec::with_capacity(kvs.len());
         let mut vals = Vec::with_capacity(kvs.len());
         for (key_expr, val_expr) in kvs {
-            let box (key_arg, _data_type) = self.resolve(key_expr, None).await?;
+            let box (key_arg, _data_type) = self.resolve(key_expr).await?;
             keys.push(key_arg);
-            let box (val_arg, _data_type) = self.resolve(val_expr, None).await?;
+            let box (val_arg, _data_type) = self.resolve(val_expr).await?;
             vals.push(val_arg);
         }
         let box (key_arg, _data_type) = self
-            .resolve_scalar_function_call(span, "array", vec![], keys, None)
+            .resolve_scalar_function_call(span, "array", vec![], keys)
             .await?;
         let box (val_arg, _data_type) = self
-            .resolve_scalar_function_call(span, "array", vec![], vals, None)
+            .resolve_scalar_function_call(span, "array", vec![], vals)
             .await?;
         let args = vec![key_arg, val_arg];
 
-        self.resolve_scalar_function_call(span, "map", vec![], args, None)
+        self.resolve_scalar_function_call(span, "map", vec![], args)
             .await
     }
 
@@ -2023,11 +1830,11 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut args = Vec::with_capacity(exprs.len());
         for expr in exprs {
-            let box (arg, _data_type) = self.resolve(expr, None).await?;
+            let box (arg, _data_type) = self.resolve(expr).await?;
             args.push(arg);
         }
 
-        self.resolve_scalar_function_call(span, "tuple", vec![], args, None)
+        self.resolve_scalar_function_call(span, "tuple", vec![], args)
             .await
     }
 
@@ -2071,7 +1878,7 @@ impl<'a> TypeChecker<'a> {
                     Ok(None)
                 })
                 .map_err(|e| e.set_span(span))?;
-            self.resolve(&udf_expr, None).await
+            self.resolve(&udf_expr).await
         } else {
             Err(ErrorCode::UnknownFunction(format!(
                 "no function matches the given name: {func_name}"
@@ -2086,7 +1893,7 @@ impl<'a> TypeChecker<'a> {
         expr: &Expr,
         mut paths: VecDeque<(Span, Literal)>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let box (mut scalar, data_type) = self.resolve(expr, None).await?;
+        let box (mut scalar, data_type) = self.resolve(expr).await?;
         let mut table_data_type = infer_schema_type(&data_type)?;
         // If it's map accessors to a tuple column, pushdown the map accessors to storage.
         if let Expr::ColumnRef { column: ident, .. } = expr {
@@ -2159,7 +1966,7 @@ impl<'a> TypeChecker<'a> {
                 .into();
                 continue;
             }
-            let box (path_value, path_data_type) = self.resolve_literal(&path_lit, None)?;
+            let box (path_value, path_data_type) = self.resolve_literal(&path_lit)?;
             let path_scalar: ScalarExpr = ConstantExpr {
                 span,
                 value: path_value,
