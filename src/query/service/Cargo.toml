@@ -98,7 +98,8 @@ storages-common-table-meta = { path = "../storages/common/table-meta" }
 # Crates.io dependencies
 aho-corasick = { version = "0.7.20" }
 async-channel = "1.7.1"
-async-openai = "0.9.5"
+# Wait for https://github.com/64bit/async-openai/pull/60
+async-openai = { version = "0.9.5", git = "https://github.com/Xuanwo/async-openai", rev = "22fd9ca0c9c86a2c57462c5fd32aaff407d6b000" }
 async-stream = "0.3.3"
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 base64 = "0.21.0"
