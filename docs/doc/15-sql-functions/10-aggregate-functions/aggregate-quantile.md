@@ -14,15 +14,17 @@ NULL values are not counted.
 
 ```sql
 QUANTILE(level)(expression)
+    
+QUANTILE(level1, level2, ...)(expression)
 ```
 
 ## Arguments
 
-| Arguments   | Description                                                                                                                  |
-| ----------- |------------------------------------------------------------------------------------------------------------------------------|
-| level       | level of quantile. Constant floating-point number from 0 to 1. We recommend using a level value in the range of [0.01, 0.99] |
-| ----------- | -----------                                                                                                                  |
-| expression  | Any numerical expression                                                                                                     |
+| Arguments   | Description                                                                                                                                   |
+|-------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| level(s)    | level(s) of quantile. Each level is constant floating-point number from 0 to 1. We recommend using a level value in the range of [0.01, 0.99] |
+| ----------- | -----------                                                                                                                                   |
+| expression  | Any numerical expression                                                                                                                      |
 
 ## Return Type
 
@@ -41,4 +43,13 @@ SELECT QUANTILE(0.6)(number) FROM numbers(10000);
 +-----------------------+
 |       5999            |
 +-----------------------+
+```
+
+```sql
+SELECT quantile(0, 0.5, 0.6, 1)(number) from numbers_mt(10000);
++----------------------------------+
+| quantile(0, 0.5, 0.6, 1)(number) |
++----------------------------------+
+| [0,4999,5999,9999]               |
++----------------------------------+
 ```

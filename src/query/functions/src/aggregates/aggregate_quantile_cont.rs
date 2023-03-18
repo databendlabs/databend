@@ -143,11 +143,12 @@ where
                 if idx < value_len {
                     self.value.as_mut_slice().select_nth_unstable(idx);
                     let value = self.value.get(idx).unwrap();
-                    builder.put_item(T::to_scalar_ref(value));
+                    builder.put_item(T::upcast_scalar(value.clone()).as_ref());
                 } else {
                     builder.push_default();
                 }
             }
+            builder.commit_row();
         } else {
             let builder = T::try_downcast_builder(builder).unwrap();
             let idx = ((value_len - 1) as f64 * levels[0]).floor() as usize;
@@ -310,7 +311,7 @@ where
                 )));
             }
             vec![level]
-        } else if params.len() == 0 {
+        } else if params.is_empty() {
             vec![0.5f64]
         } else {
             let mut levels = Vec::with_capacity(params.len());
