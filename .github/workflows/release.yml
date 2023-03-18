@@ -496,7 +496,7 @@ jobs:
           prerelease: true
           latest: true
       - name: download sha256sums
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: sha256sums
       - shell: bash
