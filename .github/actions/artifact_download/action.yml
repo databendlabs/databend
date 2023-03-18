@@ -46,7 +46,7 @@ runs:
         fi
         echo "src=${src}" >> $GITHUB_OUTPUT
 
-    - uses: actions/download-artifact@v2
+    - uses: actions/download-artifact@v3
       if: steps.info.outputs.src == 'github'
       with:
         name: ${{ inputs.profile }}-${{ inputs.sha }}-${{ inputs.target }}-${{ inputs.category }}

@@ -93,7 +93,6 @@ use crate::plans::OptimizeTableAction;
 use crate::plans::OptimizeTablePlan;
 use crate::plans::Plan;
 use crate::plans::ReclusterTablePlan;
-use crate::plans::RenameTableEntity;
 use crate::plans::RenameTablePlan;
 use crate::plans::RevertTablePlan;
 use crate::plans::RewriteKind;
@@ -588,18 +587,14 @@ impl Binder {
 
         match action {
             AlterTableAction::RenameTable { new_table } => {
-                let entities = vec![RenameTableEntity {
+                Ok(Plan::RenameTable(Box::new(RenameTablePlan {
+                    tenant,
                     if_exists: *if_exists,
                     new_database: database.clone(),
                     new_table: normalize_identifier(new_table, &self.name_resolution_ctx).name,
                     catalog,
                     database,
                     table,
-                }];
-
-                Ok(Plan::RenameTable(Box::new(RenameTablePlan {
-                    tenant,
-                    entities,
                 })))
             }
             AlterTableAction::AddColumn { column } => {
@@ -722,18 +717,14 @@ impl Binder {
             ));
         }
 
-        let entities = vec![RenameTableEntity {
+        Ok(Plan::RenameTable(Box::new(RenameTablePlan {
+            tenant,
             if_exists: *if_exists,
             catalog,
             database,
             table,
             new_database,
             new_table,
-        }];
-
-        Ok(Plan::RenameTable(Box::new(RenameTablePlan {
-            tenant,
-            entities,
         })))
     }
 
@@ -875,6 +866,7 @@ impl Binder {
                     let (expr, _) = scalar_binder.bind(default_expr).await?;
                     let is_try = schema_data_type.is_nullable();
                     let cast_expr_to_field_type = ScalarExpr::CastExpr(CastExpr {
+                        span: expr.span(),
                         is_try,
                         target_type: Box::new(DataType::from(&schema_data_type)),
                         argument: Box::new(expr),

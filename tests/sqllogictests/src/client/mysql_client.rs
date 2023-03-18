@@ -18,8 +18,8 @@ use mysql_async::prelude::Queryable;
 use mysql_async::Conn;
 use mysql_async::Pool;
 use mysql_async::Row;
-use sqllogictest::ColumnType;
 use sqllogictest::DBOutput;
+use sqllogictest::DefaultColumnType;
 
 use crate::error::Result;
 
@@ -46,7 +46,7 @@ impl MySQLClient {
         self.tpch = true;
     }
 
-    pub async fn query(&mut self, sql: &str) -> Result<DBOutput> {
+    pub async fn query(&mut self, sql: &str) -> Result<DBOutput<DefaultColumnType>> {
         let start = Instant::now();
         let rows: Vec<Row> = self.conn.query(sql).await?;
         let elapsed = start.elapsed();
@@ -58,7 +58,7 @@ impl MySQLClient {
         if self.debug {
             println!("Running sql with mysql client: [{sql}] ({elapsed:?})");
         };
-        let types = vec![ColumnType::Any; rows.len()];
+        let types = vec![DefaultColumnType::Any; rows.len()];
         let mut parsed_rows = Vec::with_capacity(rows.len());
         for row in rows.into_iter() {
             let mut parsed_row = Vec::new();

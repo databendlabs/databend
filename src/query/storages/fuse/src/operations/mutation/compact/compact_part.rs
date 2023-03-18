@@ -20,29 +20,13 @@ use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::SegmentInfo;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum CompactTask {
-    // Only one block, no need to do a compact.
-    Trivial(Arc<BlockMeta>),
-    // Multiple blocks, need to do compact.
-    Normal(Vec<Arc<BlockMeta>>),
-}
+use crate::operations::merge_into::mutation_meta::mutation_log::BlockMetaIndex;
 
-impl CompactTask {
-    pub fn get_block_metas(&self) -> Vec<Arc<BlockMeta>> {
-        match self {
-            CompactTask::Trivial(block_meta) => vec![block_meta.clone()],
-            CompactTask::Normal(block_metas) => block_metas.clone(),
-        }
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct CompactPartInfo {
-    pub segments: Vec<Arc<SegmentInfo>>,
-    pub order: usize,
+    pub blocks: Vec<Arc<BlockMeta>>,
+    pub index: BlockMetaIndex,
 }
 
 #[typetag::serde(name = "compact")]
@@ -64,8 +48,8 @@ impl PartInfo for CompactPartInfo {
 }
 
 impl CompactPartInfo {
-    pub fn create(segments: Vec<Arc<SegmentInfo>>, order: usize) -> PartInfoPtr {
-        Arc::new(Box::new(CompactPartInfo { segments, order }))
+    pub fn create(blocks: Vec<Arc<BlockMeta>>, index: BlockMetaIndex) -> PartInfoPtr {
+        Arc::new(Box::new(CompactPartInfo { blocks, index }))
     }
 
     pub fn from_part(info: &PartInfoPtr) -> Result<&CompactPartInfo> {

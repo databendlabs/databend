@@ -17,6 +17,7 @@ use std::sync::Mutex;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use educe::Educe;
 
 use super::RelationalProperty;
 use crate::optimizer::rule::AppliedRules;
@@ -29,7 +30,8 @@ use crate::IndexType;
 use crate::ScalarExpr;
 
 /// `SExpr` is abbreviation of single expression, which is a tree of relational operators.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq, Hash)]
 pub struct SExpr {
     pub(crate) plan: RelOperator,
     pub(crate) children: Arc<Vec<SExpr>>,
@@ -42,6 +44,7 @@ pub struct SExpr {
     ///
     /// Since `SExpr` is `Send + Sync`, we use `Mutex` to protect
     /// the cache.
+    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
     pub(crate) rel_prop: Arc<Mutex<Option<RelationalProperty>>>,
 
     /// A bitmap to record applied rules on current SExpr, to prevent
@@ -249,6 +252,12 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
                     .iter()
                     .any(|expr| find_subquery_in_expr(&expr.scalar))
         }
+        RelOperator::Window(op) => {
+            op.partition_by
+                .iter()
+                .any(|expr| find_subquery_in_expr(&expr.scalar))
+                || find_subquery_in_expr(&op.aggregate_function.scalar)
+        }
     }
 }
 
@@ -267,6 +276,7 @@ fn find_subquery_in_expr(expr: &ScalarExpr) -> bool {
         ScalarExpr::ComparisonExpr(expr) => {
             find_subquery_in_expr(&expr.left) || find_subquery_in_expr(&expr.right)
         }
+        ScalarExpr::WindowFunction(expr) => expr.agg_func.args.iter().any(find_subquery_in_expr),
         ScalarExpr::AggregateFunction(expr) => expr.args.iter().any(find_subquery_in_expr),
         ScalarExpr::FunctionCall(expr) => expr.arguments.iter().any(find_subquery_in_expr),
         ScalarExpr::CastExpr(expr) => find_subquery_in_expr(&expr.argument),

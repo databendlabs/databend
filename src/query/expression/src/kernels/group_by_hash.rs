@@ -170,6 +170,7 @@ impl HashMethod for HashMethodSingleString {
     fn build_keys_iter<'a>(&self, key_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {
         match key_state {
             KeysState::Column(Column::String(col)) => Ok(col.iter()),
+            KeysState::Column(Column::Variant(col)) => Ok(col.iter()),
             _ => unreachable!(),
         }
     }

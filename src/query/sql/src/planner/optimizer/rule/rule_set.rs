@@ -14,6 +14,11 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::hash::Hash;
+use std::hash::Hasher;
+
+use num_traits::FromPrimitive;
+use roaring::RoaringBitmap;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -81,5 +86,11 @@ impl AppliedRules {
 
     pub fn get(&self, id: &RuleID) -> bool {
         self.rules.contains(id)
+    }
+}
+
+impl Hash for AppliedRules {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.rules.iter().for_each(|id| id.hash(state))
     }
 }

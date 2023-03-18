@@ -32,11 +32,13 @@ pub fn convert_mark_to_semi_join(s_expr: &SExpr) -> Result<SExpr> {
     }
 
     let mark_index = join.marker_index.unwrap();
+    let mut find_mark_index = false;
 
     // remove mark index filter
     for (idx, predicate) in filter.predicates.iter().enumerate() {
         if let ScalarExpr::BoundColumnRef(col) = predicate {
             if col.column.index == mark_index {
+                find_mark_index = true;
                 filter.predicates.remove(idx);
                 break;
             }
@@ -49,6 +51,11 @@ pub fn convert_mark_to_semi_join(s_expr: &SExpr) -> Result<SExpr> {
                 }
             }
         }
+    }
+
+    if !find_mark_index {
+        // To be conservative, we do not convert
+        return Ok(s_expr.clone());
     }
 
     join.join_type = match join.join_type {

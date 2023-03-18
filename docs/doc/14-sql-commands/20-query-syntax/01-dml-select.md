@@ -7,23 +7,22 @@ Retrieves data from a table.
 ## Syntax
 
 ```sql
+[WITH]
 SELECT
     [ALL | DISTINCT]
-    select_expr [[AS] alias], ...
-    [INTO variable [, ...]]
-    [EXCLUDE (col_name1 [, col_name2, col_name3, ...] ) ]
+    <select_expr> [[AS] alias], ...
+    [EXCLUDE (<col_name1> [, <col_name2>, <col_name3>, ...] ) ]
     [FROM table_references
     [AT ...]
-    [WHERE expr]
-    [GROUP BY {{col_name | expr | col_alias | col_position}, ...
-    | extended_grouping_expr}]
-    [HAVING expr]
-    [ORDER BY {col_name | expr | col_alias | col_position} [ASC | DESC], [ NULLS { FIRST | LAST }]
-    [LIMIT row_count]
-    [OFFSET row_count]
+    [WHERE <expr>]
+    [GROUP BY {{<col_name> | <expr> | <col_alias> | <col_position>}, 
+         ... | <extended_grouping_expr>}]
+    [HAVING <expr>]
+    [ORDER BY {<col_name> | <expr> | <col_alias> | <col_position>} [ASC | DESC],
+         [ NULLS { FIRST | LAST }]
+    [LIMIT <row_count>]
+    [OFFSET <row_count>]
     [IGNORE_RESULT]
-    ]
-    ]
 ```
 
 :::tip
@@ -43,7 +42,7 @@ SELECT number FROM numbers(3);
 +--------+
 ```
 
-### EXCLUDE Parameter
+## EXCLUDE Parameter
 
 Excludes one or more columns by their names from the result. The parameter is usually used in conjunction with `SELECT * ...` to exclude a few columns from the result instead of retrieving them all.
 
@@ -99,7 +98,7 @@ SELECT number FROM numbers(3) AS a;
 
 ## AT Clause
 
-The AT clause enables you to query previous versions of your data. For more information, see [AT](./dml-at.md).
+The AT clause enables you to query previous versions of your data. For more information, see [AT](./03-dml-at.md).
 
 ## WHERE Clause
 

@@ -202,7 +202,7 @@ pub fn walk_select_target<'a, V: Visitor<'a>>(visitor: &mut V, target: &'a Selec
                     Indirection::Identifier(ident) => {
                         visitor.visit_identifier(ident);
                     }
-                    Indirection::Star => {}
+                    Indirection::Star(_) => {}
                 }
             }
             if let Some(cols) = exclude {

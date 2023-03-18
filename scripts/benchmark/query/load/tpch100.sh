@@ -7,7 +7,7 @@ select version();
 SQL
 
 for t in customer lineitem nation orders partsupp part region supplier; do
-  echo "DROP TABLE IF EXISTS $t;" | bendsql query
+	echo "DROP TABLE IF EXISTS $t;" | bendsql query
 done
 
 cat <<SQL | bendsql query
@@ -112,12 +112,23 @@ cat <<SQL | bendsql query
   ) CLUSTER BY (s_suppkey);
 SQL
 
-for t in customer lineitem nation orders partsupp part region supplier; do
-  echo "loading into $t ..."
-  cat <<SQL | bendsql query
-COPY INTO $t FROM 's3://repo.databend.rs/datasets/tpch10/${t}/'
-credentials=(aws_key_id='$REPO_ACCESS_KEY_ID' aws_secret_key='$REPO_SECRET_ACCESS_KEY') pattern ='${t}.*'
-file_format=(type='CSV' field_delimiter='|' record_delimiter='\\n' skip_header=0);
+for t in nation region; do
+	echo "loading into $t ..."
+	cat <<SQL | bendsql query
+COPY INTO $t FROM 's3://repo.databend.rs/tpch100/${t}.tbl'
+credentials=(aws_key_id='$REPO_ACCESS_KEY_ID' aws_secret_key='$REPO_SECRET_ACCESS_KEY')
+file_format=(type='CSV' field_delimiter='|' record_delimiter='\\n' skip_header=1);
+ANALYZE TABLE "${t}";
+SELECT count(*) as count_${t} FROM "${t}";
+SQL
+done
+
+for t in customer lineitem orders partsupp part supplier; do
+	echo "loading into $t ..."
+	cat <<SQL | bendsql query
+COPY INTO $t FROM 's3://repo.databend.rs/tpch100/${t}/'
+credentials=(aws_key_id='$REPO_ACCESS_KEY_ID' aws_secret_key='$REPO_SECRET_ACCESS_KEY') pattern ='${t}.tbl.*'
+file_format=(type='CSV' field_delimiter='|' record_delimiter='\\n' skip_header=1);
 ANALYZE TABLE "${t}";
 SELECT count(*) as count_${t} FROM "${t}";
 SQL

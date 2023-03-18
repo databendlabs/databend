@@ -497,8 +497,7 @@ impl PhysicalPlanBuilder {
                                     output_column: v.index,
                                     args: agg.args.iter().map(|arg| {
                                         if let ScalarExpr::BoundColumnRef(col) = arg {
-                                            let col_index = input_schema.index_of(&col.column.index.to_string())?;
-                                            Ok(col_index)
+                                            input_schema.index_of(&col.column.index.to_string())
                                         } else {
                                             Err(ErrorCode::Internal(
                                                 "Aggregate function argument must be a BoundColumnRef".to_string()

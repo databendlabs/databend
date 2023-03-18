@@ -33,20 +33,6 @@ use regex::Regex;
 use crate::init_operator;
 use crate::DataOperator;
 
-pub struct FileWithMeta {
-    pub path: String,
-    pub metadata: Metadata,
-}
-
-impl FileWithMeta {
-    fn new(path: &str, meta: Metadata) -> Self {
-        Self {
-            path: path.to_string(),
-            metadata: meta,
-        }
-    }
-}
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum StageFileStatus {
     NeedCopy,
@@ -72,17 +58,17 @@ impl StageFileInfo {
             md5: meta.content_md5().map(str::to_string),
             last_modified: meta
                 .last_modified()
-                .map_or(Utc::now(), |t| Utc.timestamp(t.unix_timestamp(), 0)),
+                .map(|v| Utc.timestamp_nanos(v.unix_timestamp_nanos() as i64))
+                .unwrap_or_default(),
             etag: meta.etag().map(str::to_string),
             status: StageFileStatus::NeedCopy,
             creator: None,
         }
     }
-}
 
-impl From<FileWithMeta> for StageFileInfo {
-    fn from(value: FileWithMeta) -> Self {
-        StageFileInfo::new(value.path, &value.metadata)
+    /// NOTE: update this query when add new meta
+    pub fn meta_query() -> flagset::FlagSet<Metakey> {
+        Metakey::ContentLength | Metakey::ContentMd5 | Metakey::LastModified | Metakey::Etag
     }
 }
 
@@ -121,7 +107,7 @@ impl StageFilesInfo {
         }
     }
 
-    pub async fn list(&self, operator: &Operator, first_only: bool) -> Result<Vec<FileWithMeta>> {
+    pub async fn list(&self, operator: &Operator, first_only: bool) -> Result<Vec<StageFileInfo>> {
         if let Some(files) = &self.files {
             let mut res = Vec::new();
             for file in files {
@@ -131,7 +117,7 @@ impl StageFilesInfo {
                     .to_string();
                 let meta = operator.stat(&full_path).await?;
                 if meta.mode().is_file() {
-                    res.push(FileWithMeta::new(&full_path, meta))
+                    res.push(StageFileInfo::new(full_path, &meta))
                 } else {
                     return Err(ErrorCode::BadArguments(format!(
                         "{full_path} is not a file"
@@ -148,7 +134,7 @@ impl StageFilesInfo {
         }
     }
 
-    pub async fn first_file(&self, operator: &Operator) -> Result<FileWithMeta> {
+    pub async fn first_file(&self, operator: &Operator) -> Result<StageFileInfo> {
         let mut files = self.list(operator, true).await?;
         match files.pop() {
             None => Err(ErrorCode::BadArguments("no file found")),
@@ -156,7 +142,7 @@ impl StageFilesInfo {
         }
     }
 
-    pub fn blocking_first_file(&self, operator: &Operator) -> Result<FileWithMeta> {
+    pub fn blocking_first_file(&self, operator: &Operator) -> Result<StageFileInfo> {
         let mut files = self.blocking_list(operator, true)?;
         match files.pop() {
             None => Err(ErrorCode::BadArguments("no file found")),
@@ -168,7 +154,7 @@ impl StageFilesInfo {
         &self,
         operator: &Operator,
         first_only: bool,
-    ) -> Result<Vec<FileWithMeta>> {
+    ) -> Result<Vec<StageFileInfo>> {
         if let Some(files) = &self.files {
             let mut res = Vec::new();
             for file in files {
@@ -178,7 +164,7 @@ impl StageFilesInfo {
                     .to_string();
                 let meta = operator.blocking().stat(&full_path)?;
                 if meta.mode().is_file() {
-                    res.push(FileWithMeta::new(&full_path, meta))
+                    res.push(StageFileInfo::new(full_path, &meta))
                 } else {
                     return Err(ErrorCode::BadArguments(format!(
                         "{full_path} is not a file"
@@ -200,11 +186,11 @@ impl StageFilesInfo {
         path: &str,
         pattern: Option<Regex>,
         first_only: bool,
-    ) -> Result<Vec<FileWithMeta>> {
+    ) -> Result<Vec<StageFileInfo>> {
         let root_meta = operator.stat(path).await;
         match root_meta {
             Ok(meta) => match meta.mode() {
-                EntryMode::FILE => return Ok(vec![FileWithMeta::new(path, meta)]),
+                EntryMode::FILE => return Ok(vec![StageFileInfo::new(path.to_string(), &meta)]),
                 EntryMode::DIR => {}
                 EntryMode::Unknown => {
                     return Err(ErrorCode::BadArguments("object mode is unknown"));
@@ -223,10 +209,9 @@ impl StageFilesInfo {
         let mut files = Vec::new();
         let mut list = operator.scan(path).await?;
         while let Some(obj) = list.try_next().await? {
-            // todo(youngsofun): not always need Metakey::Complete
-            let meta = operator.metadata(&obj, Metakey::Complete).await?;
+            let meta = operator.metadata(&obj, StageFileInfo::meta_query()).await?;
             if check_file(obj.path(), meta.mode(), &pattern) {
-                files.push(FileWithMeta::new(obj.path(), meta));
+                files.push(StageFileInfo::new(obj.path().to_string(), &meta));
                 if first_only {
                     return Ok(files);
                 }
@@ -252,13 +237,13 @@ fn blocking_list_files_with_pattern(
     path: &str,
     pattern: Option<Regex>,
     first_only: bool,
-) -> Result<Vec<FileWithMeta>> {
+) -> Result<Vec<StageFileInfo>> {
     let operator = operator.blocking();
 
     let root_meta = operator.stat(path);
     match root_meta {
         Ok(meta) => match meta.mode() {
-            EntryMode::FILE => return Ok(vec![FileWithMeta::new(path, meta)]),
+            EntryMode::FILE => return Ok(vec![StageFileInfo::new(path.to_string(), &meta)]),
             EntryMode::DIR => {}
             EntryMode::Unknown => return Err(ErrorCode::BadArguments("object mode is unknown")),
         },
@@ -276,9 +261,9 @@ fn blocking_list_files_with_pattern(
     let list = operator.list(path)?;
     for obj in list {
         let obj = obj?;
-        let meta = operator.metadata(&obj, Metakey::Complete)?;
+        let meta = operator.metadata(&obj, StageFileInfo::meta_query())?;
         if check_file(obj.path(), meta.mode(), &pattern) {
-            files.push(FileWithMeta::new(obj.path(), meta));
+            files.push(StageFileInfo::new(obj.path().to_string(), &meta));
             if first_only {
                 return Ok(files);
             }

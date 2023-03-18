@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chrono::Date;
 use chrono::DateTime;
 use chrono::Datelike;
 use chrono::Duration;
@@ -107,13 +106,13 @@ impl TzLUT {
         let mut offset_round_hour = true;
         let mut offset_round_minute = true;
 
-        let date = NaiveDate::from_ymd(DATE_LUT_MIN_YEAR, 1, 1);
+        let date = NaiveDate::from_ymd_opt(DATE_LUT_MIN_YEAR, 1, 1).unwrap();
         let mut days = date.num_days_from_ce();
 
         loop {
             let time = NaiveDateTime::new(
-                NaiveDate::from_num_days_from_ce(days),
-                NaiveTime::from_hms(0, 0, 0),
+                NaiveDate::from_num_days_from_ce_opt(days).unwrap(),
+                NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
             );
             if time.year() > DATE_LUT_MAX_YEAR {
                 break;
@@ -199,8 +198,8 @@ impl TzLUT {
                 let dt = self.to_datetime_from_us(us);
                 let dt = self
                     .tz
-                    .ymd(dt.year(), dt.month(), dt.day())
-                    .and_hms_micro(0, 0, 0, 0);
+                    .with_ymd_and_hms(dt.year(), dt.month(), dt.day(), 0, 0, 0)
+                    .unwrap();
                 dt.timestamp() * MICROS_IN_A_SEC
             }
         }
@@ -239,17 +238,17 @@ impl TzLUT {
 }
 
 pub trait DateConverter {
-    fn to_date(&self, tz: Tz) -> Date<Tz>;
+    fn to_date(&self, tz: Tz) -> NaiveDate;
     fn to_timestamp(&self, tz: Tz) -> DateTime<Tz>;
 }
 
 impl<T> DateConverter for T
 where T: AsPrimitive<i64>
 {
-    fn to_date(&self, tz: Tz) -> Date<Tz> {
-        let mut dt = tz.ymd(1970, 1, 1);
+    fn to_date(&self, tz: Tz) -> NaiveDate {
+        let mut dt = tz.with_ymd_and_hms(1970, 1, 1, 0, 0, 0).unwrap();
         dt = dt.checked_add_signed(Duration::days(self.as_())).unwrap();
-        dt
+        dt.date_naive()
     }
 
     fn to_timestamp(&self, tz: Tz) -> DateTime<Tz> {
@@ -329,7 +328,7 @@ macro_rules! impl_interval_year_month {
                 let new_date = $op(date.year(), date.month(), date.day(), delta.as_())?;
                 check_date(
                     new_date
-                        .signed_duration_since(NaiveDate::from_ymd(1970, 1, 1))
+                        .signed_duration_since(NaiveDate::from_ymd_opt(1970, 1, 1).unwrap())
                         .num_days(),
                 )
             }
@@ -384,8 +383,9 @@ impl AddTimesImpl {
 #[inline]
 pub fn today_date() -> i32 {
     let now = Utc::now();
-    NaiveDate::from_ymd(now.year(), now.month(), now.day())
-        .signed_duration_since(NaiveDate::from_ymd(1970, 1, 1))
+    NaiveDate::from_ymd_opt(now.year(), now.month(), now.day())
+        .unwrap()
+        .signed_duration_since(NaiveDate::from_ymd_opt(1970, 1, 1).unwrap())
         .num_days() as i32
 }
 
@@ -402,7 +402,12 @@ impl ToNumberImpl {
     }
 
     pub fn eval_date<T: ToNumber<R>, R>(date: i32, tz: TzLUT) -> R {
-        let dt = date.to_date(tz.tz).and_hms(0, 0, 0);
+        let dt = date
+            .to_date(tz.tz)
+            .and_hms_opt(0, 0, 0)
+            .unwrap()
+            .and_local_timezone(tz.tz)
+            .unwrap();
         T::to_number(&dt)
     }
 }
@@ -493,7 +498,12 @@ impl DateRounder {
     }
 
     pub fn eval_date<T: ToNumber<i32>>(date: i32, tz: TzLUT) -> i32 {
-        let dt = date.to_date(tz.tz).and_hms(0, 0, 0);
+        let dt = date
+            .to_date(tz.tz)
+            .and_hms_opt(0, 0, 0)
+            .unwrap()
+            .and_local_timezone(tz.tz)
+            .unwrap();
         T::to_number(&dt)
     }
 }
@@ -504,7 +514,12 @@ impl DateRounder {
 #[inline]
 fn datetime_to_date_inner_number(date: &DateTime<Tz>) -> i32 {
     date.naive_local()
-        .signed_duration_since(NaiveDate::from_ymd(1970, 1, 1).and_hms(0, 0, 0))
+        .signed_duration_since(
+            NaiveDate::from_ymd_opt(1970, 1, 1)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
+        )
         .num_days() as i32
 }
 
@@ -549,10 +564,16 @@ impl ToNumber<i32> for ToStartOfYear {
 impl ToNumber<i32> for ToStartOfISOYear {
     fn to_number(dt: &DateTime<Tz>) -> i32 {
         let iso_year = dt.iso_week().year();
+
         let iso_dt = dt
             .timezone()
-            .isoywd(iso_year, 1, chrono::Weekday::Mon)
-            .and_hms(0, 0, 0);
+            .from_local_datetime(
+                &NaiveDate::from_isoywd_opt(iso_year, 1, chrono::Weekday::Mon)
+                    .unwrap()
+                    .and_hms_opt(0, 0, 0)
+                    .unwrap(),
+            )
+            .unwrap();
         datetime_to_date_inner_number(&iso_dt)
     }
 }

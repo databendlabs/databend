@@ -1050,11 +1050,11 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let date_expr = map(
         rule! {
-            DATE ~ #literal_string
+            DATE ~ #consumed(literal_string)
         },
-        |(_, date)| ExprElement::Cast {
+        |(_, (span, date))| ExprElement::Cast {
             expr: Box::new(Expr::Literal {
-                span: None,
+                span: transform_span(span.0),
                 lit: Literal::String(date),
             }),
             target_type: TypeName::Date,
@@ -1063,11 +1063,11 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let timestamp_expr = map(
         rule! {
-            TIMESTAMP ~ #literal_string
+            TIMESTAMP ~ #consumed(literal_string)
         },
-        |(_, date)| ExprElement::Cast {
+        |(_, (span, date))| ExprElement::Cast {
             expr: Box::new(Expr::Literal {
-                span: None,
+                span: transform_span(span.0),
                 lit: Literal::String(date),
             }),
             target_type: TypeName::Timestamp,
@@ -1412,26 +1412,20 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         |(_, item_type)| TypeName::Nullable(Box::new(item_type.1)),
     );
     let ty_tuple = map(
-        rule! { TUPLE ~ "(" ~ #comma_separated_list1(tuple_types) ~ ")" },
-        |(_, _, tuple_types, _)| {
-            let mut fields_name = Vec::with_capacity(tuple_types.len());
-            let mut fields_type = Vec::with_capacity(tuple_types.len());
-            for tuple_type in tuple_types {
-                if let Some(field_name) = tuple_type.0 {
-                    fields_name.push(field_name.name);
-                }
-                fields_type.push(tuple_type.1);
-            }
-            if fields_name.is_empty() {
-                TypeName::Tuple {
-                    fields_name: None,
-                    fields_type,
-                }
-            } else {
-                TypeName::Tuple {
-                    fields_name: Some(fields_name),
-                    fields_type,
-                }
+        rule! { TUPLE ~ "(" ~ #comma_separated_list1(type_name) ~ ")" },
+        |(_, _, fields_type, _)| TypeName::Tuple {
+            fields_name: None,
+            fields_type,
+        },
+    );
+    let ty_named_tuple = map(
+        rule! { TUPLE ~ "(" ~ #comma_separated_list1(rule! { #ident ~ #type_name }) ~ ")" },
+        |(_, _, fields, _)| {
+            let (fields_name, fields_type) =
+                fields.into_iter().map(|(name, ty)| (name.name, ty)).unzip();
+            TypeName::Tuple {
+                fields_name: Some(fields_name),
+                fields_type,
             }
         },
     );
@@ -1461,7 +1455,8 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_decimal
             | #ty_array
             | #ty_map
-            | #ty_tuple
+            | #ty_tuple : "TUPLE(<type>, ...)"
+            | #ty_named_tuple : "TUPLE(<name> <type>, ...)"
             | #ty_date
             | #ty_datetime
             | #ty_string
@@ -1476,26 +1471,6 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
                 ty
             }
         },
-    )(i)
-}
-
-pub fn tuple_types(i: Input) -> IResult<(Option<Identifier>, TypeName)> {
-    let tuple_types = map(
-        rule! {
-           #type_name
-        },
-        |type_name| (None, type_name),
-    );
-    let named_tuple_types = map(
-        rule! {
-           #ident ~ #type_name
-        },
-        |(name, type_name)| (Some(name), type_name),
-    );
-
-    rule!(
-        #tuple_types
-        | #named_tuple_types
     )(i)
 }
 

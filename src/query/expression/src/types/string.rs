@@ -371,6 +371,8 @@ impl StringColumnBuilder {
     }
 
     /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     pub unsafe fn index_unchecked(&self, row: usize) -> &[u8] {
         let start = *self.offsets.get_unchecked(row) as usize;
         let end = *self.offsets.get_unchecked(row + 1) as usize;

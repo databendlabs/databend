@@ -77,21 +77,10 @@ pub fn check<Index: ColumnIndex>(
             args,
             params,
         } => {
-            let mut args_expr: Vec<_> = args
+            let args_expr: Vec<_> = args
                 .iter()
                 .map(|arg| check(arg, fn_registry))
                 .try_collect()?;
-
-            if name == "if" || name == "multi_if" {
-                args_expr
-                    .iter_mut()
-                    .skip(1)
-                    .step_by(2)
-                    .for_each(|expr| *expr = expr.wrap_catch());
-                let last = args_expr.last_mut().unwrap();
-                *last = last.wrap_catch()
-            }
-
             check_function(*span, name, params, &args_expr, fn_registry)
         }
     }
@@ -293,7 +282,7 @@ pub fn check_function<Index: ColumnIndex>(
 
     let mut fail_resaons = Vec::with_capacity(candidates.len());
     for (id, func) in &candidates {
-        match try_check_function(span, args, &func.signature, auto_cast_rules, fn_registry) {
+        match try_check_function(args, &func.signature, auto_cast_rules, fn_registry) {
             Ok((checked_args, return_type, generics)) => {
                 return Ok(Expr::FunctionCall {
                     span,
@@ -406,7 +395,6 @@ impl Substitution {
 
 #[allow(clippy::type_complexity)]
 pub fn try_check_function<Index: ColumnIndex>(
-    span: Span,
     args: &[Expr<Index>],
     sig: &FunctionSignature,
     auto_cast_rules: AutoCastRules,
@@ -424,7 +412,7 @@ pub fn try_check_function<Index: ColumnIndex>(
         .map(|(arg, sig_type)| {
             let sig_type = subst.apply(sig_type)?;
             let is_try = fn_registry.is_auto_try_cast_rule(arg.data_type(), &sig_type);
-            check_cast(span, is_try, arg.clone(), &sig_type, fn_registry)
+            check_cast(arg.span(), is_try, arg.clone(), &sig_type, fn_registry)
         })
         .collect::<Result<Vec<_>>>()?;
 

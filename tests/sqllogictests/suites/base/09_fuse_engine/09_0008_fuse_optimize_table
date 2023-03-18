@@ -232,25 +232,19 @@ select segment_count, block_count from fuse_snapshot('db_09_0008', 't2') limit 1
 
 
 statement ok
-set max_threads=1
-
-statement ok
-set max_memory_usage=600
-
-statement ok
 create table t3(c int) block_per_segment=4 row_per_block=3
 
 statement ok
-insert into t3 values(1)
+insert into t3 values (1)
 
 statement ok
-insert into t3 values(2)
+insert into t3 values (2)
 
 statement ok
-insert into t3 values(3)
+insert into t3 values (3)
 
 statement ok
-insert into t3 values(4)
+insert into t3 values (4)
 
 statement ok
 optimize table t3 compact
@@ -271,6 +265,111 @@ select segment_count, block_count from fuse_snapshot('db_09_0008', 't3') limit 1
 
 
 statement ok
+create table t4(a int) row_per_block=2
+
+statement ok
+insert into t4 values (1),(2)
+
+statement ok
+insert into t4 values (3)
+
+statement ok
+alter table t4 add column b int
+
+statement ok
+insert into t4 values (4, 4)
+
+statement ok
+optimize table t4 compact
+
+query II
+select * from t4 order by a
+----
+1 0
+2 0
+3 0
+4 4
+
+query II
+select segment_count, block_count from fuse_snapshot('db_09_0008', 't4') limit 1
+----
+1 3
+
+
+
+# for issue which addressed in PR #10620 (https://github.com/datafuselabs/databend/pull/10620)
+statement ok
+create table t5(c int)  block_per_segment=3 row_per_block=3
+
+statement ok
+insert into t5 select number from numbers(7)
+
+statement ok
+insert into t5 values(7)
+
+statement ok
+insert into t5 values(8)
+
+statement ok
+optimize table t5 compact
+
+query I
+select count() from t5
+----
+9
+
+query II
+select segment_count, block_count from fuse_snapshot('db_09_0008', 't5') limit 2
+----
+1 3
+3 5
+
+
+
+statement ok
+create table t6(c int)  block_per_segment=4 row_per_block=3
+
+statement ok
+insert into t6 select number from numbers(9)
+
+statement ok
+insert into t6 select number from numbers(18) where number>8
+
+statement ok
+optimize table t6 compact segment
+
+statement ok
+insert into t6 select number from numbers(27) where number>17
+
+statement ok
+insert into t6 values(27)
+
+statement ok
+insert into t6 values(28)
+
+statement ok
+insert into t6 values(29)
+
+statement ok
+insert into t6 values(30)
+
+statement ok
+optimize table t6 compact
+
+query I
+select count() from t6
+----
+31
+
+query II
+select segment_count, block_count from fuse_snapshot('db_09_0008', 't6') limit 2
+----
+3 11
+6 13
+
+
+
+statement ok
 DROP TABLE m
 
 statement ok
@@ -284,6 +383,15 @@ DROP TABLE t2
 
 statement ok
 DROP TABLE t3
+
+statement ok
+DROP TABLE t4
+
+statement ok
+DROP TABLE t5
+
+statement ok
+DROP TABLE t6
 
 statement ok
 DROP DATABASE db_09_0008

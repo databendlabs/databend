@@ -756,7 +756,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST('foo' AS UINT64)
-  | ^^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `UInt64` because invalid digit found in string while evaluating function `to_uint64("foo")`
+  | ^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_uint64("foo")`
 
 
 
@@ -764,7 +764,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST('1foo' AS INT32)
-  | ^^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `Int32` because invalid digit found in string while evaluating function `to_int32("1foo")`
+  | ^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32("1foo")`
 
 
 
@@ -772,7 +772,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST('-1' AS UINT64)
-  | ^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `UInt64` because invalid digit found in string while evaluating function `to_uint64("-1")`
+  | ^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_uint64("-1")`
 
 
 
@@ -780,7 +780,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST('256' AS UINT8)
-  | ^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `UInt8` because number too large to fit in target type while evaluating function `to_uint8("256")`
+  | ^^^^^^^^^^^^^^^^^^^^ number too large to fit in target type while evaluating function `to_uint8("256")`
 
 
 
@@ -875,7 +875,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST('t' AS BOOLEAN)
-  | ^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `BOOLEAN` while evaluating function `to_boolean("t")`
+  | ^^^^^^^^^^^^^^^^^^^^ cannot parse to type `BOOLEAN` while evaluating function `to_boolean("t")`
 
 
 
@@ -883,7 +883,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST('f' AS BOOLEAN)
-  | ^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `BOOLEAN` while evaluating function `to_boolean("f")`
+  | ^^^^^^^^^^^^^^^^^^^^ cannot parse to type `BOOLEAN` while evaluating function `to_boolean("f")`
 
 
 
@@ -891,7 +891,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST('0' AS BOOLEAN)
-  | ^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `BOOLEAN` while evaluating function `to_boolean("0")`
+  | ^^^^^^^^^^^^^^^^^^^^ cannot parse to type `BOOLEAN` while evaluating function `to_boolean("0")`
 
 
 
@@ -899,7 +899,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST('1' AS BOOLEAN)
-  | ^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `BOOLEAN` while evaluating function `to_boolean("1")`
+  | ^^^^^^^^^^^^^^^^^^^^ cannot parse to type `BOOLEAN` while evaluating function `to_boolean("1")`
 
 
 
@@ -973,7 +973,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST('010.010' AS DECIMAL(5,4))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ fail to decode string as decimal: Code: 1049, displayText = decimal overflow. while evaluating function `to_decimal("010.010")`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ decimal overflow while evaluating function `to_decimal("010.010")`
 
 
 
@@ -990,7 +990,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST('010.010' AS DECIMAL(4,3))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ fail to decode string as decimal: Code: 1049, displayText = decimal overflow. while evaluating function `to_decimal("010.010")`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ decimal overflow while evaluating function `to_decimal("010.010")`
 
 
 
@@ -1324,7 +1324,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_TIMESTAMP('2022')
-  | ^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `TIMESTAMP` while evaluating function `to_timestamp("2022")`
+  | ^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP` while evaluating function `to_timestamp("2022")`
 
 
 
@@ -1332,7 +1332,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_TIMESTAMP('2022-01')
-  | ^^^^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `TIMESTAMP` while evaluating function `to_timestamp("2022-01")`
+  | ^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP` while evaluating function `to_timestamp("2022-01")`
 
 
 
@@ -1349,7 +1349,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_TIMESTAMP('A NON-TIMESTMAP STR')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `TIMESTAMP` while evaluating function `to_timestamp("A NON-TIMESTMAP STR")`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP` while evaluating function `to_timestamp("A NON-TIMESTMAP STR")`
 
 
 
@@ -1524,7 +1524,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_DATE('2022')
-  | ^^^^^^^^^^^^^^^ unable to parse string to type `DATE` while evaluating function `to_date("2022")`
+  | ^^^^^^^^^^^^^^^ cannot parse to type `DATE` while evaluating function `to_date("2022")`
 
 
 
@@ -1532,7 +1532,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_DATE('2022-01')
-  | ^^^^^^^^^^^^^^^^^^ unable to parse string to type `DATE` while evaluating function `to_date("2022-01")`
+  | ^^^^^^^^^^^^^^^^^^ cannot parse to type `DATE` while evaluating function `to_date("2022-01")`
 
 
 
@@ -1549,7 +1549,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_DATE('A NON-DATE STR')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `DATE` while evaluating function `to_date("A NON-DATE STR")`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `DATE` while evaluating function `to_date("A NON-DATE STR")`
 
 
 
@@ -1712,7 +1712,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(('a',) AS Tuple(INT))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `Int32` because invalid digit found in string while evaluating function `to_int32("a")`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32("a")`
 
 
 
@@ -1738,7 +1738,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(((1, 'a'), 1) AS Tuple(Tuple(INT, INT NULL), INT))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `Int32` because invalid digit found in string while evaluating function `to_int32("a")`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32("a")`
 
 
 
@@ -1746,7 +1746,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(((1, 'a'), 1) AS Tuple(Tuple(INT, INT), INT) NULL)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `Int32` because invalid digit found in string while evaluating function `to_int32("a")`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32("a")`
 
 
 
@@ -1763,7 +1763,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST([(1,'a'),(2,'a')] AS Array(Tuple(INT, INT)) NULL)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `Int32` because invalid digit found in string while evaluating function `to_int32("a")`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32("a")`
 
 
 
@@ -1771,7 +1771,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST([(1,'a'),(2,'a')] AS Array(Tuple(INT, INT NULL)))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `Int32` because invalid digit found in string while evaluating function `to_int32("a")`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32("a")`
 
 
 
@@ -1788,7 +1788,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST([['a'], ['b', 'c']] AS Array(Array(INT) NULL))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to parse string to type `Int32` because invalid digit found in string while evaluating function `to_int32("a")`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32("a")`
 
 
 

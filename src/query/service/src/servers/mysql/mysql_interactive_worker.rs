@@ -336,6 +336,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                     None,
                     has_result,
                     schema,
+                    query.to_string(),
                 ))
             }
             None => {
@@ -359,6 +360,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                             extra_info,
                             has_result_set,
                             schema,
+                            query.to_string(),
                         ))
                     }
                     Err(e) => {

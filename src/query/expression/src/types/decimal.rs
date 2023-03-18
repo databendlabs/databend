@@ -732,7 +732,8 @@ impl DecimalColumn {
     }
 
     /// # Safety
-    /// Assumes that the `index` is not out of range.
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     pub unsafe fn index_unchecked(&self, index: usize) -> DecimalScalar {
         crate::with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalColumn::DECIMAL_TYPE(col, size) =>
