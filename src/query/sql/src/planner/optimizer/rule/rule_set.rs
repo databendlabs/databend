@@ -17,12 +17,10 @@ use std::collections::HashSet;
 use std::hash::Hash;
 use std::hash::Hasher;
 
-use num_traits::FromPrimitive;
-use roaring::RoaringBitmap;
-
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+// use num_traits::FromPrimitive;
 use crate::optimizer::rule::factory::RuleFactory;
 use crate::optimizer::rule::RuleID;
 use crate::optimizer::rule::RulePtr;
