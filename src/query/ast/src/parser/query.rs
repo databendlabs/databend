@@ -569,6 +569,14 @@ pub fn group_by_items(i: Input) -> IResult<GroupBy> {
     let normal = map(rule! { ^#comma_separated_list1(expr) }, |groups| {
         GroupBy::Normal(groups)
     });
+    let cube = map(
+        rule! { CUBE ~ "(" ~ ^#comma_separated_list1(expr) ~ ")" },
+        |(_, _, groups, _)| GroupBy::Cube(groups),
+    );
+    let rollup = map(
+        rule! { ROLLUP ~ "(" ~ ^#comma_separated_list1(expr) ~ ")" },
+        |(_, _, groups, _)| GroupBy::Rollup(groups),
+    );
     let group_set = alt((
         map(rule! {"(" ~ ")"}, |(_, _)| vec![]), // empty grouping set
         map(
@@ -581,7 +589,7 @@ pub fn group_by_items(i: Input) -> IResult<GroupBy> {
         rule! { GROUPING ~ SETS ~ "(" ~ ^#comma_separated_list1(group_set) ~ ")"  },
         |(_, _, _, sets, _)| GroupBy::GroupingSets(sets),
     );
-    rule!(#group_sets | #normal)(i)
+    rule!(#group_sets | #cube | #rollup | #normal)(i)
 }
 
 pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>> {

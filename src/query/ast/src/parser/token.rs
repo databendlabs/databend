@@ -879,6 +879,10 @@ pub enum TokenKind {
     GROUPING,
     #[token("SETS", ignore(ascii_case))]
     SETS,
+    #[token("CUBE", ignore(ascii_case))]
+    CUBE,
+    #[token("ROLLUP", ignore(ascii_case))]
+    ROLLUP,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -982,6 +986,8 @@ impl TokenKind {
             // | TokenKind::FOREIGN
             // | TokenKind::GREATEST
             // | TokenKind::GROUPING
+            | TokenKind::CUBE
+            | TokenKind::ROLLUP
             // | TokenKind::IFNULL
             | TokenKind::IN
             // | TokenKind::INITIALLY

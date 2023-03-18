@@ -96,6 +96,10 @@ pub enum GroupBy {
     ///
     /// GroupSet := (expr [, expr]*) | expr
     GroupingSets(Vec<Vec<Expr>>),
+    /// GROUP BY CUBE ( expr [, expr]* )
+    Cube(Vec<Expr>),
+    /// GROUP BY ROLLUP ( expr [, expr]* )
+    Rollup(Vec<Expr>),
 }
 
 /// A relational set expression, like `SELECT ... FROM ... {UNION|EXCEPT|INTERSECT} SELECT ... FROM ...`
@@ -469,6 +473,16 @@ impl Display for SelectStmt {
                         write_comma_separated_list(f, set)?;
                         write!(f, ")")?;
                     }
+                    write!(f, ")")?;
+                }
+                GroupBy::Cube(exprs) => {
+                    write!(f, "CUBE (")?;
+                    write_comma_separated_list(f, exprs)?;
+                    write!(f, ")")?;
+                }
+                GroupBy::Rollup(exprs) => {
+                    write!(f, "ROLLUP (")?;
+                    write_comma_separated_list(f, exprs)?;
                     write!(f, ")")?;
                 }
             }

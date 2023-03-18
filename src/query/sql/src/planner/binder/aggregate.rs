@@ -342,6 +342,24 @@ impl Binder {
                 self.resolve_grouping_sets(bind_context, select_list, sets, &available_aliases)
                     .await
             }
+            // TODO: avoid too many clones.
+            GroupBy::Rollup(exprs) => {
+                // ROLLUP (a,b,c) => GROUPING SETS ((a,b,c), (a,b), (a), ())
+                let mut sets = Vec::with_capacity(exprs.len() + 1);
+                for i in (0..=exprs.len()).rev() {
+                    sets.push(exprs[0..i].to_vec());
+                }
+                self.resolve_grouping_sets(bind_context, select_list, &sets, &available_aliases)
+                    .await
+            }
+            GroupBy::Cube(exprs) => {
+                // CUBE (a,b) => GROUPING SETS ((a,b),(a),(b),()) // All subsets
+                let sets = (0..=exprs.len())
+                    .flat_map(|count| exprs.clone().into_iter().combinations(count))
+                    .collect::<Vec<_>>();
+                self.resolve_grouping_sets(bind_context, select_list, &sets, &available_aliases)
+                    .await
+            }
         }
     }
 
