@@ -526,3 +526,43 @@ fn test_schema_modify_field() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_leaf_columns_of() -> Result<()> {
+    let fields = vec![
+        TableField::new("a", TableDataType::Number(NumberDataType::UInt64)),
+        TableField::new("b", TableDataType::Tuple {
+            fields_name: vec!["b1".to_string(), "b2".to_string()],
+            fields_type: vec![
+                TableDataType::Tuple {
+                    fields_name: vec!["b11".to_string(), "b12".to_string()],
+                    fields_type: vec![TableDataType::Boolean, TableDataType::String],
+                }
+                TableDataType::Number(NumberDataType::UInt64),
+            ],
+        }
+        TableField::new("c", TableDataType::Array(Box::new(TableDataType::Number(NumberDataType::UInt64)))),
+        TableField::new("d", TableDataType::Map(Box::new(
+            TableDataType::Tuple {
+                fields_name: vec!["key".to_string(), "value".to_string()],
+                fields_type: vec![TableDataType::String, TableDataType::String],
+            }
+        )),
+        TableField::new("e", TableDataType::String),
+    ];
+    let mut schema = TableSchema::new(fields);
+
+    assert_eq!(schema.leaf_columns_of("a"), vec![0]);
+    assert_eq!(schema.leaf_columns_of("b"), vec![1,2,3]);
+    assert_eq!(schema.leaf_columns_of("b:b1"), vec![1,2]);
+    assert_eq!(schema.leaf_columns_of("b:1"), vec![1,2]);
+    assert_eq!(schema.leaf_columns_of("b:b1:b11"), vec![1]);
+    assert_eq!(schema.leaf_columns_of("b:1:1"), vec![1]);
+    assert_eq!(schema.leaf_columns_of("b:b1:b12"), vec![2]);
+    assert_eq!(schema.leaf_columns_of("b:1:2"), vec![2]);
+    assert_eq!(schema.leaf_columns_of("b:b2"), vec![3]);
+    assert_eq!(schema.leaf_columns_of("b:2"), vec![3]);
+    assert_eq!(schema.leaf_columns_of("c"), vec![4]);
+    assert_eq!(schema.leaf_columns_of("d"), vec![5,6]);
+    assert_eq!(schema.leaf_columns_of("e"), vec![7]);
+}
