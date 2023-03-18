@@ -24,8 +24,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_table_schema;
 use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
+use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableCopiedFileInfo;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -41,6 +43,7 @@ use tracing::info;
 use crate::interpreters::common::append2table;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
+use crate::pipelines::processors::transforms::TransformRuntimeCastSchema;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::PipelineBuildResult;
@@ -330,6 +333,26 @@ impl CopyInterpreter {
                         transform_input_port,
                         transform_output_port,
                     )?))
+                },
+            )?;
+        }
+
+        if stage_table_info
+            .stage_info
+            .file_format_options
+            .format
+            .has_inner_schema()
+        {
+            let dst_schema: Arc<DataSchema> = Arc::new(to_table.schema().into());
+            let func_ctx = self.ctx.get_function_context()?;
+            build_res.main_pipeline.add_transform(
+                |transform_input_port, transform_output_port| {
+                    TransformRuntimeCastSchema::try_create(
+                        transform_input_port,
+                        transform_output_port,
+                        dst_schema.clone(),
+                        func_ctx,
+                    )
                 },
             )?;
         }
