@@ -2153,39 +2153,34 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
 
             if succ {
                 return Ok(UpdateTableMetaReply {});
-            } else {
-                if let Some(resp) = responses.get(0) {
-                    if let Some(r) = &resp.response {
-                        match r {
-                            Response::Get(get_resp) => {
-                                // check table version
-                                let (tb_meta_seq, _): (_, Option<TableMeta>) =
-                                    if let Some(seq_v) = &get_resp.value {
-                                        (seq_v.seq, Some(deserialize_struct(&seq_v.data)?))
-                                    } else {
-                                        (0, None)
-                                    };
-
-                                if req_seq.match_seq(tb_meta_seq).is_ok() {
-                                    // if table version does match, report stage file duplication
-                                    return Err(KVAppError::AppError(AppError::from(
-                                        DuplicatedUpsertFiles::new(
-                                            req.table_id,
-                                            "update_table_meta",
-                                        ),
-                                    )));
+            } else if let Some(resp) = responses.get(0) {
+                if let Some(r) = &resp.response {
+                    match r {
+                        Response::Get(get_resp) => {
+                            // check table version
+                            let (tb_meta_seq, _): (_, Option<TableMeta>) =
+                                if let Some(seq_v) = &get_resp.value {
+                                    (seq_v.seq, Some(deserialize_struct(&seq_v.data)?))
                                 } else {
-                                    return Ok(UpdateTableMetaReply {});
-                                }
-                            }
-                            _ => {
-                                unreachable!("expect Get response but got")
+                                    (0, None)
+                                };
+
+                            if req_seq.match_seq(tb_meta_seq).is_ok() {
+                                // if table version does match, report stage file duplication
+                                return Err(KVAppError::AppError(AppError::from(
+                                    DuplicatedUpsertFiles::new(req.table_id, "update_table_meta"),
+                                )));
+                            } else {
+                                return Ok(UpdateTableMetaReply {});
                             }
                         }
+                        _ => {
+                            unreachable!("expect Get response but got")
+                        }
                     }
-                } else {
-                    unreachable!("expect one response")
                 }
+            } else {
+                unreachable!("expect one response")
             }
         }
     }
@@ -2888,7 +2883,7 @@ where
 
     // TODO refactor this
     if force_insert {
-        for (f_name, file_info) in file_name_infos.into_iter() {
+        for (f_name, file_info) in file_name_infos {
             let key = TableCopiedFileNameIdent {
                 table_id,
                 file: f_name.to_owned(),

@@ -2167,7 +2167,7 @@ impl SchemaApiTestSuite {
                     .await;
                 let err = result.unwrap_err();
                 let err = ErrorCode::from(err);
-                assert_eq!(ErrorCode::DuplicatedUpsertFiels("").code(), err.code());
+                assert_eq!(ErrorCode::DuplicatedUpsertFiles("").code(), err.code());
             }
         }
         Ok(())

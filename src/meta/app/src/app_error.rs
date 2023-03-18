@@ -748,7 +748,7 @@ impl From<AppError> for ErrorCode {
             }
             AppError::WrongShare(err) => ErrorCode::WrongShare(err.message()),
             AppError::TxnRetryMaxTimes(err) => ErrorCode::TxnRetryMaxTimes(err.message()),
-            AppError::DuplicatedUpsertFiles(err) => ErrorCode::DuplicatedUpsertFiels(err.message()),
+            AppError::DuplicatedUpsertFiles(err) => ErrorCode::DuplicatedUpsertFiles(err.message()),
         }
     }
 }
