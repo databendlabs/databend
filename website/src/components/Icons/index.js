@@ -10,3 +10,5 @@ export { default as ArrowRight } from './ArrowRight';
 export { default as Return } from './Return';
 export { default as Pencil } from './Pencil';
 export { default as Label } from './Label';
+export { default as Linux } from './Linux';
+export { default as Apple } from './Apple';

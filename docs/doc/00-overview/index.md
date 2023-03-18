@@ -2,7 +2,6 @@
 title: Welcome
 slug: /
 ---
-import GetLatest from '@site/src/components/GetLatest';
 
 Welcome to the Databend documentation! Databend is an **open-source**, **elastic**, and **workload-aware** modern cloud data warehouse designed to meet businesses' massive-scale analytics needs at low cost and with low complexity.
 
