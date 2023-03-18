@@ -35,9 +35,10 @@ ORDER  BY customername;
 ## Syntax
 
 ```sql    
-WITH cte_name1 [(col_name [, col_name] ...)] AS (subquery1)
-[, cte_name2 [(col_name [, col_name] ...)] AS (subquery2)]
-[...]
+WITH
+        <cte_name1> [ ( <cte_column_list> ) ] AS ( SELECT ...  )
+    [ , <cte_name2> [ ( <cte_column_list> ) ] AS ( SELECT ...  ) ]
+    [ , <cte_nameN> [ ( <cte_column_list> ) ] AS ( SELECT ...  ) ]
 SELECT ...
 ```
 
@@ -45,11 +46,9 @@ Where:
 
 `WITH`: Initiates the WITH clause.
 
-`cte_name1`: Specifies the name of the first result set. 
+`<cte_name1>, <cte_nameN>`: The CTE name.
 
-`subquery1`: Defines the first result set.
-
-`cte_name2 AS (subquery2)`: You can define multiple CTEs in a WITH clause.
+`<cte_column_list>`: The names of the columns in the CTE.
 
 - A CTE can refer to any CTEs in the same WITH clause that are defined before.
 
