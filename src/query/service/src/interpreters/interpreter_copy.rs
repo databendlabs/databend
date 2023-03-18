@@ -400,11 +400,14 @@ impl CopyInterpreter {
             let table_id = to_table.get_id();
             let expire_hours = ctx.get_settings().get_load_file_metadata_expire_hours()?;
             let num_copied_files = copied_files.len();
-            let upsert_copied_files_request = if force {
-                None
-            } else {
-                Self::upsert_copied_files_request(table_id, expire_hours, copied_files)
-            };
+
+            let fail_if_duplicated = !force;
+            let upsert_copied_files_request = Self::upsert_copied_files_request(
+                table_id,
+                expire_hours,
+                copied_files,
+                fail_if_duplicated,
+            );
 
             {
                 let status = format!("begin commit, number of copied files:{}", num_copied_files,);
@@ -412,13 +415,13 @@ impl CopyInterpreter {
                 info!(status);
             }
 
-            let overwrite = false;
+            let overwrite_table_data = false;
             to_table
                 .commit_insertion(
                     ctx.clone(),
                     operations,
                     upsert_copied_files_request,
-                    overwrite,
+                    overwrite_table_data,
                 )
                 .await?;
 
@@ -467,6 +470,7 @@ impl CopyInterpreter {
         table_id: MetaId,
         expire_hours: u64,
         copy_stage_files: BTreeMap<String, TableCopiedFileInfo>,
+        fail_if_duplicated: bool,
     ) -> Option<UpsertTableCopiedFileReq> {
         if copy_stage_files.is_empty() {
             return None;
@@ -477,6 +481,7 @@ impl CopyInterpreter {
             table_id,
             file_info: copy_stage_files,
             expire_at: Some(expire_at),
+            fail_if_duplicated,
         };
         Some(req)
     }

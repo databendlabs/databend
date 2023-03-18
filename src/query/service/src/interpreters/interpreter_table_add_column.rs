@@ -101,7 +101,7 @@ impl Interpreter for AddTableColumnInterpreter {
                 table_id,
                 seq: MatchSeq::Exact(table_version),
                 new_table_meta,
-                upsert_source_table: None,
+                copied_files: None,
             };
 
             catalog.update_table_meta(table_info, req).await?;

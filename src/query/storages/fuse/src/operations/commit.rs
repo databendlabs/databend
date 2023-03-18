@@ -401,7 +401,7 @@ impl FuseTable {
             table_id,
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
-            upsert_source_table: copied_files.clone(),
+            copied_files: copied_files.clone(),
         };
 
         // 3. let's roll

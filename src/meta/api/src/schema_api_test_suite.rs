@@ -2025,7 +2025,7 @@ impl SchemaApiTestSuite {
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
-                    upsert_source_table: None,
+                    copied_files: None,
                 })
                 .await?;
 
@@ -2045,7 +2045,7 @@ impl SchemaApiTestSuite {
                         table_id,
                         seq: MatchSeq::Exact(table_version + 1),
                         new_table_meta: new_table_meta.clone(),
-                        upsert_source_table: None,
+                        copied_files: None,
                     })
                     .await;
 
@@ -2080,12 +2080,13 @@ impl SchemaApiTestSuite {
                     table_id,
                     file_info,
                     expire_at: None,
+                    fail_if_duplicated: true,
                 };
                 mt.update_table_meta(UpdateTableMetaReq {
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
-                    upsert_source_table: Some(upsert_source_table),
+                    copied_files: Some(upsert_source_table),
                 })
                 .await?;
 
@@ -2118,12 +2119,13 @@ impl SchemaApiTestSuite {
                     table_id,
                     file_info,
                     expire_at: None,
+                    fail_if_duplicated: true,
                 };
                 mt.update_table_meta(UpdateTableMetaReq {
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
-                    upsert_source_table: Some(upsert_source_table),
+                    copied_files: Some(upsert_source_table),
                 })
                 .await?;
 
@@ -2156,13 +2158,14 @@ impl SchemaApiTestSuite {
                     table_id,
                     file_info,
                     expire_at: None,
+                    fail_if_duplicated: true,
                 };
                 let result = mt
                     .update_table_meta(UpdateTableMetaReq {
                         table_id,
                         seq: MatchSeq::Exact(table_version),
                         new_table_meta: new_table_meta.clone(),
-                        upsert_source_table: Some(upsert_source_table),
+                        copied_files: Some(upsert_source_table),
                     })
                     .await;
                 let err = result.unwrap_err();
@@ -2631,6 +2634,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
+                fail_if_duplicated: true,
             };
 
             let _ = mt.upsert_table_copied_file_info(req).await?;
@@ -3351,6 +3355,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
+                fail_if_duplicated: true,
             };
 
             let _ = mt.upsert_table_copied_file_info(req).await?;
@@ -3380,6 +3385,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() - 86400) as u64),
+                fail_if_duplicated: true,
             };
 
             let _ = mt.upsert_table_copied_file_info(req).await?;
@@ -3464,6 +3470,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
+                fail_if_duplicated: true,
             };
 
             let _ = mt.upsert_table_copied_file_info(req).await?;
