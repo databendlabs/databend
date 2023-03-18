@@ -11,7 +11,7 @@ function GetLatest() {
   useMount(()=>{  
     if (ExecutionEnvironment.canUseDOM) {
       setTimeout(()=>{
-        setText();
+        setTagName();
         const dom = document.querySelectorAll('.clean-btn')
         for(let button of dom) {
           if (button?.getAttribute('aria-label') === 'Copy code to clipboard') {
@@ -29,7 +29,7 @@ function GetLatest() {
       });
     }
   });
-  function setText() {
+  function setTagName() {
     const name = tagName || 'v1.0.22-nightly';
     const dom = document.querySelectorAll('.variable');
     for (let div of dom){
