@@ -60,7 +60,7 @@ impl<'a> ScalarBinder<'a> {
             self.metadata.clone(),
             self.aliases,
         );
-        Ok(*type_checker.resolve(expr, None).await?)
+        Ok(*type_checker.resolve(expr).await?)
     }
 
     pub fn get_func_ctx(&self) -> Result<FunctionContext> {
