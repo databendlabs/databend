@@ -28,7 +28,7 @@ QUANTILE_CONT(level1, level2, ...)(expression)
 
 ## Return Type
 
-Float64.
+Float64 or float64 array based on level number.
 
 ## Examples
 
