@@ -205,30 +205,30 @@ select number % 3,   sum(number), avg(number),  count() from numbers(100) group 
 query I
 SELECT median(number) from numbers_mt(10000)
 ----
-4999
+4999.5
 
 query I
-SELECT quantile(0.6)(number) from numbers_mt(10000)
+SELECT quantile_cont(0.6)(number) from numbers_mt(10000)
 ----
-5999
+5999.4
 
-query I
-SELECT quantile(0)(number) from numbers_mt(10000)
+query F
+SELECT quantile_cont(0)(number) from numbers_mt(10000)
 ----
-0
+0.0
 
-query I
-SELECT quantile(1)(number) from numbers_mt(10000)
+query F
+SELECT quantile_cont(1)(number) from numbers_mt(10000)
 ----
-9999
+9999.0
 
 query T
-SELECT quantile(0, 0.5, 0.6, 1)(number) from numbers_mt(10000);
+SELECT quantile_cont(0, 0.5, 0.6, 1)(number) from numbers_mt(10000);
 ----
-[0,4999,5999,9999]
+[0.0,4999.5,5999.4,9999.0]
 
 statement error 1010
-SELECT quantile(5)(number) from numbers_mt(10000)
+SELECT quantile_cont(5)(number) from numbers_mt(10000)
 
 
 statement ok
