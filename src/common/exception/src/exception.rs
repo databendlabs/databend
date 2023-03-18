@@ -298,6 +298,6 @@ where E: Display + Send + Sync + 'static
 
 impl Clone for ErrorCode {
     fn clone(&self) -> Self {
-        ErrorCode::create(self.code(), self.message(), None, self.backtrace())
+        ErrorCode::create(self.code(), self.message(), None, self.backtrace()).set_span(self.span())
     }
 }

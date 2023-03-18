@@ -81,7 +81,7 @@ Limit
             ├── aggregate functions: []
             ├── estimated rows: 0.33
             └── Filter
-                ├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = TRY_CAST(if(CAST(is_not_null(scalar_subquery_4 (#4)) AS Boolean NULL), CAST(scalar_subquery_4 (#4) AS Int64 NULL), 0) AS UInt64 NULL))]
+                ├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = TRY_CAST(if(CAST(is_not_null(scalar_subquery_5 (#5)) AS Boolean NULL), CAST(scalar_subquery_5 (#5) AS Int64 NULL), 0) AS UInt64 NULL))]
                 ├── estimated rows: 0.33
                 └── HashJoin
                     ├── join type: SINGLE
@@ -90,7 +90,7 @@ Limit
                     ├── filters: []
                     ├── estimated rows: 1.00
                     ├── EvalScalar(Build)
-                    │   ├── expressions: [COUNT(*) (#5)]
+                    │   ├── expressions: [COUNT(*) (#4)]
                     │   ├── estimated rows: 1.00
                     │   └── AggregateFinal
                     │       ├── group by: [number]
@@ -157,12 +157,12 @@ Limit
     ├── estimated rows: 2.00
     └── HashJoin
         ├── join type: RIGHT OUTER
-        ├── build keys: [CAST(t3.c1 (#1) AS UInt64 NULL)]
-        ├── probe keys: [t4.c (#5)]
+        ├── build keys: [CAST(t3.c1 (#3) AS UInt64 NULL)]
+        ├── probe keys: [t4.c (#7)]
         ├── filters: []
         ├── estimated rows: 2.00
         ├── EvalScalar(Build)
-        │   ├── expressions: [count(t1.number) (#3)]
+        │   ├── expressions: [count(t1.number) (#2)]
         │   ├── estimated rows: 1.00
         │   └── AggregateFinal
         │       ├── group by: [number]
@@ -181,7 +181,7 @@ Limit
         │               ├── push downs: [filters: [], limit: NONE]
         │               └── estimated rows: 1.00
         └── EvalScalar(Probe)
-            ├── expressions: [count(t.number) (#7)]
+            ├── expressions: [count(t.number) (#6)]
             ├── estimated rows: 2.00
             └── AggregateFinal
                 ├── group by: [number]

@@ -8,7 +8,7 @@ query T
 explain select count(*) from t
 ----
 EvalScalar
-├── expressions: [COUNT(*) (#2)]
+├── expressions: [COUNT(*) (#1)]
 ├── estimated rows: 1.00
 └── EvalScalar
     ├── expressions: [1000]
@@ -22,7 +22,7 @@ query T
 explain select count(*) from t
 ----
 EvalScalar
-├── expressions: [COUNT(*) (#2)]
+├── expressions: [COUNT(*) (#1)]
 ├── estimated rows: 1.00
 └── EvalScalar
     ├── expressions: [1001]
@@ -33,7 +33,7 @@ query T
 explain select count(*) from t where number > 10
 ----
 EvalScalar
-├── expressions: [COUNT(*) (#2)]
+├── expressions: [COUNT(*) (#1)]
 ├── estimated rows: 1.00
 └── AggregateFinal
     ├── group by: []

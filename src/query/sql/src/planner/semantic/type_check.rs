@@ -28,6 +28,9 @@ use common_ast::ast::SubqueryModifier;
 use common_ast::ast::TrimWhere;
 use common_ast::ast::TypeName;
 use common_ast::ast::UnaryOperator;
+use common_ast::ast::WindowFrame;
+use common_ast::ast::WindowFrameBound;
+use common_ast::ast::WindowFrameUnits;
 use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
 use common_catalog::catalog::CatalogManager;
@@ -77,6 +80,10 @@ use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::plans::Unnest;
+use crate::plans::WindowFunc;
+use crate::plans::WindowFuncFrame;
+use crate::plans::WindowFuncFrameBound;
+use crate::plans::WindowFuncFrameUnits;
 use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnBinding;
@@ -164,10 +171,10 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let box (scalar, data_type): Box<(ScalarExpr, DataType)> = match expr {
             Expr::ColumnRef {
+                span,
                 database,
                 table,
                 column: ident,
-                ..
             } => {
                 let database = database
                     .as_ref()
@@ -186,7 +193,14 @@ impl<'a> TypeChecker<'a> {
                 let (scalar, data_type) = match result {
                     NameResolutionResult::Column(column) => {
                         let data_type = *column.data_type.clone();
-                        (BoundColumnRef { column }.into(), data_type)
+                        (
+                            BoundColumnRef {
+                                span: *span,
+                                column,
+                            }
+                            .into(),
+                            data_type,
+                        )
                     }
                     NameResolutionResult::InternalColumn(column) => {
                         let data_type = column.internal_column.data_type();
@@ -519,21 +533,22 @@ impl<'a> TypeChecker<'a> {
             } => {
                 let box (scalar, _) = self.resolve(expr, required_type).await?;
                 let raw_expr = RawExpr::Cast {
-                    span: None,
+                    span: expr.span(),
                     is_try: false,
                     expr: Box::new(scalar.as_raw_expr_with_col_name()),
                     dest_type: DataType::from(&resolve_type_name(target_type)?),
                 };
                 let registry = &BUILTIN_FUNCTIONS;
-                let expr = type_check::check(&raw_expr, registry)?;
+                let checked_expr = type_check::check(&raw_expr, registry)?;
                 Box::new((
                     CastExpr {
+                        span: expr.span(),
                         is_try: false,
                         argument: Box::new(scalar),
-                        target_type: Box::new(expr.data_type().clone()),
+                        target_type: Box::new(checked_expr.data_type().clone()),
                     }
                     .into(),
-                    expr.data_type().clone(),
+                    checked_expr.data_type().clone(),
                 ))
             }
 
@@ -542,21 +557,22 @@ impl<'a> TypeChecker<'a> {
             } => {
                 let box (scalar, _) = self.resolve(expr, required_type).await?;
                 let raw_expr = RawExpr::Cast {
-                    span: None,
+                    span: expr.span(),
                     is_try: true,
                     expr: Box::new(scalar.as_raw_expr_with_col_name()),
                     dest_type: DataType::from(&resolve_type_name(target_type)?),
                 };
                 let registry = &BUILTIN_FUNCTIONS;
-                let expr = type_check::check(&raw_expr, registry)?;
+                let checked_expr = type_check::check(&raw_expr, registry)?;
                 Box::new((
                     CastExpr {
+                        span: expr.span(),
                         is_try: true,
                         argument: Box::new(scalar),
-                        target_type: Box::new(expr.data_type().clone()),
+                        target_type: Box::new(checked_expr.data_type().clone()),
                     }
                     .into(),
-                    expr.data_type().clone(),
+                    checked_expr.data_type().clone(),
                 ))
             }
 
@@ -621,10 +637,11 @@ impl<'a> TypeChecker<'a> {
                     .await?
             }
 
-            Expr::Literal { lit, .. } => {
+            Expr::Literal { span, lit } => {
                 let box (value, data_type) = self.resolve_literal(lit, required_type)?;
                 Box::new((
                     ConstantExpr {
+                        span: *span,
                         value,
                         data_type: Box::new(data_type.clone()),
                     }
@@ -639,7 +656,7 @@ impl<'a> TypeChecker<'a> {
                 name,
                 args,
                 params,
-                ..
+                window,
             } => {
                 let func_name = name.name.to_lowercase();
                 let func_name = func_name.as_str();
@@ -710,18 +727,35 @@ impl<'a> TypeChecker<'a> {
                         arguments
                     };
 
-                    Box::new((
-                        AggregateFunction {
-                            display_name: format!("{:#}", expr),
-                            func_name,
-                            distinct: false,
-                            params,
-                            args,
-                            return_type: Box::new(agg_func.return_type()?),
+                    let new_agg_func = AggregateFunction {
+                        display_name: format!("{:#}", expr),
+                        func_name,
+                        distinct: false,
+                        params,
+                        args,
+                        return_type: Box::new(agg_func.return_type()?),
+                    };
+
+                    let data_type = agg_func.return_type()?;
+
+                    if let Some(window) = window {
+                        // window function
+                        let mut partitions = vec![];
+                        for p in window.partition_by.iter() {
+                            let box (part, _part_type) = self.resolve(p, None).await?;
+                            partitions.push(part);
                         }
-                        .into(),
-                        agg_func.return_type()?,
-                    ))
+                        self.resolve_window(
+                            *span,
+                            new_agg_func.clone(),
+                            partitions,
+                            window.window_frame.clone(),
+                            data_type.clone(),
+                        )
+                        .await?
+                    } else {
+                        Box::new((new_agg_func.into(), data_type))
+                    }
                 } else {
                     // Scalar function
                     let params = params
@@ -810,13 +844,13 @@ impl<'a> TypeChecker<'a> {
                 .await?
             }
 
-            expr @ Expr::MapAccess { span, .. } => {
+            expr @ Expr::MapAccess { .. } => {
                 let mut expr = expr;
                 let mut paths = VecDeque::new();
                 while let Expr::MapAccess {
+                    span,
                     expr: inner_expr,
                     accessor,
-                    ..
                 } = expr
                 {
                     expr = &**inner_expr;
@@ -836,7 +870,7 @@ impl<'a> TypeChecker<'a> {
                             .set_span(*span));
                         }
                     };
-                    paths.push_front(path);
+                    paths.push_front((*span, path));
                 }
                 self.resolve_map_access(expr, paths).await?
             }
@@ -939,12 +973,76 @@ impl<'a> TypeChecker<'a> {
         if let ScalarExpr::ConstantExpr(expr) = &args[1] {
             if let common_expression::Literal::UInt8(0) = expr.value {
                 args[1] = ConstantExpr {
+                    span: expr.span,
                     value: common_expression::Literal::Int64(1),
                     data_type: Box::new(DataType::Number(NumberDataType::Int64)),
                 }
                 .into();
             }
         }
+    }
+
+    #[async_recursion::async_recursion]
+    pub async fn resolve_window(
+        &mut self,
+        _span: Span,
+        agg_func: AggregateFunction,
+        partitions: Vec<ScalarExpr>,
+        window_frame: Option<WindowFrame>,
+        return_type: DataType,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let frame = window_frame.unwrap();
+        let units = match frame.units.clone() {
+            WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,
+            WindowFrameUnits::Range => WindowFuncFrameUnits::Range,
+        };
+        let start = match frame.start_bound {
+            WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
+            WindowFrameBound::Preceding(f) => {
+                if let Some(box expr) = f {
+                    let box (result_expr, _) = self.resolve(&expr, None).await?;
+                    WindowFuncFrameBound::Preceding(Some(Box::new(result_expr)))
+                } else {
+                    WindowFuncFrameBound::Preceding(None)
+                }
+            }
+            WindowFrameBound::Following(f) => {
+                if let Some(box expr) = f {
+                    let box (result_expr, _) = self.resolve(&expr, None).await?;
+                    WindowFuncFrameBound::Following(Some(Box::new(result_expr)))
+                } else {
+                    WindowFuncFrameBound::Following(None)
+                }
+            }
+        };
+
+        let end = match frame.end_bound {
+            WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
+            WindowFrameBound::Preceding(f) => {
+                if let Some(box expr) = f {
+                    let box (result_expr, _) = self.resolve(&expr, None).await?;
+                    WindowFuncFrameBound::Preceding(Some(Box::new(result_expr)))
+                } else {
+                    WindowFuncFrameBound::Preceding(None)
+                }
+            }
+            WindowFrameBound::Following(f) => {
+                if let Some(box expr) = f {
+                    let box (result_expr, _) = self.resolve(&expr, None).await?;
+                    WindowFuncFrameBound::Following(Some(Box::new(result_expr)))
+                } else {
+                    WindowFuncFrameBound::Following(None)
+                }
+            }
+        };
+
+        let window_func = WindowFunc {
+            agg_func,
+            partition_by: partitions,
+            frame: WindowFuncFrame { units, start, end },
+        };
+
+        Ok(Box::new((window_func.into(), return_type)))
     }
 
     /// Resolve function call.
@@ -991,6 +1089,19 @@ impl<'a> TypeChecker<'a> {
             Self::rewrite_substring(&mut args);
         }
 
+        if func_name == "grouping" {
+            // `grouping` will be rewritten again after resolving grouping sets.
+            return Ok(Box::new((
+                ScalarExpr::FunctionCall(FunctionCall {
+                    span,
+                    params: vec![],
+                    arguments: args,
+                    func_name: "grouping".to_string(),
+                }),
+                DataType::Number(NumberDataType::UInt32),
+            )));
+        }
+
         // rewrite_collation
         let func_name = if self.function_need_collation(func_name, &args)?
             && self.ctx.get_settings().get_collation()? == "utf8"
@@ -1007,7 +1118,7 @@ impl<'a> TypeChecker<'a> {
     #[async_recursion::async_recursion]
     pub async fn resolve_scalar_function_call(
         &mut self,
-        _span: Span,
+        span: Span,
         func_name: &str,
         params: Vec<usize>,
         args: Vec<ScalarExpr>,
@@ -1019,7 +1130,7 @@ impl<'a> TypeChecker<'a> {
             .map(|v| v.as_raw_expr_with_col_name())
             .collect::<Vec<_>>();
         let raw_expr = RawExpr::FunctionCall {
-            span: None,
+            span,
             name: func_name.to_string(),
             params: vec![],
             args: arguments,
@@ -1033,6 +1144,7 @@ impl<'a> TypeChecker<'a> {
 
         Ok(Box::new((
             FunctionCall {
+                span,
                 params,
                 arguments: args,
                 func_name: func_name.to_string(),
@@ -1410,6 +1522,7 @@ impl<'a> TypeChecker<'a> {
         }
 
         let subquery_expr = SubqueryExpr {
+            span: subquery.span,
             subquery: Box::new(s_expr),
             child_expr: child_scalar,
             compare_op,
@@ -1734,6 +1847,7 @@ impl<'a> TypeChecker<'a> {
             (func_name, trim_scalar, trim_type)
         } else {
             let trim_scalar = ConstantExpr {
+                span,
                 value: common_expression::Literal::String(" ".as_bytes().to_vec()),
                 data_type: Box::new(DataType::String),
             }
@@ -1960,7 +2074,7 @@ impl<'a> TypeChecker<'a> {
             self.resolve(&udf_expr, None).await
         } else {
             Err(ErrorCode::UnknownFunction(format!(
-                "No function matches the given name: {func_name}"
+                "no function matches the given name: {func_name}"
             ))
             .set_span(span))
         }
@@ -1970,13 +2084,13 @@ impl<'a> TypeChecker<'a> {
     async fn resolve_map_access(
         &mut self,
         expr: &Expr,
-        mut paths: VecDeque<Literal>,
+        mut paths: VecDeque<(Span, Literal)>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let box (mut scalar, data_type) = self.resolve(expr, None).await?;
         let mut table_data_type = infer_schema_type(&data_type)?;
         // If it's map accessors to a tuple column, pushdown the map accessors to storage.
         if let Expr::ColumnRef { column: ident, .. } = expr {
-            if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column }) = scalar {
+            if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
                 let column_entry = self.metadata.read().column(column.index).clone();
                 if let ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) =
                     column_entry
@@ -1998,7 +2112,7 @@ impl<'a> TypeChecker<'a> {
         }
 
         // Otherwise, desugar it into a `get` function.
-        while let Some(path_lit) = paths.pop_front() {
+        while let Some((span, path_lit)) = paths.pop_front() {
             table_data_type = table_data_type.remove_nullable();
             if let TableDataType::Tuple {
                 fields_name,
@@ -2037,15 +2151,17 @@ impl<'a> TypeChecker<'a> {
                     _ => unreachable!(),
                 };
                 scalar = FunctionCall {
+                    span: expr.span(),
+                    func_name: "get".to_string(),
                     params: vec![idx],
                     arguments: vec![scalar.clone()],
-                    func_name: "get".to_string(),
                 }
                 .into();
                 continue;
             }
             let box (path_value, path_data_type) = self.resolve_literal(&path_lit, None)?;
             let path_scalar: ScalarExpr = ConstantExpr {
+                span,
                 value: path_value,
                 data_type: Box::new(path_data_type.clone()),
             }
@@ -2055,9 +2171,10 @@ impl<'a> TypeChecker<'a> {
             }
             table_data_type = table_data_type.wrap_nullable();
             scalar = FunctionCall {
+                span: path_scalar.span(),
+                func_name: "get".to_string(),
                 params: vec![],
                 arguments: vec![scalar.clone(), path_scalar],
-                func_name: "get".to_string(),
             }
             .into();
         }
@@ -2071,7 +2188,7 @@ impl<'a> TypeChecker<'a> {
         span: Span,
         column: ColumnBinding,
         table_data_type: &mut TableDataType,
-        paths: &mut VecDeque<Literal>,
+        paths: &mut VecDeque<(Span, Literal)>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut names = Vec::new();
         names.push(column.column_name.clone());
@@ -2082,20 +2199,22 @@ impl<'a> TypeChecker<'a> {
                 fields_type,
             } = table_data_type
             {
-                let path = paths.pop_front().unwrap();
+                let (span, path) = paths.pop_front().unwrap();
                 match path {
                     Literal::UInt64(idx) => {
                         if idx == 0 {
                             return Err(ErrorCode::SemanticError(
                                 "tuple index is starting from 1, but 0 is found".to_string(),
-                            ));
+                            )
+                            .set_span(span));
                         }
                         if idx as usize > fields_type.len() {
                             return Err(ErrorCode::SemanticError(format!(
                                 "tuple index {} is out of bounds for length {}",
                                 idx,
                                 fields_type.len()
-                            )));
+                            ))
+                            .set_span(span));
                         }
                         let inner_name = fields_name.get(idx as usize - 1).unwrap();
                         let inner_type = fields_type.get(idx as usize - 1).unwrap();
@@ -2115,7 +2234,8 @@ impl<'a> TypeChecker<'a> {
                             return Err(ErrorCode::SemanticError(format!(
                                 "tuple name `{}` does not exist, available names are: {:?}",
                                 name, &fields_name
-                            )));
+                            ))
+                            .set_span(span));
                         }
                     },
                     _ => unreachable!(),
@@ -2138,7 +2258,7 @@ impl<'a> TypeChecker<'a> {
                 let (scalar, data_type) = match result {
                     NameResolutionResult::Column(column) => {
                         let data_type = *column.data_type.clone();
-                        (BoundColumnRef { column }.into(), data_type)
+                        (BoundColumnRef { span, column }.into(), data_type)
                     }
                     NameResolutionResult::InternalColumn(column) => {
                         let data_type = column.internal_column.data_type();
@@ -2152,9 +2272,10 @@ impl<'a> TypeChecker<'a> {
             }
             Err(_) => {
                 // inner column is not exist in view, desugar it into a `get` function.
-                let mut scalar: ScalarExpr = BoundColumnRef { column }.into();
+                let mut scalar: ScalarExpr = BoundColumnRef { span, column }.into();
                 while let Some((idx, table_data_type)) = index_with_types.pop_front() {
                     scalar = FunctionCall {
+                        span,
                         params: vec![idx],
                         arguments: vec![scalar.clone()],
                         func_name: "get".to_string(),

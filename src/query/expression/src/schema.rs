@@ -568,6 +568,77 @@ impl TableSchema {
         }
     }
 
+    // Returns all inner column ids of the given column, including itself,
+    // only tuple columns may have inner fields, like `a.1`, `a:b`.
+    pub fn leaf_columns_of(&self, col_name: &String) -> Vec<ColumnId> {
+        fn collect_inner_column_ids(
+            col_name: &String,
+            field_name: &String,
+            data_type: &TableDataType,
+            column_ids: &mut Vec<ColumnId>,
+            next_column_id: &mut ColumnId,
+        ) -> bool {
+            if col_name == field_name {
+                let n = data_type.num_leaf_columns();
+                for i in 0..n {
+                    column_ids.push(*next_column_id + i as u32);
+                }
+                return true;
+            }
+
+            if let TableDataType::Tuple {
+                fields_name,
+                fields_type,
+            } = data_type
+            {
+                if col_name.starts_with(field_name) {
+                    for ((i, inner_field_name), inner_field_type) in
+                        fields_name.iter().enumerate().zip(fields_type.iter())
+                    {
+                        let inner_name = format!("{}:{}", field_name, inner_field_name);
+                        if col_name.starts_with(&inner_name) {
+                            return collect_inner_column_ids(
+                                col_name,
+                                &inner_name,
+                                inner_field_type,
+                                column_ids,
+                                next_column_id,
+                            );
+                        }
+                        let inner_name = format!("{}:{}", field_name, i + 1);
+                        if col_name.starts_with(&inner_name) {
+                            return collect_inner_column_ids(
+                                col_name,
+                                &inner_name,
+                                inner_field_type,
+                                column_ids,
+                                next_column_id,
+                            );
+                        }
+                        *next_column_id += inner_field_type.num_leaf_columns() as u32;
+                    }
+                }
+            }
+            false
+        }
+
+        let mut column_ids = Vec::new();
+        for field in self.fields() {
+            let mut next_column_id = field.column_id;
+            if collect_inner_column_ids(
+                col_name,
+                &field.name,
+                &field.data_type,
+                &mut column_ids,
+                &mut next_column_id,
+            ) {
+                break;
+            }
+        }
+
+        column_ids
+    }
+
     fn traverse_paths(
         fields: &[TableField],
         path: &[FieldIndex],
@@ -994,6 +1065,20 @@ impl TableDataType {
             TableDataType::String => "VARCHAR".to_string(),
             TableDataType::Nullable(inner_ty) => format!("{} NULL", inner_ty.sql_name()),
             _ => self.to_string().to_uppercase(),
+        }
+    }
+
+    // Returns the number of leaf columns of the TableDataType
+    pub fn num_leaf_columns(&self) -> usize {
+        match self {
+            TableDataType::Nullable(box inner_ty)
+            | TableDataType::Array(box inner_ty)
+            | TableDataType::Map(box inner_ty) => inner_ty.num_leaf_columns(),
+            TableDataType::Tuple { fields_type, .. } => fields_type
+                .iter()
+                .map(|inner_ty| inner_ty.num_leaf_columns())
+                .sum(),
+            _ => 1,
         }
     }
 }

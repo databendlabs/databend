@@ -434,19 +434,11 @@ impl PipelineBuilder {
         let group_bys = expand
             .group_bys
             .iter()
-            .filter_map(|i| {
-                // Do not collect virtual column "_grouping_id".
-                if *i != expand.grouping_id_index {
-                    match input_schema.index_of(&i.to_string()) {
-                        Ok(index) => {
-                            let ty = input_schema.field(index).data_type().clone();
-                            Some(Ok((index, ty)))
-                        }
-                        Err(e) => Some(Err(e)),
-                    }
-                } else {
-                    None
-                }
+            .take(expand.group_bys.len() - 1) // The last group-by will be virtual column `_grouping_id`
+            .map(|i| {
+                let index = input_schema.index_of(&i.to_string())?;
+                let ty = input_schema.field(index).data_type();
+                Ok((index, ty.clone()))
             })
             .collect::<Result<Vec<_>>>()?;
         let grouping_sets = expand
@@ -463,6 +455,7 @@ impl PipelineBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
         let mut grouping_ids = Vec::with_capacity(grouping_sets.len());
+        let mask = (1 << group_bys.len()) - 1;
         for set in grouping_sets {
             let mut id = 0;
             for i in set {
@@ -474,7 +467,7 @@ impl PipelineBuilder {
             // group_bys: [a, b]
             // grouping_sets: [[0, 1], [0], [1], []]
             // grouping_ids: 00, 01, 10, 11
-            grouping_ids.push(!id);
+            grouping_ids.push(!id & mask);
         }
 
         self.main_pipeline.add_transform(|input, output| {

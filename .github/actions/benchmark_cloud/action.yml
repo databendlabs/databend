@@ -101,7 +101,7 @@ runs:
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
-        name: benchmark-${{ inputs.dataset }}-cloud-${{ inputs.size }}
+        name: benchmark-${{ inputs.dataset }}
         path: benchmark/clickbench/result-${{ inputs.dataset }}-cloud-${{ inputs.size }}.json
 
     - name: Remove warehouse

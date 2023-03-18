@@ -9,7 +9,7 @@ import * as icons from "../components/Icons"
 const community = [
   {
     'icon':'Github',
-    'star': '5.4 K',
+    'star': '5.6 K',
     'title': 'GitHub',
     'link': 'https://github.com/datafuselabs/databend'
   },

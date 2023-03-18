@@ -372,6 +372,8 @@ fn test_statement() {
         r#"SELECT * FROM t GROUP BY GROUPING SETS (a, b, (c, d))"#,
         r#"SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (c), (d, e))"#,
         r#"SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (), (d, e))"#,
+        r#"SELECT * FROM t GROUP BY CUBE (a, b, c)"#,
+        r#"SELECT * FROM t GROUP BY ROLLUP (a, b, c)"#,
     ];
 
     for case in cases {

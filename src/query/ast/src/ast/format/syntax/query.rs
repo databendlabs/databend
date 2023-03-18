@@ -203,33 +203,56 @@ fn pretty_group_set(set: Vec<Expr>) -> RcDoc<'static> {
 }
 
 fn pretty_group_by(group_by: Option<GroupBy>) -> RcDoc<'static> {
-    match group_by {
-        Some(GroupBy::Normal(exprs)) => RcDoc::line()
-            .append(
-                RcDoc::text("GROUP BY").append(
-                    if exprs.len() > 1 {
-                        RcDoc::line()
-                    } else {
-                        RcDoc::space()
-                    }
-                    .nest(NEST_FACTOR),
+    if let Some(group_by) = group_by {
+        match group_by {
+            GroupBy::Normal(exprs) => RcDoc::line()
+                .append(
+                    RcDoc::text("GROUP BY").append(
+                        if exprs.len() > 1 {
+                            RcDoc::line()
+                        } else {
+                            RcDoc::space()
+                        }
+                        .nest(NEST_FACTOR),
+                    ),
+                )
+                .append(
+                    interweave_comma(exprs.into_iter().map(pretty_expr))
+                        .nest(NEST_FACTOR)
+                        .group(),
                 ),
-            )
-            .append(
-                interweave_comma(exprs.into_iter().map(pretty_expr))
-                    .nest(NEST_FACTOR)
-                    .group(),
-            ),
-        Some(GroupBy::GroupingSets(sets)) => RcDoc::line()
-            .append(RcDoc::text("GROUP BY GROUPING SETS (").append(RcDoc::line().nest(NEST_FACTOR)))
-            .append(
-                interweave_comma(sets.into_iter().map(pretty_group_set))
-                    .nest(NEST_FACTOR)
-                    .group(),
-            )
-            .append(RcDoc::line())
-            .append(RcDoc::text(")")),
-        _ => RcDoc::nil(),
+            GroupBy::GroupingSets(sets) => RcDoc::line()
+                .append(
+                    RcDoc::text("GROUP BY GROUPING SETS (").append(RcDoc::line().nest(NEST_FACTOR)),
+                )
+                .append(
+                    interweave_comma(sets.into_iter().map(pretty_group_set))
+                        .nest(NEST_FACTOR)
+                        .group(),
+                )
+                .append(RcDoc::line())
+                .append(RcDoc::text(")")),
+            GroupBy::Rollup(exprs) => RcDoc::line()
+                .append(RcDoc::text("GROUP BY ROLLUP (").append(RcDoc::line().nest(NEST_FACTOR)))
+                .append(
+                    interweave_comma(exprs.into_iter().map(pretty_expr))
+                        .nest(NEST_FACTOR)
+                        .group(),
+                )
+                .append(RcDoc::line())
+                .append(RcDoc::text(")")),
+            GroupBy::Cube(exprs) => RcDoc::line()
+                .append(RcDoc::text("GROUP BY CUBE (").append(RcDoc::line().nest(NEST_FACTOR)))
+                .append(
+                    interweave_comma(exprs.into_iter().map(pretty_expr))
+                        .nest(NEST_FACTOR)
+                        .group(),
+                )
+                .append(RcDoc::line())
+                .append(RcDoc::text(")")),
+        }
+    } else {
+        RcDoc::nil()
     }
 }
 
