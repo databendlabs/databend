@@ -1,7 +1,7 @@
 import React from "react";
 import { useMount } from 'ahooks';
 import ExecutionEnvironment from '@docusaurus/ExecutionEnvironment';
-import { useGetReleases } from "@site/src/hooks/useGetReleases";
+import useGetReleases from "@site/src/hooks/useGetReleases";
 import { copyToClipboard } from 'copyforjs';
 
 function GetLatest() {

@@ -4,7 +4,7 @@ import { IGlobalData } from "@site/src/types/download";
 function numberFormat(num: number): string | number {
   return num < 1000 ? num : (num / 1000).toFixed(1) + 'K';
 }
-export const useGetReleases = () => {
+const useGetReleases = () => {
   const { releasesList, repoResource, stargazersCount } = usePluginData('fetch-databend-releases') as IGlobalData;
   let tagName = releasesList[0]?.tag_name??'v1.0.22-nightly';
   const formatStargazersCount = numberFormat(stargazersCount);
@@ -16,4 +16,5 @@ export const useGetReleases = () => {
     formatStargazersCount
   };
 };
+export default useGetReleases;
 

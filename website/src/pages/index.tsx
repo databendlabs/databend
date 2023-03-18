@@ -5,7 +5,7 @@ import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import styles from './index.module.scss';
 import * as icons from "../components/Icons"
-import { useGetReleases } from '../hooks/useGetReleases';
+import useGetReleases from '@site/src/hooks/useGetReleases';
 
 function HomepageHeader() {
     const {siteConfig} = useDocusaurusContext();

@@ -6,7 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm'
 import { timeFormatAgo } from '@site/src/utils/tools';
 import styles from './styles.module.scss';
-import { useGetReleases } from '@site/src/hooks/useGetReleases';
+import useGetReleases from '@site/src/hooks/useGetReleases';
 import Card from '@site/src/components/BaseComponents/Card';
 import Tag from '@site/src/components/BaseComponents/Tag';
 import { Apple, Linux } from '@site/src/components/Icons';
