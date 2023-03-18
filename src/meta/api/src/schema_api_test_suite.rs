@@ -2054,6 +2054,121 @@ impl SchemaApiTestSuite {
 
                 assert_eq!(ErrorCode::TABLE_VERSION_MISMATCHED, err.code());
             }
+
+            info!("--- update table meta, with upsert file req");
+            {
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+
+                let mut new_table_meta = table.meta.clone();
+                let table_statistics = TableStatistics {
+                    data_bytes: 1,
+                    ..Default::default()
+                };
+
+                new_table_meta.statistics = table_statistics;
+                let table_id = table.ident.table_id;
+                let table_version = table.ident.seq;
+
+                let mut file_info = BTreeMap::new();
+                file_info.insert("test".to_owned(), TableCopiedFileInfo {
+                    etag: Some("tag".to_string()),
+                    content_length: 1,
+                    last_modified: None,
+                });
+
+                let upsert_source_table = UpsertTableCopiedFileReq {
+                    table_id,
+                    file_info,
+                    expire_at: None,
+                };
+                mt.update_table_meta(UpdateTableMetaReq {
+                    table_id,
+                    seq: MatchSeq::Exact(table_version),
+                    new_table_meta: new_table_meta.clone(),
+                    upsert_source_table: Some(upsert_source_table),
+                })
+                .await?;
+
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+                assert_eq!(table.meta, new_table_meta);
+            }
+
+            info!("--- update table meta, with non-duplicated upsert file");
+            {
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+
+                let mut new_table_meta = table.meta.clone();
+                let table_statistics = TableStatistics {
+                    data_bytes: 1,
+                    ..Default::default()
+                };
+
+                new_table_meta.statistics = table_statistics;
+                let table_id = table.ident.table_id;
+                let table_version = table.ident.seq;
+
+                let mut file_info = BTreeMap::new();
+                file_info.insert("not_exist".to_owned(), TableCopiedFileInfo {
+                    etag: Some("tag_not_exist".to_string()),
+                    content_length: 1,
+                    last_modified: None,
+                });
+
+                let upsert_source_table = UpsertTableCopiedFileReq {
+                    table_id,
+                    file_info,
+                    expire_at: None,
+                };
+                mt.update_table_meta(UpdateTableMetaReq {
+                    table_id,
+                    seq: MatchSeq::Exact(table_version),
+                    new_table_meta: new_table_meta.clone(),
+                    upsert_source_table: Some(upsert_source_table),
+                })
+                .await?;
+
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+                assert_eq!(table.meta, new_table_meta);
+            }
+
+            info!("--- update table meta, with duplicated upsert files");
+            {
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+
+                let mut new_table_meta = table.meta.clone();
+                let table_statistics = TableStatistics {
+                    data_bytes: 1,
+                    ..Default::default()
+                };
+
+                new_table_meta.statistics = table_statistics;
+                let table_id = table.ident.table_id;
+                let table_version = table.ident.seq;
+
+                let mut file_info = BTreeMap::new();
+                file_info.insert("test".to_owned(), TableCopiedFileInfo {
+                    etag: Some("tag".to_string()),
+                    content_length: 1,
+                    last_modified: None,
+                });
+
+                let upsert_source_table = UpsertTableCopiedFileReq {
+                    table_id,
+                    file_info,
+                    expire_at: None,
+                };
+                let result = mt
+                    .update_table_meta(UpdateTableMetaReq {
+                        table_id,
+                        seq: MatchSeq::Exact(table_version),
+                        new_table_meta: new_table_meta.clone(),
+                        upsert_source_table: Some(upsert_source_table),
+                    })
+                    .await;
+                let err = result.unwrap_err();
+                let err = ErrorCode::from(err);
+                assert_eq!(ErrorCode::DuplicatedUpsertFiels("").code(), err.code());
+            }
         }
         Ok(())
     }

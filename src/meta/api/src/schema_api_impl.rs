@@ -25,6 +25,7 @@ use common_meta_app::app_error::CreateTableWithDropTime;
 use common_meta_app::app_error::DatabaseAlreadyExists;
 use common_meta_app::app_error::DropDbWithDropTime;
 use common_meta_app::app_error::DropTableWithDropTime;
+use common_meta_app::app_error::DuplicatedUpsertFiles;
 use common_meta_app::app_error::ShareHasNoGrantedDatabase;
 use common_meta_app::app_error::ShareHasNoGrantedPrivilege;
 use common_meta_app::app_error::TableAlreadyExists;
@@ -100,6 +101,8 @@ use common_meta_app::share::ShareId;
 use common_meta_app::share::ShareNameIdent;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::Key;
+use common_meta_types::txn_op::Request;
+use common_meta_types::txn_op_response::Response;
 use common_meta_types::ConditionResult;
 use common_meta_types::GCDroppedDataReply;
 use common_meta_types::GCDroppedDataReq;
@@ -109,6 +112,7 @@ use common_meta_types::MetaError;
 use common_meta_types::MetaId;
 use common_meta_types::MetaNetworkError;
 use common_meta_types::TxnCondition;
+use common_meta_types::TxnGetRequest;
 use common_meta_types::TxnOp;
 use common_meta_types::TxnRequest;
 use common_tracing::func_name;
@@ -1897,9 +1901,15 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 "upsert_table_copied_file_info"
             );
 
-            let (condition, if_then) =
-                build_upsert_table_copied_file_info_conditions(self, &req, &keys, tb_meta_seq)
-                    .await?;
+            let force_insert = false;
+            let (condition, if_then) = build_upsert_table_copied_file_info_conditions(
+                self,
+                &req,
+                &keys,
+                tb_meta_seq,
+                force_insert,
+            )
+            .await?;
 
             let txn_req = TxnRequest {
                 condition,
@@ -2063,7 +2073,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
-
         let tbid = TableId {
             table_id: req.table_id,
         };
@@ -2106,6 +2115,12 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 )));
             }
 
+            let get_table_meta = TxnOp {
+                request: Some(Request::Get(TxnGetRequest {
+                    key: tbid.to_string_key(),
+                })),
+            };
+
             let mut txn_req = TxnRequest {
                 condition: vec![
                     // table is not changed
@@ -2114,28 +2129,63 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 if_then: vec![
                     txn_op_put(&tbid, serialize_struct(&req.new_table_meta)?), // tb_id -> tb_meta
                 ],
-                else_then: vec![],
+                else_then: vec![get_table_meta],
             };
 
             if let Some(req) = &req.upsert_source_table {
+                let force_insert = true;
                 let (conditions, match_operations) =
                     build_upsert_table_copied_file_info_conditions(
                         self,
                         req,
                         &upsert_file_name_keys,
                         tb_meta_seq,
+                        force_insert,
                     )
                     .await?;
                 txn_req.condition.extend(conditions);
                 txn_req.if_then.extend(match_operations)
             }
 
-            let (succ, _responses) = send_txn(self, txn_req).await?;
+            let (succ, responses) = send_txn(self, txn_req).await?;
 
             debug!(id = debug(&tbid), succ = display(succ), "update_table_meta");
 
             if succ {
                 return Ok(UpdateTableMetaReply {});
+            } else {
+                if let Some(resp) = responses.get(0) {
+                    if let Some(r) = &resp.response {
+                        match r {
+                            Response::Get(get_resp) => {
+                                // check table version
+                                let (tb_meta_seq, _): (_, Option<TableMeta>) =
+                                    if let Some(seq_v) = &get_resp.value {
+                                        (seq_v.seq, Some(deserialize_struct(&seq_v.data)?))
+                                    } else {
+                                        (0, None)
+                                    };
+
+                                if req_seq.match_seq(tb_meta_seq).is_ok() {
+                                    // if table version does match, report stage file duplication
+                                    return Err(KVAppError::AppError(AppError::from(
+                                        DuplicatedUpsertFiles::new(
+                                            req.table_id,
+                                            "update_table_meta",
+                                        ),
+                                    )));
+                                } else {
+                                    return Ok(UpdateTableMetaReply {});
+                                }
+                            }
+                            _ => {
+                                unreachable!("expect Get response but got")
+                            }
+                        }
+                    }
+                } else {
+                    unreachable!("expect one response")
+                }
             }
         }
     }
@@ -2812,21 +2862,13 @@ async fn build_upsert_table_copied_file_info_conditions<T>(
     req: &UpsertTableCopiedFileReq,
     file_name_keys: &[String],
     tb_meta_seq: u64,
+    force_insert: bool,
 ) -> Result<(Vec<TxnCondition>, Vec<TxnOp>), KVAppError>
 where
     T: kvapi::KVApi<Error = MetaError>,
 {
     let table_id = req.table_id;
     let tbid = TableId { table_id };
-
-    // let mut keys = Vec::with_capacity(req.file_info.len());
-    // for file in req.file_info.iter() {
-    //     let key = TableCopiedFileNameIdent {
-    //         table_id,
-    //         file: file.0.clone(),
-    //     };
-    //     keys.push(key.to_string_key());
-    // }
 
     let mut condition = vec![txn_cond_seq(&tbid, Eq, tb_meta_seq)];
     let mut if_then = vec![];
@@ -2844,17 +2886,14 @@ where
 
     let mut file_name_infos = req.file_info.clone().into_iter();
 
-    for c in file_name_keys.chunks(DEFAULT_MGET_SIZE) {
-        let seq_infos: Vec<(u64, Option<TableCopiedFileInfo>)> = mget_pb_values(this, c).await?;
-
-        for (file_seq, _file_info_opt) in seq_infos {
-            let (f_name, file_info) = file_name_infos.next().unwrap();
-
+    // TODO refactor this
+    if force_insert {
+        for (f_name, file_info) in file_name_infos.into_iter() {
             let key = TableCopiedFileNameIdent {
                 table_id,
                 file: f_name.to_owned(),
             };
-            condition.push(txn_cond_seq(&key, Eq, file_seq));
+            condition.push(txn_cond_seq(&key, Eq, 0));
             match &req.expire_at {
                 Some(expire_at) => {
                     if_then.push(txn_op_put_with_expire(
@@ -2865,6 +2904,32 @@ where
                 }
                 None => {
                     if_then.push(txn_op_put(&key, serialize_struct(&file_info)?));
+                }
+            }
+        }
+    } else {
+        for c in file_name_keys.chunks(DEFAULT_MGET_SIZE) {
+            let seq_infos: Vec<(u64, Option<TableCopiedFileInfo>)> =
+                mget_pb_values(this, c).await?;
+
+            for (file_seq, _file_info_opt) in seq_infos {
+                let (f_name, file_info) = file_name_infos.next().unwrap();
+                let key = TableCopiedFileNameIdent {
+                    table_id,
+                    file: f_name.to_owned(),
+                };
+                condition.push(txn_cond_seq(&key, Eq, file_seq));
+                match &req.expire_at {
+                    Some(expire_at) => {
+                        if_then.push(txn_op_put_with_expire(
+                            &key,
+                            serialize_struct(&file_info)?,
+                            *expire_at,
+                        ));
+                    }
+                    None => {
+                        if_then.push(txn_op_put(&key, serialize_struct(&file_info)?));
+                    }
                 }
             }
         }
