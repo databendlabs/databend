@@ -103,7 +103,7 @@ pub fn parse_exprs(
         .iter()
         .map(|ast| {
             let (scalar, _) =
-                *block_in_place(|| Handle::current().block_on(type_checker.resolve(ast, None)))?;
+                *block_in_place(|| Handle::current().block_on(type_checker.resolve(ast)))?;
             let expr = scalar.as_expr_with_col_index()?;
             Ok(expr)
         })
