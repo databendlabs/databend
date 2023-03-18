@@ -29,6 +29,7 @@ mod transform_merge_block;
 mod transform_resort_addon;
 mod transform_right_join;
 mod transform_right_semi_anti_join;
+mod transform_runtime_cast_schema;
 mod transform_runtime_filter;
 
 pub use aggregator::build_partition_bucket;
@@ -84,6 +85,7 @@ pub use transform_right_join::RightJoinCompactor;
 pub use transform_right_join::TransformRightJoin;
 pub use transform_right_semi_anti_join::RightSemiAntiJoinCompactor;
 pub use transform_right_semi_anti_join::TransformRightSemiAntiJoin;
+pub use transform_runtime_cast_schema::TransformRuntimeCastSchema;
 pub use transform_runtime_filter::SinkRuntimeFilterSource;
 pub use transform_runtime_filter::TransformRuntimeFilter;
 pub use transform_sort_merge::SortMergeCompactor;
