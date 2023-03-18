@@ -109,12 +109,6 @@ echo "CREATE TABLE IF NOT EXISTS lineitem
 for t in customer lineitem nation orders partsupp part region supplier
 do
     echo "$t"
-    insert_sql="insert into $t file_format = (type = Parquet)"
-    
-    for p in `ls ~/dataset/tpch30/$t/*.parquet`;do
-        # curl -s -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" -H "insert_sql: ${insert_sql}" -F 'upload=@"'$p'"' 
-        echo "COPY INTO $t FROM 'fs://$p' file_format  =  (type = Parquet)" |  mysql -uroot -h127.0.0.1 -P3307
-        # echo "loading data into $t" 
-        # du -sh $p
-    done  
+    insert_sql="insert into $t file_format = (type = CSV skip_header = 0 field_delimiter = '|' record_delimiter = '\n')"
+    curl -s -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" -H "insert_sql: ${insert_sql}" -F 'upload=@"./data/'$t'.tbl"' > /dev/null 2>&1
 done
