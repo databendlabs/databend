@@ -9346,7 +9346,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -9449,7 +9453,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
