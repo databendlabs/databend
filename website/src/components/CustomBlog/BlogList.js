@@ -3,11 +3,15 @@ import styles from "./styles.module.scss";
 import clsx from "clsx";
 import WeeklyCover from "./WeeklyCover";
 import DefaultCover from "./DefaultCover";
-import useBaseUrl from "@docusaurus/useBaseUrl";
 
 const BlogList = (metadatas) => {
   const items = metadatas.metadatas.items.map((item) => {
     const metadata = item.content.metadata;
+    function innerTagAction(e, permalink) {
+      e.stopPropagation();
+      e.preventDefault();
+      window.open(permalink, '_self')
+    }
     return (
       <li
         className={clsx("post-list-item", styles.postListItem)}
@@ -30,7 +34,7 @@ const BlogList = (metadatas) => {
             {metadata.tags.map((tag, index) => {
               return (
                 <span className={clsx("tag", styles.Tag)} key={index}>
-                  <a href={tag.permalink}># {tag.label}</a>
+                  <span onClick={(e)=> innerTagAction(e, tag.permalink)}># {tag.label}</span>
                 </span>
               );
             })}
@@ -52,9 +56,9 @@ const BlogList = (metadatas) => {
             className={clsx("post-list-item-description", styles.postListDesc)}
           >
             By{" "}
-            <a href={metadata.authors[0].url}>
+            <span onClick={(e)=> innerTagAction(e, metadata.authors[0].url)}>
               <strong>{metadata.authors[0].name}</strong>
-            </a>{" "}
+            </span>{" "}
             on {metadata.formattedDate}
           </p>
         </a>

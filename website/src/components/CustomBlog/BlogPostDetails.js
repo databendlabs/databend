@@ -34,7 +34,6 @@ const BlogPostNav = ({ nextPost, prevPost }) => {
 const BlogPostDetails = (props) => {
   const metadata = props.content.metadata;
   const BlogPostContent = props.content;
-  console.log(BlogPostContent, 'BlogPostContent')
   return (
     <Layout title={`${metadata.title} | Blog`}>
       <section className={clsx("blog-page", styles.blogPage, styles.blogPost)}>

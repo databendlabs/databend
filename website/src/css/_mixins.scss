@@ -83,29 +83,6 @@ $phoneW:997px;
   -webkit-line-clamp: $line-num;
   overflow: hidden;
 }
-
-%scroll{
-  &::-webkit-scrollbar {width: 7px !important;border-radius: 7px;display: block !important;}
-
-  /* px-to-viewport-ignore */
-
-  /* Handle style */
-  &::-webkit-scrollbar-thumb {border-radius: 7px;background-color: #333;}
-
-  /* px-to-viewport-ignore */
-
-  /* hover*/
-  &::-webkit-scrollbar-thumb:vertical:hover {background-color: darken(#333,5%);}
-
-  /* press */
-  &::-webkit-scrollbar-thumb:vertical:active {background-color: darken(#333,10%);}
-}
-
-%clearfix{zoom:1;
-  &::before,&::after{content:"";display:table;}
-  &::after {clear:both;}
-}
-
 .fontSize12{
   font-size: 12px;
 }
