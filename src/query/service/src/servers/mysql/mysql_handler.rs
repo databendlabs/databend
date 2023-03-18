@@ -28,6 +28,7 @@ use futures::future::AbortRegistration;
 use futures::future::Abortable;
 use futures::StreamExt;
 use opensrv_mysql::*;
+use socket2::SockRef;
 use socket2::TcpKeepalive;
 use tokio_stream::wrappers::TcpListenerStream;
 use tracing::error;
@@ -92,7 +93,7 @@ impl MySQLHandler {
         sessions: Arc<SessionManager>,
         executor: Arc<Runtime>,
         socket: TcpStream,
-        _keepalive: TcpKeepalive,
+        keepalive: TcpKeepalive,
     ) {
         executor.spawn(async move {
             match sessions.create_session(SessionType::MySQL).await {
@@ -103,11 +104,10 @@ impl MySQLHandler {
                 Ok(session) => {
                     info!("MySQL connection coming: {:?}", socket.peer_addr());
 
-                    // FIXME: tokio TcpStream doesn't implement `AsFd` anymore, this call should be refactored.
-                    // if let Err(e) = SockRef::from(&socket).set_tcp_keepalive(&keepalive)
-                    // {
-                    //     warn!("failed to set socket option keepalive {}", e);
-                    // }
+                    // TcpStream must implement AsFd for socket2 0.5, wait https://github.com/tokio-rs/tokio/pull/5514
+                    if let Err(e) = SockRef::from(&socket).set_tcp_keepalive(&keepalive) {
+                        warn!("failed to set socket option keepalive {}", e);
+                    }
 
                     if let Err(error) = MySQLConnection::run_on_stream(session, socket) {
                         error!("Unexpected error occurred during query: {:?}", error);
