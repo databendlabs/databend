@@ -166,6 +166,7 @@ impl CopyInterpreter {
         stage_info: StageInfo,
         all_source_file_infos: Vec<StageFileInfo>,
         need_copy_file_infos: Vec<StageFileInfo>,
+        force: bool,
     ) -> Result<PipelineBuildResult> {
         let start = Instant::now();
         let ctx = self.ctx.clone();
@@ -206,6 +207,7 @@ impl CopyInterpreter {
                     stage_info,
                     all_source_file_infos,
                     need_copy_file_infos,
+                    force,
                 )?;
                 // Status.
                 {
@@ -348,6 +350,7 @@ impl CopyInterpreter {
                     stage_table_info_clone.stage_info,
                     all_source_file_infos,
                     need_copy_file_infos,
+                    force,
                 )?;
                 // Status.
                 {
@@ -374,6 +377,7 @@ impl CopyInterpreter {
         stage_info: StageInfo,
         all_source_files: Vec<StageFileInfo>,
         need_copy_files: Vec<StageFileInfo>,
+        force: bool,
     ) -> Result<()> {
         let mut copied_files = BTreeMap::new();
         for file in need_copy_files {
@@ -396,8 +400,11 @@ impl CopyInterpreter {
             let table_id = to_table.get_id();
             let expire_hours = ctx.get_settings().get_load_file_metadata_expire_hours()?;
             let num_copied_files = copied_files.len();
-            let upsert_copied_files_request =
-                Self::upsert_copied_files_request(table_id, expire_hours, copied_files);
+            let upsert_copied_files_request = if force {
+                None
+            } else {
+                Self::upsert_copied_files_request(table_id, expire_hours, copied_files)
+            };
 
             {
                 let status = format!("begin commit, number of copied files:{}", num_copied_files,);
@@ -515,6 +522,7 @@ impl Interpreter for CopyInterpreter {
                 from,
                 all_source_file_infos,
                 need_copy_file_infos,
+                force,
                 ..
             } => {
                 self.build_copy_into_table_with_transform_pipeline(
@@ -525,6 +533,7 @@ impl Interpreter for CopyInterpreter {
                     *stage_info.clone(),
                     all_source_file_infos.clone(),
                     need_copy_file_infos.clone(),
+                    *force,
                 )
                 .await
             }

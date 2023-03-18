@@ -622,6 +622,7 @@ impl<'a> Binder {
             all_source_file_infos: files,
             need_copy_file_infos,
             validation_mode,
+            force: stmt.force,
         })))
     }
 
