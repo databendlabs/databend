@@ -27,7 +27,6 @@ use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
-use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableCopiedFileInfo;
 use common_pipeline_core::processors::processor::ProcessorPtr;

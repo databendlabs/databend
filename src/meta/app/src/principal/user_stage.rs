@@ -108,10 +108,7 @@ pub enum StageFileCompression {
 
 impl StageFileFormatType {
     pub fn has_inner_schema(&self) -> bool {
-        match self {
-            StageFileFormatType::Parquet => true,
-            _ => false,
-        }
+        matches!(self, StageFileFormatType::Parquet)
     }
 }
 
