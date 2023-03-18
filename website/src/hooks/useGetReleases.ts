@@ -1,10 +1,6 @@
 import { usePluginData } from "@docusaurus/useGlobalData";
-interface IGlobalData {
-  releasesList: any[], 
-  repoResource: any, 
-  stargazersCount: number,
-  [prop: string]: any
-}
+import { IGlobalData } from "@site/src/types/download";
+
 function numberFormat(num: number): string | number {
   return num < 1000 ? num : (num / 1000).toFixed(1) + 'K';
 }

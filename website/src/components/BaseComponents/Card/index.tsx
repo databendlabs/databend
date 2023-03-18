@@ -1,15 +1,13 @@
 // Copyright 2023 Datafuse Labs.
 import React from 'react';
-import { FC, ReactElement, ReactNode } from 'react';
+import { FC, ReactElement } from 'react';
 import styles from './styles.module.scss';
 import clsx from 'clsx';
-interface IProps {
-  children: ReactNode;
-  padding?: number[];
-  className?: string;
+import { ICommonProps } from '@site/src/types';
+interface IProps extends ICommonProps{
   href?: string;
   isDownload?: boolean;
-  style?: React.CSSProperties;
+  padding?: number[]; 
 }
 const Card: FC<IProps> = ({children, padding, className, href, isDownload, style}): ReactElement=> {
   const props = {

@@ -1,5 +1,5 @@
 // Copyright 2023 Datafuse Labs.
-import React, { FC, ReactElement } from 'react';
+import React, { FC, ReactElement, ReactNode } from 'react';
 import Layout from '@theme/Layout';
 import clsx from 'clsx';
 import ReactMarkdown from 'react-markdown';
@@ -16,8 +16,8 @@ const Releases: FC = (): ReactElement => {
     releasesList, 
     tagName
   } = useGetReleases();
-  const { filterBody, assets: latestAssets, published_at } = releasesList[0];
-  function Icons({isApple, size = 24}) {
+  const { filterBody, assets: latestAssets, published_at, prerelease} = releasesList[0];
+  function Icons({isApple, size = 24}): ReactElement {
     return (
       <>
         {
@@ -27,6 +27,9 @@ const Releases: FC = (): ReactElement => {
         }
       </>
     )
+  }
+  function IsPreReleaseTag({prerelease}: {prerelease: boolean}): ReactElement {
+    return <Tag className={styles.preTag}>{prerelease ? 'Pre-release' : 'Release'}</Tag>
   }
   return (
     <Layout
@@ -40,7 +43,7 @@ const Releases: FC = (): ReactElement => {
             <div className={styles.topTag}>
               <span className={styles.version}>{tagName}</span>
               <Tag>Latest</Tag>
-              <Tag className={styles.preTag}>Pre-release</Tag>
+              <IsPreReleaseTag prerelease={prerelease}></IsPreReleaseTag>
             </div>
             <div className={styles.updateTime}>{timeFormatAgo(published_at)}</div>
             <div className={styles.nowAssets}>
@@ -84,7 +87,7 @@ const Releases: FC = (): ReactElement => {
                     <div>
                       <div className={styles.leftDesc}>
                         <div className={styles.tagName}>{release?.tag_name}</div>
-                        <Tag className={styles.preTag}>Pre-release</Tag>
+                        <IsPreReleaseTag prerelease={release.prerelease}></IsPreReleaseTag>
                       </div>
                       <div>{timeFormatAgo(release?.published_at)}</div>
                     </div>
