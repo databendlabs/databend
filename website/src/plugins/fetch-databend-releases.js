@@ -1,10 +1,10 @@
 const axios = require('axios');
 const bytes = require('bytes');
 // Define constant
-const LINUX_GENERIC_X86 = 'Linux Generic(x86, 64-bit)';
-const LINUX_GENERIC_ARM = 'Linux Generic(ARM, 64-bit)';
-const MAC_X86 = 'macOS (x86, 64-bit)';
-const MAC_ARM = 'macOS (ARM, 64-bit)';
+const LINUX_GENERIC_X86 = 'Linux Generic (x86, 64-bit)';
+const LINUX_GENERIC_ARM = 'Linux Generic (ARM, 64-bit)';
+const MAC_X86 = 'Mac Intel Chip (x86, 64-bit)';
+const MAC_ARM = 'Mac Apple Chip (ARM, 64-bit)';
 const GITHUB_DOWNLOAD = 'https://github.com/datafuselabs/databend/releases/download';
 const GITHUB_REPO = 'https://api.github.com/repos/datafuselabs/databend';
 const DATABEND_RELEASES = 'https://repo.databend.rs/databend/releases.json';
@@ -22,15 +22,15 @@ module.exports = function fetchDatabendReleasesPlugin() {
       const { data: releasesList } = await axios.get(DATABEND_RELEASES);
       const { data: repoResource } = await axios.get(GITHUB_REPO);
       // Preprocessing data, Just part of it
-      let releases = releasesList?.filter(release=> release.assets?.length).slice(0, 21);
+      const releases = releasesList?.filter(release=> release.assets?.length).slice(0, 21);
       const processedData = releases.map(release=> {
-        let afterFilterAssets = 
-          release.assets
-            .filter(asset => !/linux-gnu|testsuites|sha256sums|\.deb/.test(asset.name))
+        const filterAssets = namesToMatch(release);
+        const afterProcessedAssets = 
+          filterAssets
             .map(asset => {
-              let isApple = asset.name.includes('apple');
-              let isAarch64 = asset.name.includes('aarch64');
-              let osTypeDesc = isApple 
+              const isApple = asset.name.includes('apple');
+              const isAarch64 = asset.name.includes('aarch64');
+              const osTypeDesc = isApple 
                 ? (isAarch64 ? MAC_ARM : MAC_X86) 
                 : (isAarch64 ? LINUX_GENERIC_ARM : LINUX_GENERIC_X86);
               return {
@@ -54,13 +54,27 @@ module.exports = function fetchDatabendReleasesPlugin() {
         return {
           ...release,
           originAssets: release.assets,
-          assets: afterFilterAssets,
+          assets: afterProcessedAssets,
           filterBody: release.body
                   .replace(IGNORE_TEXT, '')
                   .replace(REG, REPLACE_TEXT)
                   .replace(/@(\w+)/g, '**@$1**')
         }
       });
+      // name match list
+      function namesToMatch(release) {
+        const { assets, tag_name } = release;
+        const namesDisplayList = [
+          `databend-${tag_name}-aarch64-apple-darwin.tar.gz`,
+          `databend-${tag_name}-x86_64-apple-darwin.tar.gz`,
+          `databend-${tag_name}-aarch64-unknown-linux-musl.tar.gz`,
+          `databend-${tag_name}-x86_64-unknown-linux-gnu.tar.gz`
+        ];
+        const filteredAssets = assets?.filter(item => {
+          return namesDisplayList?.includes(item?.name);
+        });
+        return filteredAssets;
+      }
       // Set global data
       setGlobalData({releasesList: processedData, repoResource, stargazersCount: repoResource.stargazers_count});
     },
