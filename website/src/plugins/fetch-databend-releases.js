@@ -3,8 +3,8 @@ const bytes = require('bytes');
 // Define constant
 const LINUX_GENERIC_X86 = 'Linux Generic(x86, 64-bit)';
 const LINUX_GENERIC_ARM = 'Linux Generic(ARM, 64-bit)';
-const MAC_X86 = 'macOS (x86, 64-bit)';
-const MAC_ARM = 'macOS (ARM, 64-bit)';
+const MAC_X86 = 'Mac Intel Chip (X86,64-bit)';
+const MAC_ARM = 'Mac Apple Chip (ARM,64-bit)';
 const GITHUB_DOWNLOAD = 'https://github.com/datafuselabs/databend/releases/download';
 const GITHUB_REPO = 'https://api.github.com/repos/datafuselabs/databend';
 const DATABEND_RELEASES = 'https://repo.databend.rs/databend/releases.json';
