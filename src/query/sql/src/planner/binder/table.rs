@@ -117,6 +117,25 @@ impl Binder {
             .await
     }
 
+    fn check_view_dep(bind_context: &BindContext, database: &str, view_name: &str) -> Result<()> {
+        match &bind_context.parent {
+            Some(parent) => match &parent.view_info {
+                Some((db, v)) => {
+                    if db == database && v == view_name {
+                        Err(ErrorCode::Internal(format!(
+                            "View dependency loop detected (view: {}.{})",
+                            database, view_name
+                        )))
+                    } else {
+                        Self::check_view_dep(parent, database, view_name)
+                    }
+                }
+                _ => Ok(()),
+            },
+            _ => Ok(()),
+        }
+    }
+
     #[async_recursion]
     async fn bind_single_table(
         &mut self,
@@ -191,6 +210,7 @@ impl Binder {
 
                 match table_meta.engine() {
                     "VIEW" => {
+                        Self::check_view_dep(bind_context, &database, &table_name)?;
                         let query = table_meta
                             .options()
                             .get(QUERY)
@@ -200,7 +220,8 @@ impl Binder {
                         // For view, we need use a new context to bind it.
                         let mut new_bind_context =
                             BindContext::with_parent(Box::new(bind_context.clone()));
-                        new_bind_context.is_view = true;
+                        new_bind_context.view_info =
+                            Some((database.clone(), table_name.to_string()));
                         if let Statement::Query(query) = &stmt {
                             self.metadata.write().add_table(
                                 catalog,
@@ -239,7 +260,7 @@ impl Binder {
                             database.clone(),
                             table_meta,
                             table_alias_name,
-                            bind_context.is_view,
+                            bind_context.view_info.is_some(),
                         );
 
                         let (s_expr, mut bind_context) = self
@@ -529,7 +550,7 @@ impl Binder {
             windows: vec![],
             in_grouping: false,
             ctes_map: Box::new(DashMap::new()),
-            is_view: false,
+            view_info: None,
         };
         let (s_expr, mut new_bind_context) =
             self.bind_query(&new_bind_context, &cte_info.query).await?;
