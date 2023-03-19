@@ -3,7 +3,7 @@ title: GROUP BY ROLLUP
 ---
 
 
-`GROUP BY ROLLUP` is an extension of the [GROUP BY](./06-group-by.md) clause that produces sub-total rows (in addition to the grouped rows). Sub-total rows are rows that further aggregate whose values are derived by computing the same aggregate functions that were used to produce the grouped rows.
+`GROUP BY ROLLUP` is an extension of the [GROUP BY](./06-query-group-by.md) clause that produces sub-total rows (in addition to the grouped rows). Sub-total rows are rows that further aggregate whose values are derived by computing the same aggregate functions that were used to produce the grouped rows.
 
 ## Syntax
 

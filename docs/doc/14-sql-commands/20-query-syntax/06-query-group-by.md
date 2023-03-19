@@ -2,9 +2,9 @@
 title: GROUP BY
 ---
 
-The GROUP BY clause in Databend SQL allows you to group rows sharing the same group-by-item expressions and apply aggregate functions to the resulting groups. A group-by-item expression can be a column name, a number referencing a position in the [SELECT](./01-select.md) list, or a general expression.
+The GROUP BY clause in Databend SQL allows you to group rows sharing the same group-by-item expressions and apply aggregate functions to the resulting groups. A group-by-item expression can be a column name, a number referencing a position in the [SELECT](./01-query-select.md) list, or a general expression.
 
-Extensions include [GROUP BY CUBE](./08-group-by-cube.md), [GROUP BY GROUPING SETS](./07-group-by-grouping-sets.md), and [GROUP BY ROLLUP](./09-group-by-rollup.md).
+Extensions include [GROUP BY CUBE](./08-query-group-by-cube.md), [GROUP BY GROUPING SETS](./07-query-group-by-grouping-sets.md), and [GROUP BY ROLLUP](./09-query-group-by-rollup.md).
 
 ## Syntax
 

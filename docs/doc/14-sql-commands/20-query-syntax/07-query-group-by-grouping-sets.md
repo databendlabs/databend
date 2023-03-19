@@ -2,7 +2,7 @@
 title: GROUP BY GROUPING SETS
 ---
 
-`GROUP BY GROUPING SETS` is a powerful extension of the [GROUP BY](./06-group-by.md) clause that allows computing multiple group-by clauses in a single statement. The group set is a set of dimension columns.
+`GROUP BY GROUPING SETS` is a powerful extension of the [GROUP BY](./06-query-group-by.md) clause that allows computing multiple group-by clauses in a single statement. The group set is a set of dimension columns.
 
 `GROUP BY GROUPING SETS` is equivalent to the UNION of two or more GROUP BY operations in the same result set:
 

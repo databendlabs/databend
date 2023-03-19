@@ -2,7 +2,7 @@
 title: GROUP BY CUBE
 ---
 
-`GROUP BY CUBE` is an extension of the [GROUP BY](./06-group-by.md) clause similar to [GROUP BY ROLLUP](./09-group-by-rollup.md). In addition to producing all the rows of a `GROUP BY ROLLUP`, `GROUP BY CUBE` adds all the "cross-tabulations" rows. Sub-total rows are rows that further aggregate whose values are derived by computing the same aggregate functions that were used to produce the grouped rows.
+`GROUP BY CUBE` is an extension of the [GROUP BY](./06-query-group-by.md) clause similar to [GROUP BY ROLLUP](./09-query-group-by-rollup.md). In addition to producing all the rows of a `GROUP BY ROLLUP`, `GROUP BY CUBE` adds all the "cross-tabulations" rows. Sub-total rows are rows that further aggregate whose values are derived by computing the same aggregate functions that were used to produce the grouped rows.
 
 A `CUBE` grouping is equivalent to a series of grouping sets and is essentially a shorter specification. The N elements of a CUBE specification correspond to `2^N GROUPING SETS`.
 
