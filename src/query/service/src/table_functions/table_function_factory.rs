@@ -31,7 +31,7 @@ use crate::storages::fuse::table_functions::FuseBlockTable;
 use crate::storages::fuse::table_functions::FuseSegmentTable;
 use crate::storages::fuse::table_functions::FuseSnapshotTable;
 use crate::storages::fuse::table_functions::FuseStatisticTable;
-use crate::storages::fuse::table_functions::ListStagesTable;
+use crate::storages::fuse::table_functions::ListStageTable;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
 use crate::table_functions::numbers::NumbersTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
@@ -140,8 +140,8 @@ impl TableFunctionFactory {
         );
 
         creators.insert(
-            "list_stages".to_string(),
-            (next_id(), Arc::new(ListStagesTable::create)),
+            "list_stage".to_string(),
+            (next_id(), Arc::new(ListStageTable::create)),
         );
 
         creators.insert(

@@ -18,7 +18,7 @@ mod fuse_segments;
 mod fuse_snapshots;
 mod fuse_statistics;
 mod infer_schema;
-mod list_stages;
+mod list_stage;
 mod table_args;
 
 pub use clustering_information::get_cluster_keys;
@@ -35,6 +35,6 @@ pub use fuse_snapshots::FuseSnapshot;
 pub use fuse_snapshots::FuseSnapshotTable;
 pub use fuse_statistics::FuseStatisticTable;
 pub use infer_schema::InferSchemaTable;
-pub use list_stages::ListStagesTable;
+pub use list_stage::ListStageTable;
 pub use table_args::string_literal;
 pub use table_args::string_value;

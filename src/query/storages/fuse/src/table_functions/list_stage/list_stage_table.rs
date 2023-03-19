@@ -31,32 +31,31 @@ use common_pipeline_sources::AsyncSourcer;
 use common_sql::binder::parse_stage_location;
 use common_storages_stage::StageTable;
 
-use crate::table_functions::list_stages::table_args::ListStagesArgsParsed;
+use crate::table_functions::list_stage::table_args::ListStageArgsParsed;
 
-const LIST_STAGES: &str = "list_stages";
+const LIST_STAGE: &str = "list_stage";
 
-#[warn(dead_code)]
-pub struct ListStagesTable {
-    args_parsed: ListStagesArgsParsed,
+pub struct ListStageTable {
+    args_parsed: ListStageArgsParsed,
     table_args: TableArgs,
     table_info: TableInfo,
 }
 
-impl ListStagesTable {
+impl ListStageTable {
     pub fn create(
         database_name: &str,
         table_func_name: &str,
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        let args_parsed = ListStagesArgsParsed::parse(&table_args)?;
+        let args_parsed = ListStageArgsParsed::parse(&table_args)?;
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
             desc: format!("'{}'.'{}'", database_name, table_func_name),
             name: table_func_name.to_string(),
             meta: TableMeta {
                 schema: Self::schema(),
-                engine: LIST_STAGES.to_owned(),
+                engine: LIST_STAGE.to_owned(),
                 ..Default::default()
             },
             ..Default::default()
@@ -87,7 +86,7 @@ impl ListStagesTable {
 }
 
 #[async_trait::async_trait]
-impl Table for ListStagesTable {
+impl Table for ListStageTable {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -122,7 +121,7 @@ impl Table for ListStagesTable {
     }
 }
 
-impl TableFunction for ListStagesTable {
+impl TableFunction for ListStageTable {
     fn function_name(&self) -> &str {
         self.name()
     }
@@ -136,14 +135,14 @@ impl TableFunction for ListStagesTable {
 struct ListStagesSource {
     is_finished: bool,
     ctx: Arc<dyn TableContext>,
-    args_parsed: ListStagesArgsParsed,
+    args_parsed: ListStageArgsParsed,
 }
 
 impl ListStagesSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        args_parsed: ListStagesArgsParsed,
+        args_parsed: ListStageArgsParsed,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx.clone(), output, ListStagesSource {
             is_finished: false,
@@ -155,7 +154,7 @@ impl ListStagesSource {
 
 #[async_trait::async_trait]
 impl AsyncSource for ListStagesSource {
-    const NAME: &'static str = LIST_STAGES;
+    const NAME: &'static str = LIST_STAGE;
 
     #[async_trait::unboxed_simple]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {

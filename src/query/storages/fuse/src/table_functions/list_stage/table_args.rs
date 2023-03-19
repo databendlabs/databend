@@ -6,12 +6,12 @@ use common_storage::StageFilesInfo;
 use crate::table_functions::string_value;
 
 #[derive(Clone)]
-pub(crate) struct ListStagesArgsParsed {
+pub(crate) struct ListStageArgsParsed {
     pub(crate) location: String,
     pub(crate) files_info: StageFilesInfo,
 }
 
-impl ListStagesArgsParsed {
+impl ListStageArgsParsed {
     pub fn parse(table_args: &TableArgs) -> Result<Self> {
         let args = table_args.expect_all_named("infer_schema")?;
 
@@ -32,7 +32,7 @@ impl ListStagesArgsParsed {
                 }
                 _ => {
                     return Err(ErrorCode::BadArguments(format!(
-                        "unknown param {} for list_stages",
+                        "unknown param {} for list_stage",
                         k
                     )));
                 }
@@ -40,7 +40,7 @@ impl ListStagesArgsParsed {
         }
 
         let location =
-            location.ok_or(ErrorCode::BadArguments("list_stages must specify location"))?;
+            location.ok_or(ErrorCode::BadArguments("list_stage must specify location"))?;
 
         Ok(Self {
             location,

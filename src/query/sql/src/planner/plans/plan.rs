@@ -240,6 +240,7 @@ pub enum RewriteKind {
     ShowUsers,
     ShowStages,
     DescribeStage,
+    ListStage,
     ShowRoles,
 }
 
