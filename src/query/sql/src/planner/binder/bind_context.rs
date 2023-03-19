@@ -135,7 +135,10 @@ pub struct BindContext {
 
     pub ctes_map: Box<DashMap<String, CteInfo>>,
 
-    pub is_view: bool,
+    /// If current binding table is a view, record its database and name.
+    ///
+    /// It's used to check if the view has a loop dependency.
+    pub view_info: Option<(String, String)>,
 }
 
 #[derive(Clone, Debug)]
@@ -154,7 +157,7 @@ impl BindContext {
             windows: Vec::new(),
             in_grouping: false,
             ctes_map: Box::new(DashMap::new()),
-            is_view: false,
+            view_info: None,
         }
     }
 
@@ -167,7 +170,7 @@ impl BindContext {
             windows: vec![],
             in_grouping: false,
             ctes_map: parent.ctes_map.clone(),
-            is_view: false,
+            view_info: None,
         }
     }
 

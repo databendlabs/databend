@@ -1536,6 +1536,7 @@ dependencies = [
  "itertools",
  "jsonb",
  "lexical-core",
+ "libm",
  "match-template",
  "md-5",
  "memchr",

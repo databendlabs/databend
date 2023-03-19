@@ -56,7 +56,7 @@ impl Aggregators {
         factory.register("stddev_pop", aggregate_stddev_pop_function_desc());
         factory.register("stddev", aggregate_stddev_pop_function_desc());
         factory.register("std", aggregate_stddev_pop_function_desc());
-        factory.register("quantile", aggregate_quantile_function_desc());
+        factory.register("quantile_cont", aggregate_quantile_function_desc());
         factory.register("median", aggregate_median_function_desc());
         factory.register("window_funnel", aggregate_window_funnel_function_desc());
         factory.register(
