@@ -49,7 +49,7 @@ fn test_agg() {
     test_agg_stddev(file, eval_aggr);
     test_agg_window_funnel(file, eval_aggr);
     test_agg_approx_count_distinct(file, eval_aggr);
-    test_agg_quantile(file, eval_aggr);
+    test_agg_quantile_cont(file, eval_aggr);
     test_agg_median(file, eval_aggr);
 }
 
@@ -73,7 +73,7 @@ fn test_agg_group_by() {
     test_agg_covar_pop(file, simulate_two_groups_group_by);
     test_agg_retention(file, simulate_two_groups_group_by);
     test_agg_stddev(file, simulate_two_groups_group_by);
-    test_agg_quantile(file, simulate_two_groups_group_by);
+    test_agg_quantile_cont(file, simulate_two_groups_group_by);
     test_agg_median(file, simulate_two_groups_group_by);
     test_agg_window_funnel(file, simulate_two_groups_group_by);
     test_agg_approx_count_distinct(file, simulate_two_groups_group_by);
@@ -342,16 +342,16 @@ fn test_agg_stddev(file: &mut impl Write, simulator: impl AggregationSimulator) 
     );
 }
 
-fn test_agg_quantile(file: &mut impl Write, simulator: impl AggregationSimulator) {
+fn test_agg_quantile_cont(file: &mut impl Write, simulator: impl AggregationSimulator) {
     run_agg_ast(
         file,
-        "quantile(0.8)(a)",
+        "quantile_cont(0.8)(a)",
         get_example().as_slice(),
         simulator,
     );
     run_agg_ast(
         file,
-        "quantile(0.8)(x_null)",
+        "quantile_cont(0.8)(x_null)",
         get_example().as_slice(),
         simulator,
     );
