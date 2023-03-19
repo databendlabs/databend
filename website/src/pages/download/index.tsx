@@ -1,5 +1,5 @@
 // Copyright 2023 Datafuse Labs.
-import React, { FC, ReactElement, ReactNode } from 'react';
+import React, { FC, ReactElement } from 'react';
 import Layout from '@theme/Layout';
 import clsx from 'clsx';
 import ReactMarkdown from 'react-markdown';
@@ -55,7 +55,7 @@ const Releases: FC = (): ReactElement => {
                       href={browser_download_url}
                       isDownload 
                       key={index} 
-                      className={clsx(styles.nowItem, !isApple && styles.nowItemApple)} 
+                      className={clsx(styles.nowItem, !isApple && styles.nowItemLinux)} 
                       padding={[8, 16]}>
                       <Icons isApple={isApple}></Icons>
                       <div className={styles.right}>

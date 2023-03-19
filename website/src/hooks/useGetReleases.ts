@@ -6,7 +6,7 @@ function numberFormat(num: number): string | number {
 }
 const useGetReleases = () => {
   const { releasesList, repoResource, stargazersCount } = usePluginData('fetch-databend-releases') as IGlobalData;
-  let tagName = releasesList[0]?.tag_name??'v1.0.22-nightly';
+  const tagName = releasesList[0]?.tag_name??'v1.0.22-nightly';
   const formatStargazersCount = numberFormat(stargazersCount);
   return {
     releasesList,
