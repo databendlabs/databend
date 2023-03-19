@@ -31,7 +31,7 @@ const config = {
     },
 
     customFields: {
-        blogTags: ['weekly','databend']
+      blogTags: ['weekly','databend']
     },
 
     presets: [
@@ -80,7 +80,8 @@ const config = {
     ],
     plugins: [
         'docusaurus-plugin-sass',
-        './src/plugins/globalSassVarInject',
+        './src/plugins/global-sass-var-inject',
+        './src/plugins/fetch-databend-releases',
         [
             '@docusaurus/plugin-content-docs',
             /** @type {import('@docusaurus/plugin-content-docs').Options} */
