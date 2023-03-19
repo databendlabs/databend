@@ -3,7 +3,7 @@ title: "This Week in Databend #85"
 date: 2023-03-17
 slug: 2023-03-17-databend-weekly
 tags: [databend, weekly]
-description: "Get to know the latest updates on Databend this week!"
+description: "Stay up to date with the latest weekly developments on Databend!"
 contributors:
   - name: andylokandy
   - name: ariesdevil
@@ -74,7 +74,7 @@ FROM (SELECT t.id, t.name, to_date(t.timestamp) FROM @mystage t)
 FILE_FORMAT = (type = parquet) PATTERN='.*parquet';
 ```
 
-This feature avoids storing pre-transformed data in temporary tables and supports column reordering, column omission, and type conversion operation. In addition, partial data can be loaded from staged Parquet files or their columns can be rearranged. This feature simplifies and streamlines ETL processes, allowing users to focus on data analysis rather than mechanically moving it.
+This feature avoids storing pre-transformed data in temporary tables and supports column reordering, column omission, and type conversion operation. In addition, partial data can be loaded from staged Parquet files or their columns can be rearranged. This feature simplifies and streamlines ETL processes, allowing uses to give more attentions on the data analysis without considering how to move their data.
 
 If you're interested, check the following documentation:
 
@@ -128,7 +128,7 @@ If you are interested in this Rust trick, you can read this PR: [feat: improve t
 
 System tables are tables that provide information about Databend's internal state, such as databases, tables, functions, and settings.
 
-If you are interested in creating system tables, you may want to check out our recently released documentation which introduces the implementation, registration, and testing of system tables using the `system.credits` table as an example.
+If you're interested in creating a system table, check out our recently released documentation which introduces the implementation, registration, and testing of system tables, using the `system.credits` table as an example.
 
 Here is a code snippet:
 
@@ -152,9 +152,8 @@ let table_info = TableInfo {
 
 Here are some noteworthy items recorded here, perhaps you can find something that interests you.
 
-- We suggest users to consider `unset max_storage_io_requests` to use `num_cpu` as the default value when upgrading to **1.0.17-nightly** and above.
-- Now Databend can integrate with MindsDB to provide users with machine learning workflow support. *[Bringing in-database ML to Databend](https://mindsdb.com/integrations/databend-machine-learning)*
-- If you happen to use HDFS and are interested in Databend, why not try our WebHDFS storage backend? This blog post may be helpful for you. *[How to Configure WebHDFS as a Storage Backend for Databend](https://databend.rs/blog/2023-03-13-webhdfs-storage-for-backend)*
+- MindsDB's machine learning capability has now been integrated into Databend: *[Bringing in-database ML to Databend](https://mindsdb.com/integrations/databend-machine-learning)*
+- Are you interested in using WebHDFS as the storage for Databend? This blog post may be helpful for you. *[How to Configure WebHDFS as a Storage Backend for Databend](https://databend.rs/blog/2023-03-13-webhdfs-storage-for-backend)*
 
 ## What's Up Next
 
@@ -175,7 +174,7 @@ SELECT QUANTILE([0.25, 0.5, 0.75])(number) FROM numbers(25);
 
 [Feature: quantile support list and add functions kurtosis() and skewness()](https://github.com/datafuselabs/databend/issues/10589)
 
-Additionally, the `kurtosis(x)` and `skewness(x)` mentioned in this problem may also be a good starting point for contributing to Databend.
+Additionally, the `kurtosis(x)` and `skewness(x)` mentioned in this issue seem a good starting point for contributing to Databend.
 
 Please let us know if you're interested in contributing to this issue, or pick up a good first issue at <https://link.databend.rs/i-m-feeling-lucky> to get started.
 
