@@ -165,7 +165,7 @@ impl Binder {
                     let mut exclude_cols: HashSet<String> = HashSet::new();
                     if let Some(cols) = exclude {
                         for col in cols {
-                            exclude_cols.insert(col.name.clone());
+                            exclude_cols.insert(col.name.to_ascii_lowercase());
                         }
                         if exclude_cols.len() < cols.len() {
                             // * except (id, id)
@@ -254,8 +254,10 @@ impl Binder {
             if column_binding.visibility != Visibility::Visible {
                 continue;
             }
-            let push_item =
-                empty_exclude || exclude_cols.get(&column_binding.column_name).is_none();
+            let push_item = empty_exclude
+                || exclude_cols
+                    .get(&column_binding.column_name.to_ascii_lowercase())
+                    .is_none();
             if star {
                 // Expands wildcard star, for example we have a table `t(a INT, b INT)`:
                 // The query `SELECT * FROM t` will be expanded into `SELECT t.a, t.b FROM t`
@@ -343,8 +345,9 @@ impl Binder {
                             _ => false,
                         };
                     if match_table_with_db
-                        && (exclude_cols.is_empty()
-                            || exclude_cols.get(&column_binding.column_name).is_none())
+                        && exclude_cols
+                            .get(&column_binding.column_name.to_ascii_lowercase())
+                            .is_none()
                     {
                         match_table = true;
                         output.items.push(SelectItem {
@@ -389,7 +392,7 @@ fn precheck_exclude_cols(
         qualified_cols_name: &mut HashSet<String>,
         column_bind: &ColumnBinding,
     ) -> Result<()> {
-        let col_name = column_bind.column_name.clone();
+        let col_name = column_bind.column_name.to_ascii_lowercase();
         if qualified_cols_name.contains(col_name.as_str()) {
             return Err(ErrorCode::SemanticError(format!(
                 "ambiguous column name '{col_name}'"
@@ -414,8 +417,10 @@ fn precheck_exclude_cols(
                 if column_bind.visibility != Visibility::Visible {
                     continue;
                 }
-                if column_bind.table_name == Some(table_name.name.clone()) {
-                    fill_qualified_cols(&mut qualified_cols_name, column_bind)?;
+                if let Some(ref t) = column_bind.table_name {
+                    if table_name.name.eq_ignore_ascii_case(t) {
+                        fill_qualified_cols(&mut qualified_cols_name, column_bind)?;
+                    }
                 }
             }
         }
@@ -424,10 +429,14 @@ fn precheck_exclude_cols(
                 if column_bind.visibility != Visibility::Visible {
                     continue;
                 }
-                if column_bind.table_name == Some(table_name.name.clone())
-                    && column_bind.database_name == Some(db_name.name.clone())
-                {
-                    fill_qualified_cols(&mut qualified_cols_name, column_bind)?;
+                if let Some(ref t) = column_bind.table_name {
+                    if table_name.name.eq_ignore_ascii_case(t) {
+                        if let Some(ref d) = column_bind.database_name {
+                            if db_name.name.eq_ignore_ascii_case(d) {
+                                fill_qualified_cols(&mut qualified_cols_name, column_bind)?;
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -435,7 +444,10 @@ fn precheck_exclude_cols(
     }
 
     for exclude_col in exclude_cols {
-        if qualified_cols_name.get(exclude_col).is_none() {
+        if qualified_cols_name
+            .get(&*exclude_col.to_ascii_lowercase())
+            .is_none()
+        {
             return Err(ErrorCode::SemanticError(format!(
                 "column '{exclude_col}' doesn't exist"
             )));
