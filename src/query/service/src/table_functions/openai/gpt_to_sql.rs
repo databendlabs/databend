@@ -14,10 +14,7 @@
 
 use std::any::Any;
 use std::sync::Arc;
-use std::time::Duration;
 
-use async_openai::types::CreateCompletionRequestArgs;
-use async_openai::Client;
 use chrono::NaiveDateTime;
 use chrono::TimeZone;
 use chrono::Utc;
@@ -49,6 +46,9 @@ use common_storages_fuse::table_functions::string_literal;
 use common_storages_fuse::TableContext;
 use common_storages_view::view_table::VIEW_ENGINE;
 use tracing::info;
+
+use crate::table_functions::openai::AIModel;
+use crate::table_functions::openai::OpenAI;
 
 pub struct GPT2SQLTable {
     prompt: String,
@@ -233,37 +233,16 @@ impl AsyncSource for GPT2SQLSource {
         template.push("#".to_string());
         template.push("SELECT".to_string());
 
-        let model = "code-davinci-002";
-        let timeout = Duration::from_secs(30);
         let prompt = template.join("");
-        let api_key = self.api_key.clone();
         info!("openai request prompt: {}", prompt);
 
-        // Client
-        let http_client = reqwest::ClientBuilder::new()
-            .user_agent("databend")
-            .timeout(timeout)
-            .build()
-            .map_err(|e| ErrorCode::Internal(format!("openai http error: {:?}", e)))?;
-        let client = Client::new()
-            .with_api_key(api_key)
-            .with_http_client(http_client);
-
-        // Request
-        let request = CreateCompletionRequestArgs::default()
-            .model(model)
-            .prompt(prompt)
-            .temperature(0.0)
-            .max_tokens(150_u16)
-            .top_p(1.0)
-            .frequency_penalty(0.0)
-            .presence_penalty(0.0)
-            .stop(["#", ";"])
-            .build()
-            .map_err(|e| ErrorCode::Internal(format!("openai request error: {:?}", e)))?;
-
         // Response.
-        let response = client
+        let api_key = self.api_key.clone();
+        let openai = OpenAI::create(api_key, AIModel::CodeDavinci002);
+        let request = openai.completion_request(prompt)?;
+
+        let response = openai
+            .client()?
             .completions()
             .create(request)
             .await
