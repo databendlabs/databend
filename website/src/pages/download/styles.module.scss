@@ -46,8 +46,12 @@
         margin-bottom: 12px;
         color: var(--color-text-0);
       }
+      ul {
+        padding-left: 24px;
+      }
       li {
         line-height: 28px;
+        list-style: disc;
       }
       a {
         text-decoration: underline;
