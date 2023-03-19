@@ -32,6 +32,7 @@ common-sql = { path = "../../sql" }
 common-storage = { path = "../../../common/storage" }
 jsonb = { workspace = true }
 
+common-storages-stage = { path = "../stage" }
 storages-common-blocks = { path = "../common/blocks" }
 storages-common-cache = { path = "../common/cache" }
 storages-common-cache-manager = { path = "../common/cache-manager" }
