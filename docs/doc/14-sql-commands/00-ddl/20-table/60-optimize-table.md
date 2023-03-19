@@ -14,7 +14,7 @@ Snapshot, segment, and block are the concepts Databend uses for data storage. Da
 
 Databend automatically creates table snapshots upon data updates. A snapshot represents a version of the table's segment metadata.
 
-When working with Databend, you're most likely to access a snapshot with the snapshot ID when you retrieve and query a previous version of the table's data with the [AT](../../20-query-syntax/03-dml-at.md) clause.
+When working with Databend, you're most likely to access a snapshot with the snapshot ID when you retrieve and query a previous version of the table's data with the [AT](../../20-query-syntax/03-query-at.md) clause.
 
 A snapshot is a JSON file that does not save the table's data but indicate the segments the snapshot links to. If you run [FUSE_SNAPSHOT](../../../15-sql-functions/111-system-functions/fuse_snapshot.md) against a table, you can find the saved snapshots for the table.
 
