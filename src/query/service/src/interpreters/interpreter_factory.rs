@@ -259,7 +259,6 @@ impl InterpreterFactory {
             )?)),
 
             // Stages
-            Plan::ListStage(s) => Ok(Arc::new(ListInterpreter::try_create(ctx, *s.clone())?)),
             Plan::CreateStage(create_stage) => Ok(Arc::new(
                 CreateUserStageInterpreter::try_create(ctx, *create_stage.clone())?,
             )),

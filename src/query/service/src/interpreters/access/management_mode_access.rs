@@ -81,7 +81,6 @@ impl AccessChecker for ManagementModeAccess {
                 // Stage.
                 | Plan::CreateStage(_)
                 | Plan::DropStage(_)
-                | Plan::ListStage(_)
 
                 // UDF
                 | Plan::CreateUDF(_)

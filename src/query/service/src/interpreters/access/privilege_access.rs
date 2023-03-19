@@ -429,7 +429,6 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::ShowCreateCatalog(_)
             | Plan::CreateCatalog(_)
             | Plan::DropCatalog(_)
-            | Plan::ListStage(_)
             | Plan::CreateStage(_)
             | Plan::DropStage(_)
             | Plan::RemoveStage(_)
