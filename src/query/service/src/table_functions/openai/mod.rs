@@ -13,5 +13,9 @@
 //  limitations under the License.
 
 mod gpt_to_sql;
+#[allow(clippy::module_inception)]
+mod openai;
 
 pub use gpt_to_sql::GPT2SQLTable;
+pub use openai::AIModel;
+pub use openai::OpenAI;
