@@ -294,7 +294,7 @@ dependencies = [
  "parking",
  "polling",
  "slab",
- "socket2 0.4.9",
+ "socket2",
  "waker-fn",
  "windows-sys 0.42.0",
 ]
@@ -310,8 +310,9 @@ dependencies = [
 
 [[package]]
 name = "async-openai"
-version = "0.9.5"
-source = "git+https://github.com/Xuanwo/async-openai?rev=22fd9ca0c9c86a2c57462c5fd32aaff407d6b000#22fd9ca0c9c86a2c57462c5fd32aaff407d6b000"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc62bea0dc0376372c6cb0e450168b7805d6655b88a3dfd340036743a3d91fca"
 dependencies = [
  "backoff",
  "base64 0.21.0",
@@ -3106,7 +3107,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
- "socket2 0.5.1",
+ "socket2",
  "storages-common-blocks",
  "storages-common-cache",
  "storages-common-cache-manager",
@@ -5320,7 +5321,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.4.9",
+ "socket2",
  "tokio",
  "tower-service",
  "tracing",
@@ -5527,7 +5528,7 @@ version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bd302af1b90f2463a98fa5ad469fc212c8e3175a41c3068601bfa2727591c5be"
 dependencies = [
- "socket2 0.4.9",
+ "socket2",
  "widestring",
  "winapi",
  "winreg",
@@ -6267,7 +6268,7 @@ dependencies = [
  "rustls-pemfile",
  "serde",
  "serde_json",
- "socket2 0.4.9",
+ "socket2",
  "thiserror",
  "tokio",
  "tokio-rustls",
@@ -8798,16 +8799,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "socket2"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc8d618c6641ae355025c449427f9e96b98abf99a772be3cef6708d15c77147a"
-dependencies = [
- "libc",
- "windows-sys 0.45.0",
-]
-
-[[package]]
 name = "spin"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9338,7 +9329,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "pin-project-lite",
  "signal-hook-registry",
- "socket2 0.4.9",
+ "socket2",
  "tokio-macros",
  "tracing",
  "windows-sys 0.45.0",

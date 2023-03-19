@@ -106,6 +106,12 @@ pub enum StageFileCompression {
     None,
 }
 
+impl StageFileFormatType {
+    pub fn has_inner_schema(&self) -> bool {
+        matches!(self, StageFileFormatType::Parquet)
+    }
+}
+
 impl Default for StageFileCompression {
     fn default() -> Self {
         Self::None
