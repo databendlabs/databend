@@ -64,14 +64,14 @@ module.exports = function fetchDatabendReleasesPlugin() {
       // name match list
       function namesToMatch(release) {
         const { assets, tag_name } = release;
-        const namesToMatch = [
+        const namesDisplayList = [
           `databend-${tag_name}-aarch64-apple-darwin.tar.gz`,
           `databend-${tag_name}-x86_64-apple-darwin.tar.gz`,
           `databend-${tag_name}-aarch64-unknown-linux-musl.tar.gz`,
           `databend-${tag_name}-x86_64-unknown-linux-gnu.tar.gz`
         ];
         const filteredAssets = assets?.filter(item => {
-          return namesToMatch?.includes(item?.name);
+          return namesDisplayList?.includes(item?.name);
         });
         return filteredAssets;
       }
