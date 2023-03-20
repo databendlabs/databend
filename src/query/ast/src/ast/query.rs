@@ -150,7 +150,7 @@ impl SelectTarget {
         match self {
             SelectTarget::AliasedExpr { .. } => false,
             SelectTarget::QualifiedName { qualified, .. } => {
-                matches!(qualified.last(), Some(Indirection::Star))
+                matches!(qualified.last(), Some(Indirection::Star(_)))
             }
         }
     }
