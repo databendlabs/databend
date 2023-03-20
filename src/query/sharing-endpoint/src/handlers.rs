@@ -24,7 +24,7 @@ use crate::models;
 use crate::models::PresignFileResponse;
 
 #[poem::handler]
-pub async fn presign_files(
+pub async fn share_table_spec_presign_files(
     credentials: &Credentials,
     Path((_tenant_id, share_name, table_name)): Path<(String, String, String)>,
     Json(request_files): Json<Vec<RequestFile>>,
@@ -38,7 +38,7 @@ pub async fn presign_files(
         request_files,
         None,
     );
-    match SharingAccessor::get_presigned_files(&input).await {
+    match SharingAccessor::get_share_table_spec_presigned_files(&input).await {
         Ok(output) => Ok(Json(output)),
         Err(e) => Err(BadRequest(e)),
     }

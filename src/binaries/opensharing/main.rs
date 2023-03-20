@@ -18,9 +18,10 @@ use poem::EndpointExt;
 use poem::Route;
 use poem::Server;
 use sharing_endpoint::configs::Config;
-use sharing_endpoint::handlers::presign_files;
+use sharing_endpoint::handlers::share_table_spec_presign_files;
 use sharing_endpoint::middlewares::SharingAuth;
 use sharing_endpoint::services::SharingServices;
+
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
     let config = Config::load().expect("cfgs");
@@ -30,7 +31,7 @@ async fn main() -> Result<(), std::io::Error> {
     let app = Route::new()
         .at(
             "/tenant/:tenant_id/:share_name/table/:table_name/presign",
-            poem::post(presign_files),
+            poem::post(share_table_spec_presign_files),
         )
         .with(SharingAuth);
 
