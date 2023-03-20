@@ -134,10 +134,10 @@ output         : "DOUBLE"
 ast            : sleep(2)
 raw expr       : sleep(2_u8)
 checked expr   : sleep<Float64>(to_float64<UInt8>(2_u8))
-optimized expr : 1_u8
+optimized expr : 0_u8
 output type    : UInt8
-output domain  : {1..=1}
-output         : 1
+output domain  : {0..=0}
+output         : 0
 
 
 error: 
