@@ -1296,8 +1296,7 @@ pub struct QueryConfig {
     #[clap(long)]
     pub disable_system_table_load: bool,
 
-    // Ignore show in the config table.
-    #[serde(skip_serializing)]
+    // This will not show in system.configs, put it to mask.rs.
     #[clap(long, default_value = "")]
     pub openai_api_key: String,
 }
