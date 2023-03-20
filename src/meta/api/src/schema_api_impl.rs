@@ -104,7 +104,6 @@ use common_meta_kvapi::kvapi::Key;
 use common_meta_types::txn_op::Request;
 use common_meta_types::txn_op_response::Response;
 use common_meta_types::ConditionResult;
-use common_meta_types::ConditionResult::Ge;
 use common_meta_types::GCDroppedDataReply;
 use common_meta_types::GCDroppedDataReq;
 use common_meta_types::InvalidReply;
