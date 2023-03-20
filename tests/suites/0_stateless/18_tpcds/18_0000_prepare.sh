@@ -41,7 +41,7 @@ done
 
 # Create Tables;
 # shellcheck disable=SC2002
-cat ./tpcds.sql | $MYSQL_CLIENT_CONNECT
+cat ${CURDIR}/prepare/tpcds.sql | $MYSQL_CLIENT_CONNECT
 
 # download data
 mkdir -p  ${CURDIR}/data/
