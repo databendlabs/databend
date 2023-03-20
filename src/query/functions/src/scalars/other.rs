@@ -99,28 +99,32 @@ pub fn register(registry: &mut FunctionRegistry) {
         "sleep",
         FunctionProperty::default(),
         |_| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<Float64Type, UInt8Type>(move |val, output, ctx| {
-            let duration = Duration::try_from_secs_f64(val.into()).map_err(|x| x.to_string());
-            match duration {
-                Ok(duration) => {
-                    if duration.gt(&Duration::from_secs(300)) {
-                        let err = format!(
-                            "The maximum sleep time is 300 seconds. Requested: {:?}",
-                            duration
-                        );
-                        ctx.set_error(output.len(), err);
-                        output.push(0);
-                    } else {
-                        std::thread::sleep(duration);
-                        output.push(1);
+        |a, ctx| {
+            if let Some(s) = a.as_scalar() {
+                let duration = Duration::try_from_secs_f64(val.into()).map_err(|x| x.to_string());
+                match duration {
+                    Ok(duration) => {
+                        if duration.gt(&Duration::from_secs(300)) {
+                            let err = format!(
+                                "The maximum sleep time is 300 seconds. Requested: {:?}",
+                                duration
+                            );
+                            ctx.set_error(0, err);
+                            Ok(Value::Scalar(Scalar::Null(NullType::UInt8)))
+                        } else {
+                            std::thread::sleep(duration);
+                            Ok(Value::Scalar(Scalar::Value(UInt8Type::from(1))))
+                        }
+                    }
+                    Err(e) => {
+                        ctx.set_error(0, e);
+                        Ok(Value::Scalar(Scalar::Null(NullType::UInt8)))
                     }
                 }
-                Err(e) => {
-                    ctx.set_error(output.len(), e);
-                    output.push(0);
-                }
+            } else {
+                ctx.set_error(0, "Must be constant value");
             }
-        }),
+        },
     );
 
     registry.register_0_arg_core::<NumberType<F64>, _, _>(
