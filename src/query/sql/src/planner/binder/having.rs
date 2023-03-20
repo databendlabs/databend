@@ -19,6 +19,7 @@ use common_exception::Span;
 use super::select::SelectList;
 use crate::binder::aggregate::AggregateRewriter;
 use crate::binder::split_conjunctions;
+use crate::binder::ExprContext;
 use crate::binder::ScalarBinder;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::GroupingChecker;
@@ -55,11 +56,13 @@ impl Binder {
 
     pub(super) async fn bind_having(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         having: ScalarExpr,
         span: Span,
         child: SExpr,
     ) -> Result<SExpr> {
+        bind_context.set_expr_context(ExprContext::HavingClause);
+
         let scalar = if bind_context.in_grouping {
             // If we are in grouping context, we will perform the grouping check
             let mut grouping_checker = GroupingChecker::new(bind_context);

@@ -258,6 +258,10 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
                 .any(|expr| find_subquery_in_expr(&expr.scalar))
                 || find_subquery_in_expr(&op.aggregate_function.scalar)
         }
+        RelOperator::ProjectSet(op) => op
+            .srfs
+            .iter()
+            .any(|expr| expr.args.iter().any(find_subquery_in_expr)),
     }
 }
 
@@ -281,6 +285,5 @@ fn find_subquery_in_expr(expr: &ScalarExpr) -> bool {
         ScalarExpr::FunctionCall(expr) => expr.arguments.iter().any(find_subquery_in_expr),
         ScalarExpr::CastExpr(expr) => find_subquery_in_expr(&expr.argument),
         ScalarExpr::SubqueryExpr(_) => true,
-        ScalarExpr::Unnest(expr) => find_subquery_in_expr(&expr.argument),
     }
 }

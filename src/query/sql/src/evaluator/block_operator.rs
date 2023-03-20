@@ -14,26 +14,22 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::array::ArrayColumn;
-use common_expression::types::array::ArrayColumnBuilder;
 use common_expression::types::nullable::NullableColumnBuilder;
 use common_expression::types::AnyType;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
-use common_expression::types::GenericType;
 use common_expression::BlockEntry;
 use common_expression::Column;
-use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FieldIndex;
 use common_expression::FunctionContext;
-use common_expression::Scalar;
 use common_expression::Value;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::srfs::SrfEvaluator;
+use common_functions::srfs::SrfExpr;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::Processor;
@@ -52,8 +48,8 @@ pub enum BlockOperator {
     /// Reorganize the input [`DataBlock`] with `projection`.
     Project { projection: Vec<FieldIndex> },
 
-    /// Unnest certain fields of the input [`DataBlock`].
-    Unnest { num_columns: usize },
+    /// Expand the input [`DataBlock`] with set-returning functions.
+    FlatMap { srf_exprs: Vec<SrfExpr> },
 }
 
 impl BlockOperator {
@@ -88,201 +84,110 @@ impl BlockOperator {
                 Ok(result)
             }
 
-            BlockOperator::Unnest { num_columns } => {
-                let num_rows = input.num_rows();
-                let mut unnest_columns = Vec::with_capacity(*num_columns);
-                for col in input
-                    .columns()
+            BlockOperator::FlatMap { srf_exprs } => {
+                let eval = SrfEvaluator::new(&input, *func_ctx, &BUILTIN_FUNCTIONS);
+
+                // [
+                //   srf1: [
+                //     result_set1: [
+                //       col1, col2, ...
+                //     ],
+                //     ...
+                //   ],
+                //   ...
+                // ]
+                let result = srf_exprs
                     .iter()
-                    .skip(input.num_columns() - num_columns)
-                {
-                    let array_col = match &col.value {
-                        Value::Scalar(Scalar::Array(col)) => {
-                            ArrayColumnBuilder::<AnyType>::repeat(col, num_rows).build()
+                    .map(|srf_expr| eval.run(srf_expr))
+                    .collect::<Result<Vec<_>>>()?;
+
+                let mut result_data_blocks = Vec::with_capacity(input.num_rows());
+                for i in 0..input.num_rows() {
+                    let mut row = Vec::with_capacity(input.num_rows());
+
+                    // Get the max number of rows of all result sets.
+                    let mut max_num_rows = 0;
+                    result.iter().for_each(|srf_results| {
+                        let (_, result_set_rows) = srf_results.get(i).unwrap();
+                        if *result_set_rows > max_num_rows {
+                            max_num_rows = *result_set_rows;
                         }
-                        Value::Column(Column::Array(col)) => *col.clone(),
-                        _ => {
-                            return Err(ErrorCode::Internal(
-                                "Unnest can only be applied to array types.",
-                            ));
-                        }
-                    };
-                    unnest_columns.push(array_col);
+                    });
+
+                    if max_num_rows == 0 {
+                        // Skip current row
+                        continue;
+                    }
+
+                    for entry in input.columns() {
+                        // Take the i-th row of input data block and add it to the row.
+                        row.push(BlockEntry {
+                            data_type: entry.data_type.clone(),
+                            value: Value::<AnyType>::Scalar(
+                                entry.value.as_ref().index(i).unwrap().to_owned(),
+                            ),
+                        });
+                    }
+
+                    row.extend(
+                        result
+                            .iter()
+                            .enumerate()
+                            .flat_map(|(srf_index, srf_results)| {
+                                let (mut row_result_set, result_set_rows) =
+                                    srf_results.get(i).unwrap().clone();
+
+                                if result_set_rows < max_num_rows {
+                                    // If the current result set has less rows than the max number of rows,
+                                    // we need to pad the result set with null values.
+                                    // TODO(leiysky): this can be optimized by using a `zip` array function
+                                    row_result_set = row_result_set
+                                        .iter()
+                                        .map(|value| {
+                                            match value {
+                                                Value::<AnyType>::Scalar(_) => {
+                                                    // No need to pad scalar values.
+                                                    value.clone()
+                                                }
+
+                                                Value::<AnyType>::Column(column) => {
+                                                    let nullable_column =
+                                                        column.as_nullable().unwrap().clone();
+                                                    let mut column_builder =
+                                                        NullableColumnBuilder::from_column(
+                                                            *nullable_column,
+                                                        );
+                                                    for _ in 0..(max_num_rows - result_set_rows) {
+                                                        column_builder.push_null();
+                                                    }
+                                                    Value::<AnyType>::Column(Column::Nullable(
+                                                        Box::new(column_builder.build()),
+                                                    ))
+                                                }
+                                            }
+                                        })
+                                        .collect::<Vec<_>>();
+                                }
+
+                                row_result_set
+                                    .into_iter()
+                                    .enumerate()
+                                    .map(|(result_column_index, column)| BlockEntry {
+                                        data_type: srf_exprs[srf_index].return_types
+                                            [result_column_index]
+                                            .clone(),
+                                        value: column,
+                                    })
+                                    .collect::<Vec<_>>()
+                            }),
+                    );
+
+                    result_data_blocks.push(DataBlock::new(row, max_num_rows));
                 }
-                Self::fit_unnest(input, unnest_columns)
+
+                DataBlock::concat(&result_data_blocks)
             }
         }
-    }
-
-    /// Apply the `unnest`ed columns to the whole [`DataBlock`].
-    /// Each row in non-unnest columns will be replicated due to the related unnest column.
-    ///
-    /// For example:
-    ///
-    /// ```
-    /// +---------+--------+
-    /// | arr     | number |
-    /// +---------+--------+
-    /// | [1,2]   |      0 |
-    /// | [3,4,5] |      1 |
-    /// +---------+--------+
-    /// ```
-    ///
-    /// After `unnest(arr)`, each row of `number` will be replicated by the length of `arr` at the same row.
-    /// The result will be:
-    ///
-    /// ```
-    /// +-------------+--------+
-    /// | unnest(arr) | number |
-    /// +-------------+--------+
-    /// | 1           |      0 |
-    /// | 2           |      0 |
-    /// | 3           |      1 |
-    /// | 4           |      1 |
-    /// | 5           |      1 |
-    /// +-------------+--------+
-    /// ```
-    ///
-    /// If the argument of `unnest` is a scalar, like:
-    ///
-    /// ```sql
-    /// select unnest([1,2,3]), number from numbers(2);
-    /// ```
-    ///
-    /// The array scalar `[1,2,3]` will be replicated first (See the logic in `BlockOperator::execute`).
-    fn fit_unnest(
-        input: DataBlock,
-        unnest_columns: Vec<ArrayColumn<AnyType>>,
-    ) -> Result<DataBlock> {
-        if unnest_columns.is_empty() {
-            return Ok(input);
-        }
-
-        let (unnest_columns, unnest_offsets) = Self::unify_unnest_columns(unnest_columns);
-        let num_rows = *unnest_offsets.last().unwrap();
-
-        // Convert unnest_offsets to take indices.
-        let mut take_indices = Vec::with_capacity(num_rows);
-        for (i, offset) in unnest_offsets.windows(2).enumerate() {
-            take_indices.extend(vec![i as u64; offset[1] - offset[0]]);
-        }
-
-        let mut cols = Vec::with_capacity(input.num_columns());
-        let meta = input.get_meta().cloned();
-
-        let num_non_unnest = input.num_columns() - unnest_columns.len();
-        for col in input.columns().iter().take(num_non_unnest) {
-            match &col.value {
-                Value::Column(col) => {
-                    let new_col = col.take(&take_indices);
-                    cols.push(BlockEntry {
-                        data_type: col.data_type(),
-                        value: Value::Column(new_col),
-                    })
-                }
-                Value::Scalar(_) => cols.push(col.clone()),
-            }
-        }
-        for col in unnest_columns {
-            cols.push(BlockEntry {
-                data_type: col.data_type(),
-                value: Value::Column(col),
-            })
-        }
-
-        Ok(DataBlock::new_with_meta(cols, num_rows, meta))
-    }
-
-    /// Unify all unnest columns. Make the length of each column be the same.
-    ///
-    /// Return the unified unnested columns and the unnest offsets for replicating non-unnest columns.
-    ///
-    /// If the original length of each column is different, the shorter ones will be padded with nulls.
-    ///
-    /// For example:
-    ///
-    /// ```
-    /// +---------+---------+
-    /// | origin1 | origin2 |
-    /// +---------+---------+
-    /// | [1,2]   | [1,2,3] |
-    /// | [3,4,5] | [4,5]   |
-    /// +---------+---------+
-    /// ```
-    ///
-    /// will be unnested to:
-    ///
-    /// ```
-    /// +---------+---------+
-    /// | unnest1 | unnest2 |
-    /// +------ --+---------+
-    /// | 1       | 1       |
-    /// | 2       | 2       |
-    /// | NULL    | 3       |
-    /// | 3       | 4       |
-    /// | 4       | 5       |
-    /// | 5       | NULL    |
-    /// +---------+---------+
-    /// ```
-    fn unify_unnest_columns(
-        unnest_columns: Vec<ArrayColumn<AnyType>>,
-    ) -> (Vec<Column>, Vec<usize>) {
-        debug_assert!(!unnest_columns.is_empty());
-        let num_rows = unnest_columns[0].len(); // Rows of the original `ArrayColumn`s.
-        debug_assert!(unnest_columns.iter().all(|col| col.len() == num_rows));
-        // Some pre-computed variables.
-        let unnest_columns = unnest_columns
-            .into_iter()
-            .map(|col| {
-                let typ = col.values.data_type().unnest();
-                let arrays = col.iter().map(|c| c.unnest()).collect::<Vec<_>>();
-                (typ, arrays)
-            })
-            .collect::<Vec<_>>();
-
-        // 1. Compute the offsets after unnesting.
-        let mut offsets = Vec::with_capacity(num_rows + 1);
-        offsets.push(0);
-        let mut new_num_rows = 0; // Rows of the unnested `Column`s.
-        for row in 0..num_rows {
-            let len = unnest_columns
-                .iter()
-                .map(|(_, col)| unsafe { col.get_unchecked(row).len() })
-                .max()
-                .unwrap();
-            new_num_rows += len;
-            offsets.push(new_num_rows);
-        }
-
-        // 2. Insert NULLs to shorter arrays at each row.
-        let mut col_builders = unnest_columns
-            .iter()
-            .map(|(typ, _)| {
-                NullableColumnBuilder::<GenericType<0>>::with_capacity(new_num_rows, &[typ.clone()])
-            })
-            .collect::<Vec<_>>();
-
-        for (row, w) in offsets.windows(2).enumerate() {
-            let len = w[1] - w[0];
-            for ((typ, cols), builder) in unnest_columns.iter().zip(col_builders.iter_mut()) {
-                let inner_col = unsafe { cols.get_unchecked(row) };
-                let inner_len = inner_col.len();
-                debug_assert!(inner_len <= len);
-                builder.builder.append_column(inner_col);
-                builder.validity.extend_constant(inner_len, true);
-                // Avoid using `if branch`.
-                let d = Scalar::default_value(typ);
-                let defaults = ColumnBuilder::repeat(&d.as_ref(), len - inner_len, typ).build();
-                builder.builder.append_column(&defaults);
-                builder.validity.extend_constant(len - inner_len, false);
-            }
-        }
-
-        let new_columns = col_builders
-            .into_iter()
-            .map(|builder| Column::Nullable(Box::new(builder.build().upcast())))
-            .collect();
-        (new_columns, offsets)
     }
 }
 
@@ -354,7 +259,7 @@ impl Transform for CompoundBlockOperator {
                         BlockOperator::Map { .. } => "Map",
                         BlockOperator::Filter { .. } => "Filter",
                         BlockOperator::Project { .. } => "Project",
-                        BlockOperator::Unnest { .. } => "Unnest",
+                        BlockOperator::FlatMap { .. } => "FlatMap",
                     }
                     .to_string()
                 })

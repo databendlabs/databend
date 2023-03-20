@@ -186,7 +186,7 @@ impl Binder {
                         bind_context.columns.push(column_binding.clone());
                     }
                     let mut scalar_binder = ScalarBinder::new(
-                        &bind_context,
+                        &mut bind_context,
                         self.ctx.clone(),
                         &self.name_resolution_ctx,
                         self.metadata.clone(),
@@ -318,7 +318,7 @@ impl Binder {
 
     pub(crate) async fn bind_order_by_for_set_operation(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         child: SExpr,
         order_by: &[OrderByExpr],
     ) -> Result<SExpr> {

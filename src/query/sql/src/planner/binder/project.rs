@@ -25,6 +25,7 @@ use common_exception::Span;
 
 use crate::binder::select::SelectItem;
 use crate::binder::select::SelectList;
+use crate::binder::ExprContext;
 use crate::binder::Visibility;
 use crate::optimizer::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
@@ -105,6 +106,7 @@ impl Binder {
         scalars: &HashMap<IndexType, ScalarItem>,
         child: SExpr,
     ) -> Result<SExpr> {
+        bind_context.set_expr_context(ExprContext::SelectClause);
         let mut scalars = scalars
             .iter()
             .map(|(_, item)| {
@@ -154,6 +156,8 @@ impl Binder {
         input_context: &mut BindContext,
         select_list: &'a [SelectTarget],
     ) -> Result<SelectList<'a>> {
+        input_context.set_expr_context(ExprContext::SelectClause);
+
         let mut output = SelectList::default();
         for select_target in select_list {
             match select_target {

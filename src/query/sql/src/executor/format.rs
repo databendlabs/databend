@@ -30,10 +30,10 @@ use super::HashJoin;
 use super::Limit;
 use super::PhysicalPlan;
 use super::Project;
+use super::ProjectSet;
 use super::Sort;
 use super::TableScan;
 use super::UnionAll;
-use super::Unnest;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::DistributedInsertSelect;
 use crate::executor::ExchangeSink;
@@ -88,7 +88,7 @@ fn to_format_tree(
         PhysicalPlan::DistributedInsertSelect(plan) => {
             distributed_insert_to_format_tree(plan.as_ref(), metadata, prof_span_set)
         }
-        PhysicalPlan::Unnest(plan) => unnest_to_format_tree(plan, metadata, prof_span_set),
+        PhysicalPlan::ProjectSet(plan) => project_set_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::RuntimeFilterSource(plan) => {
             runtime_filter_source_to_format_tree(plan, metadata, prof_span_set)
         }
@@ -728,15 +728,41 @@ fn distributed_insert_to_format_tree(
     ))
 }
 
-fn unnest_to_format_tree(
-    plan: &Unnest,
+fn project_set_to_format_tree(
+    plan: &ProjectSet,
     metadata: &MetadataRef,
     prof_span_set: &ProfSpanSetRef,
 ) -> Result<FormatTreeNode<String>> {
-    let children = vec![to_format_tree(&plan.input, metadata, prof_span_set)?];
+    let mut children = vec![];
+
+    if let Some(info) = &plan.stat_info {
+        let items = plan_stats_info_to_format_tree(info);
+        children.extend(items);
+    }
+
+    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
+        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
+        children.push(FormatTreeNode::new(format!(
+            "total process time: {process_time}ms"
+        )));
+    }
+
+    children.extend(vec![
+        to_format_tree(&plan.input, metadata, prof_span_set)?,
+        FormatTreeNode::new(format!(
+            "set returning functions: {}",
+            plan.srf_exprs
+                .iter()
+                .map(|(expr, _)| expr.clone().into_srf_expr().sql_display())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
+    ]);
+
+    children.extend(vec![to_format_tree(&plan.input, metadata, prof_span_set)?]);
 
     Ok(FormatTreeNode::with_children(
-        "Unnest".to_string(),
+        "ProjectSet".to_string(),
         children,
     ))
 }
