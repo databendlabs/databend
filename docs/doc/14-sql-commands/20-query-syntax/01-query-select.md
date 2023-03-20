@@ -98,7 +98,7 @@ SELECT number FROM numbers(3) AS a;
 
 ## AT Clause
 
-The AT clause enables you to query previous versions of your data. For more information, see [AT](./03-dml-at.md).
+The AT clause enables you to query previous versions of your data. For more information, see [AT](./03-query-at.md).
 
 ## WHERE Clause
 
@@ -143,7 +143,7 @@ SELECT number%2 as c1, number%3 as c2, MAX(number) FROM numbers(10000) GROUP BY 
 ```
 
 
-`GROUP BY` can be extended with [GROUPING SETS](./21-grouping-sets.md) to do more complex grouping operations.
+`GROUP BY` can be extended with [GROUPING SETS](./07-query-group-by-grouping-sets.md) to do more complex grouping operations.
 
 ## HAVING Clause
 

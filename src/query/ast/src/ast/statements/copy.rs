@@ -229,8 +229,13 @@ impl Connection {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
                 format!(
-                    "Unknown params [{}], please check the documents for supported params",
-                    diffs.join(","),
+                    "connection params invalid: expected [{}], got [{}]",
+                    self.visited_keys
+                        .iter()
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(","),
+                    diffs.join(",")
                 ),
             ));
         }

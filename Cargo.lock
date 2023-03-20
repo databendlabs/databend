@@ -310,8 +310,9 @@ dependencies = [
 
 [[package]]
 name = "async-openai"
-version = "0.9.5"
-source = "git+https://github.com/Xuanwo/async-openai?rev=22fd9ca0c9c86a2c57462c5fd32aaff407d6b000#22fd9ca0c9c86a2c57462c5fd32aaff407d6b000"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc62bea0dc0376372c6cb0e450168b7805d6655b88a3dfd340036743a3d91fca"
 dependencies = [
  "backoff",
  "base64 0.21.0",
@@ -1535,6 +1536,7 @@ dependencies = [
  "itertools",
  "jsonb",
  "lexical-core",
+ "libm",
  "match-template",
  "md-5",
  "memchr",

@@ -39,5 +39,13 @@ for i in "${copy_from_location_cases[@]}"; do
   echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
 done
 
+
+## test copy from parquet with auto cast schema
+echo "create table test_decimal(Year Decimal(15,2), DayOfWeek Decimal(15,2),  OriginCityMarketID Decimal(15,2) )" | $MYSQL_CLIENT_CONNECT
+echo "copy into test_decimal from 'fs://${DATADIR}/' PATTERN = 'ontime.*parquet' FILE_FORMAT = (type = PARQUET)" | $MYSQL_CLIENT_CONNECT
+echo "select count(1), avg(Year), sum(DayOfWeek)  from test_decimal" | $MYSQL_CLIENT_CONNECT
+
+
 ## Drop table
 echo "drop table if exists ontime200;" | $MYSQL_CLIENT_CONNECT
+echo "drop table if exists test_decimal;" | $MYSQL_CLIENT_CONNECT
