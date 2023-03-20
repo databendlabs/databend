@@ -28,7 +28,6 @@ use common_base::runtime::Runtime;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use itertools::Itertools;
 
 use crate::api::rpc::flight_client::FlightSender;
 use crate::api::rpc::flight_client::NewFlightExchange;
@@ -36,7 +35,7 @@ use crate::api::DataPacket;
 use crate::sessions::QueryContext;
 
 pub struct StatisticsReceiver {
-    runtime: Runtime,
+    _runtime: Runtime,
     shutdown_flag: Arc<AtomicBool>,
     shutdown_notify: Arc<Notify>,
     exchange_handler: Vec<JoinHandle<Result<()>>>,
@@ -133,7 +132,7 @@ impl StatisticsReceiver {
         }
 
         Ok(StatisticsReceiver {
-            runtime,
+            _runtime: runtime,
             exchange_handler,
             shutdown_notify: Arc::new(Notify::new()),
             shutdown_flag: Arc::new(AtomicBool::new(false)),

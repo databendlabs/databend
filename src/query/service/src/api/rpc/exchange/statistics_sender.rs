@@ -16,7 +16,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use async_channel::Receiver;
 use async_channel::Sender;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::runtime::TrySpawn;
@@ -25,7 +24,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use futures_util::future::Either;
 
-use crate::api::rpc::flight_client::FlightReceiver;
 use crate::api::rpc::flight_client::FlightSender;
 use crate::api::rpc::flight_client::NewFlightExchange;
 use crate::api::rpc::packets::PrecommitBlock;
@@ -34,7 +32,7 @@ use crate::api::DataPacket;
 use crate::sessions::QueryContext;
 
 pub struct StatisticsSender {
-    spawner: Arc<QueryContext>,
+    _spawner: Arc<QueryContext>,
     shutdown_flag: Arc<AtomicBool>,
     shutdown_flag_sender: Sender<Option<ErrorCode>>,
     join_handle: Option<JoinHandle<()>>,
@@ -112,7 +110,7 @@ impl StatisticsSender {
         });
 
         StatisticsSender {
-            spawner,
+            _spawner: spawner,
             shutdown_flag,
             shutdown_flag_sender,
             join_handle: Some(handle),

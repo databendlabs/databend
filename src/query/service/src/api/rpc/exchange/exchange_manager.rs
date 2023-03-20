@@ -42,7 +42,6 @@ use crate::api::rpc::exchange::exchange_sink::ExchangeSink;
 use crate::api::rpc::exchange::exchange_transform::ExchangeTransform;
 use crate::api::rpc::exchange::statistics_receiver::StatisticsReceiver;
 use crate::api::rpc::exchange::statistics_sender::StatisticsSender;
-use crate::api::rpc::flight_client::FlightExchangeRef;
 use crate::api::rpc::flight_client::FlightReceiver;
 use crate::api::rpc::flight_client::FlightSender;
 use crate::api::rpc::flight_client::NewFlightExchange;
@@ -314,7 +313,7 @@ impl DataExchangeManager {
                     query_coordinator.subscribe_fragment(&ctx, fragment_id, injector)?;
 
                 let exchanges = std::mem::take(&mut query_coordinator.new_statistics_exchanges);
-                let mut statistics_receiver = StatisticsReceiver::spawn_receiver(&ctx, exchanges)?;
+                let statistics_receiver = StatisticsReceiver::spawn_receiver(&ctx, exchanges)?;
 
                 let statistics_receiver: Mutex<StatisticsReceiver> =
                     Mutex::new(statistics_receiver);
@@ -394,7 +393,6 @@ static FLIGHT_RECEIVER: u8 = 2;
 
 struct QueryCoordinator {
     info: Option<QueryInfo>,
-    statistics_exchanges: Vec<NewFlightExchange>,
     fragments_coordinator: HashMap<usize, Box<FragmentCoordinator>>,
 
     new_statistics_exchanges: HashMap<String, Vec<NewFlightExchange>>,
@@ -405,7 +403,6 @@ impl QueryCoordinator {
     pub fn create() -> QueryCoordinator {
         QueryCoordinator {
             info: None,
-            statistics_exchanges: vec![],
             fragments_coordinator: HashMap::new(),
             new_fragment_exchanges: HashMap::new(),
             new_statistics_exchanges: HashMap::new(),
@@ -700,7 +697,7 @@ impl QueryCoordinator {
 
         let query_id = info_mut.query_id.clone();
         let query_ctx = info_mut.query_ctx.clone();
-        let mut request_server_exchanges = std::mem::take(&mut self.new_statistics_exchanges);
+        let request_server_exchanges = std::mem::take(&mut self.new_statistics_exchanges);
 
         if request_server_exchanges.len() != 1 {
             return Err(ErrorCode::Internal(

@@ -38,7 +38,6 @@ use tonic::Status;
 use tonic::Streaming;
 
 use crate::api::rpc::flight_actions::FlightAction;
-use crate::api::rpc::flight_client::NewFlightExchange;
 use crate::api::rpc::request_builder::RequestGetter;
 use crate::api::DataExchangeManager;
 use crate::sessions::SessionManager;
@@ -128,7 +127,7 @@ impl FlightService for DatabendQueryFlightService {
         }
     }
 
-    async fn do_exchange(&self, req: StreamReq<FlightData>) -> Response<Self::DoExchangeStream> {
+    async fn do_exchange(&self, _: StreamReq<FlightData>) -> Response<Self::DoExchangeStream> {
         Err(Status::unimplemented("unimplement do_exchange"))
     }
 
