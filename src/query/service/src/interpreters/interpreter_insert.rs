@@ -380,20 +380,23 @@ impl Interpreter for InsertInterpreter {
                     .format
                     .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
 
-                if Ok(StageFileFormatType::Parquet) == StageFileFormatType::from_str(format) {
-                    let dest_schema = plan.schema();
-                    let func_ctx = self.ctx.get_function_context()?;
+                match StageFileFormatType::from_str(format) {
+                    Ok(f) if f.has_inner_schema() => {
+                        let dest_schema = plan.schema();
+                        let func_ctx = self.ctx.get_function_context()?;
 
-                    build_res.main_pipeline.add_transform(
-                        |transform_input_port, transform_output_port| {
-                            TransformRuntimeCastSchema::try_create(
-                                transform_input_port,
-                                transform_output_port,
-                                dest_schema.clone(),
-                                func_ctx,
-                            )
-                        },
-                    )?;
+                        build_res.main_pipeline.add_transform(
+                            |transform_input_port, transform_output_port| {
+                                TransformRuntimeCastSchema::try_create(
+                                    transform_input_port,
+                                    transform_output_port,
+                                    dest_schema.clone(),
+                                    func_ctx,
+                                )
+                            },
+                        )?;
+                    }
+                    _ => {}
                 }
             }
             InsertInputSource::StreamingWithFileFormat(format_options, _, input_context) => {
@@ -402,7 +405,7 @@ impl Interpreter for InsertInterpreter {
                     .format
                     .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
 
-                if StageFileFormatType::Parquet == format_options.format {
+                if format_options.format.has_inner_schema() {
                     let dest_schema = plan.schema();
                     let func_ctx = self.ctx.get_function_context()?;
 

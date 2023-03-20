@@ -243,10 +243,6 @@ pub enum TokenKind {
     //    reserved list.
     #[token("ALL", ignore(ascii_case))]
     ALL,
-    #[token("ACCESS_KEY_ID", ignore(ascii_case))]
-    ACCESS_KEY_ID,
-    #[token("ACCESS_KEY_SECRET", ignore(ascii_case))]
-    ACCESS_KEY_SECRET,
     #[token("ADD", ignore(ascii_case))]
     ADD,
     #[token("ANY", ignore(ascii_case))]
@@ -271,10 +267,6 @@ pub enum TokenKind {
     AT,
     #[token("ASC", ignore(ascii_case))]
     ASC,
-    #[token("AWS_KEY_ID", ignore(ascii_case))]
-    AWS_KEY_ID,
-    #[token("AWS_SECRET_KEY", ignore(ascii_case))]
-    AWS_SECRET_KEY,
     #[token("ANTI", ignore(ascii_case))]
     ANTI,
     #[token("BEFORE", ignore(ascii_case))]
@@ -371,8 +363,6 @@ pub enum TokenKind {
     DEFAULT,
     #[token("DEFLATE", ignore(ascii_case))]
     DEFLATE,
-    #[token("DELEGATION", ignore(ascii_case))]
-    DELEGATION, // delegation token, used in webhdfs
     #[token("DELETE", ignore(ascii_case))]
     DELETE,
     #[token("DESC", ignore(ascii_case))]
@@ -405,8 +395,6 @@ pub enum TokenKind {
     ENABLE_VIRTUAL_HOST_STYLE,
     #[token("END", ignore(ascii_case))]
     END,
-    #[token("ENDPOINT_URL", ignore(ascii_case))]
-    ENDPOINT_URL,
     #[token("ENGINE", ignore(ascii_case))]
     ENGINE,
     #[token("ENGINES", ignore(ascii_case))]
@@ -489,8 +477,6 @@ pub enum TokenKind {
     HIVE,
     #[token("HOUR", ignore(ascii_case))]
     HOUR,
-    #[token("HTTPS", ignore(ascii_case))]
-    HTTPS,
     #[token("ICEBERG", ignore(ascii_case))]
     ICEBERG,
     #[token("INTERSECT", ignore(ascii_case))]
@@ -673,8 +659,6 @@ pub enum TokenKind {
     PRESIGN,
     #[token("PRIVILEGES", ignore(ascii_case))]
     PRIVILEGES,
-    #[token("REGION", ignore(ascii_case))]
-    REGION,
     #[token("REMOVE", ignore(ascii_case))]
     REMOVE,
     #[token("REVOKE", ignore(ascii_case))]
@@ -695,14 +679,10 @@ pub enum TokenKind {
     SCHEMAS,
     #[token("SECOND", ignore(ascii_case))]
     SECOND,
-    #[token("SECRET_ACCESS_KEY", ignore(ascii_case))]
-    SECRET_ACCESS_KEY,
     #[token("SELECT", ignore(ascii_case))]
     SELECT,
     #[token("SEGMENT", ignore(ascii_case))]
     SEGMENT,
-    #[token("SESSION_TOKEN", ignore(ascii_case))]
-    SESSION_TOKEN,
     #[token("SET", ignore(ascii_case))]
     SET,
     #[token("UNSET", ignore(ascii_case))]
