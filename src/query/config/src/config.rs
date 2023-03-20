@@ -1291,6 +1291,10 @@ pub struct QueryConfig {
     /// Max bytes of cached bloom filter bytes.
     #[clap(long)]
     pub(crate) table_cache_bloom_index_data_bytes: Option<u64>,
+
+    /// Disable some system load(For example system.configs) for cloud security.
+    #[clap(long)]
+    pub disable_system_table_load: bool,
 }
 
 impl Default for QueryConfig {
@@ -1347,6 +1351,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             tenant_quota: self.quota,
             internal_enable_sandbox_tenant: self.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: self.internal_merge_on_read_mutation,
+            disable_system_table_load: self.disable_system_table_load,
         })
     }
 }
@@ -1415,6 +1420,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_cache_bloom_index_meta_count: None,
             table_cache_bloom_index_filter_count: None,
             table_cache_bloom_index_data_bytes: None,
+            disable_system_table_load: inner.disable_system_table_load,
         }
     }
 }
