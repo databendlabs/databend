@@ -15,6 +15,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
 
+use chrono::Utc;
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::StageTableInfo;
@@ -29,6 +30,8 @@ use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableCopiedFileInfo;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
+use common_meta_types::MetaId;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_storage::StageFileInfo;
@@ -165,6 +168,7 @@ impl CopyInterpreter {
         stage_info: StageInfo,
         all_source_file_infos: Vec<StageFileInfo>,
         need_copy_file_infos: Vec<StageFileInfo>,
+        force: bool,
     ) -> Result<PipelineBuildResult> {
         let start = Instant::now();
         let ctx = self.ctx.clone();
@@ -197,9 +201,6 @@ impl CopyInterpreter {
             false,
         )?;
 
-        let database_name = database_name.to_string();
-        let catalog_name = catalog_name.to_string();
-        let table_name = table_name.to_string();
         build_res.main_pipeline.set_on_finished(move |may_error| {
             if may_error.is_none() {
                 CopyInterpreter::commit_copy_into_table(
@@ -208,9 +209,7 @@ impl CopyInterpreter {
                     stage_info,
                     all_source_file_infos,
                     need_copy_file_infos,
-                    catalog_name,
-                    database_name,
-                    table_name,
+                    force,
                 )?;
                 // Status.
                 {
@@ -365,9 +364,6 @@ impl CopyInterpreter {
         )?;
 
         let stage_table_info_clone = stage_table_info.clone();
-        let database_name = database_name.to_string();
-        let catalog_name = catalog_name.to_string();
-        let table_name = table_name.to_string();
         build_res.main_pipeline.set_on_finished(move |may_error| {
             if may_error.is_none() {
                 CopyInterpreter::commit_copy_into_table(
@@ -376,9 +372,7 @@ impl CopyInterpreter {
                     stage_table_info_clone.stage_info,
                     all_source_file_infos,
                     need_copy_file_infos,
-                    catalog_name,
-                    database_name,
-                    table_name,
+                    force,
                 )?;
                 // Status.
                 {
@@ -405,9 +399,7 @@ impl CopyInterpreter {
         stage_info: StageInfo,
         all_source_files: Vec<StageFileInfo>,
         need_copy_files: Vec<StageFileInfo>,
-        catalog_name: String,
-        database_name: String,
-        table_name: String,
+        force: bool,
     ) -> Result<()> {
         let mut copied_files = BTreeMap::new();
         for file in need_copy_files {
@@ -426,22 +418,36 @@ impl CopyInterpreter {
         GlobalIORuntime::instance().block_on(async move {
             // 1. Commit data to table.
             let operations = ctx.consume_precommit_blocks();
-            to_table
-                .commit_insertion(ctx.clone(), operations, false)
-                .await?;
 
-            // 2. Upsert files(status with NeedCopy) info to meta.
-            // Status.
+            let table_id = to_table.get_id();
+            let expire_hours = ctx.get_settings().get_load_file_metadata_expire_hours()?;
+            let num_copied_files = copied_files.len();
+
+            let fail_if_duplicated = !force;
+            let upsert_copied_files_request = Self::upsert_copied_files_request(
+                table_id,
+                expire_hours,
+                copied_files,
+                fail_if_duplicated,
+            );
+
             {
-                let status = format!("begin to upsert copied files:{}", copied_files.len());
+                let status = format!("begin commit, number of copied files:{}", num_copied_files,);
                 ctx.set_status_info(&status);
                 info!(status);
             }
 
-            ctx.upsert_copied_files(&catalog_name, &database_name, &table_name, copied_files)
+            let overwrite_table_data = false;
+            to_table
+                .commit_insertion(
+                    ctx.clone(),
+                    operations,
+                    upsert_copied_files_request,
+                    overwrite_table_data,
+                )
                 .await?;
 
-            info!("end to upsert copied files");
+            info!("end of commit");
 
             // 3. log on_error mode errors.
             // todo(ariesdevil): persist errors with query_id
@@ -480,6 +486,26 @@ impl CopyInterpreter {
 
             Ok(())
         })
+    }
+
+    fn upsert_copied_files_request(
+        table_id: MetaId,
+        expire_hours: u64,
+        copy_stage_files: BTreeMap<String, TableCopiedFileInfo>,
+        fail_if_duplicated: bool,
+    ) -> Option<UpsertTableCopiedFileReq> {
+        if copy_stage_files.is_empty() {
+            return None;
+        }
+        tracing::debug!("upsert_copied_files_info: {:?}", copy_stage_files);
+        let expire_at = expire_hours * 60 + Utc::now().timestamp() as u64;
+        let req = UpsertTableCopiedFileReq {
+            table_id,
+            file_info: copy_stage_files,
+            expire_at: Some(expire_at),
+            fail_if_duplicated,
+        };
+        Some(req)
     }
 }
 
@@ -523,6 +549,7 @@ impl Interpreter for CopyInterpreter {
                 from,
                 all_source_file_infos,
                 need_copy_file_infos,
+                force,
                 ..
             } => {
                 self.build_copy_into_table_with_transform_pipeline(
@@ -533,6 +560,7 @@ impl Interpreter for CopyInterpreter {
                     *stage_info.clone(),
                     all_source_file_infos.clone(),
                     need_copy_file_infos.clone(),
+                    *force,
                 )
                 .await
             }

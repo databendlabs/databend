@@ -28,22 +28,18 @@ const Releases: FC = (): ReactElement => {
       </>
     )
   }
-  function IsPreReleaseTag({prerelease}: {prerelease: boolean}): ReactElement {
-    return <Tag className={styles.preTag}>{prerelease ? 'Pre-release' : 'Release'}</Tag>
-  }
   return (
     <Layout
       title={`Databend - Activate your Object Storage for real-time analytics`}
       description={`A modern Elasticity and Performance Cloud Data Warehouse, activate your Object Storage(S3, Azure Blob, or MinIO) for real-time analytics`}>
       <div className={styles.wholePage}>
         <div className={styles.download}>Download</div>
-        <div className={styles.latest}>Latest LTS Version: {tagName}</div>
+        <div className={styles.latest}>Latest Version: {tagName}</div>
         <Card className={styles.latestBlock}>
           <div className={styles.latestVersion}>
             <div className={styles.topTag}>
               <span className={styles.version}>{tagName}</span>
               <Tag>Latest</Tag>
-              <IsPreReleaseTag prerelease={prerelease}></IsPreReleaseTag>
             </div>
             <div className={styles.updateTime}>{timeFormatAgo(published_at)}</div>
             <div className={styles.nowAssets}>
@@ -75,7 +71,7 @@ const Releases: FC = (): ReactElement => {
         <div className={styles.historyArea}>
           <div className={styles.historyTitle}>
             <div>History Versions</div>
-            <div>We will show you the latest 20 versions, please check <a target='_blank' href='https://github.com/datafuselabs/databend/releases'>Github</a> for more.</div>
+            <div>This page only displays the most recent 20 versions. For earlier versions, please refer to <a target='_blank' href='https://github.com/datafuselabs/databend/releases'>GitHub</a>.</div>
           </div>
           <div className={styles.listWrap}>
             {
@@ -87,7 +83,6 @@ const Releases: FC = (): ReactElement => {
                     <div>
                       <div className={styles.leftDesc}>
                         <div className={styles.tagName}>{release?.tag_name}</div>
-                        <IsPreReleaseTag prerelease={release.prerelease}></IsPreReleaseTag>
                       </div>
                       <div>{timeFormatAgo(release?.published_at)}</div>
                     </div>
