@@ -148,6 +148,7 @@ impl FlightClient {
 
 pub struct FlightReceiver {
     state: Arc<NewState>,
+    dropped: AtomicBool,
     rx: Receiver<Result<FlightData>>,
 }
 
@@ -162,6 +163,7 @@ impl FlightReceiver {
         FlightReceiver {
             rx,
             state: NewState::create(),
+            dropped: AtomicBool::new(false),
         }
     }
 
@@ -175,7 +177,7 @@ impl FlightReceiver {
 
     pub fn close(&self) {
         #[allow(clippy::collapsible_if)]
-        if !self.state.dropped.fetch_or(true, Ordering::SeqCst) {
+        if !self.dropped.fetch_or(true, Ordering::SeqCst) {
             if self.state.strong_count.fetch_sub(1, Ordering::SeqCst) == 1 {
                 self.rx.close();
             }
@@ -185,6 +187,7 @@ impl FlightReceiver {
 
 pub struct FlightSender {
     state: Arc<NewState>,
+    dropped: AtomicBool,
     tx: Sender<Result<FlightData, Status>>,
 }
 
@@ -195,6 +198,7 @@ impl Clone for FlightSender {
         FlightSender {
             tx: self.tx.clone(),
             state: self.state.clone(),
+            dropped: AtomicBool::new(false),
         }
     }
 }
@@ -209,6 +213,7 @@ impl FlightSender {
     pub fn create(tx: Sender<Result<FlightData, Status>>) -> FlightSender {
         FlightSender {
             state: NewState::create(),
+            dropped: AtomicBool::new(false),
             tx,
         }
     }
@@ -225,7 +230,7 @@ impl FlightSender {
 
     pub fn close(&self) {
         #[allow(clippy::collapsible_if)]
-        if !self.state.dropped.fetch_or(true, Ordering::SeqCst) {
+        if !self.dropped.fetch_or(true, Ordering::SeqCst) {
             if self.state.strong_count.fetch_sub(1, Ordering::SeqCst) == 1 {
                 self.tx.close();
             }
@@ -234,14 +239,12 @@ impl FlightSender {
 }
 
 pub struct NewState {
-    dropped: AtomicBool,
     strong_count: AtomicUsize,
 }
 
 impl NewState {
     pub fn create() -> Arc<NewState> {
         Arc::new(NewState {
-            dropped: AtomicBool::new(false),
             strong_count: AtomicUsize::new(0),
         })
     }
@@ -282,6 +285,7 @@ impl NewFlightExchange {
                 FlightSender {
                     tx: sender.clone(),
                     state: state.clone(),
+                    dropped: AtomicBool::new(false),
                 }
             }
             _ => unreachable!(),
@@ -296,6 +300,7 @@ impl NewFlightExchange {
                 FlightReceiver {
                     rx: receiver.clone(),
                     state: state.clone(),
+                    dropped: AtomicBool::new(false),
                 }
             }
             _ => unreachable!(),
