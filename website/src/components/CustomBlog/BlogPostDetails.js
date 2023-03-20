@@ -38,7 +38,7 @@ const BlogPostDetails = (props) => {
     <Layout title={`${metadata.title} | Blog`}>
       <section className={clsx("blog-page", styles.blogPage, styles.blogPost)}>
         <div className={clsx("post-content", styles.postContent)}>
-          <div className={clsx("content-container", styles.ContentContainer)}>
+          <article className={clsx("content-container", styles.ContentContainer)}>
             <div
               className={clsx("post-content-title", styles.postContentTitle)}
             >
@@ -121,7 +121,7 @@ const BlogPostDetails = (props) => {
               <hr/>
                <BlogPostNav prevPost={metadata.prevItem} nextPost={metadata.nextItem}/>
             </div>
-          </div>
+          </article>
         </div>
       </section>
     </Layout>
