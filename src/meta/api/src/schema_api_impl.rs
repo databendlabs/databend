@@ -25,6 +25,7 @@ use common_meta_app::app_error::CreateTableWithDropTime;
 use common_meta_app::app_error::DatabaseAlreadyExists;
 use common_meta_app::app_error::DropDbWithDropTime;
 use common_meta_app::app_error::DropTableWithDropTime;
+use common_meta_app::app_error::DuplicatedUpsertFiles;
 use common_meta_app::app_error::ShareHasNoGrantedDatabase;
 use common_meta_app::app_error::ShareHasNoGrantedPrivilege;
 use common_meta_app::app_error::TableAlreadyExists;
@@ -100,6 +101,8 @@ use common_meta_app::share::ShareId;
 use common_meta_app::share::ShareNameIdent;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::Key;
+use common_meta_types::txn_op::Request;
+use common_meta_types::txn_op_response::Response;
 use common_meta_types::ConditionResult;
 use common_meta_types::GCDroppedDataReply;
 use common_meta_types::GCDroppedDataReq;
@@ -109,6 +112,7 @@ use common_meta_types::MetaError;
 use common_meta_types::MetaId;
 use common_meta_types::MetaNetworkError;
 use common_meta_types::TxnCondition;
+use common_meta_types::TxnGetRequest;
 use common_meta_types::TxnOp;
 use common_meta_types::TxnRequest;
 use common_tracing::func_name;
@@ -1926,47 +1930,11 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 "upsert_table_copied_file_info"
             );
 
-            let mut condition = vec![txn_cond_seq(&tbid, Eq, tb_meta_seq)];
-            let mut if_then = vec![];
-            // `remove_table_copied_files` and `upsert_table_copied_file_info`
-            // all modify `TableCopiedFileInfo`,
-            // so there used to has `TableCopiedFileLockKey` in these two functions
-            // to protect TableCopiedFileInfo modification.
-            // In issue: https://github.com/datafuselabs/databend/issues/8897,
-            // there is chance that if copy files concurrently, `upsert_table_copied_file_info`
-            // may return `TxnRetryMaxTimes`.
-            // So now, in case that `TableCopiedFileInfo` has expire time, remove `TableCopiedFileLockKey`
-            // in each function. In this case there is chance that some `TableCopiedFileInfo` may not be
-            // removed in `remove_table_copied_files`, but these data can be purged in case of expire time.
-
-            let mut file_name_infos = req.file_info.clone().into_iter();
-
-            for c in keys.chunks(DEFAULT_MGET_SIZE) {
-                let seq_infos: Vec<(u64, Option<TableCopiedFileInfo>)> =
-                    mget_pb_values(self, c).await?;
-
-                for (file_seq, _file_info_opt) in seq_infos {
-                    let (f_name, file_info) = file_name_infos.next().unwrap();
-
-                    let key = TableCopiedFileNameIdent {
-                        table_id,
-                        file: f_name.to_owned(),
-                    };
-                    condition.push(txn_cond_seq(&key, Eq, file_seq));
-                    match &req.expire_at {
-                        Some(expire_at) => {
-                            if_then.push(txn_op_put_with_expire(
-                                &key,
-                                serialize_struct(&file_info)?,
-                                *expire_at,
-                            ));
-                        }
-                        None => {
-                            if_then.push(txn_op_put(&key, serialize_struct(&file_info)?));
-                        }
-                    }
-                }
-            }
+            let (condition, if_then) = build_upsert_table_copied_file_info_conditions(
+                &req,
+                tb_meta_seq,
+                req.fail_if_duplicated,
+            )?;
 
             let txn_req = TxnRequest {
                 condition,
@@ -1984,6 +1952,11 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
 
             if succ {
                 return Ok(UpsertTableCopiedFileReply {});
+            } else if req.fail_if_duplicated {
+                // fail fast if txn failed, which caused by file duplication
+                return Err(KVAppError::AppError(AppError::DuplicatedUpsertFiles(
+                    DuplicatedUpsertFiles::new(req.table_id, "upsert_table_copied_file_info"),
+                )));
             }
         }
 
@@ -2130,11 +2103,16 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
-
         let tbid = TableId {
             table_id: req.table_id,
         };
         let req_seq = req.seq;
+
+        let fail_if_duplicated = req
+            .copied_files
+            .as_ref()
+            .map(|v| v.fail_if_duplicated)
+            .unwrap_or(false);
 
         loop {
             let (tb_meta_seq, table_meta): (_, Option<TableMeta>) =
@@ -2158,7 +2136,13 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 )));
             }
 
-            let txn_req = TxnRequest {
+            let get_table_meta = TxnOp {
+                request: Some(Request::Get(TxnGetRequest {
+                    key: tbid.to_string_key(),
+                })),
+            };
+
+            let mut txn_req = TxnRequest {
                 condition: vec![
                     // table is not changed
                     txn_cond_seq(&tbid, Eq, tb_meta_seq),
@@ -2166,15 +2150,69 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 if_then: vec![
                     txn_op_put(&tbid, serialize_struct(&req.new_table_meta)?), // tb_id -> tb_meta
                 ],
-                else_then: vec![],
+                else_then: vec![get_table_meta],
             };
 
-            let (succ, _responses) = send_txn(self, txn_req).await?;
+            if let Some(req) = &req.copied_files {
+                let (conditions, match_operations) =
+                    build_upsert_table_copied_file_info_conditions(
+                        req,
+                        tb_meta_seq,
+                        req.fail_if_duplicated,
+                    )?;
+                txn_req.condition.extend(conditions);
+                txn_req.if_then.extend(match_operations)
+            }
+
+            let (succ, responses) = send_txn(self, txn_req).await?;
 
             debug!(id = debug(&tbid), succ = display(succ), "update_table_meta");
 
             if succ {
                 return Ok(UpdateTableMetaReply {});
+            } else {
+                let resp = responses
+                    .get(0)
+                    // fail fast if response is None (which should not happen)
+                    .expect("internal error: expect one response if update_table_meta txn failed.");
+
+                if let Some(Response::Get(get_resp)) = &resp.response {
+                    // deserialize table version info
+                    let (tb_meta_seq, _): (_, Option<TableMeta>) =
+                        if let Some(seq_v) = &get_resp.value {
+                            (seq_v.seq, Some(deserialize_struct(&seq_v.data)?))
+                        } else {
+                            (0, None)
+                        };
+
+                    // check table version
+                    if req_seq.match_seq(tb_meta_seq).is_ok() {
+                        // if table version does match, but tx failed,
+                        if fail_if_duplicated {
+                            // report file duplication error
+                            return Err(KVAppError::AppError(AppError::from(
+                                DuplicatedUpsertFiles::new(req.table_id, "update_table_meta"),
+                            )));
+                        } else {
+                            // continue and try update the "table copied files"
+                            continue;
+                        };
+                    } else {
+                        return Err(KVAppError::AppError(AppError::from(
+                            TableVersionMismatched::new(
+                                req.table_id,
+                                req.seq,
+                                tb_meta_seq,
+                                "update_table_meta",
+                            ),
+                        )));
+                    }
+                } else {
+                    unreachable!(
+                        "internal error: expect some TxnGetResponseGet, but got {:?}",
+                        resp.response
+                    );
+                }
             }
         }
     }
@@ -2854,4 +2892,63 @@ async fn list_tables_from_share_db(
         DatabaseType::ShareDB(share),
     )
     .await
+}
+
+fn build_upsert_table_copied_file_info_conditions(
+    req: &UpsertTableCopiedFileReq,
+    tb_meta_seq: u64,
+    fail_if_duplicated: bool,
+) -> Result<(Vec<TxnCondition>, Vec<TxnOp>), KVAppError> {
+    let table_id = req.table_id;
+    let tbid = TableId { table_id };
+
+    let mut condition = vec![txn_cond_seq(&tbid, Eq, tb_meta_seq)];
+    let mut if_then = vec![];
+
+    // `remove_table_copied_files` and `upsert_table_copied_file_info`
+    // all modify `TableCopiedFileInfo`,
+    // so there used to has `TableCopiedFileLockKey` in these two functions
+    // to protect TableCopiedFileInfo modification.
+    // In issue: https://github.com/datafuselabs/databend/issues/8897,
+    // there is chance that if copy files concurrently, `upsert_table_copied_file_info`
+    // may return `TxnRetryMaxTimes`.
+    // So now, in case that `TableCopiedFileInfo` has expire time, remove `TableCopiedFileLockKey`
+    // in each function. In this case there is chance that some `TableCopiedFileInfo` may not be
+    // removed in `remove_table_copied_files`, but these data can be purged in case of expire time.
+
+    let file_name_infos = req.file_info.clone().into_iter();
+
+    for (file_name, file_info) in file_name_infos {
+        let key = TableCopiedFileNameIdent {
+            table_id,
+            file: file_name.to_owned(),
+        };
+        if fail_if_duplicated {
+            // "fail_if_duplicated" mode, assumes files are absent
+            condition.push(txn_cond_seq(&key, Eq, 0));
+        }
+        set_update_expire_operation(&key, &file_info, &req.expire_at, &mut if_then)?;
+    }
+    Ok((condition, if_then))
+}
+
+fn set_update_expire_operation(
+    key: &TableCopiedFileNameIdent,
+    file_info: &TableCopiedFileInfo,
+    expire_at_opt: &Option<u64>,
+    then_branch: &mut Vec<TxnOp>,
+) -> Result<(), KVAppError> {
+    match expire_at_opt {
+        Some(expire_at) => {
+            then_branch.push(txn_op_put_with_expire(
+                key,
+                serialize_struct(file_info)?,
+                *expire_at,
+            ));
+        }
+        None => {
+            then_branch.push(txn_op_put(key, serialize_struct(file_info)?));
+        }
+    }
+    Ok(())
 }

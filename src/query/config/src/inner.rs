@@ -163,6 +163,8 @@ pub struct QueryConfig {
     pub tenant_quota: Option<TenantQuota>,
     pub internal_enable_sandbox_tenant: bool,
     pub internal_merge_on_read_mutation: bool,
+    /// Disable some system load(For example system.configs) for cloud security.
+    pub disable_system_table_load: bool,
 }
 
 impl Default for QueryConfig {
@@ -209,6 +211,7 @@ impl Default for QueryConfig {
             tenant_quota: None,
             internal_enable_sandbox_tenant: false,
             internal_merge_on_read_mutation: false,
+            disable_system_table_load: false,
         }
     }
 }
