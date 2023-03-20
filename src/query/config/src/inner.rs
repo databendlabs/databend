@@ -165,6 +165,7 @@ pub struct QueryConfig {
     pub internal_merge_on_read_mutation: bool,
     /// Disable some system load(For example system.configs) for cloud security.
     pub disable_system_table_load: bool,
+    pub openai_api_key: String,
 }
 
 impl Default for QueryConfig {
@@ -212,6 +213,7 @@ impl Default for QueryConfig {
             internal_enable_sandbox_tenant: false,
             internal_merge_on_read_mutation: false,
             disable_system_table_load: false,
+            openai_api_key: "".to_string(),
         }
     }
 }
