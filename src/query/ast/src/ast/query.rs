@@ -141,6 +141,40 @@ pub enum SelectTarget {
     },
 }
 
+impl SelectTarget {
+    pub fn is_star(&self) -> bool {
+        match self {
+            SelectTarget::AliasedExpr { .. } => false,
+            SelectTarget::QualifiedName { qualified, .. } => {
+                matches!(qualified.last(), Some(Indirection::Star))
+            }
+        }
+    }
+
+    pub fn exclude(&mut self, exclude: Vec<Identifier>) {
+        match self {
+            SelectTarget::AliasedExpr { .. } => unreachable!(),
+            SelectTarget::QualifiedName { exclude: e, .. } => {
+                *e = Some(exclude);
+            }
+        }
+    }
+
+    pub fn new_agg(name: Identifier, args: Vec<Expr>, alias: Option<Identifier>) -> Self {
+        SelectTarget::AliasedExpr {
+            expr: Box::new(Expr::FunctionCall {
+                span: Span::default(),
+                distinct: false,
+                name,
+                args,
+                params: vec![],
+                window: None,
+            }),
+            alias,
+        }
+    }
+}
+
 pub type QualifiedName = Vec<Indirection>;
 
 /// Indirection of a select result, like a part of `db.table.column`.
@@ -160,6 +194,13 @@ pub enum TimeTravelPoint {
     Timestamp(Box<Expr>),
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct PivotMeta {
+    pub aggregate: Expr,
+    pub pivot_column: Identifier,
+    pub pivot_values: Vec<Expr>,
+}
+
 /// A table name or a parenthesized subquery with an optional alias
 #[derive(Debug, Clone, PartialEq)]
 pub enum TableReference {
@@ -171,6 +212,7 @@ pub enum TableReference {
         table: Identifier,
         alias: Option<TableAlias>,
         travel_point: Option<TimeTravelPoint>,
+        pivot: Option<PivotMeta>,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
@@ -196,6 +238,17 @@ pub enum TableReference {
         options: SelectStageOptions,
         alias: Option<TableAlias>,
     },
+}
+
+impl TableReference {
+    pub fn pivot_meta(&self) -> Option<&PivotMeta> {
+        match self {
+            TableReference::Table {
+                pivot: Some(meta), ..
+            } => Some(meta),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -268,6 +321,15 @@ impl Display for TableAlias {
     }
 }
 
+impl Display for PivotMeta {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PIVOT({} FOR {} IN (", self.aggregate, self.pivot_column)?;
+        write_comma_separated_list(f, &self.pivot_values)?;
+        write!(f, "))")?;
+        Ok(())
+    }
+}
+
 impl Display for TableReference {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -278,6 +340,7 @@ impl Display for TableReference {
                 table,
                 alias,
                 travel_point,
+                pivot,
             } => {
                 write_period_separated_list(
                     f,
@@ -294,6 +357,9 @@ impl Display for TableReference {
 
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
+                }
+                if let Some(pivot) = pivot {
+                    write!(f, "{pivot}")?;
                 }
             }
             TableReference::TableFunction {
@@ -521,6 +587,7 @@ impl Display for CTE {
         Ok(())
     }
 }
+
 impl Display for With {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if self.recursive {

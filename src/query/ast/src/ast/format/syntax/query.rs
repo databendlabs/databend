@@ -252,6 +252,7 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             table,
             alias,
             travel_point,
+            pivot: _,
         } => if let Some(catalog) = catalog {
             RcDoc::text(catalog.to_string()).append(RcDoc::text("."))
         } else {

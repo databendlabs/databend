@@ -372,7 +372,8 @@ pub enum TokenKind {
     #[token("DEFLATE", ignore(ascii_case))]
     DEFLATE,
     #[token("DELEGATION", ignore(ascii_case))]
-    DELEGATION, // delegation token, used in webhdfs
+    DELEGATION,
+    // delegation token, used in webhdfs
     #[token("DELETE", ignore(ascii_case))]
     DELETE,
     #[token("DESC", ignore(ascii_case))]
@@ -699,6 +700,8 @@ pub enum TokenKind {
     SECRET_ACCESS_KEY,
     #[token("SELECT", ignore(ascii_case))]
     SELECT,
+    #[token("PIVOT", ignore(ascii_case))]
+    PIVOT,
     #[token("SEGMENT", ignore(ascii_case))]
     SEGMENT,
     #[token("SESSION_TOKEN", ignore(ascii_case))]
@@ -1150,6 +1153,7 @@ impl TokenKind {
             // | TokenKind::REFERENCES
             | TokenKind::RIGHT
             | TokenKind::SELECT
+            | TokenKind::PIVOT
             // | TokenKind::SESSION_USER
             // | TokenKind::SIMILAR
             | TokenKind::SOME

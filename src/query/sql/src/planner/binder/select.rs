@@ -15,11 +15,16 @@
 use std::collections::HashMap;
 
 use async_recursion::async_recursion;
+use common_ast::ast::BinaryOperator;
 use common_ast::ast::Expr;
+use common_ast::ast::GroupBy;
+use common_ast::ast::Identifier;
 use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
 use common_ast::ast::JoinOperator;
+use common_ast::ast::Literal;
 use common_ast::ast::OrderByExpr;
+use common_ast::ast::PivotMeta;
 use common_ast::ast::Query;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
@@ -28,6 +33,7 @@ use common_ast::ast::SetOperator;
 use common_ast::ast::TableReference;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::Span;
 use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
@@ -71,6 +77,7 @@ impl Binder {
         stmt: &SelectStmt,
         order_by: &[OrderByExpr],
     ) -> Result<(SExpr, BindContext)> {
+        Self::check_pivot_in_multi_table(stmt)?;
         let (mut s_expr, mut from_context) = if stmt.from.is_empty() {
             self.bind_one_table(bind_context, stmt).await?
         } else {
@@ -91,6 +98,13 @@ impl Binder {
             self.bind_table_reference(bind_context, &cross_joins)
                 .await?
         };
+
+        let is_pivot = stmt.from.len() == 1
+            && matches!(stmt.from[0], TableReference::Table { pivot: Some(_), .. });
+        let new_stmt = is_pivot
+            .then(|| self.rewrite_pivot_stmt(stmt, &from_context))
+            .transpose()?;
+        let stmt = new_stmt.as_ref().unwrap_or(stmt);
 
         if let Some(expr) = &stmt.selection {
             s_expr = self.bind_where(&mut from_context, expr, s_expr).await?;
@@ -553,5 +567,136 @@ impl Binder {
             );
         }
         Ok((new_bind_context, pairs, left_expr, right_expr))
+    }
+
+    fn check_pivot_in_multi_table(stmt: &SelectStmt) -> Result<()> {
+        if stmt.from.len() < 2 {
+            return Ok(());
+        }
+        for table in &stmt.from {
+            if matches!(table, TableReference::Table { pivot: Some(_), .. }) {
+                return Err(ErrorCode::SyntaxException(
+                    "Pivot table can only be used in single table query",
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn compare_column_name(&self, a: &str, b: &str) -> bool {
+        if self.name_resolution_ctx.unquoted_ident_case_sensitive {
+            a == b
+        } else {
+            a.eq_ignore_ascii_case(b)
+        }
+    }
+
+    fn rewrite_pivot_stmt(
+        &self,
+        stmt: &SelectStmt,
+        from_context: &BindContext,
+    ) -> Result<SelectStmt> {
+        let table = &stmt.from[0];
+        let PivotMeta {
+            aggregate,
+            pivot_column,
+            pivot_values,
+        } = table.pivot_meta().unwrap();
+        let all_column_bindings = from_context.all_column_bindings();
+        let pivot_column_index = all_column_bindings
+            .iter()
+            .position(|col| self.compare_column_name(&col.column_name, &pivot_column.name))
+            .ok_or_else(|| {
+                ErrorCode::SyntaxException(format!("Pivot column {} not found", pivot_column))
+            })?;
+        let (aggregate_column_index, aggregate_column_ident) =
+            self.aggregate_column(aggregate, from_context)?;
+
+        // First,rewrite group by clause,if group by clause is not specified,we will add all columns except pivot column and aggregate column
+        let new_group_by = if let Some(group_by) = &stmt.group_by {
+            group_by.clone()
+        } else {
+            let mut group_by = Vec::with_capacity(all_column_bindings.len() - 2);
+            for col in all_column_bindings.iter() {
+                if col.index != pivot_column_index && col.index != aggregate_column_index {
+                    group_by.push(Expr::Literal {
+                        span: Span::default(),
+                        lit: Literal::UInt64(col.index as u64 + 1),
+                    });
+                }
+            }
+            GroupBy::Normal(group_by)
+        };
+
+        // Second,rewrite select list，if select list contains '*', we will remove pivot column and aggregate column, then we will add aggregate if columns
+        let mut new_select_list = stmt.select_list.clone();
+        if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
+            star.exclude(vec![pivot_column.clone(), aggregate_column_ident]);
+        };
+        let (agg_func, agg_args) = match &aggregate {
+            Expr::FunctionCall { name, args, .. } => (name.clone(), args.clone()),
+            _ => unreachable!("aggregate must be function call"),
+        };
+        let new_agg_func = Identifier {
+            name: format!("{}_if", agg_func.name),
+            ..agg_func
+        };
+        for pivot_value in pivot_values {
+            let mut args = agg_args.clone();
+            args.push(Expr::BinaryOp {
+                span: Span::default(),
+                op: BinaryOperator::Eq,
+                left: Box::new(Expr::ColumnRef {
+                    column: pivot_column.clone(),
+                    span: Span::default(),
+                    database: None,
+                    table: None,
+                }),
+                right: Box::new(pivot_value.clone()),
+            });
+            new_select_list.push(SelectTarget::new_agg(new_agg_func.clone(), args, None));
+        }
+        Ok(SelectStmt {
+            select_list: new_select_list,
+            group_by: Some(new_group_by),
+            ..stmt.clone()
+        })
+    }
+
+    fn aggregate_column(
+        &self,
+        aggregate: &Expr,
+        from_context: &BindContext,
+    ) -> Result<(usize, Identifier)> {
+        let mut aggregate_column_index = None;
+        match aggregate {
+            Expr::FunctionCall { args, .. } => {
+                for expr in args {
+                    if let Expr::ColumnRef { column, .. } = expr {
+                        let column_index = from_context
+                            .all_column_bindings()
+                            .iter()
+                            .position(|col| {
+                                self.compare_column_name(&col.column_name, &column.name)
+                            })
+                            .ok_or_else(|| {
+                                ErrorCode::SyntaxException("Aggregate column not found")
+                            })?;
+                        if aggregate_column_index.is_some() {
+                            return Err(ErrorCode::SyntaxException(
+                                "multi aggregate column is not supported",
+                            ));
+                        } else {
+                            aggregate_column_index = Some((column_index, column.clone()));
+                        }
+                    }
+                }
+                aggregate_column_index
+                    .ok_or_else(|| ErrorCode::SyntaxException("Aggregate column not found"))
+            }
+            _ => Err(ErrorCode::SyntaxException(
+                "Aggregate function is required in pivot table",
+            )),
+        }
     }
 }

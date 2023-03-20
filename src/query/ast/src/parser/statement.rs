@@ -1140,7 +1140,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #show_file_formats: "`SHOW FILE FORMATS`"
             | #drop_file_format: "`DROP FILE FORMAT  [ IF EXISTS ] <format_name>`"
         ),
-        rule! (
+        rule!(
             #copy_into: "`COPY
                 INTO { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> }
                 FROM { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> | ( <query> ) }
@@ -1150,7 +1150,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`"
         ),
-        rule! (
+        rule!(
             #call: "`CALL <procedure_name>(<parameter>, ...)`"
         ),
         rule!(
@@ -1887,6 +1887,7 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
             table,
             alias: None,
             travel_point: None,
+            pivot: None, // TODO(Sky)
         },
     )(i)
 }

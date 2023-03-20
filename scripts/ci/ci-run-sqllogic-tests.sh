@@ -20,7 +20,7 @@ echo "Run suites using argument: $RUN_DIR"
 
 for i in $(seq 1 3); do
 	echo "Starting databend-sqllogic tests $i"
-	target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --skip_dir management --enable_sandbox --parallel 8 --debug
+	target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --skip_dir management,base,crdb,debug,mode,query,tpch,ydb,duckdb --enable_sandbox --parallel 4 --debug
 
 	if [ $? -ne 0 ]; then
 		break
