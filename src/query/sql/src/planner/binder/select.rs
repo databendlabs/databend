@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use async_recursion::async_recursion;
 use common_ast::ast::BinaryOperator;
 use common_ast::ast::Expr;
+use common_ast::ast::Expr::Array;
 use common_ast::ast::GroupBy;
 use common_ast::ast::Identifier;
 use common_ast::ast::Join;
@@ -31,6 +32,7 @@ use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
 use common_ast::ast::SetOperator;
 use common_ast::ast::TableReference;
+use common_ast::ast::UnpivotMeta;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
@@ -101,10 +103,25 @@ impl Binder {
 
         let is_pivot = stmt.from.len() == 1
             && matches!(stmt.from[0], TableReference::Table { pivot: Some(_), .. });
-        let new_stmt = is_pivot
+        let is_unpivot = stmt.from.len() == 1
+            && matches!(stmt.from[0], TableReference::Table {
+                unpivot: Some(_),
+                ..
+            });
+        if is_pivot && is_unpivot {
+            return Err(ErrorCode::SyntaxException(
+                "Cannot use both PIVOT and UNPIVOT after the same table",
+            ));
+        }
+        let new_pivot_stmt = is_pivot
             .then(|| self.rewrite_pivot_stmt(stmt, &from_context))
             .transpose()?;
-        let stmt = new_stmt.as_ref().unwrap_or(stmt);
+        let new_unpivot_stmt = is_unpivot
+            .then(|| self.rewrite_unpivot_stmt(stmt))
+            .transpose()?;
+        let stmt = new_pivot_stmt
+            .as_ref()
+            .unwrap_or(new_unpivot_stmt.as_ref().unwrap_or(stmt));
 
         if let Some(expr) = &stmt.selection {
             s_expr = self.bind_where(&mut from_context, expr, s_expr).await?;
@@ -579,6 +596,14 @@ impl Binder {
                     "Pivot table can only be used in single table query",
                 ));
             }
+            if matches!(table, TableReference::Table {
+                unpivot: Some(_),
+                ..
+            }) {
+                return Err(ErrorCode::SyntaxException(
+                    "Unpivot table can only be used in single table query",
+                ));
+            }
         }
         Ok(())
     }
@@ -596,12 +621,11 @@ impl Binder {
         stmt: &SelectStmt,
         from_context: &BindContext,
     ) -> Result<SelectStmt> {
-        let table = &stmt.from[0];
         let PivotMeta {
             aggregate,
             pivot_column,
             pivot_values,
-        } = table.pivot_meta().unwrap();
+        } = &stmt.from[0].pivot_meta().unwrap();
         let all_column_bindings = from_context.all_column_bindings();
         let pivot_column_index = all_column_bindings
             .iter()
@@ -654,11 +678,73 @@ impl Binder {
                 }),
                 right: Box::new(pivot_value.clone()),
             });
-            new_select_list.push(SelectTarget::new_agg(new_agg_func.clone(), args, None));
+            new_select_list.push(SelectTarget::new_func_from_name_args(
+                new_agg_func.clone(),
+                args,
+                None,
+            ));
         }
         Ok(SelectStmt {
             select_list: new_select_list,
             group_by: Some(new_group_by),
+            ..stmt.clone()
+        })
+    }
+
+    fn rewrite_unpivot_stmt(&self, stmt: &SelectStmt) -> Result<SelectStmt> {
+        let UnpivotMeta {
+            col_before_for,
+            col_after_for,
+            unpivot_cols,
+        } = &stmt.from[0].unpivot_meta().unwrap();
+
+        // First,exclude unpivot columns from select list
+        let mut new_select_list = stmt.select_list.clone();
+        if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
+            star.exclude(unpivot_cols.clone());
+        };
+
+        // Second,push unnest function to select list
+        new_select_list.push(SelectTarget::new_func_from_name_args(
+            Identifier {
+                name: "unnest".to_string(),
+                quote: None,
+                span: None,
+            },
+            vec![Array {
+                span: None,
+                exprs: unpivot_cols
+                    .iter()
+                    .map(|col| Expr::Literal {
+                        span: None,
+                        lit: Literal::String(col.name.clone()),
+                    })
+                    .collect(),
+            }],
+            Some(col_after_for.clone()),
+        ));
+        new_select_list.push(SelectTarget::new_func_from_name_args(
+            Identifier {
+                name: "unnest".to_string(),
+                quote: None,
+                span: None,
+            },
+            vec![Array {
+                span: None,
+                exprs: unpivot_cols
+                    .iter()
+                    .map(|col| Expr::ColumnRef {
+                        column: col.clone(),
+                        span: Span::default(),
+                        database: None,
+                        table: None,
+                    })
+                    .collect(),
+            }],
+            Some(col_before_for.clone()),
+        ));
+        Ok(SelectStmt {
+            select_list: new_select_list,
             ..stmt.clone()
         })
     }

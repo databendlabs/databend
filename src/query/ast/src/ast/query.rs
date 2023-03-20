@@ -160,7 +160,11 @@ impl SelectTarget {
         }
     }
 
-    pub fn new_agg(name: Identifier, args: Vec<Expr>, alias: Option<Identifier>) -> Self {
+    pub fn new_func_from_name_args(
+        name: Identifier,
+        args: Vec<Expr>,
+        alias: Option<Identifier>,
+    ) -> Self {
         SelectTarget::AliasedExpr {
             expr: Box::new(Expr::FunctionCall {
                 span: Span::default(),
@@ -219,8 +223,8 @@ pub enum TableReference {
         table: Identifier,
         alias: Option<TableAlias>,
         travel_point: Option<TimeTravelPoint>,
-        pivot: Option<PivotMeta>,
-        unpivot: Option<UnpivotMeta>,
+        pivot: Option<Box<PivotMeta>>,
+        unpivot: Option<Box<UnpivotMeta>>,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
@@ -251,19 +255,14 @@ pub enum TableReference {
 impl TableReference {
     pub fn pivot_meta(&self) -> Option<&PivotMeta> {
         match self {
-            TableReference::Table {
-                pivot: Some(meta), ..
-            } => Some(meta),
+            TableReference::Table { pivot, .. } => pivot.as_ref().map(|b| b.as_ref()),
             _ => None,
         }
     }
 
     pub fn unpivot_meta(&self) -> Option<&UnpivotMeta> {
         match self {
-            TableReference::Table {
-                unpivot: Some(meta),
-                ..
-            } => Some(meta),
+            TableReference::Table { unpivot, .. } => unpivot.as_ref().map(|b| b.as_ref()),
             _ => None,
         }
     }

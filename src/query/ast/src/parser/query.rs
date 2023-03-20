@@ -261,8 +261,8 @@ pub enum TableReferenceElement {
         table: Identifier,
         alias: Option<TableAlias>,
         travel_point: Option<TimeTravelPoint>,
-        pivot: Option<PivotMeta>,
-        unpivot: Option<UnpivotMeta>,
+        pivot: Option<Box<PivotMeta>>,
+        unpivot: Option<Box<UnpivotMeta>>,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
@@ -326,8 +326,8 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
                 table,
                 alias,
                 travel_point: travel_point_opt.map(|p| p.1),
-                pivot,
-                unpivot,
+                pivot: pivot.map(Box::new),
+                unpivot: unpivot.map(Box::new),
             }
         },
     );
