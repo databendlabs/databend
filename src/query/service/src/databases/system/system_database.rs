@@ -101,11 +101,12 @@ impl SystemDatabase {
             TableFunctionsTable::create(sys_db_meta.next_table_id()),
         ];
 
+        let disable_tables = Self::disable_system_tables();
         for tbl in table_list.into_iter() {
             // Not load the disable system tables.
             if config.query.disable_system_table_load {
                 let name = tbl.name();
-                if !Self::disable_system_tables()[name] {
+                if disable_tables.get(name).is_none() {
                     sys_db_meta.insert("system", tbl);
                 }
             } else {
