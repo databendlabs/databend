@@ -71,7 +71,7 @@ const Releases: FC = (): ReactElement => {
         <div className={styles.historyArea}>
           <div className={styles.historyTitle}>
             <div>History Versions</div>
-            <div>We will show you the latest 20 versions, please check <a target='_blank' href='https://github.com/datafuselabs/databend/releases'>Github</a> for more.</div>
+            <div>This page only displays the most recent 20 versions. For earlier versions, please refer to <a target='_blank' href='https://github.com/datafuselabs/databend/releases'>GitHub</a>.</div>
           </div>
           <div className={styles.listWrap}>
             {
