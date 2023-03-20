@@ -100,8 +100,9 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| FunctionDomain::MayThrow,
         |a, ctx| {
-            if let Some(s) = a.as_scalar() {
-                let duration = Duration::try_from_secs_f64(val.into()).map_err(|x| x.to_string());
+            if let Some(val) = a.as_scalar() {
+                let duration =
+                    Duration::try_from_secs_f64((*val).into()).map_err(|x| x.to_string());
                 match duration {
                     Ok(duration) => {
                         if duration.gt(&Duration::from_secs(300)) {
@@ -110,20 +111,18 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 duration
                             );
                             ctx.set_error(0, err);
-                            Ok(Value::Scalar(Scalar::Null(NullType::UInt8)))
                         } else {
                             std::thread::sleep(duration);
-                            Ok(Value::Scalar(Scalar::Value(UInt8Type::from(1))))
                         }
                     }
                     Err(e) => {
                         ctx.set_error(0, e);
-                        Ok(Value::Scalar(Scalar::Null(NullType::UInt8)))
                     }
                 }
             } else {
                 ctx.set_error(0, "Must be constant value");
             }
+            Value::Scalar(0_u8)
         },
     );
 
