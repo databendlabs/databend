@@ -94,8 +94,6 @@ impl Rule for RulePushDownFilterScan {
         let filter: Filter = s_expr.plan().clone().try_into()?;
         let mut get: Scan = s_expr.child(0)?.plan().clone().try_into()?;
 
-        if get.push_down_predicates.is_some() {}
-
         let add_filters = self.find_push_down_predicates(&filter.predicates)?;
 
         match get.push_down_predicates.as_mut() {
