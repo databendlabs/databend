@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::VecDeque;
 use std::io::BufRead;
 use std::io::Cursor;
@@ -21,6 +22,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use aho_corasick::AhoCorasick;
+use chrono::Utc;
 use common_ast::ast::Expr as AExpr;
 use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::parse_expr;
@@ -52,6 +54,8 @@ use common_io::cursor_ext::ReadCheckPointExt;
 use common_meta_app::principal::FileFormatOptions;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
+use common_meta_app::schema::TableCopiedFileInfo;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
@@ -72,6 +76,7 @@ use common_sql::MetadataRef;
 use common_sql::NameResolutionContext;
 use common_sql::ScalarBinder;
 use common_storage::StageFileInfo;
+use common_storage::StageFileStatus;
 use common_storage::StageFilesInfo;
 use common_storages_factory::Table;
 use common_storages_fuse::io::Files;
@@ -203,7 +208,8 @@ impl InsertInterpreter {
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
         let source_schema = self.plan.schema();
         let catalog_name = self.plan.catalog.clone();
-        let overwrite = self.plan.overwrite;
+        let database_name = self.plan.database.clone();
+        let table_name = self.plan.table.clone();
 
         let (attachment_data_schema, const_columns) = if attachment.values_str.is_empty() {
             (source_schema.clone(), vec![])
@@ -232,7 +238,7 @@ impl InsertInterpreter {
             files_to_copy: None,
         };
 
-        let all_source_files = StageTable::list_files(&stage_table_info).await?;
+        let mut all_source_files = StageTable::list_files(&stage_table_info).await?;
 
         info!(
             "insert: read all stage attachment files finished: {}, elapsed:{}",
@@ -240,11 +246,31 @@ impl InsertInterpreter {
             start.elapsed().as_secs()
         );
 
-        stage_table_info.files_to_copy = Some(all_source_files.clone());
+        all_source_files = table_ctx
+            .color_copied_files(&catalog_name, &database_name, &table_name, all_source_files)
+            .await?;
+
+        let mut need_copy_files = vec![];
+        for file in &all_source_files {
+            if file.status == StageFileStatus::NeedCopy {
+                need_copy_files.push(file.clone());
+            }
+        }
+        info!(
+            "insert: check all files finished, all:{}, need copy:{}, elapsed:{}",
+            all_source_files.len(),
+            need_copy_files.len(),
+            start.elapsed().as_secs()
+        );
+        if need_copy_files.is_empty() {
+            return Ok(());
+        }
+
+        stage_table_info.files_to_copy = Some(need_copy_files.clone());
         let stage_table = StageTable::try_create(stage_table_info.clone())?;
         let read_source_plan = {
             stage_table
-                .read_plan_with_catalog(ctx.clone(), catalog_name, None, None)
+                .read_plan_with_catalog(ctx.clone(), catalog_name.clone(), None, None)
                 .await?
         };
 
@@ -278,7 +304,6 @@ impl InsertInterpreter {
         let stage_info_clone = stage_table_info.stage_info.clone();
         pipeline.set_on_finished(move |may_error| {
             // capture out variable
-            let overwrite = overwrite;
             let ctx = ctx.clone();
             let table = table.clone();
             let stage_info = stage_info_clone.clone();
@@ -306,18 +331,48 @@ impl InsertInterpreter {
                     Err(may_error.as_ref().unwrap().clone())
                 }
                 None => {
-                    let append_entries = ctx.consume_precommit_blocks();
+                    let mut copied_files = BTreeMap::new();
+                    for file in need_copy_files {
+                        // Short the etag to 7 bytes for less space in metasrv.
+                        let short_etag = file.etag.clone().map(|mut v| {
+                            v.truncate(7);
+                            v
+                        });
+                        copied_files.insert(file.path.clone(), TableCopiedFileInfo {
+                            etag: short_etag,
+                            content_length: file.size,
+                            last_modified: Some(file.last_modified),
+                        });
+                    }
                     // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
                     GlobalIORuntime::instance().block_on(async move {
-                        tracing::info!(
-                            "insert: try to commit append entries:{}, elapsed:{}",
-                            append_entries.len(),
-                            start.elapsed().as_secs()
-                        );
+                        let operations = ctx.consume_precommit_blocks();
+                        let table_id = table.get_id();
+                        let expire_hours =
+                            ctx.get_settings().get_load_file_metadata_expire_hours()?;
 
-                        let copied_files = None;
+                        // do not upsert copied files if they are to be purged
+                        let upsert_copied_files_request =
+                            if copied_files.is_empty() || stage_info.copy_options.purge {
+                                None
+                            } else {
+                                let expire_at = expire_hours * 60 + Utc::now().timestamp() as u64;
+                                let req = UpsertTableCopiedFileReq {
+                                    table_id,
+                                    file_info: copied_files,
+                                    expire_at: Some(expire_at),
+                                    fail_if_duplicated: true,
+                                };
+                                Some(req)
+                            };
+
                         table
-                            .commit_insertion(ctx.clone(), append_entries, copied_files, overwrite)
+                            .commit_insertion(
+                                ctx.clone(),
+                                operations,
+                                upsert_copied_files_request,
+                                false,
+                            )
                             .await?;
 
                         if stage_info.copy_options.purge {
