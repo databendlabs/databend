@@ -1,135 +1,113 @@
-// Copyright 2022 Datafuse Labs.
-import React, { FC, ReactElement, useState } from 'react';
-import Table from 'rc-table';
-import styles from './styles.module.scss';
+// Copyright 2023 Datafuse Labs.
+import React, { FC, ReactElement } from 'react';
 import Layout from '@theme/Layout';
 import clsx from 'clsx';
-import { useMount } from 'ahooks';
-import bytes from 'bytes';
-import axios from 'axios';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm'
+import { timeFormatAgo } from '@site/src/utils/tools';
+import styles from './styles.module.scss';
+import useGetReleases from '@site/src/hooks/useGetReleases';
+import Card from '@site/src/components/BaseComponents/Card';
+import Tag from '@site/src/components/BaseComponents/Tag';
+import { Apple, Linux } from '@site/src/components/Icons';
 
-interface IRow {
-  name: string;
-  sort?: number;
-  tagName?: string;
-  osType?: string;
-  size: number;
-}
-const LINUX_GENERIC_X86 = 'Linux Generic(x86, 64-bit)';
-const LINUX_GENERIC_ARM = 'Linux Generic(ARM, 64-bit)';
-const MAC_X86 = 'macOS (x86, 64-bit)';
-const MAC_ARM = 'macOS (ARM, 64-bit)';
 const Releases: FC = (): ReactElement => {
-  const DOWNLOAD_LINK = 'https://repo.databend.rs/databend/';
-  useMount(() => {
-    getRelease();
-  });
-  const [releaseData, setReleaseData] = useState<IRow[]>([
-    {
-      name: `databend-aarch64-unknown-linux-musl.tar.gz`,
-      tagName: '',
-      osType: LINUX_GENERIC_ARM,
-      size: 0
-    },
-    {
-      name: `databend-x86_64-unknown-linux-musl.tar.gz`,
-      tagName: '',
-      osType: LINUX_GENERIC_X86,
-      size: 0
-    },
-    {
-      name: `databend-aarch64-apple-darwin.tar.gz`,
-      tagName: '',
-      osType: MAC_ARM,
-      size: 0
-    },
-    {
-      name: `databend-x86_64-apple-darwin.tar.gz`,
-      tagName: '',
-      osType: MAC_X86,
-      size: 0
-    }
-  ]);
-  const columns = [
-    {
-      title: 'Arch',
-      dataIndex: 'name',
-      key: 'name',
-      render(name: string, record: IRow) {
-        const { tagName, osType } = record;
-        return <div>
-          <div className={styles.osType}>{osType}</div>
-          <div className={styles.name}>{name}</div>
-        </div>
-      }
-    },
-    {
-      title: 'tagName',
-      dataIndex: 'tagName',
-      key: 'tagName',
-      render(tagName: string) {
-        return <div className={styles.tagName}>{tagName}</div>
-      }
-    },
-    {
-      title: 'Size',
-      dataIndex: 'size',
-      key: 'size',
-      render(size: number) {
-        return <div className={styles.tagName}>{size > 0 && bytes.format(size, { thousandsSeparator: ',', decimalPlaces: 1 })}</div>
-      }
-    },
-    {
-      title: 'download',
-      dataIndex: 'osType',
-      key: 'osType',
-      render(o: string, record: IRow) {
-        const { tagName, name } = record;
-        return <a className={clsx('button button--secondary', styles.download)} href={`${DOWNLOAD_LINK}${tagName}/${name}`}>Download</a>
-      }
-    }
-  ];
-  async function getRelease() {
-    const res = await axios.get(`${DOWNLOAD_LINK}releases.json`);
-    const data = res?.data;
-    if (data && data?.length > 0) {
-      const releaseData = data[0];
-      const { assets, tag_name } = releaseData || {};
-      const result = assets
-        ?.filter((item) => {
-          item.tagName = tag_name;
-          if (item?.name?.includes('-apple-')) {
-            item.sort = 1;
-            if (item?.name?.includes('x86')) {
-              item.osType = MAC_X86;
-            } else {
-              item.osType = MAC_ARM;
-            }
-          } else if (item?.name?.includes('-linux-')) {
-            item.sort = 0;
-            if (item?.name?.includes('x86')) {
-              item.osType = LINUX_GENERIC_X86;
-            } else {
-              item.osType = LINUX_GENERIC_ARM;
-            }
-          }
-          const opName = item.name;
-          return !opName?.includes('linux-gnu') && !opName?.includes('testsuites') && !opName?.includes('sha256sums') && !opName?.endsWith('.deb');
-        })
-        ?.sort((a, b) => {
-          return a.sort - b.sort;
-        })
-      setReleaseData(result);
-    }
+  const { 
+    releasesList, 
+    tagName
+  } = useGetReleases();
+  const { filterBody, assets: latestAssets, published_at, prerelease} = releasesList[0];
+  function Icons({isApple, size = 24}): ReactElement {
+    return (
+      <>
+        {
+          isApple
+          ? <Apple size={size}/>
+          : <Linux size={size}/>
+        }
+      </>
+    )
   }
   return (
     <Layout
       title={`Databend - Activate your Object Storage for real-time analytics`}
       description={`A modern Elasticity and Performance Cloud Data Warehouse, activate your Object Storage(S3, Azure Blob, or MinIO) for real-time analytics`}>
-      <div className={styles.tableWarp}>
-        <div className={styles.table}>
-          <Table showHeader={false} rowKey="name" columns={columns} data={releaseData} />
-          <a target={'_blank'} className={styles.prev} href="https://github.com/datafuselabs/databend/releases">Looking for previous GA versions?</a>
+      <div className={styles.wholePage}>
+        <div className={styles.download}>Download</div>
+        <div className={styles.latest}>Latest Version: {tagName}</div>
+        <Card className={styles.latestBlock}>
+          <div className={styles.latestVersion}>
+            <div className={styles.topTag}>
+              <span className={styles.version}>{tagName}</span>
+              <Tag>Latest</Tag>
+            </div>
+            <div className={styles.updateTime}>{timeFormatAgo(published_at)}</div>
+            <div className={styles.nowAssets}>
+              {
+                latestAssets?.map((asset, index)=> {
+                  const { isApple, browser_download_url, osTypeDesc, formatSize } = asset;
+                  return (
+                    <Card 
+                      href={browser_download_url}
+                      isDownload 
+                      key={index} 
+                      className={clsx(styles.nowItem, !isApple && styles.nowItemLinux)} 
+                      padding={[8, 16]}>
+                      <Icons isApple={isApple}></Icons>
+                      <div className={styles.right}>
+                        <div>{osTypeDesc}</div>
+                        <div>Size: {formatSize}</div>
+                      </div>
+                    </Card>
+                  )
+                })
+              }
+            </div>
+          </div>
+          <div className={styles.submitRecord}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{filterBody}</ReactMarkdown>
+          </div>
+        </Card>
+        <div className={styles.historyArea}>
+          <div className={styles.historyTitle}>
+            <div>History Versions</div>
+            <div>This page only displays the most recent 20 versions. For earlier versions, please refer to <a target='_blank' href='https://github.com/datafuselabs/databend/releases'>GitHub</a>.</div>
+          </div>
+          <div className={styles.listWrap}>
+            {
+              releasesList.slice(1)?.map((release, index)=> {
+                return (
+                  <Card 
+                    key={index}
+                    className={styles.listItem} padding={[12, 24]}>
+                    <div>
+                      <div className={styles.leftDesc}>
+                        <div className={styles.tagName}>{release?.tag_name}</div>
+                      </div>
+                      <div>{timeFormatAgo(release?.published_at)}</div>
+                    </div>
+                    <div className={styles.downArea}>
+                      {
+                        release.assets?.map((asset, ind)=> {
+                          const { isApple, browser_download_url, osType} =  asset;
+                          return (
+                            <Card  
+                              key={ind}
+                              href={browser_download_url}
+                              className={clsx(styles.button, !isApple && styles.buttonLinux)} 
+                              padding={[5, 12]}>
+                              <Icons size={12} isApple={isApple}></Icons>
+                              <span>{osType}</span>
+                            </Card>
+                          )
+                        })
+                      }
+                    </div>
+                  </Card>
+                )
+              }) 
+            }
+          </div>
         </div>
       </div>
     </Layout >

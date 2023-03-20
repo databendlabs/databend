@@ -3,7 +3,7 @@ title: Query Syntax
 slug: ./
 ---
 
-Databend supports querying using [SELECT](./01-dml-select.md) and the following basic syntax:
+Databend supports querying using [SELECT](./01-query-select.md) and the following basic syntax:
 
 ```sql
 [WITH]
