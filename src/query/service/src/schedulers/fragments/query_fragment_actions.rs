@@ -338,21 +338,20 @@ impl QueryFragmentsActions {
     }
 
     fn statistics_connections(&self) -> HashMap<String, HashSet<String>> {
+        let local_id = self.ctx.get_cluster().local_id.clone();
         let mut target_source_connections = HashMap::new();
 
         for fragment_actions in &self.fragments_actions {
             if let Some(exchange) = &fragment_actions.data_exchange {
                 let destinations = exchange.get_destinations();
 
-                for fragment_action in &fragment_actions.fragment_actions {
-                    let source = fragment_action.executor.to_string();
-
+                for _fragment_action in &fragment_actions.fragment_actions {
                     for destination in &destinations {
-                        if &source == destination {
+                        if &local_id == destination {
                             continue;
                         }
 
-                        match target_source_connections.entry(source.clone()) {
+                        match target_source_connections.entry(local_id.clone()) {
                             Entry::Vacant(v) => {
                                 v.insert(HashSet::from([destination.clone()]));
                             }
@@ -363,10 +362,10 @@ impl QueryFragmentsActions {
 
                         match target_source_connections.entry(destination.clone()) {
                             Entry::Vacant(v) => {
-                                v.insert(HashSet::from([source.clone()]));
+                                v.insert(HashSet::from([local_id.clone()]));
                             }
                             Entry::Occupied(mut v) => {
-                                v.get_mut().insert(source.clone());
+                                v.get_mut().insert(local_id.clone());
                             }
                         };
                     }

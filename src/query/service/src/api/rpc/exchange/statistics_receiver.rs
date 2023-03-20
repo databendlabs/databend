@@ -132,10 +132,10 @@ impl StatisticsReceiver {
         }
 
         Ok(StatisticsReceiver {
-            _runtime: runtime,
+            shutdown_flag,
+            shutdown_notify,
             exchange_handler,
-            shutdown_notify: Arc::new(Notify::new()),
-            shutdown_flag: Arc::new(AtomicBool::new(false)),
+            _runtime: runtime,
         })
     }
 
