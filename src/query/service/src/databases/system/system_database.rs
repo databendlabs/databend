@@ -60,8 +60,8 @@ impl SystemDatabase {
     /// These tables may disabled to the sql users.
     fn disable_system_tables() -> HashMap<String, bool> {
         let mut map = HashMap::new();
-        map.insert("system.config".to_string(), true);
-        map.insert("system.cluster".to_string(), true);
+        map.insert("configs".to_string(), true);
+        map.insert("clusters".to_string(), true);
         map
     }
 
