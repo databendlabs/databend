@@ -138,6 +138,10 @@
                 .postListDesc {
                     color: var(--color-text-2) !important;
                     font-size: 14px;
+                    span{
+                      color: var(--color-primary);
+                      font-weight: bold;
+                    }
                 }
 
                 @include media{

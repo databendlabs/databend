@@ -46,7 +46,7 @@ select snapshot_id,previous_snapshot_id, timestamp from fuse_snapshot('default',
 +----------------------------------+----------------------------------+----------------------------+
 ```
 
-You can now query the history data with a snapshot or timestamp by including the [AT](https://databend.rs/doc/reference/sql/query-syntax/dml-at) clause in the SELECT statement:
+You can now query the history data with a snapshot or timestamp by including the [AT](https://databend.rs/doc/reference/sql/query-syntax/query-at) clause in the SELECT statement:
 
 ```sql
 select * from spiderman at(snapshot=>'a2801ed9656d42c9812f2921214f0795');

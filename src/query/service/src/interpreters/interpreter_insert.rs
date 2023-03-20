@@ -16,6 +16,7 @@ use std::collections::VecDeque;
 use std::io::BufRead;
 use std::io::Cursor;
 use std::ops::Not;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -49,22 +50,22 @@ use common_formats::FastFieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
 use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
 use common_pipeline_transforms::processors::transforms::Transform;
+use common_sql::binder::wrap_cast;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::PhysicalPlanBuilder;
-use common_sql::plans::CastExpr;
 use common_sql::plans::Insert;
 use common_sql::plans::InsertInputSource;
 use common_sql::plans::Plan;
-use common_sql::plans::ScalarExpr;
 use common_sql::BindContext;
 use common_sql::Metadata;
 use common_sql::MetadataRef;
@@ -85,6 +86,7 @@ use crate::interpreters::common::append2table;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
+use crate::pipelines::processors::transforms::TransformRuntimeCastSchema;
 use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
@@ -312,8 +314,10 @@ impl InsertInterpreter {
                             append_entries.len(),
                             start.elapsed().as_secs()
                         );
+
+                        let copied_files = None;
                         table
-                            .commit_insertion(ctx.clone(), append_entries, overwrite)
+                            .commit_insertion(ctx.clone(), append_entries, copied_files, overwrite)
                             .await?;
 
                         if stage_info.copy_options.purge {
@@ -370,17 +374,52 @@ impl Interpreter for InsertInterpreter {
                     1,
                 )?;
             }
-            InsertInputSource::StreamingWithFormat(_, _, input_context) => {
+            InsertInputSource::StreamingWithFormat(format, _, input_context) => {
                 let input_context = input_context.as_ref().expect("must success").clone();
                 input_context
                     .format
                     .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
+
+                match StageFileFormatType::from_str(format) {
+                    Ok(f) if f.has_inner_schema() => {
+                        let dest_schema = plan.schema();
+                        let func_ctx = self.ctx.get_function_context()?;
+
+                        build_res.main_pipeline.add_transform(
+                            |transform_input_port, transform_output_port| {
+                                TransformRuntimeCastSchema::try_create(
+                                    transform_input_port,
+                                    transform_output_port,
+                                    dest_schema.clone(),
+                                    func_ctx,
+                                )
+                            },
+                        )?;
+                    }
+                    _ => {}
+                }
             }
-            InsertInputSource::StreamingWithFileFormat(_, _, input_context) => {
+            InsertInputSource::StreamingWithFileFormat(format_options, _, input_context) => {
                 let input_context = input_context.as_ref().expect("must success").clone();
                 input_context
                     .format
                     .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
+
+                if format_options.format.has_inner_schema() {
+                    let dest_schema = plan.schema();
+                    let func_ctx = self.ctx.get_function_context()?;
+
+                    build_res.main_pipeline.add_transform(
+                        |transform_input_port, transform_output_port| {
+                            TransformRuntimeCastSchema::try_create(
+                                transform_input_port,
+                                transform_output_port,
+                                dest_schema.clone(),
+                                func_ctx,
+                            )
+                        },
+                    )?;
+                }
             }
             InsertInputSource::Stage(opts) => {
                 tracing::info!("insert: from stage with options {:?}", opts);
@@ -456,7 +495,11 @@ impl Interpreter for InsertInterpreter {
                         let append_entries = ctx.consume_precommit_blocks();
                         // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
                         return GlobalIORuntime::instance().block_on(async move {
-                            table.commit_insertion(ctx, append_entries, overwrite).await
+                            // TODO doc this
+                            let copied_files = None;
+                            table
+                                .commit_insertion(ctx, append_entries, copied_files, overwrite)
+                                .await
                         });
                     }
 
@@ -759,11 +802,7 @@ async fn fill_default_value(
         let tokens = tokenize_sql(default_expr)?;
         let ast = parse_expr(&tokens, Dialect::PostgreSQL)?;
         let (mut scalar, _) = binder.bind(&ast).await?;
-        scalar = ScalarExpr::CastExpr(CastExpr {
-            is_try: false,
-            argument: Box::new(scalar),
-            target_type: Box::new(field.data_type().clone()),
-        });
+        scalar = wrap_cast(&scalar, field.data_type());
 
         let expr = scalar
             .as_expr_with_col_index()?
@@ -829,11 +868,7 @@ async fn exprs_to_scalar(
 
         let (mut scalar, _) = scalar_binder.bind(expr).await?;
         let field_data_type = schema.field(i).data_type();
-        scalar = ScalarExpr::CastExpr(CastExpr {
-            is_try: false,
-            argument: Box::new(scalar),
-            target_type: Box::new(field_data_type.clone()),
-        });
+        scalar = wrap_cast(&scalar, field_data_type);
         let expr = scalar
             .as_expr_with_col_index()?
             .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());

@@ -12,5 +12,5 @@
 198	2020.0	767
 --parquet less
 199	2020.0	769
---parquet mismatch schema
-1
+--parquet runtime cast schema
+199	2020.0	769

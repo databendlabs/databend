@@ -362,7 +362,7 @@ fn eval_string_to_boolean(val: ValueRef<StringType>, ctx: &mut EvalContext) -> V
         } else if val.eq_ignore_ascii_case(b"false") {
             output.push(false);
         } else {
-            ctx.set_error(output.len(), "unable to parse string to type `BOOLEAN`");
+            ctx.set_error(output.len(), "cannot parse to type `BOOLEAN`");
             output.push(false);
         }
     })(val, ctx)

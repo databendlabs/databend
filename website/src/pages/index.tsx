@@ -1,39 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import clsx from 'clsx';
 import Layout from '@theme/Layout';
 import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import styles from './index.module.scss';
 import * as icons from "../components/Icons"
-
-const community = [
-  {
-    'icon':'Github',
-    'star': '5.4 K',
-    'title': 'GitHub',
-    'link': 'https://github.com/datafuselabs/databend'
-  },
-  {
-    'icon':'Slack',
-    'title': 'Slack',
-    'link': 'https://link.databend.rs/join-slack'
-  },
-  {
-    'icon':'Twitter',
-    'title': 'Twitter',
-    'link': 'https://twitter.com/DatabendLabs'
-  },
-  {
-    'icon':'Youtube',
-    'title': 'YouTube',
-    'link': 'https://www.youtube.com/@DatabendLabs'
-  },
-]
-
+import useGetReleases from '@site/src/hooks/useGetReleases';
 
 function HomepageHeader() {
     const {siteConfig} = useDocusaurusContext();
-    const { Github,Getstart,Book } = icons
+    const { Github,Getstart,Book } = icons;
+    const { formatStargazersCount } = useGetReleases();
+    const community = [
+      {
+        'icon':'Github',
+        'star': formatStargazersCount,
+        'title': 'GitHub',
+        'link': 'https://github.com/datafuselabs/databend'
+      },
+      {
+        'icon':'Slack',
+        'title': 'Slack',
+        'link': 'https://link.databend.rs/join-slack'
+      },
+      {
+        'icon':'Twitter',
+        'title': 'Twitter',
+        'link': 'https://twitter.com/DatabendLabs'
+      },
+      {
+        'icon':'Youtube',
+        'title': 'YouTube',
+        'link': 'https://www.youtube.com/@DatabendLabs'
+      },
+    ]
     
     return (
       <div className={clsx('home-page', styles.homePage)}>

@@ -41,6 +41,7 @@ pub mod share;
 mod sort;
 mod union_all;
 mod update;
+mod window;
 
 pub use aggregate::*;
 pub use call::CallPlan;
@@ -75,3 +76,4 @@ pub use share::*;
 pub use sort::*;
 pub use union_all::UnionAll;
 pub use update::UpdatePlan;
+pub use window::*;

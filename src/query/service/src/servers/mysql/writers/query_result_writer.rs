@@ -45,6 +45,7 @@ pub struct QueryResult {
     extra_info: Option<Box<dyn ProgressReporter + Send>>,
     has_result_set: bool,
     schema: DataSchemaRef,
+    sql: String,
 }
 
 impl QueryResult {
@@ -53,12 +54,14 @@ impl QueryResult {
         extra_info: Option<Box<dyn ProgressReporter + Send>>,
         has_result_set: bool,
         schema: DataSchemaRef,
+        sql: String,
     ) -> QueryResult {
         QueryResult {
             blocks,
             extra_info,
             has_result_set,
             schema,
+            sql,
         }
     }
 }
@@ -114,7 +117,11 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                     dataset_writer
                         .error(
                             ErrorKind::ER_UNKNOWN_ERROR,
-                            format!("dataset write failed: {}", e).as_bytes(),
+                            format!(
+                                "dataset write failed: {}",
+                                e.display_with_sql(&query_result.sql)
+                            )
+                            .as_bytes(),
                         )
                         .await?;
 
@@ -195,7 +202,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                             row_writer
                                 .finish_error(
                                     ErrorKind::ER_UNKNOWN_ERROR,
-                                    &format!("{}", e).as_bytes(),
+                                    &e.display_with_sql(&query_result.sql).to_string().as_bytes(),
                                 )
                                 .await?;
                             return Ok(());

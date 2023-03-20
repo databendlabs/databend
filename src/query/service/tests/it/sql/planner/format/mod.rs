@@ -104,10 +104,12 @@ fn test_format() {
         Join {
             right_conditions: vec![
                 FunctionCall {
+                    span: None,
                     func_name: "plus".to_string(),
                     params: vec![],
                     arguments: vec![
                         BoundColumnRef {
+                            span: None,
                             column: ColumnBinding {
                                 database_name: None,
                                 table_name: None,
@@ -119,6 +121,7 @@ fn test_format() {
                         }
                         .into(),
                         ConstantExpr {
+                            span: None,
                             value: Literal::UInt64(123u64),
                             data_type: Box::new(DataType::Boolean),
                         }
@@ -129,6 +132,7 @@ fn test_format() {
             ],
             left_conditions: vec![
                 BoundColumnRef {
+                    span: None,
                     column: ColumnBinding {
                         database_name: None,
                         table_name: None,
@@ -151,6 +155,7 @@ fn test_format() {
             Filter {
                 predicates: vec![
                     ConstantExpr {
+                        span: None,
                         value: Literal::Boolean(true),
                         data_type: Box::new(DataType::Boolean),
                     }

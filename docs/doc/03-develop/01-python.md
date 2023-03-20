@@ -4,7 +4,6 @@ sidebar_label: Python
 description:
    Develop with Databend using Python.
 ---
-import GetLatest from '@site/src/components/GetLatest';
 
 Databend offers the following options enabling you to develop applications using the Python programming language and establish connectivity with Databend:
 

@@ -50,8 +50,6 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableCopiedFileReply;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_store::MetaStoreProvider;
@@ -302,16 +300,6 @@ impl Catalog for MutableCatalog {
     ) -> Result<GetTableCopiedFileReply> {
         let db = self.get_database(tenant, db_name).await?;
         db.get_table_copied_file_info(req).await
-    }
-
-    async fn upsert_table_copied_file_info(
-        &self,
-        tenant: &str,
-        db_name: &str,
-        req: UpsertTableCopiedFileReq,
-    ) -> Result<UpsertTableCopiedFileReply> {
-        let db = self.get_database(tenant, db_name).await?;
-        db.upsert_table_copied_file_info(req).await
     }
 
     async fn truncate_table(

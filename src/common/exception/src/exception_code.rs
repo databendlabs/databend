@@ -174,6 +174,7 @@ build_exceptions! {
     OCCRetryFailure(2011),
     TableNotWritable(2012),
     TableHistoricalDataNotFound(2013),
+    DuplicatedUpsertFiles(2014),
 
     // User api error codes.
     UnknownUser(2201),

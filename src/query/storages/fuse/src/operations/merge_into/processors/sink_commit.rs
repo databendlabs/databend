@@ -204,6 +204,7 @@ impl Processor for CommitSink {
                     &self.location_gen,
                     new_snapshot,
                     None,
+                    &None,
                     &self.dal,
                 )
                 .await

@@ -204,6 +204,22 @@ impl TableVersionMismatched {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("DuplicatedUpsertFiles: {table_id} , in operation `{context}`")]
+pub struct DuplicatedUpsertFiles {
+    table_id: u64,
+    context: String,
+}
+
+impl DuplicatedUpsertFiles {
+    pub fn new(table_id: u64, context: impl Into<String>) -> Self {
+        DuplicatedUpsertFiles {
+            table_id,
+            context: context.into(),
+        }
+    }
+}
+
 #[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[error("UnknownDatabase: `{db_name}` while `{context}`")]
 pub struct UnknownDatabase {
@@ -441,6 +457,9 @@ pub enum AppError {
     TableVersionMismatched(#[from] TableVersionMismatched),
 
     #[error(transparent)]
+    DuplicatedUpsertFiles(#[from] DuplicatedUpsertFiles),
+
+    #[error(transparent)]
     TableAlreadyExists(#[from] TableAlreadyExists),
 
     #[error(transparent)]
@@ -552,6 +571,7 @@ impl AppErrorMessage for UnknownTableId {}
 impl AppErrorMessage for UnknownDatabaseId {}
 
 impl AppErrorMessage for TableVersionMismatched {}
+impl AppErrorMessage for DuplicatedUpsertFiles {}
 
 impl AppErrorMessage for TableAlreadyExists {
     fn message(&self) -> String {
@@ -728,6 +748,7 @@ impl From<AppError> for ErrorCode {
             }
             AppError::WrongShare(err) => ErrorCode::WrongShare(err.message()),
             AppError::TxnRetryMaxTimes(err) => ErrorCode::TxnRetryMaxTimes(err.message()),
+            AppError::DuplicatedUpsertFiles(err) => ErrorCode::DuplicatedUpsertFiles(err.message()),
         }
     }
 }

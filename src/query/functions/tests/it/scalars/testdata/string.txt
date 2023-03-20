@@ -1869,10 +1869,10 @@ has tried possible overloads:
 
 
 error: 
-  --> SQL:1:1
+  --> SQL:1:5
   |
 1 | bin(e)
-  | ^^^^^^ unable to parse string to type `Int64` because invalid digit found in string while evaluating function `to_int64("abc")`
+  |     ^ invalid digit found in string while evaluating function `to_int64("abc")`
 
 
 
@@ -1977,10 +1977,10 @@ has tried possible overloads:
 
 
 error: 
-  --> SQL:1:1
+  --> SQL:1:5
   |
 1 | oct(e)
-  | ^^^^^^ unable to parse string to type `Int64` because invalid digit found in string while evaluating function `to_int64("abc")`
+  |     ^ invalid digit found in string while evaluating function `to_int64("abc")`
 
 
 

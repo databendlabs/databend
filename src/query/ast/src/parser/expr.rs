@@ -1050,11 +1050,11 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let date_expr = map(
         rule! {
-            DATE ~ #literal_string
+            DATE ~ #consumed(literal_string)
         },
-        |(_, date)| ExprElement::Cast {
+        |(_, (span, date))| ExprElement::Cast {
             expr: Box::new(Expr::Literal {
-                span: None,
+                span: transform_span(span.0),
                 lit: Literal::String(date),
             }),
             target_type: TypeName::Date,
@@ -1063,11 +1063,11 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let timestamp_expr = map(
         rule! {
-            TIMESTAMP ~ #literal_string
+            TIMESTAMP ~ #consumed(literal_string)
         },
-        |(_, date)| ExprElement::Cast {
+        |(_, (span, date))| ExprElement::Cast {
             expr: Box::new(Expr::Literal {
-                span: None,
+                span: transform_span(span.0),
                 lit: Literal::String(date),
             }),
             target_type: TypeName::Timestamp,

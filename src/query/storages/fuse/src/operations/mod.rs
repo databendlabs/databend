@@ -39,6 +39,8 @@ pub mod util;
 pub use compact::CompactOptions;
 pub use fuse_sink::BloomIndexState;
 pub use fuse_sink::FuseTableSink;
+pub use mutation::BlockCompactMutator;
+pub use mutation::CompactPartInfo;
 pub use mutation::FillInternalColumnProcessor;
 pub use mutation::ReclusterMutator;
 pub use mutation::SegmentCompactMutator;

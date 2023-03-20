@@ -616,7 +616,7 @@ async fn test_segment_compactor() -> Result<()> {
     Ok(())
 }
 
-struct CompactSegmentTestFixture {
+pub struct CompactSegmentTestFixture {
     threshold: u64,
     ctx: Arc<dyn TableContext>,
     data_accessor: DataOperator,
@@ -660,8 +660,14 @@ impl CompactSegmentTestFixture {
             segment_writer.clone(),
         );
 
-        let (locations, blocks) =
-            Self::gen_segments(&block_writer, &segment_writer, num_block_of_segments).await?;
+        let rows_per_block = vec![1; num_block_of_segments.len()];
+        let (locations, blocks, _) = Self::gen_segments(
+            &block_writer,
+            &segment_writer,
+            num_block_of_segments,
+            &rows_per_block,
+        )
+        .await?;
         self.input_blocks = blocks;
         let limit = limit.unwrap_or(usize::MAX);
         seg_acc
@@ -671,15 +677,22 @@ impl CompactSegmentTestFixture {
             .await
     }
 
-    async fn gen_segments(
+    pub async fn gen_segments(
         block_writer: &BlockWriter<'_>,
         segment_writer: &SegmentWriter<'_>,
         block_num_of_segments: &[usize],
-    ) -> Result<(Vec<Location>, Vec<BlockMeta>)> {
+        rows_per_blocks: &[usize],
+    ) -> Result<(Vec<Location>, Vec<BlockMeta>, Vec<SegmentInfo>)> {
         let mut locations = vec![];
         let mut collected_blocks = vec![];
-        for num_blocks in block_num_of_segments.iter().rev() {
-            let (schema, blocks) = TestFixture::gen_sample_blocks_ex(*num_blocks, 1, 1);
+        let mut segment_infos = vec![];
+        for (num_blocks, rows_per_block) in block_num_of_segments
+            .iter()
+            .zip(rows_per_blocks.iter())
+            .rev()
+        {
+            let (schema, blocks) =
+                TestFixture::gen_sample_blocks_ex(*num_blocks, *rows_per_block, 1);
             let mut stats_acc = StatisticsAccumulator::default();
             for block in blocks {
                 let block = block?;
@@ -703,10 +716,11 @@ impl CompactSegmentTestFixture {
                 col_stats,
             });
             let location = segment_writer.write_segment_no_cache(&segment_info).await?;
+            segment_infos.push(segment_info);
             locations.push(location);
         }
 
-        Ok((locations, collected_blocks))
+        Ok((locations, collected_blocks, segment_infos))
     }
 
     // verify that newly generated segments contain the proper number of blocks
