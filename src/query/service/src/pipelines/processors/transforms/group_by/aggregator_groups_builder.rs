@@ -81,15 +81,16 @@ pub struct SerializedKeysGroupColumnsBuilder<'a> {
 
 impl<'a> SerializedKeysGroupColumnsBuilder<'a> {
     pub fn create(capacity: usize, data_capacity: usize, params: &AggregatorParams) -> Self {
-        let (single_builder, data) =
-            if params.group_data_types.len() == 1 && params.group_data_types[0].is_string() {
-                (
-                    Some(StringColumnBuilder::with_capacity(capacity, data_capacity)),
-                    vec![],
-                )
-            } else {
-                (None, Vec::with_capacity(capacity))
-            };
+        let (single_builder, data) = if params.group_data_types.len() == 1
+            && (params.group_data_types[0].is_string() || params.group_data_types[0].is_variant())
+        {
+            (
+                Some(StringColumnBuilder::with_capacity(capacity, data_capacity)),
+                vec![],
+            )
+        } else {
+            (None, Vec::with_capacity(capacity))
+        };
 
         Self {
             data,
@@ -115,7 +116,11 @@ impl<'a> GroupColumnsBuilder for SerializedKeysGroupColumnsBuilder<'a> {
     fn finish(mut self) -> Result<Vec<Column>> {
         if let Some(builder) = self.single_builder.take() {
             let col = builder.build();
-            return Ok(vec![Column::String(col)]);
+            match self.group_data_types[0] {
+                DataType::String => return Ok(vec![Column::String(col)]),
+                DataType::Variant => return Ok(vec![Column::Variant(col)]),
+                _ => {}
+            }
         }
 
         let rows = self.data.len();

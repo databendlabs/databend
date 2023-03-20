@@ -99,10 +99,10 @@ Filter
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.numbers
-    ├── read rows: 1
-    ├── read bytes: 8
-    ├── partitions total: 1
-    ├── partitions scanned: 1
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
     ├── push downs: [filters: [false], limit: NONE]
     └── estimated rows: 1.00
 
@@ -114,10 +114,10 @@ Filter
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.numbers
-    ├── read rows: 1
-    ├── read bytes: 8
-    ├── partitions total: 1
-    ├── partitions scanned: 1
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
     ├── push downs: [filters: [false], limit: NONE]
     └── estimated rows: 1.00
 
@@ -129,10 +129,10 @@ Filter
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.numbers
-    ├── read rows: 1
-    ├── read bytes: 8
-    ├── partitions total: 1
-    ├── partitions scanned: 1
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
     ├── push downs: [filters: [false], limit: NONE]
     └── estimated rows: 1.00
 
@@ -159,3 +159,21 @@ TableScan
 ├── partitions scanned: 1
 ├── push downs: [filters: [], limit: NONE]
 └── estimated rows: 1.00
+
+
+
+query T
+explain select * from (select * from numbers(100)  where  number> 33 ) where 1=2;
+---
+----
+Filter
+├── filters: [false, numbers.number (#0) > 33]
+├── estimated rows: 11.11
+└── TableScan
+    ├── table: default.system.numbers
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [false], limit: NONE]
+    └── estimated rows: 100.00

@@ -23,7 +23,7 @@ env:
 
 jobs:
   metadata:
-    if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_call'
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: [self-hosted, X64, Linux, dev]
     outputs:
       sha: ${{ steps.metadata.outputs.sha }}
@@ -48,16 +48,12 @@ jobs:
               echo "source=pr" >> $GITHUB_OUTPUT
               echo "source_id=$(jq -r '.pr_id' metadata.json)" >> $GITHUB_OUTPUT
               ;;
-            workflow_call)
+            *)
               echo "sha=${{ github.sha }}" >> $GITHUB_OUTPUT
               echo "head_sha=${{ github.sha }}" >> $GITHUB_OUTPUT
               echo "run_id=${{ github.run_id }}" >> $GITHUB_OUTPUT
               echo "source=release" >> $GITHUB_OUTPUT
-              echo "source_id=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
-              ;;
-            *)
-              echo "Unknown event name: ${{ github.event_name }}"
-              exit 1
+              echo "source_id=${{ inputs.tag }}" >> $GITHUB_OUTPUT
               ;;
           esac
       - uses: ./.github/actions/create_check_status
@@ -160,7 +156,7 @@ jobs:
           databend-query --version
           databend-meta --version
       - name: Set github check status to pending
-        if: steps.metadata.outputs.source == 'pr'
+        if: needs.metadata.outputs.source == 'pr'
         uses: ./.github/actions/create_check_status
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -179,7 +175,7 @@ jobs:
           source: ${{ needs.metadata.outputs.source }}
           source_id: ${{ needs.metadata.outputs.source_id }}
       - name: Set github check status to completed
-        if: steps.metadata.outputs.source == 'pr'
+        if: needs.metadata.outputs.source == 'pr'
         uses: ./.github/actions/create_check_status
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -261,7 +257,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup_bendsql
       - name: Set github check status to pending
-        if: steps.metadata.outputs.source == 'pr'
+        if: needs.metadata.outputs.source == 'pr'
         uses: ./.github/actions/create_check_status
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -272,6 +268,7 @@ jobs:
           title: "Benchmark Cloud for ${{ matrix.dataset }} with ${{ matrix.size }} warehouse"
           summary: "status: **running**"
       - uses: ./.github/actions/benchmark_cloud
+        continue-on-error: true
         id: benchmark
         with:
           sha: ${{ needs.metadata.outputs.sha }}
@@ -286,7 +283,7 @@ jobs:
           cloud_org: ${{ secrets.BENCHMARK_CLOUD_ORG }}
           cloud_endpoint: ${{ secrets.BENCHMARK_CLOUD_ENDPOINT }}
       - name: Set github check status to pending
-        if: steps.metadata.outputs.source == 'pr'
+        if: needs.metadata.outputs.source == 'pr'
         uses: ./.github/actions/create_check_status
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -312,27 +309,11 @@ jobs:
           aws-region: us-east-2
       - uses: actions/download-artifact@v3
         with:
-          name: benchmark-hits-local
+          name: benchmark-hits
           path: benchmark/clickbench/results/hits
       - uses: actions/download-artifact@v3
         with:
-          name: benchmark-hits-cloud-Medium
-          path: benchmark/clickbench/results/hits
-      - uses: actions/download-artifact@v3
-        with:
-          name: benchmark-hits-cloud-Large
-          path: benchmark/clickbench/results/hits
-      - uses: actions/download-artifact@v3
-        with:
-          name: benchmark-tpch-local
-          path: benchmark/clickbench/results/tpch
-      - uses: actions/download-artifact@v3
-        with:
-          name: benchmark-tpch-cloud-Medium
-          path: benchmark/clickbench/results/tpch
-      - uses: actions/download-artifact@v3
-        with:
-          name: benchmark-tpch-cloud-Large
+          name: benchmark-tpch
           path: benchmark/clickbench/results/tpch
       - name: Get Report Prefix
         run: |
@@ -341,12 +322,8 @@ jobs:
       - name: Upload PR clickbench result to repo.databend.rs
         working-directory: benchmark/clickbench
         run: |
-          aws s3 cp ./results/hits/result-hits-local.json ${{ env.REPORT_S3_PREFIX }}/hits-local.json
-          aws s3 cp ./results/hits/result-hits-cloud-Medium.json ${{ env.REPORT_S3_PREFIX }}/hits-cloud-Medium.json
-          aws s3 cp ./results/hits/result-hits-cloud-Large.json ${{ env.REPORT_S3_PREFIX }}/hits-cloud-Large.json
-          aws s3 cp ./results/tpch/result-tpch-local.json ${{ env.REPORT_S3_PREFIX }}/tpch-local.json
-          aws s3 cp ./results/tpch/result-tpch-cloud-Medium.json ${{ env.REPORT_S3_PREFIX }}/tpch-cloud-Medium.json
-          aws s3 cp ./results/tpch/result-tpch-cloud-Large.json ${{ env.REPORT_S3_PREFIX }}/tpch-cloud-Large.json
+          aws s3 sync ./results/hits/ ${{ env.REPORT_S3_PREFIX }}/ --include "*.json"
+          aws s3 sync ./results/tpch/ ${{ env.REPORT_S3_PREFIX }}/ --include "*.json"
       - name: Get latest release clickbench result
         working-directory: benchmark/clickbench
         run: |
@@ -394,22 +371,17 @@ jobs:
           aws-region: us-east-2
       - uses: actions/download-artifact@v3
         with:
-          name: benchmark-${{ matrix.dataset }}-local
-          path: benchmark/clickbench/results/${{ matrix.dataset }}
-      - uses: actions/download-artifact@v3
-        with:
-          name: benchmark-${{ matrix.dataset }}-cloud-Medium
+          name: benchmark-${{ matrix.dataset }}
           path: benchmark/clickbench/results/${{ matrix.dataset }}
       - name: Upload nightly results to repo.databend.rs
-        working-directory: benchmark/clickbench
+        working-directory: benchmark/clickbench/
         run: |
           RESULT_PEFIX="${{ env.BENCHMARK_S3_PREFIX }}/release/${{ matrix.dataset }}/$(date -u +%Y)/$(date -u +%m)/$(date -u +%Y-%m-%d)/${{ needs.metadata.outputs.source_id }}"
           LATEST_PREFIX="${{ env.BENCHMARK_S3_PREFIX }}/release/${{ matrix.dataset }}/latest/latest"
-          aws s3 cp ./results/result-${{ matrix.dataset }}-local.json "${RESULT_PEFIX}-local.json"
-          aws s3 cp ./results/result-${{ matrix.dataset }}-cloud-Medium.json "${RESULT_PEFIX}-cloud-Medium.json"
-          aws s3 cp ./results/result-${{ matrix.dataset }}-local.json "${LATEST_PREFIX}-local.json"
-          aws s3 cp ./results/result-${{ matrix.dataset }}-cloud-Medium.json "${LATEST_PREFIX}-cloud-Medium.json"
-          rm -f ./results/result-*
+          for file in ./results/${{ matrix.dataset }}/*.json; do
+            aws s3 cp $file "${RESULT_PEFIX}-$(basename $file)"
+            aws s3 cp $file "${LATEST_PREFIX}-$(basename $file)"
+          done
       - name: Generate report
         working-directory: benchmark/clickbench
         run: |

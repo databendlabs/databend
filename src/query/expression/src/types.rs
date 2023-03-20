@@ -236,6 +236,20 @@ impl DataType {
             _ => self.to_string().to_uppercase(),
         }
     }
+
+    // Returns the number of leaf columns of the DataType
+    pub fn num_leaf_columns(&self) -> usize {
+        match self {
+            DataType::Nullable(box inner_ty)
+            | DataType::Array(box inner_ty)
+            | DataType::Map(box inner_ty) => inner_ty.num_leaf_columns(),
+            DataType::Tuple(inner_tys) => inner_tys
+                .iter()
+                .map(|inner_ty| inner_ty.num_leaf_columns())
+                .sum(),
+            _ => 1,
+        }
+    }
 }
 
 pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {

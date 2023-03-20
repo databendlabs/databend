@@ -127,12 +127,12 @@ impl Binder {
             s_expr = self.bind_where(&mut from_context, expr, s_expr).await?;
         }
 
+        let window_order_by_exprs = self.fetch_window_order_by_expr(&stmt.select_list).await;
+
         // Generate a analyzed select list with from context
         let mut select_list = self
             .normalize_select_list(&mut from_context, &stmt.select_list)
             .await?;
-
-        let (mut scalar_items, projections) = self.analyze_projection(&select_list)?;
 
         // This will potentially add some alias group items to `from_context` if find some.
         if let Some(group_by) = stmt.group_by.as_ref() {
@@ -140,7 +140,12 @@ impl Binder {
                 .await?;
         }
 
+        self.analyze_window_select(&mut from_context, &mut select_list)?;
+
         self.analyze_aggregate_select(&mut from_context, &mut select_list)?;
+
+        // `analyze_projection` should behind `analyze_aggregate_select` because `analyze_aggregate_select` will rewrite `grouping`.
+        let (mut scalar_items, projections) = self.analyze_projection(&select_list)?;
 
         let having = if let Some(having) = &stmt.having {
             Some(
@@ -150,6 +155,20 @@ impl Binder {
         } else {
             None
         };
+
+        let mut window_order_by_items = vec![];
+
+        for order_by_expr in window_order_by_exprs.iter() {
+            window_order_by_items.push(
+                self.fetch_window_order_items(
+                    &from_context,
+                    &mut scalar_items,
+                    &projections,
+                    order_by_expr,
+                )
+                .await?,
+            );
+        }
 
         let order_items = self
             .analyze_order_items(
@@ -173,8 +192,33 @@ impl Binder {
                 .await?;
         }
 
+        // bind window order by
+        for window_order_items in window_order_by_items {
+            s_expr = self
+                .bind_window_order_by(
+                    &from_context,
+                    window_order_items,
+                    &select_list,
+                    &mut scalar_items,
+                    s_expr,
+                )
+                .await?;
+        }
+
+        // bind window
+        // window run after the HAVING clause but before the ORDER BY clause.
+        for window_info in bind_context.windows.iter() {
+            s_expr = self.bind_window_function(window_info, s_expr).await?;
+        }
+
         if stmt.distinct {
-            s_expr = self.bind_distinct(&from_context, &projections, &mut scalar_items, s_expr)?;
+            s_expr = self.bind_distinct(
+                stmt.span,
+                &from_context,
+                &projections,
+                &mut scalar_items,
+                s_expr,
+            )?;
         }
 
         if !order_by.is_empty() {
@@ -352,13 +396,29 @@ impl Binder {
         match (op, all) {
             (SetOperator::Intersect, false) => {
                 // Transfer Intersect to Semi join
-                self.bind_intersect(left_bind_context, right_bind_context, left_expr, right_expr)
+                self.bind_intersect(
+                    left.span(),
+                    right.span(),
+                    left_bind_context,
+                    right_bind_context,
+                    left_expr,
+                    right_expr,
+                )
             }
             (SetOperator::Except, false) => {
                 // Transfer Except to Anti join
-                self.bind_except(left_bind_context, right_bind_context, left_expr, right_expr)
+                self.bind_except(
+                    left.span(),
+                    right.span(),
+                    left_bind_context,
+                    right_bind_context,
+                    left_expr,
+                    right_expr,
+                )
             }
             (SetOperator::Union, true) => self.bind_union(
+                left.span(),
+                right.span(),
                 left_bind_context,
                 right_bind_context,
                 coercion_types,
@@ -367,6 +427,8 @@ impl Binder {
                 false,
             ),
             (SetOperator::Union, false) => self.bind_union(
+                left.span(),
+                right.span(),
                 left_bind_context,
                 right_bind_context,
                 coercion_types,
@@ -380,8 +442,11 @@ impl Binder {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn bind_union(
         &mut self,
+        left_span: Span,
+        right_span: Span,
         left_context: BindContext,
         right_context: BindContext,
         coercion_types: Vec<DataType>,
@@ -390,6 +455,8 @@ impl Binder {
         distinct: bool,
     ) -> Result<(SExpr, BindContext)> {
         let (new_bind_context, pairs, left_expr, right_expr) = self.coercion_union_type(
+            left_span,
+            right_span,
             left_context,
             right_context,
             left_expr,
@@ -401,6 +468,7 @@ impl Binder {
         let mut new_expr = SExpr::create_binary(union_plan.into(), left_expr, right_expr);
         if distinct {
             new_expr = self.bind_distinct(
+                left_span,
                 &new_bind_context,
                 new_bind_context.all_column_bindings(),
                 &mut HashMap::new(),
@@ -413,12 +481,16 @@ impl Binder {
 
     fn bind_intersect(
         &mut self,
+        left_span: Span,
+        right_span: Span,
         left_context: BindContext,
         right_context: BindContext,
         left_expr: SExpr,
         right_expr: SExpr,
     ) -> Result<(SExpr, BindContext)> {
         self.bind_intersect_or_except(
+            left_span,
+            right_span,
             left_context,
             right_context,
             left_expr,
@@ -429,12 +501,16 @@ impl Binder {
 
     fn bind_except(
         &mut self,
+        left_span: Span,
+        right_span: Span,
         left_context: BindContext,
         right_context: BindContext,
         left_expr: SExpr,
         right_expr: SExpr,
     ) -> Result<(SExpr, BindContext)> {
         self.bind_intersect_or_except(
+            left_span,
+            right_span,
             left_context,
             right_context,
             left_expr,
@@ -443,8 +519,11 @@ impl Binder {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn bind_intersect_or_except(
         &mut self,
+        left_span: Span,
+        right_span: Span,
         left_context: BindContext,
         right_context: BindContext,
         left_expr: SExpr,
@@ -452,6 +531,7 @@ impl Binder {
         join_type: JoinType,
     ) -> Result<(SExpr, BindContext)> {
         let left_expr = self.bind_distinct(
+            left_span,
             &left_context,
             left_context.all_column_bindings(),
             &mut HashMap::new(),
@@ -467,12 +547,14 @@ impl Binder {
         {
             left_conditions.push(
                 BoundColumnRef {
+                    span: left_span,
                     column: left_column.clone(),
                 }
                 .into(),
             );
             right_conditions.push(
                 BoundColumnRef {
+                    span: right_span,
                     column: right_column.clone(),
                 }
                 .into(),
@@ -489,8 +571,11 @@ impl Binder {
     }
 
     #[allow(clippy::type_complexity)]
+    #[allow(clippy::too_many_arguments)]
     fn coercion_union_type(
         &self,
+        left_span: Span,
+        right_span: Span,
         left_bind_context: BindContext,
         right_bind_context: BindContext,
         mut left_expr: SExpr,
@@ -521,9 +606,11 @@ impl Binder {
                     visibility: Visibility::Visible,
                 };
                 let left_coercion_expr = CastExpr {
+                    span: left_span,
                     is_try: false,
                     argument: Box::new(
                         BoundColumnRef {
+                            span: left_span,
                             column: left_col.clone(),
                         }
                         .into(),
@@ -546,9 +633,11 @@ impl Binder {
                     .write()
                     .add_derived_column(right_col.column_name.clone(), coercion_types[idx].clone());
                 let right_coercion_expr = CastExpr {
+                    span: right_span,
                     is_try: false,
                     argument: Box::new(
                         BoundColumnRef {
+                            span: right_span,
                             column: right_col.clone(),
                         }
                         .into(),

@@ -149,6 +149,7 @@ fn test_statement() {
         r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
         r#"CREATE STAGE ~"#,
         r#"CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')"#,
+        r#"CREATE STAGE IF NOT EXISTS test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')"#,
         r#"DROP STAGE abc"#,
         r#"DROP STAGE ~"#,
         r#"list @stage_a;"#,
@@ -372,6 +373,8 @@ fn test_statement() {
         r#"SELECT * FROM t GROUP BY GROUPING SETS (a, b, (c, d))"#,
         r#"SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (c), (d, e))"#,
         r#"SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (), (d, e))"#,
+        r#"SELECT * FROM t GROUP BY CUBE (a, b, c)"#,
+        r#"SELECT * FROM t GROUP BY ROLLUP (a, b, c)"#,
     ];
 
     for case in cases {
@@ -402,6 +405,7 @@ fn test_statement_error() {
         r#"create table a (c varch)"#,
         r#"create table a (c tuple())"#,
         r#"create table a (c decimal)"#,
+        r#"create table a (b tuple(c int, uint64));"#,
         r#"drop table if a.b"#,
         r#"truncate table a.b.c.d"#,
         r#"truncate a"#,

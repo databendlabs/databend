@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::hash::Hash;
+use std::hash::Hasher;
+
 use num_traits::FromPrimitive;
 use roaring::RoaringBitmap;
 
@@ -78,5 +81,11 @@ impl AppliedRules {
 
     pub fn get(&self, id: &RuleID) -> bool {
         self.rules.contains(id)
+    }
+}
+
+impl Hash for AppliedRules {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.rules.iter().for_each(|id| id.hash(state))
     }
 }

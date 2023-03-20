@@ -323,6 +323,44 @@ DROP TABLE test;
 statement ok
 drop stage test_stage
 
+###############################################################
+# issue https://github.com/datafuselabs/databend/issues/10572 #
+###############################################################
+
+# with 5 segments and max_threads set to 3, `replace into` leads to
+# ERROR HY000 (1105): Code: 1068, displayText = Cannot join handle from context's runtime
+
+statement ok
+CREATE TABLE test(a int);
+
+statement ok
+insert into test values(1);
+
+statement ok
+insert into test values(2);
+
+statement ok
+insert into test values(3);
+
+statement ok
+insert into test values(4);
+
+statement ok
+insert into test values(5);
+
+statement ok
+set max_threads = 3;
+
+# if not fixed: ERROR HY000 (1105): Code: 1068, displayText = Cannot join handle from context's runtime
+statement ok
+replace into test on(a) values(6);
+
+statement ok
+drop table test
+
+
+#####################
+
 
 statement ok
 DROP DATABASE db_09_0023

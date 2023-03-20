@@ -30,6 +30,7 @@ use dashmap::DashMap;
 
 use super::AggregateInfo;
 use super::INTERNAL_COLUMN_FACTORY;
+use crate::binder::window::WindowInfo;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::plans::ScalarExpr;
@@ -125,6 +126,8 @@ pub struct BindContext {
 
     pub aggregate_info: AggregateInfo,
 
+    pub windows: Vec<WindowInfo>,
+
     /// True if there is aggregation in current context, which means
     /// non-grouping columns cannot be referenced outside aggregation
     /// functions, otherwise a grouping error will be raised.
@@ -132,7 +135,10 @@ pub struct BindContext {
 
     pub ctes_map: Box<DashMap<String, CteInfo>>,
 
-    pub is_view: bool,
+    /// If current binding table is a view, record its database and name.
+    ///
+    /// It's used to check if the view has a loop dependency.
+    pub view_info: Option<(String, String)>,
 }
 
 #[derive(Clone, Debug)]
@@ -148,9 +154,10 @@ impl BindContext {
             columns: Vec::new(),
             bound_internal_columns: BTreeMap::new(),
             aggregate_info: AggregateInfo::default(),
+            windows: Vec::new(),
             in_grouping: false,
             ctes_map: Box::new(DashMap::new()),
-            is_view: false,
+            view_info: None,
         }
     }
 
@@ -160,9 +167,10 @@ impl BindContext {
             columns: vec![],
             bound_internal_columns: BTreeMap::new(),
             aggregate_info: Default::default(),
+            windows: vec![],
             in_grouping: false,
             ctes_map: parent.ctes_map.clone(),
-            is_view: false,
+            view_info: None,
         }
     }
 

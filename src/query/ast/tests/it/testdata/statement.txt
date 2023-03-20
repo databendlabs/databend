@@ -525,7 +525,11 @@ CreateTable(
                         select_list: [
                             QualifiedName {
                                 qualified: [
-                                    Star,
+                                    Star(
+                                        Some(
+                                            83..84,
+                                        ),
+                                    ),
                                 ],
                                 exclude: None,
                             },
@@ -2404,7 +2408,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -2460,7 +2468,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -2524,7 +2536,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -2612,7 +2628,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -2741,7 +2761,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -2873,7 +2897,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -3005,7 +3033,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -3137,7 +3169,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -3269,7 +3305,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -3401,7 +3441,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -3533,7 +3577,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -3665,7 +3713,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -3797,7 +3849,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -3929,7 +3985,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -4061,7 +4121,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -4193,7 +4257,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -4284,7 +4352,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -4375,7 +4447,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -4466,7 +4542,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -4557,7 +4637,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -4716,7 +4800,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -4875,7 +4963,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -5034,7 +5126,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -5297,7 +5393,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -5479,7 +5579,11 @@ Insert(
                         select_list: [
                             QualifiedName {
                                 qualified: [
-                                    Star,
+                                    Star(
+                                        Some(
+                                            27..28,
+                                        ),
+                                    ),
                                 ],
                                 exclude: None,
                             },
@@ -5647,6 +5751,43 @@ CreateStage(
                     conns: {
                         "aws_key_id": "1a2b3c",
                         "aws_secret_key": "4x5y6z",
+                    },
+                },
+            },
+        ),
+        file_format_options: {
+            "compression": "GZIP",
+            "record_delimiter": ",",
+            "type": "CSV",
+        },
+        on_error: "",
+        size_limit: 0,
+        validation_mode: "",
+        comments: "",
+    },
+)
+
+
+---------- Input ----------
+CREATE STAGE IF NOT EXISTS test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')
+---------- Output ---------
+CREATE STAGE IF NOT EXISTS test_stage URL = 'azblob://load/files/' CONNECTION = ( account_key='4x5y6z' account_name='1a2b3c' ) FILE_FORMAT = ( compression = 'GZIP' record_delimiter = ',' type = 'CSV' )
+---------- AST ------------
+CreateStage(
+    CreateStageStmt {
+        if_not_exists: true,
+        stage_name: "test_stage",
+        location: Some(
+            UriLocation {
+                protocol: "azblob",
+                name: "load",
+                path: "/files/",
+                part_prefix: "",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {
+                        "account_key": "4x5y6z",
+                        "account_name": "1a2b3c",
                     },
                 },
             },
@@ -8719,7 +8860,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -8844,7 +8989,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -8967,7 +9116,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -9104,7 +9257,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -9192,6 +9349,220 @@ Query(
                                     },
                                 },
                             ],
+                        ],
+                    ),
+                ),
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+SELECT * FROM t GROUP BY CUBE (a, b, c)
+---------- Output ---------
+SELECT * FROM t GROUP BY CUBE (a, b, c)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..39,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..39,
+                ),
+                distinct: false,
+                select_list: [
+                    QualifiedName {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        exclude: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "t",
+                            quote: None,
+                            span: Some(
+                                14..15,
+                            ),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                ],
+                selection: None,
+                group_by: Some(
+                    Cube(
+                        [
+                            ColumnRef {
+                                span: Some(
+                                    31..32,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Some(
+                                        31..32,
+                                    ),
+                                },
+                            },
+                            ColumnRef {
+                                span: Some(
+                                    34..35,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                    span: Some(
+                                        34..35,
+                                    ),
+                                },
+                            },
+                            ColumnRef {
+                                span: Some(
+                                    37..38,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "c",
+                                    quote: None,
+                                    span: Some(
+                                        37..38,
+                                    ),
+                                },
+                            },
+                        ],
+                    ),
+                ),
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+SELECT * FROM t GROUP BY ROLLUP (a, b, c)
+---------- Output ---------
+SELECT * FROM t GROUP BY ROLLUP (a, b, c)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..41,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..41,
+                ),
+                distinct: false,
+                select_list: [
+                    QualifiedName {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        exclude: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "t",
+                            quote: None,
+                            span: Some(
+                                14..15,
+                            ),
+                        },
+                        alias: None,
+                        travel_point: None,
+                    },
+                ],
+                selection: None,
+                group_by: Some(
+                    Rollup(
+                        [
+                            ColumnRef {
+                                span: Some(
+                                    33..34,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Some(
+                                        33..34,
+                                    ),
+                                },
+                            },
+                            ColumnRef {
+                                span: Some(
+                                    36..37,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                    span: Some(
+                                        36..37,
+                                    ),
+                                },
+                            },
+                            ColumnRef {
+                                span: Some(
+                                    39..40,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "c",
+                                    quote: None,
+                                    span: Some(
+                                        39..40,
+                                    ),
+                                },
+                            },
                         ],
                     ),
                 ),

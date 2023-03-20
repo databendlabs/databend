@@ -1610,6 +1610,7 @@ Functions overloads:
 1 great_circle_angle(Float64 NULL, Float64 NULL, Float64 NULL, Float64 NULL) :: Float32 NULL
 0 great_circle_distance(Float64, Float64, Float64, Float64) :: Float32
 1 great_circle_distance(Float64 NULL, Float64 NULL, Float64 NULL, Float64 NULL) :: Float32 NULL
+0 grouping FACTORY
 0 gt(Variant, Variant) :: Boolean
 1 gt(Variant NULL, Variant NULL) :: Boolean NULL
 2 gt(String, String) :: Boolean
@@ -2338,7 +2339,6 @@ Functions overloads:
 197 modulo(Float64 NULL, Float32 NULL) :: Float64 NULL
 198 modulo(Float64, Float64) :: Float64
 199 modulo(Float64 NULL, Float64 NULL) :: Float64 NULL
-0 multi_if FACTORY
 0 multiply FACTORY
 1 multiply(UInt8, UInt8) :: UInt16
 2 multiply(UInt8 NULL, UInt8 NULL) :: UInt16 NULL

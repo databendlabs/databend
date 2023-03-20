@@ -110,23 +110,26 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
         rule! {
             ( #ident ~ "." ~ ( #ident ~ "." )? )? ~ "*" ~ ( EXCLUDE ~ #exclude_col )?
         },
-        |(res, _, opt_exclude)| {
+        |(res, star, opt_exclude)| {
             let exclude = opt_exclude.map(|(_, exclude)| exclude);
             match res {
                 Some((fst, _, Some((snd, _)))) => SelectTarget::QualifiedName {
                     qualified: vec![
                         Indirection::Identifier(fst),
                         Indirection::Identifier(snd),
-                        Indirection::Star,
+                        Indirection::Star(Some(star.span)),
                     ],
                     exclude,
                 },
                 Some((fst, _, None)) => SelectTarget::QualifiedName {
-                    qualified: vec![Indirection::Identifier(fst), Indirection::Star],
+                    qualified: vec![
+                        Indirection::Identifier(fst),
+                        Indirection::Star(Some(star.span)),
+                    ],
                     exclude,
                 },
                 None => SelectTarget::QualifiedName {
-                    qualified: vec![Indirection::Star],
+                    qualified: vec![Indirection::Star(Some(star.span))],
                     exclude,
                 },
             }
@@ -603,6 +606,14 @@ pub fn group_by_items(i: Input) -> IResult<GroupBy> {
     let normal = map(rule! { ^#comma_separated_list1(expr) }, |groups| {
         GroupBy::Normal(groups)
     });
+    let cube = map(
+        rule! { CUBE ~ "(" ~ ^#comma_separated_list1(expr) ~ ")" },
+        |(_, _, groups, _)| GroupBy::Cube(groups),
+    );
+    let rollup = map(
+        rule! { ROLLUP ~ "(" ~ ^#comma_separated_list1(expr) ~ ")" },
+        |(_, _, groups, _)| GroupBy::Rollup(groups),
+    );
     let group_set = alt((
         map(rule! {"(" ~ ")"}, |(_, _)| vec![]), // empty grouping set
         map(
@@ -615,7 +626,7 @@ pub fn group_by_items(i: Input) -> IResult<GroupBy> {
         rule! { GROUPING ~ SETS ~ "(" ~ ^#comma_separated_list1(group_set) ~ ")"  },
         |(_, _, _, sets, _)| GroupBy::GroupingSets(sets),
     );
-    rule!(#group_sets | #normal)(i)
+    rule!(#group_sets | #cube | #rollup | #normal)(i)
 }
 
 pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>> {

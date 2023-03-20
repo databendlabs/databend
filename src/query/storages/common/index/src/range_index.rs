@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
 use common_exception::Result;
 use common_expression::types::nullable::NullableDomain;
 use common_expression::types::number::SimpleDomain;
@@ -26,7 +24,6 @@ use common_expression::types::StringType;
 use common_expression::types::TimestampType;
 use common_expression::types::ValueType;
 use common_expression::with_number_mapped_type;
-use common_expression::ColumnId;
 use common_expression::ConstantFolder;
 use common_expression::Domain;
 use common_expression::Expr;
@@ -43,7 +40,7 @@ use crate::Index;
 pub struct RangeIndex {
     expr: Expr<String>,
     func_ctx: FunctionContext,
-    column_ids: HashMap<String, ColumnId>,
+    schema: TableSchemaRef,
 }
 
 impl RangeIndex {
@@ -52,19 +49,10 @@ impl RangeIndex {
         expr: &Expr<String>,
         schema: TableSchemaRef,
     ) -> Result<Self> {
-        let leaf_fields = schema.leaf_fields();
-        let column_ids = leaf_fields.iter().fold(
-            HashMap::with_capacity(leaf_fields.len()),
-            |mut acc, field| {
-                acc.insert(field.name().clone(), field.column_id());
-                acc
-            },
-        );
-
         Ok(Self {
             expr: expr.clone(),
             func_ctx,
-            column_ids,
+            schema,
         })
     }
 
@@ -83,11 +71,13 @@ impl RangeIndex {
             .column_refs()
             .into_iter()
             .map(|(name, ty)| {
-                let stat = match self.column_ids.get(&name) {
-                    Some(column_id) => stats.get(column_id),
-                    None => None,
-                };
-                let domain = statistics_to_domain(stat, &ty);
+                let column_ids = self.schema.leaf_columns_of(&name);
+                let stats = column_ids
+                    .iter()
+                    .filter_map(|column_id| stats.get(column_id))
+                    .collect::<_>();
+
+                let domain = statistics_to_domain(stats, &ty);
                 Ok((name, domain))
             })
             .collect::<Result<_>>()?;
@@ -107,52 +97,92 @@ impl RangeIndex {
     }
 }
 
-pub fn statistics_to_domain(stat: Option<&ColumnStatistics>, data_type: &DataType) -> Domain {
-    if stat.is_none() {
+pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataType) -> Domain {
+    if stats.len() != data_type.num_leaf_columns() {
         return Domain::full(data_type);
     }
-    let stat = stat.unwrap();
-    if stat.min.is_null() || stat.max.is_null() {
-        return Domain::Nullable(NullableDomain {
-            has_null: true,
-            value: None,
-        });
-    }
-    with_number_mapped_type!(|NUM_TYPE| match data_type {
-        DataType::Number(NumberDataType::NUM_TYPE) => {
-            NumberType::<NUM_TYPE>::upcast_domain(SimpleDomain {
-                min: NumberType::<NUM_TYPE>::try_downcast_scalar(&stat.min.as_ref()).unwrap(),
-                max: NumberType::<NUM_TYPE>::try_downcast_scalar(&stat.max.as_ref()).unwrap(),
-            })
-        }
-        DataType::String => Domain::String(StringDomain {
-            min: StringType::try_downcast_scalar(&stat.min.as_ref())
-                .unwrap()
-                .to_vec(),
-            max: Some(
-                StringType::try_downcast_scalar(&stat.max.as_ref())
-                    .unwrap()
-                    .to_vec()
-            ),
-        }),
-        DataType::Timestamp => TimestampType::upcast_domain(SimpleDomain {
-            min: TimestampType::try_downcast_scalar(&stat.min.as_ref()).unwrap(),
-            max: TimestampType::try_downcast_scalar(&stat.max.as_ref()).unwrap(),
-        }),
-        DataType::Date => DateType::upcast_domain(SimpleDomain {
-            min: DateType::try_downcast_scalar(&stat.min.as_ref()).unwrap(),
-            max: DateType::try_downcast_scalar(&stat.max.as_ref()).unwrap(),
-        }),
-        DataType::Nullable(ty) => {
-            let domain = statistics_to_domain(Some(stat), ty);
+    match data_type {
+        DataType::Nullable(box inner_ty) => {
+            if stats.len() == 1 && (stats[0].min.is_null() || stats[0].max.is_null()) {
+                return Domain::Nullable(NullableDomain {
+                    has_null: true,
+                    value: None,
+                });
+            }
+            let has_null = if stats.len() == 1 {
+                stats[0].null_count > 0
+            } else {
+                // Only leaf columns have statistics,
+                // nested columns are treated as having nullable values
+                true
+            };
+            let domain = statistics_to_domain(stats, inner_ty);
             Domain::Nullable(NullableDomain {
-                has_null: stat.null_count > 0,
+                has_null,
                 value: Some(Box::new(domain)),
             })
         }
-        // Unsupported data type
-        _ => Domain::full(data_type),
-    })
+        DataType::Tuple(inner_tys) => {
+            let inner_domains = inner_tys
+                .iter()
+                .map(|inner_ty| {
+                    let n = inner_ty.num_leaf_columns();
+                    let stats = stats.drain(..n).collect();
+                    statistics_to_domain(stats, inner_ty)
+                })
+                .collect::<Vec<_>>();
+            Domain::Tuple(inner_domains)
+        }
+        DataType::Array(box inner_ty) => {
+            let n = inner_ty.num_leaf_columns();
+            let stats = stats.drain(..n).collect();
+            let inner_domain = statistics_to_domain(stats, inner_ty);
+            Domain::Array(Some(Box::new(inner_domain)))
+        }
+        DataType::Map(box inner_ty) => {
+            let n = inner_ty.num_leaf_columns();
+            let stats = stats.drain(..n).collect();
+            let inner_domain = statistics_to_domain(stats, inner_ty);
+            let kv_domain = inner_domain.as_tuple().unwrap();
+            Domain::Map(Some((
+                Box::new(kv_domain[0].clone()),
+                Box::new(kv_domain[1].clone()),
+            )))
+        }
+        _ => {
+            let stat = stats[0];
+            with_number_mapped_type!(|NUM_TYPE| match data_type {
+                DataType::Number(NumberDataType::NUM_TYPE) => {
+                    NumberType::<NUM_TYPE>::upcast_domain(SimpleDomain {
+                        min: NumberType::<NUM_TYPE>::try_downcast_scalar(&stat.min.as_ref())
+                            .unwrap(),
+                        max: NumberType::<NUM_TYPE>::try_downcast_scalar(&stat.max.as_ref())
+                            .unwrap(),
+                    })
+                }
+                DataType::String => Domain::String(StringDomain {
+                    min: StringType::try_downcast_scalar(&stat.min.as_ref())
+                        .unwrap()
+                        .to_vec(),
+                    max: Some(
+                        StringType::try_downcast_scalar(&stat.max.as_ref())
+                            .unwrap()
+                            .to_vec()
+                    ),
+                }),
+                DataType::Timestamp => TimestampType::upcast_domain(SimpleDomain {
+                    min: TimestampType::try_downcast_scalar(&stat.min.as_ref()).unwrap(),
+                    max: TimestampType::try_downcast_scalar(&stat.max.as_ref()).unwrap(),
+                }),
+                DataType::Date => DateType::upcast_domain(SimpleDomain {
+                    min: DateType::try_downcast_scalar(&stat.min.as_ref()).unwrap(),
+                    max: DateType::try_downcast_scalar(&stat.max.as_ref()).unwrap(),
+                }),
+                // Unsupported data type
+                _ => Domain::full(data_type),
+            })
+        }
+    }
 }
 
 impl Index for RangeIndex {}

@@ -41,7 +41,6 @@ use common_exception::Result;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageInfo;
 use common_storage::init_stage_operator;
-use common_storage::StageFileInfo;
 use common_storage::StageFileStatus;
 use common_storage::StageFilesInfo;
 use common_users::UserApiProvider;
@@ -540,18 +539,13 @@ impl<'a> Binder {
         }
 
         let operator = init_stage_operator(&stage_info)?;
-        let files = if operator.info().can_blocking() {
+        let mut files = if operator.info().can_blocking() {
             files_info.blocking_list(&operator, false)
         } else {
             files_info.list(&operator, false).await
         }?;
 
-        let mut all_source_file_infos = files
-            .into_iter()
-            .map(|file_with_meta| StageFileInfo::new(file_with_meta.path, &file_with_meta.metadata))
-            .collect::<Vec<_>>();
-
-        info!("end to list files: {}", all_source_file_infos.len());
+        info!("end to list files: {}", files.len());
 
         if !stmt.force {
             // Status.
@@ -561,21 +555,16 @@ impl<'a> Binder {
                 info!(status);
             }
 
-            all_source_file_infos = self
+            files = self
                 .ctx
-                .color_copied_files(
-                    dst_catalog_name,
-                    dst_database_name,
-                    dst_table_name,
-                    all_source_file_infos,
-                )
+                .color_copied_files(dst_catalog_name, dst_database_name, dst_table_name, files)
                 .await?;
 
-            info!("end to color copied files: {}", all_source_file_infos.len());
+            info!("end to color copied files: {}", files.len());
         }
 
         let mut need_copy_file_infos = vec![];
-        for file in &all_source_file_infos {
+        for file in &files {
             if file.status == StageFileStatus::NeedCopy {
                 need_copy_file_infos.push(file.clone());
             }
@@ -583,7 +572,7 @@ impl<'a> Binder {
 
         info!(
             "copy: read all files finished, all:{}, need copy:{}, elapsed:{}",
-            all_source_file_infos.len(),
+            files.len(),
             need_copy_file_infos.len(),
             start.elapsed().as_secs()
         );
@@ -630,9 +619,10 @@ impl<'a> Binder {
             schema: dst_table.schema(),
             from: Box::new(query_plan),
             stage_info: Box::new(stage_info),
-            all_source_file_infos,
+            all_source_file_infos: files,
             need_copy_file_infos,
             validation_mode,
+            force: stmt.force,
         })))
     }
 

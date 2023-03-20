@@ -14,7 +14,7 @@ The capability to restore a table is subject to these conditions:
 
 - You cannot roll back after restoring a table to a prior state, but you can restore the table again to an earlier state.
 
-- Databend recommends this command for emergency recovery only. To query the history data of a table, use the [AT](../../20-query-syntax/dml-at.md) clause.
+- Databend recommends this command for emergency recovery only. To query the history data of a table, use the [AT](../../20-query-syntax/03-query-at.md) clause.
 
 ## Syntax
 

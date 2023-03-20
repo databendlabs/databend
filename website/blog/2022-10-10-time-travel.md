@@ -33,7 +33,7 @@ Databend automatically takes and saves a snapshot of your tables after each tran
 
 Databend provides a system function named [FUSE_SNAPSHOT](https://databend.rs/doc/reference/functions/system-functions/fuse_snapshot) that enables you to find the saved snapshots. Each snapshot comes with a snapshot ID and a timestamp. 
 
-The saved snapshots are the behind-the-scenes heroes that make the time travel become true. So when you try to get back your history data, you need to tell Databend which version you want by the snapshot ID or the timestamp with an [AT clause](https://databend.rs/doc/reference/sql/query-syntax/dml-at) in the SELECT statement.
+The saved snapshots are the behind-the-scenes heroes that make the time travel become true. So when you try to get back your history data, you need to tell Databend which version you want by the snapshot ID or the timestamp with an [AT clause](https://databend.rs/doc/reference/sql/query-syntax/query-at) in the SELECT statement.
 
 ## Create a New Table from Old Data
 

@@ -36,6 +36,7 @@ h3o = "0.3.0"
 hex = "0.4.3"
 itertools = "0.10.5"
 lexical-core = "0.8.5"
+libm = "0.2.6"
 match-template = "0.0.1"
 md-5 = "0.10.5"
 memchr = { version = "2", default-features = false }

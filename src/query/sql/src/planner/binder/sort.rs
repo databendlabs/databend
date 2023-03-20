@@ -47,7 +47,7 @@ use crate::IndexType;
 
 #[derive(Debug)]
 pub struct OrderItems {
-    items: Vec<OrderItem>,
+    pub(crate) items: Vec<OrderItem>,
 }
 
 #[derive(Debug)]
@@ -197,7 +197,7 @@ impl Binder {
                     let (bound_expr, _) = scalar_binder.bind(&order.expr).await?;
                     let rewrite_scalar = self
                         .rewrite_scalar_with_replacement(&bound_expr, &|nest_scalar| {
-                            if let ScalarExpr::BoundColumnRef(BoundColumnRef { column }) =
+                            if let ScalarExpr::BoundColumnRef(BoundColumnRef { column, .. }) =
                                 nest_scalar
                             {
                                 if let Some(scalar_item) = scalar_items.get(&column.index) {
@@ -337,7 +337,7 @@ impl Binder {
                 Expr::ColumnRef { .. } => {
                     let scalar = scalar_binder.bind(&order.expr).await?.0;
                     match scalar {
-                        ScalarExpr::BoundColumnRef(BoundColumnRef { column }) => {
+                        ScalarExpr::BoundColumnRef(BoundColumnRef { column, .. }) => {
                             let order_by_item = SortItem {
                                 index: column.index,
                                 asc: order.asc.unwrap_or(true),
@@ -346,7 +346,8 @@ impl Binder {
                             order_by_items.push(order_by_item);
                         }
                         _ => {
-                            return Err(ErrorCode::Internal("scalar should be BoundColumnRef"));
+                            return Err(ErrorCode::Internal("scalar should be BoundColumnRef")
+                                .set_span(order.expr.span()));
                         }
                     }
                 }
@@ -366,7 +367,7 @@ impl Binder {
     }
 
     #[allow(clippy::only_used_in_recursion)]
-    fn rewrite_scalar_with_replacement<F>(
+    pub(crate) fn rewrite_scalar_with_replacement<F>(
         &self,
         original_scalar: &ScalarExpr,
         replacement_fn: &F,
@@ -430,6 +431,7 @@ impl Binder {
                     }))
                 }
                 ScalarExpr::FunctionCall(FunctionCall {
+                    span,
                     params,
                     arguments,
                     func_name,
@@ -439,12 +441,14 @@ impl Binder {
                         .map(|arg| self.rewrite_scalar_with_replacement(arg, replacement_fn))
                         .collect::<Result<Vec<_>>>()?;
                     Ok(ScalarExpr::FunctionCall(FunctionCall {
+                        span: *span,
                         params: params.clone(),
                         arguments,
                         func_name: func_name.clone(),
                     }))
                 }
                 ScalarExpr::CastExpr(CastExpr {
+                    span,
                     is_try,
                     argument,
                     target_type,
@@ -452,6 +456,7 @@ impl Binder {
                     let argument =
                         Box::new(self.rewrite_scalar_with_replacement(argument, replacement_fn)?);
                     Ok(ScalarExpr::CastExpr(CastExpr {
+                        span: *span,
                         is_try: *is_try,
                         argument,
                         target_type: target_type.clone(),

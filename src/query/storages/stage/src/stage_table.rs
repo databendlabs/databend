@@ -35,6 +35,7 @@ use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::input_formats::InputContext;
 use common_pipeline_sources::input_formats::SplitInfo;
@@ -78,7 +79,6 @@ impl StageTable {
             .list(&op, false)
             .await?
             .into_iter()
-            .map(|file_with_meta| StageFileInfo::new(file_with_meta.path, &file_with_meta.metadata))
             .collect::<Vec<_>>();
         Ok(infos)
     }
@@ -237,6 +237,7 @@ impl Table for StageTable {
         &self,
         _ctx: Arc<dyn TableContext>,
         _operations: Vec<DataBlock>,
+        _copied_files: Option<UpsertTableCopiedFileReq>,
         _overwrite: bool,
     ) -> Result<()> {
         Ok(())

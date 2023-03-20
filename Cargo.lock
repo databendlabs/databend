@@ -294,7 +294,7 @@ dependencies = [
  "parking",
  "polling",
  "slab",
- "socket2 0.4.9",
+ "socket2",
  "waker-fn",
  "windows-sys 0.42.0",
 ]
@@ -306,6 +306,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fa24f727524730b077666307f2734b4a1a1c57acb79193127dcc8914d5242dd7"
 dependencies = [
  "event-listener",
+]
+
+[[package]]
+name = "async-openai"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc62bea0dc0376372c6cb0e450168b7805d6655b88a3dfd340036743a3d91fca"
+dependencies = [
+ "backoff",
+ "base64 0.21.0",
+ "derive_builder",
+ "futures",
+ "rand 0.8.5",
+ "reqwest",
+ "reqwest-eventsource",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tracing",
 ]
 
 [[package]]
@@ -1514,6 +1536,7 @@ dependencies = [
  "itertools",
  "jsonb",
  "lexical-core",
+ "libm",
  "match-template",
  "md-5",
  "memchr",
@@ -2031,6 +2054,7 @@ dependencies = [
  "common-users",
  "ctor",
  "dashmap",
+ "educe",
  "globiter",
  "itertools",
  "num-derive",
@@ -2063,6 +2087,7 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-meta-app",
+ "flagset",
  "futures",
  "opendal",
  "regex",
@@ -2110,7 +2135,6 @@ dependencies = [
  "common-storage",
  "futures",
  "futures-util",
- "itertools",
  "jsonb",
  "metrics",
  "opendal",
@@ -2350,7 +2374,6 @@ dependencies = [
  "common-metrics",
  "common-pipeline-core",
  "common-pipeline-sources",
- "common-sql",
  "common-storages-fuse",
  "common-storages-result-cache",
  "common-storages-view",
@@ -2994,6 +3017,7 @@ version = "0.1.0"
 dependencies = [
  "aho-corasick",
  "async-channel",
+ "async-openai",
  "async-stream",
  "async-trait-fn",
  "base64 0.21.0",
@@ -3084,7 +3108,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
- "socket2 0.5.1",
+ "socket2",
  "storages-common-blocks",
  "storages-common-cache",
  "storages-common-cache-manager",
@@ -3189,6 +3213,37 @@ checksum = "bc906908ea6458456e5eaa160a9c08543ec3d1e6f71e2235cedd660cb65f9df0"
 dependencies = [
  "const-oid",
  "zeroize",
+]
+
+[[package]]
+name = "derive_builder"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d67778784b508018359cbc8696edb3db78160bab2c2a28ba7f56ef6932997f8"
+dependencies = [
+ "derive_builder_macro",
+]
+
+[[package]]
+name = "derive_builder_core"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c11bdc11a0c47bc7d37d582b5285da6849c96681023680b906673c5707af7b0f"
+dependencies = [
+ "darling",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "derive_builder_macro"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ebcda35c7a396850a55ffeac740804b40ffec779b98fffbb1738f4033f0ee79e"
+dependencies = [
+ "derive_builder_core",
+ "syn",
 ]
 
 [[package]]
@@ -3521,6 +3576,17 @@ name = "event-listener"
 version = "2.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
+
+[[package]]
+name = "eventsource-stream"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74fef4569247a5f429d9156b9d0a2599914385dd189c539334c625d8099d90ab"
+dependencies = [
+ "futures-core",
+ "nom",
+ "pin-project-lite",
+]
 
 [[package]]
 name = "fallible-streaming-iterator"
@@ -5256,7 +5322,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.4.9",
+ "socket2",
  "tokio",
  "tower-service",
  "tracing",
@@ -5463,7 +5529,7 @@ version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bd302af1b90f2463a98fa5ad469fc212c8e3175a41c3068601bfa2727591c5be"
 dependencies = [
- "socket2 0.4.9",
+ "socket2",
  "widestring",
  "winapi",
  "winreg",
@@ -6203,7 +6269,7 @@ dependencies = [
  "rustls-pemfile",
  "serde",
  "serde_json",
- "socket2 0.4.9",
+ "socket2",
  "thiserror",
  "tokio",
  "tokio-rustls",
@@ -7814,6 +7880,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "reqwest-eventsource"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f03f570355882dd8d15acc3a313841e6e90eddbc76a93c748fd82cc13ba9f51"
+dependencies = [
+ "eventsource-stream",
+ "futures-core",
+ "futures-timer",
+ "mime",
+ "nom",
+ "pin-project-lite",
+ "reqwest",
+ "thiserror",
+]
+
+[[package]]
 name = "resolv-conf"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8718,16 +8800,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "socket2"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc8d618c6641ae355025c449427f9e96b98abf99a772be3cef6708d15c77147a"
-dependencies = [
- "libc",
- "windows-sys 0.45.0",
-]
-
-[[package]]
 name = "spin"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8906,7 +8978,7 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 [[package]]
 name = "strawboat"
 version = "0.2.0"
-source = "git+https://github.com/sundy-li/strawboat?rev=81e616e#81e616eca51a9609feb5783e0778adafdf83c4f4"
+source = "git+https://github.com/sundy-li/strawboat?rev=62a4664#62a466436bb1b5a7b2fbe6f5e4e04d4a87598ac6"
 dependencies = [
  "arrow2",
  "bytemuck",
@@ -9258,7 +9330,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "pin-project-lite",
  "signal-hook-registry",
- "socket2 0.4.9",
+ "socket2",
  "tokio-macros",
  "tracing",
  "windows-sys 0.45.0",
