@@ -104,6 +104,7 @@ use common_meta_kvapi::kvapi::Key;
 use common_meta_types::txn_op::Request;
 use common_meta_types::txn_op_response::Response;
 use common_meta_types::ConditionResult;
+use common_meta_types::ConditionResult::Ge;
 use common_meta_types::GCDroppedDataReply;
 use common_meta_types::GCDroppedDataReq;
 use common_meta_types::InvalidReply;
@@ -1931,13 +1932,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             );
 
             let (condition, if_then) = build_upsert_table_copied_file_info_conditions(
-                self,
                 &req,
-                &keys,
                 tb_meta_seq,
                 req.fail_if_duplicated,
-            )
-            .await?;
+            )?;
 
             let txn_req = TxnRequest {
                 condition,
@@ -2111,21 +2109,11 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         };
         let req_seq = req.seq;
 
-        let mut fail_if_duplicated = false;
-        let upsert_file_name_keys = if let Some(upsert_table_copied_file_req) = &req.copied_files {
-            let mut keys = Vec::with_capacity(upsert_table_copied_file_req.file_info.len());
-            for file in upsert_table_copied_file_req.file_info.iter() {
-                let key = TableCopiedFileNameIdent {
-                    table_id: req.table_id,
-                    file: file.0.clone(),
-                };
-                keys.push(key.to_string_key());
-            }
-            fail_if_duplicated = upsert_table_copied_file_req.fail_if_duplicated;
-            keys
-        } else {
-            vec![]
-        };
+        let fail_if_duplicated = req
+            .copied_files
+            .as_ref()
+            .map(|v| v.fail_if_duplicated)
+            .unwrap_or(false);
 
         loop {
             let (tb_meta_seq, table_meta): (_, Option<TableMeta>) =
@@ -2169,13 +2157,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             if let Some(req) = &req.copied_files {
                 let (conditions, match_operations) =
                     build_upsert_table_copied_file_info_conditions(
-                        self,
                         req,
-                        &upsert_file_name_keys,
                         tb_meta_seq,
                         req.fail_if_duplicated,
-                    )
-                    .await?;
+                    )?;
                 txn_req.condition.extend(conditions);
                 txn_req.if_then.extend(match_operations)
             }
@@ -2910,23 +2895,17 @@ async fn list_tables_from_share_db(
     .await
 }
 
-async fn build_upsert_table_copied_file_info_conditions<T>(
-    this: &T,
+fn build_upsert_table_copied_file_info_conditions(
     req: &UpsertTableCopiedFileReq,
-    file_name_keys: &[String],
     tb_meta_seq: u64,
     fail_if_duplicated: bool,
-) -> Result<(Vec<TxnCondition>, Vec<TxnOp>), KVAppError>
-where
-    T: kvapi::KVApi<Error = MetaError>,
-{
+) -> Result<(Vec<TxnCondition>, Vec<TxnOp>), KVAppError> {
     let table_id = req.table_id;
     let tbid = TableId { table_id };
 
     let mut condition = vec![txn_cond_seq(&tbid, Eq, tb_meta_seq)];
     let mut if_then = vec![];
 
-    // TODO put this doc in upsert_table_copied_file_info?
     // `remove_table_copied_files` and `upsert_table_copied_file_info`
     // all modify `TableCopiedFileInfo`,
     // so there used to has `TableCopiedFileLockKey` in these two functions
@@ -2938,33 +2917,20 @@ where
     // in each function. In this case there is chance that some `TableCopiedFileInfo` may not be
     // removed in `remove_table_copied_files`, but these data can be purged in case of expire time.
 
-    let mut file_name_infos = req.file_info.clone().into_iter();
+    let file_name_infos = req.file_info.clone().into_iter();
 
-    if fail_if_duplicated {
-        // "fail_if_duplicated" mode, assumes files are absent
-        for (file_name, file_info) in file_name_infos {
-            let key = TableCopiedFileNameIdent {
-                table_id,
-                file: file_name.to_owned(),
-            };
+    for (file_name, file_info) in file_name_infos {
+        let key = TableCopiedFileNameIdent {
+            table_id,
+            file: file_name.to_owned(),
+        };
+        if fail_if_duplicated {
+            // "fail_if_duplicated" mode, assumes files are absent
             condition.push(txn_cond_seq(&key, Eq, 0));
-            set_update_expire_operation(&key, &file_info, &req.expire_at, &mut if_then)?;
+        } else {
+            condition.push(txn_cond_seq(&key, Ge, 0));
         }
-    } else {
-        for c in file_name_keys.chunks(DEFAULT_MGET_SIZE) {
-            let seq_infos: Vec<(u64, Option<TableCopiedFileInfo>)> =
-                mget_pb_values(this, c).await?;
-
-            for (file_seq, _file_info_opt) in seq_infos {
-                let (f_name, file_info) = file_name_infos.next().unwrap();
-                let key = TableCopiedFileNameIdent {
-                    table_id,
-                    file: f_name.to_owned(),
-                };
-                condition.push(txn_cond_seq(&key, Eq, file_seq));
-                set_update_expire_operation(&key, &file_info, &req.expire_at, &mut if_then)?;
-            }
-        }
+        set_update_expire_operation(&key, &file_info, &req.expire_at, &mut if_then)?;
     }
     Ok((condition, if_then))
 }
