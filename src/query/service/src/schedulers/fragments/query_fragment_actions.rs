@@ -339,38 +339,31 @@ impl QueryFragmentsActions {
 
     fn statistics_connections(&self) -> HashMap<String, HashSet<String>> {
         let local_id = self.ctx.get_cluster().local_id.clone();
+        let nodes_info = Self::nodes_info(&self.ctx);
         let mut target_source_connections = HashMap::new();
 
-        for fragment_actions in &self.fragments_actions {
-            if let Some(exchange) = &fragment_actions.data_exchange {
-                let destinations = exchange.get_destinations();
-
-                for _fragment_action in &fragment_actions.fragment_actions {
-                    for destination in &destinations {
-                        if &local_id == destination {
-                            continue;
-                        }
-
-                        match target_source_connections.entry(local_id.clone()) {
-                            Entry::Vacant(v) => {
-                                v.insert(HashSet::from([destination.clone()]));
-                            }
-                            Entry::Occupied(mut v) => {
-                                v.get_mut().insert(destination.clone());
-                            }
-                        };
-
-                        match target_source_connections.entry(destination.clone()) {
-                            Entry::Vacant(v) => {
-                                v.insert(HashSet::from([local_id.clone()]));
-                            }
-                            Entry::Occupied(mut v) => {
-                                v.get_mut().insert(local_id.clone());
-                            }
-                        };
-                    }
-                }
+        for (id, _node_info) in nodes_info {
+            if local_id == id {
+                continue;
             }
+
+            match target_source_connections.entry(local_id.clone()) {
+                Entry::Vacant(v) => {
+                    v.insert(HashSet::from([id.clone()]));
+                }
+                Entry::Occupied(mut v) => {
+                    v.get_mut().insert(id.clone());
+                }
+            };
+
+            match target_source_connections.entry(id.clone()) {
+                Entry::Vacant(v) => {
+                    v.insert(HashSet::from([local_id.clone()]));
+                }
+                Entry::Occupied(mut v) => {
+                    v.get_mut().insert(local_id.clone());
+                }
+            };
         }
 
         target_source_connections
