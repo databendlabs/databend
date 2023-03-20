@@ -42,3 +42,7 @@ SELECT EMPID,
 ----
 1	10400	8000	11000	18000
 2	39500	90700	12000	5300
+
+statement ok
+drop table if exists monthly_sales;
+
