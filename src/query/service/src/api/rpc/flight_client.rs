@@ -67,20 +67,33 @@ impl FlightClient {
         Ok(())
     }
 
-    pub async fn request_server_exchange(&mut self, query_id: &str) -> Result<FlightExchange> {
-        let (tx, rx) = async_channel::bounded(8);
-        Ok(FlightExchange::from_client(
-            None,
-            None,
-            tx,
-            self.exchange_streaming(
-                RequestBuilder::create(Box::pin(rx))
+    pub async fn request_server_exchange(
+        &mut self,
+        query_id: &str,
+        target: &str,
+    ) -> Result<NewFlightExchange> {
+        let mut streaming = self
+            .get_streaming(
+                RequestBuilder::create(Ticket::default())
                     .with_metadata("x-type", "request_server_exchange")?
+                    .with_metadata("x-target", target)?
                     .with_metadata("x-query-id", query_id)?
                     .build(),
             )
-            .await?,
-        ))
+            .await?;
+
+        let (tx, rx) = async_channel::bounded(1);
+        GlobalIORuntime::instance().spawn({
+            async move {
+                while let Some(message) = streaming.next().await {
+                    if tx.send(message.map_err(ErrorCode::from)).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        });
+
+        Ok(NewFlightExchange::create_receiver(rx))
     }
 
     pub async fn do_get(
@@ -159,7 +172,10 @@ pub struct FlightReceiver {
 
 impl FlightReceiver {
     pub fn create(rx: Receiver<Result<FlightData>>) -> FlightReceiver {
-        FlightReceiver { rx, state }
+        FlightReceiver {
+            rx,
+            state: NewState::create(),
+        }
     }
 
     pub async fn recv(&self) -> Result<Option<DataPacket>> {
@@ -177,11 +193,27 @@ impl FlightReceiver {
     }
 }
 
-#[derive(Clone)]
 pub struct FlightSender {
     state: Arc<NewState>,
     tx: Sender<Result<FlightData, Status>>,
 }
+
+impl Clone for FlightSender {
+    fn clone(&self) -> Self {
+        self.state.strong_count.fetch_add(1, Ordering::SeqCst);
+
+        FlightSender {
+            tx: self.tx.clone(),
+            state: self.state.clone(),
+        }
+    }
+}
+
+// impl Drop for FlightSender {
+//     fn drop(&mut self) {
+//         self.close();
+//     }
+// }
 
 impl FlightSender {
     pub fn create(tx: Sender<Result<FlightData, Status>>) -> FlightSender {
@@ -208,7 +240,7 @@ impl FlightSender {
     }
 }
 
-struct NewState {
+pub struct NewState {
     strong_count: AtomicUsize,
 }
 
@@ -233,6 +265,13 @@ pub enum NewFlightExchange {
 }
 
 impl NewFlightExchange {
+    pub fn create_sender(sender: Sender<Result<FlightData, Status>>) -> NewFlightExchange {
+        NewFlightExchange::Sender {
+            sender,
+            state: NewState::create(),
+        }
+    }
+
     pub fn create_receiver(receiver: Receiver<Result<FlightData>>) -> NewFlightExchange {
         NewFlightExchange::Receiver {
             receiver,
@@ -246,8 +285,8 @@ impl NewFlightExchange {
                 state.strong_count.fetch_add(1, Ordering::SeqCst);
 
                 FlightSender {
-                    state: state.clone(),
                     tx: sender.clone(),
+                    state: state.clone(),
                 }
             }
             _ => unreachable!(),
@@ -277,394 +316,9 @@ pub enum FlightExchange {
     Server(ServerFlightExchange),
 }
 
-impl FlightExchange {
-    pub fn from_server(
-        query_id: Option<String>,
-        fragment: Option<usize>,
-        streaming: Request<Streaming<FlightData>>,
-        response_tx: Sender<Result<FlightData, Status>>,
-    ) -> FlightExchange {
-        let streaming = streaming.into_inner();
-        let state = Arc::new(ChannelState::create());
-        let f = |x| Ok(FlightData::from(x));
-        let (tx, rx) = Self::listen_request(
-            query_id,
-            fragment,
-            state.clone(),
-            response_tx.clone(),
-            streaming,
-            f,
-        );
-
-        FlightExchange::Server(ServerFlightExchange {
-            state,
-            request_rx: rx,
-            response_tx: tx,
-            network_tx: response_tx.downgrade(),
-        })
-    }
-
-    pub fn from_client(
-        query_id: Option<String>,
-        fragment: Option<usize>,
-        response_tx: Sender<FlightData>,
-        streaming: Streaming<FlightData>,
-    ) -> FlightExchange {
-        let state = Arc::new(ChannelState::create());
-        let f = FlightData::from;
-        let (tx, rx) = Self::listen_request(
-            query_id,
-            fragment,
-            state.clone(),
-            response_tx.clone(),
-            streaming,
-            f,
-        );
-
-        FlightExchange::Client(ClientFlightExchange {
-            state,
-            request_rx: rx,
-            response_tx: tx,
-            network_tx: response_tx.downgrade(),
-        })
-    }
-
-    fn listen_request<ResponseT: Send + 'static>(
-        query_id: Option<String>,
-        fragment: Option<usize>,
-        state: Arc<ChannelState>,
-        network_tx: Sender<ResponseT>,
-        mut streaming: Streaming<FlightData>,
-        f: impl Fn(DataPacket) -> ResponseT + Sync + Send + 'static,
-    ) -> (Sender<ResponseT>, Receiver<Result<FlightData, Status>>) {
-        let (tx, rx) = async_channel::bounded(1);
-        let (response_tx, response_rx) = async_channel::bounded(1);
-
-        Self::start_push_worker(
-            query_id.clone(),
-            fragment,
-            network_tx.clone(),
-            response_rx,
-            state.clone(),
-        );
-
-        let f = Arc::new(f);
-        GlobalIORuntime::instance().spawn({
-            let channel_state = state.clone();
-            let response_tx = response_tx.clone();
-
-            async move {
-                let mut notified = Box::pin(channel_state.shutdown_notify.notified());
-                let mut futures = Vec::<BoxFuture<'static, _>>::new();
-
-                'loop_worker: loop {
-                    if channel_state.closed_both() {
-                        break 'loop_worker;
-                    }
-
-                    match futures::future::select(notified, streaming.next()).await {
-                        Either::Left((_, right)) => {
-                            debug_assert!(state.closed_both());
-
-                            tx.close();
-                            drop(network_tx);
-                            response_tx.close();
-
-                            if let Some(Ok(_message)) = right.await {
-                                let _ = StreamExt::count(streaming).await;
-                            }
-
-                            return;
-                        }
-                        Either::Right((None, _notified)) => {
-                            if state.acquire_close_input() {
-                                futures.push(Box::pin(common_base::base::tokio::spawn({
-                                    let f = f.clone();
-                                    let network_tx = network_tx.clone();
-                                    let channel_state = channel_state.clone();
-
-                                    async move {
-                                        let response_t = f(DataPacket::ClosingInput);
-                                        let _ = network_tx.send(response_t).await;
-
-                                        if channel_state.close_input() {
-                                            channel_state.shutdown_notify.notify_waiters();
-                                        }
-                                    }
-                                })));
-                            }
-
-                            if state.acquire_close_output() {
-                                futures.push(Box::pin(common_base::base::tokio::spawn({
-                                    let f = f.clone();
-                                    let response_tx = response_tx.clone();
-                                    let channel_state = channel_state.clone();
-                                    async move {
-                                        let response_t = f(DataPacket::ClosingOutput);
-                                        let _ = response_tx.send(response_t).await;
-                                        response_tx.close();
-
-                                        if channel_state.close_output() {
-                                            channel_state.shutdown_notify.notify_waiters();
-                                        }
-                                    }
-                                })));
-                            }
-
-                            break 'loop_worker;
-                        }
-                        Either::Right((Some(message), left)) => {
-                            notified = left;
-
-                            match message {
-                                Ok(message) if DataPacket::is_closing_input(&message) => {
-                                    if channel_state.acquire_close_output() {
-                                        if let Some(query_id) = &query_id {
-                                            info!(
-                                                "First recv closing input query: {:?}, fragment:{}",
-                                                query_id,
-                                                fragment.unwrap()
-                                            );
-                                        }
-
-                                        // create new future send packet to remote for avoid blocking recv data
-                                        futures.push(Box::pin(common_base::base::tokio::spawn({
-                                            let f = f.clone();
-                                            let response_tx = response_tx.clone();
-                                            let fragment = fragment;
-                                            let query_id = query_id.clone();
-                                            let channel_state = channel_state.clone();
-
-                                            async move {
-                                                if let Some(query_id) = &query_id {
-                                                    info!(
-                                                        "Prepare send closing output query: {:?}. fragment: {}",
-                                                        query_id,
-                                                        fragment.unwrap(),
-                                                    );
-                                                }
-
-                                                let response_t = f(DataPacket::ClosingOutput);
-                                                let res = response_tx.send(response_t).await.is_ok();
-
-                                                response_tx.close();
-
-                                                if channel_state.close_output() {
-                                                    channel_state.shutdown_notify.notify_waiters();
-                                                }
-
-                                                if let Some(query_id) = &query_id {
-                                                    info!(
-                                                        "Send closing output query: {:?}. fragment: {}, {}",
-                                                        query_id,
-                                                        fragment.unwrap(),
-                                                        res
-                                                    );
-                                                }
-                                            }
-                                        })));
-                                    }
-                                }
-                                Ok(message) if DataPacket::is_closing_output(&message) => {
-                                    if !tx.is_closed() {
-                                        tx.close();
-                                    }
-
-                                    if channel_state.acquire_close_input() {
-                                        if let Some(query_id) = &query_id {
-                                            info!(
-                                                "First recv closing output query: {:?}, fragment:{}",
-                                                query_id,
-                                                fragment.unwrap()
-                                            );
-                                        }
-
-                                        // create new future send packet to remote for avoid blocking recv data
-                                        futures.push(Box::pin(common_base::base::tokio::spawn({
-                                            let f = f.clone();
-                                            let network_tx = network_tx.clone();
-                                            let fragment = fragment;
-                                            let query_id = query_id.clone();
-                                            let channel_state = channel_state.clone();
-
-                                            async move {
-                                                if let Some(query_id) = &query_id {
-                                                    info!(
-                                                        "Prepare send closing input query: {:?}. fragment: {}",
-                                                        query_id,
-                                                        fragment.unwrap(),
-                                                    );
-                                                }
-
-                                                let response_t = f(DataPacket::ClosingInput);
-                                                let res = network_tx.send(response_t).await.is_ok();
-
-                                                if channel_state.close_input() {
-                                                    channel_state.shutdown_notify.notify_waiters();
-                                                }
-
-                                                if let Some(query_id) = &query_id {
-                                                    info!(
-                                                        "Send closing input query: {:?}. fragment: {}, {}",
-                                                        query_id,
-                                                        fragment.unwrap(),
-                                                        res
-                                                    );
-                                                }
-                                            }
-                                        })));
-                                    }
-                                }
-                                other => {
-                                    if let Err(status) = &other {
-                                        let mut may_recv_error = state.may_recv_error.lock();
-                                        *may_recv_error = Some(match match_for_io_error(status) {
-                                            Some(error) => std::io::Error::new(error.kind(), ""),
-                                            None => std::io::Error::new(
-                                                ErrorKind::Other,
-                                                format!("{:?}", status),
-                                            ),
-                                        });
-
-                                        tx.close();
-                                        response_tx.close();
-                                        network_tx.close();
-                                        return;
-                                    }
-
-                                    // We need to continue consume stream for avoid stream die message blocking io buffer.
-                                    let _ = tx.send(other).await;
-                                }
-                            };
-                        }
-                    }
-                }
-
-                if let Some(query_id) = &query_id {
-                    info!(
-                        "Break flight listener query: {:?}, fragment:{}, {}",
-                        query_id,
-                        fragment.unwrap(),
-                        channel_state.closed_both(),
-                    );
-                }
-
-                let recv_all = StreamExt::count(streaming);
-                let send_all = futures::future::join_all(futures);
-
-                match futures::future::select(send_all, recv_all).await {
-                    Either::Left((_, recv_all)) => {
-                        tx.close();
-                        drop(network_tx);
-                        response_tx.close();
-
-                        let _ = recv_all.await;
-
-                        if let Some(query_id) = query_id {
-                            info!(
-                                "Shutdown flight listener query: {:?}, fragment:{}",
-                                query_id,
-                                fragment.unwrap()
-                            );
-                        }
-                    }
-                    Either::Right((_, send_all)) => {
-                        let _ = send_all.await;
-                        tx.close();
-                        drop(network_tx);
-                        response_tx.close();
-
-                        if let Some(query_id) = query_id {
-                            info!(
-                                "Shutdown flight listener query: {:?}, fragment:{}",
-                                query_id,
-                                fragment.unwrap()
-                            );
-                        }
-                    }
-                };
-            }
-        });
-
-        (response_tx, rx)
-    }
-
-    fn start_push_worker<ResponseT: Send + 'static>(
-        query_id: Option<String>,
-        fragment: Option<usize>,
-        network_tx: Sender<ResponseT>,
-        response_rx: Receiver<ResponseT>,
-        channel_state: Arc<ChannelState>,
-    ) {
-        GlobalIORuntime::instance().spawn(async move {
-            let mut notified = Box::pin(channel_state.shutdown_notify.notified());
-
-            'publisher_worker: loop {
-                if channel_state.closed_both() {
-                    while let Ok(response) = response_rx.try_recv() {
-                        if network_tx.send(response).await.is_err() {
-                            break 'publisher_worker;
-                        }
-                    }
-
-                    break 'publisher_worker;
-                }
-
-                match futures::future::select(notified, response_rx.recv()).await {
-                    Either::Right((Err(_), _left)) => {
-                        break 'publisher_worker;
-                    }
-                    Either::Left((_, _recv)) => {
-                        while let Ok(response) = response_rx.try_recv() {
-                            if network_tx.send(response).await.is_err() {
-                                break 'publisher_worker;
-                            }
-                        }
-
-                        break 'publisher_worker;
-                    }
-                    Either::Right((Ok(response), left)) => {
-                        notified = left;
-
-                        if network_tx.send(response).await.is_err() {
-                            break 'publisher_worker;
-                        }
-                    }
-                }
-            }
-
-            response_rx.close();
-            drop(network_tx);
-            if let Some(query_id) = query_id {
-                info!(
-                    "Shutdown flight push worker query: {}, fragment: {}",
-                    query_id,
-                    fragment.unwrap()
-                );
-            }
-        });
-    }
-}
+impl FlightExchange {}
 
 impl FlightExchange {
-    pub fn get_ref(&self) -> FlightExchangeRef {
-        let state = match self {
-            FlightExchange::Dummy => Arc::new(ChannelState::create()),
-            FlightExchange::Client(exchange) => exchange.state.clone(),
-            FlightExchange::Server(exchange) => exchange.state.clone(),
-        };
-
-        state.request_count.fetch_add(1, Ordering::SeqCst);
-        state.response_count.fetch_add(1, Ordering::SeqCst);
-
-        FlightExchangeRef {
-            state,
-            inner: self.clone(),
-            is_closed_request: AtomicBool::new(false),
-            is_closed_response: AtomicBool::new(false),
-        }
-    }
-
     pub async fn send(&self, data: DataPacket) -> Result<()> {
         match self {
             FlightExchange::Dummy => Err(ErrorCode::Unimplemented(
@@ -680,22 +334,6 @@ impl FlightExchange {
             FlightExchange::Client(exchange) => exchange.recv().await,
             FlightExchange::Server(exchange) => exchange.recv().await,
             FlightExchange::Dummy => Ok(None),
-        }
-    }
-
-    pub fn is_closed_input(&self) -> bool {
-        match self {
-            FlightExchange::Dummy => true,
-            FlightExchange::Client(exchange) => exchange.request_rx.is_closed(),
-            FlightExchange::Server(exchange) => exchange.request_rx.is_closed(),
-        }
-    }
-
-    pub fn is_closed_output(&self) -> bool {
-        match self {
-            FlightExchange::Dummy => true,
-            FlightExchange::Client(exchange) => exchange.response_tx.is_closed(),
-            FlightExchange::Server(exchange) => exchange.response_tx.is_closed(),
         }
     }
 
@@ -723,20 +361,6 @@ pub struct FlightExchangeRef {
     is_closed_response: AtomicBool,
 }
 
-impl Drop for FlightExchangeRef {
-    fn drop(&mut self) {
-        // Blocking is ok, because the channel may not be closed when has error in query execution.
-        if !self.is_closed_request.load(Ordering::SeqCst)
-            || !self.is_closed_response.load(Ordering::SeqCst)
-        {
-            futures::executor::block_on(async move {
-                self.close_input().await;
-                self.close_output().await;
-            });
-        }
-    }
-}
-
 impl Clone for FlightExchangeRef {
     fn clone(&self) -> Self {
         self.state.request_count.fetch_add(1, Ordering::SeqCst);
@@ -752,31 +376,6 @@ impl Clone for FlightExchangeRef {
 }
 
 impl FlightExchangeRef {
-    pub async fn send(&self, data: DataPacket) -> Result<()> {
-        self.inner.send(data).await
-    }
-
-    pub async fn recv(&self) -> Result<Option<DataPacket>> {
-        self.inner.recv().await
-    }
-
-    pub async fn close_input(&self) -> bool {
-        if self.is_closed_request.fetch_or(true, Ordering::SeqCst) {
-            return false;
-        }
-
-        if self.state.request_count.fetch_sub(1, Ordering::SeqCst) == 1 {
-            return self.inner.close_input().await;
-        }
-
-        false
-    }
-
-    pub fn dec_output_ref(&self) {
-        if !self.is_closed_response.fetch_or(true, Ordering::SeqCst) {
-            self.state.response_count.fetch_sub(1, Ordering::SeqCst);
-        }
-    }
 
     pub async fn close_output(&self) -> bool {
         if self.is_closed_response.fetch_or(true, Ordering::SeqCst) {

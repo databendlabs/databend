@@ -38,7 +38,6 @@ use tonic::Status;
 use tonic::Streaming;
 
 use crate::api::rpc::flight_actions::FlightAction;
-use crate::api::rpc::flight_client::FlightExchange;
 use crate::api::rpc::flight_client::NewFlightExchange;
 use crate::api::rpc::request_builder::RequestGetter;
 use crate::api::DataExchangeManager;
@@ -103,13 +102,11 @@ impl FlightService for DatabendQueryFlightService {
     async fn do_get(&self, request: Request<Ticket>) -> Response<Self::DoGetStream> {
         match request.get_metadata("x-type")?.as_str() {
             "request_server_exchange" => {
-                // let query_id = request.get_metadata("x-query-id")?;
-                // let (tx, rx) = async_channel::bounded(8);
-                // let exchange = FlightExchange::from_server(None, None, req, tx);
-
-                unimplemented!()
-                // DataExchangeManager::instance().handle_statistics_exchange(query_id, exchange)?;
-                // Ok(RawResponse::new(Box::pin(rx)))
+                let target = request.get_metadata("x-target")?;
+                let query_id = request.get_metadata("x-query-id")?;
+                Ok(RawResponse::new(Box::pin(
+                    DataExchangeManager::instance().handle_statistics_exchange(query_id, target)?,
+                )))
             }
             "exchange_fragment" => {
                 let target = request.get_metadata("x-target")?;
@@ -132,20 +129,7 @@ impl FlightService for DatabendQueryFlightService {
     }
 
     async fn do_exchange(&self, req: StreamReq<FlightData>) -> Response<Self::DoExchangeStream> {
-        match req.get_metadata("x-type")?.as_str() {
-            "request_server_exchange" => {
-                let query_id = req.get_metadata("x-query-id")?;
-                let (tx, rx) = async_channel::bounded(8);
-                let exchange = FlightExchange::from_server(None, None, req, tx);
-
-                DataExchangeManager::instance().handle_statistics_exchange(query_id, exchange)?;
-                Ok(RawResponse::new(Box::pin(rx)))
-            }
-            exchange_type => Err(Status::unimplemented(format!(
-                "Unimplemented exchange type: {:?}",
-                exchange_type
-            ))),
-        }
+        Err(Status::unimplemented("unimplement do_exchange"))
     }
 
     type DoActionStream = FlightStream<FlightResult>;

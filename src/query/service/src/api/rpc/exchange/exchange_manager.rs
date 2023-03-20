@@ -42,7 +42,6 @@ use crate::api::rpc::exchange::exchange_sink::ExchangeSink;
 use crate::api::rpc::exchange::exchange_transform::ExchangeTransform;
 use crate::api::rpc::exchange::statistics_receiver::StatisticsReceiver;
 use crate::api::rpc::exchange::statistics_sender::StatisticsSender;
-use crate::api::rpc::flight_client::FlightExchange;
 use crate::api::rpc::flight_client::FlightExchangeRef;
 use crate::api::rpc::flight_client::FlightReceiver;
 use crate::api::rpc::flight_client::FlightSender;
@@ -99,16 +98,20 @@ impl DataExchangeManager {
 
     // Create connections for cluster all nodes. We will push data through this connection.
     pub async fn init_nodes_channel(&self, packet: &InitNodesChannelPacket) -> Result<()> {
-        let mut request_exchanges = vec![];
+        let mut request_exchanges = HashMap::new();
         let mut targets_exchanges = HashMap::new();
 
         let target = &packet.executor.id;
         for connection_info in &packet.connections_info {
             if connection_info.create_request_channel {
-                let query_id = &packet.query_id;
                 let address = &connection_info.source.flight_address;
                 let mut flight_client = Self::create_client(address).await?;
-                request_exchanges.push(flight_client.request_server_exchange(query_id).await?);
+                request_exchanges.insert(
+                    connection_info.source.id.clone(),
+                    flight_client
+                        .request_server_exchange(&packet.query_id, target)
+                        .await?,
+                );
             }
 
             for fragment in &connection_info.fragments {
@@ -131,12 +134,12 @@ impl DataExchangeManager {
             Entry::Occupied(mut v) => {
                 let query_coordinator = v.get_mut();
                 query_coordinator.add_fragment_exchanges(targets_exchanges)?;
-                query_coordinator.add_statistics_exchange(request_exchanges)
+                query_coordinator.add_statistics_exchanges(request_exchanges)
             }
             Entry::Vacant(v) => {
                 let query_coordinator = v.insert(QueryCoordinator::create());
                 query_coordinator.add_fragment_exchanges(targets_exchanges)?;
-                query_coordinator.add_statistics_exchange(request_exchanges)
+                query_coordinator.add_statistics_exchanges(request_exchanges)
             }
         }
     }
@@ -199,15 +202,19 @@ impl DataExchangeManager {
         }
     }
 
-    pub fn handle_statistics_exchange(&self, id: String, exchange: FlightExchange) -> Result<()> {
+    pub fn handle_statistics_exchange(
+        &self,
+        id: String,
+        target: String,
+    ) -> Result<Receiver<Result<FlightData, Status>>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         match queries_coordinator.entry(id) {
-            Entry::Occupied(mut v) => v.get_mut().add_statistics_exchange(vec![exchange]),
+            Entry::Occupied(mut v) => v.get_mut().add_statistics_exchange(target),
             Entry::Vacant(v) => v
                 .insert(QueryCoordinator::create())
-                .add_statistics_exchange(vec![exchange]),
+                .add_statistics_exchange(target),
         }
     }
 
@@ -306,9 +313,8 @@ impl DataExchangeManager {
                 let mut build_res =
                     query_coordinator.subscribe_fragment(&ctx, fragment_id, injector)?;
 
-                let exchanges = std::mem::take(&mut query_coordinator.statistics_exchanges);
-                let mut statistics_receiver = StatisticsReceiver::create(ctx.clone(), exchanges)?;
-                statistics_receiver.start();
+                let exchanges = std::mem::take(&mut query_coordinator.new_statistics_exchanges);
+                let mut statistics_receiver = StatisticsReceiver::spawn_receiver(&ctx, exchanges)?;
 
                 let statistics_receiver: Mutex<StatisticsReceiver> =
                     Mutex::new(statistics_receiver);
@@ -388,9 +394,10 @@ static FLIGHT_RECEIVER: u8 = 2;
 
 struct QueryCoordinator {
     info: Option<QueryInfo>,
-    statistics_exchanges: Vec<FlightExchange>,
+    statistics_exchanges: Vec<NewFlightExchange>,
     fragments_coordinator: HashMap<usize, Box<FragmentCoordinator>>,
 
+    new_statistics_exchanges: HashMap<String, Vec<NewFlightExchange>>,
     new_fragment_exchanges: HashMap<(String, usize, u8), NewFlightExchange>,
 }
 
@@ -401,12 +408,40 @@ impl QueryCoordinator {
             statistics_exchanges: vec![],
             fragments_coordinator: HashMap::new(),
             new_fragment_exchanges: HashMap::new(),
+            new_statistics_exchanges: HashMap::new(),
         }
     }
 
-    pub fn add_statistics_exchange(&mut self, exchanges: Vec<FlightExchange>) -> Result<()> {
-        for exchange in exchanges.into_iter() {
-            self.statistics_exchanges.push(exchange);
+    pub fn add_statistics_exchange(
+        &mut self,
+        source: String,
+    ) -> Result<Receiver<Result<FlightData, Status>>> {
+        let (tx, rx) = async_channel::bounded(8);
+        match self.new_statistics_exchanges.entry(source) {
+            Entry::Vacant(v) => {
+                v.insert(vec![NewFlightExchange::create_sender(tx)]);
+            }
+            Entry::Occupied(mut v) => {
+                v.get_mut().push(NewFlightExchange::create_sender(tx));
+            }
+        };
+
+        Ok(rx)
+    }
+
+    pub fn add_statistics_exchanges(
+        &mut self,
+        exchanges: HashMap<String, NewFlightExchange>,
+    ) -> Result<()> {
+        for (source, exchange) in exchanges.into_iter() {
+            match self.new_statistics_exchanges.entry(source) {
+                Entry::Vacant(v) => {
+                    v.insert(vec![exchange]);
+                }
+                Entry::Occupied(mut v) => {
+                    v.get_mut().push(exchange);
+                }
+            };
         }
 
         Ok(())
@@ -420,7 +455,7 @@ impl QueryCoordinator {
         let (tx, rx) = async_channel::bounded(8);
         self.new_fragment_exchanges.insert(
             (target, fragment, FLIGHT_SENDER),
-            NewFlightExchange::Sender(tx),
+            NewFlightExchange::create_sender(tx),
         );
         Ok(rx)
     }
@@ -429,9 +464,9 @@ impl QueryCoordinator {
         &mut self,
         exchanges: HashMap<(String, usize), NewFlightExchange>,
     ) -> Result<()> {
-        for ((target, fragment), exchange) in exchanges.into_iter() {
+        for ((source, fragment), exchange) in exchanges.into_iter() {
             self.new_fragment_exchanges
-                .insert((target, fragment, FLIGHT_RECEIVER), exchange);
+                .insert((source, fragment, FLIGHT_RECEIVER), exchange);
         }
 
         Ok(())
@@ -665,7 +700,7 @@ impl QueryCoordinator {
 
         let query_id = info_mut.query_id.clone();
         let query_ctx = info_mut.query_ctx.clone();
-        let mut request_server_exchanges = std::mem::take(&mut self.statistics_exchanges);
+        let mut request_server_exchanges = std::mem::take(&mut self.new_statistics_exchanges);
 
         if request_server_exchanges.len() != 1 {
             return Err(ErrorCode::Internal(
@@ -674,9 +709,9 @@ impl QueryCoordinator {
         }
 
         let ctx = query_ctx.clone();
+        let (_, request_server_exchanges) = request_server_exchanges.into_iter().next().unwrap();
         let mut statistics_sender =
-            StatisticsSender::create(&query_id, ctx, request_server_exchanges.remove(0));
-        statistics_sender.start();
+            StatisticsSender::spawn_sender(&query_id, ctx, request_server_exchanges);
 
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
             statistics_sender.shutdown(executor.execute().err());
