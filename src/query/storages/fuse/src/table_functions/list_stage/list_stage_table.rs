@@ -29,6 +29,7 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
 use common_sql::binder::parse_stage_location;
+use common_storage::StageFilesInfo;
 use common_storages_stage::StageTable;
 
 use crate::table_functions::list_stage::table_args::ListStageArgsParsed;
@@ -164,11 +165,17 @@ impl AsyncSource for ListStagesSource {
 
         self.is_finished = true;
 
-        let (stage_info, _path) =
+        let (stage_info, path) =
             parse_stage_location(&self.ctx, &self.args_parsed.location).await?;
         let op = StageTable::get_op(&stage_info)?;
 
-        let files = self.args_parsed.files_info.list(&op, false).await?;
+        let files_info = StageFilesInfo {
+            path,
+            files: self.args_parsed.files_info.files.clone(),
+            pattern: self.args_parsed.files_info.pattern.clone(),
+        };
+
+        let files = files_info.list(&op, false).await?;
 
         let names: Vec<Vec<u8>> = files
             .iter()

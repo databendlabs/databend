@@ -1,18 +1,17 @@
 --- dir:
-00.csv	96	NULL	2023-03-19 14:00:03.419 +0000	NULL
-data/tuple.parquet	431	NULL	2023-03-19 14:00:03.419 +0000	NULL
+data/tuple.parquet	431	NULL	NULL
 --- file:
-00.csv	96	NULL	2023-03-19 14:00:03.419 +0000	NULL
-data/tuple.parquet	431	NULL	2023-03-19 14:00:03.419 +0000	NULL
+data/tuple.parquet	431	NULL	NULL
 --- pattern:
-data/tuple.parquet	431	NULL	2023-03-19 14:00:03.419 +0000	NULL
+data/tuple.parquet	431	NULL	NULL
 --- complex:
-data/complex.parquet	92762	NULL	2023-03-19 14:00:03.855 +0000	NULL
+data/complex.parquet	92762	NULL	NULL
 --- limit
-data/tuple.parquet	431	NULL	2023-03-19 14:00:03.419 +0000	NULL
+data/tuple.parquet	431	NULL	NULL
 --- where
+data/tuple.parquet	431	NULL	NULL
 --- list files so far
-00.csv	96	NULL	2023-03-19 14:00:03.419 +0000	NULL
-data/00.csv	96	NULL	2023-03-19 14:00:03.799 +0000	NULL
-data/tuple.parquet	431	NULL	2023-03-19 14:00:03.419 +0000	NULL
-data/complex.parquet	92762	NULL	2023-03-19 14:00:03.855 +0000	NULL
+00.csv	96	NULL	NULL
+data/00.csv	96	NULL	NULL
+data/tuple.parquet	431	NULL	NULL
+data/complex.parquet	92762	NULL	NULL
