@@ -4734,6 +4734,11 @@ media-typer@0.3.0:
   version "0.3.0"
   resolved "https://registry.npmjs.org/media-typer/-/media-typer-0.3.0.tgz"
 
+medium-zoom@^1.0.4:
+  version "1.0.8"
+  resolved "https://registry.yarnpkg.com/medium-zoom/-/medium-zoom-1.0.8.tgz#2bd1fbcf2961fa7b0e318fe284462aa9b8608ed2"
+  integrity sha512-CjFVuFq/IfrdqesAXfg+hzlDKu6A2n80ZIq0Kl9kWjoHh9j1N9Uvk5X0/MmN0hOfm5F9YBswlClhcwnmtwz7gA==
+
 memfs@^3.1.2, memfs@^3.4.3:
   version "3.4.13"
   resolved "https://registry.npmjs.org/memfs/-/memfs-3.4.13.tgz"
@@ -5477,6 +5482,13 @@ pkg-up@^3.1.0:
   resolved "https://registry.npmjs.org/pkg-up/-/pkg-up-3.1.0.tgz"
   dependencies:
     find-up "^3.0.0"
+
+plugin-image-zoom@^1.1.0:
+  version "1.1.0"
+  resolved "https://registry.yarnpkg.com/plugin-image-zoom/-/plugin-image-zoom-1.1.0.tgz#0d0e5950f9af327de894b3608011b4e113968712"
+  integrity sha512-1uUByLjDsqRb3HI5ffujoqPstHdGzKzEJHBG83qVt00t/gRNcVt6oaTS0wEcw5IoQGzPoRnqadv6ivxMfIjghA==
+  dependencies:
+    medium-zoom "^1.0.4"
 
 postcss-calc@^8.2.3:
   version "8.2.4"
