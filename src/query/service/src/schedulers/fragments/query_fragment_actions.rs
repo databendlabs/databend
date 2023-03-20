@@ -14,6 +14,7 @@
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -203,9 +204,9 @@ impl QueryFragmentsActions {
     }
 
     pub fn get_init_nodes_channel_packets(&self) -> Result<Vec<InitNodesChannelPacket>> {
-        let local_id = &self.ctx.get_cluster().local_id;
         let nodes_info = Self::nodes_info(&self.ctx);
         let connections_info = self.fragments_connections();
+        let mut statistics_connections = self.statistics_connections();
 
         let mut init_nodes_channel_packets = Vec::with_capacity(connections_info.len());
 
@@ -230,18 +231,39 @@ impl QueryFragmentsActions {
                     )));
                 }
 
-                connections_info.push(ConnectionInfo {
-                    source: nodes_info[source].clone(),
-                    fragments: fragments.iter().cloned().unique().collect::<Vec<_>>(),
-                    create_request_channel: &executor_node_info.id == local_id
-                        || source == local_id,
-                });
+                connections_info.push(ConnectionInfo::create(
+                    nodes_info[source].clone(),
+                    fragments.iter().cloned().unique().collect::<Vec<_>>(),
+                ));
+            }
+
+            let mut statistics_connections_info = Vec::with_capacity(0);
+            if let Some(set) = statistics_connections.remove(&executor_node_info.id) {
+                statistics_connections_info = set
+                    .iter()
+                    .map(|id| ConnectionInfo::create(nodes_info[id].clone(), vec![]))
+                    .collect::<Vec<_>>();
             }
 
             init_nodes_channel_packets.push(InitNodesChannelPacket::create(
                 self.ctx.get_id(),
                 executor_node_info.clone(),
                 connections_info,
+                statistics_connections_info,
+            ));
+        }
+
+        for (id, set) in statistics_connections.into_iter() {
+            let statistics_connections_info = set
+                .iter()
+                .map(|id| ConnectionInfo::create(nodes_info[id].clone(), vec![]))
+                .collect::<Vec<_>>();
+
+            init_nodes_channel_packets.push(InitNodesChannelPacket::create(
+                self.ctx.get_id(),
+                nodes_info[&id].clone(),
+                vec![],
+                statistics_connections_info,
             ));
         }
 
@@ -313,6 +335,46 @@ impl QueryFragmentsActions {
         }
 
         target_source_fragments
+    }
+
+    fn statistics_connections(&self) -> HashMap<String, HashSet<String>> {
+        let mut target_source_connections = HashMap::new();
+
+        for fragment_actions in &self.fragments_actions {
+            if let Some(exchange) = &fragment_actions.data_exchange {
+                let destinations = exchange.get_destinations();
+
+                for fragment_action in &fragment_actions.fragment_actions {
+                    let source = fragment_action.executor.to_string();
+
+                    for destination in &destinations {
+                        if &source == destination {
+                            continue;
+                        }
+
+                        match target_source_connections.entry(source.clone()) {
+                            Entry::Vacant(v) => {
+                                v.insert(HashSet::from([destination.clone()]));
+                            }
+                            Entry::Occupied(mut v) => {
+                                v.get_mut().insert(destination.clone());
+                            }
+                        };
+
+                        match target_source_connections.entry(destination.clone()) {
+                            Entry::Vacant(v) => {
+                                v.insert(HashSet::from([source.clone()]));
+                            }
+                            Entry::Occupied(mut v) => {
+                                v.get_mut().insert(source.clone());
+                            }
+                        };
+                    }
+                }
+            }
+        }
+
+        target_source_connections
     }
 
     fn nodes_info(ctx: &Arc<QueryContext>) -> HashMap<String, Arc<NodeInfo>> {

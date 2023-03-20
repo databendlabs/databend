@@ -101,18 +101,8 @@ impl DataExchangeManager {
         let mut targets_exchanges = HashMap::new();
 
         let target = &packet.executor.id;
-        for connection_info in &packet.connections_info {
-            if connection_info.create_request_channel {
-                let address = &connection_info.source.flight_address;
-                let mut flight_client = Self::create_client(address).await?;
-                request_exchanges.insert(
-                    connection_info.source.id.clone(),
-                    flight_client
-                        .request_server_exchange(&packet.query_id, target)
-                        .await?,
-                );
-            }
 
+        for connection_info in &packet.fragment_connections_info {
             for fragment in &connection_info.fragments {
                 let address = &connection_info.source.flight_address;
                 let mut flight_client = Self::create_client(address).await?;
@@ -124,6 +114,17 @@ impl DataExchangeManager {
                         .await?,
                 );
             }
+        }
+
+        for connection_info in &packet.statistics_connections_info {
+            let address = &connection_info.source.flight_address;
+            let mut flight_client = Self::create_client(address).await?;
+            request_exchanges.insert(
+                connection_info.source.id.clone(),
+                flight_client
+                    .request_server_exchange(&packet.query_id, target)
+                    .await?,
+            );
         }
 
         let queries_coordinator_guard = self.queries_coordinator.lock();
@@ -411,10 +412,10 @@ impl QueryCoordinator {
 
     pub fn add_statistics_exchange(
         &mut self,
-        source: String,
+        target: String,
     ) -> Result<Receiver<Result<FlightData, Status>>> {
         let (tx, rx) = async_channel::bounded(8);
-        match self.new_statistics_exchanges.entry(source) {
+        match self.new_statistics_exchanges.entry(target) {
             Entry::Vacant(v) => {
                 v.insert(vec![NewFlightExchange::create_sender(tx)]);
             }
