@@ -58,7 +58,7 @@ module.exports = function fetchDatabendReleasesPlugin() {
           filterBody: release.body
                   .replace(IGNORE_TEXT, '')
                   .replace(REG, REPLACE_TEXT)
-                  .replace(/@(\w+)/g, '**@$1**')
+                  .replace(/\@[\w\-]+/g, '**$&**')
         }
       });
       // name match list
