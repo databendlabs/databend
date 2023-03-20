@@ -44,8 +44,6 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableCopiedFileReply;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
@@ -410,17 +408,6 @@ impl Catalog for DatabaseCatalog {
     ) -> Result<GetTableCopiedFileReply> {
         self.mutable_catalog
             .get_table_copied_file_info(tenant, db_name, req)
-            .await
-    }
-
-    async fn upsert_table_copied_file_info(
-        &self,
-        tenant: &str,
-        db_name: &str,
-        req: UpsertTableCopiedFileReq,
-    ) -> Result<UpsertTableCopiedFileReply> {
-        self.mutable_catalog
-            .upsert_table_copied_file_info(tenant, db_name, req)
             .await
     }
 
