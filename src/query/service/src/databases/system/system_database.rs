@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_config::InnerConfig;
@@ -56,6 +57,14 @@ pub struct SystemDatabase {
 }
 
 impl SystemDatabase {
+    /// These tables may disabled to the sql users.
+    fn disable_system_tables() -> HashMap<String, bool> {
+        let mut map = HashMap::new();
+        map.insert("system.config".to_string(), true);
+        map.insert("system.cluster".to_string(), true);
+        map
+    }
+
     pub fn create(sys_db_meta: &mut InMemoryMetas, config: &InnerConfig) -> Self {
         let table_list: Vec<Arc<dyn Table>> = vec![
             OneTable::create(sys_db_meta.next_table_id()),
@@ -93,7 +102,15 @@ impl SystemDatabase {
         ];
 
         for tbl in table_list.into_iter() {
-            sys_db_meta.insert("system", tbl);
+            // Not load the disable system tables.
+            if config.query.disable_system_table_load {
+                let name = tbl.name();
+                if !Self::disable_system_tables()[name] {
+                    sys_db_meta.insert("system", tbl);
+                }
+            } else {
+                sys_db_meta.insert("system", tbl);
+            }
         }
 
         let db_info = DatabaseInfo {
