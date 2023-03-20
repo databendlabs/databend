@@ -19,7 +19,6 @@ use common_catalog::table_args::TableArgs;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::MetaId;
-use common_storages_fuse::table_functions::InferSchemaTable;
 use itertools::Itertools;
 use parking_lot::RwLock;
 
@@ -31,8 +30,9 @@ use crate::storages::fuse::table_functions::FuseBlockTable;
 use crate::storages::fuse::table_functions::FuseSegmentTable;
 use crate::storages::fuse::table_functions::FuseSnapshotTable;
 use crate::storages::fuse::table_functions::FuseStatisticTable;
-use crate::storages::fuse::table_functions::ListStageTable;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
+use crate::table_functions::infer_schema::InferSchemaTable;
+use crate::table_functions::list_stage::ListStageTable;
 use crate::table_functions::numbers::NumbersTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
 use crate::table_functions::GPT2SQLTable;
