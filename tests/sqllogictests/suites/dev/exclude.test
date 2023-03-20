@@ -1,0 +1,27 @@
+statement ok
+drop database if exists db1
+
+statement ok
+create database db1
+
+
+statement ok
+create table db1.t (id int, c1 tuple(int, int))
+
+statement ok
+insert into db1.t(id) values(1)
+
+
+query I
+select * exclude c1 from db1.T
+----
+1
+
+statement ok
+drop database if exists db1
+
+
+statement ok
+drop table db1.t
+
+
