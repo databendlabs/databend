@@ -509,10 +509,13 @@ impl Binder {
                         self.create_column_binding(None, None, alias, scalar.data_type()?)
                     };
                     bind_context.aggregate_info.group_items.push(ScalarItem {
-                        scalar,
+                        scalar: scalar.clone(),
                         index: column_binding.index,
                     });
                     entry.insert(bind_context.aggregate_info.group_items.len() - 1);
+                }
+                if collect_grouping_sets && !grouping_sets.last().unwrap().contains(&scalar) {
+                    grouping_sets.last_mut().unwrap().push(scalar);
                 }
                 continue;
             }
