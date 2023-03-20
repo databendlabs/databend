@@ -262,6 +262,7 @@ pub enum TableReferenceElement {
         alias: Option<TableAlias>,
         travel_point: Option<TimeTravelPoint>,
         pivot: Option<PivotMeta>,
+        unpivot: Option<UnpivotMeta>,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
@@ -301,11 +302,24 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
             pivot_values,
         },
     );
+    // UNPIVOT(ident for ident IN (ident, ...))
+    let unpivot = map(
+        rule! {
+            UNPIVOT ~ "(" ~ #ident ~ "FOR" ~ #ident ~ "IN" ~ "(" ~ #comma_separated_list1(ident) ~ ")" ~ ")"
+        },
+        |(_unpivot, _, col_before_for, _for, col_after_for, _in, _, unpivot_cols, _, _)| {
+            UnpivotMeta {
+                col_before_for,
+                col_after_for,
+                unpivot_cols,
+            }
+        },
+    );
     let aliased_table = map(
         rule! {
-            #period_separated_idents_1_to_3 ~ (AT ~ #travel_point)? ~ #table_alias? ~ #pivot?
+            #period_separated_idents_1_to_3 ~ (AT ~ #travel_point)? ~ #table_alias? ~ #pivot? ~ #unpivot?
         },
-        |((catalog, database, table), travel_point_opt, alias, pivot)| {
+        |((catalog, database, table), travel_point_opt, alias, pivot, unpivot)| {
             TableReferenceElement::Table {
                 catalog,
                 database,
@@ -313,6 +327,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
                 alias,
                 travel_point: travel_point_opt.map(|p| p.1),
                 pivot,
+                unpivot,
             }
         },
     );
@@ -439,6 +454,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 alias,
                 travel_point,
                 pivot,
+                unpivot,
             } => TableReference::Table {
                 span: transform_span(input.span.0),
                 catalog,
@@ -447,6 +463,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 alias,
                 travel_point,
                 pivot,
+                unpivot,
             },
             TableReferenceElement::TableFunction {
                 name,

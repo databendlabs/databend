@@ -201,6 +201,13 @@ pub struct PivotMeta {
     pub pivot_values: Vec<Expr>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnpivotMeta {
+    pub col_before_for: Identifier,
+    pub col_after_for: Identifier,
+    pub unpivot_cols: Vec<Identifier>,
+}
+
 /// A table name or a parenthesized subquery with an optional alias
 #[derive(Debug, Clone, PartialEq)]
 pub enum TableReference {
@@ -213,6 +220,7 @@ pub enum TableReference {
         alias: Option<TableAlias>,
         travel_point: Option<TimeTravelPoint>,
         pivot: Option<PivotMeta>,
+        unpivot: Option<UnpivotMeta>,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
@@ -245,6 +253,16 @@ impl TableReference {
         match self {
             TableReference::Table {
                 pivot: Some(meta), ..
+            } => Some(meta),
+            _ => None,
+        }
+    }
+
+    pub fn unpivot_meta(&self) -> Option<&UnpivotMeta> {
+        match self {
+            TableReference::Table {
+                unpivot: Some(meta),
+                ..
             } => Some(meta),
             _ => None,
         }
@@ -330,6 +348,19 @@ impl Display for PivotMeta {
     }
 }
 
+impl Display for UnpivotMeta {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "UNPIVOT({} FOR {} IN (",
+            self.col_before_for, self.col_after_for
+        )?;
+        write_comma_separated_list(f, &self.unpivot_cols)?;
+        write!(f, "))")?;
+        Ok(())
+    }
+}
+
 impl Display for TableReference {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -341,6 +372,7 @@ impl Display for TableReference {
                 alias,
                 travel_point,
                 pivot,
+                unpivot,
             } => {
                 write_period_separated_list(
                     f,
@@ -360,6 +392,10 @@ impl Display for TableReference {
                 }
                 if let Some(pivot) = pivot {
                     write!(f, "{pivot}")?;
+                }
+
+                if let Some(unpivot) = unpivot {
+                    write!(f, "{unpivot}")?;
                 }
             }
             TableReference::TableFunction {

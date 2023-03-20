@@ -702,6 +702,8 @@ pub enum TokenKind {
     SELECT,
     #[token("PIVOT", ignore(ascii_case))]
     PIVOT,
+    #[token("UNPIVOT", ignore(ascii_case))]
+    UNPIVOT,
     #[token("SEGMENT", ignore(ascii_case))]
     SEGMENT,
     #[token("SESSION_TOKEN", ignore(ascii_case))]
@@ -1154,6 +1156,7 @@ impl TokenKind {
             | TokenKind::RIGHT
             | TokenKind::SELECT
             | TokenKind::PIVOT
+            | TokenKind::UNPIVOT
             // | TokenKind::SESSION_USER
             // | TokenKind::SIMILAR
             | TokenKind::SOME

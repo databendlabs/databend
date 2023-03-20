@@ -1887,7 +1887,8 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
             table,
             alias: None,
             travel_point: None,
-            pivot: None, // TODO(Sky)
+            pivot: None,
+            unpivot: None,
         },
     )(i)
 }
