@@ -2927,8 +2927,6 @@ fn build_upsert_table_copied_file_info_conditions(
         if fail_if_duplicated {
             // "fail_if_duplicated" mode, assumes files are absent
             condition.push(txn_cond_seq(&key, Eq, 0));
-        } else {
-            condition.push(txn_cond_seq(&key, Ge, 0));
         }
         set_update_expire_operation(&key, &file_info, &req.expire_at, &mut if_then)?;
     }
