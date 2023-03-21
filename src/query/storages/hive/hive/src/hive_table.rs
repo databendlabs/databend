@@ -41,6 +41,7 @@ use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
@@ -583,6 +584,7 @@ impl Table for HiveTable {
         &self,
         _ctx: Arc<dyn TableContext>,
         _operations: Vec<DataBlock>,
+        _copied_files: Option<UpsertTableCopiedFileReq>,
         _overwrite: bool,
     ) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(

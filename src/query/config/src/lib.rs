@@ -30,6 +30,7 @@
 mod config;
 mod global;
 mod inner;
+mod mask;
 mod obsolete;
 mod version;
 

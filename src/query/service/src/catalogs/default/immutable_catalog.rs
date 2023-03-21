@@ -43,8 +43,6 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableCopiedFileReply;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
@@ -206,18 +204,6 @@ impl Catalog for ImmutableCatalog {
     ) -> Result<GetTableCopiedFileReply> {
         Err(ErrorCode::Unimplemented(format!(
             "get_table_copied_file_info not allowed for system database {:?}",
-            req
-        )))
-    }
-
-    async fn upsert_table_copied_file_info(
-        &self,
-        _tenant: &str,
-        _db_name: &str,
-        req: UpsertTableCopiedFileReq,
-    ) -> Result<UpsertTableCopiedFileReply> {
-        Err(ErrorCode::Unimplemented(format!(
-            "upsert_table_copied_file_info not allowed for system database {:?}",
             req
         )))
     }

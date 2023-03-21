@@ -60,15 +60,14 @@ fn error_fields(log_type: LogType, err: Option<ErrorCode>) -> (LogType, i32, Str
 
 impl InterpreterQueryLog {
     fn write_log(event: QueryLogElement) -> Result<()> {
-        info!("{}", serde_json::to_string(&event)?);
-
+        let event_str = serde_json::to_string(&event)?;
         if let Some(logger) = QueryLogger::instance().get_subscriber() {
-            let event_str = serde_json::to_string(&event)?;
             subscriber::with_default(logger, || {
                 info!("{}", event_str);
             });
+        } else {
+            info!("{}", event_str);
         };
-
         QueryLogQueue::instance()?.append_data(event)
     }
 

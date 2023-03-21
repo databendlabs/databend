@@ -104,12 +104,6 @@ You can find [sample configuration files](https://github.com/datafuselabs/databe
 * Default: `3307`
 * Env variable: `QUERY_MYSQL_HANDLER_PORT`
 
-### clickhouse_handler_host
-
-* The IP address to listen on for ClickHouse handler, e.g., `0.0.0.0`.
-* Default: `"127.0.0.1"`
-* Env variable: `QUERY_CLICKHOUSE_HANDLER_HOST`
-
 ### clickhouse_http_handler_host
 
 * The IP address to listen on for ClickHouse HTTP handler, e.g., `0.0.0.0`.
@@ -317,9 +311,9 @@ flight_api_address = "0.0.0.0:9091"
 mysql_handler_host = "0.0.0.0"
 mysql_handler_port = 3307
 
-# Query ClickHouse Handler.
-clickhouse_handler_host = "0.0.0.0"
-clickhouse_handler_port = 9001
+# Query ClickHouse HTTP Handler.
+clickhouse_http_handler_host = "0.0.0.0"
+clickhouse_http_handler_port = 9001
 
 # Query HTTP Handler.
 http_handler_host = "0.0.0.0"

@@ -42,6 +42,7 @@ mod sort;
 mod table;
 mod table_args;
 mod update;
+mod window;
 
 pub use aggregate::AggregateInfo;
 pub use bind_context::*;

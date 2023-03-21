@@ -12,7 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 use std::any::Any;
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
@@ -54,7 +53,6 @@ use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
-use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -66,8 +64,6 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableCopiedFileReply;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
@@ -213,7 +209,7 @@ async fn test_abort_on_error() -> Result<()> {
             };
             let ctx = Arc::new(CtxDelegation::new(ctx, faked_catalog));
             let r = fuse_table
-                .commit_with_max_retry_elapsed(ctx, log, self.max_retry_time, overwrite)
+                .commit_with_max_retry_elapsed(ctx, log, None, self.max_retry_time, overwrite)
                 .await;
             if self.update_meta_error.is_some() {
                 assert_eq!(
@@ -521,16 +517,6 @@ impl TableContext for CtxDelegation {
     ) -> Result<Vec<StageFileInfo>> {
         todo!()
     }
-
-    async fn upsert_copied_files(
-        &self,
-        _catalog_name: &str,
-        _database_name: &str,
-        _table_name: &str,
-        _copy_stage_files: BTreeMap<String, TableCopiedFileInfo>,
-    ) -> Result<()> {
-        todo!()
-    }
 }
 
 #[derive(Clone)]
@@ -641,15 +627,6 @@ impl Catalog for FakedCatalog {
         _db_name: &str,
         _req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
-        todo!()
-    }
-
-    async fn upsert_table_copied_file_info(
-        &self,
-        _tenant: &str,
-        _db_name: &str,
-        _req: UpsertTableCopiedFileReq,
-    ) -> Result<UpsertTableCopiedFileReply> {
         todo!()
     }
 

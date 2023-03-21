@@ -1,0 +1,57 @@
+query T
+explain select number % 2 as a, number % 3 as b, number % 5 as c from numbers(1) group by rollup(a, b, c);
+----
+EvalScalar
+├── expressions: [group_item (#1), group_item (#2), group_item (#3)]
+├── estimated rows: 1.00
+└── AggregateFinal
+    ├── group by: [a, b, c, _grouping_id]
+    ├── aggregate functions: []
+    ├── estimated rows: 1.00
+    └── AggregatePartial
+        ├── group by: [a, b, c, _grouping_id]
+        ├── aggregate functions: []
+        ├── estimated rows: 1.00
+        └── AggregateExpand
+            ├── grouping sets: [(a, b, c), (a, b), (a), ()]
+            ├── estimated rows: 1.00
+            └── EvalScalar
+                ├── expressions: [numbers.number (#0) % 2, numbers.number (#0) % 3, numbers.number (#0) % 5]
+                ├── estimated rows: 1.00
+                └── TableScan
+                    ├── table: default.system.numbers
+                    ├── read rows: 1
+                    ├── read bytes: 8
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 1.00
+
+query T
+explain select number % 2 as a, number % 3 as b, number % 5 as c from numbers(1) group by cube(a, b, c);
+----
+EvalScalar
+├── expressions: [group_item (#1), group_item (#2), group_item (#3)]
+├── estimated rows: 1.00
+└── AggregateFinal
+    ├── group by: [a, b, c, _grouping_id]
+    ├── aggregate functions: []
+    ├── estimated rows: 1.00
+    └── AggregatePartial
+        ├── group by: [a, b, c, _grouping_id]
+        ├── aggregate functions: []
+        ├── estimated rows: 1.00
+        └── AggregateExpand
+            ├── grouping sets: [(), (a), (b), (c), (a, b), (a, c), (b, c), (a, b, c)]
+            ├── estimated rows: 1.00
+            └── EvalScalar
+                ├── expressions: [numbers.number (#0) % 2, numbers.number (#0) % 3, numbers.number (#0) % 5]
+                ├── estimated rows: 1.00
+                └── TableScan
+                    ├── table: default.system.numbers
+                    ├── read rows: 1
+                    ├── read bytes: 8
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 1.00

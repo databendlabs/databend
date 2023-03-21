@@ -32,6 +32,7 @@ use crate::plans::JoinType;
 use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::Unnest;
+use crate::plans::WindowFunc;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::ColumnSet;
@@ -271,6 +272,7 @@ fn remove_column_nullable(
                 _ => {}
             };
             ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: column.span,
                 column: ColumnBinding {
                     database_name: column.column.database_name.clone(),
                     table_name: column.column.table_name.clone(),
@@ -338,6 +340,30 @@ fn remove_column_nullable(
                 right: Box::new(right_expr),
             })
         }
+        ScalarExpr::WindowFunction(expr) => {
+            let mut args = Vec::with_capacity(expr.agg_func.args.len());
+            for arg in expr.agg_func.args.iter() {
+                args.push(remove_column_nullable(
+                    arg,
+                    left_prop,
+                    right_prop,
+                    join_type,
+                    metadata.clone(),
+                )?);
+            }
+            ScalarExpr::WindowFunction(WindowFunc {
+                agg_func: AggregateFunction {
+                    display_name: expr.agg_func.display_name.clone(),
+                    func_name: expr.agg_func.func_name.clone(),
+                    distinct: expr.agg_func.distinct,
+                    params: expr.agg_func.params.clone(),
+                    args,
+                    return_type: expr.agg_func.return_type.clone(),
+                },
+                partition_by: expr.partition_by.clone(),
+                frame: expr.frame.clone(),
+            })
+        }
         ScalarExpr::AggregateFunction(expr) => {
             let mut args = Vec::with_capacity(expr.args.len());
             for arg in expr.args.iter() {
@@ -370,6 +396,7 @@ fn remove_column_nullable(
                 )?);
             }
             ScalarExpr::FunctionCall(FunctionCall {
+                span: expr.span,
                 params: expr.params.clone(),
                 arguments: args,
                 func_name: expr.func_name.clone(),
@@ -379,6 +406,7 @@ fn remove_column_nullable(
             let new_expr =
                 remove_column_nullable(&expr.argument, left_prop, right_prop, join_type, metadata)?;
             ScalarExpr::CastExpr(CastExpr {
+                span: expr.span,
                 is_try: expr.is_try,
                 argument: Box::new(new_expr),
                 target_type: expr.target_type.clone(),

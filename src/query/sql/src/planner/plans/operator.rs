@@ -34,6 +34,7 @@ use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::plans::runtime_filter_source::RuntimeFilterSource;
 use crate::plans::Exchange;
+use crate::plans::Window;
 
 pub trait Operator {
     fn rel_op(&self) -> RelOp;
@@ -69,6 +70,7 @@ pub enum RelOp {
     UnionAll,
     DummyTableScan,
     RuntimeFilterSource,
+    Window,
 
     // Pattern
     Pattern,
@@ -88,6 +90,7 @@ pub enum RelOperator {
     UnionAll(UnionAll),
     DummyTableScan(DummyTableScan),
     RuntimeFilterSource(RuntimeFilterSource),
+    Window(Window),
 
     Pattern(PatternPlan),
 }
@@ -107,6 +110,7 @@ impl Operator for RelOperator {
             RelOperator::UnionAll(rel_op) => rel_op.rel_op(),
             RelOperator::DummyTableScan(rel_op) => rel_op.rel_op(),
             RelOperator::RuntimeFilterSource(rel_op) => rel_op.rel_op(),
+            RelOperator::Window(rel_op) => rel_op.rel_op(),
         }
     }
 
@@ -124,6 +128,7 @@ impl Operator for RelOperator {
             RelOperator::UnionAll(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::DummyTableScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::RuntimeFilterSource(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::Window(rel_op) => rel_op.derive_relational_prop(rel_expr),
         }
     }
 
@@ -141,6 +146,7 @@ impl Operator for RelOperator {
             RelOperator::UnionAll(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::DummyTableScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::RuntimeFilterSource(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::Window(rel_op) => rel_op.derive_physical_prop(rel_expr),
         }
     }
 
@@ -186,6 +192,9 @@ impl Operator for RelOperator {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
             RelOperator::RuntimeFilterSource(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::Window(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
         }
@@ -282,6 +291,23 @@ impl TryFrom<RelOperator> for Aggregate {
             Err(ErrorCode::Internal(
                 "Cannot downcast RelOperator to Aggregate",
             ))
+        }
+    }
+}
+
+impl From<Window> for RelOperator {
+    fn from(v: Window) -> Self {
+        Self::Window(v)
+    }
+}
+
+impl TryFrom<RelOperator> for Window {
+    type Error = ErrorCode;
+    fn try_from(value: RelOperator) -> Result<Self> {
+        if let RelOperator::Window(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal("Cannot downcast RelOperator to Window"))
         }
     }
 }

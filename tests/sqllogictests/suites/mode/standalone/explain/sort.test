@@ -58,5 +58,6 @@ Sort
         ├── output columns: [a]
         └── estimated rows: 0.00
 
+
 statement ok
 drop table if exists t1;

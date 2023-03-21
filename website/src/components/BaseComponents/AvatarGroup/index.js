@@ -10,6 +10,10 @@ const Avatar = ({ name }) => {
     url = "http://github.com/app/mergify[bot]";
     image_url = "https://avatars.githubusercontent.com/in/10562";
   }
+  if (name == "dependabot[bot]") {
+    url = "http://github.com/app/dependabot[bot]";
+    image_url = "https://avatars.githubusercontent.com/in/29110";
+  }
   return (
     <Tooltip content={name}>
       <a href={url} className={styles.Avatar}>

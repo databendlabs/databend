@@ -25,6 +25,7 @@ use common_meta_types::MetaError;
 
 use crate::exception::ErrorCodeBacktrace;
 use crate::ErrorCode;
+use crate::Span;
 
 #[derive(thiserror::Error)]
 enum OtherErrors {
@@ -210,9 +211,10 @@ impl From<prost::EncodeError> for ErrorCode {
 // ===  ser/de to/from tonic::Status ===
 #[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct SerializedError {
-    code: u16,
-    message: String,
-    backtrace: String,
+    pub code: u16,
+    pub message: String,
+    pub span: Span,
+    pub backtrace: String,
 }
 
 impl Display for SerializedError {
@@ -226,6 +228,7 @@ impl From<ErrorCode> for SerializedError {
         SerializedError {
             code: e.code(),
             message: e.message(),
+            span: e.span(),
             backtrace: e.backtrace_str(),
         }
     }
@@ -239,6 +242,7 @@ impl From<SerializedError> for ErrorCode {
             None,
             Some(ErrorCodeBacktrace::Serialized(Arc::new(se.backtrace))),
         )
+        .set_span(se.span)
     }
 }
 
@@ -262,7 +266,8 @@ impl From<tonic::Status> for ErrorCode {
                             serialized_error.message,
                             None,
                             None,
-                        ),
+                        )
+                        .set_span(serialized_error.span),
                         _ => ErrorCode::create(
                             serialized_error.code,
                             serialized_error.message,
@@ -270,7 +275,8 @@ impl From<tonic::Status> for ErrorCode {
                             Some(ErrorCodeBacktrace::Serialized(Arc::new(
                                 serialized_error.backtrace,
                             ))),
-                        ),
+                        )
+                        .set_span(serialized_error.span),
                     },
                 }
             }
@@ -299,9 +305,10 @@ impl From<MetaStorageError> for ErrorCode {
 
 impl From<ErrorCode> for tonic::Status {
     fn from(err: ErrorCode) -> Self {
-        let rst_json = serde_json::to_vec::<SerializedError>(&SerializedError {
+        let error_json = serde_json::to_vec::<SerializedError>(&SerializedError {
             code: err.code(),
             message: err.message(),
+            span: err.span(),
             backtrace: {
                 let mut str = err.backtrace_str();
                 str.truncate(2 * 1024);
@@ -309,7 +316,7 @@ impl From<ErrorCode> for tonic::Status {
             },
         });
 
-        match rst_json {
+        match error_json {
             Ok(serialized_error_json) => {
                 // Code::Internal will be used by h2, if something goes wrong internally.
                 // To distinguish from that, we use Code::Unknown here

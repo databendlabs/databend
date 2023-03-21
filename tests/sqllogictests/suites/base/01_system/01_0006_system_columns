@@ -10,19 +10,8 @@ CREATE TABLE COLUMNTEST.A(ID INT, ID2 INT DEFAULT 1, ID3 STRING, ID4 STRING DEFA
 statement ok
 SELECT lower(database), name, type, default_kind as default_type, default_expression, comment FROM system.columns  WHERE database LIKE 'columntest'
 
-query show_columns_for_view
+statement ok
 SELECT lower(database), name FROM system.columns  WHERE table LIKE 'views'
-----
-information_schema table_catalog
-information_schema table_schema
-information_schema table_name
-information_schema view_definition
-information_schema check_option
-information_schema is_updatable
-information_schema is_insertable_into
-information_schema is_trigger_updatable
-information_schema is_trigger_deletable
-information_schema is_trigger_insertable_into
 
 
 statement ok

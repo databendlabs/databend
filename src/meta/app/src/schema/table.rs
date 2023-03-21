@@ -558,6 +558,7 @@ pub struct UpdateTableMetaReq {
     pub table_id: u64,
     pub seq: MatchSeq,
     pub new_table_meta: TableMeta,
+    pub copied_files: Option<UpsertTableCopiedFileReq>,
 }
 
 impl UpsertTableOptionReq {
@@ -702,6 +703,7 @@ pub struct UpsertTableCopiedFileReq {
     pub table_id: u64,
     pub file_info: BTreeMap<String, TableCopiedFileInfo>,
     pub expire_at: Option<u64>,
+    pub fail_if_duplicated: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

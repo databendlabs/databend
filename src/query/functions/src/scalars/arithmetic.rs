@@ -701,12 +701,7 @@ fn register_string_to_number(registry: &mut FunctionRegistry) {
                                 match str_val.parse::<DEST_TYPE>() {
                                     Ok(new_val) => output.push(new_val),
                                     Err(e) => {
-                                        ctx.set_error(
-                                            output.len(),
-                                            format!(
-                                                "unable to parse string to type `{dest_type}` because {e}",
-                                            ),
-                                        );
+                                        ctx.set_error(output.len(), e.to_string());
                                         output.push(DEST_TYPE::default());
                                     }
                                 };
