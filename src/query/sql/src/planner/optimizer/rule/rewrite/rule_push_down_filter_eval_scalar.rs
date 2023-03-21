@@ -34,7 +34,6 @@ use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
-use crate::plans::Unnest;
 use crate::plans::WindowFunc;
 
 pub struct RulePushDownFilterEvalScalar {
@@ -247,18 +246,6 @@ impl RulePushDownFilterEvalScalar {
                         params: func.params.clone(),
                         arguments,
                         func_name: func.func_name.clone(),
-                    }))
-                }
-                ScalarExpr::Unnest(unnest) => {
-                    let arg = Self::replace_predicate(
-                        &unnest.argument,
-                        items,
-                        eval_scalar_columns,
-                        eval_scalar_child_columns,
-                    )?;
-                    Ok(ScalarExpr::Unnest(Unnest {
-                        argument: Box::new(arg),
-                        return_type: unnest.return_type.clone(),
                     }))
                 }
                 ScalarExpr::CastExpr(cast) => {
