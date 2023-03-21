@@ -163,24 +163,6 @@ impl SelectTarget {
             }
         }
     }
-
-    pub fn new_func_from_name_args(
-        name: Identifier,
-        args: Vec<Expr>,
-        alias: Option<Identifier>,
-    ) -> Self {
-        SelectTarget::AliasedExpr {
-            expr: Box::new(Expr::FunctionCall {
-                span: Span::default(),
-                distinct: false,
-                name,
-                args,
-                params: vec![],
-                window: None,
-            }),
-            alias,
-        }
-    }
 }
 
 pub type QualifiedName = Vec<Indirection>;
@@ -257,14 +239,14 @@ pub enum TableReference {
 }
 
 impl TableReference {
-    pub fn pivot_meta(&self) -> Option<&Pivot> {
+    pub fn pivot(&self) -> Option<&Pivot> {
         match self {
             TableReference::Table { pivot, .. } => pivot.as_ref().map(|b| b.as_ref()),
             _ => None,
         }
     }
 
-    pub fn unpivot_meta(&self) -> Option<&Unpivot> {
+    pub fn unpivot(&self) -> Option<&Unpivot> {
         match self {
             TableReference::Table { unpivot, .. } => unpivot.as_ref().map(|b| b.as_ref()),
             _ => None,

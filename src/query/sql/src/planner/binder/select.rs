@@ -25,14 +25,12 @@ use common_ast::ast::JoinCondition;
 use common_ast::ast::JoinOperator;
 use common_ast::ast::Literal;
 use common_ast::ast::OrderByExpr;
-use common_ast::ast::Pivot;
 use common_ast::ast::Query;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
 use common_ast::ast::SetOperator;
 use common_ast::ast::TableReference;
-use common_ast::ast::Unpivot;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
@@ -79,7 +77,6 @@ impl Binder {
         stmt: &SelectStmt,
         order_by: &[OrderByExpr],
     ) -> Result<(SExpr, BindContext)> {
-        Self::check_pivot_in_multi_table(stmt)?;
         let (mut s_expr, mut from_context) = if stmt.from.is_empty() {
             self.bind_one_table(bind_context, stmt).await?
         } else {
@@ -101,27 +98,12 @@ impl Binder {
                 .await?
         };
 
-        let is_pivot = stmt.from.len() == 1
-            && matches!(stmt.from[0], TableReference::Table { pivot: Some(_), .. });
-        let is_unpivot = stmt.from.len() == 1
-            && matches!(stmt.from[0], TableReference::Table {
-                unpivot: Some(_),
-                ..
-            });
-        if is_pivot && is_unpivot {
-            return Err(ErrorCode::SyntaxException(
-                "Cannot use both PIVOT and UNPIVOT after the same table",
-            ));
-        }
-        let new_pivot_stmt = is_pivot
-            .then(|| self.rewrite_pivot_stmt(stmt, &from_context))
-            .transpose()?;
-        let new_unpivot_stmt = is_unpivot
-            .then(|| self.rewrite_unpivot_stmt(stmt))
-            .transpose()?;
-        let stmt = new_pivot_stmt
-            .as_ref()
-            .unwrap_or(new_unpivot_stmt.as_ref().unwrap_or(stmt));
+        let mut rewriter = SelectRewriter::new(
+            from_context.all_column_bindings(),
+            self.name_resolution_ctx.unquoted_ident_case_sensitive,
+        );
+        let new_stmt = rewriter.rewrite(stmt)?;
+        let stmt = new_stmt.as_ref().unwrap_or(stmt);
 
         if let Some(expr) = &stmt.selection {
             s_expr = self.bind_where(&mut from_context, expr, s_expr).await?;
@@ -674,204 +656,223 @@ impl Binder {
         }
         Ok((new_bind_context, pairs, left_expr, right_expr))
     }
+}
 
-    fn check_pivot_in_multi_table(stmt: &SelectStmt) -> Result<()> {
-        if stmt.from.len() < 2 {
-            return Ok(());
-        }
-        for table in &stmt.from {
-            if matches!(table, TableReference::Table { pivot: Some(_), .. }) {
-                return Err(ErrorCode::SyntaxException(
-                    "Pivot table can only be used in single table query",
-                ));
-            }
-            if matches!(table, TableReference::Table {
-                unpivot: Some(_),
-                ..
-            }) {
-                return Err(ErrorCode::SyntaxException(
-                    "Unpivot table can only be used in single table query",
-                ));
-            }
-        }
-        Ok(())
-    }
+/// It is useful when implementing some SQL syntax sugar,
+///
+/// [`column_binding`] contains the column binding information of the SelectStmt.
+///
+/// to rewrite the SelectStmt, just add a new rewrite_* function and call it in the `rewrite` function.
+struct SelectRewriter<'a> {
+    column_binding: &'a [ColumnBinding],
+    new_stmt: Option<SelectStmt>,
+    is_unquoted_ident_case_sensitive: bool,
+}
 
-    fn compare_column_name(&self, a: &str, b: &str) -> bool {
-        if self.name_resolution_ctx.unquoted_ident_case_sensitive {
+// helper functions to SelectRewriter
+impl<'a> SelectRewriter<'a> {
+    fn compare_unquoted_ident(&self, a: &str, b: &str) -> bool {
+        if self.is_unquoted_ident_case_sensitive {
             a == b
         } else {
             a.eq_ignore_ascii_case(b)
         }
     }
+    fn parse_aggregate_function(expr: &Expr) -> Result<(&Identifier, &[Expr])> {
+        match expr {
+            Expr::FunctionCall { name, args, .. } => Ok((name, args)),
+            _ => Err(ErrorCode::SyntaxException("Aggregate function is required")),
+        }
+    }
 
-    fn rewrite_pivot_stmt(
-        &self,
-        stmt: &SelectStmt,
-        from_context: &BindContext,
-    ) -> Result<SelectStmt> {
-        let Pivot {
-            aggregate,
-            value_column,
-            values,
-        } = &stmt.from[0].pivot_meta().unwrap();
-        let all_column_bindings = from_context.all_column_bindings();
-        let pivot_column_index = all_column_bindings
-            .iter()
-            .position(|col| self.compare_column_name(&col.column_name, &value_column.name))
-            .ok_or_else(|| {
-                ErrorCode::SyntaxException(format!("Pivot column {} not found", value_column))
-            })?;
-        let (aggregate_column_index, aggregate_column_ident) =
-            self.aggregate_column(aggregate, from_context)?;
+    fn ident_from_string(s: &str) -> Identifier {
+        Identifier {
+            name: s.to_string(),
+            quote: None,
+            span: None,
+        }
+    }
 
-        // First,rewrite group by clause,if group by clause is not specified,we will add all columns except pivot column and aggregate column
-        let new_group_by = if let Some(group_by) = &stmt.group_by {
-            group_by.clone()
-        } else {
-            let mut group_by = Vec::with_capacity(all_column_bindings.len() - 2);
-            for col in all_column_bindings.iter() {
-                if col.index != pivot_column_index && col.index != aggregate_column_index {
-                    group_by.push(Expr::Literal {
-                        span: Span::default(),
-                        lit: Literal::UInt64(col.index as u64 + 1),
-                    });
-                }
-            }
-            GroupBy::Normal(group_by)
-        };
+    fn expr_eq_from_col_and_value(col: Identifier, value: Expr) -> Expr {
+        Expr::BinaryOp {
+            span: None,
+            left: Box::new(Expr::ColumnRef {
+                column: col,
+                span: None,
+                database: None,
+                table: None,
+            }),
+            op: BinaryOperator::Eq,
+            right: Box::new(value),
+        }
+    }
 
-        // Second,rewrite select list，if select list contains '*', we will remove pivot column and aggregate column, then we will add aggregate if columns
-        let mut new_select_list = stmt.select_list.clone();
-        if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
-            star.exclude(vec![value_column.clone(), aggregate_column_ident]);
-        };
-        let (agg_func, agg_args) = match &aggregate {
-            Expr::FunctionCall { name, args, .. } => (name.clone(), args.clone()),
-            _ => unreachable!("aggregate must be function call"),
-        };
-        let new_agg_func = Identifier {
-            name: format!("{}_if", agg_func.name),
-            ..agg_func
-        };
-        for pivot_value in values {
-            let mut args = agg_args.clone();
-            args.push(Expr::BinaryOp {
+    fn target_func_from_name_args(
+        name: Identifier,
+        args: Vec<Expr>,
+        alias: Option<Identifier>,
+    ) -> SelectTarget {
+        SelectTarget::AliasedExpr {
+            expr: Box::new(Expr::FunctionCall {
                 span: Span::default(),
-                op: BinaryOperator::Eq,
-                left: Box::new(Expr::ColumnRef {
-                    column: value_column.clone(),
-                    span: Span::default(),
+                distinct: false,
+                name,
+                args,
+                params: vec![],
+                window: None,
+            }),
+            alias,
+        }
+    }
+
+    fn expr_literal_array_from_vec_ident(exprs: Vec<Identifier>) -> Expr {
+        Array {
+            span: Span::default(),
+            exprs: exprs
+                .into_iter()
+                .map(|expr| Expr::Literal {
+                    span: None,
+                    lit: Literal::String(expr.name),
+                })
+                .collect(),
+        }
+    }
+
+    fn expr_column_ref_array_from_vec_ident(exprs: Vec<Identifier>) -> Expr {
+        Array {
+            span: Span::default(),
+            exprs: exprs
+                .into_iter()
+                .map(|expr| Expr::ColumnRef {
+                    span: None,
+                    column: expr,
                     database: None,
                     table: None,
-                }),
-                right: Box::new(pivot_value.clone()),
-            });
-            new_select_list.push(SelectTarget::new_func_from_name_args(
-                new_agg_func.clone(),
+                })
+                .collect(),
+        }
+    }
+}
+
+impl<'a> SelectRewriter<'a> {
+    fn new(column_binding: &'a [ColumnBinding], is_unquoted_ident_case_sensitive: bool) -> Self {
+        SelectRewriter {
+            column_binding,
+            new_stmt: None,
+            is_unquoted_ident_case_sensitive,
+        }
+    }
+
+    fn rewrite(&mut self, stmt: &SelectStmt) -> Result<Option<SelectStmt>> {
+        self.rewrite_pivot(stmt)?;
+        self.rewrite_unpivot(stmt)?;
+        Ok(self.new_stmt.take())
+    }
+    fn rewrite_pivot(&mut self, stmt: &SelectStmt) -> Result<()> {
+        if stmt.from.len() != 1 || stmt.from[0].pivot().is_none() {
+            return Ok(());
+        }
+        let pivot = stmt.from[0].pivot().unwrap();
+        let (aggregate_name, aggregate_args) = Self::parse_aggregate_function(&pivot.aggregate)?;
+        let aggregate_columns = aggregate_args
+            .iter()
+            .map(|expr| match expr {
+                Expr::ColumnRef { column, .. } => Some(column.clone()),
+                _ => None,
+            })
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(|| ErrorCode::SyntaxException("Aggregate column not found"))?;
+        let aggregate_column_names = aggregate_columns
+            .iter()
+            .map(|col| col.name.as_str())
+            .collect::<Vec<_>>();
+        let new_group_by = stmt.group_by.clone().unwrap_or_else(|| {
+            GroupBy::Normal(
+                self.column_binding
+                    .iter()
+                    .filter(|col_bind| {
+                        !self
+                            .compare_unquoted_ident(&col_bind.column_name, &pivot.value_column.name)
+                            && !aggregate_column_names
+                                .iter()
+                                .any(|col| self.compare_unquoted_ident(col, &col_bind.column_name))
+                    })
+                    .map(|col| Expr::Literal {
+                        span: Span::default(),
+                        lit: Literal::UInt64(col.index as u64 + 1),
+                    })
+                    .collect(),
+            )
+        });
+
+        let mut new_select_list = stmt.select_list.clone();
+        if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
+            let mut exclude_columns = aggregate_columns;
+            exclude_columns.push(pivot.value_column.clone());
+            star.exclude(exclude_columns);
+        };
+        let new_aggregate_name = Identifier {
+            name: format!("{}_if", aggregate_name.name),
+            ..aggregate_name.clone()
+        };
+        for value in &pivot.values {
+            let mut args = aggregate_args.to_vec();
+            args.push(Self::expr_eq_from_col_and_value(
+                pivot.value_column.clone(),
+                value.clone(),
+            ));
+            new_select_list.push(Self::target_func_from_name_args(
+                new_aggregate_name.clone(),
                 args,
                 None,
             ));
         }
-        Ok(SelectStmt {
-            select_list: new_select_list,
-            group_by: Some(new_group_by),
-            ..stmt.clone()
-        })
+
+        if let Some(ref mut new_stmt) = self.new_stmt {
+            new_stmt.select_list = new_select_list;
+            new_stmt.group_by = Some(new_group_by);
+        } else {
+            self.new_stmt = Some(SelectStmt {
+                select_list: new_select_list,
+                group_by: Some(new_group_by),
+                ..stmt.clone()
+            });
+        }
+        Ok(())
     }
 
-    fn rewrite_unpivot_stmt(&self, stmt: &SelectStmt) -> Result<SelectStmt> {
-        let Unpivot {
-            value_column,
-            column_name,
-            names,
-        } = &stmt.from[0].unpivot_meta().unwrap();
-
-        // First,exclude unpivot columns from select list
+    fn rewrite_unpivot(&mut self, stmt: &SelectStmt) -> Result<()> {
+        if stmt.from.len() != 1 || stmt.from[0].unpivot().is_none() {
+            return Ok(());
+        }
+        let unpivot = stmt.from[0].unpivot().unwrap();
         let mut new_select_list = stmt.select_list.clone();
         if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
-            star.exclude(names.clone());
+            star.exclude(unpivot.names.clone());
         };
-
-        // Second,push unnest function to select list
-        new_select_list.push(SelectTarget::new_func_from_name_args(
-            Identifier {
-                name: "unnest".to_string(),
-                quote: None,
-                span: None,
-            },
-            vec![Array {
-                span: None,
-                exprs: names
-                    .iter()
-                    .map(|col| Expr::Literal {
-                        span: None,
-                        lit: Literal::String(col.name.clone()),
-                    })
-                    .collect(),
-            }],
-            Some(column_name.clone()),
+        new_select_list.push(Self::target_func_from_name_args(
+            Self::ident_from_string("unnest"),
+            vec![Self::expr_literal_array_from_vec_ident(
+                unpivot.names.clone(),
+            )],
+            None,
         ));
-        new_select_list.push(SelectTarget::new_func_from_name_args(
-            Identifier {
-                name: "unnest".to_string(),
-                quote: None,
-                span: None,
-            },
-            vec![Array {
-                span: None,
-                exprs: names
-                    .iter()
-                    .map(|col| Expr::ColumnRef {
-                        column: col.clone(),
-                        span: Span::default(),
-                        database: None,
-                        table: None,
-                    })
-                    .collect(),
-            }],
-            Some(value_column.clone()),
+        new_select_list.push(Self::target_func_from_name_args(
+            Self::ident_from_string("unnest"),
+            vec![Self::expr_column_ref_array_from_vec_ident(
+                unpivot.names.clone(),
+            )],
+            None,
         ));
-        Ok(SelectStmt {
-            select_list: new_select_list,
-            ..stmt.clone()
-        })
-    }
 
-    fn aggregate_column(
-        &self,
-        aggregate: &Expr,
-        from_context: &BindContext,
-    ) -> Result<(usize, Identifier)> {
-        let mut aggregate_column_index = None;
-        match aggregate {
-            Expr::FunctionCall { args, .. } => {
-                for expr in args {
-                    if let Expr::ColumnRef { column, .. } = expr {
-                        let column_index = from_context
-                            .all_column_bindings()
-                            .iter()
-                            .position(|col| {
-                                self.compare_column_name(&col.column_name, &column.name)
-                            })
-                            .ok_or_else(|| {
-                                ErrorCode::SyntaxException("Aggregate column not found")
-                            })?;
-                        if aggregate_column_index.is_some() {
-                            return Err(ErrorCode::SyntaxException(
-                                "multi aggregate column is not supported",
-                            ));
-                        } else {
-                            aggregate_column_index = Some((column_index, column.clone()));
-                        }
-                    }
-                }
-                aggregate_column_index
-                    .ok_or_else(|| ErrorCode::SyntaxException("Aggregate column not found"))
-            }
-            _ => Err(ErrorCode::SyntaxException(
-                "Aggregate function is required in pivot table",
-            )),
-        }
+        if let Some(ref mut new_stmt) = self.new_stmt {
+            new_stmt.select_list = new_select_list;
+        } else {
+            self.new_stmt = Some(SelectStmt {
+                select_list: new_select_list,
+                ..stmt.clone()
+            });
+        };
+        Ok(())
     }
 }
