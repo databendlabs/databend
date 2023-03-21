@@ -297,7 +297,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     // PIVOT(expr FOR col IN (ident, ...))
     let pivot = map(
         rule! {
-           PIVOT ~ "(" ~ #expr ~ "FOR" ~ #ident ~ "IN" ~ "(" ~ #comma_separated_list1(expr) ~ ")" ~ ")"
+           PIVOT ~ "(" ~ #expr ~ FOR ~ #ident ~ IN ~ "(" ~ #comma_separated_list1(expr) ~ ")" ~ ")"
         },
         |(_pivot, _, aggregate, _for, value_column, _in, _, values, _, _)| Pivot {
             aggregate,
@@ -308,7 +308,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     // UNPIVOT(ident for ident IN (ident, ...))
     let unpivot = map(
         rule! {
-            UNPIVOT ~ "(" ~ #ident ~ "FOR" ~ #ident ~ "IN" ~ "(" ~ #comma_separated_list1(ident) ~ ")" ~ ")"
+            UNPIVOT ~ "(" ~ #ident ~ FOR ~ #ident ~ IN ~ "(" ~ #comma_separated_list1(ident) ~ ")" ~ ")"
         },
         |(_unpivot, _, value_column, _for, column_name, _in, _, names, _, _)| Unpivot {
             value_column,

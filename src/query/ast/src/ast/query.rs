@@ -386,11 +386,11 @@ impl Display for TableReference {
                     write!(f, " AS {alias}")?;
                 }
                 if let Some(pivot) = pivot {
-                    write!(f, "{pivot}")?;
+                    write!(f, " {pivot}")?;
                 }
 
                 if let Some(unpivot) = unpivot {
-                    write!(f, "{unpivot}")?;
+                    write!(f, " {unpivot}")?;
                 }
             }
             TableReference::TableFunction {
