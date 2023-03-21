@@ -224,6 +224,11 @@ pub(crate) fn pretty_copy(copy_stmt: CopyStmt) -> RcDoc<'static> {
                 .append(RcDoc::text("PURGE = "))
                 .append(RcDoc::text(format!("{}", copy_stmt.purge))),
         )
+        .append(
+            RcDoc::line()
+                .append(RcDoc::text("DISTRIBUTED = "))
+                .append(RcDoc::text(format!("{}", copy_stmt.distributed))),
+        )
 }
 
 fn pretty_copy_unit(copy_unit: CopyUnit) -> RcDoc<'static> {

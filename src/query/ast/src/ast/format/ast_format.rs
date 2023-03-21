@@ -758,6 +758,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let purge_name_node = FormatTreeNode::new(purge_name_ctx);
         children.push(purge_name_node);
 
+        let distributed_name = format!("Distributed {}", copy.distributed);
+        let distributed_name_ctx = AstFormatContext::new(distributed_name);
+        let distributed_name_node = FormatTreeNode::new(distributed_name_ctx);
+        children.push(distributed_name_node);
+
         let name = "Copy".to_string();
         let format_ctx = AstFormatContext::with_children(name, children.len());
         let node = FormatTreeNode::with_children(format_ctx, children);

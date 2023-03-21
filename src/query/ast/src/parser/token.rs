@@ -341,6 +341,8 @@ pub enum TokenKind {
     CURRENT_TIMESTAMP,
     #[token("DATABASE", ignore(ascii_case))]
     DATABASE,
+    #[token("DISTRIBUTED", ignore(ascii_case))]
+    DISTRIBUTED,
     #[token("DATABASES", ignore(ascii_case))]
     DATABASES,
     #[token("DATE", ignore(ascii_case))]

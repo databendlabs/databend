@@ -48,6 +48,7 @@ pub struct CopyStmt {
     pub split_size: usize,
     pub single: bool,
     pub purge: bool,
+    pub distributed: bool,
     pub force: bool,
     pub on_error: String,
 }
@@ -64,6 +65,7 @@ impl CopyStmt {
             CopyOption::SplitSize(v) => self.split_size = v,
             CopyOption::Single(v) => self.single = v,
             CopyOption::Purge(v) => self.purge = v,
+            CopyOption::Distributed(v) => self.distributed = v,
             CopyOption::Force(v) => self.force = v,
             CopyOption::OnError(v) => self.on_error = v,
         }
@@ -112,6 +114,7 @@ impl Display for CopyStmt {
 
         write!(f, " SINGLE = {}", self.single)?;
         write!(f, " PURGE = {}", self.purge)?;
+        write!(f, " DISTRIBUTED = {}", self.distributed)?;
         write!(f, " FORCE = {}", self.force)?;
         write!(f, " ON_ERROR = '{}'", self.on_error)?;
 
@@ -383,6 +386,7 @@ pub enum CopyOption {
     SplitSize(usize),
     Single(bool),
     Purge(bool),
+    Distributed(bool),
     Force(bool),
     OnError(String),
 }

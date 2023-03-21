@@ -913,6 +913,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 split_size: Default::default(),
                 single: Default::default(),
                 purge: Default::default(),
+                distributed: false,
                 force: Default::default(),
                 on_error: "abort".to_string(),
             };
@@ -1840,6 +1841,10 @@ pub fn copy_option(i: Input) -> IResult<CopyOption> {
         map(rule! { PURGE ~ "=" ~ #literal_bool }, |(_, _, purge)| {
             CopyOption::Purge(purge)
         }),
+        map(
+            rule! { DISTRIBUTED ~ "=" ~ #literal_bool },
+            |(_, _, distributed)| CopyOption::Distributed(distributed),
+        ),
         map(rule! { FORCE ~ "=" ~ #literal_bool }, |(_, _, force)| {
             CopyOption::Force(force)
         }),

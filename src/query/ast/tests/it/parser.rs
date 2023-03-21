@@ -280,7 +280,8 @@ fn test_statement() {
                     record_delimiter = '\n'
                     skip_header = 1
                 )
-                size_limit=10;"#,
+                size_limit=10
+                distributed=true;"#,
         r#"COPY INTO mytable
                 FROM @external_stage/path/to/file.csv
                 FILE_FORMAT = (

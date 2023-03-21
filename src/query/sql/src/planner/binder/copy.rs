@@ -271,6 +271,7 @@ impl<'a> Binder {
     }
 
     /// Bind COPY INFO <table> FROM <uri_location>
+    /// TODO(TCeason): add distributed copy into
     #[allow(clippy::too_many_arguments)]
     async fn bind_copy_from_uri_into_table(
         &mut self,
