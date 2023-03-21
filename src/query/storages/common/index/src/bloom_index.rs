@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use common_arrow::parquet::metadata::FileMetaData;
+use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
@@ -60,12 +60,10 @@ pub struct BloomIndexMeta {
     pub columns: Vec<(String, SingleColumnMeta)>,
 }
 
-impl TryFrom<FileMetaData> for BloomIndexMeta {
+impl TryFrom<ThriftFileMetaData> for BloomIndexMeta {
     type Error = common_exception::ErrorCode;
 
-    fn try_from(meta: FileMetaData) -> std::result::Result<Self, Self::Error> {
-        // TODO from FileMeta directly or pass in Thrift
-        let mut meta = meta.into_thrift();
+    fn try_from(mut meta: ThriftFileMetaData) -> std::result::Result<Self, Self::Error> {
         let rg = meta.row_groups.remove(0);
         let mut col_metas = Vec::with_capacity(rg.columns.len());
         for x in &rg.columns {
@@ -92,7 +90,9 @@ impl TryFrom<FileMetaData> for BloomIndexMeta {
                     col_metas.push((column_name, res));
                 }
                 None => {
-                    panic!("")
+                    panic!(
+                        "expecting chunk meta data while converting ThriftFileMetaData to BloomIndexMeta"
+                    )
                 }
             }
         }

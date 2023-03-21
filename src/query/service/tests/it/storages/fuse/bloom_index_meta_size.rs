@@ -84,8 +84,7 @@ async fn test_index_meta_cache_size_bloom_meta() -> common_exception::Result<()>
 
     let cache_number = 300_000;
 
-    let meta: FileMetaData = FileMetaData::try_from_thrift(thrift_file_meta)?;
-    let bloom_index_meta = BloomIndexMeta::try_from(meta)?;
+    let bloom_index_meta = BloomIndexMeta::try_from(thrift_file_meta)?;
 
     let sys = System::new_all();
     let pid = get_current_pid().unwrap();

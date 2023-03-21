@@ -2138,6 +2138,7 @@ dependencies = [
  "jsonb",
  "metrics",
  "opendal",
+ "parquet-format-safe",
  "serde",
  "serde_json",
  "sha2",

@@ -45,8 +45,8 @@ enable-histogram-metrics = [
 common-arrow = { path = "../../common/arrow" }
 common-ast = { path = "../ast" }
 common-base = { path = "../../common/base" }
+common-cache = { path = "../../common/cache" }
 common-catalog = { path = "../catalog" }
-common-cache = {path = "../../common/cache" }
 common-compress = { path = "../../common/compress" }
 common-config = { path = "../config" }
 common-exception = { path = "../../common/exception" }
@@ -161,13 +161,13 @@ num = "0.4.0"
 p256 = "0.13"
 pretty_assertions = "1.3.0"
 reqwest = { workspace = true }
+sysinfo = "0.28.3"
 temp-env = "0.3.0"
 tempfile = "3.4.0"
 toml = { version = "0.7.3", default-features = false }
 url = "2.3.1"
 walkdir = "2.3.2"
 wiremock = "0.5.14"
-sysinfo = "0.28.3"
 
 [build-dependencies]
 common-building = { path = "../../common/building" }
