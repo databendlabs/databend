@@ -191,7 +191,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
     fn execute_copy_aligned(ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
         let (data_tx, data_rx) = async_channel::bounded(1);
         Self::build_pipeline_aligned(&ctx, data_rx, pipeline)?;
-        let max_storage_io_requests = ctx.settings.get_max_storage_io_requests().unwrap();
+        let max_storage_io_requests = ctx.settings.get_max_storage_io_requests()?;
         let per_split_io = ctx.schema.fields().len();
         let max_splits = max_storage_io_requests as usize / per_split_io;
         let mut max_splits = std::cmp::max(max_splits, 1);
