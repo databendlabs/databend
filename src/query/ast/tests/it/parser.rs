@@ -21,11 +21,11 @@ use common_ast::parser::tokenize_sql;
 use common_ast::rule;
 use common_ast::Backtrace;
 use common_ast::Dialect;
-use common_ast::Dialect::PostgreSQL;
 use common_ast::Input;
 use common_exception::Result;
 use goldenfile::Mint;
 use nom::Parser;
+use std::io::Write;
 
 macro_rules! run_parser {
     ($file:expr, $parser:expr, $source:expr $(,)*) => {
