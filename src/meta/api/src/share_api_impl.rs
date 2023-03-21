@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+use std::collections::HashSet;
+
 use common_meta_app::app_error::AppError;
 use common_meta_app::app_error::ShareAccountsAlreadyExists;
 use common_meta_app::app_error::ShareAlreadyExists;
@@ -25,6 +28,7 @@ use common_meta_app::schema::DBIdTableName;
 use common_meta_app::schema::DatabaseId;
 use common_meta_app::schema::DatabaseIdToName;
 use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdToName;
 use common_meta_app::schema::TableMeta;
@@ -60,6 +64,7 @@ use crate::table_has_to_exist;
 use crate::txn_cond_seq;
 use crate::txn_op_del;
 use crate::txn_op_put;
+use crate::util::list_tables_from_unshare_db;
 use crate::ShareApi;
 use crate::TXN_MAX_RETRY_TIMES;
 
@@ -568,6 +573,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 return Ok(GrantShareObjectReply {
                     share_id,
                     spec_vec: None,
+                    share_table_info: (share_name_key.share_name.clone(), None),
                 });
             }
 
@@ -599,7 +605,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 // if_then
                 let mut if_then = vec![
                     txn_op_put(&id_key, serialize_struct(&share_meta)?), /* (share_id) -> share_meta */
-                    txn_op_put(&object, serialize_struct(&share_ids)?),  /* (object) -> share_ids */
+                    txn_op_put(&object, serialize_struct(&share_ids)?),  // (object) -> share_ids
                 ];
                 // Some database has been created before `DatabaseIdToName`, so create it if need.
                 create_db_name_to_id_key_if_need(
@@ -634,6 +640,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                         spec_vec: Some(
                             get_tenant_share_spec_vec(self, share_name_key.tenant.clone()).await?,
                         ),
+                        share_table_info: get_share_table_info(self, share_name_key, &share_meta)
+                            .await?,
                     });
                 }
             }
@@ -681,6 +689,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 return Ok(RevokeShareObjectReply {
                     share_id,
                     spec_vec: None,
+                    share_table_info: (share_name_key.share_name.clone(), None),
                 });
             }
 
@@ -745,6 +754,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                         spec_vec: Some(
                             get_tenant_share_spec_vec(self, share_name_key.tenant.clone()).await?,
                         ),
+                        share_table_info: get_share_table_info(self, share_name_key, &share_meta)
+                            .await?,
                     });
                 }
             }
@@ -1490,4 +1501,52 @@ async fn convert_share_meta_to_spec(
         tables,
         tenants: Vec::from_iter(share_meta.accounts.into_iter()),
     })
+}
+
+async fn get_share_table_info(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    share_name: &ShareNameIdent,
+    share_meta: &ShareMeta,
+) -> Result<ShareTableInfoMap, KVAppError> {
+    let mut db_name = None;
+    let mut shared_db_id = 0;
+    if let Some(ref entry) = share_meta.database {
+        if let ShareGrantObject::Database(db_id) = entry.object {
+            let db_id_key = DatabaseIdToName { db_id };
+            let (_db_name_seq, db_name_ident): (_, Option<DatabaseNameIdent>) =
+                get_pb_value(kv_api, &db_id_key).await?;
+            db_name = db_name_ident;
+            shared_db_id = db_id;
+        } else {
+            unreachable!();
+        }
+    }
+
+    match db_name {
+        Some(db_name) => {
+            let mut table_ids = HashSet::new();
+            for entry in share_meta.entries.values() {
+                if let ShareGrantObject::Table(table_id) = entry.object {
+                    table_ids.insert(table_id);
+                } else {
+                    unreachable!();
+                }
+            }
+            let all_tables = list_tables_from_unshare_db(kv_api, shared_db_id, &db_name).await?;
+            let table_infos = BTreeMap::from_iter(
+                all_tables
+                    .iter()
+                    .filter(|table_info| table_ids.contains(&table_info.ident.table_id))
+                    .map(|table_info| {
+                        let mut table_info = table_info.as_ref().clone();
+                        table_info.db_type = DatabaseType::ShareDB(share_name.to_owned());
+                        (table_info.name.clone(), table_info)
+                    })
+                    .collect::<Vec<_>>(),
+            );
+
+            Ok((share_name.share_name.clone(), Some(table_infos)))
+        }
+        None => Ok((share_name.share_name.clone(), None)),
+    }
 }
