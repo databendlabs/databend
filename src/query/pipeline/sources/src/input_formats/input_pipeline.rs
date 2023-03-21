@@ -197,7 +197,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         let mut max_splits = std::cmp::max(max_splits, 1);
         let mut sizes = ctx.splits.iter().map(|s| s.size).collect::<Vec<usize>>();
         sizes.sort_by(|a, b| b.cmp(a));
-        let max_memory = ctx.settings.get_max_memory_usage().unwrap() as usize;
+        let max_memory = ctx.settings.get_max_memory_usage()? as usize;
         let mut mem = 0;
         for (i, s) in sizes.iter().enumerate() {
             let m = mem + s;
