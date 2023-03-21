@@ -183,7 +183,7 @@ mod thrift_file_meta_read {
 
         if file_size < HEADER_SIZE + FOOTER_SIZE {
             return Err(Error::OutOfSpec(
-                "A parquet file must containt a header and footer with at least 12 bytes".into(),
+                "A parquet file must contain a header and footer with at least 12 bytes".into(),
             ));
         }
 
