@@ -25,6 +25,7 @@ use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::StringType;
@@ -41,6 +42,7 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
+use common_sql::validate_function_arg;
 use common_storages_factory::Table;
 use common_storages_fuse::table_functions::string_literal;
 use common_storages_fuse::TableContext;
@@ -64,19 +66,45 @@ impl GPT2SQLTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         // Check args.
-        let args = table_args.expect_all_positioned(table_func_name, Some(2))?;
-        let prompt = String::from_utf8(
-            args[0]
-                .clone()
-                .into_string()
-                .map_err(|_| ErrorCode::BadArguments("Expected string argument."))?,
+        validate_function_arg(
+            table_func_name,
+            table_args.positioned.len(),
+            Some((1, 2)),
+            2,
         )?;
-        let api_key = String::from_utf8(
-            args[1]
-                .clone()
-                .into_string()
-                .map_err(|_| ErrorCode::BadArguments("Expected string argument."))?,
-        )?;
+
+        let (prompt, api_key) = match table_args.positioned.len() {
+            1 => {
+                let prompt = String::from_utf8(
+                    table_args.positioned[0]
+                        .clone()
+                        .into_string()
+                        .map_err(|_| ErrorCode::BadArguments("Expected string argument."))?,
+                )?;
+
+                (prompt, "".to_string())
+            }
+
+            2 => {
+                let prompt = String::from_utf8(
+                    table_args.positioned[0]
+                        .clone()
+                        .into_string()
+                        .map_err(|_| ErrorCode::BadArguments("Expected string argument."))?,
+                )?;
+                let api_key = String::from_utf8(
+                    table_args.positioned[1]
+                        .clone()
+                        .into_string()
+                        .map_err(|_| ErrorCode::BadArguments("Expected string argument."))?,
+                )?;
+
+                (prompt, api_key)
+            }
+
+            // This case never happened, because the check above.
+            _ => ("".to_string(), "".to_string()),
+        };
 
         let schema = TableSchema::new(vec![
             TableField::new("database", TableDataType::String),
@@ -237,7 +265,11 @@ impl AsyncSource for GPT2SQLSource {
         info!("openai request prompt: {}", prompt);
 
         // Response.
-        let api_key = self.api_key.clone();
+        let api_key = if self.api_key.is_empty() {
+            GlobalConfig::instance().query.openai_api_key.clone()
+        } else {
+            self.api_key.clone()
+        };
         let openai = OpenAI::create(api_key, AIModel::CodeDavinci002);
         let request = openai.completion_request(prompt)?;
 

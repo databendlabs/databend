@@ -35,6 +35,7 @@ use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::input_formats::InputContext;
 use common_pipeline_sources::input_formats::SplitInfo;
@@ -236,6 +237,7 @@ impl Table for StageTable {
         &self,
         _ctx: Arc<dyn TableContext>,
         _operations: Vec<DataBlock>,
+        _copied_files: Option<UpsertTableCopiedFileReq>,
         _overwrite: bool,
     ) -> Result<()> {
         Ok(())
