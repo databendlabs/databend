@@ -211,7 +211,7 @@ pub fn check_cast<Index: ColumnIndex>(
     }
 }
 
-fn wrap_nullable_for_try_cast(span: Span, ty: &DataType) -> Result<DataType> {
+pub fn wrap_nullable_for_try_cast(span: Span, ty: &DataType) -> Result<DataType> {
     match ty {
         DataType::Null => Err(ErrorCode::from_string_no_backtrace(
             "TRY_CAST() to NULL is not supported".to_string(),

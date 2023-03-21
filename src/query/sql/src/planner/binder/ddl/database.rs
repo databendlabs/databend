@@ -48,7 +48,7 @@ use crate::SelectBuilder;
 impl Binder {
     pub(in crate::planner::binder) async fn bind_show_databases(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &ShowDatabasesStmt,
     ) -> Result<Plan> {
         let ShowDatabasesStmt {

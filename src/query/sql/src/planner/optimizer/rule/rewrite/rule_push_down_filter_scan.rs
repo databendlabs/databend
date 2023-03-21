@@ -56,11 +56,11 @@ impl RulePushDownFilterScan {
     }
 
     fn find_push_down_predicates(&self, predicates: &[ScalarExpr]) -> Result<Vec<ScalarExpr>> {
+        let metadata = self.metadata.read();
+        let column_entries = metadata.columns();
         let mut filtered_predicates = vec![];
         for predicate in predicates {
             let used_columns = predicate.used_columns();
-            let metadata = self.metadata.read();
-            let column_entries = metadata.columns();
             let mut contain_derived_column = false;
             for column_entry in column_entries {
                 match column_entry {

@@ -20,7 +20,7 @@ use itertools::Itertools;
 
 use super::AggregateExpand;
 use super::DistributedInsertSelect;
-use super::Unnest;
+use super::ProjectSet;
 use crate::executor::AggregateFinal;
 use crate::executor::AggregatePartial;
 use crate::executor::EvalScalar;
@@ -69,7 +69,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ExchangeSink(sink) => write!(f, "{}", sink)?,
             PhysicalPlan::UnionAll(union_all) => write!(f, "{}", union_all)?,
             PhysicalPlan::DistributedInsertSelect(insert_select) => write!(f, "{}", insert_select)?,
-            PhysicalPlan::Unnest(unnest) => write!(f, "{}", unnest)?,
+            PhysicalPlan::ProjectSet(unnest) => write!(f, "{}", unnest)?,
             PhysicalPlan::RuntimeFilterSource(plan) => write!(f, "{}", plan)?,
         }
 
@@ -327,8 +327,27 @@ impl Display for RuntimeFilterSource {
     }
 }
 
-impl Display for Unnest {
+impl Display for ProjectSet {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Unnest: unnset num : {}", self.num_columns)
+        write!(
+            f,
+            "ProjectSet: set-returning functions : {}",
+            self.srf_exprs
+                .iter()
+                .map(|(srf_expr, _)| {
+                    format!(
+                        "{}({})",
+                        srf_expr.id.0,
+                        srf_expr
+                            .args
+                            .iter()
+                            .map(|arg| arg.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
     }
 }
