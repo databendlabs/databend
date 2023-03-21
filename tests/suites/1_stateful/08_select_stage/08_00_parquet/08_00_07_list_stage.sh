@@ -40,4 +40,5 @@ echo "--- where"
 echo "select name, size, md5, creator from list_stage(location => '@s7/data/', pattern => '.*parquet') where name = 'data/tuple.parquet';" | $MYSQL_CLIENT_CONNECT
 
 echo "--- list files so far"
-echo "select name, size, md5, creator from list_stage(location => '@s7');" | $MYSQL_CLIENT_CONNECT
+echo "--- In the CI runs, this file may executed multiple times, so we list files order by name instead of creation time (by default)."
+echo "select name, size, md5, creator from list_stage(location => '@s7') order by name;" | $MYSQL_CLIENT_CONNECT
