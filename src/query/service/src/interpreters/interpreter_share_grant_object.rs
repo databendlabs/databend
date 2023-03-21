@@ -63,6 +63,7 @@ impl Interpreter for GrantShareObjectInterpreter {
             &self.ctx.get_tenant(),
             self.ctx.get_data_operator()?.operator(),
             resp.spec_vec,
+            Some(&resp.share_table_info),
         )
         .await?;
 
