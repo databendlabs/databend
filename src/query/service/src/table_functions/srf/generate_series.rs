@@ -27,9 +27,13 @@ use common_catalog::table_function::TableFunction;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_schema_type;
+use common_expression::types::NumberColumn;
 use common_expression::types::NumberDataType;
+use common_expression::types::NumberScalar;
+use common_expression::types::UInt64Type;
 use common_expression::Column;
 use common_expression::DataBlock;
+use common_expression::FromData;
 use common_expression::Scalar;
 use common_expression::Scalar::Number;
 use common_expression::TableDataType;
@@ -46,7 +50,9 @@ use common_storages_fuse::TableContext;
 
 pub struct GenerateSeriesTable {
     table_info: TableInfo,
-    output: Column,
+    start: NumberScalar,
+    end: NumberScalar,
+    step: NumberScalar,
 }
 
 impl GenerateSeriesTable {
@@ -72,20 +78,24 @@ impl GenerateSeriesTable {
             .clone()
             .into_number()
             .map_err(|_| ErrorCode::BadArguments("Expected number argument."))?;
-        let mut step = 1;
-        if table_args.positioned.len() == 3 {
-            step = table_args.positioned[2]
-                .clone()
-                .into_number()
-                .map_err(|_| ErrorCode::BadArguments("Expected number argument."))?.as_int32().unwrap().clone();
-        }
-        println!("start: {}, end: {}, step: {}", start, end, step);
 
-        let column = Column::Null { len: 0 };
+        let step = table_args
+            .positioned
+            .get(2)
+            .map_or(NumberScalar::Int64(1), |s| {
+                s.clone()
+                    .into_number()
+                    .map_err(|_| ErrorCode::BadArguments("Expected number argument."))?
+            });
+        println!("start: {}, end: {}, step: {}", start, end, step);
 
         let schema = TableSchema::new(vec![TableField::new(
             "generate_series",
-            TableDataType::Number(NumberDataType::UInt64),
+            if number_scalars_have_float(vec![start, end, step]) {
+                TableDataType::Number(NumberDataType::Float64)
+            } else {
+                TableDataType::Number(NumberDataType::Int64)
+            },
         )]);
 
         let table_info = TableInfo {
@@ -108,7 +118,9 @@ impl GenerateSeriesTable {
 
         Ok(Arc::new(GenerateSeriesTable {
             table_info,
-            output: column,
+            start,
+            end,
+            step,
         }))
     }
 }
@@ -162,7 +174,7 @@ impl Table for GenerateSeriesTable {
             |output| {
                 OneBlockSource::create(
                     output,
-                    DataBlock::new_from_columns(vec![self.output.clone()]),
+                    DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![1])]),
                 )
             },
             1,
@@ -170,4 +182,22 @@ impl Table for GenerateSeriesTable {
 
         Ok(())
     }
+}
+
+pub fn number_scalars_have_float(scalars: Vec<NumberScalar>) -> bool {
+    for scalar in scalars {
+        match scalar {
+            NumberScalar::UInt8(_) => (),
+            NumberScalar::UInt16(_) => (),
+            NumberScalar::UInt32(_) => (),
+            NumberScalar::UInt64(_) => (),
+            NumberScalar::Int8(_) => (),
+            NumberScalar::Int16(_) => (),
+            NumberScalar::Int32(_) => (),
+            NumberScalar::Int64(_) => (),
+            NumberScalar::Float32(_) => return true,
+            NumberScalar::Float64(_) => return true,
+        }
+    }
+    false
 }
