@@ -51,7 +51,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ExchangeSink(plan) => self.replace_exchange_sink(plan),
             PhysicalPlan::UnionAll(plan) => self.replace_union(plan),
             PhysicalPlan::DistributedInsertSelect(plan) => self.replace_insert_select(plan),
-            PhysicalPlan::ProjectSet(plan) => self.replace_unnest(plan),
+            PhysicalPlan::ProjectSet(plan) => self.replace_project_set(plan),
             PhysicalPlan::RuntimeFilterSource(plan) => self.replace_runtime_filter_source(plan),
         }
     }
@@ -233,7 +233,7 @@ pub trait PhysicalPlanReplacer {
         )))
     }
 
-    fn replace_unnest(&mut self, plan: &ProjectSet) -> Result<PhysicalPlan> {
+    fn replace_project_set(&mut self, plan: &ProjectSet) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::ProjectSet(ProjectSet {
             plan_id: plan.plan_id,

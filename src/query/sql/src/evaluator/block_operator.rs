@@ -114,7 +114,7 @@ impl BlockOperator {
                         }
                     });
 
-                    if max_num_rows == 0 {
+                    if max_num_rows == 0 && !result_data_blocks.is_empty() {
                         // Skip current row
                         continue;
                     }
