@@ -1295,6 +1295,10 @@ pub struct QueryConfig {
     /// Disable some system load(For example system.configs) for cloud security.
     #[clap(long)]
     pub disable_system_table_load: bool,
+
+    // This will not show in system.configs, put it to mask.rs.
+    #[clap(long, default_value = "")]
+    pub openai_api_key: String,
 }
 
 impl Default for QueryConfig {
@@ -1352,6 +1356,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             internal_enable_sandbox_tenant: self.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: self.internal_merge_on_read_mutation,
             disable_system_table_load: self.disable_system_table_load,
+            openai_api_key: self.openai_api_key,
         })
     }
 }
@@ -1421,6 +1426,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_cache_bloom_index_filter_count: None,
             table_cache_bloom_index_data_bytes: None,
             disable_system_table_load: inner.disable_system_table_load,
+            openai_api_key: inner.openai_api_key,
         }
     }
 }

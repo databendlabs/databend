@@ -68,6 +68,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | "query"   | "mysql_handler_port"                       | "3307"                           | ""       |
 | "query"   | "mysql_handler_tcp_keepalive_timeout_secs" | "120"                            | ""       |
 | "query"   | "num_cpus"                                 | "0"                              | ""       |
+| "query"   | "openai_api_key"                           | "******"                         | ""       |
 | "query"   | "quota"                                    | "null"                           | ""       |
 | "query"   | "rpc_tls_query_server_root_ca_cert"        | ""                               | ""       |
 | "query"   | "rpc_tls_query_service_domain_name"        | "localhost"                      | ""       |
