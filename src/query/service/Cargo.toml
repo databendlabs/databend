@@ -45,6 +45,7 @@ enable-histogram-metrics = [
 common-arrow = { path = "../../common/arrow" }
 common-ast = { path = "../ast" }
 common-base = { path = "../../common/base" }
+common-auth = { path = "../../common/auth" }
 common-catalog = { path = "../catalog" }
 common-compress = { path = "../../common/compress" }
 common-config = { path = "../config" }
@@ -96,6 +97,7 @@ storages-common-table-meta = { path = "../storages/common/table-meta" }
 # Github dependencies
 
 # Crates.io dependencies
+bytes = "1"
 aho-corasick = { version = "0.7.20" }
 async-channel = "1.7.1"
 async-stream = "0.3.3"

@@ -20,7 +20,8 @@ use opendal::Operator;
 
 use crate::configs::Config;
 
-mod share_table_spec_accessor;
+mod share_table_accessor;
+mod share_table_meta_accessor;
 
 #[derive(Clone)]
 pub struct SharingAccessor {

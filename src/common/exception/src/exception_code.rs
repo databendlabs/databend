@@ -135,6 +135,7 @@ build_exceptions! {
     ReadTableDataError(1107),
     AddColumnExistError(1108),
     DropColumnEmptyError(1109),
+    EmptyShareEndpointConfig(1110),
 
     // Data Related Errors
 

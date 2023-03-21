@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_storages_share::SHARE_CONFIG_PREFIX;
 use time::Duration;
 
 use crate::accessor::truncate_root;
@@ -59,7 +60,10 @@ impl SharingAccessor {
     }
 
     fn get_share_spec_location(&self) -> String {
-        format!("{}/_share_config/share_specs.json", self.config.tenant)
+        format!(
+            "{}/{}/share_specs.json",
+            self.config.tenant, SHARE_CONFIG_PREFIX
+        )
     }
 
     pub async fn get_share_table_spec_presigned_files(

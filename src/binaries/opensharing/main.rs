@@ -18,7 +18,8 @@ use poem::EndpointExt;
 use poem::Route;
 use poem::Server;
 use sharing_endpoint::configs::Config;
-use sharing_endpoint::handlers::share_table_spec_presign_files;
+use sharing_endpoint::handlers::share_table_meta;
+use sharing_endpoint::handlers::share_table_presign_files;
 use sharing_endpoint::middlewares::SharingAuth;
 use sharing_endpoint::services::SharingServices;
 
@@ -29,9 +30,15 @@ async fn main() -> Result<(), std::io::Error> {
         .await
         .expect("failed to init sharing service");
     let app = Route::new()
+        // handler for share table presign
         .at(
             "/tenant/:tenant_id/:share_name/table/:table_name/presign",
-            poem::post(share_table_spec_presign_files),
+            poem::post(share_table_presign_files),
+        )
+        // handler for accessing share table meta
+        .at(
+            "/tenant/:tenant_id/:share_name/meta",
+            poem::post(share_table_meta),
         )
         .with(SharingAuth);
 

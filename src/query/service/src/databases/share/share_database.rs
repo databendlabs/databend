@@ -15,7 +15,10 @@
 use std::str;
 use std::sync::Arc;
 
+use bytes::Bytes;
+use common_auth::RefreshableToken;
 use common_catalog::table::Table;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
@@ -39,14 +42,18 @@ use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::share::TableInfoMap;
-use common_storage::DataOperator;
-use common_storage::StorageMetrics;
-use common_storage::StorageMetricsLayer;
-use common_storages_share::share_table_info_location;
-use opendal::Operator;
+use common_storage::ShareTableConfig;
+use http::header::AUTHORIZATION;
+use http::header::CONTENT_LENGTH;
+use http::Method;
+use http::Request;
+use opendal::raw::AsyncBody;
+use opendal::raw::HttpClient;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
+
+const TENANT_HEADER: &str = "X-DATABEND-TENANT";
 
 // Share Database implementation for `Database` trait.
 #[derive(Clone)]
@@ -55,25 +62,35 @@ pub struct ShareDatabase {
 
     db_info: DatabaseInfo,
 
-    operator: Operator,
+    client: HttpClient,
 
-    table_info_location: String,
+    token: RefreshableToken,
+
+    endpoint: String,
 }
 
 impl ShareDatabase {
     pub const NAME: &'static str = "SHARE";
     pub fn try_create(ctx: DatabaseContext, db_info: DatabaseInfo) -> Result<Box<dyn Database>> {
-        let mut operator = DataOperator::instance().operator();
-        let data_metrics = Arc::new(StorageMetrics::default());
-        operator = operator.layer(StorageMetricsLayer::new(data_metrics));
+        let share_endpoint_address = match ShareTableConfig::share_endpoint_address() {
+            Some(share_endpoint_address) => share_endpoint_address,
+            None => {
+                return Err(ErrorCode::EmptyShareEndpointConfig(
+                    "EmptyShareEndpointConfig, cannot query share databases".to_string(),
+                ));
+            }
+        };
         let share_name = db_info.meta.from_share.clone().unwrap();
-        let table_info_location =
-            share_table_info_location(&share_name.tenant, &share_name.share_name);
+        let endpoint = format!(
+            "http://{}/tenant/{}/{}/meta",
+            share_endpoint_address, share_name.tenant, share_name.share_name,
+        );
         Ok(Box::new(Self {
             ctx,
             db_info,
-            operator,
-            table_info_location,
+            client: HttpClient::new()?,
+            token: ShareTableConfig::share_endpoint_token(),
+            endpoint,
         }))
     }
 
@@ -86,14 +103,28 @@ impl ShareDatabase {
     }
 
     // Read table info map from operator
-    async fn get_table_info_map(&self) -> Result<TableInfoMap> {
-        let data = self.operator.read(&self.table_info_location).await?;
-        let s = str::from_utf8(&data)?;
-        Ok(serde_json::from_str(s)?)
+    async fn get_table_info_map(&self, req: Vec<String>) -> Result<TableInfoMap> {
+        let bs = Bytes::from(serde_json::to_vec(&req)?);
+        let auth = self.token.to_header().await?;
+        let requester = GlobalConfig::instance().as_ref().query.tenant_id.clone();
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri(&self.endpoint)
+            .header(AUTHORIZATION, auth)
+            .header(CONTENT_LENGTH, bs.len())
+            .header(TENANT_HEADER, requester)
+            .body(AsyncBody::Bytes(bs))?;
+        let resp = self.client.send_async(req).await?;
+        let bs = resp.into_body().bytes().await?;
+        let table_info_map: TableInfoMap = serde_json::from_slice(&bs)?;
+
+        Ok(table_info_map)
     }
 
     async fn get_table_info(&self, table_name: &str) -> Result<Arc<TableInfo>> {
-        let table_info_map = self.get_table_info_map().await?;
+        let table_info_map = self
+            .get_table_info_map(vec![table_name.to_string()])
+            .await?;
         match table_info_map.get(table_name) {
             None => Err(ErrorCode::UnknownTable(format!(
                 "share table {} is unknown",
@@ -104,7 +135,7 @@ impl ShareDatabase {
     }
 
     async fn list_tables(&self) -> Result<Vec<Arc<TableInfo>>> {
-        let table_info_map = self.get_table_info_map().await?;
+        let table_info_map = self.get_table_info_map(vec![]).await?;
         let table_infos: Vec<Arc<TableInfo>> = table_info_map
             .values()
             .map(|table_info| Arc::new(table_info.to_owned()))
