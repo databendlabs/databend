@@ -11,6 +11,7 @@ These functions help you extract and summarize data from databases to gain valua
 | [COUNT](aggregate-count.md)                                 | Counts the number of rows that meet certain criteria        | 
 | [COUNT_IF](aggregate-count-if.md)                           | Counts rows meeting a specified condition                   | 
 | [COUNT_DISTINCT](aggregate-count-distinct.md)               | Counts the number of distinct values in a column            | 
+| [APPROX_COUNT_DISTINCT](aggregate-approx-count-distinct.md) | Estimates the number of distinct values with HyperLogLog    | 
 | [SUM](aggregate-sum.md)                                     | Adds up the values of a specific column                     | 
 | [AVG](aggregate-avg.md)                                     | Calculates the average value of a specific column           | 
 | [AVG_IF](aggregate-avg-if.md)                               | Calculates the average for rows meeting a condition         | 
@@ -19,7 +20,6 @@ These functions help you extract and summarize data from databases to gain valua
 | [MAX](aggregate-max.md)                                     | Finds the largest value in a specific column                | 
 | [MAX_IF](aggregate-max-if.md)                               | Finds the maximum value for rows meeting a condition        | 
 | [ANY](aggregate-any.md)                                     | Checks if any row meets the specified condition             | 
-| [APPROX_COUNT_DISTINCT](aggregate-approx-count-distinct.md) | Estimates the number of distinct values with HyperLogLog    | 
 | [ARG_MAX](aggregate-arg-max.md)                             | Finds the arg value for the maximum val value               | 
 | [ARG_MIN](aggregate-arg-min.md)                             | Finds the arg value for the minimum val value               | 
 | [COVAR_POP](aggregate-covar-pop.md)                         | Returns the population covariance of a set of number pairs  | 
