@@ -56,11 +56,11 @@ use crate::filters::Xor8Filter;
 use crate::Index;
 
 #[derive(Clone)]
-pub struct BloomIndexMetaMini {
+pub struct BloomIndexMeta {
     pub columns: Vec<(String, SingleColumnMeta)>,
 }
 
-impl TryFrom<FileMetaData> for BloomIndexMetaMini {
+impl TryFrom<FileMetaData> for BloomIndexMeta {
     type Error = common_exception::ErrorCode;
 
     fn try_from(meta: FileMetaData) -> std::result::Result<Self, Self::Error> {

@@ -26,7 +26,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CachedObject;
-use storages_common_index::BloomIndexMetaMini;
+use storages_common_index::BloomIndexMeta;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SnapshotId;
@@ -267,7 +267,7 @@ impl FuseTable {
                         bloom_locations_to_be_pruged.insert(loc.to_string());
                     }
                     status_bloom_to_be_purged_count += bloom_locations_to_be_pruged.len();
-                    self.try_purge_location_files_and_cache::<BloomIndexMetaMini>(
+                    self.try_purge_location_files_and_cache::<BloomIndexMeta>(
                         ctx.clone(),
                         bloom_locations_to_be_pruged,
                     )

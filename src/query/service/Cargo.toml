@@ -46,7 +46,7 @@ common-arrow = { path = "../../common/arrow" }
 common-ast = { path = "../ast" }
 common-base = { path = "../../common/base" }
 common-catalog = { path = "../catalog" }
-common-cache = {path = "../../common/cache"}
+common-cache = {path = "../../common/cache" }
 common-compress = { path = "../../common/compress" }
 common-config = { path = "../config" }
 common-exception = { path = "../../common/exception" }

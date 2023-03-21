@@ -89,7 +89,7 @@ impl BloomColumnFilterReader {
             offset: meta.offset,
             len: meta.len,
             cache_key,
-            operator: operator.clone(),
+            operator,
             column_descriptor: ColumnDescriptor::new(
                 descriptor,
                 vec![column_name],

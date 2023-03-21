@@ -29,7 +29,7 @@ use futures_util::future::try_join_all;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
 use storages_common_index::filters::Xor8Filter;
-use storages_common_index::BloomIndexMetaMini;
+use storages_common_index::BloomIndexMeta;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SingleColumnMeta;
 
@@ -157,11 +157,7 @@ async fn load_column_xor8_filter<'a>(
 /// Loads index meta data
 /// read data from cache, or populate cache items if possible
 #[tracing::instrument(level = "debug", skip_all)]
-async fn load_index_meta(
-    dal: Operator,
-    path: &str,
-    length: u64,
-) -> Result<Arc<BloomIndexMetaMini>> {
+async fn load_index_meta(dal: Operator, path: &str, length: u64) -> Result<Arc<BloomIndexMeta>> {
     let path_owned = path.to_owned();
     async move {
         let reader = MetaReaders::bloom_index_meta_reader(dal);
