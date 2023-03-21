@@ -25,14 +25,14 @@ use common_ast::ast::JoinCondition;
 use common_ast::ast::JoinOperator;
 use common_ast::ast::Literal;
 use common_ast::ast::OrderByExpr;
-use common_ast::ast::PivotMeta;
+use common_ast::ast::Pivot;
 use common_ast::ast::Query;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
 use common_ast::ast::SetOperator;
 use common_ast::ast::TableReference;
-use common_ast::ast::UnpivotMeta;
+use common_ast::ast::Unpivot;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
@@ -710,7 +710,7 @@ impl Binder {
         stmt: &SelectStmt,
         from_context: &BindContext,
     ) -> Result<SelectStmt> {
-        let PivotMeta {
+        let Pivot {
             aggregate,
             pivot_column,
             pivot_values,
@@ -781,7 +781,7 @@ impl Binder {
     }
 
     fn rewrite_unpivot_stmt(&self, stmt: &SelectStmt) -> Result<SelectStmt> {
-        let UnpivotMeta {
+        let Unpivot {
             col_before_for,
             col_after_for,
             unpivot_cols,

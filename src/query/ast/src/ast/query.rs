@@ -203,14 +203,14 @@ pub enum TimeTravelPoint {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct PivotMeta {
+pub struct Pivot {
     pub aggregate: Expr,
     pub pivot_column: Identifier,
     pub pivot_values: Vec<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct UnpivotMeta {
+pub struct Unpivot {
     pub col_before_for: Identifier,
     pub col_after_for: Identifier,
     pub unpivot_cols: Vec<Identifier>,
@@ -227,8 +227,8 @@ pub enum TableReference {
         table: Identifier,
         alias: Option<TableAlias>,
         travel_point: Option<TimeTravelPoint>,
-        pivot: Option<Box<PivotMeta>>,
-        unpivot: Option<Box<UnpivotMeta>>,
+        pivot: Option<Box<Pivot>>,
+        unpivot: Option<Box<Unpivot>>,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
@@ -257,14 +257,14 @@ pub enum TableReference {
 }
 
 impl TableReference {
-    pub fn pivot_meta(&self) -> Option<&PivotMeta> {
+    pub fn pivot_meta(&self) -> Option<&Pivot> {
         match self {
             TableReference::Table { pivot, .. } => pivot.as_ref().map(|b| b.as_ref()),
             _ => None,
         }
     }
 
-    pub fn unpivot_meta(&self) -> Option<&UnpivotMeta> {
+    pub fn unpivot_meta(&self) -> Option<&Unpivot> {
         match self {
             TableReference::Table { unpivot, .. } => unpivot.as_ref().map(|b| b.as_ref()),
             _ => None,
@@ -352,7 +352,7 @@ impl Display for TableAlias {
     }
 }
 
-impl Display for PivotMeta {
+impl Display for Pivot {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "PIVOT({} FOR {} IN (", self.aggregate, self.pivot_column)?;
         write_comma_separated_list(f, &self.pivot_values)?;
@@ -361,7 +361,7 @@ impl Display for PivotMeta {
     }
 }
 
-impl Display for UnpivotMeta {
+impl Display for Unpivot {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,

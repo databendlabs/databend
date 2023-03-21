@@ -264,8 +264,8 @@ pub enum TableReferenceElement {
         table: Identifier,
         alias: Option<TableAlias>,
         travel_point: Option<TimeTravelPoint>,
-        pivot: Option<Box<PivotMeta>>,
-        unpivot: Option<Box<UnpivotMeta>>,
+        pivot: Option<Box<Pivot>>,
+        unpivot: Option<Box<Unpivot>>,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
@@ -299,7 +299,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         rule! {
            PIVOT ~ "(" ~ #expr ~ "FOR" ~ #ident ~ "IN" ~ "(" ~ #comma_separated_list1(expr) ~ ")" ~ ")"
         },
-        |(_pivot, _, aggregate, _for, pivot_column, _in, _, pivot_values, _, _)| PivotMeta {
+        |(_pivot, _, aggregate, _for, pivot_column, _in, _, pivot_values, _, _)| Pivot {
             aggregate,
             pivot_column,
             pivot_values,
@@ -311,7 +311,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
             UNPIVOT ~ "(" ~ #ident ~ "FOR" ~ #ident ~ "IN" ~ "(" ~ #comma_separated_list1(ident) ~ ")" ~ ")"
         },
         |(_unpivot, _, col_before_for, _for, col_after_for, _in, _, unpivot_cols, _, _)| {
-            UnpivotMeta {
+            Unpivot {
                 col_before_for,
                 col_after_for,
                 unpivot_cols,
