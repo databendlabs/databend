@@ -124,19 +124,19 @@ Filter
     │               ├── probe keys: [t3.b (#10)]
     │               ├── filters: []
     │               ├── estimated rows: 0.33
-    │               ├── Filter(Build)
-    │               │   ├── filters: [t2.c (#6) = 1]
+    │               ├── EvalScalar(Build)
+    │               │   ├── expressions: [numbers.number (#3) + 1]
     │               │   ├── estimated rows: 0.33
-    │               │   └── EvalScalar
-    │               │       ├── expressions: [numbers.number (#3) + 1, numbers.number (#3) + 1]
-    │               │       ├── estimated rows: 1.00
+    │               │   └── Filter
+    │               │       ├── filters: [numbers.number (#3) + 1 = 1]
+    │               │       ├── estimated rows: 0.33
     │               │       └── TableScan
     │               │           ├── table: default.system.numbers
     │               │           ├── read rows: 1
     │               │           ├── read bytes: 8
     │               │           ├── partitions total: 1
     │               │           ├── partitions scanned: 1
-    │               │           ├── push downs: [filters: [], limit: NONE]
+    │               │           ├── push downs: [filters: [numbers.number (#3) + 1 = 1], limit: NONE]
     │               │           └── estimated rows: 1.00
     │               └── EvalScalar(Probe)
     │                   ├── expressions: [numbers.number (#8) + 1]
