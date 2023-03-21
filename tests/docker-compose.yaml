@@ -1,0 +1,38 @@
+version: '3'
+services:
+  minio:
+    image: docker.io/minio/minio
+    command: server /data
+    volumes:
+      - ./data:/data
+  databend:
+    image: docker.io/datafuselabs/databend
+    environment:
+      - QUERY_DEFAULT_USER=databend
+      - QUERY_DEFAULT_PASSWORD=databend
+      - QUERY_STORAGE_TYPE=s3
+      - AWS_S3_ENDPOINT=http://minio:9000
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+    depends_on:
+      - minio
+    healthcheck:
+      test: "curl -f localhost:8080/v1/health || exit 1"
+  test:
+    image: rust
+    command: cargo test ./tests/...
+    working_dir: /workdir
+
+    environment:
+      - TEST_DATABEND_DSN=databend://databend:databend@databend:8000/default?sslmode=disable
+      # - HTTPS_PROXY=http://172.24.0.1:7890
+    volumes:
+      - ../:/workdir
+      - cargo_registry:/usr/local/cargo/registry
+      - rustup:/usr/local/rustup
+    depends_on:
+      - databend
+
+volumes:
+  cargo_registry:
+  rustup:

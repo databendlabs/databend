@@ -1,0 +1,5 @@
+.vscode
+target/
+Cargo.lock
+
+/tests/data

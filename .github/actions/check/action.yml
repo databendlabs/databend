@@ -1,0 +1,24 @@
+name: 'Check'
+description: 'Check will do all essential checks'
+inputs:
+  github_token:
+    description: "Github Token"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Format
+      shell: bash
+      run: |
+        cargo fmt --all -- --check
+
+    - name: Audit dependencies
+      shell: bash
+      run: |
+        cargo install cargo-audit
+        cargo audit
+
+    - name: Clippy
+      shell: bash
+      run: |
+        cargo clippy --all-targets -- -D warnings
