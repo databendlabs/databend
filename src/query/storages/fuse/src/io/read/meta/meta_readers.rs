@@ -21,8 +21,8 @@ use opendal::Reader;
 use storages_common_cache::InMemoryItemCacheReader;
 use storages_common_cache::LoadParams;
 use storages_common_cache::Loader;
-use storages_common_cache_manager::BloomIndexMeta;
 use storages_common_cache_manager::CacheManager;
+use storages_common_index::BloomIndexMetaMini;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SegmentInfoVersion;
 use storages_common_table_meta::meta::SnapshotVersion;
@@ -34,7 +34,8 @@ use super::versioned_reader::VersionedReader;
 
 pub type TableSnapshotStatisticsReader =
     InMemoryItemCacheReader<TableSnapshotStatistics, LoaderWrapper<Operator>>;
-pub type BloomIndexMetaReader = InMemoryItemCacheReader<BloomIndexMeta, LoaderWrapper<Operator>>;
+pub type BloomIndexMetaReader =
+    InMemoryItemCacheReader<BloomIndexMetaMini, LoaderWrapper<Operator>>;
 pub type TableSnapshotReader = InMemoryItemCacheReader<TableSnapshot, LoaderWrapper<Operator>>;
 pub type SegmentInfoReader =
     InMemoryItemCacheReader<SegmentInfo, LoaderWrapper<(Operator, TableSchemaRef)>>;
@@ -104,8 +105,8 @@ impl Loader<SegmentInfo> for LoaderWrapper<(Operator, TableSchemaRef)> {
 }
 
 #[async_trait::async_trait]
-impl Loader<BloomIndexMeta> for LoaderWrapper<Operator> {
-    async fn load(&self, params: &LoadParams) -> Result<BloomIndexMeta> {
+impl Loader<BloomIndexMetaMini> for LoaderWrapper<Operator> {
+    async fn load(&self, params: &LoadParams) -> Result<BloomIndexMetaMini> {
         let mut reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
         let meta = read_metadata_async(&mut reader).await.map_err(|err| {
             ErrorCode::Internal(format!(
@@ -113,7 +114,8 @@ impl Loader<BloomIndexMeta> for LoaderWrapper<Operator> {
                 params.location, err
             ))
         })?;
-        Ok(BloomIndexMeta(meta))
+
+        BloomIndexMetaMini::try_from(meta)
     }
 }
 

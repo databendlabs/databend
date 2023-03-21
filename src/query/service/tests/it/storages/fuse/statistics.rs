@@ -15,7 +15,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_arrow::parquet::metadata::FileMetaData;
+use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_base::base::tokio;
+use common_cache::Cache;
 use common_expression::type_check::check;
 use common_expression::types::number::Int32Type;
 use common_expression::types::number::NumberScalar;
@@ -35,6 +38,7 @@ use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
+use common_expression::TableSchemaRefExt;
 use common_functions::aggregates::eval_aggr;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
@@ -50,11 +54,19 @@ use databend_query::storages::fuse::statistics::ClusterStatsGenerator;
 use databend_query::storages::fuse::statistics::StatisticsAccumulator;
 use opendal::Operator;
 use rand::Rng;
+use storages_common_cache::InMemoryCacheBuilder;
+use storages_common_cache::InMemoryItemCacheHolder;
+use storages_common_index::BloomIndexMetaMini;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ClusterStatistics;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Compression;
 use storages_common_table_meta::meta::Statistics;
+use sysinfo::get_current_pid;
+use sysinfo::ProcessExt;
+use sysinfo::System;
+use sysinfo::SystemExt;
+use uuid::Uuid;
 
 use crate::storages::fuse::block_writer::BlockWriter;
 use crate::storages::fuse::table_test_fixture::TestFixture;
@@ -236,7 +248,7 @@ async fn test_accumulator() -> common_exception::Result<()> {
         let block = item?;
         let col_stats = gen_columns_statistics(&block, None, &schema)?;
         let block_writer = BlockWriter::new(&operator, &loc_generator);
-        let block_meta = block_writer
+        let (block_meta, _index_meta) = block_writer
             .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
             .await?;
         stats_acc.add_with_block_meta(block_meta);
@@ -550,6 +562,108 @@ fn test_reduce_block_meta() -> common_exception::Result<()> {
     assert_eq!(acc_block_size, stats.uncompressed_byte_size);
     assert_eq!(acc_file_size, stats.compressed_byte_size);
     assert_eq!(acc_bloom_filter_index_size, stats.index_size);
+
+    Ok(())
+}
+
+fn populate_cache<T>(cache: &InMemoryItemCacheHolder<T>, item: T, num_cache: usize)
+where T: Clone {
+    let mut c = cache.write();
+    for _ in 0..num_cache {
+        let uuid = Uuid::new_v4();
+        (*c).put(
+            format!("{}", uuid.simple()),
+            std::sync::Arc::new(item.clone()),
+        );
+    }
+}
+
+async fn setup() -> common_exception::Result<ThriftFileMetaData> {
+    let fields = (0..23)
+        .into_iter()
+        .map(|_| TableField::new("id", TableDataType::Number(NumberDataType::Int32)))
+        .collect::<Vec<_>>();
+
+    let schema = TableSchemaRefExt::create(fields);
+
+    let mut columns = vec![];
+    for _ in 0..schema.fields().len() {
+        // values do not matter
+        let column = Int32Type::from_data(vec![1]);
+        columns.push(column)
+    }
+
+    let block = DataBlock::new_from_columns(columns);
+    let operator = Operator::new(opendal::services::Memory::default())?.finish();
+    let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
+    let col_stats = gen_columns_statistics(&block, None, &schema)?;
+    let block_writer = BlockWriter::new(&operator, &loc_generator);
+    let (_block_meta, thrift_file_meta) = block_writer
+        .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
+        .await?;
+
+    Ok(thrift_file_meta.unwrap())
+}
+
+fn show_memory_usage(case: &str, base_memory_usage: u64, num_cache_items: usize) {
+    let sys = System::new_all();
+    let pid = get_current_pid().unwrap();
+    let process = sys.process(pid).unwrap();
+    {
+        let memory_after = process.memory();
+        let delta = memory_after - base_memory_usage;
+        let delta_gb = (delta as f64) / 1024.0 / 1024.0 / 1024.0;
+        eprintln!(
+            " cache type: {}, number of cached items {}, mem usage(B):{:+}, mem usage(GB){:+}",
+            case, num_cache_items, delta, delta_gb
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore]
+async fn test_index_meta_cache_size_file_meta_data() -> common_exception::Result<()> {
+    let thrift_file_meta = setup().await?;
+
+    let cache_number = 300_000;
+
+    let meta: FileMetaData = FileMetaData::try_from_thrift(thrift_file_meta.clone())?;
+
+    let sys = System::new_all();
+    let pid = get_current_pid().unwrap();
+    let process = sys.process(pid).unwrap();
+    let base_memory_usage = process.memory();
+
+    let cache = InMemoryCacheBuilder::new_item_cache::<FileMetaData>(cache_number as u64);
+
+    populate_cache(&cache, meta, cache_number);
+    show_memory_usage("FileMetaData", base_memory_usage, cache_number);
+
+    drop(cache);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore]
+async fn test_index_meta_cache_size_bloom_meta() -> common_exception::Result<()> {
+    let thrift_file_meta = setup().await?;
+
+    let cache_number = 300_000;
+
+    let meta: FileMetaData = FileMetaData::try_from_thrift(thrift_file_meta.clone())?;
+    let bloom_index_meta = BloomIndexMetaMini::try_from(meta.clone())?;
+
+    let sys = System::new_all();
+    let pid = get_current_pid().unwrap();
+    let process = sys.process(pid).unwrap();
+    let base_memory_usage = process.memory();
+
+    let cache = InMemoryCacheBuilder::new_item_cache::<BloomIndexMetaMini>(cache_number as u64);
+    populate_cache(&cache, bloom_index_meta, cache_number);
+    show_memory_usage("BloomIndexMetaMini", base_memory_usage, cache_number);
+
+    drop(cache);
 
     Ok(())
 }

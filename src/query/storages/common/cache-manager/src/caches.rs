@@ -24,6 +24,7 @@ use storages_common_cache::CacheAccessor;
 use storages_common_cache::InMemoryItemCacheHolder;
 use storages_common_cache::NamedCache;
 use storages_common_index::filters::Xor8Filter;
+use storages_common_index::BloomIndexMetaMini;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
@@ -39,9 +40,8 @@ pub type TableSnapshotStatisticCache = NamedCache<InMemoryItemCacheHolder<TableS
 /// In memory object cache of bloom filter.
 /// For each indexed data block, the bloom xor8 filter of column is cached individually
 pub type BloomIndexFilterCache = NamedCache<InMemoryItemCacheHolder<Xor8Filter>>;
-pub struct BloomIndexMeta(pub FileMetaData);
 /// In memory object cache of parquet FileMetaData of bloom index data
-pub type BloomIndexMetaCache = NamedCache<InMemoryItemCacheHolder<BloomIndexMeta>>;
+pub type BloomIndexMetaCache = NamedCache<InMemoryItemCacheHolder<BloomIndexMetaMini>>;
 /// In memory object cache of parquet FileMetaData of external parquet files
 pub type FileMetaDataCache = NamedCache<InMemoryItemCacheHolder<FileMetaData>>;
 
@@ -87,7 +87,7 @@ impl CachedObject<TableSnapshotStatistics> for TableSnapshotStatistics {
     }
 }
 
-impl CachedObject<BloomIndexMeta> for BloomIndexMeta {
+impl CachedObject<BloomIndexMetaMini> for BloomIndexMetaMini {
     type Cache = BloomIndexMetaCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_bloom_index_meta_cache()

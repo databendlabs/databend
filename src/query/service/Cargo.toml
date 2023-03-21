@@ -46,6 +46,7 @@ common-arrow = { path = "../../common/arrow" }
 common-ast = { path = "../ast" }
 common-base = { path = "../../common/base" }
 common-catalog = { path = "../catalog" }
+common-cache = {path = "../../common/cache"}
 common-compress = { path = "../../common/compress" }
 common-config = { path = "../config" }
 common-exception = { path = "../../common/exception" }
@@ -166,6 +167,7 @@ toml = { version = "0.7.3", default-features = false }
 url = "2.3.1"
 walkdir = "2.3.2"
 wiremock = "0.5.14"
+sysinfo = "0.28.3"
 
 [build-dependencies]
 common-building = { path = "../../common/building" }
