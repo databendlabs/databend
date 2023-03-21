@@ -23,7 +23,6 @@ use common_storages_fuse::table_functions::InferSchemaTable;
 use itertools::Itertools;
 use parking_lot::RwLock;
 
-use super::UnnestTable;
 use crate::catalogs::SYS_TBL_FUC_ID_END;
 use crate::catalogs::SYS_TBL_FUNC_ID_BEGIN;
 use crate::storages::fuse::table_functions::ClusteringInformationTable;
@@ -33,6 +32,8 @@ use crate::storages::fuse::table_functions::FuseSnapshotTable;
 use crate::storages::fuse::table_functions::FuseStatisticTable;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
 use crate::table_functions::numbers::NumbersTable;
+use crate::table_functions::srf::GenerateSeriesTable;
+use crate::table_functions::srf::UnnestTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
 use crate::table_functions::GPT2SQLTable;
 use crate::table_functions::TableFunction;
@@ -142,6 +143,11 @@ impl TableFunctionFactory {
         creators.insert(
             "unnest".to_string(),
             (next_id(), Arc::new(UnnestTable::create)),
+        );
+
+        creators.insert(
+            "generate_series".to_string(),
+            (next_id(), Arc::new(GenerateSeriesTable::create)),
         );
 
         creators.insert(
