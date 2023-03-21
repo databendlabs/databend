@@ -129,35 +129,12 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
+    #[allow(dead_code)]
     fn post_resolve(
         &mut self,
         scalar: &ScalarExpr,
         data_type: &DataType,
     ) -> Result<(ScalarExpr, DataType)> {
-        // TODO(leiysky): constant folding with new expression
-        //
-        // if let Ok((value, value_type)) = Evaluator::eval_scalar(scalar).and_then(|evaluator| {
-        //     let func_ctx = self.ctx.try_get_function_context()?;
-        //     if scalar.is_deterministic() {
-        //         evaluator.try_eval_const(&func_ctx)
-        //     } else {
-        //         Err(ErrorCode::Internal(
-        //             "Constant folding requires the function deterministic",
-        //         ))
-        //     }
-        // }) {
-        //     Ok((
-        //         ConstantExpr {
-        //             value,
-        //             data_type: Box::new(value_type),
-        //         }
-        //         .into(),
-        //         data_type.clone(),
-        //     ))
-        // } else {
-        //     Ok((scalar.clone(), data_type.clone()))
-        // }
-
         Ok((scalar.clone(), data_type.clone()))
     }
 
@@ -920,7 +897,7 @@ impl<'a> TypeChecker<'a> {
             Expr::Tuple { span, exprs, .. } => self.resolve_tuple(*span, exprs).await?,
         };
 
-        Ok(Box::new(self.post_resolve(&scalar, &data_type)?))
+        Ok(Box::new((scalar, data_type)))
     }
 
     // TODO: remove this function

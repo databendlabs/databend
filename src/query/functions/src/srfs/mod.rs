@@ -28,8 +28,8 @@ use common_expression::types::DataType;
 use common_expression::ColumnIndex;
 use common_expression::Expr;
 use common_expression::RemoteExpr;
-use common_expression::ScalarRef;
 use common_expression::Value;
+use common_expression::ValueRef;
 use ctor::ctor;
 pub use evaluator::SrfEvaluator;
 use serde::Deserialize;
@@ -120,7 +120,8 @@ pub struct SetReturningFunction {
     pub arg_types: Vec<DataType>,
     pub return_types: Vec<DataType>,
 
-    pub eval: Box<dyn Fn(&[ScalarRef], &[DataType]) -> (Vec<Value<AnyType>>, usize) + Send + Sync>,
+    pub eval:
+        Box<dyn Fn(&[ValueRef<AnyType>], usize) -> Vec<(Vec<Value<AnyType>>, usize)> + Send + Sync>,
 }
 
 #[derive(Default)]
@@ -136,7 +137,10 @@ impl SetReturningFunctionRegistry {
         return_types: &[DataType],
         eval: F,
     ) where
-        F: Fn(&[ScalarRef], &[DataType]) -> (Vec<Value<AnyType>>, usize) + Send + Sync + 'static,
+        F: Fn(&[ValueRef<AnyType>], usize) -> Vec<(Vec<Value<AnyType>>, usize)>
+            + Send
+            + Sync
+            + 'static,
     {
         if return_types.iter().any(|t| !t.is_nullable()) {
             panic!("return type of srf must be nullable");

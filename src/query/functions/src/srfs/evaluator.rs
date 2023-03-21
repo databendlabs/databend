@@ -54,20 +54,7 @@ impl<'a> SrfEvaluator<'a> {
             .map(|arg| arg.as_ref())
             .collect::<Vec<_>>();
 
-        let results = (0..self.input_columns.num_rows())
-            .map(|i| {
-                let args = arg_result_refs
-                    .iter()
-                    .map(|arg| arg.index(i).unwrap())
-                    .collect::<Vec<_>>();
-                let arg_types = srf_expr
-                    .args
-                    .iter()
-                    .map(|arg| arg.data_type().clone())
-                    .collect::<Vec<_>>();
-                (*srf_expr.srf.eval)(&args, &arg_types)
-            })
-            .collect::<Vec<_>>();
+        let results = (*srf_expr.srf.eval)(&arg_result_refs, self.input_columns.num_rows());
 
         Ok(results)
     }

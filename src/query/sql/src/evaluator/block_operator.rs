@@ -21,6 +21,7 @@ use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::Expr;
@@ -121,11 +122,15 @@ impl BlockOperator {
 
                     for entry in input.columns() {
                         // Take the i-th row of input data block and add it to the row.
+                        let mut builder =
+                            ColumnBuilder::with_capacity(&entry.data_type, max_num_rows);
+                        let scalar_ref = entry.value.index(i).unwrap();
+                        (0..max_num_rows).for_each(|_| {
+                            builder.push(scalar_ref.clone());
+                        });
                         row.push(BlockEntry {
+                            value: Value::Column(builder.build()),
                             data_type: entry.data_type.clone(),
-                            value: Value::<AnyType>::Scalar(
-                                entry.value.as_ref().index(i).unwrap().to_owned(),
-                            ),
                         });
                     }
 
@@ -157,12 +162,14 @@ impl BlockOperator {
                                                         NullableColumnBuilder::from_column(
                                                             *nullable_column,
                                                         );
-                                                    for _ in 0..(max_num_rows - result_set_rows) {
-                                                        column_builder.push_null();
-                                                    }
-                                                    Value::<AnyType>::Column(Column::Nullable(
-                                                        Box::new(column_builder.build()),
-                                                    ))
+                                                    (0..(max_num_rows - result_set_rows)).for_each(
+                                                        |_| {
+                                                            column_builder.push_null();
+                                                        },
+                                                    );
+                                                    Value::Column(Column::Nullable(Box::new(
+                                                        column_builder.build(),
+                                                    )))
                                                 }
                                             }
                                         })
@@ -185,7 +192,8 @@ impl BlockOperator {
                     result_data_blocks.push(DataBlock::new(row, max_num_rows));
                 }
 
-                DataBlock::concat(&result_data_blocks)
+                let result = DataBlock::concat(&result_data_blocks)?;
+                Ok(result)
             }
         }
     }

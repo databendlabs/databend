@@ -747,17 +747,14 @@ fn project_set_to_format_tree(
         )));
     }
 
-    children.extend(vec![
-        to_format_tree(&plan.input, metadata, prof_span_set)?,
-        FormatTreeNode::new(format!(
-            "set returning functions: {}",
-            plan.srf_exprs
-                .iter()
-                .map(|(expr, _)| expr.clone().into_srf_expr().sql_display())
-                .collect::<Vec<_>>()
-                .join(", ")
-        )),
-    ]);
+    children.extend(vec![FormatTreeNode::new(format!(
+        "set returning functions: {}",
+        plan.srf_exprs
+            .iter()
+            .map(|(expr, _)| expr.clone().into_srf_expr().sql_display())
+            .collect::<Vec<_>>()
+            .join(", ")
+    ))]);
 
     children.extend(vec![to_format_tree(&plan.input, metadata, prof_span_set)?]);
 

@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_expression::types::nullable::NullableColumn;
+use common_expression::types::array::ArrayColumnBuilder;
 use common_expression::types::AnyType;
 use common_expression::types::DataType;
 use common_expression::Column;
-use common_expression::ScalarRef;
+use common_expression::Scalar;
 use common_expression::Value;
+use common_expression::ValueRef;
 
 use crate::srfs::SetReturningFunctionRegistry;
 
@@ -29,18 +29,26 @@ pub fn builtin_set_returning_functions() -> SetReturningFunctionRegistry {
 }
 
 pub fn register_unnest_functions(registry: &mut SetReturningFunctionRegistry) {
-    let unnest_impl = |args: &[ScalarRef], arg_types: &[DataType]| {
-        let arg = Value::<AnyType>::Scalar(args[0].to_owned());
-        let mut result = arg.convert_to_full_column(&arg_types[0], 1).unnest();
-        let num_rows = result.len();
-        if !result.data_type().is_nullable() {
-            result = Column::Nullable(Box::new(NullableColumn {
-                column: result,
-                validity: Bitmap::new_zeroed(num_rows),
-            }));
-        }
+    let unnest_impl = |args: &[ValueRef<AnyType>], num_rows| {
+        debug_assert_eq!(args.len(), 1);
+        let unnest_array = match args[0].clone().to_owned() {
+            Value::Scalar(Scalar::Array(col)) => {
+                ArrayColumnBuilder::<AnyType>::repeat(&col, num_rows).build()
+            }
+            Value::Column(Column::Array(col)) => *col,
+            _ => unreachable!(),
+        };
+        debug_assert_eq!(unnest_array.len(), num_rows);
+        let result = unnest_array
+            .iter()
+            .map(|v| {
+                let column = v.unnest();
+                let len = column.len();
+                (vec![Value::Column(column)], len)
+            })
+            .collect::<Vec<_>>();
 
-        (vec![Value::<AnyType>::Column(result)], num_rows)
+        result
     };
 
     {
