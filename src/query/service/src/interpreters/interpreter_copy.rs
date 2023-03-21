@@ -99,7 +99,8 @@ impl CopyInterpreter {
             })
             .collect();
         let data_schema = DataSchemaRefExt::create(fields);
-        let build_res = select_interpreter.build_pipeline().await?;
+        let plan = select_interpreter.build_physical_plan().await?;
+        let build_res = select_interpreter.build_pipeline(plan).await?;
         Ok((build_res, data_schema))
     }
 
