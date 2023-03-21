@@ -373,6 +373,11 @@ jobs:
         with:
           name: benchmark-${{ matrix.dataset }}
           path: benchmark/clickbench/results/${{ matrix.dataset }}
+      - name: Generate report
+        working-directory: benchmark/clickbench
+        run: |
+          aws s3 sync ${{ env.BENCHMARK_S3_PREFIX }}/release/${{ matrix.dataset }}/$(date -u +%Y)/$(date -u +%m)/ ./results/${{ matrix.dataset }}/ --no-progress
+          ./update-results.sh ${{ matrix.dataset }}
       - name: Upload nightly results to repo.databend.rs
         working-directory: benchmark/clickbench/
         run: |
@@ -382,10 +387,6 @@ jobs:
             aws s3 cp $file "${RESULT_PEFIX}-$(basename $file)"
             aws s3 cp $file "${LATEST_PREFIX}-$(basename $file)"
           done
-      - name: Generate report
-        working-directory: benchmark/clickbench
-        run: |
-          ./update-results.sh ${{ matrix.dataset }}
       - name: Upload PR clickbench report to repo.databend.rs
         working-directory: benchmark/clickbench
         run: |

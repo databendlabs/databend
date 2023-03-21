@@ -22,6 +22,7 @@ use scalars::BUILTIN_FUNCTIONS;
 
 pub mod aggregates;
 pub mod scalars;
+pub mod srfs;
 
 pub fn is_builtin_function(name: &str) -> bool {
     BUILTIN_FUNCTIONS.contains(name) || AggregateFunctionFactory::instance().contains(name)

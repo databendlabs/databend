@@ -50,17 +50,11 @@ pub fn via_exchange_source(
 
     let exchange_params = ExchangeParams::MergeExchange(params.clone());
     let exchange_manager = ctx.get_exchange_manager();
-    let flight_exchanges = exchange_manager.get_flight_exchanges(&exchange_params)?;
+    let flight_receivers = exchange_manager.get_flight_receiver(&exchange_params)?;
 
     let last_output_len = pipeline.output_len();
-    let flight_exchanges_len = flight_exchanges.len();
-    exchange_source_reader::via_reader(
-        last_output_len,
-        flight_exchanges,
-        pipeline,
-        params.query_id.clone(),
-        params.fragment_id,
-    );
+    let flight_exchanges_len = flight_receivers.len();
+    exchange_source_reader::via_reader(last_output_len, pipeline, flight_receivers);
 
     injector.apply_merge_deserializer(flight_exchanges_len, params, pipeline)
 }
