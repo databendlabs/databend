@@ -38,10 +38,10 @@ pub fn share_table_info_location(tenant: &str, share_name: &str) -> String {
 pub async fn save_share_spec(
     tenant: &String,
     operator: Operator,
-    share_spec: Option<Vec<ShareSpec>>,
+    spec_vec: Option<Vec<ShareSpec>>,
     share_table_info: Option<&ShareTableInfoMap>,
 ) -> Result<()> {
-    if let Some(share_spec) = share_spec {
+    if let Some(share_spec) = spec_vec {
         let location = format!("{}/{}/share_specs.json", tenant, SHARE_CONFIG_PREFIX);
         let mut share_spec_vec = ShareSpecVec::default();
         for spec in share_spec {

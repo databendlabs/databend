@@ -62,7 +62,7 @@ impl Interpreter for RevokeShareObjectInterpreter {
         save_share_spec(
             &self.ctx.get_tenant(),
             self.ctx.get_data_operator()?.operator(),
-            resp.share_spec,
+            resp.spec_vec,
             Some(&resp.share_table_info),
         )
         .await?;

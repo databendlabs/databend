@@ -105,7 +105,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 return if req.if_not_exists {
                     Ok(CreateShareReply {
                         share_id,
-                        share_spec: None,
+                        spec_vec: None,
                     })
                 } else {
                     Err(KVAppError::AppError(AppError::ShareAlreadyExists(
@@ -156,7 +156,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 if succ {
                     return Ok(CreateShareReply {
                         share_id,
-                        share_spec: Some(
+                        spec_vec: Some(
                             get_tenant_share_spec_vec(self, name_key.tenant.clone()).await?,
                         ),
                     });
@@ -195,7 +195,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                         if req.if_exists {
                             return Ok(DropShareReply {
                                 share_id: None,
-                                share_spec: None,
+                                spec_vec: None,
                             });
                         }
                     }
@@ -214,7 +214,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                         if req.if_exists {
                             return Ok(DropShareReply {
                                 share_id: Some(share_id),
-                                share_spec: None,
+                                spec_vec: None,
                             });
                         }
                     }
@@ -289,7 +289,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 if succ {
                     return Ok(DropShareReply {
                         share_id: Some(share_id),
-                        share_spec: Some(
+                        spec_vec: Some(
                             get_tenant_share_spec_vec(self, name_key.tenant.clone()).await?,
                         ),
                     });
@@ -323,7 +323,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                         if req.if_exists {
                             return Ok(AddShareAccountsReply {
                                 share_id: None,
-                                share_spec: None,
+                                spec_vec: None,
                             });
                         }
                     }
@@ -401,7 +401,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 if succ {
                     return Ok(AddShareAccountsReply {
                         share_id: Some(share_id),
-                        share_spec: Some(
+                        spec_vec: Some(
                             get_tenant_share_spec_vec(self, name_key.tenant.clone()).await?,
                         ),
                     });
@@ -440,7 +440,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                         if req.if_exists {
                             return Ok(RemoveShareAccountsReply {
                                 share_id: None,
-                                share_spec: None,
+                                spec_vec: None,
                             });
                         }
                     }
@@ -523,7 +523,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 if succ {
                     return Ok(RemoveShareAccountsReply {
                         share_id: Some(share_id),
-                        share_spec: Some(
+                        spec_vec: Some(
                             get_tenant_share_spec_vec(self, name_key.tenant.clone()).await?,
                         ),
                     });
@@ -572,7 +572,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             if has_granted_privileges {
                 return Ok(GrantShareObjectReply {
                     share_id,
-                    share_spec: None,
+                    spec_vec: None,
                     share_table_info: (share_name_key.share_name.clone(), None),
                 });
             }
@@ -637,7 +637,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 if succ {
                     return Ok(GrantShareObjectReply {
                         share_id,
-                        share_spec: Some(
+                        spec_vec: Some(
                             get_tenant_share_spec_vec(self, share_name_key.tenant.clone()).await?,
                         ),
                         share_table_info: get_share_table_info(self, share_name_key, &share_meta)
@@ -688,7 +688,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             if !has_granted_privileges {
                 return Ok(RevokeShareObjectReply {
                     share_id,
-                    share_spec: None,
+                    spec_vec: None,
                     share_table_info: (share_name_key.share_name.clone(), None),
                 });
             }
@@ -751,7 +751,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 if succ {
                     return Ok(RevokeShareObjectReply {
                         share_id,
-                        share_spec: Some(
+                        spec_vec: Some(
                             get_tenant_share_spec_vec(self, share_name_key.tenant.clone()).await?,
                         ),
                         share_table_info: get_share_table_info(self, share_name_key, &share_meta)
