@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::tokio::sync::mpsc::Sender;
-use common_base::runtime::CatchUnwindFuture;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
 use common_compress::CompressAlgorithm;
@@ -27,9 +26,7 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::Pipeline;
 use futures::AsyncRead;
-use futures_util::stream::FuturesUnordered;
 use futures_util::AsyncReadExt;
-use futures_util::StreamExt;
 
 use crate::input_formats::Aligner;
 use crate::input_formats::BeyondEndReader;
@@ -195,33 +192,19 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         Self::build_pipeline_aligned(&ctx, data_rx, pipeline)?;
 
         let ctx_clone = ctx.clone();
-        let p = 3;
         GlobalIORuntime::instance().spawn(async move {
-            for splits in ctx_clone.splits.chunks(p) {
-                let ctx_clone2 = ctx_clone.clone();
-                let row_batch_tx = data_tx.clone();
-                let splits = splits.to_owned().clone();
-                tokio::spawn(async move {
-                    let mut futs = FuturesUnordered::new();
-                    for s in splits.into_iter() {
-                        let fut =
-                            CatchUnwindFuture::create(Self::read_split(ctx_clone2.clone(), s));
-                        futs.push(fut);
-                    }
-                    while let Some(row_batch) = futs.next().await {
-                        match row_batch {
-                            Ok(row_batch) => {
-                                if row_batch_tx.send(row_batch).await.is_err() {
-                                    break;
-                                }
-                            }
-                            Err(cause) => {
-                                row_batch_tx.send(Err(cause)).await.ok();
-                                break;
-                            }
+            for split in &ctx_clone.splits {
+                match Self::read_split(ctx_clone.clone(), split.clone()).await {
+                    Ok(row_batch) => {
+                        if data_tx.send(Ok(row_batch)).await.is_err() {
+                            break;
                         }
                     }
-                });
+                    Err(cause) => {
+                        data_tx.send(Err(cause)).await.ok();
+                        break;
+                    }
+                }
             }
         });
         Ok(())
