@@ -289,12 +289,12 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
         })
         .append(RcDoc::text(table.to_string()))
         .append(if let Some(pivot) = pivot {
-            RcDoc::text(format!("{pivot}"))
+            RcDoc::text(format!(" {pivot}"))
         } else {
             RcDoc::nil()
         })
         .append(if let Some(unpivot) = unpivot {
-            RcDoc::text(format!("{unpivot}"))
+            RcDoc::text(format!(" {unpivot}"))
         } else {
             RcDoc::nil()
         })

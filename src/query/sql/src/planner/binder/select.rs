@@ -712,15 +712,15 @@ impl Binder {
     ) -> Result<SelectStmt> {
         let Pivot {
             aggregate,
-            pivot_column,
-            pivot_values,
+            value_column,
+            values,
         } = &stmt.from[0].pivot_meta().unwrap();
         let all_column_bindings = from_context.all_column_bindings();
         let pivot_column_index = all_column_bindings
             .iter()
-            .position(|col| self.compare_column_name(&col.column_name, &pivot_column.name))
+            .position(|col| self.compare_column_name(&col.column_name, &value_column.name))
             .ok_or_else(|| {
-                ErrorCode::SyntaxException(format!("Pivot column {} not found", pivot_column))
+                ErrorCode::SyntaxException(format!("Pivot column {} not found", value_column))
             })?;
         let (aggregate_column_index, aggregate_column_ident) =
             self.aggregate_column(aggregate, from_context)?;
@@ -744,7 +744,7 @@ impl Binder {
         // Second,rewrite select list，if select list contains '*', we will remove pivot column and aggregate column, then we will add aggregate if columns
         let mut new_select_list = stmt.select_list.clone();
         if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
-            star.exclude(vec![pivot_column.clone(), aggregate_column_ident]);
+            star.exclude(vec![value_column.clone(), aggregate_column_ident]);
         };
         let (agg_func, agg_args) = match &aggregate {
             Expr::FunctionCall { name, args, .. } => (name.clone(), args.clone()),
@@ -754,13 +754,13 @@ impl Binder {
             name: format!("{}_if", agg_func.name),
             ..agg_func
         };
-        for pivot_value in pivot_values {
+        for pivot_value in values {
             let mut args = agg_args.clone();
             args.push(Expr::BinaryOp {
                 span: Span::default(),
                 op: BinaryOperator::Eq,
                 left: Box::new(Expr::ColumnRef {
-                    column: pivot_column.clone(),
+                    column: value_column.clone(),
                     span: Span::default(),
                     database: None,
                     table: None,
@@ -782,15 +782,15 @@ impl Binder {
 
     fn rewrite_unpivot_stmt(&self, stmt: &SelectStmt) -> Result<SelectStmt> {
         let Unpivot {
-            col_before_for,
-            col_after_for,
-            unpivot_cols,
+            value_column,
+            column_name,
+            names,
         } = &stmt.from[0].unpivot_meta().unwrap();
 
         // First,exclude unpivot columns from select list
         let mut new_select_list = stmt.select_list.clone();
         if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
-            star.exclude(unpivot_cols.clone());
+            star.exclude(names.clone());
         };
 
         // Second,push unnest function to select list
@@ -802,7 +802,7 @@ impl Binder {
             },
             vec![Array {
                 span: None,
-                exprs: unpivot_cols
+                exprs: names
                     .iter()
                     .map(|col| Expr::Literal {
                         span: None,
@@ -810,7 +810,7 @@ impl Binder {
                     })
                     .collect(),
             }],
-            Some(col_after_for.clone()),
+            Some(column_name.clone()),
         ));
         new_select_list.push(SelectTarget::new_func_from_name_args(
             Identifier {
@@ -820,7 +820,7 @@ impl Binder {
             },
             vec![Array {
                 span: None,
-                exprs: unpivot_cols
+                exprs: names
                     .iter()
                     .map(|col| Expr::ColumnRef {
                         column: col.clone(),
@@ -830,7 +830,7 @@ impl Binder {
                     })
                     .collect(),
             }],
-            Some(col_before_for.clone()),
+            Some(value_column.clone()),
         ));
         Ok(SelectStmt {
             select_list: new_select_list,

@@ -2209,10 +2209,12 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 name.push_str(&table.to_string());
 
                 if let Some(pivot) = pivot {
+                    name.push(' ');
                     name.push_str(&pivot.to_string());
                 }
 
                 if let Some(unpivot) = unpivot {
+                    name.push(' ');
                     name.push_str(&unpivot.to_string());
                 }
 

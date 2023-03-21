@@ -299,10 +299,10 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         rule! {
            PIVOT ~ "(" ~ #expr ~ "FOR" ~ #ident ~ "IN" ~ "(" ~ #comma_separated_list1(expr) ~ ")" ~ ")"
         },
-        |(_pivot, _, aggregate, _for, pivot_column, _in, _, pivot_values, _, _)| Pivot {
+        |(_pivot, _, aggregate, _for, value_column, _in, _, values, _, _)| Pivot {
             aggregate,
-            pivot_column,
-            pivot_values,
+            value_column,
+            values,
         },
     );
     // UNPIVOT(ident for ident IN (ident, ...))
@@ -310,10 +310,10 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         rule! {
             UNPIVOT ~ "(" ~ #ident ~ "FOR" ~ #ident ~ "IN" ~ "(" ~ #comma_separated_list1(ident) ~ ")" ~ ")"
         },
-        |(_unpivot, _, col_before_for, _for, col_after_for, _in, _, unpivot_cols, _, _)| Unpivot {
-            col_before_for,
-            col_after_for,
-            unpivot_cols,
+        |(_unpivot, _, value_column, _for, column_name, _in, _, names, _, _)| Unpivot {
+            value_column,
+            column_name,
+            names,
         },
     );
     let aliased_table = map(

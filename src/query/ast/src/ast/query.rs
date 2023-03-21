@@ -354,8 +354,8 @@ impl Display for TableAlias {
 
 impl Display for Pivot {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "PIVOT({} FOR {} IN (", self.aggregate, self.pivot_column)?;
-        write_comma_separated_list(f, &self.pivot_values)?;
+        write!(f, "PIVOT({} FOR {} IN (", self.aggregate, self.value_column)?;
+        write_comma_separated_list(f, &self.values)?;
         write!(f, "))")?;
         Ok(())
     }
@@ -366,9 +366,9 @@ impl Display for Unpivot {
         write!(
             f,
             "UNPIVOT({} FOR {} IN (",
-            self.col_before_for, self.col_after_for
+            self.value_column, self.column_name
         )?;
-        write_comma_separated_list(f, &self.unpivot_cols)?;
+        write_comma_separated_list(f, &self.names)?;
         write!(f, "))")?;
         Ok(())
     }
