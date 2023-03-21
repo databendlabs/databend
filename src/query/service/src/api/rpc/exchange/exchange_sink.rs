@@ -44,7 +44,6 @@ impl ExchangeSink {
     ) -> Result<()> {
         let exchange_manager = ctx.get_exchange_manager();
         let mut flight_senders = exchange_manager.get_flight_sender(params)?;
-        // let mut flight_exchanges = exchange_manager.get_flight_exchanges(params)?;
 
         match params {
             ExchangeParams::MergeExchange(params) => {
