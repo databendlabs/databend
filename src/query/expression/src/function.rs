@@ -14,6 +14,8 @@
 
 use std::collections::HashMap;
 use std::ops::BitAnd;
+use std::ops::BitOr;
+use std::ops::Not;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
@@ -436,19 +438,21 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
             }
         }
         let results = f(&nonull_args, ctx);
-        let mut bitmap = bitmap.unwrap_or_else(|| constant_bitmap(true, len));
-        let error_bitmap: Bitmap = ctx
-            .errors
-            .as_ref()
-            .map(|(b, _)| b.clone())
-            .unwrap_or_else(|| constant_bitmap(true, len))
-            .into();
-        ctx.errors = None;
-        bitmap = bitmap & &error_bitmap;
+        let bitmap = bitmap.unwrap_or_else(|| constant_bitmap(true, len));
+        if let Some((error_bitmap, _)) = ctx.errors.as_mut() {
+            // If the original value is NULL, we can ignore the error.
+            let rhs: Bitmap = bitmap.clone().not().into();
+            let res = error_bitmap.clone().bitor(&rhs);
+            if res.unset_bits() == 0 {
+                ctx.errors = None;
+            } else {
+                *error_bitmap = res;
+            }
+        }
 
         match results {
             Value::Scalar(s) => {
-                if bitmap.get(0) && ctx.errors.is_none() {
+                if bitmap.get(0) {
                     Value::Scalar(s)
                 } else {
                     Value::Scalar(Scalar::Null)
