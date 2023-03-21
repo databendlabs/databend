@@ -46,7 +46,7 @@ use crate::Binder;
 impl Binder {
     pub(in crate::planner::binder) async fn bind_show_catalogs(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &ShowCatalogsStmt,
     ) -> Result<Plan> {
         let ShowCatalogsStmt { limit } = stmt;

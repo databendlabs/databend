@@ -54,11 +54,11 @@ use common_sql::executor::HashJoin;
 use common_sql::executor::Limit;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
+use common_sql::executor::ProjectSet;
 use common_sql::executor::RuntimeFilterSource;
 use common_sql::executor::Sort;
 use common_sql::executor::TableScan;
 use common_sql::executor::UnionAll;
-use common_sql::executor::Unnest;
 use common_sql::plans::JoinType;
 use common_sql::ColumnBinding;
 use common_sql::IndexType;
@@ -174,7 +174,7 @@ impl PipelineBuilder {
             PhysicalPlan::DistributedInsertSelect(insert_select) => {
                 self.build_distributed_insert_select(insert_select)
             }
-            PhysicalPlan::Unnest(unnest) => self.build_unnest(unnest),
+            PhysicalPlan::ProjectSet(project_set) => self.build_project_set(project_set),
             PhysicalPlan::Exchange(_) => Err(ErrorCode::Internal(
                 "Invalid physical plan with PhysicalPlan::Exchange",
             )),
@@ -403,11 +403,15 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    fn build_unnest(&mut self, unnest: &Unnest) -> Result<()> {
-        self.build_pipeline(&unnest.input)?;
+    fn build_project_set(&mut self, project_set: &ProjectSet) -> Result<()> {
+        self.build_pipeline(&project_set.input)?;
 
-        let op = BlockOperator::Unnest {
-            num_columns: unnest.num_columns,
+        let op = BlockOperator::FlatMap {
+            srf_exprs: project_set
+                .srf_exprs
+                .iter()
+                .map(|(expr, _)| expr.clone().into_srf_expr())
+                .collect(),
         };
 
         let func_ctx = self.ctx.get_function_context()?;
@@ -419,7 +423,7 @@ impl PipelineBuilder {
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProfileWrapper::create(
                     transform,
-                    unnest.plan_id,
+                    project_set.plan_id,
                     self.prof_span_set.clone(),
                 )))
             } else {
