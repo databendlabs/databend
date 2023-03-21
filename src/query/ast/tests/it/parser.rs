@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fs::{File, OpenOptions};
 use std::io::Write;
 
 use common_ast::display_parser_error;
@@ -487,7 +488,7 @@ fn test_query() {
         r#"(select * from t1 union select * from t2) union select * from t3"#,
         r#"select * from t1 union (select * from t2 union select * from t3)"#,
         r#"select * from monthly_sales pivot(sum(amount) for month in ('JAN', 'FEB', 'MAR', 'APR')) order by empid"#,
-        // r#"select * from monthly_sales_1 unpivot(sales for month in (jan, feb, mar, april)) order by empid"#
+        r#"select * from monthly_sales_1 unpivot(sales for month in (jan, feb, mar, april)) order by empid"#
     ];
 
     for case in cases {
@@ -624,4 +625,21 @@ fn test_expr_error() {
     for case in cases {
         run_parser!(file, expr, case);
     }
+}
+
+#[test]
+fn test(){
+    let backtrace = Backtrace::new();
+    let source = "select * from monthly_sales_1 unpivot(sales for month in (jan, feb, mar, april)) order by empid";
+    let tokens = tokenize_sql(source).unwrap();
+    let mut parser = rule!(#query ~ &EOI);
+    let (_,(output,_))  = parser.parse(Input(&tokens, Dialect::PostgreSQL, &backtrace)).unwrap();
+    let mut file = File::create("tests/it/testdata/ast.txt").unwrap();
+    writeln!(file, "---------- Input ----------").unwrap();
+    writeln!(file, "{}", source).unwrap();
+    writeln!(file, "---------- Output ---------").unwrap();
+    writeln!(file, "{}", output).unwrap();
+    writeln!(file, "---------- AST ------------").unwrap();
+    writeln!(file, "{:#?}", output).unwrap();
+    writeln!(file, "\n").unwrap();
 }

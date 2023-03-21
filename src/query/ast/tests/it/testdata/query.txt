@@ -3631,3 +3631,130 @@ Query {
     ignore_result: false,
 }
 
+
+---------- Input ----------
+select * from monthly_sales_1 unpivot(sales for month in (jan, feb, mar, april)) order by empid
+---------- Output ---------
+SELECT * FROM monthly_sales_1 UNPIVOT(sales FOR month IN (jan, feb, mar, april)) ORDER BY empid
+---------- AST ------------
+Query {
+    span: Some(
+        0..95,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..80,
+            ),
+            distinct: false,
+            select_list: [
+                QualifiedName {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    exclude: None,
+                },
+            ],
+            from: [
+                Table {
+                    span: Some(
+                        14..80,
+                    ),
+                    catalog: None,
+                    database: None,
+                    table: Identifier {
+                        name: "monthly_sales_1",
+                        quote: None,
+                        span: Some(
+                            14..29,
+                        ),
+                    },
+                    alias: None,
+                    travel_point: None,
+                    pivot: None,
+                    unpivot: Some(
+                        Unpivot {
+                            value_column: Identifier {
+                                name: "sales",
+                                quote: None,
+                                span: Some(
+                                    38..43,
+                                ),
+                            },
+                            column_name: Identifier {
+                                name: "month",
+                                quote: None,
+                                span: Some(
+                                    48..53,
+                                ),
+                            },
+                            names: [
+                                Identifier {
+                                    name: "jan",
+                                    quote: None,
+                                    span: Some(
+                                        58..61,
+                                    ),
+                                },
+                                Identifier {
+                                    name: "feb",
+                                    quote: None,
+                                    span: Some(
+                                        63..66,
+                                    ),
+                                },
+                                Identifier {
+                                    name: "mar",
+                                    quote: None,
+                                    span: Some(
+                                        68..71,
+                                    ),
+                                },
+                                Identifier {
+                                    name: "april",
+                                    quote: None,
+                                    span: Some(
+                                        73..78,
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+        },
+    ),
+    order_by: [
+        OrderByExpr {
+            expr: ColumnRef {
+                span: Some(
+                    90..95,
+                ),
+                database: None,
+                table: None,
+                column: Identifier {
+                    name: "empid",
+                    quote: None,
+                    span: Some(
+                        90..95,
+                    ),
+                },
+            },
+            asc: None,
+            nulls_first: None,
+        },
+    ],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
