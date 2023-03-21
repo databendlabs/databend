@@ -26,33 +26,39 @@ use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::infer_schema_type;
-use common_expression::types::NumberColumn;
+use common_expression::type_check::check_number;
+use common_expression::types::DataType;
+use common_expression::types::Float64Type;
+use common_expression::types::Int64Type;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
-use common_expression::types::UInt64Type;
-use common_expression::Column;
+use common_expression::types::F64;
 use common_expression::DataBlock;
+use common_expression::Expr;
 use common_expression::FromData;
+use common_expression::FunctionContext;
 use common_expression::Scalar;
-use common_expression::Scalar::Number;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
+use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
-use common_pipeline_sources::OneBlockSource;
+use common_pipeline_sources::AsyncSource;
+use common_pipeline_sources::AsyncSourcer;
 use common_sql::validate_function_arg;
 use common_storages_factory::Table;
 use common_storages_fuse::TableContext;
 
 pub struct GenerateSeriesTable {
     table_info: TableInfo,
-    start: NumberScalar,
-    end: NumberScalar,
-    step: NumberScalar,
+    start: Scalar,
+    end: Scalar,
+    step: Scalar,
 }
 
 impl GenerateSeriesTable {
@@ -70,28 +76,24 @@ impl GenerateSeriesTable {
             2,
         )?;
 
-        let start = table_args.positioned[0]
-            .clone()
-            .into_number()
-            .map_err(|_| ErrorCode::BadArguments("Expected number argument."))?;
-        let end = table_args.positioned[1]
-            .clone()
-            .into_number()
-            .map_err(|_| ErrorCode::BadArguments("Expected number argument."))?;
+        // Check if the parameter type is a Number or a Decimal.
+        let check_number = |arg: &Scalar| -> Result<Scalar> {
+            match arg {
+                Scalar::Number(_) | Scalar::Decimal(_) => Ok(arg.clone()),
+                _ => Err(ErrorCode::BadArguments("Expected number argument.")),
+            }
+        };
 
-        let step = table_args
-            .positioned
-            .get(2)
-            .map_or(NumberScalar::Int64(1), |s| {
-                s.clone()
-                    .into_number()
-                    .map_err(|_| ErrorCode::BadArguments("Expected number argument."))?
-            });
-        println!("start: {}, end: {}, step: {}", start, end, step);
+        let start = check_number(&table_args.positioned[0])?;
+        let end = check_number(&table_args.positioned[1])?;
+        let mut step = Scalar::Number(NumberScalar::Int64(1));
+        if table_args.positioned.len() == 3 {
+            step = check_number(&table_args.positioned[2])?;
+        }
 
         let schema = TableSchema::new(vec![TableField::new(
             "generate_series",
-            if number_scalars_have_float(vec![start, end, step]) {
+            if number_scalars_have_float(vec![start.clone(), end.clone(), step.clone()]) {
                 TableDataType::Number(NumberDataType::Float64)
             } else {
                 TableDataType::Number(NumberDataType::Int64)
@@ -152,51 +154,220 @@ impl Table for GenerateSeriesTable {
         _: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         // dummy statistics
-        Ok((
-            PartStatistics::new_exact(self.output.len(), self.output.memory_size(), 1, 1),
-            Partitions::default(),
-        ))
+        Ok((PartStatistics::default_exact(), Partitions::default()))
     }
 
     fn table_args(&self) -> Option<TableArgs> {
-        Some(TableArgs::new_positioned(vec![Scalar::Array(
-            self.output.clone(),
-        )]))
+        Some(TableArgs::new_positioned(vec![
+            self.start.clone(),
+            self.end.clone(),
+            self.step.clone(),
+        ]))
     }
 
     fn read_data(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_source(
             |output| {
-                OneBlockSource::create(
+                GenerateSeriesSource::create(
+                    ctx.clone(),
                     output,
-                    DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![1])]),
+                    self.start.clone(),
+                    self.end.clone(),
+                    self.step.clone(),
                 )
             },
             1,
         )?;
-
         Ok(())
     }
 }
 
-pub fn number_scalars_have_float(scalars: Vec<NumberScalar>) -> bool {
+struct GenerateSeriesSource {
+    finished: bool,
+    start: Scalar,
+    end: Scalar,
+    step: Scalar,
+}
+
+impl GenerateSeriesSource {
+    pub fn create(
+        ctx: Arc<dyn TableContext>,
+        output: Arc<OutputPort>,
+        start: Scalar,
+        end: Scalar,
+        step: Scalar,
+    ) -> Result<ProcessorPtr> {
+        AsyncSourcer::create(ctx.clone(), output, GenerateSeriesSource {
+            start,
+            end,
+            step,
+            finished: false,
+        })
+    }
+}
+
+fn range<T>(start: T, end: T, step: T) -> Vec<T>
+where T: std::ops::Add<Output = T> + std::ops::Sub<Output = T> + PartialOrd + Copy + Default {
+    let mut result = Vec::new();
+    if step == T::default() {
+        return result;
+    }
+    let increase_sign = end >= start;
+    let step_sign = step > T::default();
+    if increase_sign != step_sign {
+        return result;
+    }
+    let mut current = start;
+    while (current <= end) == increase_sign {
+        result.push(current);
+        current = current + step;
+    }
+    result
+}
+
+#[async_trait::async_trait]
+impl AsyncSource for GenerateSeriesSource {
+    const NAME: &'static str = "GenerateSeriesSourceTransform";
+
+    #[async_trait::unboxed_simple]
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+        if self.finished {
+            return Ok(None);
+        }
+        let have_float = number_scalars_have_float(vec![
+            self.start.clone(),
+            self.end.clone(),
+            self.step.clone(),
+        ]);
+        if have_float {
+            let dest_type = DataType::Number(NumberDataType::Float64);
+            let start: F64 = check_number(
+                None,
+                FunctionContext::default(),
+                &Expr::<usize>::Cast {
+                    span: None,
+                    is_try: false,
+                    expr: Box::new(Expr::Constant {
+                        span: None,
+                        scalar: self.start.clone(),
+                        data_type: self.start.clone().as_ref().infer_data_type(),
+                    }),
+                    dest_type: dest_type.clone(),
+                },
+                &BUILTIN_FUNCTIONS,
+            )?;
+            let end: F64 = check_number(
+                None,
+                FunctionContext::default(),
+                &Expr::<usize>::Cast {
+                    span: None,
+                    is_try: false,
+                    expr: Box::new(Expr::Constant {
+                        span: None,
+                        scalar: self.end.clone(),
+                        data_type: self.end.clone().as_ref().infer_data_type(),
+                    }),
+                    dest_type: dest_type.clone(),
+                },
+                &BUILTIN_FUNCTIONS,
+            )?;
+            let step: F64 = check_number(
+                None,
+                FunctionContext::default(),
+                &Expr::<usize>::Cast {
+                    span: None,
+                    is_try: false,
+                    expr: Box::new(Expr::Constant {
+                        span: None,
+                        scalar: self.step.clone(),
+                        data_type: self.step.clone().as_ref().infer_data_type(),
+                    }),
+                    dest_type,
+                },
+                &BUILTIN_FUNCTIONS,
+            )?;
+
+            self.finished = true;
+            Ok(Some(DataBlock::new_from_columns(vec![
+                Float64Type::from_data(range(start, end, step).into_iter()),
+            ])))
+        } else {
+            let dest_type = DataType::Number(NumberDataType::Int64);
+            let start: i64 = check_number(
+                None,
+                FunctionContext::default(),
+                &Expr::<usize>::Cast {
+                    span: None,
+                    is_try: false,
+                    expr: Box::new(Expr::Constant {
+                        span: None,
+                        scalar: self.start.clone(),
+                        data_type: self.start.clone().as_ref().infer_data_type(),
+                    }),
+                    dest_type: dest_type.clone(),
+                },
+                &BUILTIN_FUNCTIONS,
+            )?;
+            let end: i64 = check_number(
+                None,
+                FunctionContext::default(),
+                &Expr::<usize>::Cast {
+                    span: None,
+                    is_try: false,
+                    expr: Box::new(Expr::Constant {
+                        span: None,
+                        scalar: self.end.clone(),
+                        data_type: self.end.clone().as_ref().infer_data_type(),
+                    }),
+                    dest_type: dest_type.clone(),
+                },
+                &BUILTIN_FUNCTIONS,
+            )?;
+            let step: i64 = check_number(
+                None,
+                FunctionContext::default(),
+                &Expr::<usize>::Cast {
+                    span: None,
+                    is_try: false,
+                    expr: Box::new(Expr::Constant {
+                        span: None,
+                        scalar: self.step.clone(),
+                        data_type: self.step.clone().as_ref().infer_data_type(),
+                    }),
+                    dest_type,
+                },
+                &BUILTIN_FUNCTIONS,
+            )?;
+            self.finished = true;
+            Ok(Some(DataBlock::new_from_columns(vec![
+                Int64Type::from_data(range(start, end, step).into_iter()),
+            ])))
+        }
+    }
+}
+
+pub fn number_scalars_have_float(scalars: Vec<Scalar>) -> bool {
     for scalar in scalars {
         match scalar {
-            NumberScalar::UInt8(_) => (),
-            NumberScalar::UInt16(_) => (),
-            NumberScalar::UInt32(_) => (),
-            NumberScalar::UInt64(_) => (),
-            NumberScalar::Int8(_) => (),
-            NumberScalar::Int16(_) => (),
-            NumberScalar::Int32(_) => (),
-            NumberScalar::Int64(_) => (),
-            NumberScalar::Float32(_) => return true,
-            NumberScalar::Float64(_) => return true,
+            Scalar::Number(n) => match n {
+                NumberScalar::UInt8(_) => (),
+                NumberScalar::UInt16(_) => (),
+                NumberScalar::UInt32(_) => (),
+                NumberScalar::UInt64(_) => (),
+                NumberScalar::Int8(_) => (),
+                NumberScalar::Int16(_) => (),
+                NumberScalar::Int32(_) => (),
+                NumberScalar::Int64(_) => (),
+                NumberScalar::Float32(_) => return true,
+                NumberScalar::Float64(_) => return true,
+            },
+            Scalar::Decimal(_) => return true,
+            _ => (),
         }
     }
     false
