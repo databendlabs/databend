@@ -68,11 +68,11 @@ impl Operator for ProjectSet {
 
     fn compute_required_prop_child(
         &self,
-        ctx: Arc<dyn TableContext>,
-        rel_expr: &RelExpr,
-        child_index: usize,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _child_index: usize,
         required: &RequiredProperty,
     ) -> common_exception::Result<RequiredProperty> {
-        rel_expr.compute_required_prop_child(ctx, child_index, required)
+        Ok(required.clone())
     }
 }
