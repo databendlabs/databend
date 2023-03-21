@@ -65,6 +65,7 @@ use crate::reply::txn_reply_to_api_result;
 use crate::Id;
 
 pub const TXN_MAX_RETRY_TIMES: u32 = 10;
+pub const DEFAULT_MGET_SIZE: usize = 256;
 
 /// Get value that its type is `u64`.
 ///
@@ -577,20 +578,26 @@ pub async fn get_table_names_by_ids(
 ) -> Result<Vec<String>, KVAppError> {
     let mut table_names = vec![];
 
-    for id in ids.iter() {
-        let key = TableIdToName { table_id: *id };
-        let (_table_id_to_name_seq, table_name_opt): (_, Option<DBIdTableName>) =
-            get_pb_value(kv_api, &key).await?;
-
-        match table_name_opt {
-            Some(table_name) => table_names.push(table_name.table_name),
-            None => {
-                return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(*id, "get_table_names_by_ids"),
-                )));
+    let keys: Vec<String> = ids
+        .iter()
+        .map(|id| TableIdToName { table_id: *id }.to_string_key())
+        .collect();
+    let mut id_iter = ids.iter();
+    for c in keys.chunks(DEFAULT_MGET_SIZE) {
+        let table_seq_name: Vec<(u64, Option<DBIdTableName>)> = mget_pb_values(kv_api, c).await?;
+        for (_seq, table_name_opt) in table_seq_name {
+            let id = id_iter.next().unwrap();
+            match table_name_opt {
+                Some(table_name) => table_names.push(table_name.table_name),
+                None => {
+                    return Err(KVAppError::AppError(AppError::UnknownTableId(
+                        UnknownTableId::new(*id, "get_table_names_by_ids"),
+                    )));
+                }
             }
         }
     }
+
     Ok(table_names)
 }
 
@@ -651,16 +658,41 @@ pub async fn get_tableinfos_by_ids(
     Ok(tb_infos)
 }
 
+pub async fn list_tables_from_unshare_db(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    db_id: u64,
+    tenant_dbname: &DatabaseNameIdent,
+) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
+    // List tables by tenant, db_id, table_name.
+
+    let dbid_tbname = DBIdTableName {
+        db_id,
+        // Use empty name to scan all tables
+        table_name: "".to_string(),
+    };
+
+    let (dbid_tbnames, ids) = list_u64_value(kv_api, &dbid_tbname).await?;
+
+    get_tableinfos_by_ids(
+        kv_api,
+        &ids,
+        tenant_dbname,
+        Some(dbid_tbnames),
+        DatabaseType::NormalDB,
+    )
+    .await
+}
+
 pub async fn list_tables_from_share_db(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     share: ShareNameIdent,
     db_id: u64,
-    tenant_dbname: DatabaseNameIdent,
+    tenant_dbname: &DatabaseNameIdent,
 ) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
     let res = get_share_or_err(
         kv_api,
         &share,
-        format!("list_tables_from_share_db: {}", share),
+        format!("list_tables_from_share_db: {}", &share),
     )
     .await;
 
@@ -690,34 +722,9 @@ pub async fn list_tables_from_share_db(
     get_tableinfos_by_ids(
         kv_api,
         &ids,
-        &tenant_dbname,
+        tenant_dbname,
         None,
         DatabaseType::ShareDB(share),
-    )
-    .await
-}
-
-pub async fn list_tables_from_unshare_db(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    db_id: u64,
-    tenant_dbname: &DatabaseNameIdent,
-) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
-    // List tables by tenant, db_id, table_name.
-
-    let dbid_tbname = DBIdTableName {
-        db_id,
-        // Use empty name to scan all tables
-        table_name: "".to_string(),
-    };
-
-    let (dbid_tbnames, ids) = list_u64_value(kv_api, &dbid_tbname).await?;
-
-    get_tableinfos_by_ids(
-        kv_api,
-        &ids,
-        tenant_dbname,
-        Some(dbid_tbnames),
-        DatabaseType::NormalDB,
     )
     .await
 }

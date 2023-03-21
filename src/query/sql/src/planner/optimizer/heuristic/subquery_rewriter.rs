@@ -147,6 +147,7 @@ impl SubqueryRewriter {
     ) -> Result<(ScalarExpr, SExpr)> {
         match scalar {
             ScalarExpr::BoundColumnRef(_) => Ok((scalar.clone(), s_expr.clone())),
+            ScalarExpr::BoundInternalColumnRef(_) => Ok((scalar.clone(), s_expr.clone())),
 
             ScalarExpr::ConstantExpr(_) => Ok((scalar.clone(), s_expr.clone())),
 
@@ -204,6 +205,8 @@ impl SubqueryRewriter {
                 ))
             }
 
+            ScalarExpr::WindowFunction(_) => Ok((scalar.clone(), s_expr.clone())),
+
             ScalarExpr::AggregateFunction(_) => Ok((scalar.clone(), s_expr.clone())),
 
             ScalarExpr::FunctionCall(func) => {
@@ -216,6 +219,7 @@ impl SubqueryRewriter {
                 }
 
                 let expr: ScalarExpr = FunctionCall {
+                    span: func.span,
                     params: func.params.clone(),
                     arguments: args,
                     func_name: func.func_name.clone(),
@@ -229,6 +233,7 @@ impl SubqueryRewriter {
                 let (scalar, s_expr) = self.try_rewrite_subquery(&cast.argument, s_expr, false)?;
                 Ok((
                     CastExpr {
+                        span: cast.span,
                         is_try: cast.is_try,
                         argument: Box::new(scalar),
                         target_type: cast.target_type.clone(),
@@ -279,6 +284,7 @@ impl SubqueryRewriter {
                 if matches!(result, UnnestResult::SimpleJoin) {
                     return Ok((
                         ScalarExpr::ConstantExpr(ConstantExpr {
+                            span: subquery.span,
                             value: Literal::Boolean(true),
                             data_type: Box::new(DataType::Boolean),
                         }),
@@ -310,6 +316,7 @@ impl SubqueryRewriter {
                 };
 
                 let column_ref = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: subquery.span,
                     column: ColumnBinding {
                         database_name: None,
                         table_name: None,
@@ -321,13 +328,15 @@ impl SubqueryRewriter {
                 });
 
                 let scalar = if flatten_info.from_count_func {
-                    // convert count aggregate function to multi_if function, if count() is not null, then count() else 0
+                    // convert count aggregate function to `if(count() is not null, count(), 0)`
                     let is_not_null = ScalarExpr::FunctionCall(FunctionCall {
+                        span: subquery.span,
+                        func_name: "is_not_null".to_string(),
                         params: vec![],
                         arguments: vec![column_ref.clone()],
-                        func_name: "is_not_null".to_string(),
                     });
                     let cast_column_ref_to_uint64 = ScalarExpr::CastExpr(CastExpr {
+                        span: subquery.span,
                         is_try: true,
                         argument: Box::new(column_ref),
                         target_type: Box::new(
@@ -335,14 +344,17 @@ impl SubqueryRewriter {
                         ),
                     });
                     let zero = ScalarExpr::ConstantExpr(ConstantExpr {
+                        span: subquery.span,
                         value: Literal::Int64(0),
                         data_type: Box::new(
                             DataType::Number(NumberDataType::Int64).wrap_nullable(),
                         ),
                     });
                     ScalarExpr::CastExpr(CastExpr {
+                        span: subquery.span,
                         is_try: true,
                         argument: Box::new(ScalarExpr::FunctionCall(FunctionCall {
+                            span: subquery.span,
                             params: vec![],
                             arguments: vec![is_not_null, cast_column_ref_to_uint64, zero],
                             func_name: "if".to_string(),
@@ -420,6 +432,8 @@ impl SubqueryRewriter {
                     from_distinct: false,
                     mode: AggregateMode::Initial,
                     limit: None,
+                    grouping_id_index: 0,
+                    grouping_sets: vec![],
                 };
 
                 let compare = ComparisonExpr {
@@ -430,6 +444,7 @@ impl SubqueryRewriter {
                     },
                     left: Box::new(
                         BoundColumnRef {
+                            span: subquery.span,
                             column: ColumnBinding {
                                 database_name: None,
                                 table_name: None,
@@ -443,6 +458,7 @@ impl SubqueryRewriter {
                     ),
                     right: Box::new(
                         ConstantExpr {
+                            span: subquery.span,
                             value: common_expression::Literal::UInt64(1),
                             data_type: Box::new(UInt64Type::data_type().wrap_nullable()),
                         }
@@ -480,6 +496,7 @@ impl SubqueryRewriter {
                 let column_name = format!("subquery_{}", output_column.index);
                 let left_condition = wrap_cast(
                     &ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: subquery.span,
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,

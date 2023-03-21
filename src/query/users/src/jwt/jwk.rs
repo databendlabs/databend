@@ -17,8 +17,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use base64::decode_config;
-use base64::URL_SAFE_NO_PAD;
+use base64::engine::general_purpose;
+use base64::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use jwt_simple::prelude::ES256PublicKey;
@@ -55,7 +55,8 @@ pub struct JwkKey {
 }
 
 fn decode(v: &str) -> Result<Vec<u8>> {
-    decode_config(v.as_bytes(), URL_SAFE_NO_PAD)
+    general_purpose::URL_SAFE_NO_PAD
+        .decode(v.as_bytes())
         .map_err(|e| ErrorCode::InvalidConfig(e.to_string()))
 }
 

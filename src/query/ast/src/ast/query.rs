@@ -82,9 +82,24 @@ pub struct SelectStmt {
     // `WHERE` clause
     pub selection: Option<Expr>,
     // `GROUP BY` clause
-    pub group_by: Vec<Expr>,
+    pub group_by: Option<GroupBy>,
     // `HAVING` clause
     pub having: Option<Expr>,
+}
+
+/// Group by Clause.
+#[derive(Debug, Clone, PartialEq)]
+pub enum GroupBy {
+    /// GROUP BY expr [, expr]*
+    Normal(Vec<Expr>),
+    /// GROUP BY GROUPING SETS ( GroupSet [, GroupSet]* )
+    ///
+    /// GroupSet := (expr [, expr]*) | expr
+    GroupingSets(Vec<Vec<Expr>>),
+    /// GROUP BY CUBE ( expr [, expr]* )
+    Cube(Vec<Expr>),
+    /// GROUP BY ROLLUP ( expr [, expr]* )
+    Rollup(Vec<Expr>),
 }
 
 /// A relational set expression, like `SELECT ... FROM ... {UNION|EXCEPT|INTERSECT} SELECT ... FROM ...`
@@ -139,7 +154,7 @@ pub enum Indirection {
     // Field name
     Identifier(Identifier),
     // Wildcard star
-    Star,
+    Star(Span),
 }
 
 /// Time Travel specification
@@ -222,6 +237,16 @@ pub enum JoinCondition {
     Using(Vec<Identifier>),
     Natural,
     None,
+}
+
+impl SetExpr {
+    pub fn span(&self) -> Span {
+        match self {
+            SetExpr::Select(stmt) => stmt.span,
+            SetExpr::Query(query) => query.span,
+            SetExpr::SetOperation(op) => op.span,
+        }
+    }
 }
 
 impl Display for OrderByExpr {
@@ -388,7 +413,7 @@ impl Display for Indirection {
             Indirection::Identifier(ident) => {
                 write!(f, "{ident}")?;
             }
-            Indirection::Star => {
+            Indirection::Star(_) => {
                 write!(f, "*")?;
             }
         }
@@ -442,9 +467,35 @@ impl Display for SelectStmt {
         }
 
         // GROUP BY clause
-        if !self.group_by.is_empty() {
+        if self.group_by.is_some() {
             write!(f, " GROUP BY ")?;
-            write_comma_separated_list(f, &self.group_by)?;
+            match self.group_by.as_ref().unwrap() {
+                GroupBy::Normal(exprs) => {
+                    write_comma_separated_list(f, exprs)?;
+                }
+                GroupBy::GroupingSets(sets) => {
+                    write!(f, "GROUPING SETS (")?;
+                    for (i, set) in sets.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "(")?;
+                        write_comma_separated_list(f, set)?;
+                        write!(f, ")")?;
+                    }
+                    write!(f, ")")?;
+                }
+                GroupBy::Cube(exprs) => {
+                    write!(f, "CUBE (")?;
+                    write_comma_separated_list(f, exprs)?;
+                    write!(f, ")")?;
+                }
+                GroupBy::Rollup(exprs) => {
+                    write!(f, "ROLLUP (")?;
+                    write_comma_separated_list(f, exprs)?;
+                    write!(f, ")")?;
+                }
+            }
         }
 
         // HAVING clause

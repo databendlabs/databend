@@ -74,6 +74,7 @@ impl FuseTable {
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta,
+                    copied_files: None,
                 })
                 .await?;
 

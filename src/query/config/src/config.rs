@@ -1215,18 +1215,6 @@ pub struct QueryConfig {
     #[clap(skip)]
     pub jwt_key_files: Vec<String>,
 
-    /// The maximum memory size of the buffered data collected per insert before being inserted.
-    #[clap(long, default_value = "10000")]
-    pub async_insert_max_data_size: u64,
-
-    /// The maximum timeout in milliseconds since the first insert before inserting collected data.
-    #[clap(long, default_value = "200")]
-    pub async_insert_busy_timeout: u64,
-
-    /// The maximum timeout in milliseconds since the last insert before inserting collected data.
-    #[clap(long, default_value = "0")]
-    pub async_insert_stale_timeout: u64,
-
     #[clap(long, default_value = "auto")]
     pub default_storage_format: String,
 
@@ -1303,6 +1291,14 @@ pub struct QueryConfig {
     /// Max bytes of cached bloom filter bytes.
     #[clap(long)]
     pub(crate) table_cache_bloom_index_data_bytes: Option<u64>,
+
+    /// Disable some system load(For example system.configs) for cloud security.
+    #[clap(long)]
+    pub disable_system_table_load: bool,
+
+    // This will not show in system.configs, put it to mask.rs.
+    #[clap(long, default_value = "")]
+    pub openai_api_key: String,
 }
 
 impl Default for QueryConfig {
@@ -1349,9 +1345,6 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             management_mode: self.management_mode,
             jwt_key_file: self.jwt_key_file,
             jwt_key_files: self.jwt_key_files,
-            async_insert_max_data_size: self.async_insert_max_data_size,
-            async_insert_busy_timeout: self.async_insert_busy_timeout,
-            async_insert_stale_timeout: self.async_insert_stale_timeout,
             default_storage_format: self.default_storage_format,
             default_compression: self.default_compression,
             idm: InnerIDMConfig {
@@ -1362,6 +1355,8 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             tenant_quota: self.quota,
             internal_enable_sandbox_tenant: self.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: self.internal_merge_on_read_mutation,
+            disable_system_table_load: self.disable_system_table_load,
+            openai_api_key: self.openai_api_key,
         })
     }
 }
@@ -1409,9 +1404,6 @@ impl From<InnerQueryConfig> for QueryConfig {
             management_mode: inner.management_mode,
             jwt_key_file: inner.jwt_key_file,
             jwt_key_files: inner.jwt_key_files,
-            async_insert_max_data_size: inner.async_insert_max_data_size,
-            async_insert_busy_timeout: inner.async_insert_busy_timeout,
-            async_insert_stale_timeout: inner.async_insert_stale_timeout,
             default_storage_format: inner.default_storage_format,
             default_compression: inner.default_compression,
 
@@ -1433,6 +1425,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_cache_bloom_index_meta_count: None,
             table_cache_bloom_index_filter_count: None,
             table_cache_bloom_index_data_bytes: None,
+            disable_system_table_load: inner.disable_system_table_load,
+            openai_api_key: inner.openai_api_key,
         }
     }
 }

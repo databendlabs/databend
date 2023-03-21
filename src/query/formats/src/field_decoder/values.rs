@@ -173,7 +173,6 @@ impl FieldDecoderRowBased for FieldDecoderValues {
             // check duplicate map keys
             let key = map_builder[KEY].pop().unwrap();
             if set.contains(&key) {
-                column.commit_row();
                 return Err(ErrorCode::BadBytes(
                     "map keys have to be unique".to_string(),
                 ));

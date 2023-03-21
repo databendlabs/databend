@@ -64,13 +64,12 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableCopiedFileReply;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
 use common_settings::Settings;
 use common_storage::DataOperator;
+use common_storage::StageFileInfo;
 use common_storages_fuse::operations::AppendOperationLogEntry;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
@@ -210,7 +209,7 @@ async fn test_abort_on_error() -> Result<()> {
             };
             let ctx = Arc::new(CtxDelegation::new(ctx, faked_catalog));
             let r = fuse_table
-                .commit_with_max_retry_elapsed(ctx, log, self.max_retry_time, overwrite)
+                .commit_with_max_retry_elapsed(ctx, log, None, self.max_retry_time, overwrite)
                 .await;
             if self.update_meta_error.is_some() {
                 assert_eq!(
@@ -379,7 +378,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn attach_query_str(&self, _kind: String, _query: &str) {
+    fn attach_query_str(&self, _kind: String, _query: String) {
         todo!()
     }
 
@@ -508,6 +507,16 @@ impl TableContext for CtxDelegation {
     ) -> Result<Arc<dyn Table>> {
         todo!()
     }
+
+    async fn color_copied_files(
+        &self,
+        _catalog_name: &str,
+        _database_name: &str,
+        _table_name: &str,
+        _files: Vec<StageFileInfo>,
+    ) -> Result<Vec<StageFileInfo>> {
+        todo!()
+    }
 }
 
 #[derive(Clone)]
@@ -618,15 +627,6 @@ impl Catalog for FakedCatalog {
         _db_name: &str,
         _req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
-        todo!()
-    }
-
-    async fn upsert_table_copied_file_info(
-        &self,
-        _tenant: &str,
-        _db_name: &str,
-        _req: UpsertTableCopiedFileReq,
-    ) -> Result<UpsertTableCopiedFileReply> {
         todo!()
     }
 

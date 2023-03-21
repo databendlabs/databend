@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
+use common_sql::binder::INTERNAL_COLUMN_FACTORY;
 use common_sql::plans::AddTableColumnPlan;
 use common_storages_view::view_table::VIEW_ENGINE;
 
@@ -81,6 +82,14 @@ impl Interpreter for AddTableColumnInterpreter {
                     } else {
                         field
                     };
+
+                if INTERNAL_COLUMN_FACTORY.exist(field.name()) {
+                    return Err(ErrorCode::TableWithInternalColumnName(format!(
+                        "Cannot alter table to add a column with the same name as internal column: {}",
+                        field.name()
+                    )));
+                }
+
                 fields.push(field)
             }
             new_table_meta.add_columns(&fields, &self.plan.field_comments)?;
@@ -92,6 +101,7 @@ impl Interpreter for AddTableColumnInterpreter {
                 table_id,
                 seq: MatchSeq::Exact(table_version),
                 new_table_meta,
+                copied_files: None,
             };
 
             catalog.update_table_meta(table_info, req).await?;

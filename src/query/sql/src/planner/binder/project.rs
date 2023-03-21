@@ -21,6 +21,7 @@ use common_ast::ast::QualifiedName;
 use common_ast::ast::SelectTarget;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::Span;
 
 use crate::binder::select::SelectItem;
 use crate::binder::select::SelectList;
@@ -58,6 +59,7 @@ impl Binder {
                 self.create_column_binding(None, None, item.alias.clone(), item.scalar.data_type()?)
             };
             let scalar = if let ScalarExpr::SubqueryExpr(SubqueryExpr {
+                span,
                 typ,
                 subquery,
                 child_expr,
@@ -70,6 +72,7 @@ impl Binder {
             {
                 if typ == SubqueryType::Any || typ == SubqueryType::Exists {
                     ScalarExpr::SubqueryExpr(SubqueryExpr {
+                        span,
                         typ,
                         subquery,
                         child_expr,
@@ -148,7 +151,7 @@ impl Binder {
     /// in this function.
     pub(super) async fn normalize_select_list<'a>(
         &mut self,
-        input_context: &BindContext,
+        input_context: &mut BindContext,
         select_list: &'a [SelectTarget],
     ) -> Result<SelectList<'a>> {
         let mut output = SelectList::default();
@@ -169,8 +172,13 @@ impl Binder {
                             return Err(ErrorCode::SemanticError("duplicate column name"));
                         }
                     }
+                    let span = match names.last() {
+                        Some(Indirection::Star(span)) => *span,
+                        _ => None,
+                    };
                     match names.len() {
                         1 | 2 => self.resolve_qualified_name_without_database_name(
+                            span,
                             input_context,
                             names,
                             exclude_cols,
@@ -178,6 +186,7 @@ impl Binder {
                             &mut output,
                         )?,
                         3 => self.resolve_qualified_name_with_database_name(
+                            span,
                             input_context,
                             names,
                             exclude_cols,
@@ -196,6 +205,14 @@ impl Binder {
                         &[],
                     );
                     let (bound_expr, _) = scalar_binder.bind(expr).await?;
+                    // if `Expr` is internal column, then add this internal column into `BindContext`
+                    if let ScalarExpr::BoundInternalColumnRef(ref internal_column) = bound_expr {
+                        // add internal column binding into `BindContext`
+                        input_context.add_internal_column_binding(
+                            &internal_column.column,
+                            self.metadata.clone(),
+                        );
+                    }
 
                     // If alias is not specified, we will generate a name for the scalar expression.
                     let expr_name = match alias {
@@ -216,6 +233,7 @@ impl Binder {
 
     fn resolve_qualified_name_without_database_name<'a>(
         &self,
+        span: Span,
         input_context: &BindContext,
         names: &QualifiedName,
         exclude_cols: HashSet<String>,
@@ -225,7 +243,7 @@ impl Binder {
         let mut match_table = false;
         let empty_exclude = exclude_cols.is_empty();
         let table_name = match &names[0] {
-            Indirection::Star => None,
+            Indirection::Star(_) => None,
             Indirection::Identifier(table_name) => Some(table_name),
         };
         let star = table_name.is_none();
@@ -245,6 +263,7 @@ impl Binder {
                     output.items.push(SelectItem {
                         select_target,
                         scalar: BoundColumnRef {
+                            span,
                             column: column_binding.clone(),
                         }
                         .into(),
@@ -263,6 +282,7 @@ impl Binder {
                     output.items.push(SelectItem {
                         select_target,
                         scalar: BoundColumnRef {
+                            span,
                             column: column_binding.clone(),
                         }
                         .into(),
@@ -275,13 +295,15 @@ impl Binder {
             return Err(ErrorCode::UnknownTable(format!(
                 "Unknown table '{}'",
                 table_name.unwrap().name
-            )));
+            ))
+            .set_span(span));
         }
         Ok(())
     }
 
     fn resolve_qualified_name_with_database_name<'a>(
         &self,
+        span: Span,
         input_context: &BindContext,
         names: &QualifiedName,
         exclude_cols: HashSet<String>,
@@ -328,6 +350,7 @@ impl Binder {
                         output.items.push(SelectItem {
                             select_target,
                             scalar: BoundColumnRef {
+                                span,
                                 column: column_binding.clone(),
                             }
                             .into(),
@@ -340,7 +363,8 @@ impl Binder {
                         "Unknown table '{}'.'{}'",
                         db_name.name.clone(),
                         table_name.name.clone()
-                    )));
+                    ))
+                    .set_span(span));
                 }
             }
             _ => {

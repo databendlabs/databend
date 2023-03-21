@@ -12,23 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::hash::Hash;
 
+use common_ast::ast::Query;
 use common_ast::ast::TableAlias;
+use common_catalog::plan::InternalColumn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
 use common_expression::types::DataType;
+use common_expression::ColumnId;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use dashmap::DashMap;
 
 use super::AggregateInfo;
+use super::INTERNAL_COLUMN_FACTORY;
+use crate::binder::window::WindowInfo;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::plans::ScalarExpr;
+use crate::ColumnSet;
 use crate::IndexType;
+use crate::MetadataRef;
 use crate::NameResolutionContext;
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -73,9 +81,36 @@ impl Hash for ColumnBinding {
     }
 }
 
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub struct InternalColumnBinding {
+    /// Database name of this `InternalColumnBinding` in current context
+    pub database_name: Option<String>,
+    /// Table name of this `InternalColumnBinding` in current context
+    pub table_name: Option<String>,
+    /// Column index of InternalColumnBinding
+    pub index: IndexType,
+
+    pub internal_column: InternalColumn,
+}
+
+impl PartialEq for InternalColumnBinding {
+    fn eq(&self, other: &Self) -> bool {
+        self.index == other.index
+    }
+}
+
+impl Eq for InternalColumnBinding {}
+
+impl Hash for InternalColumnBinding {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.index.hash(state);
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum NameResolutionResult {
     Column(ColumnBinding),
+    InternalColumn(InternalColumnBinding),
     Alias { alias: String, scalar: ScalarExpr },
 }
 
@@ -86,7 +121,12 @@ pub struct BindContext {
 
     pub columns: Vec<ColumnBinding>,
 
+    // map internal column id to (table_index, column_index)
+    pub bound_internal_columns: BTreeMap<ColumnId, (IndexType, IndexType)>,
+
     pub aggregate_info: AggregateInfo,
+
+    pub windows: Vec<WindowInfo>,
 
     /// True if there is aggregation in current context, which means
     /// non-grouping columns cannot be referenced outside aggregation
@@ -95,14 +135,16 @@ pub struct BindContext {
 
     pub ctes_map: Box<DashMap<String, CteInfo>>,
 
-    pub is_view: bool,
+    /// If current binding table is a view, record its database and name.
+    ///
+    /// It's used to check if the view has a loop dependency.
+    pub view_info: Option<(String, String)>,
 }
 
 #[derive(Clone, Debug)]
 pub struct CteInfo {
     pub columns_alias: Vec<String>,
-    pub s_expr: SExpr,
-    pub bind_context: BindContext,
+    pub query: Query,
 }
 
 impl BindContext {
@@ -110,10 +152,12 @@ impl BindContext {
         Self {
             parent: None,
             columns: Vec::new(),
+            bound_internal_columns: BTreeMap::new(),
             aggregate_info: AggregateInfo::default(),
+            windows: Vec::new(),
             in_grouping: false,
             ctes_map: Box::new(DashMap::new()),
-            is_view: false,
+            view_info: None,
         }
     }
 
@@ -121,10 +165,12 @@ impl BindContext {
         BindContext {
             parent: Some(parent.clone()),
             columns: vec![],
+            bound_internal_columns: BTreeMap::new(),
             aggregate_info: Default::default(),
+            windows: vec![],
             in_grouping: false,
             ctes_map: parent.ctes_map.clone(),
-            is_view: false,
+            view_info: None,
         }
     }
 
@@ -220,6 +266,18 @@ impl BindContext {
                 break;
             }
 
+            // look up internal column
+            if let Some(internal_column) = INTERNAL_COLUMN_FACTORY.get_internal_column(column) {
+                let column_binding = InternalColumnBinding {
+                    database_name: database.map(|n| n.to_owned()),
+                    table_name: table.map(|n| n.to_owned()),
+                    index: bind_context.columns.len(),
+                    internal_column,
+                };
+                result.push(NameResolutionResult::InternalColumn(column_binding));
+                break;
+            }
+
             if let Some(ref parent) = bind_context.parent {
                 bind_context = parent;
             } else {
@@ -299,6 +357,81 @@ impl BindContext {
             })
             .collect();
         DataSchemaRefExt::create(fields)
+    }
+
+    fn get_internal_column_table_index(
+        column_binding: &InternalColumnBinding,
+        metadata: MetadataRef,
+    ) -> (IndexType, Option<String>, Option<String>) {
+        let metadata = metadata.read();
+        let (database_name, table_name) =
+            match (&column_binding.database_name, &column_binding.table_name) {
+                (Some(database_name), Some(table_name)) => {
+                    (Some(database_name.clone()), Some(table_name.clone()))
+                }
+                (None, Some(table_name)) => (None, Some(table_name.clone())),
+                (database_name, None) => {
+                    // If table_name is None, assert that metadata.tables has only one table
+                    debug_assert!(metadata.tables().len() == 1);
+                    return (metadata.table(0).index(), database_name.clone(), None);
+                }
+            };
+
+        (
+            metadata
+                .get_table_index(
+                    database_name.as_deref(),
+                    table_name.as_ref().unwrap().as_str(),
+                )
+                .unwrap(),
+            database_name,
+            table_name,
+        )
+    }
+
+    // Add internal column binding into `BindContext`
+    // Convert `InternalColumnBinding` to `ColumnBinding`
+    pub fn add_internal_column_binding(
+        &mut self,
+        column_binding: &InternalColumnBinding,
+        metadata: MetadataRef,
+    ) {
+        let column_id = column_binding.internal_column.column_id();
+        if let std::collections::btree_map::Entry::Vacant(e) =
+            self.bound_internal_columns.entry(column_id)
+        {
+            // New added internal column MUST at the end of `columns` array.
+            debug_assert_eq!(column_binding.index, self.columns.len());
+
+            let (table_index, database_name, table_name) =
+                BindContext::get_internal_column_table_index(column_binding, metadata.clone());
+
+            let mut metadata = metadata.write();
+            metadata.add_internal_column(table_index, column_binding.internal_column.clone());
+            self.columns.push(ColumnBinding {
+                database_name,
+                table_name,
+                column_name: column_binding.internal_column.column_name().clone(),
+                index: column_binding.index,
+                data_type: Box::new(column_binding.internal_column.data_type()),
+                visibility: Visibility::Visible,
+            });
+
+            e.insert((table_index, column_binding.index));
+        }
+    }
+
+    pub fn add_internal_column_into_expr(&self, s_expr: SExpr) -> SExpr {
+        let bound_internal_columns = &self.bound_internal_columns;
+        let mut s_expr = s_expr;
+        for (table_index, column_index) in bound_internal_columns.values() {
+            s_expr = SExpr::add_internal_column_index(&s_expr, *table_index, *column_index);
+        }
+        s_expr
+    }
+
+    pub fn column_set(&self) -> ColumnSet {
+        self.columns.iter().map(|c| c.index).collect()
     }
 }
 

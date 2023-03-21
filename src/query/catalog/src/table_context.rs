@@ -32,6 +32,7 @@ use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
 use common_settings::Settings;
 use common_storage::DataOperator;
+use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
 
 use crate::catalog::Catalog;
@@ -57,6 +58,7 @@ pub struct ProcessInfo {
     pub scan_progress_value: Option<ProgressValues>,
     pub mysql_connection_id: Option<u32>,
     pub created_time: SystemTime,
+    pub status_info: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -92,7 +94,7 @@ pub trait TableContext: Send + Sync {
     fn get_cacheable(&self) -> bool;
     fn set_cacheable(&self, cacheable: bool);
 
-    fn attach_query_str(&self, kind: String, query: &str);
+    fn attach_query_str(&self, kind: String, query: String);
     fn get_query_str(&self) -> String;
 
     fn get_fragment_id(&self) -> usize;
@@ -132,4 +134,12 @@ pub trait TableContext: Send + Sync {
 
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;
+
+    async fn color_copied_files(
+        &self,
+        catalog_name: &str,
+        database_name: &str,
+        table_name: &str,
+        files: Vec<StageFileInfo>,
+    ) -> Result<Vec<StageFileInfo>>;
 }

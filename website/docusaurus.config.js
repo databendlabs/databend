@@ -31,7 +31,7 @@ const config = {
     },
 
     customFields: {
-        blogTags: ['weekly','databend']
+      blogTags: ['weekly','databend']
     },
 
     presets: [
@@ -80,7 +80,8 @@ const config = {
     ],
     plugins: [
         'docusaurus-plugin-sass',
-        './src/plugins/globalSassVarInject',
+        './src/plugins/global-sass-var-inject',
+        './src/plugins/fetch-databend-releases',
         [
             '@docusaurus/plugin-content-docs',
             /** @type {import('@docusaurus/plugin-content-docs').Options} */
@@ -97,10 +98,12 @@ const config = {
                   },
             },
         ],
+        'plugin-image-zoom'
     ],
     themeConfig:
         /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
         ({
+            zoomSelector: 'article :not(a) > img',
             announcementBar: {
                 id: 'announcementBar-2', // Increment on change
                 content: `⭐️ If you like Databend, give it a star on <a target="_blank" rel="noopener noreferrer" href="https://github.com/datafuselabs/databend">GitHub</a> and follow us on <a target="_blank" rel="noopener noreferrer" href="https://twitter.com/DatabendLabs" >Twitter</a> ${TwitterSvg}`,
@@ -132,7 +135,7 @@ const config = {
                         items: [
                             {
                                 label: 'Performance',
-                                to: '/doc/performance'
+                                to: 'https://databend.rs/blog/clickbench-databend-top'
                             },
                             {
                                 label: 'Deployment',

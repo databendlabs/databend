@@ -157,7 +157,7 @@ Limit
     ├── sort keys: [c ASC NULLS LAST, e ASC NULLS LAST, d ASC NULLS LAST]
     ├── estimated rows: 1.00
     └── EvalScalar
-        ├── expressions: [count(1) (#8), max(a) (#10), count(b) (#9)]
+        ├── expressions: [count(1) (#2), max(a) (#4), count(b) (#3)]
         ├── estimated rows: 1.00
         └── AggregateFinal
             ├── group by: []

@@ -65,6 +65,7 @@ impl RulePushDownFilterScan {
             for column_entry in column_entries {
                 match column_entry {
                     ColumnEntry::BaseTableColumn(_) => {}
+                    ColumnEntry::InternalColumn(_) => {}
                     ColumnEntry::DerivedColumn(column) => {
                         // Don't push down predicate that contains derived column
                         // Because storage can't know such columns.
@@ -93,15 +94,16 @@ impl Rule for RulePushDownFilterScan {
         let filter: Filter = s_expr.plan().clone().try_into()?;
         let mut get: Scan = s_expr.child(0)?.plan().clone().try_into()?;
 
-        if get.push_down_predicates.is_some() {
-            return Ok(());
+        let add_filters = self.find_push_down_predicates(&filter.predicates)?;
+
+        match get.push_down_predicates.as_mut() {
+            Some(vs) => vs.extend(add_filters),
+            None => get.push_down_predicates = Some(add_filters),
         }
 
-        get.push_down_predicates = Some(self.find_push_down_predicates(&filter.predicates)?);
-
-        let result = SExpr::create_unary(filter.into(), SExpr::create_leaf(get.into()));
+        let mut result = SExpr::create_unary(filter.into(), SExpr::create_leaf(get.into()));
+        result.set_applied_rule(&self.id);
         state.add_result(result);
-
         Ok(())
     }
 

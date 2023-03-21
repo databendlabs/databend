@@ -66,7 +66,7 @@ explain select * from (select t1.a from (select number + 1 as a, number + 1 as b
 HashJoin
 ├── join type: INNER
 ├── build keys: [t1.b (#2)]
-├── probe keys: [t2.b (#11)]
+├── probe keys: [t2.b (#7)]
 ├── filters: []
 ├── estimated rows: 0.33
 ├── Filter(Build)
@@ -84,7 +84,7 @@ HashJoin
 │           ├── push downs: [filters: [], limit: NONE]
 │           └── estimated rows: 1.00
 └── EvalScalar(Probe)
-    ├── expressions: [numbers.number (#9) + 1]
+    ├── expressions: [numbers.number (#5) + 1]
     ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.system.numbers
@@ -99,7 +99,7 @@ query T
 explain select t1.a from (select number + 1 as a, number + 1 as b from numbers(1)) as t1 where t1.a = (select count(*) from (select t2.a, t3.a from (select number + 1 as a, number + 1 as b, number + 1 as c, number + 1 as d from numbers(1)) as t2, (select number + 1 as a, number + 1 as b, number + 1 as c from numbers(1)) as t3 where t2.b = t3.b and t2.c = 1))
 ----
 Filter
-├── filters: [is_true(CAST(t1.a (#1) AS UInt64 NULL) = scalar_subquery_21 (#21))]
+├── filters: [is_true(CAST(t1.a (#1) AS UInt64 NULL) = scalar_subquery_13 (#13))]
 ├── estimated rows: 0.33
 └── HashJoin
     ├── join type: SINGLE
@@ -108,7 +108,7 @@ Filter
     ├── filters: []
     ├── estimated rows: 1.00
     ├── EvalScalar(Build)
-    │   ├── expressions: [COUNT(*) (#22)]
+    │   ├── expressions: [COUNT(*) (#12)]
     │   ├── estimated rows: 1.00
     │   └── AggregateFinal
     │       ├── group by: []
@@ -120,15 +120,15 @@ Filter
     │           ├── estimated rows: 1.00
     │           └── HashJoin
     │               ├── join type: INNER
-    │               ├── build keys: [t2.b (#7)]
-    │               ├── probe keys: [t3.b (#16)]
+    │               ├── build keys: [t2.b (#5)]
+    │               ├── probe keys: [t3.b (#10)]
     │               ├── filters: []
     │               ├── estimated rows: 0.33
     │               ├── Filter(Build)
-    │               │   ├── filters: [t2.c (#8) = 1]
+    │               │   ├── filters: [t2.c (#6) = 1]
     │               │   ├── estimated rows: 0.33
     │               │   └── EvalScalar
-    │               │       ├── expressions: [numbers.number (#5) + 1, numbers.number (#5) + 1]
+    │               │       ├── expressions: [numbers.number (#3) + 1, numbers.number (#3) + 1]
     │               │       ├── estimated rows: 1.00
     │               │       └── TableScan
     │               │           ├── table: default.system.numbers
@@ -139,7 +139,7 @@ Filter
     │               │           ├── push downs: [filters: [], limit: NONE]
     │               │           └── estimated rows: 1.00
     │               └── EvalScalar(Probe)
-    │                   ├── expressions: [numbers.number (#14) + 1]
+    │                   ├── expressions: [numbers.number (#8) + 1]
     │                   ├── estimated rows: 1.00
     │                   └── TableScan
     │                       ├── table: default.system.numbers
@@ -231,7 +231,7 @@ query T
 explain select count(*) from t where t.b = 2
 ----
 EvalScalar
-├── expressions: [COUNT(*) (#3)]
+├── expressions: [COUNT(*) (#2)]
 ├── estimated rows: 1.00
 └── AggregateFinal
     ├── group by: []

@@ -43,7 +43,9 @@ anyhow = { workspace = true }
 async-recursion = "1.0.0"
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 chrono = { workspace = true }
+ctor = "0.1.26"
 dashmap = "5.4"
+educe = "0.4"
 globiter = "0.1"
 itertools = "0.10.5"
 num-derive = "0.3.3"

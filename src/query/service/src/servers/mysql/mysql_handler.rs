@@ -104,6 +104,7 @@ impl MySQLHandler {
                 Ok(session) => {
                     info!("MySQL connection coming: {:?}", socket.peer_addr());
 
+                    // TcpStream must implement AsFd for socket2 0.5, wait https://github.com/tokio-rs/tokio/pull/5514
                     if let Err(e) = SockRef::from(&socket).set_tcp_keepalive(&keepalive) {
                         warn!("failed to set socket option keepalive {}", e);
                     }

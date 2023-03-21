@@ -110,23 +110,26 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
         rule! {
             ( #ident ~ "." ~ ( #ident ~ "." )? )? ~ "*" ~ ( EXCLUDE ~ #exclude_col )?
         },
-        |(res, _, opt_exclude)| {
+        |(res, star, opt_exclude)| {
             let exclude = opt_exclude.map(|(_, exclude)| exclude);
             match res {
                 Some((fst, _, Some((snd, _)))) => SelectTarget::QualifiedName {
                     qualified: vec![
                         Indirection::Identifier(fst),
                         Indirection::Identifier(snd),
-                        Indirection::Star,
+                        Indirection::Star(Some(star.span)),
                     ],
                     exclude,
                 },
                 Some((fst, _, None)) => SelectTarget::QualifiedName {
-                    qualified: vec![Indirection::Identifier(fst), Indirection::Star],
+                    qualified: vec![
+                        Indirection::Identifier(fst),
+                        Indirection::Star(Some(star.span)),
+                    ],
                     exclude,
                 },
                 None => SelectTarget::QualifiedName {
-                    qualified: vec![Indirection::Star],
+                    qualified: vec![Indirection::Star(Some(star.span))],
                     exclude,
                 },
             }
@@ -555,7 +558,7 @@ pub enum SetOperationElement {
         select_list: Box<Vec<SelectTarget>>,
         from: Box<Vec<TableReference>>,
         selection: Box<Option<Expr>>,
-        group_by: Box<Vec<Expr>>,
+        group_by: Option<GroupBy>,
         having: Box<Option<Expr>>,
     },
     SetOperation {
@@ -563,6 +566,33 @@ pub enum SetOperationElement {
         all: bool,
     },
     Group(SetExpr),
+}
+
+pub fn group_by_items(i: Input) -> IResult<GroupBy> {
+    let normal = map(rule! { ^#comma_separated_list1(expr) }, |groups| {
+        GroupBy::Normal(groups)
+    });
+    let cube = map(
+        rule! { CUBE ~ "(" ~ ^#comma_separated_list1(expr) ~ ")" },
+        |(_, _, groups, _)| GroupBy::Cube(groups),
+    );
+    let rollup = map(
+        rule! { ROLLUP ~ "(" ~ ^#comma_separated_list1(expr) ~ ")" },
+        |(_, _, groups, _)| GroupBy::Rollup(groups),
+    );
+    let group_set = alt((
+        map(rule! {"(" ~ ")"}, |(_, _)| vec![]), // empty grouping set
+        map(
+            rule! {"(" ~ #comma_separated_list1(expr) ~ ")"},
+            |(_, sets, _)| sets,
+        ),
+        map(rule! { #expr }, |e| vec![e]),
+    ));
+    let group_sets = map(
+        rule! { GROUPING ~ SETS ~ "(" ~ ^#comma_separated_list1(group_set) ~ ")"  },
+        |(_, _, _, sets, _)| GroupBy::GroupingSets(sets),
+    );
+    rule!(#group_sets | #cube | #rollup | #normal)(i)
 }
 
 pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>> {
@@ -588,7 +618,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
              SELECT ~ DISTINCT? ~ ^#comma_separated_list1(select_target)
                 ~ ( FROM ~ ^#comma_separated_list1(table_reference) )?
                 ~ ( WHERE ~ ^#expr )?
-                ~ ( GROUP ~ ^BY ~ ^#comma_separated_list1(expr) )?
+                ~ ( GROUP ~ ^BY ~ ^#group_by_items )?
                 ~ ( HAVING ~ ^#expr )?
         },
         |(
@@ -609,11 +639,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
                         .unwrap_or_default(),
                 ),
                 selection: Box::new(opt_where_block.map(|(_, selection)| selection)),
-                group_by: Box::new(
-                    opt_group_by_block
-                        .map(|(_, _, group_by)| group_by)
-                        .unwrap_or_default(),
-                ),
+                group_by: opt_group_by_block.map(|(_, _, group_by)| group_by),
                 having: Box::new(opt_having_block.map(|(_, having)| having)),
             }
         },
@@ -667,7 +693,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 select_list: *select_list,
                 from: *from,
                 selection: *selection,
-                group_by: *group_by,
+                group_by,
                 having: *having,
             })),
             _ => unreachable!(),

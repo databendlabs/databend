@@ -59,6 +59,7 @@ fn normalize_falsy_predicate(predicates: Vec<ScalarExpr>) -> Vec<ScalarExpr> {
     if predicates.iter().any(is_falsy) {
         vec![
             ConstantExpr {
+                span: None,
                 value: Literal::Boolean(false),
                 data_type: Box::new(DataType::Boolean),
             }

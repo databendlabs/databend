@@ -2,6 +2,11 @@ name: Dev Linux
 
 on:
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
     branches:
       - main
     paths-ignore:
@@ -11,6 +16,9 @@ on:
       - "docker/**"
       - "scripts/setup/**"
       - ".devcontainer/**"
+  merge_group:
+    types:
+      - checks_requested
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
@@ -19,9 +27,6 @@ concurrency:
 env:
   BUILD_PROFILE: debug
   RUNNER_PROVIDER: aws
-  CARGO_INCREMENTAL: 0
-  # Remove this env after rust 1.68 has been released.
-  CARGO_UNSTABLE_SPARSE_REGISTRY: true
 
 jobs:
   check:
@@ -171,11 +176,10 @@ jobs:
         with:
           name: test-sqllogic-standalone-${{ matrix.handlers }}-${{ matrix.dirs }}
 
-
   test_sqllogic_management_mode_linux:
     timeout-minutes: 30
     name: test_sqllogic_${{ matrix.dirs }}_linux
-    runs-on: [ self-hosted, X64, Linux, dev ]
+    runs-on: [self-hosted, X64, Linux, dev]
     needs: build_gnu
     strategy:
       matrix:
@@ -218,7 +222,6 @@ jobs:
         with:
           name: test-sqllogic-cluster-${{ matrix.handlers }}-${{ matrix.dirs }}
 
-
   test_stateless_standalone_linux:
     timeout-minutes: 20
     runs-on: [self-hosted, X64, Linux, dev]
@@ -250,6 +253,15 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_cluster_linux
+
+  test_stateful_large_data:
+    timeout-minutes: 60
+    if: contains(github.event.pull_request.labels.*.name, 'ci-largedata')
+    runs-on: [self-hosted, X64, Linux, dev]
+    needs: build_gnu
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/test_stateful_large_data
 
   test_fuzz_standalone_linux:
     timeout-minutes: 10

@@ -35,12 +35,16 @@ use common_expression::types::DateType;
 use common_expression::types::GenericType;
 use common_expression::types::NullType;
 use common_expression::types::NullableType;
+use common_expression::types::NumberColumn;
+use common_expression::types::NumberDataType;
+use common_expression::types::NumberScalar;
 use common_expression::types::NumberType;
 use common_expression::types::SimpleDomain;
 use common_expression::types::StringType;
 use common_expression::types::TimestampType;
 use common_expression::types::ValueType;
 use common_expression::vectorize_with_builder_1_arg;
+use common_expression::Column;
 use common_expression::Domain;
 use common_expression::EvalContext;
 use common_expression::Function;
@@ -49,6 +53,7 @@ use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::Scalar;
+use common_expression::ScalarRef;
 use common_expression::Value;
 use common_expression::ValueRef;
 use ordered_float::OrderedFloat;
@@ -66,6 +71,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_inet_aton(registry);
     register_inet_ntoa(registry);
     register_run_diff(registry);
+    register_grouping(registry);
 
     registry.register_passthrough_nullable_1_arg::<Float64Type, StringType, _, _>(
         "humanize_size",
@@ -93,28 +99,31 @@ pub fn register(registry: &mut FunctionRegistry) {
         "sleep",
         FunctionProperty::default(),
         |_| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<Float64Type, UInt8Type>(move |val, output, ctx| {
-            let duration = Duration::try_from_secs_f64(val.into()).map_err(|x| x.to_string());
-            match duration {
-                Ok(duration) => {
-                    if duration.gt(&Duration::from_secs(300)) {
-                        let err = format!(
-                            "The maximum sleep time is 300 seconds. Requested: {:?}",
-                            duration
-                        );
-                        ctx.set_error(output.len(), err);
-                        output.push(0);
-                    } else {
-                        std::thread::sleep(duration);
-                        output.push(1);
+        |a, ctx| {
+            if let Some(val) = a.as_scalar() {
+                let duration =
+                    Duration::try_from_secs_f64((*val).into()).map_err(|x| x.to_string());
+                match duration {
+                    Ok(duration) => {
+                        if duration.gt(&Duration::from_secs(300)) {
+                            let err = format!(
+                                "The maximum sleep time is 300 seconds. Requested: {:?}",
+                                duration
+                            );
+                            ctx.set_error(0, err);
+                        } else {
+                            std::thread::sleep(duration);
+                        }
+                    }
+                    Err(e) => {
+                        ctx.set_error(0, e);
                     }
                 }
-                Err(e) => {
-                    ctx.set_error(output.len(), e);
-                    output.push(0);
-                }
+            } else {
+                ctx.set_error(0, "Must be constant value");
             }
-        }),
+            Value::Scalar(0_u8)
+        },
     );
 
     registry.register_0_arg_core::<NumberType<F64>, _, _>(
@@ -342,4 +351,49 @@ fn register_run_diff(registry: &mut FunctionRegistry) {
         F64,
         OrderedFloat(0.0)
     );
+}
+
+fn register_grouping(registry: &mut FunctionRegistry) {
+    registry.register_function_factory("grouping", |params, arg_type| {
+        if arg_type.len() != 1 {
+            return None;
+        }
+
+        let params = params.to_vec();
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "grouping".to_string(),
+                args_type: vec![DataType::Number(NumberDataType::UInt32)],
+                return_type: DataType::Number(NumberDataType::UInt32),
+                property: FunctionProperty::default(),
+            },
+            calc_domain: Box::new(|_| FunctionDomain::Full),
+            eval: Box::new(move |args, _| match &args[0] {
+                ValueRef::Scalar(ScalarRef::Number(NumberScalar::UInt32(v))) => Value::Scalar(
+                    Scalar::Number(NumberScalar::UInt32(compute_grouping(&params, *v))),
+                ),
+                ValueRef::Column(Column::Number(NumberColumn::UInt32(col))) => {
+                    let output = col
+                        .iter()
+                        .map(|v| compute_grouping(&params, *v))
+                        .collect::<Vec<_>>();
+                    Value::Column(Column::Number(NumberColumn::UInt32(output.into())))
+                }
+                _ => unreachable!(),
+            }),
+        }))
+    })
+}
+
+/// Compute `grouping` by `grouping_id` and `cols`.
+///
+/// `cols` are indices of the column represented in `_grouping_id`.
+/// The order will influence the result of `grouping`.
+#[inline(always)]
+pub fn compute_grouping(cols: &[usize], grouping_id: u32) -> u32 {
+    let mut grouping = 0;
+    for (i, &j) in cols.iter().rev().enumerate() {
+        grouping |= ((grouping_id & (1 << j)) >> j) << i;
+    }
+    grouping
 }

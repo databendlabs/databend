@@ -20,6 +20,7 @@ use common_catalog::plan::DataSourcePlan;
 use common_expression::TableSchemaRef;
 use common_meta_app::principal::StageInfo;
 use common_meta_types::MetaId;
+use common_storage::StageFileInfo;
 
 use crate::plans::Plan;
 
@@ -65,6 +66,19 @@ pub enum CopyPlan {
         from: Box<DataSourcePlan>,
         force: bool,
     },
+    IntoTableWithTransform {
+        catalog_name: String,
+        database_name: String,
+        table_name: String,
+        table_id: MetaId,
+        schema: TableSchemaRef,
+        stage_info: Box<StageInfo>,
+        validation_mode: ValidationMode,
+        from: Box<Plan>,
+        all_source_file_infos: Vec<StageFileInfo>,
+        need_copy_file_infos: Vec<StageFileInfo>,
+        force: bool,
+    },
     IntoStage {
         stage: Box<StageInfo>,
         path: String,
@@ -89,6 +103,17 @@ impl Debug for CopyPlan {
                 write!(f, ", validation_mode: {validation_mode:?}")?;
                 write!(f, ", from: {from:?}")?;
                 write!(f, " force: {force}")?;
+            }
+            CopyPlan::IntoTableWithTransform {
+                database_name,
+                table_name,
+                from,
+                validation_mode,
+                ..
+            } => {
+                write!(f, "Copy into {database_name:}.{table_name:}")?;
+                write!(f, ", validation_mode: {validation_mode:?}")?;
+                write!(f, ", from: {from:?}")?;
             }
             CopyPlan::IntoStage {
                 stage,

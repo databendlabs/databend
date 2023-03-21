@@ -473,7 +473,7 @@ pub struct WindowFrame {
     pub end_bound: WindowFrameBound,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum WindowFrameUnits {
     Rows,
     Range,
@@ -522,6 +522,8 @@ pub enum BinaryOperator {
     BitwiseOr,
     BitwiseAnd,
     BitwiseXor,
+    BitwiseShiftLeft,
+    BitwiseShiftRight,
 }
 
 impl BinaryOperator {
@@ -548,6 +550,9 @@ impl BinaryOperator {
             BinaryOperator::BitwiseOr => "bit_or".to_string(),
             BinaryOperator::BitwiseAnd => "bit_and".to_string(),
             BinaryOperator::BitwiseXor => "bit_xor".to_string(),
+            BinaryOperator::BitwiseShiftLeft => "bit_shift_left".to_string(),
+            BinaryOperator::BitwiseShiftRight => "bit_shift_right".to_string(),
+            BinaryOperator::Caret => "pow".to_string(),
             _ => {
                 let name = format!("{:?}", self);
                 name.to_lowercase()
@@ -561,6 +566,25 @@ pub enum UnaryOperator {
     Plus,
     Minus,
     Not,
+    Factorial,
+    SquareRoot,
+    CubeRoot,
+    Abs,
+    BitwiseNot,
+}
+
+impl UnaryOperator {
+    pub fn to_func_name(&self) -> String {
+        match self {
+            UnaryOperator::SquareRoot => "sqrt".to_string(),
+            UnaryOperator::CubeRoot => "cbrt".to_string(),
+            UnaryOperator::BitwiseNot => "bit_not".to_string(),
+            _ => {
+                let name = format!("{:?}", self);
+                name.to_lowercase()
+            }
+        }
+    }
 }
 
 impl Expr {
@@ -636,6 +660,21 @@ impl Display for UnaryOperator {
             }
             UnaryOperator::Not => {
                 write!(f, "NOT")
+            }
+            UnaryOperator::SquareRoot => {
+                write!(f, "|/")
+            }
+            UnaryOperator::CubeRoot => {
+                write!(f, "||/")
+            }
+            UnaryOperator::Factorial => {
+                write!(f, "!")
+            }
+            UnaryOperator::Abs => {
+                write!(f, "@")
+            }
+            UnaryOperator::BitwiseNot => {
+                write!(f, "~")
             }
         }
     }
@@ -721,6 +760,12 @@ impl Display for BinaryOperator {
             }
             BinaryOperator::BitwiseXor => {
                 write!(f, "#")
+            }
+            BinaryOperator::BitwiseShiftLeft => {
+                write!(f, "<<")
+            }
+            BinaryOperator::BitwiseShiftRight => {
+                write!(f, ">>")
             }
         }
     }
@@ -1006,7 +1051,15 @@ impl Display for Expr {
                 write!(f, " BETWEEN {low} AND {high}")?;
             }
             Expr::UnaryOp { op, expr, .. } => {
-                write!(f, "({op} {expr})")?;
+                match op {
+                    // TODO (xieqijun) Maybe special attribute are provided to check whether the symbol is before or after.
+                    UnaryOperator::Factorial => {
+                        write!(f, "({expr} {op})")?;
+                    }
+                    _ => {
+                        write!(f, "({op} {expr})")?;
+                    }
+                }
             }
             Expr::BinaryOp {
                 op, left, right, ..

@@ -803,7 +803,7 @@ query T
 explain select count(distinct a) from t1;
 ----
 EvalScalar
-├── expressions: [count() (#3)]
+├── expressions: [count() (#2)]
 ├── estimated rows: 1.00
 └── AggregateFinal
     ├── group by: []
@@ -836,7 +836,7 @@ query T
 explain select count_distinct(a) from t1;
 ----
 EvalScalar
-├── expressions: [count() (#3)]
+├── expressions: [count() (#2)]
 ├── estimated rows: 1.00
 └── AggregateFinal
     ├── group by: []

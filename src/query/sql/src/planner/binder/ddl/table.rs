@@ -45,7 +45,6 @@ use common_ast::ast::UriLocation;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::walk_expr_mut;
-use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
@@ -78,8 +77,8 @@ use crate::optimizer::optimize;
 use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
 use crate::planner::semantic::normalize_identifier;
+use crate::planner::semantic::resolve_type_name;
 use crate::planner::semantic::IdentifierNormalizer;
-use crate::planner::semantic::TypeChecker;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
@@ -94,7 +93,6 @@ use crate::plans::OptimizeTableAction;
 use crate::plans::OptimizeTablePlan;
 use crate::plans::Plan;
 use crate::plans::ReclusterTablePlan;
-use crate::plans::RenameTableEntity;
 use crate::plans::RenameTablePlan;
 use crate::plans::RevertTablePlan;
 use crate::plans::RewriteKind;
@@ -274,8 +272,7 @@ impl Binder {
             ),
         };
         let tokens = tokenize_sql(query.as_str())?;
-        let backtrace = Backtrace::new();
-        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace)?;
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
         self.bind_statement(bind_context, &stmt).await
     }
 
@@ -590,18 +587,14 @@ impl Binder {
 
         match action {
             AlterTableAction::RenameTable { new_table } => {
-                let entities = vec![RenameTableEntity {
+                Ok(Plan::RenameTable(Box::new(RenameTablePlan {
+                    tenant,
                     if_exists: *if_exists,
                     new_database: database.clone(),
                     new_table: normalize_identifier(new_table, &self.name_resolution_ctx).name,
                     catalog,
                     database,
                     table,
-                }];
-
-                Ok(Plan::RenameTable(Box::new(RenameTablePlan {
-                    tenant,
-                    entities,
                 })))
             }
             AlterTableAction::AddColumn { column } => {
@@ -724,18 +717,14 @@ impl Binder {
             ));
         }
 
-        let entities = vec![RenameTableEntity {
+        Ok(Plan::RenameTable(Box::new(RenameTablePlan {
+            tenant,
             if_exists: *if_exists,
             catalog,
             database,
             table,
             new_database,
             new_table,
-        }];
-
-        Ok(Plan::RenameTable(Box::new(RenameTablePlan {
-            tenant,
-            entities,
         })))
     }
 
@@ -869,7 +858,7 @@ impl Binder {
         let mut fields_comments = Vec::with_capacity(columns.len());
         for column in columns.iter() {
             let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
-            let schema_data_type = TypeChecker::resolve_type_name(&column.data_type)?;
+            let schema_data_type = resolve_type_name(&column.data_type)?;
 
             fields.push(TableField::new(&name, schema_data_type.clone()));
             fields_default_expr.push({
@@ -877,6 +866,7 @@ impl Binder {
                     let (expr, _) = scalar_binder.bind(default_expr).await?;
                     let is_try = schema_data_type.is_nullable();
                     let cast_expr_to_field_type = ScalarExpr::CastExpr(CastExpr {
+                        span: expr.span(),
                         is_try,
                         target_type: Box::new(DataType::from(&schema_data_type)),
                         argument: Box::new(expr),
@@ -925,7 +915,7 @@ impl Binder {
                 if table.engine() == VIEW_ENGINE {
                     let query = table.get_table_info().options().get(QUERY).unwrap();
                     let mut planner = Planner::new(self.ctx.clone());
-                    let (plan, _, _) = planner.plan_sql(query).await?;
+                    let (plan, _) = planner.plan_sql(query).await?;
                     Ok((infer_table_schema(&plan.schema())?, vec![], vec![]))
                 } else {
                     Ok((table.schema(), vec![], table.field_comments().clone()))

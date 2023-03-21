@@ -29,7 +29,7 @@ pub enum OP {
     Super,
 }
 
-pub fn codegen_arithmetic_type_v2() {
+pub fn codegen_arithmetic_type() {
     let dest = Path::new("src/query/expression/src/utils");
     let path = dest.join("arithmetics_type.rs");
 

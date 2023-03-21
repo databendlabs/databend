@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::base::GlobalInstance;
 use common_expression::types::DataType;
 use common_expression::Literal;
 use common_expression::TableDataType;
@@ -69,6 +70,13 @@ impl Table for DummyTable {
 
 #[test]
 fn test_format() {
+    let thread_name = match std::thread::current().name() {
+        None => panic!("thread name is none"),
+        Some(thread_name) => thread_name.to_string(),
+    };
+
+    GlobalInstance::init_testing(&thread_name);
+
     let mut metadata = Metadata::default();
     let tab1 = metadata.add_table(
         "catalog".to_string(),
@@ -96,10 +104,12 @@ fn test_format() {
         Join {
             right_conditions: vec![
                 FunctionCall {
+                    span: None,
                     func_name: "plus".to_string(),
                     params: vec![],
                     arguments: vec![
                         BoundColumnRef {
+                            span: None,
                             column: ColumnBinding {
                                 database_name: None,
                                 table_name: None,
@@ -111,6 +121,7 @@ fn test_format() {
                         }
                         .into(),
                         ConstantExpr {
+                            span: None,
                             value: Literal::UInt64(123u64),
                             data_type: Box::new(DataType::Boolean),
                         }
@@ -121,6 +132,7 @@ fn test_format() {
             ],
             left_conditions: vec![
                 BoundColumnRef {
+                    span: None,
                     column: ColumnBinding {
                         database_name: None,
                         table_name: None,
@@ -143,6 +155,7 @@ fn test_format() {
             Filter {
                 predicates: vec![
                     ConstantExpr {
+                        span: None,
                         value: Literal::Boolean(true),
                         data_type: Box::new(DataType::Boolean),
                     }

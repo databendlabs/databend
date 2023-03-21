@@ -118,11 +118,14 @@ clap = { version = "3.2.22", features = ["derive", "env"] }
 
 # serialization
 prost = { version = "0.11.0" }
-serde = { version = "1.0.145", features = ["derive", "rc"] }
+# 1.0.153 adds a new feature which will allow `serde(alias = "…")` inside a flattened struct.
+# This feature seems cool but will break our config parse.
+# @xuanwo will address this issue upon his return from Mars.
+serde = { version = "=1.0.152", features = ["derive", "rc"] }
 serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order"] }
 
 # chrono
-chrono = { version = "0.4.22", features = ["serde"] }
+chrono = { version = "0.4.24", features = ["serde"] }
 chrono-tz = "0.6.3"
 
 # memory
@@ -184,7 +187,6 @@ rpath = false
 # For example:
 # arrow-format = { git = "https://github.com/datafuse-extras/arrow-format", rev = "78dacc1" }
 
-arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "9749aee" }
+arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "db87f71" }
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "ed0e1ff" }
-limits-rs = { git = "https://github.com/datafuse-extras/limits-rs", rev = "abfcf7b" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }

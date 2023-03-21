@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::hash::Hash;
 use std::io::Read;
 use std::ops::Range;
 
+use base64::engine::general_purpose;
+use base64::prelude::*;
 use common_arrow::arrow::bitmap::and;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
@@ -42,6 +45,8 @@ use crate::property::Domain;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::boolean::BooleanDomain;
+use crate::types::date::DATE_MAX;
+use crate::types::date::DATE_MIN;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalColumnBuilder;
@@ -61,6 +66,8 @@ use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::types::string::StringDomain;
 use crate::types::timestamp::check_timestamp;
+use crate::types::timestamp::TIMESTAMP_MAX;
+use crate::types::timestamp::TIMESTAMP_MIN;
 use crate::types::variant::JSONB_NULL;
 use crate::types::*;
 use crate::utils::arrow::append_bitmap;
@@ -69,6 +76,7 @@ use crate::utils::arrow::buffer_into_mut;
 use crate::utils::arrow::constant_bitmap;
 use crate::utils::arrow::deserialize_column;
 use crate::utils::arrow::serialize_column;
+use crate::utils::FromData;
 use crate::with_decimal_mapped_type;
 use crate::with_decimal_type;
 use crate::with_number_mapped_type;
@@ -191,6 +199,8 @@ impl<'a, T: ValueType> ValueRef<'a, T> {
     }
 
     /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     pub unsafe fn index_unchecked(&'a self, index: usize) -> T::ScalarRef<'a> {
         match self {
             ValueRef::Scalar(scalar) => scalar.clone(),
@@ -211,6 +221,23 @@ impl<'a, T: ValueType> Value<T> {
         match self {
             Value::Scalar(scalar) => ValueRef::Scalar(T::to_scalar_ref(scalar)),
             Value::Column(col) => ValueRef::Column(col.clone()),
+        }
+    }
+
+    pub fn index(&'a self, index: usize) -> Option<T::ScalarRef<'a>> {
+        match self {
+            Value::Scalar(scalar) => Some(T::to_scalar_ref(scalar)),
+            Value::Column(col) => T::index_column(col, index),
+        }
+    }
+
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    pub unsafe fn index_unchecked(&'a self, index: usize) -> T::ScalarRef<'a> {
+        match self {
+            Value::Scalar(scalar) => T::to_scalar_ref(scalar),
+            Value::Column(c) => T::index_column_unchecked(c, index),
         }
     }
 }
@@ -237,6 +264,13 @@ impl Value<AnyType> {
 
     pub fn try_downcast<T: ValueType>(&self) -> Option<Value<T>> {
         Some(self.as_ref().try_downcast::<T>()?.to_owned())
+    }
+
+    pub fn wrap_nullable(self) -> Self {
+        match self {
+            Value::Column(c) => Value::Column(c.wrap_nullable()),
+            scalar => scalar,
+        }
     }
 }
 
@@ -660,7 +694,8 @@ impl Column {
     }
 
     /// # Safety
-    /// Assumes that the `index` is not out of range.
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     pub unsafe fn index_unchecked(&self, index: usize) -> ScalarRef {
         match self {
             Column::Null { .. } => ScalarRef::Null,
@@ -1472,6 +1507,146 @@ impl Column {
         }
     }
 
+    pub fn random(ty: &DataType, len: usize) -> Self {
+        use jsonb::Number as JsonbNumber;
+        use jsonb::Object as JsonbObject;
+        use jsonb::Value as JsonbValue;
+        use rand::distributions::Alphanumeric;
+        use rand::distributions::DistString;
+        use rand::rngs::SmallRng;
+        use rand::Rng;
+        use rand::SeedableRng;
+
+        // Migrate from legacy code:
+        match ty {
+            DataType::Null => Column::Null { len },
+            DataType::EmptyArray => Column::EmptyArray { len },
+            DataType::EmptyMap => Column::EmptyMap { len },
+            DataType::Boolean => {
+                BooleanType::from_data((0..len).map(|_| SmallRng::from_entropy().gen_bool(0.5)))
+            }
+            DataType::String => StringType::from_data((0..len).map(|_| {
+                let rng = SmallRng::from_entropy();
+                rng.sample_iter(&Alphanumeric)
+                    // randomly generate 5 characters.
+                    .take(5)
+                    .map(u8::from)
+                    .collect::<Vec<_>>()
+            })),
+            DataType::Number(num_ty) => {
+                with_number_mapped_type!(|NUM_TYPE| match num_ty {
+                    NumberDataType::NUM_TYPE => {
+                        NumberType::<NUM_TYPE>::from_data(
+                            (0..len).map(|_| SmallRng::from_entropy().gen()),
+                        )
+                    }
+                })
+            }
+            DataType::Decimal(t) => match t {
+                DecimalDataType::Decimal128(x) => {
+                    Column::Decimal(DecimalColumn::Decimal128(vec![0i128; len].into(), *x))
+                }
+                DecimalDataType::Decimal256(x) => {
+                    Column::Decimal(DecimalColumn::Decimal256(vec![i256::ZERO; len].into(), *x))
+                }
+            },
+            DataType::Timestamp => TimestampType::from_data(
+                (0..len)
+                    .map(|_| SmallRng::from_entropy().gen_range(TIMESTAMP_MIN..=TIMESTAMP_MAX))
+                    .collect::<Vec<i64>>(),
+            ),
+            DataType::Date => DateType::from_data(
+                (0..len)
+                    .map(|_| SmallRng::from_entropy().gen_range(DATE_MIN..=DATE_MAX))
+                    .collect::<Vec<i32>>(),
+            ),
+            DataType::Nullable(ty) => Column::Nullable(Box::new(NullableColumn {
+                column: Column::random(ty, len),
+                validity: Bitmap::from(
+                    (0..len)
+                        .map(|_| SmallRng::from_entropy().gen_bool(0.5))
+                        .collect::<Vec<bool>>(),
+                ),
+            })),
+            DataType::Array(inner_ty) => {
+                let mut inner_len = 0;
+                let mut offsets: Vec<u64> = Vec::with_capacity(len + 1);
+                offsets.push(0);
+                for _ in 0..len {
+                    inner_len += SmallRng::from_entropy().gen_range(0..=3);
+                    offsets.push(inner_len);
+                }
+                Column::Array(Box::new(ArrayColumn {
+                    values: Column::random(inner_ty, inner_len as usize),
+                    offsets: offsets.into(),
+                }))
+            }
+            DataType::Map(inner_ty) => {
+                let mut inner_len = 0;
+                let mut offsets: Vec<u64> = Vec::with_capacity(len + 1);
+                offsets.push(0);
+                for _ in 0..len {
+                    inner_len += SmallRng::from_entropy().gen_range(0..=3);
+                    offsets.push(inner_len);
+                }
+                Column::Map(Box::new(ArrayColumn {
+                    values: Column::random(inner_ty, inner_len as usize),
+                    offsets: offsets.into(),
+                }))
+            }
+            DataType::Tuple(fields) => {
+                let fields = fields
+                    .iter()
+                    .map(|ty| Column::random(ty, len))
+                    .collect::<Vec<_>>();
+                Column::Tuple(fields)
+            }
+            DataType::Variant => {
+                let mut data = Vec::with_capacity(len);
+                for _ in 0..len {
+                    let opt = SmallRng::from_entropy().gen_range(0..=6);
+                    let val = match opt {
+                        0 => JsonbValue::Null,
+                        1 => JsonbValue::Bool(true),
+                        2 => JsonbValue::Bool(false),
+                        3 => {
+                            let s = Alphanumeric.sample_string(&mut rand::thread_rng(), 5);
+                            JsonbValue::String(Cow::from(s))
+                        }
+                        4 => {
+                            let num = SmallRng::from_entropy().gen_range(i64::MIN..=i64::MAX);
+                            JsonbValue::Number(JsonbNumber::Int64(num))
+                        }
+                        5 => {
+                            let arr_len = SmallRng::from_entropy().gen_range(0..=5);
+                            let mut values = Vec::with_capacity(arr_len);
+                            for _ in 0..arr_len {
+                                let num = SmallRng::from_entropy().gen_range(i64::MIN..=i64::MAX);
+                                values.push(JsonbValue::Number(JsonbNumber::Int64(num)))
+                            }
+                            JsonbValue::Array(values)
+                        }
+                        6 => {
+                            let obj_len = SmallRng::from_entropy().gen_range(0..=5);
+                            let mut obj = JsonbObject::new();
+                            for _ in 0..obj_len {
+                                let k = Alphanumeric.sample_string(&mut rand::thread_rng(), 5);
+                                let num = SmallRng::from_entropy().gen_range(i64::MIN..=i64::MAX);
+                                let v = JsonbValue::Number(JsonbNumber::Int64(num));
+                                obj.insert(k, v);
+                            }
+                            JsonbValue::Object(obj)
+                        }
+                        _ => JsonbValue::Null,
+                    };
+                    data.push(val.to_vec());
+                }
+                VariantType::from_data(data)
+            }
+            DataType::Generic(_) => unreachable!(),
+        }
+    }
+
     pub fn remove_nullable(&self) -> Self {
         match self {
             Column::Nullable(inner) => inner.column.clone(),
@@ -1481,12 +1656,12 @@ impl Column {
 
     pub fn wrap_nullable(self) -> Self {
         match self {
-            col @ Column::Nullable(_) => col,
-            col => {
-                let mut validity = MutableBitmap::with_capacity(col.len());
-                validity.extend_constant(col.len(), true);
+            column @ Column::Nullable(_) => column,
+            column => {
+                let mut validity = MutableBitmap::with_capacity(column.len());
+                validity.extend_constant(column.len(), true);
                 Column::Nullable(Box::new(NullableColumn {
-                    column: col,
+                    column,
                     validity: validity.into(),
                 }))
             }
@@ -1522,7 +1697,7 @@ impl Column {
         }
     }
 
-    /// Returns (is_all_null,  Option bitmap)
+    /// Returns (is_all_null, Option bitmap)
     pub fn validity(&self) -> (bool, Option<&Bitmap>) {
         match self {
             Column::Null { .. } => (true, None),
@@ -1544,7 +1719,7 @@ impl Serialize for Column {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
         let bytes = serialize_column(self);
-        let base64_str = base64::encode(bytes);
+        let base64_str = general_purpose::STANDARD.encode(bytes);
         serializer.serialize_str(&base64_str)
     }
 }
@@ -1563,7 +1738,7 @@ impl<'de> Deserialize<'de> for Column {
 
             fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
             where E: serde::de::Error {
-                let bytes = base64::decode(v).unwrap();
+                let bytes = general_purpose::STANDARD.decode(v).unwrap();
                 let column = deserialize_column(&bytes)
                     .expect("expecting an arrow chunk with exactly one column");
                 Ok(column)

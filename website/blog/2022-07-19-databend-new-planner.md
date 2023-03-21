@@ -37,7 +37,7 @@ You can also get a better experience when coding complex queries:
 
 The new SQL planner supports JOIN queries (INNER JOIN, OUTER JOIN, CROSS JOIN) and correlated subqueries, and provides a Hash Join algorithm to execute JOIN queries.
 
-For more information about how to use JOIN in Databend, go to https://databend.rs/doc/reference/sql/query-syntax/dml-join
+For more information about how to use JOIN in Databend, go to https://databend.rs/doc/reference/sql/query-syntax/query-join
 
 JOIN is a very important part of the OLAP query. In traditional star and snowflake schemas, we join dimensional tables with fact tables through the JOIN query to generate the resulting report.
 

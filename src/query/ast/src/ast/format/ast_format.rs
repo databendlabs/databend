@@ -705,9 +705,9 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         children.push(self.children.pop().unwrap());
         self.visit_copy_unit(&copy.dst);
         children.push(self.children.pop().unwrap());
-        if !copy.files.is_empty() {
-            let mut files_children = Vec::with_capacity(copy.files.len());
-            for file in copy.files.iter() {
+        if let Some(files) = &copy.files {
+            let mut files_children = Vec::with_capacity(files.len());
+            for file in files.iter() {
                 let file_name = format!("File {}", file);
                 let file_format_ctx = AstFormatContext::new(file_name);
                 let file_node = FormatTreeNode::new(file_format_ctx);
@@ -719,8 +719,8 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             let files_node = FormatTreeNode::with_children(files_format_ctx, files_children);
             children.push(files_node);
         }
-        if !copy.pattern.is_empty() {
-            let pattern_name = format!("Pattern {}", copy.pattern);
+        if let Some(pattern) = &copy.pattern {
+            let pattern_name = format!("Pattern {}", pattern);
             let pattern_format_ctx = AstFormatContext::new(pattern_name);
             let pattern_node = FormatTreeNode::new(pattern_format_ctx);
             children.push(pattern_node);
@@ -2074,19 +2074,78 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 FormatTreeNode::with_children(selection_format_ctx, vec![selection_child]);
             children.push(selection_node);
         }
-        if !stmt.group_by.is_empty() {
-            let mut group_by_list_children = Vec::with_capacity(stmt.group_by.len());
-            for group_by in stmt.group_by.iter() {
-                self.visit_expr(group_by);
-                group_by_list_children.push(self.children.pop().unwrap());
+        if let Some(group_by) = &stmt.group_by {
+            match group_by {
+                GroupBy::Normal(exprs) => {
+                    let mut group_by_list_children = Vec::with_capacity(exprs.len());
+                    for group_by in exprs.iter() {
+                        self.visit_expr(group_by);
+                        group_by_list_children.push(self.children.pop().unwrap());
+                    }
+                    let group_by_list_name = "GroupByList".to_string();
+                    let group_by_list_format_ctx = AstFormatContext::with_children(
+                        group_by_list_name,
+                        group_by_list_children.len(),
+                    );
+                    let group_by_list_node = FormatTreeNode::with_children(
+                        group_by_list_format_ctx,
+                        group_by_list_children,
+                    );
+                    children.push(group_by_list_node);
+                }
+                GroupBy::GroupingSets(sets) => {
+                    let mut grouping_sets = Vec::with_capacity(sets.len());
+                    for set in sets.iter() {
+                        let mut grouping_set = Vec::with_capacity(set.len());
+                        for expr in set.iter() {
+                            self.visit_expr(expr);
+                            grouping_set.push(self.children.pop().unwrap());
+                        }
+                        let name = "GroupingSet".to_string();
+                        let grouping_set_format_ctx =
+                            AstFormatContext::with_children(name, grouping_set.len());
+                        let grouping_set_node =
+                            FormatTreeNode::with_children(grouping_set_format_ctx, grouping_set);
+                        grouping_sets.push(grouping_set_node);
+                    }
+                    let group_by_list_name = "GroupByList".to_string();
+                    let group_by_list_format_ctx =
+                        AstFormatContext::with_children(group_by_list_name, grouping_sets.len());
+                    let group_by_list_node =
+                        FormatTreeNode::with_children(group_by_list_format_ctx, grouping_sets);
+                    children.push(group_by_list_node);
+                }
+                GroupBy::Rollup(exprs) => {
+                    let mut rollup_list_children = Vec::with_capacity(exprs.len());
+                    for group_by in exprs.iter() {
+                        self.visit_expr(group_by);
+                        rollup_list_children.push(self.children.pop().unwrap());
+                    }
+                    let rollup_list_name = "GroupByRollUpList".to_string();
+                    let rollup_list_format_ctx = AstFormatContext::with_children(
+                        rollup_list_name,
+                        rollup_list_children.len(),
+                    );
+                    let rollup_list_node =
+                        FormatTreeNode::with_children(rollup_list_format_ctx, rollup_list_children);
+                    children.push(rollup_list_node);
+                }
+                GroupBy::Cube(exprs) => {
+                    let mut cube_list_children = Vec::with_capacity(exprs.len());
+                    for group_by in exprs.iter() {
+                        self.visit_expr(group_by);
+                        cube_list_children.push(self.children.pop().unwrap());
+                    }
+                    let cube_list_name = "GroupByCubeList".to_string();
+                    let cube_list_format_ctx =
+                        AstFormatContext::with_children(cube_list_name, cube_list_children.len());
+                    let cube_list_node =
+                        FormatTreeNode::with_children(cube_list_format_ctx, cube_list_children);
+                    children.push(cube_list_node);
+                }
             }
-            let group_by_list_name = "GroupByList".to_string();
-            let group_by_list_format_ctx =
-                AstFormatContext::with_children(group_by_list_name, group_by_list_children.len());
-            let group_by_list_node =
-                FormatTreeNode::with_children(group_by_list_format_ctx, group_by_list_children);
-            children.push(group_by_list_node);
         }
+
         if let Some(having) = &stmt.having {
             self.visit_expr(having);
             let having_child = self.children.pop().unwrap();

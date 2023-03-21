@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::StageFileInfo;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
 use common_meta_app::principal::StageInfo;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
+use common_storage::StageFileInfo;
 use opendal::Operator;
 
 use crate::input_formats::InputContext;

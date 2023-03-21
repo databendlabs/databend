@@ -23,6 +23,7 @@ use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::TableStatistics;
 use common_meta_types::MatchSeq;
+use common_sql::binder::INTERNAL_COLUMN_FACTORY;
 use common_sql::field_default_value;
 use common_sql::plans::CreateTablePlan;
 use common_storages_fuse::io::MetaReaders;
@@ -144,7 +145,7 @@ impl CreateTableInterpreter {
             source: InsertInputSource::SelectPlan(select_plan),
         };
 
-        InsertInterpreter::try_create(self.ctx.clone(), insert_plan, false)?
+        InsertInterpreter::try_create(self.ctx.clone(), insert_plan)?
             .execute2()
             .await
     }
@@ -192,6 +193,13 @@ impl CreateTableInterpreter {
             } else {
                 field
             };
+
+            if INTERNAL_COLUMN_FACTORY.exist(field.name()) {
+                return Err(ErrorCode::TableWithInternalColumnName(format!(
+                    "Cannot create table has column with the same name as internal column: {}",
+                    field.name()
+                )));
+            }
 
             fields.push(field)
         }

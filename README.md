@@ -127,7 +127,8 @@ docker run --net=host  datafuselabs/databend
 - [How to Load Data from Remote Files](https://databend.rs/doc/load-data/http)
 - [How to Load Data from Amazon S3](https://databend.rs/doc/load-data/s3)
 - [How to Load Data from Databend Stages](https://databend.rs/doc/load-data/stage)
-
+- [Querying Data in Staged Files](https://databend.rs/doc/load-data/querying-stage)
+- [Transforming Data During a Load](http://databend.rs/doc/load-data/data-load-transform)
 
 ### Unloading Data from Databend
 
@@ -178,8 +179,8 @@ docker run --net=host  datafuselabs/databend
 
 ### Backup & Restore
 
-* [How to Back Up Meta Data](https://databend.rs/doc/deploy/metasrv/metasrv-backup-restore)
-* [How to Back Up Databases](https://databend.rs/doc/deploy/backup-restore/backup-and-restore-schema)
+- [How to Back Up Meta Data](https://databend.rs/doc/deploy/metasrv/metasrv-backup-restore)
+- [How to Back Up Databases](https://databend.rs/doc/deploy/backup-restore/backup-and-restore-schema)
 
 ### Use Cases
 

@@ -27,7 +27,6 @@ use common_arrow::arrow::io::parquet::read::indexes::FieldPageStatistics;
 use common_arrow::parquet::indexes::Interval;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::read_pages_locations;
-use common_base::base::tokio;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
@@ -38,6 +37,7 @@ use common_expression::Expr;
 use common_expression::FieldIndex;
 use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
+use common_storage::read_parquet_metas_in_parallel;
 use common_storage::ColumnNodes;
 use opendal::Operator;
 use storages_common_pruner::RangePruner;
@@ -57,7 +57,7 @@ pub struct PartitionPruner {
     /// Pruners to prune pages.
     pub page_pruners: Option<ColumnRangePruners>,
     /// Parquet file locations
-    pub locations: Vec<String>,
+    pub locations: Vec<(String, u64)>,
     /// OpenDAL operator
     pub operator: Operator,
     /// The projected column indices.
@@ -102,7 +102,7 @@ impl PartitionPruner {
         // 1. Read parquet meta data. Distinguish between sync and async reading.
         let file_metas = if is_blocking_io {
             let mut file_metas = Vec::with_capacity(locations.len());
-            for location in locations {
+            for (location, _size) in locations {
                 let mut reader = operator.blocking().reader(location)?;
                 let file_meta = pread::read_metadata(&mut reader).map_err(|e| {
                     ErrorCode::Internal(format!(
@@ -114,25 +114,7 @@ impl PartitionPruner {
             }
             file_metas
         } else {
-            let mut file_metas = Vec::with_capacity(locations.len());
-            for location in locations {
-                let location = location.clone();
-                let operator = operator.clone();
-                file_metas.push(async move {
-                    tokio::spawn(async move {
-                        let mut reader = operator.reader(&location).await?;
-                        pread::read_metadata_async(&mut reader).await.map_err(|e| {
-                            ErrorCode::Internal(format!(
-                                "Read parquet file '{}''s meta error: {}",
-                                location, e
-                            ))
-                        })
-                    })
-                    .await
-                    .unwrap()
-                });
-            }
-            futures::future::try_join_all(file_metas).await?
+            read_parquet_metas_in_parallel(operator.clone(), locations.clone(), 16, 64).await?
         };
 
         // 2. Use file meta to prune row groups or pages.
@@ -195,7 +177,7 @@ impl PartitionPruner {
                         c.column_chunk().column_index_offset.is_some()
                             && c.column_chunk().column_index_length.is_some()
                     }) {
-                    let mut reader = operator.blocking().reader(&locations[file_id])?;
+                    let mut reader = operator.blocking().reader(&locations[file_id].0)?;
                     page_pruners
                         .as_ref()
                         .map(|pruners| filter_pages(&mut reader, schema, rg, pruners))
@@ -229,7 +211,7 @@ impl PartitionPruner {
                 }
 
                 partitions.push(ParquetRowGroupPart {
-                    location: locations[file_id].clone(),
+                    location: locations[file_id].0.clone(),
                     num_rows: rg.num_rows(),
                     column_metas,
                     row_selection,
@@ -690,9 +672,12 @@ mod tests {
         // col1 > 12
         {
             let filter = ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "gt".to_string(),
                 params: vec![],
                 arguments: vec![
                     ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
@@ -703,11 +688,11 @@ mod tests {
                         },
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
+                        span: None,
                         value: Literal::Int32(12),
                         data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                     }),
                 ],
-                func_name: "gt".to_string(),
             });
             let filter = filter.as_expr_with_col_name()?;
             let pruner =
@@ -718,9 +703,12 @@ mod tests {
         // col1 < 0
         {
             let filter = ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "lt".to_string(),
                 params: vec![],
                 arguments: vec![
                     ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
@@ -731,11 +719,11 @@ mod tests {
                         },
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
+                        span: None,
                         value: Literal::Int32(0),
                         data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                     }),
                 ],
-                func_name: "lt".to_string(),
             });
             let filter = filter.as_expr_with_col_name()?;
             let pruner =
@@ -746,9 +734,12 @@ mod tests {
         // col1 <= 5
         {
             let filter = ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "lte".to_string(),
                 params: vec![],
                 arguments: vec![
                     ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
@@ -759,11 +750,11 @@ mod tests {
                         },
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
+                        span: None,
                         value: Literal::Int32(5),
                         data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                     }),
                 ],
-                func_name: "lte".to_string(),
             });
             let filter = filter.as_expr_with_col_name()?;
             let pruner =
@@ -784,9 +775,12 @@ mod tests {
         // col1 > 12
         {
             let filter = ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "gt".to_string(),
                 params: vec![],
                 arguments: vec![
                     ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
@@ -797,11 +791,11 @@ mod tests {
                         },
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
+                        span: None,
                         value: Literal::Int32(12),
                         data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                     }),
                 ],
-                func_name: "gt".to_string(),
             });
             let filter = filter.as_expr_with_col_name()?;
             let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filter)?;
@@ -813,9 +807,12 @@ mod tests {
         // col1 <= 5
         {
             let filter = ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "lte".to_string(),
                 params: vec![],
                 arguments: vec![
                     ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
@@ -826,11 +823,11 @@ mod tests {
                         },
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
+                        span: None,
                         value: Literal::Int32(5),
                         data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                     }),
                 ],
-                func_name: "lte".to_string(),
             });
             let filter = filter.as_expr_with_col_name()?;
             let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filter)?;
@@ -842,9 +839,12 @@ mod tests {
         // col1 > 10
         {
             let filter = ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "gt".to_string(),
                 params: vec![],
                 arguments: vec![
                     ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
@@ -855,11 +855,11 @@ mod tests {
                         },
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
+                        span: None,
                         value: Literal::Int32(10),
                         data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                     }),
                 ],
-                func_name: "gt".to_string(),
             });
             let filter = filter.as_expr_with_col_name()?;
             let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filter)?;
@@ -871,9 +871,12 @@ mod tests {
         // col1 <= 10
         {
             let filter = ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "lte".to_string(),
                 params: vec![],
                 arguments: vec![
                     ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
@@ -884,11 +887,11 @@ mod tests {
                         },
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
+                        span: None,
                         value: Literal::Int32(10),
                         data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                     }),
                 ],
-                func_name: "lte".to_string(),
             });
             let filter = filter.as_expr_with_col_name()?;
             let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filter)?;

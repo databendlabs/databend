@@ -90,6 +90,15 @@ pub struct SelectStageOptions {
     pub connection: BTreeMap<String, String>,
 }
 
+impl SelectStageOptions {
+    pub fn is_empty(&self) -> bool {
+        self.files.is_none()
+            && self.pattern.is_none()
+            && self.file_format.is_none()
+            && self.connection.is_empty()
+    }
+}
+
 // SELECT <columns> FROM
 // {@<stage_name>[/<path>] | '<uri>'} [(
 // [ PARTTERN => '<regex_pattern>']

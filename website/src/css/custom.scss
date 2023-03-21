@@ -91,6 +91,9 @@
   --color-secondary-light-hover : rgba(203,230,254,1.00);
   --color-secondary-light-active : rgba(152,204,252,1.00);
   --color-secondary-light-default : rgba(234,245,254,1.00);
+  --orange-5: #FA8801;
+  --blue-5: #0176F8;
+  --indigo-5: rgb(94,110,195);
   --ifm-color-primary: var(--color-primary);
   --ifm-color-primary-dark:  var(--color-primary);
   --ifm-color-primary-darker:  var(--color-primary-hover);
@@ -217,6 +220,9 @@
  --color-secondary-light-hover : rgba(51,148,249,0.30);
  --color-secondary-light-active : rgba(51,148,249,0.40);
  --color-secondary-light-default : rgba(51,148,249,0.20)
+ --orange-5: #FA8801;
+ --blue-5: rgb(1,118,248);
+ --indigo-5: rgb(63,80,180);
  --ifm-color-primary: var(--color-primary);
  --ifm-color-primary-dark:  var(--color-primary);
  --ifm-color-primary-darker:  var(--color-primary);
@@ -301,14 +307,15 @@
     padding-bottom: 40px;
     margin-top: 20px;
   }
-
   h1:not(:first-child),h2,h3{
     font-weight: 700;
   }
   h4,h5,h6{
     font-weight: 500;
   }
-
+  ul li{
+    list-style: disc;
+  }
   img{
     object-fit: contain;
     max-height: 520px;
@@ -485,4 +492,7 @@ ul li{
   width: 100%;
   max-width: 100%;
   margin-top: 20px;
+}
+.tabs-container p{
+  margin-bottom: var(--ifm-leading);
 }

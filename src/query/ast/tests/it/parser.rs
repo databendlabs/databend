@@ -149,6 +149,7 @@ fn test_statement() {
         r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
         r#"CREATE STAGE ~"#,
         r#"CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')"#,
+        r#"CREATE STAGE IF NOT EXISTS test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')"#,
         r#"DROP STAGE abc"#,
         r#"DROP STAGE ~"#,
         r#"list @stage_a;"#,
@@ -368,12 +369,17 @@ fn test_statement() {
             type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;"#,
         r#"SHOW FILE FORMATS"#,
         r#"DROP FILE FORMAT my_csv"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS (a, b, c, d)"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS (a, b, (c, d))"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (c), (d, e))"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (), (d, e))"#,
+        r#"SELECT * FROM t GROUP BY CUBE (a, b, c)"#,
+        r#"SELECT * FROM t GROUP BY ROLLUP (a, b, c)"#,
     ];
 
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();
-        let backtrace = Backtrace::new();
-        let (stmt, fmt) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace).unwrap();
+        let (stmt, fmt) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
@@ -399,6 +405,7 @@ fn test_statement_error() {
         r#"create table a (c varch)"#,
         r#"create table a (c tuple())"#,
         r#"create table a (c decimal)"#,
+        r#"create table a (b tuple(c int, uint64));"#,
         r#"drop table if a.b"#,
         r#"truncate table a.b.c.d"#,
         r#"truncate a"#,
@@ -425,12 +432,13 @@ fn test_statement_error() {
         r#"CALL system$test(a"#,
         r#"show settings ilike 'enable%'"#,
         r#"PRESIGN INVALID @my_stage/path/to/file"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS a, b"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS ()"#,
     ];
 
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();
-        let backtrace = Backtrace::new();
-        let err = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace).unwrap_err();
+        let err = parse_sql(&tokens, Dialect::PostgreSQL).unwrap_err();
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();

@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
-use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_base::base::tokio::runtime::Handle;
 use common_base::base::tokio::task::block_in_place;
@@ -51,7 +50,6 @@ use crate::Visibility;
 pub fn parse_exprs(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
-    unwrap_tuple: bool,
     sql: &str,
 ) -> Result<Vec<Expr>> {
     let settings = Settings::default_settings("", GlobalConfig::instance())?;
@@ -86,7 +84,6 @@ pub fn parse_exprs(
                     Visibility::Visible
                 },
             },
-
             _ => {
                 return Err(ErrorCode::Internal("Invalid column entry"));
             }
@@ -101,18 +98,12 @@ pub fn parse_exprs(
 
     let sql_dialect = Dialect::MySQL;
     let tokens = tokenize_sql(sql)?;
-    let backtrace = Backtrace::new();
-    let tokens = if unwrap_tuple {
-        &tokens[1..tokens.len() - 1]
-    } else {
-        &tokens
-    };
-    let ast_exprs = parse_comma_separated_exprs(tokens, sql_dialect, &backtrace)?;
+    let ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
     let exprs = ast_exprs
         .iter()
         .map(|ast| {
             let (scalar, _) =
-                *block_in_place(|| Handle::current().block_on(type_checker.resolve(ast, None)))?;
+                *block_in_place(|| Handle::current().block_on(type_checker.resolve(ast)))?;
             let expr = scalar.as_expr_with_col_index()?;
             Ok(expr)
         })
@@ -124,11 +115,10 @@ pub fn parse_exprs(
 pub fn parse_to_remote_string_expr(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
-    unwrap_tuple: bool,
     sql: &str,
 ) -> Result<RemoteExpr<String>> {
     let schema = table_meta.schema();
-    let exprs = parse_exprs(ctx, table_meta, unwrap_tuple, sql)?;
+    let exprs = parse_exprs(ctx, table_meta, sql)?;
     let exprs: Vec<RemoteExpr<String>> = exprs
         .iter()
         .map(|expr| {
@@ -168,7 +158,7 @@ pub fn field_default_value(ctx: Arc<dyn TableContext>, field: &TableField) -> Re
     match field.default_expr() {
         Some(default_expr) => {
             let table: Arc<dyn Table> = Arc::new(DummyTable::default());
-            let mut expr = parse_exprs(ctx.clone(), table.clone(), false, default_expr)?;
+            let mut expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?;
             let mut expr = expr.remove(0);
 
             if expr.data_type() != &data_type {

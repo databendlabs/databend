@@ -43,6 +43,7 @@ use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_sharing::create_share_table_operator;
 use common_sql::parse_exprs;
 use common_storage::init_operator;
@@ -72,6 +73,7 @@ use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
 use crate::operations::AppendOperationLogEntry;
 use crate::pipelines::Pipeline;
+use crate::table_functions::unwrap_tuple;
 use crate::NavigationPoint;
 use crate::Table;
 use crate::TableStatistics;
@@ -344,7 +346,12 @@ impl Table for FuseTable {
     fn cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
         let table_meta = Arc::new(self.clone());
         if let Some((_, order)) = &self.cluster_key_meta {
-            let cluster_keys = parse_exprs(ctx, table_meta.clone(), true, order).unwrap();
+            let cluster_keys = parse_exprs(ctx, table_meta.clone(), order).unwrap();
+            let cluster_keys = if cluster_keys.len() == 1 {
+                unwrap_tuple(&cluster_keys[0]).unwrap_or(cluster_keys)
+            } else {
+                cluster_keys
+            };
             let cluster_keys = cluster_keys
                 .iter()
                 .map(|k| {
@@ -402,6 +409,7 @@ impl Table for FuseTable {
             &self.meta_location_generator,
             new_snapshot,
             None,
+            &None,
             &self.operator,
         )
         .await
@@ -451,6 +459,7 @@ impl Table for FuseTable {
             &self.meta_location_generator,
             new_snapshot,
             None,
+            &None,
             &self.operator,
         )
         .await
@@ -500,6 +509,7 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         operations: Vec<DataBlock>,
+        copied_files: Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
     ) -> Result<()> {
         // only append operation supported currently
@@ -507,7 +517,8 @@ impl Table for FuseTable {
             .iter()
             .map(AppendOperationLogEntry::try_from)
             .collect::<Result<Vec<AppendOperationLogEntry>>>()?;
-        self.do_commit(ctx, append_log_entries, overwrite).await
+        self.do_commit(ctx, append_log_entries, copied_files, overwrite)
+            .await
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_truncate", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]

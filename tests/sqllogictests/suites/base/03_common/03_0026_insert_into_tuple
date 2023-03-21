@@ -25,6 +25,9 @@ select t.1, t.2, t.3, t.4, t.5, t.6 from t1
 1 100 12.34 abc 2020-01-01 2020-01-01 00:00:00.000000
 0 200 -25.73 xyz 2022-06-01 2022-06-01 12:00:00.000000
 
+statement error 1005
+CREATE TABLE IF NOT EXISTS t2(t Tuple(a Bool, Int64)) Engine = Fuse
+
 statement ok
 CREATE TABLE IF NOT EXISTS t2(id Int, t Tuple(a Bool, b Int64, c Float64, d String, e Date, f Timestamp)) Engine = Fuse
 
@@ -47,7 +50,7 @@ statement ok
 CREATE TABLE IF NOT EXISTS t3(id Int, t Tuple(a Tuple(m Int64, n Int64), b Tuple(x Int64, y Int64))) Engine = Fuse
 
 statement ok
-INSERT INTO t3 (id, t) VALUES(1, ((10, 11), (20, 21))), (2, ((30, 31), (40, 41)))
+INSERT INTO t3 (id, t) VALUES(1, ((10, 11), (20, 21))), (2, (('30', '31'), (40, 41)))
 
 query IT
 select * from t3

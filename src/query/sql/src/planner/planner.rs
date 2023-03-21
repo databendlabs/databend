@@ -22,7 +22,6 @@ use common_ast::parser::token::Token;
 use common_ast::parser::token::TokenKind;
 use common_ast::parser::token::Tokenizer;
 use common_ast::walk_statement_mut;
-use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
@@ -47,12 +46,19 @@ pub struct Planner {
     ctx: Arc<dyn TableContext>,
 }
 
+#[derive(Debug, Clone)]
+pub struct PlanExtras {
+    pub metadata: MetadataRef,
+    pub format: Option<String>,
+    pub stament: Statement,
+}
+
 impl Planner {
     pub fn new(ctx: Arc<dyn TableContext>) -> Self {
         Planner { ctx }
     }
 
-    pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, MetadataRef, Option<String>)> {
+    pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, PlanExtras)> {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
 
@@ -82,8 +88,7 @@ impl Planner {
         loop {
             let res = async {
                 // Step 2: Parse the SQL.
-                let backtrace = Backtrace::new();
-                let (mut stmt, format) = parse_sql(&tokens, sql_dialect, &backtrace)?;
+                let (mut stmt, format) = parse_sql(&tokens, sql_dialect)?;
                 self.replace_stmt(&mut stmt, sql_dialect);
 
                 // Step 3: Bind AST with catalog, and generate a pure logical SExpr
@@ -103,7 +108,11 @@ impl Planner {
                 }));
 
                 let optimized_plan = optimize(self.ctx.clone(), opt_ctx, plan)?;
-                Ok((optimized_plan, metadata.clone(), format))
+                Ok((optimized_plan, PlanExtras {
+                    metadata,
+                    format,
+                    stament: stmt,
+                }))
             }
             .await;
 

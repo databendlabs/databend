@@ -22,7 +22,8 @@ use common_expression::DataSchemaRef;
 use common_expression::FromData;
 use common_expression::FromOptData;
 use common_sql::plans::ListPlan;
-use common_storages_stage::list_file;
+use common_storage::StageFileInfo;
+use common_storage::StageFilesInfo;
 use common_storages_stage::StageTable;
 
 use crate::interpreters::Interpreter;
@@ -54,8 +55,20 @@ impl Interpreter for ListInterpreter {
     #[tracing::instrument(level = "debug", name = "list_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
+
         let op = StageTable::get_op(&plan.stage)?;
-        let files = list_file(&op, &plan.path, &plan.pattern).await?;
+
+        let pattern = if plan.pattern.is_empty() {
+            None
+        } else {
+            Some(plan.pattern.clone())
+        };
+        let files_info = StageFilesInfo {
+            path: plan.path.clone(),
+            files: None,
+            pattern,
+        };
+        let files: Vec<StageFileInfo> = files_info.list(&op, false).await?;
 
         let names: Vec<Vec<u8>> = files
             .iter()

@@ -155,9 +155,6 @@ pub struct QueryConfig {
     pub management_mode: bool,
     pub jwt_key_file: String,
     pub jwt_key_files: Vec<String>,
-    pub async_insert_max_data_size: u64,
-    pub async_insert_busy_timeout: u64,
-    pub async_insert_stale_timeout: u64,
     pub default_storage_format: String,
     pub default_compression: String,
     pub idm: IDMConfig,
@@ -166,6 +163,9 @@ pub struct QueryConfig {
     pub tenant_quota: Option<TenantQuota>,
     pub internal_enable_sandbox_tenant: bool,
     pub internal_merge_on_read_mutation: bool,
+    /// Disable some system load(For example system.configs) for cloud security.
+    pub disable_system_table_load: bool,
+    pub openai_api_key: String,
 }
 
 impl Default for QueryConfig {
@@ -204,9 +204,6 @@ impl Default for QueryConfig {
             management_mode: false,
             jwt_key_file: "".to_string(),
             jwt_key_files: Vec::new(),
-            async_insert_max_data_size: 10000,
-            async_insert_busy_timeout: 200,
-            async_insert_stale_timeout: 0,
             default_storage_format: "auto".to_string(),
             default_compression: "auto".to_string(),
             idm: IDMConfig::default(),
@@ -215,6 +212,8 @@ impl Default for QueryConfig {
             tenant_quota: None,
             internal_enable_sandbox_tenant: false,
             internal_merge_on_read_mutation: false,
+            disable_system_table_load: false,
+            openai_api_key: "".to_string(),
         }
     }
 }

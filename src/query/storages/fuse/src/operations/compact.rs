@@ -16,20 +16,17 @@ use std::sync::Arc;
 
 use common_catalog::plan::Projection;
 use common_catalog::table::CompactTarget;
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_pipeline_core::pipe::Pipe;
-use common_pipeline_core::pipe::PipeItem;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use storages_common_table_meta::meta::TableSnapshot;
+use tracing::info;
 
 use crate::operations::mutation::BlockCompactMutator;
+use crate::operations::mutation::CompactAggregator;
 use crate::operations::mutation::CompactSource;
-use crate::operations::mutation::CompactTransform;
-use crate::operations::mutation::MergeSegmentsTransform;
 use crate::operations::mutation::MutationSink;
 use crate::operations::mutation::SegmentCompactMutator;
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::Pipeline;
 use crate::FuseTable;
 use crate::Table;
@@ -105,13 +102,13 @@ impl FuseTable {
     }
 
     /// The flow of Pipeline is as follows:
-    /// +--------------+        +-----------------+
-    /// |CompactSource1|  --->  |CompactTransform1|  ------
-    /// +--------------+        +-----------------+        |      +----------------------+      +------------+
-    /// |    ...       |  ...   |       ...       |  ...   | ---> |MergeSegmentsTransform| ---> |MutationSink|
-    /// +--------------+        +-----------------+        |      +----------------------+      +------------+
-    /// |CompactSourceN|  --->  |CompactTransformN|  ------
-    /// +--------------+        +-----------------+
+    /// +--------------+
+    /// |CompactSource1|  ------
+    /// +--------------+        |      +-----------------+      +------------+
+    /// |    ...       |  ...   | ---> |CompactAggregator| ---> |MutationSink|
+    /// +--------------+        |      +-----------------+      +------------+
+    /// |CompactSourceN|  ------
+    /// +--------------+
     async fn compact_blocks(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -124,42 +121,59 @@ impl FuseTable {
         }
 
         let thresholds = self.get_block_compact_thresholds();
+        let schema = self.schema();
+        let write_settings = self.get_write_settings();
 
-        let mut mutator = BlockCompactMutator::new(ctx.clone(), options, self.operator.clone());
-        let need_compact = mutator.target_select().await?;
-        if !need_compact {
+        let mut mutator =
+            BlockCompactMutator::new(ctx.clone(), thresholds, options, self.operator.clone());
+        mutator.target_select().await?;
+        if mutator.compact_tasks.is_empty() {
             return Ok(false);
         }
 
+        // Status.
+        {
+            let status = "compact: begin to run compact tasks";
+            ctx.set_status_info(status);
+            info!(status);
+        }
         ctx.set_partitions(mutator.compact_tasks.clone())?;
-
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        // Add source pipe.
-        pipeline.add_source(
-            |output| CompactSource::try_create(ctx.clone(), output, thresholds),
-            max_threads,
-        )?;
 
         let all_column_indices = self.all_column_indices();
         let projection = Projection::Columns(all_column_indices);
-        let block_reader = self.create_block_reader(projection, ctx.clone())?;
+        let block_reader = self.create_block_reader(projection, false, ctx.clone())?;
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        // Add source pipe.
+        pipeline.add_source(
+            |output| {
+                CompactSource::try_create(
+                    ctx.clone(),
+                    self.operator.clone(),
+                    write_settings.clone(),
+                    self.meta_location_generator().clone(),
+                    schema.clone(),
+                    block_reader.clone(),
+                    output,
+                )
+            },
+            max_threads,
+        )?;
+
+        pipeline.resize(1)?;
 
         pipeline.add_transform(|input, output| {
-            CompactTransform::try_create(
-                ctx.clone(),
+            let compact_aggregator = CompactAggregator::new(
+                self.operator.clone(),
+                self.meta_location_generator().clone(),
+                mutator.clone(),
+            );
+            Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                 input,
                 output,
-                ctx.get_scan_progress(),
-                block_reader.clone(),
-                self.meta_location_generator().clone(),
-                self.operator.clone(),
-                self.schema(),
-                thresholds,
-                self.get_write_settings(),
-            )
+                compact_aggregator,
+            )))
         })?;
 
-        self.try_add_merge_segments_transform(mutator.clone(), pipeline)?;
         pipeline.add_sink(|input| {
             MutationSink::try_create(
                 self,
@@ -170,40 +184,5 @@ impl FuseTable {
         })?;
 
         Ok(true)
-    }
-
-    fn try_add_merge_segments_transform(
-        &self,
-        mutator: BlockCompactMutator,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        if pipeline.is_empty() {
-            return Err(ErrorCode::Internal("The pipeline is empty."));
-        }
-
-        match pipeline.output_len() {
-            0 => Err(ErrorCode::Internal("The output of the last pipe is 0.")),
-            last_pipe_size => {
-                let mut inputs_port = Vec::with_capacity(last_pipe_size);
-                for _ in 0..last_pipe_size {
-                    inputs_port.push(InputPort::create());
-                }
-
-                let output_port = OutputPort::create();
-                let processor = MergeSegmentsTransform::try_create(
-                    mutator,
-                    inputs_port.clone(),
-                    output_port.clone(),
-                )?;
-
-                pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
-                    processor,
-                    inputs_port,
-                    vec![output_port],
-                )]));
-
-                Ok(())
-            }
-        }
     }
 }

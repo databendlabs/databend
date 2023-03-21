@@ -35,6 +35,7 @@ use common_expression::filter_helper::FilterHelpers;
 use common_expression::types::BooleanType;
 use common_expression::BlockEntry;
 use common_expression::BlockMetaInfoDowncast;
+use common_expression::BlockMetaInfoPtr;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
@@ -281,15 +282,28 @@ impl NativeDeserializeDataTransform {
         Ok(())
     }
 
+    fn fill_block_meta_index(data_block: DataBlock, fuse_part: &FusePartInfo) -> Result<DataBlock> {
+        // Fill `BlockMetaInfoPtr` if query internal columns
+        let meta: Option<BlockMetaInfoPtr> =
+            Some(Box::new(fuse_part.block_meta_index().unwrap().to_owned()));
+        data_block.add_meta(meta)
+    }
+
     /// All columns are default values, not need to read.
     fn finish_process_with_default_values(&mut self) -> Result<()> {
         let _ = self.chunks.pop_front();
         let part = self.parts.pop_front().unwrap();
-        let part = FusePartInfo::from_part(&part)?;
+        let fuse_part = FusePartInfo::from_part(&part)?;
 
-        let num_rows = part.nums_rows;
+        let num_rows = fuse_part.nums_rows;
         let data_block = self.block_reader.build_default_values_block(num_rows)?;
         let data_block = data_block.resort(&self.src_schema, &self.output_schema)?;
+
+        let data_block = if !self.block_reader.query_internal_columns() {
+            data_block
+        } else {
+            Self::fill_block_meta_index(data_block, fuse_part)?
+        };
 
         self.add_block(data_block)?;
 
@@ -303,10 +317,16 @@ impl NativeDeserializeDataTransform {
     fn finish_process_with_empty_block(&mut self) -> Result<()> {
         let _ = self.chunks.pop_front();
         let part = self.parts.pop_front().unwrap();
-        let part = FusePartInfo::from_part(&part)?;
+        let fuse_part = FusePartInfo::from_part(&part)?;
 
-        let num_rows = part.nums_rows;
+        let num_rows = fuse_part.nums_rows;
         let data_block = DataBlock::new(vec![], num_rows);
+        let data_block = if !self.block_reader.query_internal_columns() {
+            data_block
+        } else {
+            Self::fill_block_meta_index(data_block, fuse_part)?
+        };
+
         self.add_block(data_block)?;
         Ok(())
     }
@@ -582,8 +602,18 @@ impl Processor for NativeDeserializeDataTransform {
                 block
             };
 
-            let block = block.resort(&self.src_schema, &self.output_schema)?;
-            // Step 7: Add the block to output data
+            // Step 7: Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
+            // `FillInternalColumnProcessor` will generate internal columns using `BlockMetaIndex` in next pipeline.
+            let block = if !self.block_reader.query_internal_columns() {
+                block.resort(&self.src_schema, &self.output_schema)?
+            } else {
+                let fuse_part = FusePartInfo::from_part(&self.parts[0])?;
+                let meta: Option<BlockMetaInfoPtr> =
+                    Some(Box::new(fuse_part.block_meta_index().unwrap().to_owned()));
+                block.add_meta(meta)?
+            };
+
+            // Step 8: Add the block to output data
             self.add_block(block)?;
         }
 

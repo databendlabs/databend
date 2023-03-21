@@ -31,20 +31,22 @@ use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::arrow::io::parquet::read::to_deserializer;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
 use common_arrow::parquet::metadata::ColumnChunkMetaData;
+use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::read_metadata;
 use common_arrow::read_columns_async;
-use common_base::runtime::execute_futures_in_parallel;
-use common_catalog::plan::StageFileInfo;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_expression::TableField;
+use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_meta_app::principal::StageInfo;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
+use common_storage::read_parquet_metas_in_parallel;
+use common_storage::StageFileInfo;
 use futures::AsyncRead;
 use futures::AsyncSeek;
 use opendal::Operator;
@@ -65,18 +67,15 @@ use crate::input_formats::SplitInfo;
 pub struct InputFormatParquet;
 
 impl InputFormatParquet {
-    async fn get_split_batch(
+    fn make_splits(
         file_infos: Vec<StageFileInfo>,
-        op: Operator,
+        metas: Vec<FileMetaData>,
     ) -> Result<Vec<Arc<SplitInfo>>> {
         let mut infos = vec![];
         let mut schema = None;
-        for info in file_infos {
+        for (info, mut file_meta) in file_infos.into_iter().zip(metas.into_iter()) {
             let size = info.size as usize;
             let path = info.path.clone();
-
-            let mut reader = op.reader(&path).await?;
-            let mut file_meta = read_metadata_async(&mut reader).await?;
             let row_groups = mem::take(&mut file_meta.row_groups);
             if schema.is_none() {
                 schema = Some(infer_schema(&file_meta)?);
@@ -135,37 +134,12 @@ impl InputFormat for InputFormatParquet {
         op: &Operator,
         _settings: &Arc<Settings>,
     ) -> Result<Vec<Arc<SplitInfo>>> {
-        let batch_size = 1000;
-
-        if file_infos.len() <= batch_size {
-            Self::get_split_batch(file_infos, op.clone()).await
-        } else {
-            let mut chunks = file_infos.chunks(batch_size);
-
-            let tasks = std::iter::from_fn(move || {
-                chunks
-                    .next()
-                    .map(|location| Self::get_split_batch(location.to_vec(), op.clone()))
-            });
-
-            // TODO: Get from ctx.
-            let thread_nums = 16;
-            let permit_nums = 64;
-            let result = execute_futures_in_parallel(
-                tasks,
-                thread_nums,
-                permit_nums,
-                "get-parquet-splits-worker".to_owned(),
-            )
-            .await?
-            .into_iter()
-            .collect::<Result<Vec<Vec<_>>>>()?
-            .into_iter()
-            .flatten()
-            .collect();
-
-            Ok(result)
-        }
+        let files = file_infos
+            .iter()
+            .map(|f| (f.path.clone(), f.size))
+            .collect::<Vec<_>>();
+        let metas = read_parquet_metas_in_parallel(op.clone(), files, 16, 64).await?;
+        Self::make_splits(file_infos, metas)
     }
 
     async fn infer_schema(&self, path: &str, op: &Operator) -> Result<TableSchemaRef> {
@@ -202,7 +176,14 @@ impl InputFormatPipe for ParquetFormatPipe {
         let op = ctx.source.get_operator()?;
         let mut reader = op.reader(&split_info.file.path).await?;
         let input_fields = Arc::new(get_used_fields(&meta.file.fields, &ctx.schema)?);
-        RowGroupInMemory::read_async(&mut reader, meta.meta.clone(), input_fields).await
+
+        RowGroupInMemory::read_async(
+            split_info.to_string(),
+            &mut reader,
+            meta.meta.clone(),
+            input_fields,
+        )
+        .await
     }
 }
 
@@ -244,6 +225,7 @@ impl DynData for SplitMeta {
 }
 
 pub struct RowGroupInMemory {
+    pub split_info: String,
     pub meta: RowGroupMetaData,
     // for input, they are in the order of schema.
     // for select, they are the fields used in query.
@@ -265,6 +247,7 @@ impl RowBatchTrait for RowGroupInMemory {
 
 impl RowGroupInMemory {
     fn read<R: Read + Seek>(
+        split_info: String,
         reader: &mut R,
         meta: RowGroupMetaData,
         fields: Arc<Vec<Field>>,
@@ -278,6 +261,7 @@ impl RowGroupInMemory {
             filed_arrays.push(data)
         }
         Ok(Self {
+            split_info,
             meta,
             field_meta_indexes,
             field_arrays: filed_arrays,
@@ -286,6 +270,7 @@ impl RowGroupInMemory {
     }
 
     async fn read_async<R: AsyncRead + AsyncSeek + Send + Unpin>(
+        split_info: String,
         reader: &mut R,
         meta: RowGroupMetaData,
         fields: Arc<Vec<Field>>,
@@ -299,6 +284,7 @@ impl RowGroupInMemory {
             filed_arrays.push(data)
         }
         Ok(Self {
+            split_info,
             meta,
             field_meta_indexes,
             field_arrays: filed_arrays,
@@ -325,9 +311,10 @@ impl RowGroupInMemory {
         }
 
         match RowGroupDeserializer::new(column_chunks, self.meta.num_rows(), None).next() {
-            None => Err(ErrorCode::Internal(
-                "deserialize from raw group: fail to get a chunk",
-            )),
+            None => Err(ErrorCode::Internal(format!(
+                "no chunk when deserialize row group {}",
+                self.split_info
+            ))),
             Some(Ok(chunk)) => Ok(chunk),
             Some(Err(e)) => Err(e.into()),
         }
@@ -376,7 +363,15 @@ impl BlockBuilderTrait for ParquetBlockBuilder {
     fn deserialize(&mut self, mut batch: Option<RowGroupInMemory>) -> Result<Vec<DataBlock>> {
         if let Some(rg) = batch.as_mut() {
             let chunk = rg.get_arrow_chunk()?;
-            let block = DataBlock::from_arrow_chunk(&chunk, &self.ctx.data_schema())?;
+
+            let fields: Vec<DataField> = rg
+                .fields_to_read
+                .iter()
+                .map(DataField::from)
+                .collect::<Vec<_>>();
+
+            let input_schema = DataSchema::new(fields);
+            let block = DataBlock::from_arrow_chunk(&chunk, &input_schema)?;
 
             let block_total_rows = block.num_rows();
             let num_rows_per_block = self.ctx.block_compact_thresholds.max_rows_per_block;
@@ -416,6 +411,7 @@ impl AligningStateTrait for AligningState {
     }
 
     fn align(&mut self, read_batch: Option<ReadBatch>) -> Result<Vec<RowGroupInMemory>> {
+        let split_info = self.split_info.to_string();
         if let Some(rb) = read_batch {
             if let ReadBatch::Buffer(b) = rb {
                 self.buffers.push(b)
@@ -440,6 +436,7 @@ impl AligningStateTrait for AligningState {
             let mut row_batches = Vec::with_capacity(file_meta.row_groups.len());
             for row_group in file_meta.row_groups.into_iter() {
                 row_batches.push(RowGroupInMemory::read(
+                    split_info.clone(),
                     &mut cursor,
                     row_group,
                     fields.clone(),
@@ -458,20 +455,12 @@ impl AligningStateTrait for AligningState {
 
 fn get_used_fields(fields: &Vec<Field>, schema: &TableSchemaRef) -> Result<Vec<Field>> {
     let mut read_fields = Vec::with_capacity(fields.len());
-    for (idx, f) in schema.fields().iter().enumerate() {
+    for f in schema.fields().iter() {
         if let Some(m) = fields
             .iter()
             .filter(|c| c.name.eq_ignore_ascii_case(f.name()))
             .last()
         {
-            let tf = TableField::from(m);
-            if tf.data_type().remove_nullable() != f.data_type().remove_nullable() {
-                return Err(ErrorCode::TableSchemaMismatch(format!(
-                    "parquet schema mismatch for field {}(start from 0), expect: {:?}, got {:?}",
-                    idx, f, tf
-                )));
-            }
-
             read_fields.push(m.clone());
         } else {
             return Err(ErrorCode::TableSchemaMismatch(format!(

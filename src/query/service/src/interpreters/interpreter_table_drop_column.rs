@@ -81,6 +81,7 @@ impl Interpreter for DropTableColumnInterpreter {
                 table_id,
                 seq: MatchSeq::Exact(table_version),
                 new_table_meta,
+                copied_files: None,
             };
 
             catalog.update_table_meta(table_info, req).await?;

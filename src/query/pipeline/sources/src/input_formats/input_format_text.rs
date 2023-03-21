@@ -19,7 +19,6 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_catalog::plan::StageFileInfo;
 use common_compress::DecompressDecoder;
 use common_compress::DecompressState;
 use common_exception::ErrorCode;
@@ -34,6 +33,7 @@ use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
+use common_storage::StageFileInfo;
 use opendal::Operator;
 
 use crate::input_formats::input_pipeline::AligningStateTrait;

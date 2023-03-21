@@ -60,7 +60,7 @@ async fn apply_block_pruning(
     let ctx: Arc<dyn TableContext> = ctx;
     let segment_locs = table_snapshot.segments.clone();
     FusePruner::create(&ctx, op, schema, push_down)?
-        .pruning(segment_locs)
+        .pruning(segment_locs, None, None)
         .await
         .map(|v| v.into_iter().map(|(_, v)| v).collect())
 }
@@ -163,7 +163,7 @@ async fn test_block_pruner() -> Result<()> {
         location: snapshot_loc.clone(),
         len_hint: None,
         ver: TableSnapshot::VERSION,
-        put_cache: true,
+        put_cache: false,
     };
 
     let snapshot = reader.read(&load_params).await?;
@@ -173,7 +173,6 @@ async fn test_block_pruner() -> Result<()> {
         filter: Some(parse_to_remote_string_expr(
             ctx.clone(),
             table.clone(),
-            false,
             "a > 3",
         )?),
         ..Default::default()
@@ -186,7 +185,6 @@ async fn test_block_pruner() -> Result<()> {
     e2.filter = Some(parse_to_remote_string_expr(
         ctx.clone(),
         table.clone(),
-        false,
         "a > 0 and b > 6",
     )?);
     let b2 = num_blocks - max_val_of_b as usize - 1;

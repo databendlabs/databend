@@ -30,6 +30,7 @@ use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_types::MatchSeq;
 use common_sql::field_default_value;
 use opendal::Operator;
@@ -74,9 +75,10 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         operation_log: TableOperationLog,
+        copied_files: Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
     ) -> Result<()> {
-        self.commit_with_max_retry_elapsed(ctx, operation_log, None, overwrite)
+        self.commit_with_max_retry_elapsed(ctx, operation_log, copied_files, None, overwrite)
             .await
     }
 
@@ -84,6 +86,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         operation_log: TableOperationLog,
+        copied_files: Option<UpsertTableCopiedFileReq>,
         max_retry_elapsed: Option<Duration>,
         overwrite: bool,
     ) -> Result<()> {
@@ -116,7 +119,10 @@ impl FuseTable {
 
         let transient = self.transient();
         loop {
-            match tbl.try_commit(ctx.clone(), &operation_log, overwrite).await {
+            match tbl
+                .try_commit(ctx.clone(), &operation_log, &copied_files, overwrite)
+                .await
+            {
                 Ok(_) => {
                     break {
                         if transient {
@@ -196,6 +202,7 @@ impl FuseTable {
         &'a self,
         ctx: Arc<dyn TableContext>,
         operation_log: &'a TableOperationLog,
+        copied_files: &Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
     ) -> Result<()> {
         let prev = self.read_table_snapshot().await?;
@@ -256,6 +263,7 @@ impl FuseTable {
             &self.meta_location_generator,
             new_snapshot,
             None,
+            copied_files,
             &self.operator,
         )
         .await
@@ -343,6 +351,7 @@ impl FuseTable {
         location_generator: &TableMetaLocationGenerator,
         snapshot: TableSnapshot,
         table_statistics: Option<TableSnapshotStatistics>,
+        copied_files: &Option<UpsertTableCopiedFileReq>,
         operator: &Operator,
     ) -> Result<()> {
         let snapshot_location = location_generator
@@ -392,6 +401,7 @@ impl FuseTable {
             table_id,
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
+            copied_files: copied_files.clone(),
         };
 
         // 3. let's roll
@@ -462,7 +472,7 @@ impl FuseTable {
                 acc.col_stats = if acc.col_stats.is_empty() {
                     stats.col_stats.clone()
                 } else {
-                    statistics::reduce_block_statistics(&[&acc.col_stats, &stats.col_stats], None)?
+                    statistics::reduce_block_statistics(&[&acc.col_stats, &stats.col_stats])?
                 };
                 seg_acc.push(location.clone());
                 Ok::<_, ErrorCode>((acc, seg_acc))
@@ -502,6 +512,7 @@ impl FuseTable {
             });
     }
 
+    // TODO refactor, it is called by segment compaction and re-cluster now
     pub async fn commit_mutation(
         &self,
         ctx: &Arc<dyn TableContext>,
@@ -520,6 +531,13 @@ impl FuseTable {
 
         // potentially concurrently appended segments, init it to empty
         let mut concurrently_appended_segment_locations: &[Location] = &[];
+
+        // Status
+        {
+            let status = "mutation: begin try to commit";
+            ctx.set_status_info(status);
+            info!(status);
+        }
 
         while retries < MAX_RETRIES {
             let mut snapshot_tobe_committed =
@@ -544,6 +562,7 @@ impl FuseTable {
                 &self.meta_location_generator,
                 snapshot_tobe_committed,
                 None,
+                &None,
                 &self.operator,
             )
             .await

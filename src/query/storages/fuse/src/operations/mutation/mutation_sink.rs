@@ -25,6 +25,7 @@ use opendal::Operator;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
+use tracing::info;
 
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -153,6 +154,13 @@ impl Processor for MutationSink {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::ReadMeta(input_meta) => {
+                // Status
+                {
+                    let status = "mutation: begin try to commit";
+                    self.ctx.set_status_info(status);
+                    info!(status);
+                }
+
                 let meta = MutationSinkMeta::from_meta(&input_meta)?;
 
                 self.merged_segments = meta.segments.clone();
@@ -203,6 +211,7 @@ impl Processor for MutationSink {
                     &self.location_gen,
                     new_snapshot,
                     None,
+                    &None,
                     &self.dal,
                 )
                 .await

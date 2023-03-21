@@ -65,11 +65,20 @@ impl<T: AsyncSink + 'static> AsyncSinker<T> {
 
 impl<T: AsyncSink + 'static> Drop for AsyncSinker<T> {
     fn drop(&mut self) {
-        if !self.called_on_finish {
-            self.called_on_finish = true;
+        if !self.called_on_start || !self.called_on_finish {
             if let Some(mut inner) = self.inner.take() {
-                GlobalIORuntime::instance().spawn(async move {
-                    let _ = inner.on_finish().await;
+                GlobalIORuntime::instance().spawn({
+                    let called_on_start = self.called_on_start;
+                    let called_on_finish = self.called_on_finish;
+                    async move {
+                        if !called_on_start {
+                            let _ = inner.on_start().await;
+                        }
+
+                        if !called_on_finish {
+                            let _ = inner.on_finish().await;
+                        }
+                    }
                 });
             }
         }
