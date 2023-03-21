@@ -69,11 +69,9 @@ runs:
         case ${{ inputs.source }} in
           pr)
             BENCHMARK_SYSTEM="Databend(PR#${{ inputs.source_id }})"
-            BENCHMARK_TYPE="PR"
             ;;
           release)
             BENCHMARK_SYSTEM="Databend(Release@${{ inputs.source_id }})"
-            BENCHMARK_TYPE="Release"
             ;;
           *)
             echo "Unspported benchmark source: ${{ inputs.source }}"
@@ -94,7 +92,7 @@ runs:
         esac
         jq ".cluster_size = \"${BENCHMARK_CLUSTER_SIZE}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
         jq ".machine = \"${BENCHMARK_CLUSTER_SIZE}×${{ inputs.size }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
-        jq ".tags = [\"${BENCHMARK_TYPE}\", \"s3\"]" <result.json >result.json.tmp && mv result.json.tmp result.json
+        jq ".tags = [\"s3\"]" <result.json >result.json.tmp && mv result.json.tmp result.json
         jq ".comment = \"commit:${{ inputs.sha }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
         mv result.json result-${{ inputs.dataset }}-cloud-${{ inputs.size }}.json
 
