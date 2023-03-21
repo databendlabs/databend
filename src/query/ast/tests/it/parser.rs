@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write;
+
 use common_ast::display_parser_error;
 use common_ast::parser::expr::*;
 use common_ast::parser::parse_sql;
@@ -25,7 +27,6 @@ use common_ast::Input;
 use common_exception::Result;
 use goldenfile::Mint;
 use nom::Parser;
-use std::io::Write;
 
 macro_rules! run_parser {
     ($file:expr, $parser:expr, $source:expr $(,)*) => {
