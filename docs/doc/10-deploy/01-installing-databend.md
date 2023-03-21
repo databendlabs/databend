@@ -13,7 +13,11 @@ Databend offers you these options for downloading the installation packages:
 
 ## Manual Download
 
-The primary distribution packages for Databend are `.tar.gz` archives containing single executable files that you can download from the [Download](https://databend.rs/download) page and extract them anywhere on your system. 
+The primary distribution packages for Databend are `.tar.gz` archives containing single executable files that you can download from the [Download](https://databend.rs/download) page and extract them anywhere on your system.
+
+:::note
+**Linux Generic (ARM, 64-bit)** is suitable for Linux distributions that use musl as the standard C library; **Linux Generic (x86, 64-bit)** is suitable for Linux distributions that use GNU C with a minimum version 2.29 of GLIBC.
+:::
 
 ## APT Package Manager
 
