@@ -39,8 +39,10 @@ use common_expression::types::DataType;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 
 use crate::binder::join::JoinConditions;
+use crate::binder::project_set::SrfCollector;
 use crate::binder::scalar_common::split_conjunctions;
 use crate::binder::CteInfo;
+use crate::binder::ExprContext;
 use crate::binder::Visibility;
 use crate::optimizer::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
@@ -73,7 +75,7 @@ pub struct SelectItem<'a> {
 impl Binder {
     pub(super) async fn bind_select_stmt(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &SelectStmt,
         order_by: &[OrderByExpr],
     ) -> Result<(SExpr, BindContext)> {
@@ -110,6 +112,22 @@ impl Binder {
         }
 
         let window_order_by_exprs = self.fetch_window_order_by_expr(&stmt.select_list).await;
+
+        // Collect set returning functions
+        let set_returning_functions = {
+            let mut collector = SrfCollector::new();
+            stmt.select_list.iter().for_each(|item| {
+                if let SelectTarget::AliasedExpr { expr, .. } = item {
+                    collector.visit(expr);
+                }
+            });
+            collector.into_srfs()
+        };
+
+        // Bind set returning functions
+        s_expr = self
+            .bind_project_set(&mut from_context, &set_returning_functions, s_expr)
+            .await?;
 
         // Generate a analyzed select list with from context
         let mut select_list = self
@@ -170,7 +188,7 @@ impl Binder {
 
         if let Some((having, span)) = having {
             s_expr = self
-                .bind_having(&from_context, having, span, s_expr)
+                .bind_having(&mut from_context, having, span, s_expr)
                 .await?;
         }
 
@@ -231,7 +249,7 @@ impl Binder {
     #[async_recursion]
     pub(crate) async fn bind_set_expr(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         set_expr: &SetExpr,
         order_by: &[OrderByExpr],
     ) -> Result<(SExpr, BindContext)> {
@@ -254,7 +272,7 @@ impl Binder {
     #[async_recursion]
     pub(crate) async fn bind_query(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         query: &Query,
     ) -> Result<(SExpr, BindContext)> {
         if let Some(with) = &query.with {
@@ -278,11 +296,11 @@ impl Binder {
                     .await?
             }
             SetExpr::SetOperation(_) => {
-                let (mut s_expr, bind_context) =
+                let (mut s_expr, mut bind_context) =
                     self.bind_set_expr(bind_context, &query.body, &[]).await?;
                 if !query.order_by.is_empty() {
                     s_expr = self
-                        .bind_order_by_for_set_operation(&bind_context, s_expr, &query.order_by)
+                        .bind_order_by_for_set_operation(&mut bind_context, s_expr, &query.order_by)
                         .await?;
                 }
                 (s_expr, bind_context)
@@ -319,6 +337,8 @@ impl Binder {
         expr: &Expr,
         child: SExpr,
     ) -> Result<SExpr> {
+        bind_context.set_expr_context(ExprContext::WhereClause);
+
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
             self.ctx.clone(),
@@ -343,7 +363,7 @@ impl Binder {
 
     pub(super) async fn bind_set_operator(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         left: &SetExpr,
         right: &SetExpr,
         op: &SetOperator,

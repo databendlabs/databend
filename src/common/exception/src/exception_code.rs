@@ -137,6 +137,7 @@ build_exceptions! {
     DropColumnEmptyError(1109),
     // create table or alter table add column with internal column name
     TableWithInternalColumnName(1110),
+    EmptyShareEndpointConfig(1111),
 
     // Data Related Errors
 

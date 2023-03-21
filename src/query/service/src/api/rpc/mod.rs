@@ -41,8 +41,6 @@ pub use exchange::MergeExchangeParams;
 pub use exchange::ShuffleDataExchange;
 pub use exchange::ShuffleExchangeParams;
 pub use exchange::TransformExchangeDeserializer;
-pub use flight_client::ClientFlightExchange;
-pub use flight_client::ServerFlightExchange;
 pub use flight_scatter::FlightScatter;
 pub use flight_scatter_broadcast::BroadcastFlightScatter;
 pub use flight_scatter_hash::HashFlightScatter;

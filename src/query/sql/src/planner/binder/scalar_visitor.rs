@@ -22,7 +22,6 @@ use crate::plans::FunctionCall;
 use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
-use crate::plans::Unnest;
 use crate::plans::WindowFunc;
 
 /// Controls how the visitor recursion should proceed.
@@ -93,9 +92,6 @@ pub trait ScalarVisitor: Sized {
                                 | ScalarExpr::BoundInternalColumnRef(_)
                                 | ScalarExpr::ConstantExpr(_) => {}
                                 ScalarExpr::CastExpr(CastExpr { argument, .. }) => {
-                                    stack.push(RecursionProcessing::Call(argument))
-                                }
-                                ScalarExpr::Unnest(Unnest { argument, .. }) => {
                                     stack.push(RecursionProcessing::Call(argument))
                                 }
                                 ScalarExpr::SubqueryExpr(_) => {}
