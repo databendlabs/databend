@@ -44,49 +44,14 @@ pub fn register_unnest_functions(registry: &mut SetReturningFunctionRegistry) {
     };
 
     {
-        // Unnest 1d-array
-        let arg_types = vec![DataType::Array(Box::new(DataType::Nullable(Box::new(
-            DataType::Generic(0),
-        ))))];
-        registry.register(
-            "unnest",
-            &arg_types,
-            &[DataType::Nullable(Box::new(DataType::Generic(0)))],
-            unnest_impl,
-        );
-    }
-
-    {
-        // Unnest 2d-array
+        // Unnest 10d-array
         let arg_types = vec![DataType::Array(Box::new(DataType::Array(Box::new(
-            DataType::Nullable(Box::new(DataType::Generic(0))),
-        ))))];
-        registry.register(
-            "unnest",
-            &arg_types,
-            &[DataType::Nullable(Box::new(DataType::Generic(0)))],
-            unnest_impl,
-        );
-    }
-
-    {
-        // Unnest 3d-array
-        let arg_types = vec![DataType::Array(Box::new(DataType::Array(Box::new(
-            DataType::Array(Box::new(DataType::Nullable(Box::new(DataType::Generic(0))))),
-        ))))];
-        registry.register(
-            "unnest",
-            &arg_types,
-            &[DataType::Nullable(Box::new(DataType::Generic(0)))],
-            unnest_impl,
-        );
-    }
-
-    {
-        // Unnest 4d-array
-        let arg_types = vec![DataType::Array(Box::new(DataType::Array(Box::new(
-            DataType::Array(Box::new(DataType::Array(Box::new(DataType::Nullable(
-                Box::new(DataType::Generic(0)),
+            DataType::Array(Box::new(DataType::Array(Box::new(DataType::Array(
+                Box::new(DataType::Array(Box::new(DataType::Array(Box::new(
+                    DataType::Array(Box::new(DataType::Array(Box::new(DataType::Array(
+                        Box::new(DataType::Nullable(Box::new(DataType::Generic(0)))),
+                    ))))),
+                ))))),
             ))))),
         ))))];
         registry.register(
@@ -98,10 +63,14 @@ pub fn register_unnest_functions(registry: &mut SetReturningFunctionRegistry) {
     }
 
     {
-        // Unnest 5d-array
+        // Unnest 9d-array
         let arg_types = vec![DataType::Array(Box::new(DataType::Array(Box::new(
             DataType::Array(Box::new(DataType::Array(Box::new(DataType::Array(
-                Box::new(DataType::Nullable(Box::new(DataType::Generic(0)))),
+                Box::new(DataType::Array(Box::new(DataType::Array(Box::new(
+                    DataType::Array(Box::new(DataType::Array(Box::new(DataType::Nullable(
+                        Box::new(DataType::Generic(0)),
+                    ))))),
+                ))))),
             ))))),
         ))))];
         registry.register(
@@ -113,11 +82,11 @@ pub fn register_unnest_functions(registry: &mut SetReturningFunctionRegistry) {
     }
 
     {
-        // Unnest 6d-array
+        // Unnest 8d-array
         let arg_types = vec![DataType::Array(Box::new(DataType::Array(Box::new(
             DataType::Array(Box::new(DataType::Array(Box::new(DataType::Array(
-                Box::new(DataType::Array(Box::new(DataType::Nullable(Box::new(
-                    DataType::Generic(0),
+                Box::new(DataType::Array(Box::new(DataType::Array(Box::new(
+                    DataType::Array(Box::new(DataType::Nullable(Box::new(DataType::Generic(0))))),
                 ))))),
             ))))),
         ))))];
@@ -147,13 +116,11 @@ pub fn register_unnest_functions(registry: &mut SetReturningFunctionRegistry) {
     }
 
     {
-        // Unnest 9d-array
+        // Unnest 6d-array
         let arg_types = vec![DataType::Array(Box::new(DataType::Array(Box::new(
             DataType::Array(Box::new(DataType::Array(Box::new(DataType::Array(
-                Box::new(DataType::Array(Box::new(DataType::Array(Box::new(
-                    DataType::Array(Box::new(DataType::Array(Box::new(DataType::Array(
-                        Box::new(DataType::Generic(0)),
-                    ))))),
+                Box::new(DataType::Array(Box::new(DataType::Nullable(Box::new(
+                    DataType::Generic(0),
                 ))))),
             ))))),
         ))))];
@@ -166,15 +133,65 @@ pub fn register_unnest_functions(registry: &mut SetReturningFunctionRegistry) {
     }
 
     {
-        // Unnest 10d-array
+        // Unnest 5d-array
         let arg_types = vec![DataType::Array(Box::new(DataType::Array(Box::new(
             DataType::Array(Box::new(DataType::Array(Box::new(DataType::Array(
-                Box::new(DataType::Array(Box::new(DataType::Array(Box::new(
-                    DataType::Array(Box::new(DataType::Array(Box::new(DataType::Array(
-                        Box::new(DataType::Nullable(Box::new(DataType::Generic(0)))),
-                    ))))),
-                ))))),
+                Box::new(DataType::Nullable(Box::new(DataType::Generic(0)))),
             ))))),
+        ))))];
+        registry.register(
+            "unnest",
+            &arg_types,
+            &[DataType::Nullable(Box::new(DataType::Generic(0)))],
+            unnest_impl,
+        );
+    }
+
+    {
+        // Unnest 4d-array
+        let arg_types = vec![DataType::Array(Box::new(DataType::Array(Box::new(
+            DataType::Array(Box::new(DataType::Array(Box::new(DataType::Nullable(
+                Box::new(DataType::Generic(0)),
+            ))))),
+        ))))];
+        registry.register(
+            "unnest",
+            &arg_types,
+            &[DataType::Nullable(Box::new(DataType::Generic(0)))],
+            unnest_impl,
+        );
+    }
+
+    {
+        // Unnest 3d-array
+        let arg_types = vec![DataType::Array(Box::new(DataType::Array(Box::new(
+            DataType::Array(Box::new(DataType::Nullable(Box::new(DataType::Generic(0))))),
+        ))))];
+        registry.register(
+            "unnest",
+            &arg_types,
+            &[DataType::Nullable(Box::new(DataType::Generic(0)))],
+            unnest_impl,
+        );
+    }
+
+    {
+        // Unnest 2d-array
+        let arg_types = vec![DataType::Array(Box::new(DataType::Array(Box::new(
+            DataType::Nullable(Box::new(DataType::Generic(0))),
+        ))))];
+        registry.register(
+            "unnest",
+            &arg_types,
+            &[DataType::Nullable(Box::new(DataType::Generic(0)))],
+            unnest_impl,
+        );
+    }
+
+    {
+        // Unnest 1d-array
+        let arg_types = vec![DataType::Array(Box::new(DataType::Nullable(Box::new(
+            DataType::Generic(0),
         ))))];
         registry.register(
             "unnest",
