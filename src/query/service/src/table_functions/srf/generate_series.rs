@@ -72,21 +72,13 @@ impl GenerateSeriesTable {
             .clone()
             .into_number()
             .map_err(|_| ErrorCode::BadArguments("Expected number argument."))?;
-        let (step) = match table_args.positioned.len() {
-            2 => {
-                1;
-            }
-
-            3 => {
-                table_args.positioned[2]
-                    .clone()
-                    .into_number()
-                    .map_err(|_| ErrorCode::BadArguments("Expected number argument."))?;
-            }
-
-            // This case never happened, because the check above.
-            _ => 0,
-        };
+        let mut step = 1;
+        if table_args.positioned.len() == 3 {
+            step = table_args.positioned[2]
+                .clone()
+                .into_number()
+                .map_err(|_| ErrorCode::BadArguments("Expected number argument."))?.as_int32().unwrap().clone();
+        }
         println!("start: {}, end: {}, step: {}", start, end, step);
 
         let column = Column::Null { len: 0 };
