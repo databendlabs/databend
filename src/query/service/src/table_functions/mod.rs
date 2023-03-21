@@ -26,4 +26,3 @@ pub use numbers::NumbersTable;
 pub use openai::GPT2SQLTable;
 pub use table_function::TableFunction;
 pub use table_function_factory::TableFunctionFactory;
-pub use unnest::UnnestTable;

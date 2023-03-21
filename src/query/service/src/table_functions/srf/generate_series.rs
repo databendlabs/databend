@@ -27,9 +27,12 @@ use common_catalog::table_function::TableFunction;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_schema_type;
+use common_expression::types::NumberDataType;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::Scalar;
+use common_expression::Scalar::Number;
+use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_meta_app::schema::TableIdent;
@@ -37,6 +40,7 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::OneBlockSource;
+use common_sql::validate_function_arg;
 use common_storages_factory::Table;
 use common_storages_fuse::TableContext;
 
@@ -52,21 +56,44 @@ impl GenerateSeriesTable {
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        let args = table_args.expect_all_positioned(table_func_name, Some(1))?;
+        // Check args.
+        validate_function_arg(
+            table_func_name,
+            table_args.positioned.len(),
+            Some((2, 3)),
+            2,
+        )?;
 
-        let column = match &args[0] {
-            Scalar::Array(column) => column.unnest(),
-            Scalar::EmptyArray => Column::Null { len: 0 },
-            _ => {
-                return Err(ErrorCode::BadArguments(
-                    "The argument of table function unnest should be an array",
-                ));
+        let start = table_args.positioned[0]
+            .clone()
+            .into_number()
+            .map_err(|_| ErrorCode::BadArguments("Expected number argument."))?;
+        let end = table_args.positioned[1]
+            .clone()
+            .into_number()
+            .map_err(|_| ErrorCode::BadArguments("Expected number argument."))?;
+        let (step) = match table_args.positioned.len() {
+            2 => {
+                1;
             }
+
+            3 => {
+                table_args.positioned[2]
+                    .clone()
+                    .into_number()
+                    .map_err(|_| ErrorCode::BadArguments("Expected number argument."))?;
+            }
+
+            // This case never happened, because the check above.
+            _ => 0,
         };
+        println!("start: {}, end: {}, step: {}", start, end, step);
+
+        let column = Column::Null { len: 0 };
 
         let schema = TableSchema::new(vec![TableField::new(
-            "unnest",
-            infer_schema_type(&column.data_type().unnest())?,
+            "generate_series",
+            TableDataType::Number(NumberDataType::UInt64),
         )]);
 
         let table_info = TableInfo {
