@@ -145,7 +145,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
 
                 for (place, valid) in places.iter().zip(v.iter()) {
                     if valid {
-                        self.set_flag(*place, 1);
+                        self.set_flag(place.next(offset), 1);
                     }
                 }
             }
