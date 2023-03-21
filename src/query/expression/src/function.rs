@@ -436,10 +436,19 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
             }
         }
         let results = f(&nonull_args, ctx);
-        let bitmap = bitmap.unwrap_or_else(|| constant_bitmap(true, len));
+        let mut bitmap = bitmap.unwrap_or_else(|| constant_bitmap(true, len));
+        let error_bitmap: Bitmap = ctx
+            .errors
+            .as_ref()
+            .map(|(b, _)| b.clone())
+            .unwrap_or_else(|| constant_bitmap(true, len))
+            .into();
+        ctx.errors = None;
+        bitmap = bitmap & &error_bitmap;
+
         match results {
             Value::Scalar(s) => {
-                if bitmap.get(0) {
+                if bitmap.get(0) && ctx.errors.is_none() {
                     Value::Scalar(s)
                 } else {
                     Value::Scalar(Scalar::Null)
