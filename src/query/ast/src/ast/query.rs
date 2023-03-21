@@ -205,15 +205,15 @@ pub enum TimeTravelPoint {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Pivot {
     pub aggregate: Expr,
-    pub pivot_column: Identifier,
-    pub pivot_values: Vec<Expr>,
+    pub value_column: Identifier,
+    pub values: Vec<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Unpivot {
-    pub col_before_for: Identifier,
-    pub col_after_for: Identifier,
-    pub unpivot_cols: Vec<Identifier>,
+    pub value_column: Identifier,
+    pub column_name: Identifier,
+    pub names: Vec<Identifier>,
 }
 
 /// A table name or a parenthesized subquery with an optional alias

@@ -310,12 +310,10 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         rule! {
             UNPIVOT ~ "(" ~ #ident ~ "FOR" ~ #ident ~ "IN" ~ "(" ~ #comma_separated_list1(ident) ~ ")" ~ ")"
         },
-        |(_unpivot, _, col_before_for, _for, col_after_for, _in, _, unpivot_cols, _, _)| {
-            Unpivot {
-                col_before_for,
-                col_after_for,
-                unpivot_cols,
-            }
+        |(_unpivot, _, col_before_for, _for, col_after_for, _in, _, unpivot_cols, _, _)| Unpivot {
+            col_before_for,
+            col_after_for,
+            unpivot_cols,
         },
     );
     let aliased_table = map(

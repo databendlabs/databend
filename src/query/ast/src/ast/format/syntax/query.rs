@@ -275,8 +275,8 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             table,
             alias,
             travel_point,
-            pivot: _,
-            unpivot: _,
+            pivot,
+            unpivot,
         } => if let Some(catalog) = catalog {
             RcDoc::text(catalog.to_string()).append(RcDoc::text("."))
         } else {
@@ -288,6 +288,16 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             RcDoc::nil()
         })
         .append(RcDoc::text(table.to_string()))
+        .append(if let Some(pivot) = pivot {
+            RcDoc::text(format!("{pivot}"))
+        } else {
+            RcDoc::nil()
+        })
+        .append(if let Some(unpivot) = unpivot {
+            RcDoc::text(format!("{unpivot}"))
+        } else {
+            RcDoc::nil()
+        })
         .append(if let Some(TimeTravelPoint::Snapshot(sid)) = travel_point {
             RcDoc::text(format!(" AT (SNAPSHOT => {sid})"))
         } else if let Some(TimeTravelPoint::Timestamp(ts)) = travel_point {
