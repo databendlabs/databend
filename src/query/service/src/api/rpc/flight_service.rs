@@ -117,7 +117,7 @@ impl FlightService for DatabendQueryFlightService {
 
                 Ok(RawResponse::new(Box::pin(
                     DataExchangeManager::instance()
-                        .new_handle_exchange_fragment(query_id, target, fragment)?,
+                        .handle_exchange_fragment(query_id, target, fragment)?,
                 )))
             }
             exchange_type => Err(Status::unimplemented(format!(
