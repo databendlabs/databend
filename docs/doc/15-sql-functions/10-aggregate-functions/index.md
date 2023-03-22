@@ -30,4 +30,5 @@ These functions help you extract and summarize data from databases to gain valua
 | [QUANTILE](aggregate-quantile.md)                           | Calculates the quantile for a specific column               | 
 | [RETENTION](aggregate-retention.md)                         | Calculates retention for a set of events                    | 
 | [WINDOW_FUNNEL](aggregate-windowfunnel.md)                  | Analyzes user behavior in a time-ordered sequence of events | 
+| [LIST](aggregate-list.md)                                   | Converts all the values of a column to an Array             |
 
