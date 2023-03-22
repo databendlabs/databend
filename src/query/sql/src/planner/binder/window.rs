@@ -163,7 +163,7 @@ impl Binder {
                         bind_context.columns.push(column_binding.clone());
                     }
                     let mut scalar_binder = ScalarBinder::new(
-                        &bind_context,
+                        &mut bind_context,
                         self.ctx.clone(),
                         &self.name_resolution_ctx,
                         self.metadata.clone(),
