@@ -28,6 +28,7 @@ use common_expression::type_check::check_function;
 use common_expression::types::DataType;
 use common_expression::ConstantFolder;
 use common_expression::DataBlock;
+use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::Expr;
 use common_expression::RemoteExpr;
@@ -63,6 +64,7 @@ use crate::optimizer::SExpr;
 use crate::plans::AggregateMode;
 use crate::plans::AndExpr;
 use crate::plans::Exchange;
+use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::Scan;
@@ -72,6 +74,7 @@ use crate::DerivedColumn;
 use crate::Metadata;
 use crate::MetadataRef;
 use crate::TableInternalColumn;
+use crate::TypeCheck;
 use crate::DUMMY_COLUMN_INDEX;
 use crate::DUMMY_TABLE_INDEX;
 
@@ -278,8 +281,45 @@ impl PhysicalPlanBuilder {
             RelOperator::Join(join) => {
                 let build_side = self.build(s_expr.child(1)?).await?;
                 let probe_side = self.build(s_expr.child(0)?).await?;
-                let build_schema = build_side.output_schema()?;
-                let probe_schema = probe_side.output_schema()?;
+
+                let build_schema = match join.join_type {
+                    JoinType::Left | JoinType::Full => {
+                        let build_schema = build_side.output_schema()?;
+                        // Wrap nullable type for columns in build side.
+                        let build_schema = DataSchemaRefExt::create(
+                            build_schema
+                                .fields()
+                                .iter()
+                                .map(|field| {
+                                    DataField::new(field.name(), field.data_type().wrap_nullable())
+                                })
+                                .collect::<Vec<_>>(),
+                        );
+                        build_schema
+                    }
+
+                    _ => build_side.output_schema()?,
+                };
+
+                let probe_schema = match join.join_type {
+                    JoinType::Right | JoinType::Full => {
+                        let probe_schema = probe_side.output_schema()?;
+                        // Wrap nullable type for columns in probe side.
+                        let probe_schema = DataSchemaRefExt::create(
+                            probe_schema
+                                .fields()
+                                .iter()
+                                .map(|field| {
+                                    DataField::new(field.name(), field.data_type().wrap_nullable())
+                                })
+                                .collect::<Vec<_>>(),
+                        );
+                        probe_schema
+                    }
+
+                    _ => probe_side.output_schema()?,
+                };
+
                 let merged_schema = DataSchemaRefExt::create(
                     probe_schema
                         .fields()
@@ -297,12 +337,12 @@ impl PhysicalPlanBuilder {
                         .right_conditions
                         .iter()
                         .map(|scalar| {
-                            let expr =
-                                scalar
-                                    .as_expr_with_col_index()?
-                                    .project_column_ref(|index| {
-                                        build_schema.index_of(&index.to_string()).unwrap()
-                                    });
+                            let expr = scalar
+                                .as_raw_expr_with_col_index()
+                                .resolve_and_check(build_schema.as_ref())?
+                                .project_column_ref(|index| {
+                                    build_schema.index_of(&index.to_string()).unwrap()
+                                });
                             let (expr, _) = ConstantFolder::fold(
                                 &expr,
                                 self.ctx.get_function_context()?,
@@ -315,12 +355,12 @@ impl PhysicalPlanBuilder {
                         .left_conditions
                         .iter()
                         .map(|scalar| {
-                            let expr =
-                                scalar
-                                    .as_expr_with_col_index()?
-                                    .project_column_ref(|index| {
-                                        probe_schema.index_of(&index.to_string()).unwrap()
-                                    });
+                            let expr = scalar
+                                .as_raw_expr_with_col_index()
+                                .resolve_and_check(probe_schema.as_ref())?
+                                .project_column_ref(|index| {
+                                    probe_schema.index_of(&index.to_string()).unwrap()
+                                });
                             let (expr, _) = ConstantFolder::fold(
                                 &expr,
                                 self.ctx.get_function_context()?,
@@ -333,12 +373,12 @@ impl PhysicalPlanBuilder {
                         .non_equi_conditions
                         .iter()
                         .map(|scalar| {
-                            let expr =
-                                scalar
-                                    .as_expr_with_col_index()?
-                                    .project_column_ref(|index| {
-                                        merged_schema.index_of(&index.to_string()).unwrap()
-                                    });
+                            let expr = scalar
+                                .as_raw_expr_with_col_index()
+                                .resolve_and_check(merged_schema.as_ref())?
+                                .project_column_ref(|index| {
+                                    merged_schema.index_of(&index.to_string()).unwrap()
+                                });
                             let (expr, _) = ConstantFolder::fold(
                                 &expr,
                                 self.ctx.get_function_context()?,
@@ -362,12 +402,13 @@ impl PhysicalPlanBuilder {
                     .items
                     .iter()
                     .map(|item| {
-                        let expr =
-                            item.scalar
-                                .as_expr_with_col_index()?
-                                .project_column_ref(|index| {
-                                    input_schema.index_of(&index.to_string()).unwrap()
-                                });
+                        let expr = item
+                            .scalar
+                            .as_raw_expr_with_col_index()
+                            .resolve_and_check(input_schema.as_ref())?
+                            .project_column_ref(|index| {
+                                input_schema.index_of(&index.to_string()).unwrap()
+                            });
                         let (expr, _) = ConstantFolder::fold(
                             &expr,
                             self.ctx.get_function_context()?,
@@ -394,12 +435,12 @@ impl PhysicalPlanBuilder {
                         .predicates
                         .iter()
                         .map(|scalar| {
-                            let expr =
-                                scalar
-                                    .as_expr_with_col_index()?
-                                    .project_column_ref(|index| {
-                                        input_schema.index_of(&index.to_string()).unwrap()
-                                    });
+                            let expr = scalar
+                                .as_raw_expr_with_col_index()
+                                .resolve_and_check(input_schema.as_ref())?
+                                .project_column_ref(|index| {
+                                    input_schema.index_of(&index.to_string()).unwrap()
+                                });
                             let expr = cast_expr_to_non_null_boolean(expr)?;
                             let (expr, _) = ConstantFolder::fold(
                                 &expr,
@@ -678,12 +719,12 @@ impl PhysicalPlanBuilder {
                     Exchange::Random => FragmentKind::Init,
                     Exchange::Hash(scalars) => {
                         for scalar in scalars {
-                            let expr =
-                                scalar
-                                    .as_expr_with_col_index()?
-                                    .project_column_ref(|index| {
-                                        input_schema.index_of(&index.to_string()).unwrap()
-                                    });
+                            let expr = scalar
+                                .as_raw_expr_with_col_index()
+                                .resolve_and_check(input_schema.as_ref())?
+                                .project_column_ref(|index| {
+                                    input_schema.index_of(&index.to_string()).unwrap()
+                                });
                             let (expr, _) = ConstantFolder::fold(
                                 &expr,
                                 self.ctx.get_function_context()?,
@@ -741,7 +782,8 @@ impl PhysicalPlanBuilder {
                     left_runtime_filters.insert(
                         left.0.clone(),
                         left.1
-                            .as_expr_with_col_index()?
+                            .as_raw_expr_with_col_index()
+                            .resolve_and_check(left_schema.as_ref())?
                             .project_column_ref(|index| {
                                 left_schema.index_of(&index.to_string()).unwrap()
                             })
@@ -751,7 +793,8 @@ impl PhysicalPlanBuilder {
                         right.0.clone(),
                         right
                             .1
-                            .as_expr_with_col_index()?
+                            .as_raw_expr_with_col_index()
+                            .resolve_and_check(right_schema.as_ref())?
                             .project_column_ref(|index| {
                                 right_schema.index_of(&index.to_string()).unwrap()
                             })
@@ -778,8 +821,10 @@ impl PhysicalPlanBuilder {
                             .args
                             .iter()
                             .map(|arg| {
-                                let expr =
-                                    arg.as_expr_with_col_index()?.project_column_ref(|index| {
+                                let expr = arg
+                                    .as_raw_expr_with_col_index()
+                                    .resolve_and_check(input_schema.as_ref())?
+                                    .project_column_ref(|index| {
                                         input_schema.index_of(&index.to_string()).unwrap()
                                     });
                                 let (expr, _) = ConstantFolder::fold(

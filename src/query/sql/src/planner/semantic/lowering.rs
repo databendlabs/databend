@@ -12,16 +12,144 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
+use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::type_check;
+use common_expression::type_check::check;
+use common_expression::types::DataType;
+use common_expression::ColumnIndex;
+use common_expression::DataSchema;
 use common_expression::Expr;
 use common_expression::RawExpr;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 
 use crate::plans::ScalarExpr;
+use crate::ColumnEntry;
+use crate::IndexType;
+use crate::Metadata;
 
 const DUMMY_NAME: &str = "DUMMY";
 const DUMMY_INDEX: usize = usize::MAX;
+
+pub trait LoweringContext {
+    type ColumnID: ColumnIndex;
+
+    fn resolve_column_type(&self, column_id: &Self::ColumnID) -> Result<DataType>;
+}
+
+impl LoweringContext for Metadata {
+    type ColumnID = IndexType;
+
+    fn resolve_column_type(&self, column_id: &Self::ColumnID) -> Result<DataType> {
+        let column_entry = self.column(*column_id);
+        match column_entry {
+            ColumnEntry::BaseTableColumn(column) => Ok(DataType::from(&column.data_type)),
+            ColumnEntry::DerivedColumn(column) => Ok(column.data_type.clone()),
+            ColumnEntry::InternalColumn(column) => Ok(column.internal_column.data_type()),
+        }
+    }
+}
+
+impl LoweringContext for DataSchema {
+    type ColumnID = IndexType;
+
+    fn resolve_column_type(&self, column_id: &Self::ColumnID) -> Result<DataType> {
+        let column = self.field_with_name(&column_id.to_string())?;
+        Ok(column.data_type().clone())
+    }
+}
+
+impl<Index> LoweringContext for HashMap<Index, DataType>
+where Index: ColumnIndex
+{
+    type ColumnID = Index;
+
+    fn resolve_column_type(&self, column_id: &Self::ColumnID) -> Result<DataType> {
+        self.get(column_id).cloned().ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "Logical error: can not find column {:?}",
+                column_id
+            ))
+        })
+    }
+}
+
+fn resolve_column_type<C: LoweringContext>(
+    raw_expr: &RawExpr<C::ColumnID>,
+    context: &C,
+) -> Result<RawExpr<C::ColumnID>> {
+    match raw_expr {
+        RawExpr::ColumnRef {
+            span,
+            id,
+            display_name,
+            ..
+        } => {
+            let data_type = context.resolve_column_type(id)?;
+            Ok(RawExpr::ColumnRef {
+                id: id.clone(),
+                span: *span,
+                display_name: display_name.clone(),
+                data_type,
+            })
+        }
+        RawExpr::Cast {
+            span,
+            is_try,
+            expr,
+            dest_type,
+        } => Ok(RawExpr::Cast {
+            span: *span,
+            is_try: *is_try,
+            expr: Box::new(resolve_column_type(expr, context)?),
+            dest_type: dest_type.clone(),
+        }),
+        RawExpr::FunctionCall {
+            span,
+            name,
+            params,
+            args,
+        } => {
+            let args = args
+                .iter()
+                .map(|arg| resolve_column_type(arg, context))
+                .collect::<Result<Vec<_>>>()?;
+            Ok(RawExpr::FunctionCall {
+                span: *span,
+                name: name.clone(),
+                params: params.clone(),
+                args,
+            })
+        }
+        RawExpr::Literal { .. } => Ok(raw_expr.clone()),
+    }
+}
+
+pub trait TypeCheck<Index: ColumnIndex> {
+    /// Resolve data type with `LoweringContext` and perform type check.
+    fn resolve_and_check(
+        &self,
+        resolver: &impl LoweringContext<ColumnID = Index>,
+    ) -> Result<Expr<Index>>;
+
+    /// Perform type check without resolving data type.
+    fn type_check(&self) -> Result<Expr<Index>>;
+}
+
+impl<Index: ColumnIndex> TypeCheck<Index> for RawExpr<Index> {
+    fn resolve_and_check(
+        &self,
+        resolver: &impl LoweringContext<ColumnID = Index>,
+    ) -> Result<Expr<Index>> {
+        let raw_expr = resolve_column_type(self, resolver)?;
+        check(&raw_expr, &BUILTIN_FUNCTIONS)
+    }
+
+    fn type_check(&self) -> Result<Expr<Index>> {
+        check(self, &BUILTIN_FUNCTIONS)
+    }
+}
 
 impl ScalarExpr {
     /// Lowering `Scalar` into `RawExpr` to utilize with `common_expression::types::type_check`.
@@ -133,9 +261,7 @@ impl ScalarExpr {
     }
 
     pub fn as_expr_with_col_name(&self) -> Result<Expr<String>> {
-        let raw_expr = self.as_raw_expr_with_col_name();
-        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
-        Ok(expr)
+        self.as_raw_expr_with_col_name().type_check()
     }
 
     pub fn as_raw_expr_with_col_index(&self) -> RawExpr {
@@ -245,8 +371,6 @@ impl ScalarExpr {
     }
 
     pub fn as_expr_with_col_index(&self) -> Result<Expr> {
-        let raw_expr = self.as_raw_expr_with_col_index();
-        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
-        Ok(expr)
+        self.as_raw_expr_with_col_index().type_check()
     }
 }
