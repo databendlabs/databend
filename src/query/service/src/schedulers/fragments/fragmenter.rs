@@ -94,9 +94,7 @@ impl Fragmenter {
     }
 
     pub fn build_fragment(mut self, plan: &PhysicalPlan) -> Result<PlanFragment> {
-        eprintln!("origin plan {:?}", &plan);
         let root = self.replace(plan)?;
-        eprintln!("after replace {:?}", &root);
         let mut root_fragment = PlanFragment {
             plan: root,
             fragment_type: FragmentType::Root,

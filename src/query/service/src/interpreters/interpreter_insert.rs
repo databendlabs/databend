@@ -485,8 +485,6 @@ impl Interpreter for InsertInterpreter {
 
                 let ctx = self.ctx.clone();
                 let overwrite = self.plan.overwrite;
-                eprintln!(">>> main piepline {:?}", build_res.main_pipeline);
-                eprintln!(">>> source piepline {:?}", build_res.sources_pipelines);
                 build_res.main_pipeline.set_on_finished(move |may_error| {
                     // capture out variable
                     let overwrite = overwrite;

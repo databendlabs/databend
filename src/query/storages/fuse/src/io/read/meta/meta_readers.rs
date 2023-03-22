@@ -144,11 +144,8 @@ mod thrift_file_meta_read {
     use super::*;
 
     // the following code is copied from crate `parquet2`, with slight modification:
-    // return a ThriftFileMetaData instead of FileMetaData while reader parquet metadata,
+    // return a ThriftFileMetaData instead of FileMetaData while reading parquet metadata,
     // to avoid unnecessary conversions.
-    //
-    // It takes about 18s, to convert one million ThriftFileMetaData objects to parquet::metadata::FileMetaData,
-    // and the memory usage of FileMetaData is also larger.
 
     const HEADER_SIZE: u64 = PARQUET_MAGIC.len() as u64;
     const FOOTER_SIZE: u64 = 8;

@@ -82,13 +82,6 @@ async fn load_bloom_filter_by_columns<'a>(
 ) -> Result<BlockFilter> {
     // 1. load index meta
     let bloom_index_meta = load_index_meta(dal.clone(), index_path, index_length).await?;
-    // let file_meta = &bloom_index_meta.0;
-    // if file_meta.row_groups.len() != 1 {
-    //    return Err(ErrorCode::StorageOther(format!(
-    //        "invalid bloom filter index, number of row group should be 1, but found {} row groups",
-    //        file_meta.row_groups.len()
-    //    )));
-    //}
 
     // 2. filter out columns that needed and exist in the index
     // 2.1 dedup the columns

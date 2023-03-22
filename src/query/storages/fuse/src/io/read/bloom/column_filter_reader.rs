@@ -141,11 +141,6 @@ impl Loader<Xor8Filter> for Xor8FilterLoader {
             descriptor: self.column_descriptor.descriptor.clone(),
         };
 
-        eprintln!(
-            "column descriptor: {:?}",
-            self.column_descriptor.descriptor.clone()
-        );
-
         let page_reader = PageReader::new_with_page_meta(
             std::io::Cursor::new(bytes),
             page_meta_data,
