@@ -80,6 +80,7 @@ impl Display for FormatContext {
                 RelOperator::DummyTableScan(_) => write!(f, "DummyTableScan"),
                 RelOperator::RuntimeFilterSource(_) => write!(f, "RuntimeFilterSource"),
                 RelOperator::Window(_) => write!(f, "WindowFunc"),
+                RelOperator::ProjectSet(_) => write!(f, "ProjectSet"),
             },
             Self::Text(text) => write!(f, "{}", text),
         }
@@ -154,9 +155,6 @@ pub fn format_scalar(_metadata: &MetadataRef, scalar: &ScalarExpr) -> String {
                 format_scalar(_metadata, &cast.argument),
                 cast.target_type
             )
-        }
-        ScalarExpr::Unnest(unnest) => {
-            format!("UNNEST({})", format_scalar(_metadata, &unnest.argument),)
         }
         ScalarExpr::SubqueryExpr(_) => "SUBQUERY".to_string(),
     }

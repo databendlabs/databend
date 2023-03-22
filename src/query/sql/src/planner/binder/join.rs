@@ -500,7 +500,7 @@ impl<'a> JoinConditionResolver<'a> {
             &mut join_context,
         );
         let mut scalar_binder = ScalarBinder::new(
-            &join_context,
+            &mut join_context,
             self.ctx.clone(),
             self.name_resolution_ctx,
             self.metadata.clone(),
@@ -665,7 +665,7 @@ impl<'a> JoinConditionResolver<'a> {
             &mut join_context,
         );
         let mut scalar_binder = ScalarBinder::new(
-            &join_context,
+            &mut join_context,
             self.ctx.clone(),
             self.name_resolution_ctx,
             self.metadata.clone(),

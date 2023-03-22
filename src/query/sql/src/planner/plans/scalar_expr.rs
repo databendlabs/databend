@@ -41,7 +41,6 @@ pub enum ScalarExpr {
     WindowFunction(WindowFunc),
     AggregateFunction(AggregateFunction),
     FunctionCall(FunctionCall),
-    Unnest(Unnest),
     // TODO(leiysky): maybe we don't need this variant any more
     // after making functions static typed?
     CastExpr(CastExpr),
@@ -97,39 +96,6 @@ impl ScalarExpr {
             }
             ScalarExpr::CastExpr(scalar) => scalar.argument.used_columns(),
             ScalarExpr::SubqueryExpr(scalar) => scalar.outer_columns.clone(),
-            ScalarExpr::Unnest(scalar) => scalar.argument.used_columns(),
-        }
-    }
-
-    /// Collect all [`ScalarExpr`]s that need to be eval before executing `UNNEST`.
-    pub fn collect_before_unnest_scalars(&self, scalars: &mut Vec<Box<ScalarExpr>>) {
-        match self {
-            ScalarExpr::AndExpr(scalar) => {
-                scalar.left.collect_before_unnest_scalars(scalars);
-                scalar.right.collect_before_unnest_scalars(scalars);
-            }
-            ScalarExpr::OrExpr(scalar) => {
-                scalar.left.collect_before_unnest_scalars(scalars);
-                scalar.right.collect_before_unnest_scalars(scalars);
-            }
-            ScalarExpr::NotExpr(scalar) => scalar.argument.collect_before_unnest_scalars(scalars),
-            ScalarExpr::ComparisonExpr(scalar) => {
-                scalar.left.collect_before_unnest_scalars(scalars);
-                scalar.right.collect_before_unnest_scalars(scalars);
-            }
-            ScalarExpr::AggregateFunction(scalar) => {
-                for scalar in &scalar.args {
-                    scalar.collect_before_unnest_scalars(scalars);
-                }
-            }
-            ScalarExpr::FunctionCall(scalar) => {
-                for scalar in &scalar.arguments {
-                    scalar.collect_before_unnest_scalars(scalars);
-                }
-            }
-            ScalarExpr::CastExpr(scalar) => scalar.argument.collect_before_unnest_scalars(scalars),
-            ScalarExpr::Unnest(scalar) => scalars.push(scalar.argument.clone()),
-            _ => {}
         }
     }
 
@@ -292,23 +258,6 @@ impl TryFrom<ScalarExpr> for WindowFunc {
             Ok(value)
         } else {
             Err(ErrorCode::Internal("Cannot downcast Scalar to WindowFunc"))
-        }
-    }
-}
-
-impl From<Unnest> for ScalarExpr {
-    fn from(v: Unnest) -> Self {
-        Self::Unnest(v)
-    }
-}
-
-impl TryFrom<ScalarExpr> for Unnest {
-    type Error = ErrorCode;
-    fn try_from(value: ScalarExpr) -> Result<Self> {
-        if let ScalarExpr::Unnest(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal("Cannot downcast Scalar to Unnest"))
         }
     }
 }
@@ -518,12 +467,6 @@ pub struct FunctionCall {
     pub func_name: String,
     pub params: Vec<usize>,
     pub arguments: Vec<ScalarExpr>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Unnest {
-    pub argument: Box<ScalarExpr>,
-    pub return_type: Box<DataType>,
 }
 
 #[derive(Clone, Debug, Educe)]
