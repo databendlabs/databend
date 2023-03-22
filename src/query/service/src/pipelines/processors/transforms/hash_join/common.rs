@@ -309,13 +309,15 @@ impl JoinHashTable {
     }
 
     pub(crate) fn rest_block(&self) -> Result<DataBlock> {
-        let rest_probe_blocks = self.hash_join_desc.join_state.rest_probe_blocks.read();
+        let mut rest_probe_blocks = self.hash_join_desc.join_state.rest_probe_blocks.write();
         if rest_probe_blocks.is_empty() {
             return Ok(DataBlock::empty());
         }
         let probe_block = DataBlock::concat(&rest_probe_blocks)?;
-        let rest_build_indexes = self.hash_join_desc.join_state.rest_build_indexes.read();
+        rest_probe_blocks.clear();
+        let mut rest_build_indexes = self.hash_join_desc.join_state.rest_build_indexes.write();
         let mut build_block = self.row_space.gather(&rest_build_indexes)?;
+        rest_build_indexes.clear();
         // For left join, wrap nullable for build block
         if matches!(
             self.hash_join_desc.join_type,

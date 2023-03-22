@@ -40,8 +40,15 @@ impl Compactor for LeftJoinCompactor {
         self.hash_join_state.interrupt();
     }
 
+    fn compact_partial(&mut self, blocks: &mut Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+        self.hash_join_state.left_join_blocks(blocks)
+    }
+
     // `compact_final` is called when all the blocks are pushed
     fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+        if blocks.is_empty() {
+            return Ok(vec![]);
+        }
         self.hash_join_state.left_join_blocks(blocks)
     }
 }
