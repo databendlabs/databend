@@ -59,7 +59,7 @@ pub struct AggregateFunctionFeatures {
     /// or we should return non-Nullable type with default value (example: count, count_distinct, approx_count_distinct)
     pub(crate) returns_default_when_only_null: bool,
 
-    /// An aggregation function F is decomposable if there exist aggregation functions F1 and F2 
+    /// An aggregation function F is decomposable if there exist aggregation functions F1 and F2
     /// such that F(S1 ∪ S2) = F2(F1(S1), F1(S2)), where S1 and S2 are two sets of values.
     /// Aggregation functions MIN and MAX are always decomposable:
     ///   MAX(S1 ∪ S2) = MAX(MIN(S1), MAX(S2))

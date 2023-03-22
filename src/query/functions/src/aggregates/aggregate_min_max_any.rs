@@ -261,9 +261,10 @@ pub fn aggregate_min_function_desc() -> AggregateFunctionDescription {
         is_decomposable: true,
         ..Default::default()
     };
-    AggregateFunctionDescription::creator_with_features(Box::new(
-        try_create_aggregate_min_max_any_function::<TYPE_MIN>,
-    ), features)
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_aggregate_min_max_any_function::<TYPE_MIN>),
+        features,
+    )
 }
 
 pub fn aggregate_max_function_desc() -> AggregateFunctionDescription {
@@ -271,9 +272,10 @@ pub fn aggregate_max_function_desc() -> AggregateFunctionDescription {
         is_decomposable: true,
         ..Default::default()
     };
-    AggregateFunctionDescription::creator_with_features(Box::new(
-        try_create_aggregate_min_max_any_function::<TYPE_MAX>,
-    ), features)
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_aggregate_min_max_any_function::<TYPE_MAX>),
+        features,
+    )
 }
 
 pub fn aggregate_any_function_desc() -> AggregateFunctionDescription {

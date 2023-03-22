@@ -115,7 +115,6 @@ where
                     let state = place.get::<Self>();
                     state.value += c.as_();
                 });
-                    
             }
         };
         Ok(())
@@ -428,7 +427,10 @@ pub fn aggregate_sum_function_desc() -> AggregateFunctionDescription {
         is_decomposable: true,
         ..Default::default()
     };
-    AggregateFunctionDescription::creator_with_features(Box::new(try_create_aggregate_sum_function), features)
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_aggregate_sum_function),
+        features,
+    )
 }
 
 #[inline]

@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_functions::aggregates::AggregateFunctionFactory;
 use common_expression::types::number::NumberDataType;
 use common_expression::types::DataType;
+use common_functions::aggregates::AggregateFunctionFactory;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
@@ -158,7 +158,6 @@ impl Rule for RuleEagerAggregation {
             }
         }
 
-        // Obtain the columns that exist in both the group by column and the join condition columns.
         let mut is_eager = [true, true];
         for cond in join.left_conditions.iter() {
             for c in cond.used_columns().iter() {
@@ -198,10 +197,13 @@ impl Rule for RuleEagerAggregation {
                         continue;
                     }
 
-                    let aggregation_functions = vec![&mut agg_partial.aggregate_functions[*index], &mut agg_final.aggregate_functions[*index]];
+                    let aggregation_functions = vec![
+                        &mut agg_partial.aggregate_functions[*index],
+                        &mut agg_final.aggregate_functions[*index],
+                    ];
                     for aggregate_function in aggregation_functions {
                         if let ScalarExpr::AggregateFunction(agg) = &mut aggregate_function.scalar {
-                            let data_type = match agg.func_name.as_str() {
+                            let new_data_type = match agg.func_name.as_str() {
                                 "count" => Box::new(DataType::Number(NumberDataType::UInt64)),
                                 "sum" => Box::new(DataType::Number(NumberDataType::Int64)),
                                 _ => Box::new(agg.args[0].data_type()?.clone()),
@@ -213,7 +215,7 @@ impl Rule for RuleEagerAggregation {
                                     table_name: None,
                                     column_name: "eager_aggregation".to_string(),
                                     index: *aggregation_function_index,
-                                    data_type: data_type,
+                                    data_type: new_data_type,
                                     visibility: Visibility::Visible,
                                 },
                             });
@@ -226,9 +228,10 @@ impl Rule for RuleEagerAggregation {
                                     if let ScalarExpr::BoundColumnRef(column) = &mut item.scalar {
                                         let column_binding = &mut column.column;
                                         if column_binding.index == aggregate_function.index {
-                                            column_binding.data_type = Box::new(DataType::Nullable(Box::new(
-                                                DataType::Number(NumberDataType::UInt64),
-                                            )));
+                                            column_binding.data_type =
+                                                Box::new(DataType::Nullable(Box::new(
+                                                    DataType::Number(NumberDataType::UInt64),
+                                                )));
                                         }
                                     }
                                 }
@@ -315,7 +318,7 @@ fn get_columns_set(s_expr: &SExpr, columns_set: &mut ColumnSet) {
 }
 
 fn get_aggregation_functions(
-    agg_final: & Aggregate,
+    agg_final: &Aggregate,
     columns_set: &ColumnSet,
 ) -> Vec<(usize, IndexType, String)> {
     agg_final
@@ -331,7 +334,11 @@ fn get_aggregation_functions(
                         if matches!(*column.column.data_type, DataType::Number(_))
                             && columns_set.contains(&column.column.index) =>
                     {
-                        Some((index, aggregate_item.index, aggregate_function.func_name.clone()))
+                        Some((
+                            index,
+                            aggregate_item.index,
+                            aggregate_function.func_name.clone(),
+                        ))
                     }
                     _ => None,
                 }
