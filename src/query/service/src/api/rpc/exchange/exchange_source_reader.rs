@@ -66,7 +66,8 @@ impl Processor for ExchangeSourceReader {
 
         if self.output.is_finished() {
             if !self.finished {
-                return Ok(Event::Async);
+                self.finished = true;
+                self.flight_receiver.close();
             }
 
             return Ok(Event::Finished);
