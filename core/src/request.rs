@@ -38,11 +38,11 @@ pub struct QueryRequest {
 #[derive(Serialize, Debug)]
 pub struct PaginationConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
-    wait_time_secs: Option<i64>,
+    pub wait_time_secs: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    max_rows_in_buffer: Option<i64>,
+    pub max_rows_in_buffer: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    max_rows_per_page: Option<i64>,
+    pub max_rows_per_page: Option<i64>,
 }
 
 #[derive(Serialize, Debug)]
@@ -63,18 +63,21 @@ impl QueryRequest {
         }
     }
 
-    pub fn with_session(mut self, session: SessionConfig) -> Self {
-        self.session = Some(session);
+    pub fn with_session(mut self, session: Option<SessionConfig>) -> Self {
+        self.session = session;
         self
     }
 
-    pub fn with_pagination(mut self, pagination: PaginationConfig) -> Self {
-        self.pagination = Some(pagination);
+    pub fn with_pagination(mut self, pagination: Option<PaginationConfig>) -> Self {
+        self.pagination = pagination;
         self
     }
 
-    pub fn with_stage_attachment(mut self, stage_attachment: StageAttachmentConfig) -> Self {
-        self.stage_attachment = Some(stage_attachment);
+    pub fn with_stage_attachment(
+        mut self,
+        stage_attachment: Option<StageAttachmentConfig>,
+    ) -> Self {
+        self.stage_attachment = stage_attachment;
         self
     }
 }
@@ -87,19 +90,19 @@ mod test {
     #[test]
     fn test_build_request() -> Result<()> {
         let req = QueryRequest::new("select 1".to_string())
-            .with_session(SessionConfig {
+            .with_session(Some(SessionConfig {
                 database: Some("default".to_string()),
                 settings: Some(BTreeMap::new()),
-            })
-            .with_pagination(PaginationConfig {
+            }))
+            .with_pagination(Some(PaginationConfig {
                 wait_time_secs: Some(1),
                 max_rows_in_buffer: Some(1),
                 max_rows_per_page: Some(1),
-            })
-            .with_stage_attachment(StageAttachmentConfig {
+            }))
+            .with_stage_attachment(Some(StageAttachmentConfig {
                 stage: Some("stage".to_string()),
                 stage_result_uri: Some("stage_result_uri".to_string()),
-            });
+            }));
         assert_eq!(
             serde_json::to_string(&req)?,
             r#"{"session":{"database":"default","settings":{}},"sql":"select 1","pagination":{"wait_time_secs":1,"max_rows_in_buffer":1,"max_rows_per_page":1},"stage_attachment":{"stage":"stage","stage_result_uri":"stage_result_uri"}}"#

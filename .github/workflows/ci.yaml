@@ -22,7 +22,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
-  unit:
+  build:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -37,12 +37,22 @@ jobs:
           curl https://sh.rustup.rs -sSf | sh -s -- -y
       - name: Test
         run: |
-          cargo test --all-features -- --show-output
+          cargo build
 
-  test:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Rust (Stable)
+        run:
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+      - name: Test
+        run: |
+          cargo test --all-features --lib -- --show-output
+
+  integration:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - run: |
-          cd tests
-          make docker-compose
+          make -C tests

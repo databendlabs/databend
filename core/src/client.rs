@@ -14,18 +14,25 @@
 
 use std::collections::BTreeMap;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use reqwest::header::HeaderMap;
+use reqwest::Client as HttpClient;
 use url::Url;
+
+use crate::{
+    request::{PaginationConfig, QueryRequest, SessionConfig},
+    response::QueryResponse,
+};
 
 #[derive(Clone)]
 pub struct APIClient {
-    // cli: reqwest::Client,
+    cli: HttpClient,
     endpoint: Url,
     host: String,
 
     tenant: Option<String>,
     warehouse: Option<String>,
-    database: String,
+    database: Option<String>,
     user: String,
     password: Option<String>,
     session_settings: BTreeMap<String, String>,
@@ -47,8 +54,8 @@ impl APIClient {
         client.user = u.username().to_string();
         client.password = u.password().map(|s| s.to_string());
         client.database = match u.path().trim_start_matches('/') {
-            "" => "default".to_string(),
-            s => s.to_string(),
+            "" => None,
+            s => Some(s.to_string()),
         };
 
         let mut scheme = "https";
@@ -97,17 +104,109 @@ impl APIClient {
 
         Ok(client)
     }
+
+    pub async fn query(&self, sql: String) -> Result<QueryResponse> {
+        let req = QueryRequest::new(sql)
+            .with_pagination(self.make_pagination())
+            .with_session(self.make_session());
+        let endpoint = self.endpoint.join("v1/query")?;
+
+        let resp: QueryResponse = self
+            .cli
+            .post(endpoint)
+            .json(&req)
+            .basic_auth(self.user.clone(), self.password.clone())
+            .headers(self.make_headers()?)
+            .send()
+            .await?
+            .json()
+            .await?;
+        match resp.error {
+            Some(err) => Err(anyhow!("Query error {}: {}", err.code, err.message)),
+            // TODO:(everpcpc) update session configs
+            None => Ok(resp),
+        }
+    }
+
+    pub async fn query_page(&self, next_uri: String) -> Result<QueryResponse> {
+        let endpoint = self.endpoint.join(&next_uri)?;
+        let resp: QueryResponse = self
+            .cli
+            .get(endpoint)
+            .basic_auth(self.user.clone(), self.password.clone())
+            .headers(self.make_headers()?)
+            .send()
+            .await?
+            .json()
+            .await?;
+        match resp.error {
+            Some(err) => Err(anyhow!("Query page error {}: {}", err.code, err.message)),
+            None => Ok(resp),
+        }
+    }
+
+    fn make_session(&self) -> Option<SessionConfig> {
+        if self.database.is_none() && self.session_settings.is_empty() {
+            return None;
+        }
+        let mut session = SessionConfig {
+            database: None,
+            settings: None,
+        };
+        if self.database.is_some() {
+            session.database = self.database.clone();
+        }
+        if !self.session_settings.is_empty() {
+            session.settings = Some(self.session_settings.clone());
+        }
+        Some(session)
+    }
+
+    fn make_pagination(&self) -> Option<PaginationConfig> {
+        if self.wait_time_secs.is_none()
+            && self.max_rows_in_buffer.is_none()
+            && self.max_rows_per_page.is_none()
+        {
+            return None;
+        }
+        let mut pagination = PaginationConfig {
+            wait_time_secs: None,
+            max_rows_in_buffer: None,
+            max_rows_per_page: None,
+        };
+        if let Some(wait_time_secs) = self.wait_time_secs {
+            pagination.wait_time_secs = Some(wait_time_secs);
+        }
+        if let Some(max_rows_in_buffer) = self.max_rows_in_buffer {
+            pagination.max_rows_in_buffer = Some(max_rows_in_buffer);
+        }
+        if let Some(max_rows_per_page) = self.max_rows_per_page {
+            pagination.max_rows_per_page = Some(max_rows_per_page);
+        }
+        Some(pagination)
+    }
+
+    fn make_headers(&self) -> Result<HeaderMap> {
+        let mut headers = HeaderMap::new();
+        if let Some(tenant) = &self.tenant {
+            headers.insert("X-DATABEND-TENANT", tenant.parse()?);
+        }
+        if let Some(warehouse) = &self.warehouse {
+            headers.insert("X-DATABEND-WAREHOUSE", warehouse.parse()?);
+        }
+        Ok(headers)
+    }
 }
 
 impl Default for APIClient {
     fn default() -> Self {
         Self {
-            // cli: reqwest::Client::new(),
+            cli: HttpClient::new(),
             endpoint: Url::parse("http://localhost:8080").unwrap(),
             host: "localhost".to_string(),
             tenant: None,
             warehouse: None,
-            database: "default".to_string(),
+            database: None,
             user: "root".to_string(),
             password: None,
             session_settings: BTreeMap::new(),
@@ -131,7 +230,7 @@ mod test {
         assert_eq!(client.endpoint, Url::parse("http://app.databend.com:80")?);
         assert_eq!(client.user, "username");
         assert_eq!(client.password, Some("password".to_string()));
-        assert_eq!(client.database, "test");
+        assert_eq!(client.database, Some("test".to_string()));
         assert_eq!(client.wait_time_secs, Some(10));
         assert_eq!(client.max_rows_in_buffer, Some(5000000));
         assert_eq!(client.max_rows_per_page, Some(10000));

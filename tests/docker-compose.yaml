@@ -20,9 +20,8 @@ services:
       test: "curl -f localhost:8080/v1/health || exit 1"
   test:
     image: rust
-    command: cargo test ./tests/...
+    command: cargo test --target-dir /target --test *
     working_dir: /workdir
-
     environment:
       - TEST_DATABEND_DSN=databend://databend:databend@databend:8000/default?sslmode=disable
       # - HTTPS_PROXY=http://172.24.0.1:7890
@@ -30,9 +29,11 @@ services:
       - ../:/workdir
       - cargo_registry:/usr/local/cargo/registry
       - rustup:/usr/local/rustup
+      - target:/target
     depends_on:
       - databend
 
 volumes:
   cargo_registry:
   rustup:
+  target:
