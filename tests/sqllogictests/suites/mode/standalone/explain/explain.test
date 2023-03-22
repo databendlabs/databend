@@ -521,6 +521,34 @@ Query (children 1)
             └── TableIdentifier unknown_table1
 
 query T
+explain ast SELECT * FROM monthly_sales PIVOT(SUM(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) ORDER BY EMPID
+----
+Query (children 2)
+├── QueryBody (children 1)
+│   └── SelectQuery (children 2)
+│       ├── SelectList (children 1)
+│       │   └── Target *
+│       └── TableList (children 1)
+│           └── TableIdentifier monthly_sales PIVOT(SUM(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR'))
+└── OrderByList (children 1)
+    └── OrderByElement (children 1)
+         └── ColumnIdentifier EMPID
+
+query T
+explain ast SELECT * FROM monthly_sales_1 UNPIVOT(sales FOR month IN (jan, feb, mar, april)) ORDER BY empid
+----
+Query (children 2)
+├── QueryBody (children 1)
+│   └── SelectQuery (children 2)
+│       ├── SelectList (children 1)
+│       │   └── Target *
+│       └── TableList (children 1)
+│           └── TableIdentifier monthly_sales_1 UNPIVOT(sales FOR month IN (jan, feb, mar, april))
+└── OrderByList (children 1)
+     └── OrderByElement (children 1)
+         └── ColumnIdentifier empid
+
+query T
 explain select a from t1 UNION ALL select a from t2
 ----
 UnionAll

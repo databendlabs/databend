@@ -45,10 +45,12 @@ use crate::plans::SortItem;
 use crate::BindContext;
 use crate::IndexType;
 
+#[derive(Debug)]
 pub struct OrderItems {
     pub(crate) items: Vec<OrderItem>,
 }
 
+#[derive(Debug)]
 pub struct OrderItem {
     pub expr: OrderByExpr,
     pub index: IndexType,
