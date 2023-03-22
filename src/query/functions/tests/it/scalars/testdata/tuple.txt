@@ -17,7 +17,7 @@ output         : (NULL, NULL)
 
 
 ast            : (1, 2, 'a')
-raw expr       : tuple(1_u8, 2_u8, "a")
+raw expr       : tuple(1, 2, "a")
 checked expr   : tuple<UInt8, UInt8, String>(1_u8, 2_u8, "a")
 optimized expr : (1_u8, 2_u8, "a")
 output type    : Tuple(UInt8, UInt8, String)
@@ -26,7 +26,7 @@ output         : (1, 2, "a")
 
 
 ast            : (1, 2, ('a', 'b'))
-raw expr       : tuple(1_u8, 2_u8, tuple("a", "b"))
+raw expr       : tuple(1, 2, tuple("a", "b"))
 checked expr   : tuple<UInt8, UInt8, Tuple(String, String)>(1_u8, 2_u8, tuple<String, String>("a", "b"))
 optimized expr : (1_u8, 2_u8, ("a", "b"))
 output type    : Tuple(UInt8, UInt8, Tuple(String, String))
@@ -91,7 +91,7 @@ error:
 
 
 ast            : (1, 'a').1
-raw expr       : get(1)(tuple(1_u8, "a"))
+raw expr       : get(1)(tuple(1, "a"))
 checked expr   : get<T0=UInt8, T1=String><Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"))
 optimized expr : 1_u8
 output type    : UInt8
@@ -100,7 +100,7 @@ output         : 1
 
 
 ast            : (1, 'a').2
-raw expr       : get(2)(tuple(1_u8, "a"))
+raw expr       : get(2)(tuple(1, "a"))
 checked expr   : get<T0=UInt8, T1=String><Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"))
 optimized expr : "a"
 output type    : String
@@ -109,7 +109,7 @@ output         : "a"
 
 
 ast            : (1, 2, ('a', 'b')).3
-raw expr       : get(3)(tuple(1_u8, 2_u8, tuple("a", "b")))
+raw expr       : get(3)(tuple(1, 2, tuple("a", "b")))
 checked expr   : get<T0=UInt8, T1=UInt8, T2=Tuple(String, String)><Tuple(T0, T1, T2)>(tuple<UInt8, UInt8, Tuple(String, String)>(1_u8, 2_u8, tuple<String, String>("a", "b")))
 optimized expr : ("a", "b")
 output type    : Tuple(String, String)
@@ -118,7 +118,7 @@ output         : ("a", "b")
 
 
 ast            : (1, 2, ('a', 'b')).3.1
-raw expr       : get(1)(get(3)(tuple(1_u8, 2_u8, tuple("a", "b"))))
+raw expr       : get(1)(get(3)(tuple(1, 2, tuple("a", "b"))))
 checked expr   : get<T0=String, T1=String><Tuple(T0, T1)>(get<T0=UInt8, T1=UInt8, T2=Tuple(String, String)><Tuple(T0, T1, T2)>(tuple<UInt8, UInt8, Tuple(String, String)>(1_u8, 2_u8, tuple<String, String>("a", "b"))))
 optimized expr : "a"
 output type    : String
