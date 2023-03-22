@@ -16,11 +16,10 @@ use std::collections::HashMap;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::number::UInt64Type;
-use common_expression::types::ArgType;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::Literal;
+use common_expression::types::NumberScalar;
+use common_expression::Scalar;
 use common_functions::aggregates::AggregateCountFunction;
 
 use crate::binder::wrap_cast;
@@ -272,8 +271,7 @@ impl SubqueryRewriter {
                     return Ok((
                         ScalarExpr::ConstantExpr(ConstantExpr {
                             span: subquery.span,
-                            value: Literal::Boolean(true),
-                            data_type: Box::new(DataType::Boolean),
+                            value: Scalar::Boolean(true),
                         }),
                         s_expr,
                     ));
@@ -332,10 +330,7 @@ impl SubqueryRewriter {
                     });
                     let zero = ScalarExpr::ConstantExpr(ConstantExpr {
                         span: subquery.span,
-                        value: Literal::Int64(0),
-                        data_type: Box::new(
-                            DataType::Number(NumberDataType::Int64).wrap_nullable(),
-                        ),
+                        value: Scalar::Number(NumberScalar::UInt8(0)),
                     });
                     ScalarExpr::CastExpr(CastExpr {
                         span: subquery.span,
@@ -446,8 +441,7 @@ impl SubqueryRewriter {
                     right: Box::new(
                         ConstantExpr {
                             span: subquery.span,
-                            value: common_expression::Literal::UInt64(1),
-                            data_type: Box::new(UInt64Type::data_type().wrap_nullable()),
+                            value: common_expression::Scalar::Number(NumberScalar::UInt64(1)),
                         }
                         .into(),
                     ),

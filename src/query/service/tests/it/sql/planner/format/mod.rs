@@ -16,7 +16,8 @@ use std::sync::Arc;
 
 use common_base::base::GlobalInstance;
 use common_expression::types::DataType;
-use common_expression::Literal;
+use common_expression::types::NumberScalar;
+use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
@@ -122,8 +123,7 @@ fn test_format() {
                         .into(),
                         ConstantExpr {
                             span: None,
-                            value: Literal::UInt64(123u64),
-                            data_type: Box::new(DataType::Boolean),
+                            value: Scalar::Number(NumberScalar::UInt64(123u64)),
                         }
                         .into(),
                     ],
@@ -156,8 +156,7 @@ fn test_format() {
                 predicates: vec![
                     ConstantExpr {
                         span: None,
-                        value: Literal::Boolean(true),
-                        data_type: Box::new(DataType::Boolean),
+                        value: Scalar::Boolean(true),
                     }
                     .into(),
                 ],

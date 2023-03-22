@@ -58,9 +58,9 @@ impl ScalarExpr {
                     column_ref.column.index
                 ),
             },
-            ScalarExpr::ConstantExpr(constant) => RawExpr::Literal {
+            ScalarExpr::ConstantExpr(constant) => RawExpr::Constant {
                 span: constant.span,
-                lit: constant.value.clone(),
+                scalar: constant.value.clone(),
             },
             ScalarExpr::AndExpr(expr) => RawExpr::FunctionCall {
                 span: None,
@@ -170,9 +170,9 @@ impl ScalarExpr {
                     column_ref.column.index
                 ),
             },
-            ScalarExpr::ConstantExpr(constant) => RawExpr::Literal {
+            ScalarExpr::ConstantExpr(constant) => RawExpr::Constant {
                 span: constant.span,
-                lit: constant.value.clone(),
+                scalar: constant.value.clone(),
             },
             ScalarExpr::AndExpr(expr) => RawExpr::FunctionCall {
                 span: None,
