@@ -260,6 +260,8 @@ Explain {
                             },
                             alias: None,
                             travel_point: None,
+                            pivot: None,
+                            unpivot: None,
                         },
                     ],
                     selection: None,
@@ -550,6 +552,8 @@ CreateTable(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         ],
                         selection: None,
@@ -2242,6 +2246,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                 ],
                 selection: Some(
@@ -2433,6 +2439,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                 ],
                 selection: None,
@@ -2501,6 +2509,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                 ],
                 selection: None,
@@ -2561,6 +2571,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                     Table {
                         span: Some(
@@ -2577,6 +2589,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                     Table {
                         span: Some(
@@ -2593,6 +2607,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                 ],
                 selection: None,
@@ -2653,6 +2669,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                     Table {
                         span: Some(
@@ -2669,6 +2687,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                     Table {
                         span: Some(
@@ -2685,6 +2705,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                 ],
                 selection: None,
@@ -2844,6 +2866,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -2860,6 +2884,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
@@ -2980,6 +3006,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -2996,6 +3024,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
@@ -3116,6 +3146,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -3132,6 +3164,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
@@ -3252,6 +3286,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -3268,6 +3304,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
@@ -3388,6 +3426,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -3404,6 +3444,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
@@ -3524,6 +3566,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -3540,6 +3584,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
@@ -3660,6 +3706,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -3676,6 +3724,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
@@ -3796,6 +3846,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -3812,6 +3864,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
@@ -3932,6 +3986,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -3948,6 +4004,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
@@ -4068,6 +4126,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -4084,6 +4144,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
@@ -4204,6 +4266,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -4220,6 +4284,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
@@ -4299,6 +4365,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -4315,6 +4383,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
@@ -4394,6 +4464,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -4410,6 +4482,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
@@ -4489,6 +4563,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -4505,6 +4581,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
@@ -4584,6 +4662,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -4600,6 +4680,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
@@ -4662,6 +4744,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                 ],
                 selection: Some(
@@ -4753,6 +4837,8 @@ Query(
                                                 },
                                                 alias: None,
                                                 travel_point: None,
+                                                pivot: None,
+                                                unpivot: None,
                                             },
                                         ],
                                         selection: None,
@@ -4825,6 +4911,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                 ],
                 selection: Some(
@@ -4916,6 +5004,8 @@ Query(
                                                 },
                                                 alias: None,
                                                 travel_point: None,
+                                                pivot: None,
+                                                unpivot: None,
                                             },
                                         ],
                                         selection: None,
@@ -4988,6 +5078,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                 ],
                 selection: Some(
@@ -5079,6 +5171,8 @@ Query(
                                                 },
                                                 alias: None,
                                                 travel_point: None,
+                                                pivot: None,
+                                                unpivot: None,
                                             },
                                         ],
                                         selection: None,
@@ -5151,6 +5245,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                 ],
                 selection: Some(
@@ -5240,6 +5336,8 @@ Query(
                                                 },
                                                 alias: None,
                                                 travel_point: None,
+                                                pivot: None,
+                                                unpivot: None,
                                             },
                                         ],
                                         selection: None,
@@ -5604,6 +5702,8 @@ Insert(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         ],
                         selection: None,
@@ -5957,6 +6057,8 @@ AlterTable(
             },
             alias: None,
             travel_point: None,
+            pivot: None,
+            unpivot: None,
         },
         action: AlterTableClusterKey {
             cluster_by: [
@@ -6003,6 +6105,8 @@ AlterTable(
             },
             alias: None,
             travel_point: None,
+            pivot: None,
+            unpivot: None,
         },
         action: DropTableClusterKey,
     },
@@ -6032,6 +6136,8 @@ AlterTable(
             },
             alias: None,
             travel_point: None,
+            pivot: None,
+            unpivot: None,
         },
         action: ReclusterTable {
             is_final: true,
@@ -6093,6 +6199,8 @@ AlterTable(
             },
             alias: None,
             travel_point: None,
+            pivot: None,
+            unpivot: None,
         },
         action: AddColumn {
             column: ColumnDefinition {
@@ -6146,6 +6254,8 @@ AlterTable(
             },
             alias: None,
             travel_point: None,
+            pivot: None,
+            unpivot: None,
         },
         action: DropColumn {
             column: Identifier {
@@ -8269,6 +8379,8 @@ Update(
             },
             alias: None,
             travel_point: None,
+            pivot: None,
+            unpivot: None,
         },
         update_list: [
             UpdateExpr {
@@ -8699,6 +8811,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
@@ -8885,6 +8999,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                 ],
                 selection: None,
@@ -9014,6 +9130,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                 ],
                 selection: None,
@@ -9141,6 +9259,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                 ],
                 selection: None,
@@ -9282,6 +9402,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                 ],
                 selection: None,
@@ -9408,6 +9530,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                 ],
                 selection: None,
@@ -9515,6 +9639,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                 ],
                 selection: None,

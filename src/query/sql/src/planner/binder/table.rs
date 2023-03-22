@@ -151,6 +151,8 @@ impl Binder {
                 table,
                 alias,
                 travel_point,
+                pivot: _,
+                unpivot: _,
             } => {
                 let (catalog, database, table_name) =
                     self.normalize_object_identifier_triple(catalog, database, table);
@@ -642,6 +644,7 @@ impl Binder {
 
         let is_accurate = table.table().engine().to_lowercase() == "fuse";
         let stat = table.table().table_statistics()?;
+
         Ok((
             SExpr::create_leaf(
                 Scan {

@@ -603,6 +603,7 @@ impl Binder {
         select_list: &SelectList,
     ) -> Result<(ScalarExpr, String)> {
         // Convert to zero-based index
+        debug_assert!(index > 0);
         let index = index as usize - 1;
         if index >= select_list.items.len() {
             return Err(ErrorCode::SemanticError(format!(
@@ -621,7 +622,6 @@ impl Binder {
 
         Ok((scalar, alias))
     }
-
     fn resolve_alias_item(
         bind_context: &mut BindContext,
         expr: &Expr,
