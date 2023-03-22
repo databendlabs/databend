@@ -19,6 +19,8 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::table::Table;
+use common_catalog::table_args::TableArgs;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::BooleanType;
@@ -47,9 +49,7 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::Pipeline;
 use crate::sessions::TableContext;
 use crate::table_functions::infer_schema::table_args::InferSchemaArgsParsed;
-use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
-use crate::Table;
 
 const INFER_SCHEMA: &str = "infer_schema";
 
