@@ -122,7 +122,7 @@ fn resolve_column_type<C: LoweringContext>(
                 args,
             })
         }
-        RawExpr::Literal { .. } => Ok(raw_expr.clone()),
+        RawExpr::Constant { .. } => Ok(raw_expr.clone()),
     }
 }
 
