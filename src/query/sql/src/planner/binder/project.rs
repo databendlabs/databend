@@ -168,8 +168,13 @@ impl Binder {
                     // Handle qualified name as select target
                     let mut exclude_cols: HashSet<String> = HashSet::new();
                     if let Some(cols) = exclude {
+                        let is_unquoted_ident_case_sensitive =
+                            self.name_resolution_ctx.unquoted_ident_case_sensitive;
                         for col in cols {
-                            exclude_cols.insert(col.name.clone());
+                            let name = is_unquoted_ident_case_sensitive
+                                .then(|| col.name.clone())
+                                .unwrap_or_else(|| col.name.to_lowercase());
+                            exclude_cols.insert(name);
                         }
                         if exclude_cols.len() < cols.len() {
                             // * except (id, id)
