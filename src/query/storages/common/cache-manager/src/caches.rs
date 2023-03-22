@@ -24,6 +24,7 @@ use storages_common_cache::CacheAccessor;
 use storages_common_cache::InMemoryItemCacheHolder;
 use storages_common_cache::NamedCache;
 use storages_common_index::filters::Xor8Filter;
+use storages_common_index::BloomIndexMeta;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
@@ -39,7 +40,6 @@ pub type TableSnapshotStatisticCache = NamedCache<InMemoryItemCacheHolder<TableS
 /// In memory object cache of bloom filter.
 /// For each indexed data block, the bloom xor8 filter of column is cached individually
 pub type BloomIndexFilterCache = NamedCache<InMemoryItemCacheHolder<Xor8Filter>>;
-pub struct BloomIndexMeta(pub FileMetaData);
 /// In memory object cache of parquet FileMetaData of bloom index data
 pub type BloomIndexMetaCache = NamedCache<InMemoryItemCacheHolder<BloomIndexMeta>>;
 /// In memory object cache of parquet FileMetaData of external parquet files

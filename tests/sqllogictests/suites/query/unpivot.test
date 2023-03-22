@@ -46,4 +46,3 @@ SELECT * FROM monthly_sales_1
 statement ok
 drop table monthly_sales_1;
 
-
