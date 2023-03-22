@@ -29,8 +29,8 @@ use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::api::rpc::flight_client::FlightExchange;
 use crate::api::rpc::flight_client::FlightSender;
-use crate::api::rpc::flight_client::NewFlightExchange;
 use crate::api::DataPacket;
 use crate::sessions::QueryContext;
 
@@ -44,7 +44,7 @@ pub struct StatisticsReceiver {
 impl StatisticsReceiver {
     pub fn spawn_receiver(
         ctx: &Arc<QueryContext>,
-        statistics_exchanges: HashMap<String, Vec<NewFlightExchange>>,
+        statistics_exchanges: HashMap<String, Vec<FlightExchange>>,
     ) -> Result<StatisticsReceiver> {
         let shutdown_notify = Arc::new(Notify::new());
         let shutdown_flag = Arc::new(AtomicBool::new(false));
@@ -55,14 +55,12 @@ impl StatisticsReceiver {
             debug_assert_eq!(exchanges.len(), 2);
 
             let (tx, rx) = match (exchanges.remove(0), exchanges.remove(0)) {
-                (
-                    tx @ NewFlightExchange::Sender { .. },
-                    rx @ NewFlightExchange::Receiver { .. },
-                ) => (tx.as_sender(), rx.as_receiver()),
-                (
-                    rx @ NewFlightExchange::Receiver { .. },
-                    tx @ NewFlightExchange::Sender { .. },
-                ) => (tx.as_sender(), rx.as_receiver()),
+                (tx @ FlightExchange::Sender { .. }, rx @ FlightExchange::Receiver { .. }) => {
+                    (tx.as_sender(), rx.as_receiver())
+                }
+                (rx @ FlightExchange::Receiver { .. }, tx @ FlightExchange::Sender { .. }) => {
+                    (tx.as_sender(), rx.as_receiver())
+                }
                 _ => unreachable!(),
             };
 
