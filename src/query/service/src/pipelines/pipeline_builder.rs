@@ -835,7 +835,7 @@ impl PipelineBuilder {
             || join.join_type == JoinType::Single)
             && join.non_equi_conditions.is_empty()
         {
-            self.main_pipeline.resize(1)?;
+            // self.main_pipeline.resize(1)?;
             self.main_pipeline.add_transform(|input, output| {
                 let transform = TransformLeftJoin::try_create(
                     input,
