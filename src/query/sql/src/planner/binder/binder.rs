@@ -217,9 +217,7 @@ impl<'a> Binder {
 
             // Stages
             Statement::ShowStages => self.bind_rewrite_to_query(bind_context, "SELECT name, stage_type, number_of_files, creator, comment FROM system.stages ORDER BY name", RewriteKind::ShowStages).await?,
-            Statement::ListStage { location, pattern } => {
-                self.bind_list_stage(location, pattern).await?
-            }
+            Statement::ListStage { location, pattern } => self.bind_rewrite_to_query(bind_context, format!("SELECT * FROM LIST_STAGE(location => '@{location}', pattern => '{pattern}')").as_str(), RewriteKind::ListStage).await?,
             Statement::DescribeStage { stage_name } => self.bind_rewrite_to_query(bind_context, format!("SELECT * FROM system.stages WHERE name = '{stage_name}'").as_str(), RewriteKind::DescribeStage).await?,
             Statement::CreateStage(stmt) => self.bind_create_stage(stmt).await?,
             Statement::DropStage {

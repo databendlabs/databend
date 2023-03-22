@@ -69,7 +69,6 @@ use crate::plans::ExistsTablePlan;
 use crate::plans::GrantPrivilegePlan;
 use crate::plans::GrantRolePlan;
 use crate::plans::KillPlan;
-use crate::plans::ListPlan;
 use crate::plans::OptimizeTablePlan;
 use crate::plans::RemoveStagePlan;
 use crate::plans::RenameDatabasePlan;
@@ -197,7 +196,6 @@ pub enum Plan {
     ShowFileFormats(Box<ShowFileFormatsPlan>),
 
     // Stages
-    ListStage(Box<ListPlan>),
     CreateStage(Box<CreateStagePlan>),
     DropStage(Box<DropStagePlan>),
     RemoveStage(Box<RemoveStagePlan>),
@@ -240,6 +238,7 @@ pub enum RewriteKind {
     ShowUsers,
     ShowStages,
     DescribeStage,
+    ListStage,
     ShowRoles,
 }
 
@@ -282,7 +281,6 @@ impl Display for Plan {
             Plan::DropUser(_) => write!(f, "DropUser"),
             Plan::CreateRole(_) => write!(f, "CreateRole"),
             Plan::DropRole(_) => write!(f, "DropRole"),
-            Plan::ListStage(_) => write!(f, "ListStage"),
             Plan::CreateStage(_) => write!(f, "CreateStage"),
             Plan::DropStage(_) => write!(f, "DropStage"),
             Plan::CreateFileFormat(_) => write!(f, "CreateFileFormat"),
@@ -378,7 +376,6 @@ impl Plan {
             Plan::GrantRole(plan) => plan.schema(),
             Plan::GrantPriv(plan) => plan.schema(),
             Plan::ShowGrants(plan) => plan.schema(),
-            Plan::ListStage(plan) => plan.schema(),
             Plan::CreateStage(plan) => plan.schema(),
             Plan::DropStage(plan) => plan.schema(),
             Plan::RemoveStage(plan) => plan.schema(),
