@@ -133,7 +133,7 @@ impl TableFunction for GenerateSeriesTable {
     }
 
     fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
-    where Self: 'a {
+        where Self: 'a {
         self
     }
 }
@@ -212,7 +212,7 @@ impl GenerateSeriesSource {
 }
 
 fn range<T>(start: T, end: T, step: T) -> Vec<T>
-where T: std::ops::Add<Output = T> + std::ops::Sub<Output = T> + PartialOrd + Copy + Default {
+    where T: std::ops::Add<Output = T> + std::ops::Sub<Output = T> + PartialOrd + Copy + Default {
     let mut result = Vec::new();
     if step == T::default() {
         return result;
@@ -223,9 +223,16 @@ where T: std::ops::Add<Output = T> + std::ops::Sub<Output = T> + PartialOrd + Co
         return result;
     }
     let mut current = start;
-    while (current <= end) == increase_sign {
-        result.push(current);
-        current = current + step;
+    if increase_sign {
+        while current <= end {
+            result.push(current);
+            current = current + step;
+        }
+    } else {
+        while current >= end {
+            result.push(current);
+            current = current + step;
+        }
     }
     result
 }
