@@ -12,7 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
+use databend_client::APIClient;
 
-mod simple;
-mod stage;
+use crate::common::DEFAULT_DSN;
+
+#[tokio::test]
+async fn simple_select() {
+    let dsn = option_env!("TEST_DATABEND_DSN").unwrap_or(DEFAULT_DSN);
+    let client = APIClient::from_dsn(dsn).unwrap();
+    let resp = client.query("select 15532".into()).await.unwrap();
+    assert_eq!(resp.data.len(), 1);
+    assert_eq!(resp.data[0].len(), 1);
+    assert_eq!(resp.data[0][0], "15532");
+}

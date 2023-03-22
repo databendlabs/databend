@@ -10,14 +10,15 @@ repository = "https://github.com/databendcloud/databend-client"
 
 [dependencies]
 anyhow = "1.0.70"
+bytes = "1.4.0"
 http = "0.2.9"
-reqwest = { version = "0.11.14", default-features = false, features = ["json"] }
+reqwest = { version = "0.11.14", default-features = false, features = ["json", "multipart"] }
 serde = { version = "1.0.156", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0.94", default-features = false, features = ["std"] }
 tower = { version = "0.4.13", default-features = false }
 tower-http = { version = "0.4.0", default-features = false }
 url = { version = "2.3.1", default-features = false }
 
-
 [dev-dependencies]
+chrono = { version = "0.4.24", default-features = false, features = ["clock"] }
 tokio = { version = "1.26.0", features = ["macros"] }

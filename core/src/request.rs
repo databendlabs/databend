@@ -47,10 +47,11 @@ pub struct PaginationConfig {
 
 #[derive(Serialize, Debug)]
 pub struct StageAttachmentConfig {
+    pub location: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    stage: Option<String>,
+    pub file_format_options: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    stage_result_uri: Option<String>,
+    pub copy_options: Option<BTreeMap<String, String>>,
 }
 
 impl QueryRequest {
@@ -100,12 +101,13 @@ mod test {
                 max_rows_per_page: Some(1),
             }))
             .with_stage_attachment(Some(StageAttachmentConfig {
-                stage: Some("stage".to_string()),
-                stage_result_uri: Some("stage_result_uri".to_string()),
+                location: "@~/my_location".into(),
+                file_format_options: None,
+                copy_options: None,
             }));
         assert_eq!(
             serde_json::to_string(&req)?,
-            r#"{"session":{"database":"default","settings":{}},"sql":"select 1","pagination":{"wait_time_secs":1,"max_rows_in_buffer":1,"max_rows_per_page":1},"stage_attachment":{"stage":"stage","stage_result_uri":"stage_result_uri"}}"#
+            r#"{"session":{"database":"default","settings":{}},"sql":"select 1","pagination":{"wait_time_secs":1,"max_rows_in_buffer":1,"max_rows_per_page":1},"stage_attachment":{"location":"@~/my_location"}}"#
         );
         Ok(())
     }

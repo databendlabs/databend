@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fmt};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
+use bytes::Bytes;
+use http::StatusCode;
 use reqwest::header::HeaderMap;
+use reqwest::multipart::{Form, Part};
 use reqwest::Client as HttpClient;
 use url::Url;
 
@@ -23,6 +26,44 @@ use crate::{
     request::{PaginationConfig, QueryRequest, SessionConfig},
     response::QueryResponse,
 };
+
+pub struct PresignedResponse {
+    pub method: String,
+    pub headers: BTreeMap<String, String>,
+    pub url: String,
+}
+
+pub struct StageLocation {
+    pub name: String,
+    pub path: String,
+}
+
+impl fmt::Display for StageLocation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "@{}/{}", self.name, self.path)
+    }
+}
+
+impl TryFrom<&str> for StageLocation {
+    type Error = anyhow::Error;
+    fn try_from(s: &str) -> Result<Self> {
+        if !s.starts_with('@') {
+            return Err(anyhow!("Invalid stage location: {}", s));
+        }
+        let mut parts = s.splitn(2, '/');
+        let name = parts
+            .next()
+            .with_context(|| format!("Invalid stage location: {}", s))?
+            .trim_start_matches('@');
+        let path = parts
+            .next()
+            .with_context(|| format!("Invalid stage path: {}", s))?;
+        Ok(Self {
+            name: name.to_string(),
+            path: path.to_string(),
+        })
+    }
+}
 
 #[derive(Clone)]
 pub struct APIClient {
@@ -57,7 +98,6 @@ impl APIClient {
             "" => None,
             s => Some(s.to_string()),
         };
-
         let mut scheme = "https";
         let mut session_settings = BTreeMap::new();
         for (k, v) in u.query_pairs() {
@@ -72,7 +112,13 @@ impl APIClient {
                     client.max_rows_per_page = Some(v.parse()?);
                 }
                 "presigned_url_disabled" => {
-                    client.presigned_url_disabled = v.parse()?;
+                    client.presigned_url_disabled = match v.as_ref() {
+                        "true" | "1" => true,
+                        "false" | "0" => false,
+                        _ => {
+                            return Err(anyhow!("Invalid value for presigned_url_disabled: {}", v))
+                        }
+                    }
                 }
                 "tenant" => {
                     client.tenant = Some(v.to_string());
@@ -90,7 +136,6 @@ impl APIClient {
                 }
             }
         }
-
         let port = match u.port() {
             Some(p) => p,
             None => match scheme {
@@ -110,7 +155,6 @@ impl APIClient {
             .with_pagination(self.make_pagination())
             .with_session(self.make_session());
         let endpoint = self.endpoint.join("v1/query")?;
-
         let resp: QueryResponse = self
             .cli
             .post(endpoint)
@@ -195,6 +239,90 @@ impl APIClient {
             headers.insert("X-DATABEND-WAREHOUSE", warehouse.parse()?);
         }
         Ok(headers)
+    }
+
+    pub async fn upload_to_stage(&self, stage_location: &str, data: Bytes) -> Result<()> {
+        if self.presigned_url_disabled {
+            self.upload_to_stage_with_stream(stage_location, data).await
+        } else {
+            self.upload_to_stage_with_presigned(stage_location, data)
+                .await
+        }
+    }
+
+    async fn upload_to_stage_with_stream(&self, stage_location: &str, data: Bytes) -> Result<()> {
+        let endpoint = self.endpoint.join("v1/upload_to_stage")?;
+        let location = StageLocation::try_from(stage_location)?;
+        let mut headers = self.make_headers()?;
+        headers.insert("stage_name", location.name.parse()?);
+        let part = Part::stream(data).file_name(location.path);
+        let form = Form::new().part("upload", part);
+        let resp = self
+            .cli
+            .put(endpoint)
+            .basic_auth(self.user.clone(), self.password.clone())
+            .headers(headers)
+            .multipart(form)
+            .send()
+            .await?;
+        let status = resp.status();
+        let body = resp.bytes().await?;
+        match status {
+            StatusCode::OK => Ok(()),
+            _ => Err(anyhow!(
+                "Stage Upload Failed: {}",
+                String::from_utf8_lossy(&body)
+            )),
+        }
+    }
+
+    async fn upload_to_stage_with_presigned(
+        &self,
+        stage_location: &str,
+        data: Bytes,
+    ) -> Result<()> {
+        let presigned = self.get_presigned_url(stage_location).await?;
+        let mut builder = self.cli.put(presigned.url);
+        for (k, v) in presigned.headers {
+            builder = builder.header(k, v);
+        }
+        let resp = builder.body(data).send().await?;
+        let status = resp.status();
+        let body = resp.bytes().await?;
+        match status {
+            StatusCode::OK => Ok(()),
+            _ => Err(anyhow!(
+                "Presigned Upload Failed: {}",
+                String::from_utf8_lossy(&body)
+            )),
+        }
+    }
+
+    async fn get_presigned_url(&self, stage_location: &str) -> Result<PresignedResponse> {
+        let resp = self
+            .query(format!("PRESIGN UPLOAD {}", stage_location))
+            .await?;
+        if resp.data.len() != 1 {
+            return Err(anyhow!("Empty response from server for presigned request"));
+        }
+        if resp.data[0].len() != 3 {
+            return Err(anyhow!(
+                "Invalid response from server for presigned request"
+            ));
+        }
+        // resp.data[0]: [ "PUT", "{\"host\":\"s3.us-east-2.amazonaws.com\"}", "https://s3.us-east-2.amazonaws.com/query-storage-xxxxx/tnxxxxx/stage/user/xxxx/xxx?" ]
+        let method = resp.data[0][0].clone();
+        let headers: BTreeMap<String, String> =
+            serde_json::from_str(resp.data[0][1].clone().as_str())?;
+        let url = resp.data[0][2].clone();
+        if method != "PUT" {
+            return Err(anyhow!("Invalid method {} for presigned request", method));
+        }
+        Ok(PresignedResponse {
+            method,
+            headers,
+            url,
+        })
     }
 }
 

@@ -12,7 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
-
-mod simple;
-mod stage;
+pub static DEFAULT_DSN: &str = "databend://root:@localhost:8000/default?sslmode=disable";

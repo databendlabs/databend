@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-
 use serde::Deserialize;
 
 use crate::request::SessionConfig;
@@ -65,11 +63,4 @@ pub struct QueryResponse {
     pub final_uri: Option<String>,
     pub next_uri: Option<String>,
     pub kill_uri: Option<String>,
-}
-
-#[derive(Debug)]
-pub struct PresignedResponse {
-    pub method: String,
-    pub headers: BTreeMap<String, String>,
-    pub url: String,
 }

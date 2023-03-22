@@ -23,6 +23,7 @@ services:
     command: cargo test --target-dir /target --test *
     working_dir: /workdir
     environment:
+      - RUST_BACKTRACE=1
       - TEST_DATABEND_DSN=databend://databend:databend@databend:8000/default?sslmode=disable
       # - HTTPS_PROXY=http://172.24.0.1:7890
     volumes:
