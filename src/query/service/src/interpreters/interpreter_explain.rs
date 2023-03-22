@@ -212,8 +212,7 @@ impl ExplainInterpreter {
         plan: &PhysicalPlan,
         metadata: &MetadataRef,
     ) -> Result<Vec<DataBlock>> {
-        let prof = ProfSpanSetRef::default();
-        let result = plan.format_join(metadata, &prof)?.format_pretty()?;
+        let result = plan.format_join(metadata)?.format_pretty()?;
         let line_split_result: Vec<&str> = result.lines().collect();
         let formatted_plan = StringType::from_data(line_split_result);
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])

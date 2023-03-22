@@ -56,11 +56,7 @@ impl PhysicalPlan {
         to_format_tree(self, &metadata, &prof_span_set)
     }
 
-    pub fn format_join(
-        &self,
-        metadata: &MetadataRef,
-        prof_span_set: &ProfSpanSetRef,
-    ) -> Result<FormatTreeNode<String>> {
+    pub fn format_join(&self, metadata: &MetadataRef) -> Result<FormatTreeNode<String>> {
         match self {
             PhysicalPlan::TableScan(plan) => {
                 if plan.table_index == DUMMY_TABLE_INDEX {
@@ -82,8 +78,8 @@ impl PhysicalPlan {
                 ))
             }
             PhysicalPlan::HashJoin(plan) => {
-                let build_child = plan.build.format_join(metadata, prof_span_set)?;
-                let probe_child = plan.probe.format_join(metadata, prof_span_set)?;
+                let build_child = plan.build.format_join(metadata)?;
+                let probe_child = plan.probe.format_join(metadata)?;
 
                 let children = vec![
                     FormatTreeNode::with_children("Build".to_string(), vec![build_child]),
@@ -98,7 +94,7 @@ impl PhysicalPlan {
             other => {
                 let children = other
                     .children()
-                    .map(|child| child.format_join(metadata, prof_span_set))
+                    .map(|child| child.format_join(metadata))
                     .collect::<Result<Vec<FormatTreeNode<String>>>>()?;
 
                 if children.len() == 1 {
