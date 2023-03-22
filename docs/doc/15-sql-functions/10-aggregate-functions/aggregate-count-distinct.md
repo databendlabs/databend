@@ -7,7 +7,7 @@ Aggregate function.
 
 The count(distinct ...) function calculates the uniq value of a set of values.
 
-To obtain an estimated result from large data sets with little memory and time, consider using [APPROX_COUNT_DISTINCT](aggregate-approx_count-distinct.md).
+To obtain an estimated result from large data sets with little memory and time, consider using [APPROX_COUNT_DISTINCT](aggregate-approx-count-distinct.md).
 
 :::caution
  NULL values are not counted.

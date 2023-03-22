@@ -14,6 +14,7 @@
 
 #![allow(clippy::too_many_arguments)]
 mod block_writer;
+mod bloom_index_meta_size;
 mod io;
 mod meta;
 mod operations;

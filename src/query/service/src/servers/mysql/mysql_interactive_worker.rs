@@ -77,7 +77,6 @@ fn has_result_set_by_plan(plan: &Plan) -> bool {
             | Plan::ShowGrantTenantsOfShare(_)
             | Plan::DescribeTable(_)
             | Plan::ShowGrants(_)
-            | Plan::ListStage(_)
             | Plan::Presign(_)
     )
 }

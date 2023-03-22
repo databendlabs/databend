@@ -22,6 +22,7 @@ mod type_check;
 pub use aggregate_rewriter::AggregateRewriter;
 pub use distinct_to_groupby::DistinctToGroupBy;
 pub use grouping_check::GroupingChecker;
+pub use lowering::*;
 pub use name_resolution::compare_table_name;
 pub use name_resolution::normalize_identifier;
 pub use name_resolution::IdentifierNormalizer;

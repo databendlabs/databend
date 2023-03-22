@@ -50,6 +50,7 @@ impl Interpreter for DropShareInterpreter {
             &self.ctx.get_tenant(),
             self.ctx.get_data_operator()?.operator(),
             resp.spec_vec,
+            Some(&(self.plan.share.clone(), None)),
         )
         .await?;
 

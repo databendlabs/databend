@@ -243,10 +243,9 @@ impl JoinHashTable {
         }
 
         if !WITH_OTHER_CONJUNCT {
-            let mut rest_build_indexes = self.hash_join_desc.join_state.rest_build_indexes.write();
-            rest_build_indexes.extend(local_build_indexes);
-            let mut rest_probe_blocks = self.hash_join_desc.join_state.rest_probe_blocks.write();
-            rest_probe_blocks.push(probe_block);
+            let mut rest_pairs = self.hash_join_desc.join_state.rest_pairs.write();
+            rest_pairs.1.extend(local_build_indexes);
+            rest_pairs.0.push(probe_block);
             let validity: Bitmap = validity.into();
             let mut validity_state = self.hash_join_desc.join_state.validity.write();
             validity_state.extend_from_bitmap(&validity);

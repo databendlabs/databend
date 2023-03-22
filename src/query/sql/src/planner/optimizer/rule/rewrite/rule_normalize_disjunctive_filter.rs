@@ -14,7 +14,7 @@
 
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::Literal;
+use common_expression::Scalar;
 
 use crate::binder::split_conjunctions;
 use crate::optimizer::rule::Rule;
@@ -221,8 +221,7 @@ fn process_duplicate_or_exprs(or_args: &[PredicateScalar]) -> (PredicateScalar, 
             PredicateScalar::Other {
                 expr: Box::from(ScalarExpr::ConstantExpr(ConstantExpr {
                     span: None,
-                    value: Literal::Boolean(false),
-                    data_type: Box::new(DataType::Boolean),
+                    value: Scalar::Boolean(false),
                 })),
             },
             false,

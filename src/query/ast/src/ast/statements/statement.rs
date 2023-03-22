@@ -253,7 +253,8 @@ impl Display for Statement {
                     ExplainKind::Raw => write!(f, " RAW")?,
                     ExplainKind::Plan => (),
                     ExplainKind::AnalyzePlan => write!(f, " ANALYZE")?,
-                    ExplainKind::Memo(_) => write!(f, "MEMO")?,
+                    ExplainKind::JOIN => write!(f, " JOIN")?,
+                    ExplainKind::Memo(_) => write!(f, " MEMO")?,
                 }
                 write!(f, " {query}")?;
             }

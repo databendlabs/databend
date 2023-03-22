@@ -692,6 +692,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             ExplainKind::Raw => "Raw",
             ExplainKind::Plan => "Plan",
             ExplainKind::Memo(_) => "Memo",
+            ExplainKind::JOIN => "JOIN",
             ExplainKind::AnalyzePlan => "Analyze",
         });
         let format_ctx = AstFormatContext::with_children(name, 1);
@@ -2193,6 +2194,8 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 table,
                 alias,
                 travel_point,
+                pivot,
+                unpivot,
             } => {
                 let mut name = String::new();
                 name.push_str("TableIdentifier ");
@@ -2205,6 +2208,16 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                     name.push('.');
                 }
                 name.push_str(&table.to_string());
+
+                if let Some(pivot) = pivot {
+                    name.push(' ');
+                    name.push_str(&pivot.to_string());
+                }
+
+                if let Some(unpivot) = unpivot {
+                    name.push(' ');
+                    name.push_str(&unpivot.to_string());
+                }
 
                 let mut children = Vec::new();
                 if let Some(travel_point) = travel_point {

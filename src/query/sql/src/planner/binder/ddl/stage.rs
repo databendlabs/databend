@@ -27,27 +27,10 @@ use super::super::copy::parse_stage_location;
 use crate::binder::location::parse_uri_location;
 use crate::binder::Binder;
 use crate::plans::CreateStagePlan;
-use crate::plans::ListPlan;
 use crate::plans::Plan;
 use crate::plans::RemoveStagePlan;
 
 impl Binder {
-    pub(in crate::planner::binder) async fn bind_list_stage(
-        &mut self,
-        location: &str,
-        pattern: &str,
-    ) -> Result<Plan> {
-        let stage_name = format!("@{location}");
-        let (stage, path) = parse_stage_location(&self.ctx, stage_name.as_str()).await?;
-        let plan_node = ListPlan {
-            path,
-            stage,
-            pattern: pattern.to_string(),
-        };
-
-        Ok(Plan::ListStage(Box::new(plan_node)))
-    }
-
     pub(in crate::planner::binder) async fn bind_remove_stage(
         &mut self,
         location: &str,

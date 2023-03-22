@@ -28,7 +28,6 @@ use rust_decimal::RoundingStrategy;
 
 use crate::block::DataBlock;
 use crate::expression::Expr;
-use crate::expression::Literal;
 use crate::expression::RawExpr;
 use crate::function::Function;
 use crate::function::FunctionSignature;
@@ -377,7 +376,7 @@ impl Debug for StringColumn {
 impl<Index: ColumnIndex> Display for RawExpr<Index> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RawExpr::Literal { lit, .. } => write!(f, "{lit}"),
+            RawExpr::Constant { scalar, .. } => write!(f, "{scalar}"),
             RawExpr::ColumnRef {
                 display_name,
                 data_type,
@@ -420,48 +419,6 @@ impl<Index: ColumnIndex> Display for RawExpr<Index> {
                 }
                 write!(f, ")")
             }
-        }
-    }
-}
-
-impl Display for Literal {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        match self {
-            Literal::Null => write!(f, "NULL"),
-            Literal::Boolean(val) => write!(f, "{val}"),
-            Literal::Int8(val) => write!(f, "{val}_i8"),
-            Literal::Int16(val) => write!(f, "{val}_i16"),
-            Literal::Int32(val) => write!(f, "{val}_i32"),
-            Literal::Int64(val) => write!(f, "{val}_i64"),
-            Literal::UInt8(val) => write!(f, "{val}_u8"),
-            Literal::UInt16(val) => write!(f, "{val}_u16"),
-            Literal::UInt32(val) => write!(f, "{val}_u32"),
-            Literal::UInt64(val) => write!(f, "{val}_u64"),
-            Literal::Float32(val) => write!(f, "{val}_f32"),
-            Literal::Float64(val) => write!(f, "{val}_f64"),
-            Literal::Decimal256 {
-                value,
-                precision,
-                scale,
-            } => write!(
-                f,
-                "{}_decimal({}, {})",
-                display_decimal_256(*value, *scale),
-                precision,
-                scale
-            ),
-            Literal::Decimal128 {
-                value,
-                precision,
-                scale,
-            } => write!(
-                f,
-                "{}_decimal({}, {})",
-                display_decimal_128(*value, *scale),
-                precision,
-                scale
-            ),
-            Literal::String(val) => write!(f, "{:?}", String::from_utf8_lossy(val)),
         }
     }
 }

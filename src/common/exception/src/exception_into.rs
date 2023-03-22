@@ -175,6 +175,12 @@ impl From<opendal::Error> for ErrorCode {
     }
 }
 
+impl From<http::Error> for ErrorCode {
+    fn from(error: http::Error) -> Self {
+        ErrorCode::from_std_error(error)
+    }
+}
+
 impl From<std::io::Error> for ErrorCode {
     fn from(error: std::io::Error) -> Self {
         use std::io::ErrorKind;
