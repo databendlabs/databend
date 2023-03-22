@@ -55,6 +55,63 @@ impl PhysicalPlan {
     ) -> Result<FormatTreeNode<String>> {
         to_format_tree(self, &metadata, &prof_span_set)
     }
+
+    pub fn format_join(
+        &self,
+        metadata: &MetadataRef,
+        prof_span_set: &ProfSpanSetRef,
+    ) -> Result<FormatTreeNode<String>> {
+        match self {
+            PhysicalPlan::TableScan(plan) => {
+                if plan.table_index == DUMMY_TABLE_INDEX {
+                    return Ok(FormatTreeNode::with_children(
+                        format!("Scan: dummy, rows: {}", plan.source.statistics.read_rows),
+                        vec![],
+                    ));
+                }
+                let table = metadata.read().table(plan.table_index).clone();
+                let table_name =
+                    format!("{}.{}.{}", table.catalog(), table.database(), table.name());
+
+                Ok(FormatTreeNode::with_children(
+                    format!(
+                        "Scan: {}, rows: {}",
+                        table_name, plan.source.statistics.read_rows
+                    ),
+                    vec![],
+                ))
+            }
+            PhysicalPlan::HashJoin(plan) => {
+                let build_child = plan.build.format_join(metadata, prof_span_set)?;
+                let probe_child = plan.probe.format_join(metadata, prof_span_set)?;
+
+                let children = vec![
+                    FormatTreeNode::with_children("Build".to_string(), vec![build_child]),
+                    FormatTreeNode::with_children("Probe".to_string(), vec![probe_child]),
+                ];
+
+                Ok(FormatTreeNode::with_children(
+                    format!("HashJoin: {}", plan.join_type),
+                    children,
+                ))
+            }
+            other => {
+                let children = other
+                    .children()
+                    .map(|child| child.format_join(metadata, prof_span_set))
+                    .collect::<Result<Vec<FormatTreeNode<String>>>>()?;
+
+                if children.len() == 1 {
+                    Ok(children[0].clone())
+                } else {
+                    Ok(FormatTreeNode::with_children(
+                        format!("{:?}", other),
+                        children,
+                    ))
+                }
+            }
+        }
+    }
 }
 
 fn to_format_tree(

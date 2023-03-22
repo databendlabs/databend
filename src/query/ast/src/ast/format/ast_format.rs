@@ -692,6 +692,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             ExplainKind::Raw => "Raw",
             ExplainKind::Plan => "Plan",
             ExplainKind::Memo(_) => "Memo",
+            ExplainKind::JOIN => "JOIN",
             ExplainKind::AnalyzePlan => "Analyze",
         });
         let format_ctx = AstFormatContext::with_children(name, 1);
