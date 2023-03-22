@@ -52,8 +52,6 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableCopiedFileReply;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::*;
@@ -375,15 +373,6 @@ impl Catalog for HiveCatalog {
         unimplemented!()
     }
 
-    async fn upsert_table_copied_file_info(
-        &self,
-        _tenant: &str,
-        _db_name: &str,
-        _req: UpsertTableCopiedFileReq,
-    ) -> Result<UpsertTableCopiedFileReply> {
-        unimplemented!()
-    }
-
     async fn truncate_table(
         &self,
         _table_info: &TableInfo,
@@ -409,7 +398,7 @@ impl Catalog for HiveCatalog {
 
     // List all table functions' names.
     fn list_table_functions(&self) -> Vec<String> {
-        unimplemented!()
+        vec![]
     }
 
     // Get table engines

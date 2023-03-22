@@ -177,7 +177,7 @@ impl InsertInterpreter {
             }
         }
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-        let bind_context = BindContext::new();
+        let mut bind_context = BindContext::new();
         let metadata = Arc::new(RwLock::new(Metadata::default()));
         let const_schema = Arc::new(DataSchema::new(const_fields));
         let const_values = exprs_to_scalar(
@@ -185,7 +185,7 @@ impl InsertInterpreter {
             &const_schema,
             self.ctx.clone(),
             &name_resolution_ctx,
-            &bind_context,
+            &mut bind_context,
             metadata,
         )
         .await?;
@@ -314,8 +314,10 @@ impl InsertInterpreter {
                             append_entries.len(),
                             start.elapsed().as_secs()
                         );
+
+                        let copied_files = None;
                         table
-                            .commit_insertion(ctx.clone(), append_entries, overwrite)
+                            .commit_insertion(ctx.clone(), append_entries, copied_files, overwrite)
                             .await?;
 
                         if stage_info.copy_options.purge {
@@ -493,7 +495,11 @@ impl Interpreter for InsertInterpreter {
                         let append_entries = ctx.consume_precommit_blocks();
                         // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
                         return GlobalIORuntime::instance().block_on(async move {
-                            table.commit_insertion(ctx, append_entries, overwrite).await
+                            // TODO doc this
+                            let copied_files = None;
+                            table
+                                .commit_insertion(ctx, append_entries, copied_files, overwrite)
+                                .await
                         });
                     }
 
@@ -608,6 +614,8 @@ impl ValueSource {
             .map(|f| ColumnBuilder::with_capacity(f.data_type(), estimated_rows))
             .collect::<Vec<_>>();
 
+        let mut bind_context = self.bind_context.clone();
+
         let format = self.ctx.get_format_settings()?;
         let field_decoder = FastFieldDecoderValues::create_for_insert(format);
 
@@ -626,7 +634,7 @@ impl ValueSource {
                 reader,
                 &mut columns,
                 positions,
-                &self.bind_context,
+                &mut bind_context,
                 self.metadata.clone(),
             )
             .await?;
@@ -646,7 +654,7 @@ impl ValueSource {
         reader: &mut Cursor<R>,
         columns: &mut [ColumnBuilder],
         positions: &mut VecDeque<usize>,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         metadata: MetadataRef,
     ) -> Result<()> {
         let _ = reader.ignore_white_spaces();
@@ -830,7 +838,7 @@ async fn exprs_to_scalar(
     schema: &DataSchemaRef,
     ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &NameResolutionContext,
-    bind_context: &BindContext,
+    bind_context: &mut BindContext,
     metadata: MetadataRef,
 ) -> Result<Vec<Scalar>> {
     let schema_fields_len = schema.fields().len();

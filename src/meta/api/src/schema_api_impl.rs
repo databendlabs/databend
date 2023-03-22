@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Display;
-use std::iter::FromIterator;
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -25,6 +24,7 @@ use common_meta_app::app_error::CreateTableWithDropTime;
 use common_meta_app::app_error::DatabaseAlreadyExists;
 use common_meta_app::app_error::DropDbWithDropTime;
 use common_meta_app::app_error::DropTableWithDropTime;
+use common_meta_app::app_error::DuplicatedUpsertFiles;
 use common_meta_app::app_error::ShareHasNoGrantedDatabase;
 use common_meta_app::app_error::ShareHasNoGrantedPrivilege;
 use common_meta_app::app_error::TableAlreadyExists;
@@ -100,6 +100,8 @@ use common_meta_app::share::ShareId;
 use common_meta_app::share::ShareNameIdent;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::Key;
+use common_meta_types::txn_op::Request;
+use common_meta_types::txn_op_response::Response;
 use common_meta_types::ConditionResult;
 use common_meta_types::GCDroppedDataReply;
 use common_meta_types::GCDroppedDataReq;
@@ -109,6 +111,7 @@ use common_meta_types::MetaError;
 use common_meta_types::MetaId;
 use common_meta_types::MetaNetworkError;
 use common_meta_types::TxnCondition;
+use common_meta_types::TxnGetRequest;
 use common_meta_types::TxnOp;
 use common_meta_types::TxnRequest;
 use common_tracing::func_name;
@@ -135,14 +138,16 @@ use crate::txn_cond_seq;
 use crate::txn_op_del;
 use crate::txn_op_put;
 use crate::txn_op_put_with_expire;
+use crate::util::get_table_names_by_ids;
+use crate::util::list_tables_from_share_db;
+use crate::util::list_tables_from_unshare_db;
 use crate::util::mget_pb_values;
 use crate::IdGenerator;
 use crate::SchemaApi;
+use crate::DEFAULT_MGET_SIZE;
 use crate::TXN_MAX_RETRY_TIMES;
 
 const DEFAULT_DATA_RETENTION_SECONDS: i64 = 24 * 60 * 60;
-
-const DEFAULT_MGET_SIZE: usize = 256;
 
 /// SchemaApi is implemented upon kvapi::KVApi.
 /// Thus every type that impl kvapi::KVApi impls SchemaApi.
@@ -1926,47 +1931,11 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 "upsert_table_copied_file_info"
             );
 
-            let mut condition = vec![txn_cond_seq(&tbid, Eq, tb_meta_seq)];
-            let mut if_then = vec![];
-            // `remove_table_copied_files` and `upsert_table_copied_file_info`
-            // all modify `TableCopiedFileInfo`,
-            // so there used to has `TableCopiedFileLockKey` in these two functions
-            // to protect TableCopiedFileInfo modification.
-            // In issue: https://github.com/datafuselabs/databend/issues/8897,
-            // there is chance that if copy files concurrently, `upsert_table_copied_file_info`
-            // may return `TxnRetryMaxTimes`.
-            // So now, in case that `TableCopiedFileInfo` has expire time, remove `TableCopiedFileLockKey`
-            // in each function. In this case there is chance that some `TableCopiedFileInfo` may not be
-            // removed in `remove_table_copied_files`, but these data can be purged in case of expire time.
-
-            let mut file_name_infos = req.file_info.clone().into_iter();
-
-            for c in keys.chunks(DEFAULT_MGET_SIZE) {
-                let seq_infos: Vec<(u64, Option<TableCopiedFileInfo>)> =
-                    mget_pb_values(self, c).await?;
-
-                for (file_seq, _file_info_opt) in seq_infos {
-                    let (f_name, file_info) = file_name_infos.next().unwrap();
-
-                    let key = TableCopiedFileNameIdent {
-                        table_id,
-                        file: f_name.to_owned(),
-                    };
-                    condition.push(txn_cond_seq(&key, Eq, file_seq));
-                    match &req.expire_at {
-                        Some(expire_at) => {
-                            if_then.push(txn_op_put_with_expire(
-                                &key,
-                                serialize_struct(&file_info)?,
-                                *expire_at,
-                            ));
-                        }
-                        None => {
-                            if_then.push(txn_op_put(&key, serialize_struct(&file_info)?));
-                        }
-                    }
-                }
-            }
+            let (condition, if_then) = build_upsert_table_copied_file_info_conditions(
+                &req,
+                tb_meta_seq,
+                req.fail_if_duplicated,
+            )?;
 
             let txn_req = TxnRequest {
                 condition,
@@ -1984,6 +1953,11 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
 
             if succ {
                 return Ok(UpsertTableCopiedFileReply {});
+            } else if req.fail_if_duplicated {
+                // fail fast if txn failed, which caused by file duplication
+                return Err(KVAppError::AppError(AppError::DuplicatedUpsertFiles(
+                    DuplicatedUpsertFiles::new(req.table_id, "upsert_table_copied_file_info"),
+                )));
             }
         }
 
@@ -2130,11 +2104,16 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
-
         let tbid = TableId {
             table_id: req.table_id,
         };
         let req_seq = req.seq;
+
+        let fail_if_duplicated = req
+            .copied_files
+            .as_ref()
+            .map(|v| v.fail_if_duplicated)
+            .unwrap_or(false);
 
         loop {
             let (tb_meta_seq, table_meta): (_, Option<TableMeta>) =
@@ -2158,7 +2137,13 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 )));
             }
 
-            let txn_req = TxnRequest {
+            let get_table_meta = TxnOp {
+                request: Some(Request::Get(TxnGetRequest {
+                    key: tbid.to_string_key(),
+                })),
+            };
+
+            let mut txn_req = TxnRequest {
                 condition: vec![
                     // table is not changed
                     txn_cond_seq(&tbid, Eq, tb_meta_seq),
@@ -2166,15 +2151,69 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 if_then: vec![
                     txn_op_put(&tbid, serialize_struct(&req.new_table_meta)?), // tb_id -> tb_meta
                 ],
-                else_then: vec![],
+                else_then: vec![get_table_meta],
             };
 
-            let (succ, _responses) = send_txn(self, txn_req).await?;
+            if let Some(req) = &req.copied_files {
+                let (conditions, match_operations) =
+                    build_upsert_table_copied_file_info_conditions(
+                        req,
+                        tb_meta_seq,
+                        req.fail_if_duplicated,
+                    )?;
+                txn_req.condition.extend(conditions);
+                txn_req.if_then.extend(match_operations)
+            }
+
+            let (succ, responses) = send_txn(self, txn_req).await?;
 
             debug!(id = debug(&tbid), succ = display(succ), "update_table_meta");
 
             if succ {
                 return Ok(UpdateTableMetaReply {});
+            } else {
+                let resp = responses
+                    .get(0)
+                    // fail fast if response is None (which should not happen)
+                    .expect("internal error: expect one response if update_table_meta txn failed.");
+
+                if let Some(Response::Get(get_resp)) = &resp.response {
+                    // deserialize table version info
+                    let (tb_meta_seq, _): (_, Option<TableMeta>) =
+                        if let Some(seq_v) = &get_resp.value {
+                            (seq_v.seq, Some(deserialize_struct(&seq_v.data)?))
+                        } else {
+                            (0, None)
+                        };
+
+                    // check table version
+                    if req_seq.match_seq(tb_meta_seq).is_ok() {
+                        // if table version does match, but tx failed,
+                        if fail_if_duplicated {
+                            // report file duplication error
+                            return Err(KVAppError::AppError(AppError::from(
+                                DuplicatedUpsertFiles::new(req.table_id, "update_table_meta"),
+                            )));
+                        } else {
+                            // continue and try update the "table copied files"
+                            continue;
+                        };
+                    } else {
+                        return Err(KVAppError::AppError(AppError::from(
+                            TableVersionMismatched::new(
+                                req.table_id,
+                                req.seq,
+                                tb_meta_seq,
+                                "update_table_meta",
+                            ),
+                        )));
+                    }
+                } else {
+                    unreachable!(
+                        "internal error: expect some TxnGetResponseGet, but got {:?}",
+                        resp.response
+                    );
+                }
             }
         }
     }
@@ -2699,159 +2738,61 @@ async fn get_table_id_from_share_by_name(
     }
 }
 
-async fn get_table_names_by_ids(
-    kv_api: &impl kvapi::KVApi<Error = MetaError>,
-    ids: &[u64],
-) -> Result<Vec<String>, KVAppError> {
-    let mut table_names = vec![];
+fn build_upsert_table_copied_file_info_conditions(
+    req: &UpsertTableCopiedFileReq,
+    tb_meta_seq: u64,
+    fail_if_duplicated: bool,
+) -> Result<(Vec<TxnCondition>, Vec<TxnOp>), KVAppError> {
+    let table_id = req.table_id;
+    let tbid = TableId { table_id };
 
-    let keys: Vec<String> = ids
-        .iter()
-        .map(|id| TableIdToName { table_id: *id }.to_string_key())
-        .collect();
-    let mut id_iter = ids.iter();
-    for c in keys.chunks(DEFAULT_MGET_SIZE) {
-        let table_seq_name: Vec<(u64, Option<DBIdTableName>)> = mget_pb_values(kv_api, c).await?;
-        for (_seq, table_name_opt) in table_seq_name {
-            let id = id_iter.next().unwrap();
-            match table_name_opt {
-                Some(table_name) => table_names.push(table_name.table_name),
-                None => {
-                    return Err(KVAppError::AppError(AppError::UnknownTableId(
-                        UnknownTableId::new(*id, "get_table_names_by_ids"),
-                    )));
-                }
-            }
+    let mut condition = vec![txn_cond_seq(&tbid, Eq, tb_meta_seq)];
+    let mut if_then = vec![];
+
+    // `remove_table_copied_files` and `upsert_table_copied_file_info`
+    // all modify `TableCopiedFileInfo`,
+    // so there used to has `TableCopiedFileLockKey` in these two functions
+    // to protect TableCopiedFileInfo modification.
+    // In issue: https://github.com/datafuselabs/databend/issues/8897,
+    // there is chance that if copy files concurrently, `upsert_table_copied_file_info`
+    // may return `TxnRetryMaxTimes`.
+    // So now, in case that `TableCopiedFileInfo` has expire time, remove `TableCopiedFileLockKey`
+    // in each function. In this case there is chance that some `TableCopiedFileInfo` may not be
+    // removed in `remove_table_copied_files`, but these data can be purged in case of expire time.
+
+    let file_name_infos = req.file_info.clone().into_iter();
+
+    for (file_name, file_info) in file_name_infos {
+        let key = TableCopiedFileNameIdent {
+            table_id,
+            file: file_name.to_owned(),
+        };
+        if fail_if_duplicated {
+            // "fail_if_duplicated" mode, assumes files are absent
+            condition.push(txn_cond_seq(&key, Eq, 0));
         }
+        set_update_expire_operation(&key, &file_info, &req.expire_at, &mut if_then)?;
     }
-
-    Ok(table_names)
+    Ok((condition, if_then))
 }
 
-async fn get_tableinfos_by_ids(
-    kv_api: &impl kvapi::KVApi<Error = MetaError>,
-    ids: &[u64],
-    tenant_dbname: &DatabaseNameIdent,
-    dbid_tbnames_opt: Option<Vec<DBIdTableName>>,
-    db_type: DatabaseType,
-) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
-    let mut tb_meta_keys = Vec::with_capacity(ids.len());
-    for id in ids.iter() {
-        let tbid = TableId { table_id: *id };
-
-        tb_meta_keys.push(tbid.to_string_key());
-    }
-
-    // mget() corresponding table_metas
-
-    let seq_tb_metas = kv_api.mget_kv(&tb_meta_keys).await?;
-
-    let mut tb_infos = Vec::with_capacity(ids.len());
-
-    let tbnames = match dbid_tbnames_opt {
-        Some(dbid_tbnames) => Vec::<String>::from_iter(
-            dbid_tbnames
-                .into_iter()
-                .map(|dbid_tbname| dbid_tbname.table_name),
-        ),
-
-        None => get_table_names_by_ids(kv_api, ids).await?,
-    };
-
-    for (i, seq_meta_opt) in seq_tb_metas.iter().enumerate() {
-        if let Some(seq_meta) = seq_meta_opt {
-            let tb_meta: TableMeta = deserialize_struct(&seq_meta.data)?;
-
-            let tb_info = TableInfo {
-                ident: TableIdent {
-                    table_id: ids[i],
-                    seq: seq_meta.seq,
-                },
-                desc: format!("'{}'.'{}'", tenant_dbname.db_name, tbnames[i]),
-                meta: tb_meta,
-                name: tbnames[i].clone(),
-                tenant: tenant_dbname.tenant.clone(),
-                db_type: db_type.clone(),
-            };
-            tb_infos.push(Arc::new(tb_info));
-        } else {
-            debug!(
-                k = display(&tb_meta_keys[i]),
-                "db_meta not found, maybe just deleted after listing names and before listing meta"
-            );
+fn set_update_expire_operation(
+    key: &TableCopiedFileNameIdent,
+    file_info: &TableCopiedFileInfo,
+    expire_at_opt: &Option<u64>,
+    then_branch: &mut Vec<TxnOp>,
+) -> Result<(), KVAppError> {
+    match expire_at_opt {
+        Some(expire_at) => {
+            then_branch.push(txn_op_put_with_expire(
+                key,
+                serialize_struct(file_info)?,
+                *expire_at,
+            ));
+        }
+        None => {
+            then_branch.push(txn_op_put(key, serialize_struct(file_info)?));
         }
     }
-
-    Ok(tb_infos)
-}
-
-async fn list_tables_from_unshare_db(
-    kv_api: &impl kvapi::KVApi<Error = MetaError>,
-    db_id: u64,
-    tenant_dbname: &DatabaseNameIdent,
-) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
-    // List tables by tenant, db_id, table_name.
-
-    let dbid_tbname = DBIdTableName {
-        db_id,
-        // Use empty name to scan all tables
-        table_name: "".to_string(),
-    };
-
-    let (dbid_tbnames, ids) = list_u64_value(kv_api, &dbid_tbname).await?;
-
-    get_tableinfos_by_ids(
-        kv_api,
-        &ids,
-        tenant_dbname,
-        Some(dbid_tbnames),
-        DatabaseType::NormalDB,
-    )
-    .await
-}
-
-async fn list_tables_from_share_db(
-    kv_api: &impl kvapi::KVApi<Error = MetaError>,
-    share: ShareNameIdent,
-    db_id: u64,
-    tenant_dbname: &DatabaseNameIdent,
-) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
-    let res = get_share_or_err(
-        kv_api,
-        &share,
-        format!("list_tables_from_share_db: {}", &share),
-    )
-    .await;
-
-    let (share_id_seq, _share_id, _share_meta_seq, share_meta) = match res {
-        Ok(x) => x,
-        Err(e) => {
-            return Err(e);
-        }
-    };
-    if share_id_seq == 0 {
-        return Err(KVAppError::AppError(AppError::WrongShare(WrongShare::new(
-            share.to_string_key(),
-        ))));
-    }
-    if !share_meta.share_from_db_ids.contains(&db_id) {
-        return Err(KVAppError::AppError(AppError::ShareHasNoGrantedDatabase(
-            ShareHasNoGrantedDatabase::new(&share.tenant, &share.share_name),
-        )));
-    }
-
-    let mut ids = Vec::with_capacity(share_meta.entries.len());
-    for (_, entry) in share_meta.entries.iter() {
-        if let ShareGrantObject::Table(table_id) = entry.object {
-            ids.push(table_id);
-        }
-    }
-    get_tableinfos_by_ids(
-        kv_api,
-        &ids,
-        tenant_dbname,
-        None,
-        DatabaseType::ShareDB(share),
-    )
-    .await
+    Ok(())
 }

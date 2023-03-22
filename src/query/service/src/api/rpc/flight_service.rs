@@ -38,7 +38,6 @@ use tonic::Status;
 use tonic::Streaming;
 
 use crate::api::rpc::flight_actions::FlightAction;
-use crate::api::rpc::flight_client::FlightExchange;
 use crate::api::rpc::request_builder::RequestGetter;
 use crate::api::DataExchangeManager;
 use crate::sessions::SessionManager;
@@ -99,39 +98,37 @@ impl FlightService for DatabendQueryFlightService {
     type DoExchangeStream = FlightStream<FlightData>;
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn do_get(&self, _request: Request<Ticket>) -> Response<Self::DoGetStream> {
-        Err(Status::unimplemented("unimplement do_get"))
-    }
-
-    async fn do_exchange(&self, req: StreamReq<FlightData>) -> Response<Self::DoExchangeStream> {
-        match req.get_metadata("x-type")?.as_str() {
+    async fn do_get(&self, request: Request<Ticket>) -> Response<Self::DoGetStream> {
+        match request.get_metadata("x-type")?.as_str() {
             "request_server_exchange" => {
-                let query_id = req.get_metadata("x-query-id")?;
-                let (tx, rx) = async_channel::bounded(8);
-                let exchange = FlightExchange::from_server(None, None, req, tx);
-
-                DataExchangeManager::instance().handle_statistics_exchange(query_id, exchange)?;
-                Ok(RawResponse::new(Box::pin(rx)))
+                let target = request.get_metadata("x-target")?;
+                let query_id = request.get_metadata("x-query-id")?;
+                Ok(RawResponse::new(Box::pin(
+                    DataExchangeManager::instance().handle_statistics_exchange(query_id, target)?,
+                )))
             }
             "exchange_fragment" => {
-                let source = req.get_metadata("x-source")?;
-                let query_id = req.get_metadata("x-query-id")?;
-                let fragment = req.get_metadata("x-fragment-id")?.parse::<usize>().unwrap();
+                let target = request.get_metadata("x-target")?;
+                let query_id = request.get_metadata("x-query-id")?;
+                let fragment = request
+                    .get_metadata("x-fragment-id")?
+                    .parse::<usize>()
+                    .unwrap();
 
-                let (tx, rx) = async_channel::bounded(8);
-                let exchange =
-                    FlightExchange::from_server(Some(query_id.clone()), Some(fragment), req, tx);
-
-                DataExchangeManager::instance()
-                    .handle_exchange_fragment(query_id, source, fragment, exchange)?;
-
-                Ok(RawResponse::new(Box::pin(rx)))
+                Ok(RawResponse::new(Box::pin(
+                    DataExchangeManager::instance()
+                        .new_handle_exchange_fragment(query_id, target, fragment)?,
+                )))
             }
             exchange_type => Err(Status::unimplemented(format!(
                 "Unimplemented exchange type: {:?}",
                 exchange_type
             ))),
         }
+    }
+
+    async fn do_exchange(&self, _: StreamReq<FlightData>) -> Response<Self::DoExchangeStream> {
+        Err(Status::unimplemented("unimplement do_exchange"))
     }
 
     type DoActionStream = FlightStream<FlightResult>;

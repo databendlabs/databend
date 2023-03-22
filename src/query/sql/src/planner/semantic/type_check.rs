@@ -54,12 +54,14 @@ use common_functions::aggregates::AggregateCountFunction;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::is_builtin_function;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::srfs::BUILTIN_SET_RETURNING_FUNCTIONS;
 use common_users::UserApiProvider;
 
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
 use crate::binder::wrap_cast;
 use crate::binder::Binder;
+use crate::binder::ExprContext;
 use crate::binder::NameResolutionResult;
 use crate::optimizer::RelExpr;
 use crate::planner::metadata::optimize_remove_count_args;
@@ -77,7 +79,6 @@ use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
-use crate::plans::Unnest;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncFrameBound;
@@ -98,7 +99,7 @@ use crate::MetadataRef;
 /// If failed, a `SemanticError` will be raised. This may caused by incompatible
 /// argument types of expressions, or unresolvable columns.
 pub struct TypeChecker<'a> {
-    bind_context: &'a BindContext,
+    bind_context: &'a mut BindContext,
     ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
@@ -112,7 +113,7 @@ pub struct TypeChecker<'a> {
 
 impl<'a> TypeChecker<'a> {
     pub fn new(
-        bind_context: &'a BindContext,
+        bind_context: &'a mut BindContext,
         ctx: Arc<dyn TableContext>,
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
@@ -128,40 +129,34 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
+    #[allow(dead_code)]
     fn post_resolve(
         &mut self,
         scalar: &ScalarExpr,
         data_type: &DataType,
     ) -> Result<(ScalarExpr, DataType)> {
-        // TODO(leiysky): constant folding with new expression
-        //
-        // if let Ok((value, value_type)) = Evaluator::eval_scalar(scalar).and_then(|evaluator| {
-        //     let func_ctx = self.ctx.try_get_function_context()?;
-        //     if scalar.is_deterministic() {
-        //         evaluator.try_eval_const(&func_ctx)
-        //     } else {
-        //         Err(ErrorCode::Internal(
-        //             "Constant folding requires the function deterministic",
-        //         ))
-        //     }
-        // }) {
-        //     Ok((
-        //         ConstantExpr {
-        //             value,
-        //             data_type: Box::new(value_type),
-        //         }
-        //         .into(),
-        //         data_type.clone(),
-        //     ))
-        // } else {
-        //     Ok((scalar.clone(), data_type.clone()))
-        // }
-
         Ok((scalar.clone(), data_type.clone()))
     }
 
     #[async_recursion::async_recursion]
     pub async fn resolve(&mut self, expr: &Expr) -> Result<Box<(ScalarExpr, DataType)>> {
+        if let Some(column_binding) = self.bind_context.srfs.get(&expr.to_string()) {
+            if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
+                return Err(ErrorCode::SemanticError(
+                    "set-returning functions are only allowed in SELECT clause",
+                ));
+            }
+            // Found a SRF, return it directly.
+            // See `Binder::bind_project_set` for more details.
+            return Ok(Box::new((
+                ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: expr.span(),
+                    column: column_binding.clone(),
+                }),
+                *column_binding.data_type.clone(),
+            )));
+        }
+
         let box (scalar, data_type): Box<(ScalarExpr, DataType)> = match expr {
             Expr::ColumnRef {
                 span,
@@ -596,7 +591,7 @@ impl<'a> TypeChecker<'a> {
                 params,
                 window,
             } => {
-                let func_name = name.name.to_lowercase();
+                let func_name = normalize_identifier(name, self.name_resolution_ctx).to_string();
                 let func_name = func_name.as_str();
                 if !is_builtin_function(func_name)
                     && !Self::all_rewritable_scalar_function().contains(&func_name)
@@ -605,6 +600,28 @@ impl<'a> TypeChecker<'a> {
                 }
 
                 let args: Vec<&Expr> = args.iter().collect();
+
+                if BUILTIN_SET_RETURNING_FUNCTIONS.contains(func_name) {
+                    if matches!(
+                        self.bind_context.expr_context,
+                        ExprContext::InSetReturningFunction
+                    ) {
+                        return Err(ErrorCode::SemanticError(
+                            "set-returning functions cannot be nested".to_string(),
+                        )
+                        .set_span(expr.span()));
+                    }
+
+                    if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
+                        return Err(ErrorCode::SemanticError(
+                            "set-returning functions can only be used in SELECT".to_string(),
+                        )
+                        .set_span(expr.span()));
+                    }
+
+                    // Should have been handled with `BindContext::srfs`
+                    return Err(ErrorCode::Internal("Logical error, there is a bug!"));
+                }
 
                 if AggregateFunctionFactory::instance().contains(func_name) {
                     if self.in_aggregate_function {
@@ -880,7 +897,7 @@ impl<'a> TypeChecker<'a> {
             Expr::Tuple { span, exprs, .. } => self.resolve_tuple(*span, exprs).await?,
         };
 
-        Ok(Box::new(self.post_resolve(&scalar, &data_type)?))
+        Ok(Box::new((scalar, data_type)))
     }
 
     // TODO: remove this function
@@ -1357,8 +1374,8 @@ impl<'a> TypeChecker<'a> {
         );
 
         // Create new `BindContext` with current `bind_context` as its parent, so we can resolve outer columns.
-        let bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
-        let (s_expr, output_context) = binder.bind_query(&bind_context, subquery).await?;
+        let mut bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
+        let (s_expr, output_context) = binder.bind_query(&mut bind_context, subquery).await?;
 
         if (typ == SubqueryType::Scalar || typ == SubqueryType::Any)
             && output_context.columns.len() > 1
@@ -1629,35 +1646,6 @@ impl<'a> TypeChecker<'a> {
                         .await
                     }
                     Err(e) => Err(e),
-                })
-            }
-            ("unnest", args) => {
-                if args.len() != 1 {
-                    return Some(Err(ErrorCode::SemanticError(
-                        "Unnest can only be applied to one array type argument".to_string(),
-                    )
-                    .set_span(span)));
-                }
-                let inner_res = self.resolve(args[0]).await;
-                if inner_res.is_err() {
-                    return Some(inner_res);
-                }
-                let box (inner_expr, inner_type) = inner_res.unwrap();
-                Some(match inner_type {
-                    DataType::Array(inner) => {
-                        let return_type = Box::new(inner.unnest().wrap_nullable());
-                        Ok(Box::new((
-                            ScalarExpr::Unnest(Unnest {
-                                return_type,
-                                argument: Box::new(inner_expr),
-                            }),
-                            *inner,
-                        )))
-                    }
-                    _ => Err(ErrorCode::SemanticError(
-                        "Unnest can only be applied to one array type argument".to_string(),
-                    )
-                    .set_span(span)),
                 })
             }
             _ => None,

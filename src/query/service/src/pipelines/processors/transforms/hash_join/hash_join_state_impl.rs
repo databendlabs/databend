@@ -222,8 +222,17 @@ impl HashJoinState for JoinHashTable {
     }
 
     async fn wait_finish(&self) -> Result<()> {
-        if !self.is_finished()? {
-            self.finished_notify.notified().await;
+        let notified = {
+            let finished_guard = self.is_finished.lock().unwrap();
+
+            match *finished_guard {
+                true => None,
+                false => Some(self.finished_notify.notified()),
+            }
+        };
+
+        if let Some(notified) = notified {
+            notified.await;
         }
 
         Ok(())

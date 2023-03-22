@@ -77,6 +77,7 @@ pub enum CopyPlan {
         from: Box<Plan>,
         all_source_file_infos: Vec<StageFileInfo>,
         need_copy_file_infos: Vec<StageFileInfo>,
+        force: bool,
     },
     IntoStage {
         stage: Box<StageInfo>,

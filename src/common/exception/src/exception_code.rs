@@ -137,6 +137,7 @@ build_exceptions! {
     DropColumnEmptyError(1109),
     // create table or alter table add column with internal column name
     TableWithInternalColumnName(1110),
+    EmptyShareEndpointConfig(1111),
 
     // Data Related Errors
 
@@ -174,6 +175,7 @@ build_exceptions! {
     OCCRetryFailure(2011),
     TableNotWritable(2012),
     TableHistoricalDataNotFound(2013),
+    DuplicatedUpsertFiles(2014),
 
     // User api error codes.
     UnknownUser(2201),

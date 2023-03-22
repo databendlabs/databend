@@ -258,6 +258,9 @@ impl SchemaApiTestSuite {
         suite.get_table_copied_file(&b.build().await).await?;
         suite.truncate_table(&b.build().await).await?;
         suite.get_tables_from_share(&b.build().await).await?;
+        suite
+            .upsert_table_copied_file_info(&b.build().await)
+            .await?;
         Ok(())
     }
 
@@ -2025,6 +2028,7 @@ impl SchemaApiTestSuite {
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
+                    copied_files: None,
                 })
                 .await?;
 
@@ -2044,6 +2048,7 @@ impl SchemaApiTestSuite {
                         table_id,
                         seq: MatchSeq::Exact(table_version + 1),
                         new_table_meta: new_table_meta.clone(),
+                        copied_files: None,
                     })
                     .await;
 
@@ -2051,6 +2056,124 @@ impl SchemaApiTestSuite {
                 let err = ErrorCode::from(err);
 
                 assert_eq!(ErrorCode::TABLE_VERSION_MISMATCHED, err.code());
+            }
+
+            info!("--- update table meta, with upsert file req");
+            {
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+
+                let mut new_table_meta = table.meta.clone();
+                let table_statistics = TableStatistics {
+                    data_bytes: 1,
+                    ..Default::default()
+                };
+
+                new_table_meta.statistics = table_statistics;
+                let table_id = table.ident.table_id;
+                let table_version = table.ident.seq;
+
+                let mut file_info = BTreeMap::new();
+                file_info.insert("test".to_owned(), TableCopiedFileInfo {
+                    etag: Some("tag".to_string()),
+                    content_length: 1,
+                    last_modified: None,
+                });
+
+                let upsert_source_table = UpsertTableCopiedFileReq {
+                    table_id,
+                    file_info,
+                    expire_at: None,
+                    fail_if_duplicated: true,
+                };
+                mt.update_table_meta(UpdateTableMetaReq {
+                    table_id,
+                    seq: MatchSeq::Exact(table_version),
+                    new_table_meta: new_table_meta.clone(),
+                    copied_files: Some(upsert_source_table),
+                })
+                .await?;
+
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+                assert_eq!(table.meta, new_table_meta);
+            }
+
+            info!("--- update table meta, with non-duplicated upsert file, no duplication");
+            {
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+
+                let mut new_table_meta = table.meta.clone();
+                let table_statistics = TableStatistics {
+                    data_bytes: 1,
+                    ..Default::default()
+                };
+
+                new_table_meta.statistics = table_statistics;
+                let table_id = table.ident.table_id;
+                let table_version = table.ident.seq;
+
+                let mut file_info = BTreeMap::new();
+                file_info.insert("not_exist".to_owned(), TableCopiedFileInfo {
+                    etag: Some("tag_not_exist".to_string()),
+                    content_length: 1,
+                    last_modified: None,
+                });
+
+                let upsert_source_table = UpsertTableCopiedFileReq {
+                    table_id,
+                    file_info,
+                    expire_at: None,
+                    fail_if_duplicated: true,
+                };
+                mt.update_table_meta(UpdateTableMetaReq {
+                    table_id,
+                    seq: MatchSeq::Exact(table_version),
+                    new_table_meta: new_table_meta.clone(),
+                    copied_files: Some(upsert_source_table),
+                })
+                .await?;
+
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+                assert_eq!(table.meta, new_table_meta);
+            }
+
+            info!("--- update table meta, with duplicated upsert files");
+            {
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+
+                let mut new_table_meta = table.meta.clone();
+                let table_statistics = TableStatistics {
+                    data_bytes: 1,
+                    ..Default::default()
+                };
+
+                new_table_meta.statistics = table_statistics;
+                let table_id = table.ident.table_id;
+                let table_version = table.ident.seq;
+
+                let mut file_info = BTreeMap::new();
+                file_info.insert("test".to_owned(), TableCopiedFileInfo {
+                    etag: Some("tag".to_string()),
+                    content_length: 1,
+                    last_modified: None,
+                });
+
+                let upsert_source_table = UpsertTableCopiedFileReq {
+                    table_id,
+                    file_info,
+                    expire_at: None,
+                    fail_if_duplicated: true,
+                };
+                let result = mt
+                    .update_table_meta(UpdateTableMetaReq {
+                        table_id,
+                        seq: MatchSeq::Exact(table_version),
+                        new_table_meta: new_table_meta.clone(),
+                        copied_files: Some(upsert_source_table),
+                    })
+                    .await;
+                let err = result.unwrap_err();
+                let err = ErrorCode::from(err);
+                assert_eq!(ErrorCode::DuplicatedUpsertFiles("").code(), err.code());
             }
         }
         Ok(())
@@ -2514,6 +2637,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
+                fail_if_duplicated: true,
             };
 
             let _ = mt.upsert_table_copied_file_info(req).await?;
@@ -3234,6 +3358,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
+                fail_if_duplicated: true,
             };
 
             let _ = mt.upsert_table_copied_file_info(req).await?;
@@ -3263,6 +3388,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() - 86400) as u64),
+                fail_if_duplicated: true,
             };
 
             let _ = mt.upsert_table_copied_file_info(req).await?;
@@ -3347,6 +3473,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
+                fail_if_duplicated: true,
             };
 
             let _ = mt.upsert_table_copied_file_info(req).await?;
@@ -4140,6 +4267,167 @@ impl SchemaApiTestSuite {
                 ErrorCode::UnknownTable("").code(),
                 ErrorCode::from(err).code()
             );
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn upsert_table_copied_file_info<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+        let tbl_name = "tb2";
+        let table_id;
+
+        let schema = || {
+            Arc::new(TableSchema::new(vec![TableField::new(
+                "number",
+                TableDataType::Number(NumberDataType::UInt64),
+            )]))
+        };
+
+        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: options(),
+            created_on,
+            ..TableMeta::default()
+        };
+
+        info!("--- prepare db and table");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            let _ = mt.create_database(plan).await?;
+            let created_on = Utc::now();
+
+            let req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: table_meta(created_on),
+            };
+            let resp = mt.create_table(req.clone()).await?;
+            table_id = resp.table_id;
+        }
+
+        info!("--- create and get stage file info");
+        {
+            let stage_info = TableCopiedFileInfo {
+                etag: Some("etag".to_owned()),
+                content_length: 1024,
+                last_modified: Some(Utc::now()),
+            };
+            let mut file_info = BTreeMap::new();
+            file_info.insert("file".to_string(), stage_info.clone());
+
+            let req = UpsertTableCopiedFileReq {
+                table_id,
+                file_info: file_info.clone(),
+                expire_at: Some((Utc::now().timestamp() + 86400) as u64),
+                fail_if_duplicated: true,
+            };
+
+            let _ = mt.upsert_table_copied_file_info(req).await?;
+
+            let req = GetTableCopiedFileReq {
+                table_id,
+                files: vec!["file".to_string()],
+            };
+
+            let resp = mt.get_table_copied_file_info(req).await?;
+            assert_eq!(resp.file_info.len(), 1);
+            let resp_stage_info = resp.file_info.get(&"file".to_string());
+            assert_eq!(resp_stage_info.unwrap(), &stage_info);
+        }
+
+        info!("--- upsert table copied files with duplication, fail if duplicated");
+        {
+            // get previous file info
+            let req = GetTableCopiedFileReq {
+                table_id,
+                files: vec!["file".to_string()],
+            };
+            let resp = mt.get_table_copied_file_info(req).await?;
+            let previous_file_info = resp.file_info.get(&"file".to_string());
+
+            let stage_info = TableCopiedFileInfo {
+                etag: Some("etag".to_owned()),
+                content_length: 1024,
+                last_modified: Some(Utc::now()),
+            };
+            let mut file_info = BTreeMap::new();
+            file_info.insert("file".to_string(), stage_info.clone());
+            file_info.insert("file_not_exist".to_string(), stage_info.clone());
+
+            let req = UpsertTableCopiedFileReq {
+                table_id,
+                file_info: file_info.clone(),
+                expire_at: Some((Utc::now().timestamp() + 86400) as u64),
+                fail_if_duplicated: true,
+            };
+
+            let result = mt.upsert_table_copied_file_info(req).await;
+            let err = result.unwrap_err();
+            let err = ErrorCode::from(err);
+            assert_eq!(ErrorCode::DuplicatedUpsertFiles("").code(), err.code());
+
+            let req = GetTableCopiedFileReq {
+                table_id,
+                files: vec!["file".to_string(), "file_not_exist".to_string()],
+            };
+
+            let resp = mt.get_table_copied_file_info(req).await?;
+            // "file" exist
+            assert_eq!(resp.file_info.len(), 1);
+            // "file" not modified
+            let resp_stage_info = resp.file_info.get(&"file".to_string());
+            assert_eq!(resp_stage_info, previous_file_info);
+        }
+
+        info!("--- upsert table copied files with duplication, duplicated checking disabled");
+        {
+            let stage_info = TableCopiedFileInfo {
+                etag: Some("etag".to_owned()),
+                content_length: 1024,
+                last_modified: Some(Utc::now()),
+            };
+            let mut file_info = BTreeMap::new();
+            file_info.insert("file".to_string(), stage_info.clone());
+            file_info.insert("file_not_exist".to_string(), stage_info.clone());
+
+            let req = UpsertTableCopiedFileReq {
+                table_id,
+                file_info: file_info.clone(),
+                expire_at: Some((Utc::now().timestamp() + 86400) as u64),
+                fail_if_duplicated: false,
+            };
+
+            mt.upsert_table_copied_file_info(req).await?;
+            let req = GetTableCopiedFileReq {
+                table_id,
+                files: vec!["file".to_string(), "file_not_exist".to_string()],
+            };
+
+            let resp = mt.get_table_copied_file_info(req).await?;
+            assert_eq!(resp.file_info.len(), 2);
+            let resp_stage_info = resp.file_info.get(&"file".to_string());
+            assert_eq!(resp_stage_info.unwrap(), &stage_info);
         }
 
         Ok(())
