@@ -55,9 +55,7 @@ select * from generate_series(-1.0,-5.0,-0.5);
 query F
 select * from generate_series(1.0,5.0,0);
 ----
-1.0
 
 query F
 select * from generate_series(1.0,5.0,-1.0);
 ----
-1.0
