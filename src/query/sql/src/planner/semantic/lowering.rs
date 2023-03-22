@@ -130,7 +130,7 @@ pub trait TypeCheck<Index: ColumnIndex> {
     /// Resolve data type with `LoweringContext` and perform type check.
     fn resolve_and_check(
         &self,
-        resolver: &impl LoweringContext<ColumnID = Index>,
+        ctx: &impl LoweringContext<ColumnID = Index>,
     ) -> Result<Expr<Index>>;
 
     /// Perform type check without resolving data type.
@@ -148,6 +148,36 @@ impl<Index: ColumnIndex> TypeCheck<Index> for RawExpr<Index> {
 
     fn type_check(&self) -> Result<Expr<Index>> {
         check(self, &BUILTIN_FUNCTIONS)
+    }
+}
+
+impl TypeCheck<String> for ScalarExpr {
+    fn resolve_and_check(
+        &self,
+        resolver: &impl LoweringContext<ColumnID = String>,
+    ) -> Result<Expr<String>> {
+        let raw_expr = self.as_raw_expr_with_col_name();
+        raw_expr.resolve_and_check(resolver)
+    }
+
+    fn type_check(&self) -> Result<Expr<String>> {
+        let raw_expr = self.as_raw_expr_with_col_name();
+        raw_expr.type_check()
+    }
+}
+
+impl TypeCheck<IndexType> for ScalarExpr {
+    fn resolve_and_check(
+        &self,
+        resolver: &impl LoweringContext<ColumnID = IndexType>,
+    ) -> Result<Expr<IndexType>> {
+        let raw_expr = self.as_raw_expr_with_col_index();
+        raw_expr.resolve_and_check(resolver)
+    }
+
+    fn type_check(&self) -> Result<Expr<IndexType>> {
+        let raw_expr = self.as_raw_expr_with_col_index();
+        raw_expr.type_check()
     }
 }
 

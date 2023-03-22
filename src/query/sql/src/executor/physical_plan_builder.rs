@@ -338,7 +338,6 @@ impl PhysicalPlanBuilder {
                         .iter()
                         .map(|scalar| {
                             let expr = scalar
-                                .as_raw_expr_with_col_index()
                                 .resolve_and_check(build_schema.as_ref())?
                                 .project_column_ref(|index| {
                                     build_schema.index_of(&index.to_string()).unwrap()
@@ -356,7 +355,6 @@ impl PhysicalPlanBuilder {
                         .iter()
                         .map(|scalar| {
                             let expr = scalar
-                                .as_raw_expr_with_col_index()
                                 .resolve_and_check(probe_schema.as_ref())?
                                 .project_column_ref(|index| {
                                     probe_schema.index_of(&index.to_string()).unwrap()
@@ -374,7 +372,6 @@ impl PhysicalPlanBuilder {
                         .iter()
                         .map(|scalar| {
                             let expr = scalar
-                                .as_raw_expr_with_col_index()
                                 .resolve_and_check(merged_schema.as_ref())?
                                 .project_column_ref(|index| {
                                     merged_schema.index_of(&index.to_string()).unwrap()
@@ -404,7 +401,6 @@ impl PhysicalPlanBuilder {
                     .map(|item| {
                         let expr = item
                             .scalar
-                            .as_raw_expr_with_col_index()
                             .resolve_and_check(input_schema.as_ref())?
                             .project_column_ref(|index| {
                                 input_schema.index_of(&index.to_string()).unwrap()
@@ -436,7 +432,6 @@ impl PhysicalPlanBuilder {
                         .iter()
                         .map(|scalar| {
                             let expr = scalar
-                                .as_raw_expr_with_col_index()
                                 .resolve_and_check(input_schema.as_ref())?
                                 .project_column_ref(|index| {
                                     input_schema.index_of(&index.to_string()).unwrap()
@@ -720,7 +715,6 @@ impl PhysicalPlanBuilder {
                     Exchange::Hash(scalars) => {
                         for scalar in scalars {
                             let expr = scalar
-                                .as_raw_expr_with_col_index()
                                 .resolve_and_check(input_schema.as_ref())?
                                 .project_column_ref(|index| {
                                     input_schema.index_of(&index.to_string()).unwrap()
@@ -782,7 +776,6 @@ impl PhysicalPlanBuilder {
                     left_runtime_filters.insert(
                         left.0.clone(),
                         left.1
-                            .as_raw_expr_with_col_index()
                             .resolve_and_check(left_schema.as_ref())?
                             .project_column_ref(|index| {
                                 left_schema.index_of(&index.to_string()).unwrap()
@@ -793,7 +786,6 @@ impl PhysicalPlanBuilder {
                         right.0.clone(),
                         right
                             .1
-                            .as_raw_expr_with_col_index()
                             .resolve_and_check(right_schema.as_ref())?
                             .project_column_ref(|index| {
                                 right_schema.index_of(&index.to_string()).unwrap()
@@ -822,7 +814,6 @@ impl PhysicalPlanBuilder {
                             .iter()
                             .map(|arg| {
                                 let expr = arg
-                                    .as_raw_expr_with_col_index()
                                     .resolve_and_check(input_schema.as_ref())?
                                     .project_column_ref(|index| {
                                         input_schema.index_of(&index.to_string()).unwrap()
