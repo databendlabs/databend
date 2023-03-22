@@ -132,12 +132,17 @@ macro_rules! binary_decimal {
                 let mut result = Vec::with_capacity(buffer_a.len());
 
                 for (a, b) in buffer_a.iter().zip(buffer_b.iter()) {
-                    let t = (a * scale_a).$op(b) / scale_b;
-                    if t < min_for_precision || t > max_for_precision {
-                        $ctx.set_error(result.len(), "Decimal overflow");
+                    if $is_divide && std::intrinsics::unlikely(*b == zero) {
+                        $ctx.set_error(result.len(), "divided by zero");
                         result.push(one);
                     } else {
-                        result.push(t);
+                        let t = (a * scale_a).$op(b) / scale_b;
+                        if t < min_for_precision || t > max_for_precision {
+                            $ctx.set_error(result.len(), "Decimal overflow");
+                            result.push(one);
+                        } else {
+                            result.push(t);
+                        }
                     }
                 }
                 Value::Column(Column::Decimal(DecimalColumn::$decimal_type(
@@ -180,12 +185,17 @@ macro_rules! binary_decimal {
                 let mut result = Vec::with_capacity(buffer.len());
 
                 for b in buffer.iter() {
-                    let t = (a * scale_a).$op(b) / scale_b;
-                    if t < min_for_precision || t > max_for_precision {
-                        $ctx.set_error(result.len(), "Decimal overflow");
+                    if $is_divide && std::intrinsics::unlikely(*b == zero) {
+                        $ctx.set_error(result.len(), "divided by zero");
                         result.push(one);
                     } else {
-                        result.push(t);
+                        let t = (a * scale_a).$op(b) / scale_b;
+                        if t < min_for_precision || t > max_for_precision {
+                            $ctx.set_error(result.len(), "Decimal overflow");
+                            result.push(one);
+                        } else {
+                            result.push(t);
+                        }
                     }
                 }
                 Value::Column(Column::Decimal(DecimalColumn::$decimal_type(
