@@ -29,7 +29,6 @@ use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::FromData;
 use common_expression::FunctionContext;
-use common_expression::Literal;
 use common_expression::RawExpr;
 use common_expression::Scalar;
 use common_expression::TableDataType;
@@ -295,9 +294,9 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
                 data_type: schema.field(0).data_type().clone(),
                 display_name: schema.field(0).name().clone(),
             },
-            RawExpr::Literal {
+            RawExpr::Constant {
                 span: None,
-                lit: Literal::UInt64(1),
+                scalar: Scalar::Number(NumberScalar::UInt64(1)),
             },
         ],
     };

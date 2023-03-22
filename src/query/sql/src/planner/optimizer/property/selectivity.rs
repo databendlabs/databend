@@ -16,7 +16,8 @@ use std::cmp::Ordering;
 
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::Literal;
+use common_expression::types::NumberScalar;
+use common_expression::Scalar;
 
 use crate::optimizer::ColumnStat;
 use crate::optimizer::Datum;
@@ -103,7 +104,7 @@ impl<'a> SelectivityEstimator<'a> {
             } else {
                 return DEFAULT_SELECTIVITY;
             };
-            let const_datum = if let Some(datum) = Datum::from_literal(&constant.value) {
+            let const_datum = if let Some(datum) = Datum::from_scalar(&constant.value) {
                 datum
             } else {
                 return DEFAULT_SELECTIVITY;
@@ -194,20 +195,21 @@ impl<'a> SelectivityEstimator<'a> {
     }
 }
 
+// TODO(andylokandy): match on non-null boolean only once we have constant folding in the optimizer.
 fn is_true_constant_predicate(constant: &ConstantExpr) -> bool {
     match &constant.value {
-        Literal::Null => false,
-        Literal::Boolean(v) => *v,
-        Literal::Int64(v) => *v != 0,
-        Literal::UInt64(v) => *v != 0,
-        Literal::Float64(v) => *v != 0.0,
+        Scalar::Null => false,
+        Scalar::Boolean(v) => *v,
+        Scalar::Number(NumberScalar::Int64(v)) => *v != 0,
+        Scalar::Number(NumberScalar::UInt64(v)) => *v != 0,
+        Scalar::Number(NumberScalar::Float64(v)) => *v != 0.0,
         _ => true,
     }
 }
 
 fn evaluate_equal(col_hist: &Histogram, column_stat: &ColumnStat, constant: &ConstantExpr) -> f64 {
-    let constant_datum = Datum::from_literal(&constant.value);
-    match *constant.data_type {
+    let constant_datum = Datum::from_scalar(&constant.value);
+    match constant.value.as_ref().infer_data_type() {
         DataType::Null => 0.0,
         DataType::Number(number) => match number {
             NumberDataType::UInt8

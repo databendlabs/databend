@@ -122,7 +122,7 @@ fn resolve_column_type<C: LoweringContext>(
                 args,
             })
         }
-        RawExpr::Literal { .. } => Ok(raw_expr.clone()),
+        RawExpr::Constant { .. } => Ok(raw_expr.clone()),
     }
 }
 
@@ -216,9 +216,9 @@ impl ScalarExpr {
                     column_ref.column.index
                 ),
             },
-            ScalarExpr::ConstantExpr(constant) => RawExpr::Literal {
+            ScalarExpr::ConstantExpr(constant) => RawExpr::Constant {
                 span: constant.span,
-                lit: constant.value.clone(),
+                scalar: constant.value.clone(),
             },
             ScalarExpr::AndExpr(expr) => RawExpr::FunctionCall {
                 span: None,
@@ -326,9 +326,9 @@ impl ScalarExpr {
                     column_ref.column.index
                 ),
             },
-            ScalarExpr::ConstantExpr(constant) => RawExpr::Literal {
+            ScalarExpr::ConstantExpr(constant) => RawExpr::Constant {
                 span: constant.span,
-                lit: constant.value.clone(),
+                scalar: constant.value.clone(),
             },
             ScalarExpr::AndExpr(expr) => RawExpr::FunctionCall {
                 span: None,

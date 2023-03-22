@@ -688,15 +688,9 @@ impl PipelineBuilder {
             .iter()
             .map(|agg_func| {
                 agg_args.push(agg_func.args.clone());
-                let params = agg_func
-                    .sig
-                    .params
-                    .iter()
-                    .map(|p| p.clone().into_scalar())
-                    .collect();
                 AggregateFunctionFactory::instance().get(
                     agg_func.sig.name.as_str(),
-                    params,
+                    agg_func.sig.params.clone(),
                     agg_func.sig.args.clone(),
                 )
             })
