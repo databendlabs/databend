@@ -136,10 +136,9 @@ impl JoinHashTable {
             probe_block = DataBlock::new(nullable_columns, validity.len());
         }
 
-        let mut rest_build_indexes = self.hash_join_desc.join_state.rest_build_indexes.write();
-        let mut rest_probe_blocks = self.hash_join_desc.join_state.rest_probe_blocks.write();
-        rest_probe_blocks.push(probe_block);
-        rest_build_indexes.extend(local_build_indexes);
+        let mut rest_pairs = self.hash_join_desc.join_state.rest_pairs.write();
+        rest_pairs.0.push(probe_block);
+        rest_pairs.1.extend(local_build_indexes);
 
         Ok(probed_blocks)
     }

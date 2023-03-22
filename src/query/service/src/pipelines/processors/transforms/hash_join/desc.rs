@@ -43,8 +43,8 @@ pub struct JoinState {
     /// Record rows in build side that are matched with rows in probe side.
     /// It's order-sensitive, aligned with the order of rows in merged block.
     pub(crate) build_indexes: RwLock<Vec<RowPtr>>,
-    pub(crate) rest_build_indexes: RwLock<Vec<RowPtr>>,
-    pub(crate) rest_probe_blocks: RwLock<Vec<DataBlock>>,
+    /// Rest build indexes and probe blocks
+    pub(crate) rest_pairs: RwLock<(Vec<DataBlock>, Vec<RowPtr>)>,
     pub(crate) validity: RwLock<MutableBitmap>,
 }
 
@@ -52,9 +52,8 @@ impl JoinState {
     pub fn create() -> Result<Self> {
         Ok(JoinState {
             build_indexes: RwLock::new(Vec::with_capacity(JOIN_MAX_BLOCK_SIZE)),
-            rest_build_indexes: RwLock::new(Vec::with_capacity(JOIN_MAX_BLOCK_SIZE)),
-            rest_probe_blocks: RwLock::new(Vec::with_capacity(JOIN_MAX_BLOCK_SIZE)),
             validity: RwLock::new(MutableBitmap::with_capacity(JOIN_MAX_BLOCK_SIZE)),
+            rest_pairs: Default::default(),
         })
     }
 }
