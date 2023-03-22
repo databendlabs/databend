@@ -24,8 +24,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use futures_util::future::Either;
 
+use crate::api::rpc::flight_client::FlightExchange;
 use crate::api::rpc::flight_client::FlightSender;
-use crate::api::rpc::flight_client::NewFlightExchange;
 use crate::api::rpc::packets::PrecommitBlock;
 use crate::api::rpc::packets::ProgressInfo;
 use crate::api::DataPacket;
@@ -42,15 +42,15 @@ impl StatisticsSender {
     pub fn spawn_sender(
         query_id: &str,
         ctx: Arc<QueryContext>,
-        mut exchanges: Vec<NewFlightExchange>,
+        mut exchanges: Vec<FlightExchange>,
     ) -> StatisticsSender {
         debug_assert_eq!(exchanges.len(), 2);
 
         let (tx, rx) = match (exchanges.remove(0), exchanges.remove(0)) {
-            (tx @ NewFlightExchange::Sender { .. }, rx @ NewFlightExchange::Receiver { .. }) => {
+            (tx @ FlightExchange::Sender { .. }, rx @ FlightExchange::Receiver { .. }) => {
                 (tx.as_sender(), rx.as_receiver())
             }
-            (rx @ NewFlightExchange::Receiver { .. }, tx @ NewFlightExchange::Sender { .. }) => {
+            (rx @ FlightExchange::Receiver { .. }, tx @ FlightExchange::Sender { .. }) => {
                 (tx.as_sender(), rx.as_receiver())
             }
             _ => unreachable!(),
