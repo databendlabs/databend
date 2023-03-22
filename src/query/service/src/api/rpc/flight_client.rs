@@ -62,7 +62,7 @@ impl FlightClient {
         &mut self,
         query_id: &str,
         target: &str,
-    ) -> Result<NewFlightExchange> {
+    ) -> Result<FlightExchange> {
         let mut streaming = self
             .get_streaming(
                 RequestBuilder::create(Ticket::default())
@@ -84,7 +84,7 @@ impl FlightClient {
             }
         });
 
-        Ok(NewFlightExchange::create_receiver(rx))
+        Ok(FlightExchange::create_receiver(rx))
     }
 
     pub async fn do_get(
@@ -92,7 +92,7 @@ impl FlightClient {
         query_id: &str,
         target: &str,
         fragment: usize,
-    ) -> Result<NewFlightExchange> {
+    ) -> Result<FlightExchange> {
         let mut streaming = self
             .get_streaming(
                 RequestBuilder::create(Ticket::default())
@@ -117,7 +117,7 @@ impl FlightClient {
             }
         });
 
-        Ok(NewFlightExchange::create_receiver(rx))
+        Ok(FlightExchange::create_receiver(rx))
     }
 
     async fn get_streaming(&mut self, request: Request<Ticket>) -> Result<Streaming<FlightData>> {
@@ -149,7 +149,7 @@ impl FlightClient {
 }
 
 pub struct FlightReceiver {
-    state: Arc<NewState>,
+    state: Arc<State>,
     dropped: AtomicBool,
     rx: Receiver<Result<FlightData>>,
 }
@@ -164,7 +164,7 @@ impl FlightReceiver {
     pub fn create(rx: Receiver<Result<FlightData>>) -> FlightReceiver {
         FlightReceiver {
             rx,
-            state: NewState::create(),
+            state: State::create(),
             dropped: AtomicBool::new(false),
         }
     }
@@ -188,7 +188,7 @@ impl FlightReceiver {
 }
 
 pub struct FlightSender {
-    state: Arc<NewState>,
+    state: Arc<State>,
     dropped: AtomicBool,
     tx: Sender<Result<FlightData, Status>>,
 }
@@ -214,7 +214,7 @@ impl Drop for FlightSender {
 impl FlightSender {
     pub fn create(tx: Sender<Result<FlightData, Status>>) -> FlightSender {
         FlightSender {
-            state: NewState::create(),
+            state: State::create(),
             dropped: AtomicBool::new(false),
             tx,
         }
@@ -240,48 +240,48 @@ impl FlightSender {
     }
 }
 
-pub struct NewState {
+pub struct State {
     strong_count: AtomicUsize,
 }
 
-impl NewState {
-    pub fn create() -> Arc<NewState> {
-        Arc::new(NewState {
+impl State {
+    pub fn create() -> Arc<State> {
+        Arc::new(State {
             strong_count: AtomicUsize::new(0),
         })
     }
 }
 
-pub enum NewFlightExchange {
+pub enum FlightExchange {
     Dummy,
     Receiver {
-        state: Arc<NewState>,
+        state: Arc<State>,
         receiver: Receiver<Result<FlightData>>,
     },
     Sender {
-        state: Arc<NewState>,
+        state: Arc<State>,
         sender: Sender<Result<FlightData, Status>>,
     },
 }
 
-impl NewFlightExchange {
-    pub fn create_sender(sender: Sender<Result<FlightData, Status>>) -> NewFlightExchange {
-        NewFlightExchange::Sender {
+impl FlightExchange {
+    pub fn create_sender(sender: Sender<Result<FlightData, Status>>) -> FlightExchange {
+        FlightExchange::Sender {
             sender,
-            state: NewState::create(),
+            state: State::create(),
         }
     }
 
-    pub fn create_receiver(receiver: Receiver<Result<FlightData>>) -> NewFlightExchange {
-        NewFlightExchange::Receiver {
+    pub fn create_receiver(receiver: Receiver<Result<FlightData>>) -> FlightExchange {
+        FlightExchange::Receiver {
             receiver,
-            state: NewState::create(),
+            state: State::create(),
         }
     }
 
     pub fn as_sender(&self) -> FlightSender {
         match self {
-            NewFlightExchange::Sender { state, sender } => {
+            FlightExchange::Sender { state, sender } => {
                 state.strong_count.fetch_add(1, Ordering::SeqCst);
 
                 FlightSender {
@@ -296,7 +296,7 @@ impl NewFlightExchange {
 
     pub fn as_receiver(&self) -> FlightReceiver {
         match self {
-            NewFlightExchange::Receiver { state, receiver } => {
+            FlightExchange::Receiver { state, receiver } => {
                 state.strong_count.fetch_add(1, Ordering::SeqCst);
 
                 FlightReceiver {
