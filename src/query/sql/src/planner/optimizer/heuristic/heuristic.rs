@@ -49,6 +49,7 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
         RuleID::PushDownFilterJoin,
         RuleID::FoldCountAggregate,
         RuleID::SplitAggregate,
+        RuleID::EagerAggregation,
         RuleID::PushDownFilterScan,
         RuleID::PushDownPrewhere, /* PushDownPrwhere should be after all rules except PushDownFilterScan */
         RuleID::PushDownSortScan, // PushDownFilterScan should be after PushDownPrewhere

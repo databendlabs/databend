@@ -27,6 +27,7 @@ use super::rewrite::RulePushDownPrewhere;
 use super::transform::RuleCommuteJoin;
 use super::transform::RuleLeftAssociateJoin;
 use super::transform::RuleRightAssociateJoin;
+use crate::optimizer::rule::rewrite::RuleEagerAggregation;
 use crate::optimizer::rule::rewrite::RuleEliminateFilter;
 use crate::optimizer::rule::rewrite::RuleMergeEvalScalar;
 use crate::optimizer::rule::rewrite::RuleMergeFilter;
@@ -71,6 +72,7 @@ impl RuleFactory {
             RuleID::MergeFilter => Ok(Box::new(RuleMergeFilter::new())),
             RuleID::NormalizeScalarFilter => Ok(Box::new(RuleNormalizeScalarFilter::new())),
             RuleID::SplitAggregate => Ok(Box::new(RuleSplitAggregate::new())),
+            RuleID::EagerAggregation => Ok(Box::new(RuleEagerAggregation::new())),
             RuleID::FoldCountAggregate => Ok(Box::new(RuleFoldCountAggregate::new())),
             RuleID::NormalizeDisjunctiveFilter => {
                 Ok(Box::new(RuleNormalizeDisjunctiveFilter::new()))

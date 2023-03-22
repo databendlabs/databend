@@ -99,12 +99,25 @@ where
     }
 
     fn accumulate_keys(places: &[StateAddr], offset: usize, columns: &Column) -> Result<()> {
-        let darray = NumberType::<T>::try_downcast_column(columns).unwrap();
-        darray.iter().zip(places.iter()).for_each(|(c, place)| {
-            let place = place.next(offset);
-            let state = place.get::<Self>();
-            state.value += c.as_();
-        });
+        match columns {
+            Column::Nullable(column) => {
+                let darray = NumberType::<TSum>::try_downcast_column(&column.column).unwrap();
+                darray.iter().zip(places.iter()).for_each(|(c, place)| {
+                    let place = place.next(offset);
+                    let state = place.get::<Self>();
+                    state.value += *c;
+                });
+            }
+            _ => {
+                let darray = NumberType::<T>::try_downcast_column(columns).unwrap();
+                darray.iter().zip(places.iter()).for_each(|(c, place)| {
+                    let place = place.next(offset);
+                    let state = place.get::<Self>();
+                    state.value += c.as_();
+                });
+                    
+            }
+        };
         Ok(())
     }
 
@@ -411,7 +424,11 @@ pub fn try_create_aggregate_sum_function(
 }
 
 pub fn aggregate_sum_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_sum_function))
+    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+        is_decomposable: true,
+        ..Default::default()
+    };
+    AggregateFunctionDescription::creator_with_features(Box::new(try_create_aggregate_sum_function), features)
 }
 
 #[inline]

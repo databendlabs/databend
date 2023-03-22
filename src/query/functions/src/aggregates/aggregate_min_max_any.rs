@@ -97,7 +97,10 @@ where
         columns: &[Column],
         _input_rows: usize,
     ) -> Result<()> {
-        let column = T::try_downcast_column(&columns[0]).unwrap();
+        let column = match &columns[0] {
+            Column::Nullable(column) => T::try_downcast_column(&column.column).unwrap(),
+            _ => T::try_downcast_column(&columns[0]).unwrap(),
+        };
         let column_iter = T::iter_column(&column);
         column_iter.zip(places.iter()).for_each(|(v, place)| {
             let addr = place.next(offset);
@@ -255,15 +258,23 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
 }
 
 pub fn aggregate_min_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(
+    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+        is_decomposable: true,
+        ..Default::default()
+    };
+    AggregateFunctionDescription::creator_with_features(Box::new(
         try_create_aggregate_min_max_any_function::<TYPE_MIN>,
-    ))
+    ), features)
 }
 
 pub fn aggregate_max_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(
+    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+        is_decomposable: true,
+        ..Default::default()
+    };
+    AggregateFunctionDescription::creator_with_features(Box::new(
         try_create_aggregate_min_max_any_function::<TYPE_MAX>,
-    ))
+    ), features)
 }
 
 pub fn aggregate_any_function_desc() -> AggregateFunctionDescription {

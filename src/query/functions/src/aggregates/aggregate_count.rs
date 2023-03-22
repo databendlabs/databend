@@ -56,6 +56,7 @@ impl AggregateCountFunction {
     pub fn desc() -> AggregateFunctionDescription {
         let features = super::aggregate_function_factory::AggregateFunctionFeatures {
             returns_default_when_only_null: true,
+            is_decomposable: true,
             ..Default::default()
         };
         AggregateFunctionDescription::creator_with_features(Box::new(Self::try_create), features)
