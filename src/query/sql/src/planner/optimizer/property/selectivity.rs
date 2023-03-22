@@ -16,6 +16,7 @@ use std::cmp::Ordering;
 
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use common_expression::types::NumberScalar;
 use common_expression::Scalar;
 
 use crate::optimizer::ColumnStat;
@@ -194,9 +195,14 @@ impl<'a> SelectivityEstimator<'a> {
     }
 }
 
+// TODO(andylokandy): match on non-null boolean only once we have constant folding in the optimizer.
 fn is_true_constant_predicate(constant: &ConstantExpr) -> bool {
     match &constant.value {
+        Scalar::Null => false,
         Scalar::Boolean(v) => *v,
+        Scalar::Number(NumberScalar::Int64(v)) => *v != 0,
+        Scalar::Number(NumberScalar::UInt64(v)) => *v != 0,
+        Scalar::Number(NumberScalar::Float64(v)) => *v != 0.0,
         _ => true,
     }
 }

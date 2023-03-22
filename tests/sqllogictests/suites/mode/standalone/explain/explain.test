@@ -98,7 +98,7 @@ explain raw select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.
 EvalScalar
 ├── scalars: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
 └── Filter
-    ├── filters: [((t1.a (#0) eq t2.a (#2)) AND (t1.a (#0) gt 3_u8)) OR (t1.a (#0) eq t2.a (#2))]
+    ├── filters: [((t1.a (#0) eq t2.a (#2)) AND (t1.a (#0) gt 3)) OR (t1.a (#0) eq t2.a (#2))]
     └── CrossJoin
         ├── equi conditions: []
         ├── non-equi conditions: []
@@ -122,7 +122,7 @@ EvalScalar
     ├── equi conditions: [(t1.a (#0) eq t2.a (#2)) AND (t1.b (#1) eq t2.b (#3))]
     ├── non-equi conditions: []
     ├── Filter
-    │   ├── filters: [t1.a (#0) gt 2_u8]
+    │   ├── filters: [t1.a (#0) gt 2]
     │   └── LogicalGet
     │       ├── table: default.default.t1
     │       ├── filters: []

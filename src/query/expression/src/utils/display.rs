@@ -376,7 +376,7 @@ impl Debug for StringColumn {
 impl<Index: ColumnIndex> Display for RawExpr<Index> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RawExpr::Constant { scalar: lit, .. } => write!(f, "{lit}"),
+            RawExpr::Constant { scalar, .. } => write!(f, "{scalar}"),
             RawExpr::ColumnRef {
                 display_name,
                 data_type,
