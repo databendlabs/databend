@@ -392,8 +392,10 @@ impl PhysicalPlanBuilder {
             }
 
             RelOperator::EvalScalar(eval_scalar) => {
+                dbg!("eval scalar 0", s_expr.child(0).clone());
                 let input = self.build(s_expr.child(0)?).await?;
                 let input_schema = input.output_schema()?;
+                dbg!("eval scalar 1", input.clone(), input_schema.clone());
                 let exprs = eval_scalar
                     .items
                     .iter()
@@ -681,7 +683,7 @@ impl PhysicalPlanBuilder {
             RelOperator::Window(w) => {
                 println!("window sexpr: {:?}", s_expr.child(0));
                 Ok(PhysicalPlan::Window(Window {
-                    plan_id: self.next_plan_id,
+                    plan_id: self.next_plan_id(),
                     input: Box::new(self.build(s_expr.child(0)?).await?),
                 }))
             }

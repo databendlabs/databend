@@ -156,6 +156,10 @@ impl UnusedColumnPruner {
                     Self::keep_required_columns(expr.child(0)?, required)?,
                 ))
             }
+            RelOperator::Window(p) => Ok(SExpr::create_unary(
+                RelOperator::Window(p.clone()),
+                Self::keep_required_columns(expr.child(0)?, required)?,
+            )),
             RelOperator::Sort(p) => {
                 p.items.iter().for_each(|s| {
                     required.insert(s.index);

@@ -207,9 +207,11 @@ impl Binder {
 
         // bind window
         // window run after the HAVING clause but before the ORDER BY clause.
-        for window_info in bind_context.windows.iter() {
+        for window_info in from_context.windows.iter() {
             s_expr = self.bind_window_function(window_info, s_expr).await?;
         }
+
+        // dbg!("after bind window", s_expr.clone());
 
         if stmt.distinct {
             s_expr = self.bind_distinct(
