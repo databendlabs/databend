@@ -20,6 +20,8 @@ use common_ast::Visitor;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
+use common_expression::FunctionKind;
+use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::ExprContext;
 use crate::normalize_identifier;
@@ -49,8 +51,12 @@ impl<'a> Visitor<'a> for SrfCollector {
         params: &'a [Literal],
         over: &'a Option<WindowSpec>,
     ) {
-        // TODO(andylokandy): look up function property: if it is a set-returning function
-        if name.name.to_lowercase() == "unnest" {
+        if BUILTIN_FUNCTIONS
+            .properties
+            .get(&name.name.to_lowercase())
+            .map(|property| property.kind == FunctionKind::SRF)
+            .unwrap_or(false)
+        {
             // Collect the srf
             self.srfs.push(Expr::FunctionCall {
                 span,

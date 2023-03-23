@@ -18,6 +18,8 @@ use common_expression::types::DataType;
 use common_expression::Column;
 use common_expression::Function;
 use common_expression::FunctionEval;
+use common_expression::FunctionKind;
+use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::Scalar;
@@ -25,6 +27,11 @@ use common_expression::Value;
 use common_expression::ValueRef;
 
 pub fn register(registry: &mut FunctionRegistry) {
+    registry.properties.insert(
+        "unnest".to_string(),
+        FunctionProperty::default().kind(FunctionKind::SRF),
+    );
+
     let unnest_impl = |args: &[ValueRef<AnyType>], num_rows| {
         debug_assert_eq!(args.len(), 1);
         let unnest_array = match args[0].clone().to_owned() {

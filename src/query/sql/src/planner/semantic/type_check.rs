@@ -588,8 +588,12 @@ impl<'a> TypeChecker<'a> {
 
                 let args: Vec<&Expr> = args.iter().collect();
 
-                // TODO(andylokandy): look up function property: if it is a set-returning function
-                if func_name == "unnest" {
+                if BUILTIN_FUNCTIONS
+                    .properties
+                    .get(&name.name.to_lowercase())
+                    .map(|property| property.kind == FunctionKind::SRF)
+                    .unwrap_or(false)
+                {
                     if matches!(
                         self.bind_context.expr_context,
                         ExprContext::InSetReturningFunction
@@ -1432,7 +1436,6 @@ impl<'a> TypeChecker<'a> {
             "is_null",
             "coalesce",
             "last_query_id",
-            "unnest",
         ]
     }
 
