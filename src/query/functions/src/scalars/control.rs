@@ -26,7 +26,6 @@ use common_expression::Domain;
 use common_expression::Function;
 use common_expression::FunctionDomain;
 use common_expression::FunctionEval;
-use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::Value;
@@ -52,7 +51,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "if".to_string(),
                 args_type: sig_args_type,
                 return_type: DataType::Generic(0),
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|args_domain| {
@@ -107,7 +105,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_1_arg_core::<NullType, BooleanType, _, _>(
         "is_not_null",
-        FunctionProperty::default(),
         |_| {
             FunctionDomain::Domain(BooleanDomain {
                 has_true: false,
@@ -118,7 +115,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
     registry.register_1_arg_core::<NullableType<GenericType<0>>, BooleanType, _, _>(
         "is_not_null",
-        FunctionProperty::default(),
         |NullableDomain { has_null, value }| {
             FunctionDomain::Domain(BooleanDomain {
                 has_true: value.is_some(),

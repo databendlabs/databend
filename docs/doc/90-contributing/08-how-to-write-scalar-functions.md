@@ -138,7 +138,7 @@ with_number_mapped_type!(|NUM_TYPE| match left {
     NumberDataType::NUM_TYPE => {
         registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, _, _>(
             "plus",
-            FunctionProperty::default(),
+            
             |lhs| Some(lhs.clone()),
             |a, _| a,
         );
@@ -161,7 +161,7 @@ The length function takes a `String` parameter and returns a `Number`. It is nam
 ```rust
 registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
     "length",
-    FunctionProperty::default(),
+    
     |_| None,
     |val, _| val.len() as u64,
 );
@@ -218,7 +218,7 @@ For example, the implementation of the `regexp` function takes two `String` para
 ```rust
 registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
     "regexp",
-    FunctionProperty::default(),
+    
     |_, _| None,
     vectorize_regexp(|str, pat, map, _| {
         let pattern = if let Some(pattern) = map.get(pat) {

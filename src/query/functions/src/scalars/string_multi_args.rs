@@ -31,7 +31,6 @@ use common_expression::EvalContext;
 use common_expression::Function;
 use common_expression::FunctionDomain;
 use common_expression::FunctionEval;
-use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::Scalar;
@@ -50,7 +49,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "concat".to_string(),
                 args_type: vec![DataType::String; args_type.len()],
                 return_type: DataType::String,
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|args_domain| {
@@ -81,7 +79,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "concat".to_string(),
                 args_type: vec![DataType::Nullable(Box::new(DataType::String)); args_type.len()],
                 return_type: DataType::Nullable(Box::new(DataType::String)),
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_| FunctionDomain::Full),
@@ -99,7 +96,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "concat_ws".to_string(),
                 args_type: vec![DataType::String; args_type.len()],
                 return_type: DataType::String,
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|args_domain| {
@@ -168,7 +164,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "concat_ws".to_string(),
                 args_type: vec![DataType::Nullable(Box::new(DataType::String)); args_type.len()],
                 return_type: DataType::Nullable(Box::new(DataType::String)),
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_| FunctionDomain::Full),
@@ -262,7 +257,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "char".to_string(),
                 args_type: vec![DataType::Number(NumberDataType::UInt8); args_type.len()],
                 return_type: DataType::String,
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_| FunctionDomain::Full),
@@ -292,7 +286,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     args_type.len()
                 ],
                 return_type: DataType::Nullable(Box::new(DataType::String)),
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_| FunctionDomain::MayThrow),
@@ -341,7 +334,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "regexp_instr".to_string(),
                 args_type,
                 return_type: DataType::Number(NumberDataType::UInt64),
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_| FunctionDomain::MayThrow),
@@ -369,7 +361,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "regexp_like".to_string(),
                 args_type,
                 return_type: DataType::Boolean,
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_| FunctionDomain::MayThrow),
@@ -419,7 +410,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "regexp_replace".to_string(),
                 args_type,
                 return_type: DataType::String,
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_| FunctionDomain::MayThrow),
@@ -465,7 +455,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "regexp_substr".to_string(),
                 args_type,
                 return_type: DataType::Nullable(Box::new(DataType::String)),
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_| FunctionDomain::MayThrow),

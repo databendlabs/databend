@@ -31,15 +31,13 @@ pub fn codegen_register() {
             #![allow(unused_parens)]
             #![allow(unused_variables)]
             #![allow(clippy::redundant_closure)]
-            
-            use crate::FunctionEval;
+                use crate::FunctionEval;
             use crate::Function;
             use crate::EvalContext;
             use crate::FunctionDomain;
             use crate::FunctionRegistry;
             use crate::FunctionSignature;
             use crate::property::Domain;
-            use crate::property::FunctionProperty;
             use crate::types::nullable::NullableColumn;
             use crate::types::nullable::NullableDomain;
             use crate::types::*;
@@ -76,7 +74,6 @@ pub fn codegen_register() {
                 pub fn register_{n_args}_arg<{arg_generics_bound} O: ArgType, F, G>(
                     &mut self,
                     name: &str,
-                    property: FunctionProperty,
                     calc_domain: F,
                     func: G,
                 ) where
@@ -85,7 +82,6 @@ pub fn codegen_register() {
                 {{
                     self.register_passthrough_nullable_{n_args}_arg::<{arg_generics} O, _, _>(
                         name,
-                        property,
                         calc_domain,
                         vectorize_{n_args}_arg(func),
                     )
@@ -148,7 +144,6 @@ pub fn codegen_register() {
                 pub fn register_passthrough_nullable_{n_args}_arg<{arg_generics_bound} O: ArgType, F, G>(
                     &mut self,
                     name: &str,
-                    property: FunctionProperty,
                     calc_domain: F,
                     func: G,
                 ) where
@@ -165,11 +160,10 @@ pub fn codegen_register() {
                         name
                     );
 
-                    self.register_{n_args}_arg_core::<{arg_generics} O, _, _>(name, property.clone(), calc_domain, func);
+                    self.register_{n_args}_arg_core::<{arg_generics} O, _, _>(name, calc_domain, func);
 
                     self.register_{n_args}_arg_core::<{arg_nullable_generics} NullableType<O>, _, _>(
                         name,
-                        property,
                         move |{closure_args}| {{
                             match ({closure_args_value}) {{
                                 ({some_values}) => {{
@@ -251,7 +245,6 @@ pub fn codegen_register() {
                 pub fn register_combine_nullable_{n_args}_arg<{arg_generics_bound} O: ArgType, F, G>(
                     &mut self,
                     name: &str,
-                    property: FunctionProperty,
                     calc_domain: F,
                     func: G,
                 ) where
@@ -270,14 +263,12 @@ pub fn codegen_register() {
 
                     self.register_{n_args}_arg_core::<{arg_generics} NullableType<O>, _, _>(
                         name,
-                        property.clone(),
                         calc_domain,
                         func
                     );
 
                     self.register_{n_args}_arg_core::<{arg_nullable_generics} NullableType<O>, _, _>(
                         name,
-                        property,
                         move |{closure_args}| {{
                             match ({closure_args_value}) {{
                                 ({some_values}) => {{
@@ -334,7 +325,6 @@ pub fn codegen_register() {
                 pub fn register_{n_args}_arg_core<{arg_generics_bound} O: ArgType, F, G>(
                     &mut self,
                     name: &str,
-                    property: FunctionProperty,
                     calc_domain: F,
                     func: G,
                 ) where
@@ -346,7 +336,6 @@ pub fn codegen_register() {
                             name: name.to_string(),
                             args_type: vec![{arg_sig_type}],
                             return_type: O::data_type(),
-                            property,
                         }},
                         eval: FunctionEval::Scalar {{
                             calc_domain: Box::new(erase_calc_domain_generic_{n_args}_arg::<{arg_generics} O>(calc_domain)),

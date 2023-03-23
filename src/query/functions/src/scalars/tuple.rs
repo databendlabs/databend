@@ -23,7 +23,6 @@ use common_expression::Domain;
 use common_expression::Function;
 use common_expression::FunctionDomain;
 use common_expression::FunctionEval;
-use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::Scalar;
@@ -42,7 +41,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "tuple".to_string(),
                 args_type: args_type.clone(),
                 return_type: DataType::Tuple(args_type.clone()),
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|args_domain| {
@@ -99,7 +97,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     (0..fields_ty.len()).map(DataType::Generic).collect(),
                 )],
                 return_type: DataType::Generic(idx),
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(move |args_domain| {
@@ -138,7 +135,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                         .collect(),
                 )))],
                 return_type: DataType::Nullable(Box::new(DataType::Generic(idx))),
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(move |args_domain| {
@@ -207,7 +203,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                         .collect(),
                 )))],
                 return_type: DataType::Null,
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(move |_| FunctionDomain::Full),

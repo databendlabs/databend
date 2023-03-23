@@ -38,7 +38,8 @@ use crate::types::ValueType;
 use crate::with_decimal_type;
 use crate::with_number_type;
 use crate::Scalar;
-#[derive(Debug, Clone, Default)]
+
+#[derive(Debug, Clone)]
 pub struct FunctionProperty {
     pub non_deterministic: bool,
 }
@@ -47,6 +48,14 @@ impl FunctionProperty {
     pub fn non_deterministic(mut self) -> Self {
         self.non_deterministic = true;
         self
+    }
+}
+
+impl Default for FunctionProperty {
+    fn default() -> Self {
+        FunctionProperty {
+            non_deterministic: false,
+        }
     }
 }
 

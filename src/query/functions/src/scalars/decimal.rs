@@ -28,7 +28,6 @@ use common_expression::EvalContext;
 use common_expression::Function;
 use common_expression::FunctionDomain;
 use common_expression::FunctionEval;
-use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::Scalar;
@@ -264,7 +263,6 @@ macro_rules! register_decimal_compare_op {
                         DataType::Decimal(return_type.clone()),
                     ],
                     return_type: DataType::Boolean,
-                    property: FunctionProperty::default(),
                 },
                 eval: FunctionEval::Scalar {
                     calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
@@ -345,7 +343,6 @@ macro_rules! register_decimal_binary_op {
                         DataType::Decimal(return_type.clone()),
                     ],
                     return_type: DataType::Decimal(return_type.clone()),
-                    property: FunctionProperty::default(),
                 },
                 eval: FunctionEval::Scalar {
                     calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
@@ -422,7 +419,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "to_decimal".to_string(),
                 args_type: args_type.to_owned(),
                 return_type: return_type.clone(),
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
@@ -450,7 +446,6 @@ pub(crate) fn register_decimal_to_float64(registry: &mut FunctionRegistry) {
                 name: "to_float64".to_string(),
                 args_type: vec![arg_type.clone()],
                 return_type: Float64Type::data_type(),
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
@@ -476,7 +471,6 @@ pub(crate) fn register_decimal_to_float32(registry: &mut FunctionRegistry) {
                 name: "to_float32".to_string(),
                 args_type: vec![arg_type.clone()],
                 return_type: Float32Type::data_type(),
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
