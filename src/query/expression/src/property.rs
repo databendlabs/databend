@@ -389,3 +389,112 @@ impl Domain {
         }
     }
 }
+
+pub trait SimpleDomainCmp {
+    fn domain_eq(&self, other: &Self) -> FunctionDomain<BooleanType>;
+    fn domain_noteq(&self, other: &Self) -> FunctionDomain<BooleanType>;
+    fn domain_gt(&self, other: &Self) -> FunctionDomain<BooleanType>;
+    fn domain_gte(&self, other: &Self) -> FunctionDomain<BooleanType>;
+    fn domain_lt(&self, other: &Self) -> FunctionDomain<BooleanType>;
+    fn domain_lte(&self, other: &Self) -> FunctionDomain<BooleanType>;
+}
+
+const ALL_TRUE_DOMAIN: BooleanDomain = BooleanDomain {
+    has_true: true,
+    has_false: false,
+};
+
+const ALL_FALSE_DOMAIN: BooleanDomain = BooleanDomain {
+    has_true: false,
+    has_false: true,
+};
+
+impl<T: Ord + PartialOrd> SimpleDomainCmp for SimpleDomain<T> {
+    fn domain_eq(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        if self.min > other.max || self.max < other.min {
+            FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+        } else {
+            FunctionDomain::Full
+        }
+    }
+
+    fn domain_noteq(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        if self.min > other.max || self.max < other.min {
+            FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+        } else {
+            FunctionDomain::Full
+        }
+    }
+
+    fn domain_gt(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        if self.min > other.max {
+            FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+        } else if self.max <= other.min {
+            FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+        } else {
+            FunctionDomain::Full
+        }
+    }
+
+    fn domain_gte(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        if self.min >= other.max {
+            FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+        } else if self.max < other.min {
+            FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+        } else {
+            FunctionDomain::Full
+        }
+    }
+
+    fn domain_lt(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        if self.max < other.min {
+            FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+        } else if self.min >= other.max {
+            FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+        } else {
+            FunctionDomain::Full
+        }
+    }
+
+    fn domain_lte(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        if self.max <= other.min {
+            FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+        } else if self.min > other.max {
+            FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+        } else {
+            FunctionDomain::Full
+        }
+    }
+}
+
+impl SimpleDomainCmp for StringDomain {
+    fn domain_eq(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        let (d1, d2) = self.unify(other);
+        d1.domain_eq(&d2)
+    }
+
+    fn domain_noteq(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        let (d1, d2) = self.unify(other);
+        d1.domain_noteq(&d2)
+    }
+
+    fn domain_gt(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        let (d1, d2) = self.unify(other);
+        d1.domain_gt(&d2)
+    }
+
+    fn domain_gte(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        let (d1, d2) = self.unify(other);
+        d1.domain_gte(&d2)
+    }
+
+    fn domain_lt(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        let (d1, d2) = self.unify(other);
+        d1.domain_lt(&d2)
+    }
+
+    fn domain_lte(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        let (d1, d2) = self.unify(other);
+        d1.domain_lte(&d2)
+    }
+}

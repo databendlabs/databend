@@ -772,6 +772,17 @@ impl<'a> SelectRewriter<'a> {
                 .collect(),
         }
     }
+
+    // For Expr::Literal, expr.to_string() is quoted, sometimes we need the raw string.
+    fn raw_string_from_literal_expr(expr: &Expr) -> Option<String> {
+        match expr {
+            Expr::Literal { lit, .. } => match lit {
+                Literal::String(v) => Some(v.clone()),
+                _ => Some(expr.to_string()),
+            },
+            _ => None,
+        }
+    }
 }
 
 impl<'a> SelectRewriter<'a> {
@@ -841,10 +852,12 @@ impl<'a> SelectRewriter<'a> {
                 pivot.value_column.clone(),
                 value.clone(),
             ));
+            let alias = Self::raw_string_from_literal_expr(value)
+                .ok_or_else(|| ErrorCode::SyntaxException("Pivot value should be literal"))?;
             new_select_list.push(Self::target_func_from_name_args(
                 new_aggregate_name.clone(),
                 args,
-                None,
+                Some(Self::ident_from_string(&alias)),
             ));
         }
 
@@ -875,14 +888,14 @@ impl<'a> SelectRewriter<'a> {
             vec![Self::expr_literal_array_from_vec_ident(
                 unpivot.names.clone(),
             )],
-            None,
+            Some(unpivot.column_name.clone()),
         ));
         new_select_list.push(Self::target_func_from_name_args(
             Self::ident_from_string("unnest"),
             vec![Self::expr_column_ref_array_from_vec_ident(
                 unpivot.names.clone(),
             )],
-            None,
+            Some(unpivot.value_column.clone()),
         ));
 
         if let Some(ref mut new_stmt) = self.new_stmt {

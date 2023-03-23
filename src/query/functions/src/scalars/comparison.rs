@@ -43,6 +43,7 @@ use common_expression::FunctionEval;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::ScalarRef;
+use common_expression::SimpleDomainCmp;
 use common_expression::ValueRef;
 use memchr::memmem;
 use regex::bytes::Regex;
@@ -119,116 +120,43 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
     );
 }
 
-fn register_string_cmp(registry: &mut FunctionRegistry) {
-    registry.register_2_arg::<StringType, StringType, BooleanType, _, _>(
-        "eq",
-        |_, _| FunctionDomain::Full,
-        |lhs, rhs, _| lhs == rhs,
-    );
-    registry.register_2_arg::<StringType, StringType, BooleanType, _, _>(
-        "noteq",
-        |_, _| FunctionDomain::Full,
-        |lhs, rhs, _| lhs != rhs,
-    );
-    registry.register_2_arg::<StringType, StringType, BooleanType, _, _>(
-        "gt",
-        |_, _| FunctionDomain::Full,
-        |lhs, rhs, _| lhs > rhs,
-    );
-    registry.register_2_arg::<StringType, StringType, BooleanType, _, _>(
-        "gte",
-        |_, _| FunctionDomain::Full,
-        |lhs, rhs, _| lhs >= rhs,
-    );
-    registry.register_2_arg::<StringType, StringType, BooleanType, _, _>(
-        "lt",
-        |_, _| FunctionDomain::Full,
-        |lhs, rhs, _| lhs < rhs,
-    );
-    registry.register_2_arg::<StringType, StringType, BooleanType, _, _>(
-        "lte",
-        |_, _| FunctionDomain::Full,
-        |lhs, rhs, _| lhs <= rhs,
-    );
-}
-
 macro_rules! register_simple_domain_type_cmp {
     ($registry:ident, $T:ty) => {
         $registry.register_2_arg::<$T, $T, BooleanType, _, _>(
             "eq",
-            |d1, d2| {
-                if d1.min > d2.max || d1.max < d2.min {
-                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
-                } else {
-                    FunctionDomain::Full
-                }
-            },
+            |d1, d2| d1.domain_eq(d2),
             |lhs, rhs, _| lhs == rhs,
         );
         $registry.register_2_arg::<$T, $T, BooleanType, _, _>(
             "noteq",
-            |d1, d2| {
-                if d1.min > d2.max || d1.max < d2.min {
-                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
-                } else {
-                    FunctionDomain::Full
-                }
-            },
+            |d1, d2| d1.domain_noteq(d2),
             |lhs, rhs, _| lhs != rhs,
         );
         $registry.register_2_arg::<$T, $T, BooleanType, _, _>(
             "gt",
-            |d1, d2| {
-                if d1.min > d2.max {
-                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
-                } else if d1.max <= d2.min {
-                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
-                } else {
-                    FunctionDomain::Full
-                }
-            },
+            |d1, d2| d1.domain_gt(d2),
             |lhs, rhs, _| lhs > rhs,
         );
         $registry.register_2_arg::<$T, $T, BooleanType, _, _>(
             "gte",
-            |d1, d2| {
-                if d1.min >= d2.max {
-                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
-                } else if d1.max < d2.min {
-                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
-                } else {
-                    FunctionDomain::Full
-                }
-            },
+            |d1, d2| d1.domain_gte(d2),
             |lhs, rhs, _| lhs >= rhs,
         );
         $registry.register_2_arg::<$T, $T, BooleanType, _, _>(
             "lt",
-            |d1, d2| {
-                if d1.max < d2.min {
-                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
-                } else if d1.min >= d2.max {
-                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
-                } else {
-                    FunctionDomain::Full
-                }
-            },
+            |d1, d2| d1.domain_lt(d2),
             |lhs, rhs, _| lhs < rhs,
         );
         $registry.register_2_arg::<$T, $T, BooleanType, _, _>(
             "lte",
-            |d1, d2| {
-                if d1.max <= d2.min {
-                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
-                } else if d1.min > d2.max {
-                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
-                } else {
-                    FunctionDomain::Full
-                }
-            },
+            |d1, d2| d1.domain_lte(d2),
             |lhs, rhs, _| lhs <= rhs,
         );
     };
+}
+
+fn register_string_cmp(registry: &mut FunctionRegistry) {
+    register_simple_domain_type_cmp!(registry, StringType);
 }
 
 fn register_date_cmp(registry: &mut FunctionRegistry) {
