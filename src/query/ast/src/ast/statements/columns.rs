@@ -33,16 +33,16 @@ impl Display for ShowColumnsStmt {
         if self.full {
             write!(f, " FULL")?;
         }
-        write!(f, " COLUMNS FROM")?;
+        write!(f, " COLUMNS FROM {}", self.table)?;
 
         if let Some(database) = &self.database {
+            write!(f, " FROM ")?;
             if let Some(catalog) = &self.catalog {
                 write!(f, "{catalog}.",)?;
             }
-            write!(f, "{database}.",)?;
+            write!(f, "{database}")?;
         }
 
-        write!(f, " {}", self.table)?;
         if let Some(limit) = &self.limit {
             write!(f, " {limit}")?;
         }

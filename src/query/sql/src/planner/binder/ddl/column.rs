@@ -66,33 +66,36 @@ impl Binder {
             table
         };
 
-        let mut select_builder = SelectBuilder::from("system.columns");
+        let mut select_builder = SelectBuilder::from("information_schema.columns");
 
         select_builder
-            .with_column("name AS Field")
-            .with_column("type AS Type")
+            .with_column("column_name AS `Field`")
+            .with_column("column_type AS `Type`")
             .with_column("is_nullable AS `Null`")
-            .with_column("data_type AS Data_Type")
-            .with_column("default_kind AS Default_Kind")
-            .with_column("default_expression AS Default_Expression");
+            .with_column("default AS `Default`")
+            .with_column("extra AS `Extra`")
+            .with_column("column_key AS `Key`");
 
         if *full {
-            select_builder.with_column("comment AS Comment");
+            select_builder
+                .with_column("collation_name AS `Collation`")
+                .with_column("privileges AS `Privileges`")
+                .with_column("column_comment AS Comment");
         }
 
         select_builder
-            .with_order_by("database")
-            .with_order_by("table")
-            .with_order_by("name");
+            .with_order_by("table_schema")
+            .with_order_by("table_name")
+            .with_order_by("column_name");
 
         select_builder
-            .with_filter(format!("database = '{database}'"))
-            .with_filter(format!("table = '{table}'"));
+            .with_filter(format!("table_schema = '{database}'"))
+            .with_filter(format!("table_name = '{table}'"));
 
         let query = match limit {
             None => select_builder.build(),
             Some(ShowLimit::Like { pattern }) => {
-                select_builder.with_filter(format!("name LIKE '{pattern}'"));
+                select_builder.with_filter(format!("column_name LIKE '{pattern}'"));
                 select_builder.build()
             }
             Some(ShowLimit::Where { selection }) => {
