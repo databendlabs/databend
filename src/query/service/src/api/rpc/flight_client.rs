@@ -81,6 +81,8 @@ impl FlightClient {
                         break;
                     }
                 }
+
+                tx.close();
             }
         });
 
