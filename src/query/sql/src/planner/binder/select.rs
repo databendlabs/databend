@@ -36,7 +36,7 @@ use common_exception::Result;
 use common_exception::Span;
 use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::join::JoinConditions;
 use crate::binder::project_set::SrfCollector;

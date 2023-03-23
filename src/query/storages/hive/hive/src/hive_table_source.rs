@@ -32,7 +32,7 @@ use common_expression::DataSchemaRef;
 use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::Value;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;

@@ -38,9 +38,11 @@ use crate::types::ValueType;
 use crate::with_decimal_type;
 use crate::with_number_type;
 use crate::Scalar;
-#[derive(Debug, Clone, Default)]
+
+#[derive(Debug, Clone, Copy)]
 pub struct FunctionProperty {
     pub non_deterministic: bool,
+    pub kind: FunctionKind,
 }
 
 impl FunctionProperty {
@@ -48,6 +50,26 @@ impl FunctionProperty {
         self.non_deterministic = true;
         self
     }
+
+    pub fn kind(mut self, kind: FunctionKind) -> Self {
+        self.kind = kind;
+        self
+    }
+}
+
+impl Default for FunctionProperty {
+    fn default() -> Self {
+        FunctionProperty {
+            non_deterministic: false,
+            kind: FunctionKind::Scalar,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FunctionKind {
+    Scalar,
+    SRF,
 }
 
 /// Describe the behavior of a function to eliminate the runtime

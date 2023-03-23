@@ -23,6 +23,7 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
+use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use serde::Deserialize;
 use serde::Serialize;
@@ -47,7 +48,6 @@ pub struct FunctionSignature {
     pub name: String,
     pub args_type: Vec<DataType>,
     pub return_type: DataType,
-    pub property: FunctionProperty,
 }
 
 pub type AutoCastRules<'a> = &'a [(DataType, DataType)];
@@ -140,16 +140,27 @@ pub enum FunctionID {
     },
 }
 
+#[derive(EnumAsInner)]
+#[allow(clippy::type_complexity)]
+pub enum FunctionEval {
+    Scalar {
+        calc_domain: Box<dyn Fn(&[Domain]) -> FunctionDomain<AnyType> + Send + Sync>,
+        eval: Box<dyn Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> + Send + Sync>,
+    },
+    SRF {
+        eval:
+            Box<dyn Fn(&[ValueRef<AnyType>], usize) -> Vec<(Value<AnyType>, usize)> + Send + Sync>,
+    },
+}
+
 pub struct Function {
     pub signature: FunctionSignature,
-    #[allow(clippy::type_complexity)]
-    pub calc_domain: Box<dyn Fn(&[Domain]) -> FunctionDomain<AnyType> + Send + Sync>,
-    #[allow(clippy::type_complexity)]
-    pub eval: Box<dyn Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> + Send + Sync>,
+    pub eval: FunctionEval,
 }
 
 impl Function {
     pub fn wrap_nullable(self) -> Self {
+        let (_, eval) = self.eval.into_scalar().unwrap();
         Self {
             signature: FunctionSignature {
                 name: self.signature.name.clone(),
@@ -160,10 +171,11 @@ impl Function {
                     .map(|ty| ty.wrap_nullable())
                     .collect(),
                 return_type: self.signature.return_type.wrap_nullable(),
-                property: self.signature.property.clone(),
             },
-            calc_domain: Box::new(|_| FunctionDomain::Full),
-            eval: Box::new(wrap_nullable(self.eval)),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_| FunctionDomain::Full),
+                eval: Box::new(wrap_nullable(eval)),
+            },
         }
     }
 }
@@ -188,6 +200,8 @@ pub struct FunctionRegistry {
     pub additional_cast_rules: HashMap<String, Vec<(DataType, DataType)>>,
     /// The auto rules that should use TRY_CAST instead of CAST.
     pub auto_try_cast_rules: Vec<(DataType, DataType)>,
+
+    pub properties: HashMap<String, FunctionProperty>,
 }
 
 impl FunctionRegistry {
@@ -298,6 +312,19 @@ impl FunctionRegistry {
         self.auto_try_cast_rules
             .iter()
             .any(|(src_ty, dest_ty)| arg_type == src_ty && sig_type == dest_ty)
+    }
+
+    pub fn get_property(&self, func_name: &str) -> FunctionProperty {
+        self.properties.get(func_name).cloned().unwrap_or_default()
+    }
+
+    pub fn register_function(&mut self, func: Function) {
+        let name = func.signature.name.clone();
+        let id = self.next_function_id(&name);
+        self.funcs
+            .entry(name)
+            .or_insert_with(Vec::new)
+            .push((Arc::new(func), id));
     }
 
     pub fn register_function_factory(

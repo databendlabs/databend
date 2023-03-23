@@ -44,7 +44,7 @@ use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::StateAddr;
-use crate::scalars::BUILTIN_FUNCTIONS;
+use crate::BUILTIN_FUNCTIONS;
 
 const MEDIAN: u8 = 0;
 const QUANTILE_CONT: u8 = 1;

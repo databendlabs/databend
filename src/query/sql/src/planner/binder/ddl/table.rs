@@ -58,7 +58,7 @@ use common_expression::DataSchemaRefExt;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::storage::StorageParams;
 use common_storage::DataOperator;
 use common_storages_view::view_table::QUERY;
@@ -989,7 +989,7 @@ impl Binder {
         for cluster_by in cluster_by.iter() {
             let (cluster_key, _) = scalar_binder.bind(cluster_by).await?;
             let expr = cluster_key.as_expr_with_col_index()?;
-            if !expr.is_deterministic() {
+            if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Cluster by expression `{:#}` is not deterministic",
                     cluster_by

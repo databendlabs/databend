@@ -25,7 +25,7 @@ use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::FunctionContext;
 use common_expression::Value;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use goldenfile::Mint;
 use itertools::Itertools;
 

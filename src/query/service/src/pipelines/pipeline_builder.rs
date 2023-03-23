@@ -28,7 +28,7 @@ use common_expression::HashMethodKind;
 use common_expression::SortColumnDescription;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
@@ -410,7 +410,7 @@ impl PipelineBuilder {
             srf_exprs: project_set
                 .srf_exprs
                 .iter()
-                .map(|(expr, _)| expr.clone().into_srf_expr())
+                .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS))
                 .collect(),
         };
 
