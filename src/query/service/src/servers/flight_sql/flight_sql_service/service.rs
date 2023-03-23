@@ -460,7 +460,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
     async fn register_sql_info(&self, _id: i32, _result: &SqlInfo) {}
 }
 
-// not sure why we have to do this, but ticket cannot be correctly parsed by GRPC when commumicate
+// not sure why we have to do this, but ticket cannot be correctly parsed by GRPC when communicate
 // with JDBC driver.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FetchResults {
