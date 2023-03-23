@@ -206,7 +206,7 @@ impl<'a> SegmentCompactor<'a> {
         let mut checked_end_at = 0;
         for chunk in reverse_locations.chunks(chunk_size) {
             let segment_infos = segments_io
-                .read_segments(chunk)
+                .read_segments_without_semaphore(chunk)
                 .await?
                 .into_iter()
                 .collect::<Result<Vec<_>>>()?;
@@ -245,7 +245,7 @@ impl<'a> SegmentCompactor<'a> {
             let start_pos = checked_end_at;
             for chunk in reverse_locations[start_pos..].chunks(chunk_size) {
                 let segment_infos = segments_io
-                    .read_segments(chunk)
+                    .read_segments_without_semaphore(chunk)
                     .await?
                     .into_iter()
                     .collect::<Result<Vec<_>>>()?;
