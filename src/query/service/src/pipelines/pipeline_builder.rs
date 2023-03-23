@@ -688,15 +688,9 @@ impl PipelineBuilder {
             .iter()
             .map(|agg_func| {
                 agg_args.push(agg_func.args.clone());
-                let params = agg_func
-                    .sig
-                    .params
-                    .iter()
-                    .map(|p| p.clone().into_scalar())
-                    .collect();
                 AggregateFunctionFactory::instance().get(
                     agg_func.sig.name.as_str(),
-                    params,
+                    agg_func.sig.params.clone(),
                     agg_func.sig.args.clone(),
                 )
             })
@@ -835,7 +829,6 @@ impl PipelineBuilder {
             || join.join_type == JoinType::Single)
             && join.non_equi_conditions.is_empty()
         {
-            self.main_pipeline.resize(1)?;
             self.main_pipeline.add_transform(|input, output| {
                 let transform = TransformLeftJoin::try_create(
                     input,

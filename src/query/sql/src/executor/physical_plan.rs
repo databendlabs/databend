@@ -24,8 +24,8 @@ use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::FieldIndex;
-use common_expression::Literal;
 use common_expression::RemoteExpr;
+use common_expression::Scalar;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_functions::srfs::RemoteSrfExpr;
 use common_meta_app::schema::TableInfo;
@@ -672,7 +672,7 @@ pub struct AggregateFunctionDesc {
 pub struct AggregateFunctionSignature {
     pub name: String,
     pub args: Vec<DataType>,
-    pub params: Vec<Literal>,
+    pub params: Vec<Scalar>,
     pub return_type: DataType,
 }
 

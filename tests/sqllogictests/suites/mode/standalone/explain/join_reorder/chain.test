@@ -451,5 +451,14 @@ HashJoin
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 10.00
 
+query T
+explain join select * from t right anti join t1 on t1.a = t.a
+----
+HashJoin: LEFT ANTI
+├── Build
+│   └── Scan: default.join_reorder.t, rows: 1
+└── Probe
+    └── Scan: default.join_reorder.t1, rows: 10
+
 statement ok
 drop database join_reorder

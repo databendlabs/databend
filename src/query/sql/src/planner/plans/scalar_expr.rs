@@ -20,7 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
 use common_expression::types::DataType;
-use common_expression::Literal;
+use common_expression::Scalar;
 use educe::Educe;
 
 use crate::binder::ColumnBinding;
@@ -335,8 +335,7 @@ pub struct BoundInternalColumnRef {
 pub struct ConstantExpr {
     #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
     pub span: Span,
-    pub value: Literal,
-    pub data_type: Box<DataType>,
+    pub value: Scalar,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -416,7 +415,7 @@ pub struct ComparisonExpr {
 pub struct AggregateFunction {
     pub func_name: String,
     pub distinct: bool,
-    pub params: Vec<Literal>,
+    pub params: Vec<Scalar>,
     pub args: Vec<ScalarExpr>,
     pub return_type: Box<DataType>,
 

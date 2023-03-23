@@ -330,8 +330,11 @@ impl StringColumnBuilder {
             let bytes_per_row = self.data.len() / 64 + 1;
             let bytes_estimate = bytes_per_row * self.offsets.capacity();
 
+            const MAX_HINT_SIZE: usize = 1000000000;
             // if we are more than 10% over the capacity, we reserve more
-            if bytes_estimate as f64 > self.data.capacity() as f64 * 1.10f64 {
+            if bytes_estimate < MAX_HINT_SIZE
+                && bytes_estimate as f64 > self.data.capacity() as f64 * 1.10f64
+            {
                 self.data.reserve(bytes_estimate - self.data.capacity());
             }
         }

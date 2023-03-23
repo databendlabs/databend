@@ -40,15 +40,16 @@ use common_exception::Result;
 use common_exception::Span;
 use common_expression::infer_schema_type;
 use common_expression::type_check;
-use common_expression::type_check::check_literal;
 use common_expression::type_check::check_number;
 use common_expression::type_check::common_super_type;
 use common_expression::types::decimal::DecimalDataType;
+use common_expression::types::decimal::DecimalScalar;
 use common_expression::types::decimal::DecimalSize;
-use common_expression::types::number::F64;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use common_expression::types::NumberScalar;
 use common_expression::RawExpr;
+use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_functions::aggregates::AggregateCountFunction;
 use common_functions::aggregates::AggregateFunctionFactory;
@@ -572,15 +573,7 @@ impl<'a> TypeChecker<'a> {
 
             Expr::Literal { span, lit } => {
                 let box (value, data_type) = self.resolve_literal(lit)?;
-                Box::new((
-                    ConstantExpr {
-                        span: *span,
-                        value,
-                        data_type: Box::new(data_type.clone()),
-                    }
-                    .into(),
-                    data_type,
-                ))
+                Box::new((ConstantExpr { span: *span, value }.into(), data_type))
             }
 
             Expr::FunctionCall {
@@ -639,11 +632,6 @@ impl<'a> TypeChecker<'a> {
                         .map(|literal| self.resolve_literal(literal).map(|box (value, _)| value))
                         .collect::<Result<Vec<_>>>()?;
 
-                    let scalar_params = params
-                        .iter()
-                        .map(|param| check_literal(param).0)
-                        .collect::<Vec<_>>();
-
                     self.in_aggregate_function = true;
                     let mut arguments = vec![];
                     let mut arg_types = vec![];
@@ -669,7 +657,7 @@ impl<'a> TypeChecker<'a> {
                     };
 
                     let agg_func = AggregateFunctionFactory::instance()
-                        .get(&func_name, scalar_params, arg_types)
+                        .get(&func_name, params.clone(), arg_types)
                         .map_err(|e| e.set_span(*span))?;
 
                     let args = if optimize_remove_count_args(&func_name, distinct, args.as_slice())
@@ -903,11 +891,10 @@ impl<'a> TypeChecker<'a> {
     // TODO: remove this function
     fn rewrite_substring(args: &mut [ScalarExpr]) {
         if let ScalarExpr::ConstantExpr(expr) = &args[1] {
-            if let common_expression::Literal::UInt8(0) = expr.value {
+            if let common_expression::Scalar::Number(NumberScalar::UInt8(0)) = expr.value {
                 args[1] = ConstantExpr {
                     span: expr.span,
-                    value: common_expression::Literal::Int64(1),
-                    data_type: Box::new(DataType::Number(NumberDataType::Int64)),
+                    value: common_expression::Scalar::Number(NumberScalar::Int64(1)),
                 }
                 .into();
             }
@@ -1672,8 +1659,7 @@ impl<'a> TypeChecker<'a> {
         } else {
             let trim_scalar = ConstantExpr {
                 span,
-                value: common_expression::Literal::String(" ".as_bytes().to_vec()),
-                data_type: Box::new(DataType::String),
+                value: common_expression::Scalar::String(" ".as_bytes().to_vec()),
             }
             .into();
             ("trim_both", trim_scalar, DataType::String)
@@ -1690,60 +1676,56 @@ impl<'a> TypeChecker<'a> {
     pub fn resolve_literal(
         &self,
         literal: &common_ast::ast::Literal,
-    ) -> Result<Box<(common_expression::Literal, DataType)>> {
+    ) -> Result<Box<(Scalar, DataType)>> {
         let value = match literal {
             Literal::UInt64(uint) => {
                 // how to use match range?
                 if *uint <= u8::MAX as u64 {
-                    common_expression::Literal::UInt8(*uint as u8)
+                    Scalar::Number(NumberScalar::UInt8(*uint as u8))
                 } else if *uint <= u16::MAX as u64 {
-                    common_expression::Literal::UInt16(*uint as u16)
+                    Scalar::Number(NumberScalar::UInt16(*uint as u16))
                 } else if *uint <= u32::MAX as u64 {
-                    common_expression::Literal::UInt32(*uint as u32)
+                    Scalar::Number(NumberScalar::UInt32(*uint as u32))
                 } else {
-                    common_expression::Literal::UInt64(*uint)
+                    Scalar::Number(NumberScalar::UInt64(*uint))
                 }
             }
             Literal::Int64(int) => {
                 if *int >= i8::MIN as i64 && *int <= i8::MAX as i64 {
-                    common_expression::Literal::Int8(*int as i8)
+                    Scalar::Number(NumberScalar::Int8(*int as i8))
                 } else if *int >= i16::MIN as i64 && *int <= i16::MAX as i64 {
-                    common_expression::Literal::Int16(*int as i16)
+                    Scalar::Number(NumberScalar::Int16(*int as i16))
                 } else if *int >= i32::MIN as i64 && *int <= i32::MAX as i64 {
-                    common_expression::Literal::Int32(*int as i32)
+                    Scalar::Number(NumberScalar::Int32(*int as i32))
                 } else {
-                    common_expression::Literal::Int64(*int)
+                    Scalar::Number(NumberScalar::Int64(*int))
                 }
             }
             Literal::Decimal128 {
                 value,
                 precision,
                 scale,
-            } => common_expression::Literal::Decimal128 {
-                value: *value,
+            } => Scalar::Decimal(DecimalScalar::Decimal128(*value, DecimalSize {
                 precision: *precision,
                 scale: *scale,
-            },
+            })),
             Literal::Decimal256 {
                 value,
                 precision,
                 scale,
-            } => common_expression::Literal::Decimal256 {
-                value: *value,
+            } => Scalar::Decimal(DecimalScalar::Decimal256(*value, DecimalSize {
                 precision: *precision,
                 scale: *scale,
-            },
-            Literal::Float(float) => common_expression::Literal::Float64(F64::from(*float)),
-            Literal::String(string) => {
-                common_expression::Literal::String(string.as_bytes().to_vec())
-            }
-            Literal::Boolean(boolean) => common_expression::Literal::Boolean(*boolean),
-            Literal::Null => common_expression::Literal::Null,
+            })),
+            Literal::Float(float) => Scalar::Number(NumberScalar::Float64((*float).into())),
+            Literal::String(string) => Scalar::String(string.as_bytes().to_vec()),
+            Literal::Boolean(boolean) => Scalar::Boolean(*boolean),
+            Literal::Null => Scalar::Null,
             _ => Err(ErrorCode::SemanticError(format!(
                 "Unsupported literal value: {literal}"
             )))?,
         };
-        let (_, data_type) = check_literal(&value);
+        let data_type = value.as_ref().infer_data_type();
         Ok(Box::new((value, data_type)))
     }
 
@@ -1954,11 +1936,10 @@ impl<'a> TypeChecker<'a> {
                 .into();
                 continue;
             }
-            let box (path_value, path_data_type) = self.resolve_literal(&path_lit)?;
+            let box (path_value, _) = self.resolve_literal(&path_lit)?;
             let path_scalar: ScalarExpr = ConstantExpr {
                 span,
                 value: path_value,
-                data_type: Box::new(path_data_type.clone()),
             }
             .into();
             if let TableDataType::Array(inner_type) = table_data_type {

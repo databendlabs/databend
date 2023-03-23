@@ -468,7 +468,7 @@ impl<'a> ScalarRef<'a> {
 
     /// Infer the data type of the scalar.
     /// If the scalar is Null, the data type is `DataType::Null`,
-    /// otherwise, the inferred data type is not nullable.
+    /// otherwise, the inferred data type is non-nullable.
     pub fn infer_data_type(&self) -> DataType {
         match self {
             ScalarRef::Null => DataType::Null,

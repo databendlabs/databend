@@ -22,11 +22,13 @@ use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
 use common_ast::Dialect;
 use common_expression::types::decimal::DecimalDataType;
+use common_expression::types::decimal::DecimalScalar;
 use common_expression::types::decimal::DecimalSize;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::Literal;
+use common_expression::types::NumberScalar;
 use common_expression::RawExpr;
+use common_expression::Scalar;
 use ordered_float::OrderedFloat;
 
 pub fn parse_raw_expr(text: &str, columns: &[(&str, DataType)]) -> RawExpr {
@@ -87,9 +89,9 @@ macro_rules! transform_interval_add_sub {
 
 pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
     match ast {
-        AExpr::Literal { span, lit } => RawExpr::Literal {
+        AExpr::Literal { span, lit } => RawExpr::Constant {
             span,
-            lit: transform_literal(lit),
+            scalar: transform_literal(lit),
         },
         AExpr::ColumnRef {
             span,
@@ -345,9 +347,9 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 ]),
                 MapAccessor::Period { key } | MapAccessor::Colon { key } => (vec![], vec![
                     transform_expr(*expr, columns),
-                    RawExpr::Literal {
+                    RawExpr::Constant {
                         span,
-                        lit: Literal::String(key.name.into_bytes()),
+                        scalar: Scalar::String(key.name.into_bytes()),
                     },
                 ]),
                 MapAccessor::PeriodNumber { key } => {
@@ -542,52 +544,50 @@ fn transform_data_type(target_type: common_ast::ast::TypeName) -> DataType {
     }
 }
 
-pub fn transform_literal(lit: ASTLiteral) -> Literal {
+pub fn transform_literal(lit: ASTLiteral) -> Scalar {
     match lit {
         ASTLiteral::UInt64(u) => {
             if u < u8::MAX as u64 {
-                Literal::UInt8(u as u8)
+                Scalar::Number(NumberScalar::UInt8(u as u8))
             } else if u < u16::MAX as u64 {
-                Literal::UInt16(u as u16)
+                Scalar::Number(NumberScalar::UInt16(u as u16))
             } else if u < u32::MAX as u64 {
-                Literal::UInt32(u as u32)
+                Scalar::Number(NumberScalar::UInt32(u as u32))
             } else {
-                Literal::UInt64(u)
+                Scalar::Number(NumberScalar::UInt64(u))
             }
         }
         ASTLiteral::Int64(int) => {
             if int >= i8::MIN as i64 && int <= i8::MAX as i64 {
-                Literal::Int8(int as i8)
+                Scalar::Number(NumberScalar::Int8(int as i8))
             } else if int >= i16::MIN as i64 && int <= i16::MAX as i64 {
-                Literal::Int16(int as i16)
+                Scalar::Number(NumberScalar::Int16(int as i16))
             } else if int >= i32::MIN as i64 && int <= i32::MAX as i64 {
-                Literal::Int32(int as i32)
+                Scalar::Number(NumberScalar::Int32(int as i32))
             } else {
-                Literal::Int64(int)
+                Scalar::Number(NumberScalar::Int64(int))
             }
         }
         ASTLiteral::Decimal128 {
             value,
             precision,
             scale,
-        } => Literal::Decimal128 {
-            value,
+        } => Scalar::Decimal(DecimalScalar::Decimal128(value, DecimalSize {
             precision,
             scale,
-        },
+        })),
         ASTLiteral::Decimal256 {
             value,
             precision,
             scale,
-        } => Literal::Decimal256 {
-            value,
+        } => Scalar::Decimal(DecimalScalar::Decimal256(value, DecimalSize {
             precision,
             scale,
-        },
-        ASTLiteral::String(s) => Literal::String(s.as_bytes().to_vec()),
-        ASTLiteral::Boolean(b) => Literal::Boolean(b),
-        ASTLiteral::Null => Literal::Null,
-        ASTLiteral::Float(f) => Literal::Float64(OrderedFloat(f)),
+        })),
+        ASTLiteral::String(s) => Scalar::String(s.as_bytes().to_vec()),
+        ASTLiteral::Boolean(b) => Scalar::Boolean(b),
+        ASTLiteral::Null => Scalar::Null,
+        ASTLiteral::Float(f) => Scalar::Number(NumberScalar::Float64(OrderedFloat(f))),
         _ => unimplemented!("{lit}"),
     }
 }

@@ -146,6 +146,8 @@ impl FlightService for DatabendQueryFlightService {
                     .create_session(SessionType::FlightRPC)
                     .await?;
                 let ctx = session.create_query_context().await?;
+                // Keep query id
+                ctx.set_id(init_query_fragments_plan.executor_packet.query_id.clone());
 
                 let spawner = ctx.clone();
                 match_join_handle(spawner.spawn(async move {

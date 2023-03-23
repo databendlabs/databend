@@ -46,6 +46,40 @@ GRANT SELECT ON db01.tbnotexists TO 'test-grant'@'localhost'
 statement error 1003
 GRANT SELECT ON dbnotexists.* TO 'test-grant'@'localhost'
 
+onlyif mysql
+query T
+select current_user()
+----
+'root'@'127.0.0.1'
+
+onlyif mysql
+statement ok
+set role 'public';
+
+onlyif mysql
+query T
+select current_role()
+----
+public
+
+onlyif mysql
+query T
+show roles
+----
+account_admin 0 0 1
+public 0 1 0
+
+query T
+show grants for role 'public'
+----
+GRANT SELECT ON 'default'.'system'.'one' TO 'public'
+
+query T
+show grants for role 'account_admin'
+----
+GRANT ALL ON *.* TO 'account_admin'
+GRANT SELECT ON 'default'.'system'.'one' TO 'account_admin'
+
 query T
 SHOW GRANTS FOR 'test-grant'@'localhost'
 ----

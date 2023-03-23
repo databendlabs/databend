@@ -2162,7 +2162,7 @@ evaluation (internal):
 
 
 ast            : lpad('hi', 2, '?')
-raw expr       : lpad("hi", 2_u8, "?")
+raw expr       : lpad("hi", 2, "?")
 checked expr   : lpad<String, UInt64, String>("hi", to_uint64<UInt8>(2_u8), "?")
 optimized expr : "hi"
 output type    : String
@@ -2171,7 +2171,7 @@ output         : "hi"
 
 
 ast            : lpad('hi', 4, '?')
-raw expr       : lpad("hi", 4_u8, "?")
+raw expr       : lpad("hi", 4, "?")
 checked expr   : lpad<String, UInt64, String>("hi", to_uint64<UInt8>(4_u8), "?")
 optimized expr : "??hi"
 output type    : String
@@ -2180,7 +2180,7 @@ output         : "??hi"
 
 
 ast            : lpad('hi', 0, '?')
-raw expr       : lpad("hi", 0_u8, "?")
+raw expr       : lpad("hi", 0, "?")
 checked expr   : lpad<String, UInt64, String>("hi", to_uint64<UInt8>(0_u8), "?")
 optimized expr : ""
 output type    : String
@@ -2189,7 +2189,7 @@ output         : ""
 
 
 ast            : lpad('hi', 1, '?')
-raw expr       : lpad("hi", 1_u8, "?")
+raw expr       : lpad("hi", 1, "?")
 checked expr   : lpad<String, UInt64, String>("hi", to_uint64<UInt8>(1_u8), "?")
 optimized expr : "h"
 output type    : String
@@ -2234,7 +2234,7 @@ evaluation (internal):
 
 
 ast            : rpad('hi', 2, '?')
-raw expr       : rpad("hi", 2_u8, "?")
+raw expr       : rpad("hi", 2, "?")
 checked expr   : rpad<String, UInt64, String>("hi", to_uint64<UInt8>(2_u8), "?")
 optimized expr : "hi"
 output type    : String
@@ -2243,7 +2243,7 @@ output         : "hi"
 
 
 ast            : rpad('hi', 4, '?')
-raw expr       : rpad("hi", 4_u8, "?")
+raw expr       : rpad("hi", 4, "?")
 checked expr   : rpad<String, UInt64, String>("hi", to_uint64<UInt8>(4_u8), "?")
 optimized expr : "hi??"
 output type    : String
@@ -2252,7 +2252,7 @@ output         : "hi??"
 
 
 ast            : rpad('hi', 0, '?')
-raw expr       : rpad("hi", 0_u8, "?")
+raw expr       : rpad("hi", 0, "?")
 checked expr   : rpad<String, UInt64, String>("hi", to_uint64<UInt8>(0_u8), "?")
 optimized expr : ""
 output type    : String
@@ -2261,7 +2261,7 @@ output         : ""
 
 
 ast            : rpad('hi', 1, '?')
-raw expr       : rpad("hi", 1_u8, "?")
+raw expr       : rpad("hi", 1, "?")
 checked expr   : rpad<String, UInt64, String>("hi", to_uint64<UInt8>(1_u8), "?")
 optimized expr : "h"
 output type    : String
@@ -2453,7 +2453,7 @@ output         : 0
 
 
 ast            : locate('bar', 'foobarbar', 5)
-raw expr       : locate("bar", "foobarbar", 5_u8)
+raw expr       : locate("bar", "foobarbar", 5)
 checked expr   : locate<String, String, UInt64>("bar", "foobarbar", to_uint64<UInt8>(5_u8))
 optimized expr : 7_u64
 output type    : UInt64
@@ -2487,7 +2487,7 @@ evaluation (internal):
 
 
 ast            : char(65,66,67)
-raw expr       : char(65_u8, 66_u8, 67_u8)
+raw expr       : char(65, 66, 67)
 checked expr   : char<UInt8, UInt8, UInt8>(65_u8, 66_u8, 67_u8)
 evaluation:
 +--------+--------+
@@ -2506,7 +2506,7 @@ evaluation (internal):
 
 
 ast            : char(65, null)
-raw expr       : char(65_u8, NULL)
+raw expr       : char(65, NULL)
 checked expr   : char<UInt8 NULL, UInt8 NULL>(CAST(65_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 optimized expr : NULL
 output type    : String NULL
@@ -2677,7 +2677,7 @@ output         : NULL
 
 
 ast            : repeat('3', 5)
-raw expr       : repeat("3", 5_u8)
+raw expr       : repeat("3", 5)
 checked expr   : repeat<String, UInt64>("3", to_uint64<UInt8>(5_u8))
 optimized expr : "33333"
 output type    : String
@@ -2694,7 +2694,7 @@ error:
 
 
 ast            : repeat(a, 3)
-raw expr       : repeat(a::String, 3_u8)
+raw expr       : repeat(a::String, 3)
 checked expr   : repeat<String, UInt64>(a, to_uint64<UInt8>(3_u8))
 optimized expr : repeat<String, UInt64>(a, 3_u64)
 evaluation:
@@ -2733,7 +2733,7 @@ error:
 
 
 ast            : insert('Quadratic', 3, 4, 'What')
-raw expr       : insert("Quadratic", 3_u8, 4_u8, "What")
+raw expr       : insert("Quadratic", 3, 4, "What")
 checked expr   : insert<String, Int64, Int64, String>("Quadratic", to_int64<UInt8>(3_u8), to_int64<UInt8>(4_u8), "What")
 optimized expr : "QuWhattic"
 output type    : String
@@ -2742,7 +2742,7 @@ output         : "QuWhattic"
 
 
 ast            : insert('Quadratic', -1, 4, 'What')
-raw expr       : insert("Quadratic", -1_i8, 4_u8, "What")
+raw expr       : insert("Quadratic", -1, 4, "What")
 checked expr   : insert<String, Int64, Int64, String>("Quadratic", to_int64<Int8>(-1_i8), to_int64<UInt8>(4_u8), "What")
 optimized expr : "Quadratic"
 output type    : String
@@ -2751,7 +2751,7 @@ output         : "Quadratic"
 
 
 ast            : insert('Quadratic', 3, 100, 'What')
-raw expr       : insert("Quadratic", 3_u8, 100_u8, "What")
+raw expr       : insert("Quadratic", 3, 100, "What")
 checked expr   : insert<String, Int64, Int64, String>("Quadratic", to_int64<UInt8>(3_u8), to_int64<UInt8>(100_u8), "What")
 optimized expr : "QuWhat"
 output type    : String
@@ -2760,7 +2760,7 @@ output         : "QuWhat"
 
 
 ast            : insert('Quadratic', 3, 100, NULL)
-raw expr       : insert("Quadratic", 3_u8, 100_u8, NULL)
+raw expr       : insert("Quadratic", 3, 100, NULL)
 checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(CAST("Quadratic" AS String NULL), CAST(3_u8 AS Int64 NULL), CAST(100_u8 AS Int64 NULL), CAST(NULL AS String NULL))
 optimized expr : NULL
 output type    : String NULL
@@ -2769,7 +2769,7 @@ output         : NULL
 
 
 ast            : insert('Quadratic', 3, NULL, 'NULL')
-raw expr       : insert("Quadratic", 3_u8, NULL, "NULL")
+raw expr       : insert("Quadratic", 3, NULL, "NULL")
 checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(CAST("Quadratic" AS String NULL), CAST(3_u8 AS Int64 NULL), CAST(NULL AS Int64 NULL), CAST("NULL" AS String NULL))
 optimized expr : NULL
 output type    : String NULL
@@ -2778,7 +2778,7 @@ output         : NULL
 
 
 ast            : insert('Quadratic', NULL, 100, 'NULL')
-raw expr       : insert("Quadratic", NULL, 100_u8, "NULL")
+raw expr       : insert("Quadratic", NULL, 100, "NULL")
 checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(CAST("Quadratic" AS String NULL), CAST(NULL AS Int64 NULL), CAST(100_u8 AS Int64 NULL), CAST("NULL" AS String NULL))
 optimized expr : NULL
 output type    : String NULL
@@ -2787,7 +2787,7 @@ output         : NULL
 
 
 ast            : insert(NULL, 2, 100, 'NULL')
-raw expr       : insert(NULL, 2_u8, 100_u8, "NULL")
+raw expr       : insert(NULL, 2, 100, "NULL")
 checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(CAST(NULL AS String NULL), CAST(2_u8 AS Int64 NULL), CAST(100_u8 AS Int64 NULL), CAST("NULL" AS String NULL))
 optimized expr : NULL
 output type    : String NULL
@@ -2848,7 +2848,7 @@ evaluation (internal):
 
 
 ast            : space(0)
-raw expr       : space(0_u8)
+raw expr       : space(0)
 checked expr   : space<UInt64>(to_uint64<UInt8>(0_u8))
 optimized expr : ""
 output type    : String
@@ -2857,7 +2857,7 @@ output         : ""
 
 
 ast            : space(5)
-raw expr       : space(5_u8)
+raw expr       : space(5)
 checked expr   : space<UInt64>(to_uint64<UInt8>(5_u8))
 optimized expr : "     "
 output type    : String
@@ -2895,7 +2895,7 @@ evaluation (internal):
 
 
 ast            : left('', 0)
-raw expr       : left("", 0_u8)
+raw expr       : left("", 0)
 checked expr   : left<String, UInt64>("", to_uint64<UInt8>(0_u8))
 optimized expr : ""
 output type    : String
@@ -2904,7 +2904,7 @@ output         : ""
 
 
 ast            : left('', 1)
-raw expr       : left("", 1_u8)
+raw expr       : left("", 1)
 checked expr   : left<String, UInt64>("", to_uint64<UInt8>(1_u8))
 optimized expr : ""
 output type    : String
@@ -2943,7 +2943,7 @@ evaluation (internal):
 
 
 ast            : right('', 0)
-raw expr       : right("", 0_u8)
+raw expr       : right("", 0)
 checked expr   : right<String, UInt64>("", to_uint64<UInt8>(0_u8))
 optimized expr : ""
 output type    : String
@@ -2952,7 +2952,7 @@ output         : ""
 
 
 ast            : right('', 1)
-raw expr       : right("", 1_u8)
+raw expr       : right("", 1)
 checked expr   : right<String, UInt64>("", to_uint64<UInt8>(1_u8))
 optimized expr : ""
 output type    : String
@@ -2991,7 +2991,7 @@ evaluation (internal):
 
 
 ast            : mid('1234567890', -3, 3)
-raw expr       : mid("1234567890", -3_i8, 3_u8)
+raw expr       : mid("1234567890", -3, 3)
 checked expr   : substr<String, Int64, UInt64>("1234567890", to_int64<Int8>(-3_i8), to_uint64<UInt8>(3_u8))
 optimized expr : "890"
 output type    : String
@@ -3000,7 +3000,7 @@ output         : "890"
 
 
 ast            : mid('1234567890', -3)
-raw expr       : mid("1234567890", -3_i8)
+raw expr       : mid("1234567890", -3)
 checked expr   : substr<String, Int64>("1234567890", to_int64<Int8>(-3_i8))
 optimized expr : "890"
 output type    : String
@@ -3009,7 +3009,7 @@ output         : "890"
 
 
 ast            : substring('', 0, 1)
-raw expr       : substr("", 0_u8, 1_u8)
+raw expr       : substr("", 0, 1)
 checked expr   : substr<String, Int64, UInt64>("", to_int64<UInt8>(0_u8), to_uint64<UInt8>(1_u8))
 optimized expr : ""
 output type    : String
@@ -3018,7 +3018,7 @@ output         : ""
 
 
 ast            : substr('Sakila' from -4 for 2)
-raw expr       : substr("Sakila", -4_i8, 2_u8)
+raw expr       : substr("Sakila", -4, 2)
 checked expr   : substr<String, Int64, UInt64>("Sakila", to_int64<Int8>(-4_i8), to_uint64<UInt8>(2_u8))
 optimized expr : "ki"
 output type    : String
@@ -3027,7 +3027,7 @@ output         : "ki"
 
 
 ast            : substr('sakila' FROM -4)
-raw expr       : substr("sakila", -4_i8)
+raw expr       : substr("sakila", -4)
 checked expr   : substr<String, Int64>("sakila", to_int64<Int8>(-4_i8))
 optimized expr : "kila"
 output type    : String
@@ -3036,7 +3036,7 @@ output         : "kila"
 
 
 ast            : substr('abc',2)
-raw expr       : substr("abc", 2_u8)
+raw expr       : substr("abc", 2)
 checked expr   : substr<String, Int64>("abc", to_int64<UInt8>(2_u8))
 optimized expr : "bc"
 output type    : String

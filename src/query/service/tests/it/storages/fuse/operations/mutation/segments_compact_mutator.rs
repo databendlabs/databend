@@ -698,7 +698,7 @@ impl CompactSegmentTestFixture {
                 let block = block?;
                 let col_stats = gen_columns_statistics(&block, None, &schema)?;
 
-                let block_meta = block_writer
+                let (block_meta, _index_meta) = block_writer
                     .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
                     .await?;
 
