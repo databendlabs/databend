@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use common_expression::types::number::NumberDataType;
 use common_expression::types::DataType;
 use common_functions::aggregates::AggregateFunctionFactory;
@@ -22,15 +24,18 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
+use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
+use crate::plans::CastExpr;
 use crate::plans::EvalScalar;
+use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::ColumnBinding;
-use crate::IndexType;
+use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::Visibility;
 
@@ -63,10 +68,11 @@ use crate::Visibility;
 pub struct RuleEagerAggregation {
     id: RuleID,
     pattern: SExpr,
+    metadata: MetadataRef,
 }
 
 impl RuleEagerAggregation {
-    pub fn new() -> Self {
+    pub fn new(metadata: MetadataRef) -> Self {
         Self {
             id: RuleID::EagerAggregation,
             pattern: SExpr::create_unary(
@@ -105,6 +111,7 @@ impl RuleEagerAggregation {
                     ),
                 ),
             ),
+            metadata,
         }
     }
 }
@@ -135,15 +142,33 @@ impl Rule for RuleEagerAggregation {
         get_columns_set(&join_expr.children[0], &mut columns_set[0]);
         get_columns_set(&join_expr.children[1], &mut columns_set[1]);
 
-        // dbg!("columns_set = {:?}", &columns_set);
+        let eval_scalar_items: HashMap<usize, usize> = eval_scalar
+            .items
+            .iter()
+            .enumerate()
+            .filter_map(|(index, item)| match &item.scalar {
+                ScalarExpr::BoundColumnRef(column) => Some((column.column.index, index)),
+                _ => None,
+            })
+            .collect();
 
-        // Divide the aggregate functions into left and right based on the columns in the aggregate function.
-        let aggregations = vec![
-            get_aggregation_functions(&agg_final, &columns_set[0]),
-            get_aggregation_functions(&agg_final, &columns_set[1]),
+        let function_factory = AggregateFunctionFactory::instance();
+
+        // Get valid aggregate functions.
+        let mut aggregations = vec![
+            get_valid_aggregation_functions(
+                &agg_final,
+                &columns_set[0],
+                &eval_scalar_items,
+                function_factory,
+            ),
+            get_valid_aggregation_functions(
+                &agg_final,
+                &columns_set[1],
+                &eval_scalar_items,
+                function_factory,
+            ),
         ];
-
-        // dbg!("aggregations = {:?}", &aggregations);
 
         if aggregations[0].is_empty() && aggregations[1].is_empty() {
             return Ok(());
@@ -174,11 +199,11 @@ impl Rule for RuleEagerAggregation {
             }
         }
 
-        // dbg!("group_columns_set = {:?}", &group_columns_set);
+        let metadata = self.metadata.clone();
+        let mut metadata = metadata.write();
+        let mut column_index = 0;
 
-        let factory = AggregateFunctionFactory::instance();
         let d = if aggregations[0].is_empty() { 1 } else { 0 };
-
         if is_eager[d] && is_eager[d ^ 1] {
             // TODO(dousir9):
             // if aggregations[d ^ 1].is_empty() {
@@ -190,54 +215,179 @@ impl Rule for RuleEagerAggregation {
         } else if is_eager[d] && !is_eager[d ^ 1] {
             if aggregations[d ^ 1].is_empty() {
                 // Apply eager group by on d
+                let mut success = false;
+                // Check if there is an AVG aggregate function, if so, convert it to SUM and add a COUNT aggregate function.
+                // TODO(dousir9): add comments in the future.
+                let mut avg_components = HashMap::new();
+                let mut avg_count_aggregations = Vec::new();
+                for (index, func_name) in aggregations[d].iter_mut() {
+                    if func_name == "avg" {
+                        *func_name = "sum".to_string();
+                        agg_partial
+                            .aggregate_functions
+                            .push(agg_partial.aggregate_functions[*index].clone());
+                        agg_final
+                            .aggregate_functions
+                            .push(agg_final.aggregate_functions[*index].clone());
+
+                        let sum_aggregation_functions = vec![
+                            &mut agg_partial.aggregate_functions[*index],
+                            &mut agg_final.aggregate_functions[*index],
+                        ];
+                        let sum_index = sum_aggregation_functions[0].index;
+                        for aggregate_function in sum_aggregation_functions {
+                            if let ScalarExpr::AggregateFunction(agg) =
+                                &mut aggregate_function.scalar
+                            {
+                                agg.func_name = "sum".to_string();
+                                if let ScalarExpr::BoundColumnRef(column) = &agg.args[0] {
+                                    metadata.change_derived_column_alias(
+                                        aggregate_function.index,
+                                        format!(
+                                            "{}({}.{})",
+                                            agg.func_name.clone(),
+                                            &column
+                                                .column
+                                                .table_name
+                                                .clone()
+                                                .unwrap_or("".to_string()),
+                                            &column.column.column_name.clone(),
+                                        ),
+                                    );
+                                }
+                                // // TODO(dousir9): add comments in the future.
+                                agg.return_type = Box::new(DataType::Nullable(Box::new(
+                                    DataType::Number(NumberDataType::Int64),
+                                )))
+                            }
+                        }
+
+                        let last_index = agg_partial.aggregate_functions.len() - 1;
+                        let count_aggregation_functions = vec![
+                            &mut agg_partial.aggregate_functions[last_index],
+                            &mut agg_final.aggregate_functions[last_index],
+                        ];
+                        let new_index = metadata.add_derived_column(
+                            format!("_{}_eager_{}", &func_name, column_index),
+                            count_aggregation_functions[0].scalar.data_type()?,
+                        );
+                        column_index += 1;
+                        for aggregate_function in count_aggregation_functions {
+                            if let ScalarExpr::AggregateFunction(agg) =
+                                &mut aggregate_function.scalar
+                            {
+                                agg.func_name = "count".to_string();
+                                agg.return_type =
+                                    Box::new(DataType::Number(NumberDataType::UInt64));
+                            }
+                            aggregate_function.index = new_index;
+                        }
+
+                        avg_components.insert(sum_index, new_index);
+                        avg_count_aggregations.push((last_index, "count".to_string()));
+                    }
+                }
+
                 let eager_agg_final = agg_final.clone();
                 let eager_agg_partial = agg_partial.clone();
-                for (index, aggregation_function_index, func_name) in aggregations[d].iter() {
-                    if !factory.is_decomposable(func_name) {
-                        continue;
-                    }
+                aggregations[d].extend(avg_count_aggregations);
+                let mut old_to_new = HashMap::new();
 
+                // The aggregations[d] here only contains MIN, MAX, SUM and COUNT,
+                // and the AVG has been transformed into SUM and COUNT.
+                for (index, func_name) in aggregations[d].iter() {
                     let aggregation_functions = vec![
                         &mut agg_partial.aggregate_functions[*index],
                         &mut agg_final.aggregate_functions[*index],
                     ];
+                    let old_index = aggregation_functions[0].index;
+                    let new_index = metadata.add_derived_column(
+                        format!("_{}_eager_{}", &func_name, column_index),
+                        aggregation_functions[0].scalar.data_type()?,
+                    );
+                    column_index += 1;
+                    old_to_new.insert(old_index, new_index);
                     for aggregate_function in aggregation_functions {
                         if let ScalarExpr::AggregateFunction(agg) = &mut aggregate_function.scalar {
-                            let new_data_type = match agg.func_name.as_str() {
-                                "count" => Box::new(DataType::Number(NumberDataType::UInt64)),
-                                "sum" => Box::new(DataType::Number(NumberDataType::Int64)),
-                                _ => Box::new(agg.args[0].data_type()?.clone()),
-                            };
-                            agg.args[0] = ScalarExpr::BoundColumnRef(BoundColumnRef {
-                                span: None,
-                                column: ColumnBinding {
-                                    database_name: None,
-                                    table_name: None,
-                                    column_name: "eager_aggregation".to_string(),
-                                    index: *aggregation_function_index,
-                                    data_type: new_data_type,
-                                    visibility: Visibility::Visible,
-                                },
-                            });
-                            if agg.func_name.as_str() == "count" {
-                                agg.func_name = "sum".to_string();
-                                agg.return_type = Box::new(DataType::Nullable(Box::new(
-                                    DataType::Number(NumberDataType::UInt64),
-                                )));
-                                for item in &mut eval_scalar.items {
-                                    if let ScalarExpr::BoundColumnRef(column) = &mut item.scalar {
-                                        let column_binding = &mut column.column;
-                                        if column_binding.index == aggregate_function.index {
-                                            column_binding.data_type =
-                                                Box::new(DataType::Nullable(Box::new(
-                                                    DataType::Number(NumberDataType::UInt64),
-                                                )));
-                                        }
-                                    }
-                                }
-                            }
+                            modify_aggregate_function(agg, old_index);
+                            aggregate_function.index = new_index;
                         }
                     }
+
+                    // TODO(dousir9): add comments in the future.
+                    if let Some(idx) = eval_scalar_items.get(&old_index) && !avg_components.contains_key(&old_index) {
+                        let eval_scalar_item = &mut eval_scalar.items[*idx];
+                        if let ScalarExpr::BoundColumnRef(column) = &mut eval_scalar_item.scalar {
+                            let mut column_binding = &mut column.column;
+                            if column_binding.index == old_index {
+                                column_binding.index = new_index;
+                                if func_name == "count" {
+                                    column_binding.data_type = Box::new(DataType::Nullable(Box::new(
+                                        DataType::Number(NumberDataType::UInt64),
+                                    )));
+                                    eval_scalar_item.scalar = ScalarExpr::CastExpr(CastExpr {
+                                        span: None,
+                                        is_try: false,
+                                        argument: Box::new(eval_scalar_item.scalar.clone()),
+                                        target_type: Box::new(DataType::Number(NumberDataType::UInt64)),
+                                    });
+                                }
+                            }
+                            success = true;
+                        }
+                    }
+                }
+
+                // AVG(C) = SUM(C) / COUNT(NOTNULL C)
+                for (sum_index, count_index) in avg_components.iter() {
+                    if let Some(idx) = eval_scalar_items.get(sum_index) {
+                        let eval_scalar_item = &mut eval_scalar.items[*idx];
+                        eval_scalar_item.scalar = ScalarExpr::FunctionCall(FunctionCall {
+                            span: None,
+                            func_name: "divide".to_string(),
+                            params: vec![],
+                            arguments: vec![
+                                ScalarExpr::BoundColumnRef(BoundColumnRef {
+                                    span: None,
+                                    column: ColumnBinding {
+                                        database_name: None,
+                                        table_name: None,
+                                        column_name: "_eager".to_string(),
+                                        index: old_to_new[sum_index],
+                                        data_type: Box::new(DataType::Number(
+                                            NumberDataType::Float64,
+                                        )),
+                                        visibility: Visibility::Visible,
+                                    },
+                                }),
+                                ScalarExpr::CastExpr(CastExpr {
+                                    span: None,
+                                    is_try: false,
+                                    argument: Box::new(ScalarExpr::BoundColumnRef(
+                                        BoundColumnRef {
+                                            span: None,
+                                            column: ColumnBinding {
+                                                database_name: None,
+                                                table_name: None,
+                                                column_name: "_eager".to_string(),
+                                                index: old_to_new[count_index],
+                                                data_type: Box::new(DataType::Nullable(Box::new(
+                                                    DataType::Number(NumberDataType::UInt64),
+                                                ))),
+                                                visibility: Visibility::Visible,
+                                            },
+                                        },
+                                    )),
+                                    target_type: Box::new(DataType::Number(NumberDataType::UInt64)),
+                                }),
+                            ],
+                        });
+                        success = true;
+                    }
+                }
+
+                if !success {
+                    return Ok(());
                 }
 
                 let join_expr = if d == 0 {
@@ -317,33 +467,60 @@ fn get_columns_set(s_expr: &SExpr, columns_set: &mut ColumnSet) {
     }
 }
 
-fn get_aggregation_functions(
+fn get_valid_aggregation_functions(
     agg_final: &Aggregate,
     columns_set: &ColumnSet,
-) -> Vec<(usize, IndexType, String)> {
+    eval_scalar_items: &HashMap<usize, usize>,
+    function_factory: &AggregateFunctionFactory,
+) -> Vec<(usize, String)> {
     agg_final
         .aggregate_functions
         .iter()
         .enumerate()
         .filter_map(|(index, aggregate_item)| match &aggregate_item.scalar {
             ScalarExpr::AggregateFunction(aggregate_function)
-                if aggregate_function.args.len() == 1 =>
+                if aggregate_function.args.len() == 1
+                    && function_factory.is_decomposable(&aggregate_function.func_name)
+                    && eval_scalar_items.contains_key(&aggregate_item.index) =>
             {
                 match &aggregate_function.args[0] {
-                    ScalarExpr::BoundColumnRef(column)
-                        if matches!(*column.column.data_type, DataType::Number(_))
-                            && columns_set.contains(&column.column.index) =>
-                    {
-                        Some((
-                            index,
-                            aggregate_item.index,
-                            aggregate_function.func_name.clone(),
-                        ))
-                    }
+                    ScalarExpr::BoundColumnRef(column) => match &*column.column.data_type {
+                        DataType::Number(_) if columns_set.contains(&column.column.index) => {
+                            Some((index, aggregate_function.func_name.clone()))
+                        }
+                        DataType::Nullable(ty) => match **ty {
+                            DataType::Number(_) if columns_set.contains(&column.column.index) => {
+                                Some((index, aggregate_function.func_name.clone()))
+                            }
+                            _ => None,
+                        },
+                        _ => None,
+                    },
                     _ => None,
                 }
             }
             _ => None,
         })
         .collect::<Vec<_>>()
+}
+
+fn modify_aggregate_function(agg: &mut AggregateFunction, args_index: usize) {
+    agg.args[0] = ScalarExpr::BoundColumnRef(BoundColumnRef {
+        span: None,
+        column: ColumnBinding {
+            database_name: None,
+            table_name: None,
+            column_name: "_eager".to_string(),
+            index: args_index,
+            data_type: agg.return_type.clone(),
+            visibility: Visibility::Visible,
+        },
+    });
+
+    if agg.func_name.as_str() == "count" {
+        agg.func_name = "sum".to_string();
+        agg.return_type = Box::new(DataType::Nullable(Box::new(DataType::Number(
+            NumberDataType::UInt64,
+        ))));
+    }
 }

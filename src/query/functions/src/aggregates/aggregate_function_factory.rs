@@ -61,12 +61,14 @@ pub struct AggregateFunctionFeatures {
 
     /// An aggregation function F is decomposable if there exist aggregation functions F1 and F2
     /// such that F(S1 ∪ S2) = F2(F1(S1), F1(S2)), where S1 and S2 are two sets of values.
-    /// Aggregation functions MIN and MAX are always decomposable:
-    ///   MAX(S1 ∪ S2) = MAX(MIN(S1), MAX(S2))
+    /// MAX and MIN are always decomposable:
+    ///   MAX(S1 ∪ S2) = MAX(MAX(S1), MAX(S2))
     ///   MIN(S1 ∪ S2) = MIN(MIN(S1), MIN(S2))
     /// SUM and COUNT are decomposable when they contain no DISTINCT:
     ///   SUM(S1 ∪ S2) = SUM(SUM(S1), SUM(S2))
     ///   COUNT(S1 ∪ S2) = SUM(COUNT(S1), COUNT(S2))
+    /// AVG(C) can be handled as SUM(C) and COUNT(NOTNULL C) and thus is decomposable.
+    ///   AVG(C) = SUM(C) / COUNT(NOTNULL C)
     pub(crate) is_decomposable: bool,
 
     // Function Category

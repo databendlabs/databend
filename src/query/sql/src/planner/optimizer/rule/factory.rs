@@ -72,7 +72,7 @@ impl RuleFactory {
             RuleID::MergeFilter => Ok(Box::new(RuleMergeFilter::new())),
             RuleID::NormalizeScalarFilter => Ok(Box::new(RuleNormalizeScalarFilter::new())),
             RuleID::SplitAggregate => Ok(Box::new(RuleSplitAggregate::new())),
-            RuleID::EagerAggregation => Ok(Box::new(RuleEagerAggregation::new())),
+            RuleID::EagerAggregation => Ok(Box::new(RuleEagerAggregation::new(metadata))),
             RuleID::FoldCountAggregate => Ok(Box::new(RuleFoldCountAggregate::new())),
             RuleID::NormalizeDisjunctiveFilter => {
                 Ok(Box::new(RuleNormalizeDisjunctiveFilter::new()))

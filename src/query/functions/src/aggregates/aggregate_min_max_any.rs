@@ -97,10 +97,7 @@ where
         columns: &[Column],
         _input_rows: usize,
     ) -> Result<()> {
-        let column = match &columns[0] {
-            Column::Nullable(column) => T::try_downcast_column(&column.column).unwrap(),
-            _ => T::try_downcast_column(&columns[0]).unwrap(),
-        };
+        let column = T::try_downcast_column(&columns[0]).unwrap();
         let column_iter = T::iter_column(&column);
         column_iter.zip(places.iter()).for_each(|(v, place)| {
             let addr = place.next(offset);

@@ -99,24 +99,12 @@ where
     }
 
     fn accumulate_keys(places: &[StateAddr], offset: usize, columns: &Column) -> Result<()> {
-        match columns {
-            Column::Nullable(column) => {
-                let darray = NumberType::<TSum>::try_downcast_column(&column.column).unwrap();
-                darray.iter().zip(places.iter()).for_each(|(c, place)| {
-                    let place = place.next(offset);
-                    let state = place.get::<Self>();
-                    state.value += *c;
-                });
-            }
-            _ => {
-                let darray = NumberType::<T>::try_downcast_column(columns).unwrap();
-                darray.iter().zip(places.iter()).for_each(|(c, place)| {
-                    let place = place.next(offset);
-                    let state = place.get::<Self>();
-                    state.value += c.as_();
-                });
-            }
-        };
+        let darray = NumberType::<T>::try_downcast_column(columns).unwrap();
+        darray.iter().zip(places.iter()).for_each(|(c, place)| {
+            let place = place.next(offset);
+            let state = place.get::<Self>();
+            state.value += c.as_();
+        });
         Ok(())
     }
 
