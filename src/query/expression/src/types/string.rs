@@ -412,14 +412,8 @@ impl<'a> FromIterator<&'a [u8]> for StringColumnBuilder {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StringDomain {
     pub min: Vec<u8>,
-    // None is max value for full domain
+    // max value is None for full domain
     pub max: Option<Vec<u8>>,
-}
-
-pub struct UnifyStringDomain {
-    pub min: Vec<u8>,
-    // None is max value for full domain
-    pub max: Vec<u8>,
 }
 
 impl StringDomain {
