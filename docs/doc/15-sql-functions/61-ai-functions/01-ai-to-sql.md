@@ -14,9 +14,17 @@ The SQL query statements generated adhere to the PostgreSQL standards, so they m
 
 ```sql
 USE <your-database>;
-SELECT * FROM ai_to_sql('<natural-language-instruction>', '<openai-api-key>');
+SELECT * FROM ai_to_sql('<natural-language-instruction>'[, '<openai-api-key>']);
 ```
-To obtain your openAI API key, please visit https://platform.openai.com/account/api-keys and generate a new key.
+
+:::tip Obtain and Save openAI API Key
+- To obtain your openAI API key, please visit https://platform.openai.com/account/api-keys and generate a new key.
+- Instead of manually entering your OpenAI API secret key every time you run the function, you can save time by adding it to the configuration file **databend-query.toml** through the `openai_api_key` setting. Databend will automatically use that secret key whenever you run the function without explicitly specifying a key as a parameter.
+
+```toml
+openai_api_key = "<your-key>"
+```
+:::
 
 ## Examples
 

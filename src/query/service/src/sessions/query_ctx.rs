@@ -200,6 +200,10 @@ impl QueryContext {
         self.shared.set_affect(affect)
     }
 
+    pub fn set_id(&self, id: String) {
+        *self.shared.init_query_id.write() = id;
+    }
+
     pub fn set_executor(&self, weak_ptr: Weak<PipelineExecutor>) {
         self.shared.set_executor(weak_ptr)
     }

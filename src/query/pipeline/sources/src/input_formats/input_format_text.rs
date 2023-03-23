@@ -463,10 +463,7 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
             .mutable_columns
             .iter_mut()
             .map(|col| {
-                let empty_builder = ColumnBuilder::with_capacity(
-                    &col.data_type(),
-                    self.ctx.block_compact_thresholds.min_rows_per_block,
-                );
+                let empty_builder = ColumnBuilder::with_capacity(&col.data_type(), 0);
                 std::mem::replace(col, empty_builder).build()
             })
             .collect();
