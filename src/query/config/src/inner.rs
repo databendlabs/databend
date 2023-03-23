@@ -196,7 +196,7 @@ impl Default for QueryConfig {
             http_handler_result_timeout_secs: 60,
             flight_api_address: "127.0.0.1:9090".to_string(),
             flight_sql_handler_host: "127.0.0.1".to_string(),
-            flight_sql_handler_port: 50050,
+            flight_sql_handler_port: 7000,
             admin_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),
             api_tls_server_cert: "".to_string(),

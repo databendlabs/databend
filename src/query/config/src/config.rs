@@ -1154,7 +1154,7 @@ pub struct QueryConfig {
     #[clap(long, default_value = "127.0.0.1")]
     pub flight_sql_handler_host: String,
 
-    #[clap(long, default_value = "50050")]
+    #[clap(long, default_value = "7000")]
     pub flight_sql_handler_port: u16,
 
     #[clap(long, default_value = "127.0.0.1:9090")]
