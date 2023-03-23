@@ -144,8 +144,10 @@ jobs:
 
   publish_linux:
     name: linux assets
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, X64, Linux, dev]
     needs: [create_release]
+    env:
+      RUNNER_PROVIDER: aws
     strategy:
       fail-fast: false
       matrix:
@@ -206,8 +208,10 @@ jobs:
 
   publish_hive:
     name: hive assets
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, X64, Linux, dev]
     needs: [create_release]
+    env:
+      RUNNER_PROVIDER: aws
     strategy:
       fail-fast: false
       matrix:
@@ -293,7 +297,7 @@ jobs:
 
   release_docker_combined:
     name: docker image combined
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, X64, Linux, dev]
     needs: [create_release, publish_linux]
     steps:
       - name: Checkout
@@ -318,7 +322,7 @@ jobs:
           mkdir -p ./distro/
           for platform in ${!platform_targets[@]}; do
               target=${platform_targets[$platform]}
-              wget -P distro -qc https://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz
+              aws s3 cp s3://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz distro/ --no-progress
               mkdir -p ./target/${target}/release
               tar x -C ./target/${target}/release -f ./distro/databend-${version}-${target}.tar.gz --strip-components 1 bin/
               mkdir -p ./distro/linux/${platform}
@@ -348,7 +352,7 @@ jobs:
 
   release_docker_separate:
     name: docker image seperated
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, X64, Linux, dev]
     needs: [create_release, publish_linux]
     strategy:
       fail-fast: false
@@ -382,7 +386,7 @@ jobs:
           mkdir -p ./distro/
           for platform in ${!platform_targets[@]}; do
               target=${platform_targets[$platform]}
-              wget -P distro -qc https://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz
+              aws s3 cp s3://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz distro/ --no-progress
               mkdir -p ./target/${target}/release
               tar x -C ./target/${target}/release -f ./distro/databend-${version}-${target}.tar.gz --strip-components 1 bin/
               mkdir -p ./distro/linux/${platform}
@@ -412,7 +416,7 @@ jobs:
 
   release_packages:
     name: release packages
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, X64, Linux, dev]
     needs: [create_release, publish_linux]
     strategy:
       matrix:
@@ -441,7 +445,7 @@ jobs:
           target=${{ steps.target.outputs.target }}
           version="${{ needs.create_release.outputs.version }}"
           mkdir -p ./distro/
-          wget -P distro -qc https://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz
+          aws s3 cp s3://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz distro/ --no-progress
           tar x -C distro -f ./distro/databend-${version}-${target}.tar.gz
       - name: Build Packages
         id: build_packages
