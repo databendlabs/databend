@@ -432,7 +432,7 @@ impl StringDomain {
             max_size = max_size.max(max.len());
         }
 
-        let max_value = vec![255; max_size];
+        let max_value = vec![255; max_size + 1];
 
         (
             SimpleDomain {
