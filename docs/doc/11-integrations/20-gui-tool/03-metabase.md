@@ -9,7 +9,7 @@ description:
 
 ## Downloading and Installing Metabase Databend Driver
 
-To install the Metabase Databend Driver: 
+To download and install the Metabase Databend Driver: 
 
 1. Create a folder named **plugins** in the directory where the file **metabase.jar** is stored.
 
