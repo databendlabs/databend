@@ -98,7 +98,7 @@ The steps below describe how to install and deploy Grafana using Docker.
 
 3. Add a data source of Prometheus type.
 
-   Open your web browser and go to http://0.0.0.0:3000. Log in with the user name `admin` and password `admin` first, and then add a data source of Prometheus type on **Configuration** > **Data Sources** > **Add data source**.
+   Open your web browser and go to `http://0.0.0.0:3000`. Log in with the user name `admin` and password `admin` first, and then add a data source of Prometheus type on **Configuration** > **Data Sources** > **Add data source**.
 
    Please note that set the URL to `http://host.docker.internal:9090` for the data source.
 
