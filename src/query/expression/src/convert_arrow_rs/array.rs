@@ -37,6 +37,7 @@ use crate::types::number::NumberColumn;
 use crate::Column;
 
 fn try_take_buffer<T: Clone>(buffer: Buffer2<T>) -> Vec<T> {
+    // currently need a copy if buffer has more then 1 reference
     match buffer.into_mut() {
         Either::Left(b) => b.as_slice().to_vec(),
         Either::Right(v) => v,
@@ -50,7 +51,6 @@ fn numbers_into<TN: ArrowNativeType, TA: ArrowPrimitiveType>(
     let v: Vec<TN> = try_take_buffer(buf);
     let len = v.len();
     let buf = Buffer::from_vec(v);
-    // unwrap because build() always return Ok if without feature force_validate
     let data = ArrayData::builder(data_type)
         .len(len)
         .offset(0)
@@ -119,6 +119,7 @@ impl Column {
             }
             Column::Decimal(DecimalColumn::Decimal256(buf, size)) => {
                 let v: Vec<ethnum::i256> = try_take_buffer(buf);
+                // todo(youngsofun): arrow_rs use u128 for lo while arrow2 use i128, recheck it later.
                 let v: Vec<i256> = v
                     .into_iter()
                     .map(|i| {
@@ -152,6 +153,7 @@ impl Column {
                 let data = arrow_array.into_data();
                 let buf = col.validity.as_slice().0;
                 let builder = ArrayDataBuilder::from(data);
+                // bitmap copied here
                 let data = builder.null_bit_buffer(Some(buf.into())).build()?;
                 make_array(data)
             }
