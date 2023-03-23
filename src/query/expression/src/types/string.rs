@@ -20,6 +20,7 @@ use common_arrow::arrow::trusted_len::TrustedLen;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::SimpleDomain;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -411,5 +412,31 @@ impl<'a> FromIterator<&'a [u8]> for StringColumnBuilder {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StringDomain {
     pub min: Vec<u8>,
+    // max value is None for full domain
     pub max: Option<Vec<u8>>,
+}
+
+impl StringDomain {
+    pub fn unify(&self, other: &Self) -> (SimpleDomain<Vec<u8>>, SimpleDomain<Vec<u8>>) {
+        let mut max_size = self.min.len().max(other.min.len());
+        if let Some(max) = &self.max {
+            max_size = max_size.max(max.len());
+        }
+        if let Some(max) = &other.max {
+            max_size = max_size.max(max.len());
+        }
+
+        let max_value = vec![255; max_size + 1];
+
+        (
+            SimpleDomain {
+                min: self.min.clone(),
+                max: self.max.clone().unwrap_or_else(|| max_value.clone()),
+            },
+            SimpleDomain {
+                min: other.min.clone(),
+                max: other.max.clone().unwrap_or_else(|| max_value.clone()),
+            },
+        )
+    }
 }
