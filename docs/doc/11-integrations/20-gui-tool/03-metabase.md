@@ -7,9 +7,28 @@ description:
 
 [Metabase](https://www.metabase.com/) is an open-source business intelligence platform. You can use Metabase to ask questions about your data, or embed Metabase in your app to let your customers explore their data on their own. Databend provides a JDBC driver named [Metabase Databend Driver](https://github.com/databendcloud/metabase-databend-driver/releases/latest), enabling you to connect to Metabase and dashboard your data in Databend. For more information about the Metabase Databend Driver, refer to https://github.com/databendcloud/metabase-databend-driver
 
-The following tutorial shows you how to integrate Databend with Metabase through the Metabase Databend Driver. In this tutorial, you'll deploy a local Databend and install Metabase with Docker. Before you start, ensure that you have Docker installed.
+## Downloading and Installing Metabase Databend Driver
+
+To install the Metabase Databend Driver: 
+
+1. Create a folder named **plugins** in the directory where the file **metabase.jar** is stored.
+
+```bash
+$ ls
+metabase.jar
+$ mkdir plugins
+```
+2. [Download](https://github.com/databendcloud/metabase-databend-driver/releases/latest) the Metabase Databend Driver, then save it in the **plugins** folder.
+
+3. To start Metabase, run the following command:
+
+```bash
+java -jar metabase.jar
+```
 
 ## Tutorial: Integrate with Metabase
+
+The following tutorial shows you how to integrate Databend with Metabase through the Metabase Databend Driver. In this tutorial, you'll deploy a local Databend and install Metabase with Docker. Before you start, ensure that you have Docker installed.
 
 ### Step 1. Deploy Databend
 
@@ -38,9 +57,9 @@ docker run  -d -p 3000:3000 --name metabase metabase/metabase
 
 ### Step 3. Connect Databend to Metabase
 
-1. Open your web browser, and go to http://localhost:3000/
+1. Open your web browser, and go to http://localhost:3000/.
 
-2. Complete the initial sign-up process. Select "I'll add my data later" in step 3.
+2. Complete the initial sign-up process. Select **I'll add my data later** in step 3.
 
 ![Alt text](../../../public/img/integration/add-later.png)
 
