@@ -344,6 +344,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::AlterDatabase(stmt) => visitor.visit_alter_database(stmt),
         Statement::UseDatabase { database } => visitor.visit_use_database(database),
         Statement::ShowTables(stmt) => visitor.visit_show_tables(stmt),
+        Statement::ShowColumns(stmt) => visitor.visit_show_columns(stmt),
         Statement::ShowCreateTable(stmt) => visitor.visit_show_create_table(stmt),
         Statement::DescribeTable(stmt) => visitor.visit_describe_table(stmt),
         Statement::ShowTablesStatus(stmt) => visitor.visit_show_tables_status(stmt),

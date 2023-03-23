@@ -45,6 +45,7 @@ use crate::BlockEntry;
 use crate::ColumnIndex;
 use crate::FunctionContext;
 use crate::FunctionDomain;
+use crate::FunctionEval;
 use crate::FunctionRegistry;
 
 pub struct Evaluator<'a> {
@@ -118,12 +119,12 @@ impl<'a> Evaluator<'a> {
     }
 
     pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
-        self.run_partially(expr, None)
+        self.partial_run(expr, None)
     }
 
     /// Run an expression partially, only the rows that are valid in the validity bitmap
     /// will be evaluated, the rest will be default values and should not throw any error.
-    fn run_partially(&self, expr: &Expr, validity: Option<Bitmap>) -> Result<Value<AnyType>> {
+    fn partial_run(&self, expr: &Expr, validity: Option<Bitmap>) -> Result<Value<AnyType>> {
         debug_assert!(
             validity.is_none() || validity.as_ref().unwrap().len() == self.input_columns.num_rows()
         );
@@ -140,7 +141,7 @@ impl<'a> Evaluator<'a> {
                 expr,
                 dest_type,
             } => {
-                let value = self.run_partially(expr, validity.clone())?;
+                let value = self.partial_run(expr, validity.clone())?;
                 if *is_try {
                     self.run_try_cast(*span, expr.data_type(), dest_type, value)
                 } else {
@@ -162,7 +163,7 @@ impl<'a> Evaluator<'a> {
             } => {
                 let args = args
                     .iter()
-                    .map(|expr| self.run_partially(expr, validity.clone()))
+                    .map(|expr| self.partial_run(expr, validity.clone()))
                     .collect::<Result<Vec<_>>>()?;
                 assert!(
                     args.iter()
@@ -180,7 +181,8 @@ impl<'a> Evaluator<'a> {
                     errors: None,
                     tz: self.func_ctx.tz,
                 };
-                let result = (function.eval)(cols_ref.as_slice(), &mut ctx);
+                let (_, eval) = function.eval.as_scalar().unwrap();
+                let result = (eval)(cols_ref.as_slice(), &mut ctx);
                 ctx.render_error(*span, &args, &function.signature.name)?;
                 Ok(result)
             }
@@ -710,7 +712,7 @@ impl<'a> Evaluator<'a> {
             num_rows,
         );
         let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-        Ok(Some(evaluator.run_partially(&cast_expr, validity)?))
+        Ok(Some(evaluator.partial_run(&cast_expr, validity)?))
     }
 
     // `if` is a special builtin function that could partially evaluate its arguments
@@ -743,30 +745,29 @@ impl<'a> Evaluator<'a> {
         let mut flags = Vec::new();
         let mut results = Vec::new();
         for cond_idx in (0..args.len() - 1).step_by(2) {
-            let cond = self.run_partially(&args[cond_idx], Some(validity.clone()))?;
+            let cond = self.partial_run(&args[cond_idx], Some(validity.clone()))?;
             match cond.try_downcast::<NullableType<BooleanType>>().unwrap() {
                 Value::Scalar(None | Some(false)) => {
                     results.push(Value::Scalar(Scalar::default_value(&generics[0])));
                     flags.push(constant_bitmap(false, len.unwrap_or(1)).into());
                 }
                 Value::Scalar(Some(true)) => {
-                    results.push(self.run_partially(&args[cond_idx + 1], Some(validity.clone()))?);
+                    results.push(self.partial_run(&args[cond_idx + 1], Some(validity.clone()))?);
                     validity = constant_bitmap(false, num_rows).into();
                     flags.push(constant_bitmap(true, len.unwrap_or(1)).into());
                     break;
                 }
                 Value::Column(cond) => {
                     let flag = (&cond.column) & (&cond.validity);
-                    results.push(
-                        self.run_partially(&args[cond_idx + 1], Some((&validity) & (&flag)))?,
-                    );
+                    results
+                        .push(self.partial_run(&args[cond_idx + 1], Some((&validity) & (&flag)))?);
                     validity = (&validity) & (&flag.not());
                     flags.push(flag);
                 }
             };
             conds.push(cond);
         }
-        let else_result = self.run_partially(&args[args.len() - 1], Some(validity))?;
+        let else_result = self.partial_run(&args[args.len() - 1], Some(validity))?;
 
         // Assert that all the arguments have the same length.
         assert!(
@@ -797,6 +798,29 @@ impl<'a> Evaluator<'a> {
             Some(_) => Ok(Value::Column(output_builder.build())),
             None => Ok(Value::Scalar(output_builder.build_scalar())),
         }
+    }
+
+    /// Evaluate a set returning function. Return multiple chunks of results, and the repeat times of each of the result.
+    pub fn run_srf(&self, expr: &Expr) -> Result<Vec<(Value<AnyType>, usize)>> {
+        if let Expr::FunctionCall {
+            function,
+            args,
+            return_type,
+            ..
+        } = expr
+        {
+            if let FunctionEval::SRF { eval } = &function.eval {
+                assert!(return_type.as_tuple().is_some());
+                let args = args
+                    .iter()
+                    .map(|expr| self.run(expr))
+                    .collect::<Result<Vec<_>>>()?;
+                let cols_ref = args.iter().map(Value::as_ref).collect::<Vec<_>>();
+                return Ok((eval)(&cols_ref, self.input_columns.num_rows()));
+            }
+        }
+
+        unreachable!("expr is not a set returning function: {expr}")
     }
 }
 
@@ -966,14 +990,29 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                         domains
                     });
                 }
-
-                let func_domain =
-                    args_domain.and_then(|domains| match (function.calc_domain)(&domains) {
-                        FunctionDomain::MayThrow => None,
-                        FunctionDomain::Full => Some(Domain::full(return_type)),
-                        FunctionDomain::Domain(domain) => Some(domain),
-                    });
                 let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());
+
+                let func_expr = Expr::FunctionCall {
+                    span: *span,
+                    id: id.clone(),
+                    function: function.clone(),
+                    generics: generics.clone(),
+                    args: args_expr,
+                    return_type: return_type.clone(),
+                };
+
+                let calc_domain = match &function.eval {
+                    FunctionEval::Scalar { calc_domain, .. } => calc_domain,
+                    FunctionEval::SRF { .. } => {
+                        return (func_expr, None);
+                    }
+                };
+
+                let func_domain = args_domain.and_then(|domains| match (calc_domain)(&domains) {
+                    FunctionDomain::MayThrow => None,
+                    FunctionDomain::Full => Some(Domain::full(return_type)),
+                    FunctionDomain::Domain(domain) => Some(domain),
+                });
 
                 if let Some(scalar) = func_domain.as_ref().and_then(Domain::as_singleton) {
                     return (
@@ -985,15 +1024,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                         func_domain,
                     );
                 }
-
-                let func_expr = Expr::FunctionCall {
-                    span: *span,
-                    id: id.clone(),
-                    function: function.clone(),
-                    generics: generics.clone(),
-                    args: args_expr,
-                    return_type: return_type.clone(),
-                };
 
                 if all_args_is_scalar {
                     let block = DataBlock::empty();

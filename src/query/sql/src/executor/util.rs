@@ -18,7 +18,7 @@ use common_expression::type_check;
 use common_expression::types::DataType;
 use common_expression::ColumnIndex;
 use common_expression::Expr;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use once_cell::sync::Lazy;
 use regex::Regex;
 

@@ -33,9 +33,7 @@ use common_expression::DataSchemaRefExt;
 use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
-use common_functions::srfs::check_srf;
-use common_functions::srfs::BUILTIN_SET_RETURNING_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 
 use super::cast_expr_to_non_null_boolean;
 use super::AggregateExpand;
@@ -808,34 +806,21 @@ impl PhysicalPlanBuilder {
                 let srf_exprs = project_set
                     .srfs
                     .iter()
-                    .map(|srf_item| {
-                        let args = srf_item
-                            .args
-                            .iter()
-                            .map(|arg| {
-                                let expr = arg
-                                    .resolve_and_check(input_schema.as_ref())?
-                                    .project_column_ref(|index| {
-                                        input_schema.index_of(&index.to_string()).unwrap()
-                                    });
-                                let (expr, _) = ConstantFolder::fold(
-                                    &expr,
-                                    self.ctx.get_function_context()?,
-                                    &BUILTIN_FUNCTIONS,
-                                );
-                                Ok(expr)
-                            })
-                            .collect::<Result<Vec<_>>>()?;
-
-                        let srf = check_srf(
-                            srf_item.srf_name.as_str(),
-                            &args,
-                            &BUILTIN_SET_RETURNING_FUNCTIONS,
-                        )?;
-                        Ok((srf.into_remote_srf_expr(), srf_item.columns.clone()))
+                    .map(|item| {
+                        let expr = item
+                            .scalar
+                            .resolve_and_check(input_schema.as_ref())?
+                            .project_column_ref(|index| {
+                                input_schema.index_of(&index.to_string()).unwrap()
+                            });
+                        let (expr, _) = ConstantFolder::fold(
+                            &expr,
+                            self.ctx.get_function_context()?,
+                            &BUILTIN_FUNCTIONS,
+                        );
+                        Ok((expr.as_remote_expr(), item.index))
                     })
                     .collect::<Result<Vec<_>>>()?;
-
                 Ok(PhysicalPlan::ProjectSet(ProjectSet {
                     plan_id: self.next_plan_id(),
                     input: Box::new(input),

@@ -22,7 +22,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::RemoteExpr;
 use common_expression::TableSchemaRef;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use opendal::Operator;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_pruner::Limiter;

@@ -3755,6 +3755,16 @@ Functions overloads:
 0 typeof(T0) :: String
 0 unhex(String) :: String
 1 unhex(String NULL) :: String NULL
+0 unnest(Array(Array(Array(Array(Array(Array(Array(Array(Array(Array(T0 NULL))))))))))) :: Tuple(T0 NULL,)
+1 unnest(Array(Array(Array(Array(Array(Array(Array(Array(Array(T0 NULL)))))))))) :: Tuple(T0 NULL,)
+2 unnest(Array(Array(Array(Array(Array(Array(Array(Array(T0 NULL))))))))) :: Tuple(T0 NULL,)
+3 unnest(Array(Array(Array(Array(Array(Array(Array(T0 NULL)))))))) :: Tuple(T0 NULL,)
+4 unnest(Array(Array(Array(Array(Array(Array(T0 NULL))))))) :: Tuple(T0 NULL,)
+5 unnest(Array(Array(Array(Array(Array(T0 NULL)))))) :: Tuple(T0 NULL,)
+6 unnest(Array(Array(Array(Array(T0 NULL))))) :: Tuple(T0 NULL,)
+7 unnest(Array(Array(Array(T0 NULL)))) :: Tuple(T0 NULL,)
+8 unnest(Array(Array(T0 NULL))) :: Tuple(T0 NULL,)
+9 unnest(Array(T0 NULL)) :: Tuple(T0 NULL,)
 0 upper(String) :: String
 1 upper(String NULL) :: String NULL
 0 xor(Boolean, Boolean) :: Boolean

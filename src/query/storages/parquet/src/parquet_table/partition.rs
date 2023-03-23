@@ -20,7 +20,7 @@ use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use storages_common_index::Index;
 use storages_common_index::RangeIndex;
 use storages_common_pruner::RangePrunerCreator;
