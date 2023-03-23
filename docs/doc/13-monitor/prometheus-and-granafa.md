@@ -2,109 +2,112 @@
 title: Prometheus & Grafana
 ---
 
-[Prometheus](https://prometheus.io/) is a time series database that features a flexible query language and a multi-dimensional data model.
+Databend captures real-time metrics of the meta and query services, which you can access through a web browser using the following URLs:
 
-[Grafana](https://grafana.com/grafana) is an open-source tool used for analyzing and visualizing metrics.
+- Meta Metrics: `http://<admin_api_address>/v1/metrics`
+- Query Metrics: `http://<metric_api_address>/metrics`
 
-Databend supports using Prometheus to store monitoring and performance metrics, which can be visualized through Grafana.
+Alternatively, you can use Prometheus to capture and store the metrics data from Databend. Then, you can visualize the captured time series data on a dashboard with Grafana.
+
+[Prometheus](https://prometheus.io/) is an open-source monitoring system with a dimensional data model, flexible query language, efficient time series database and modern alerting approach. [Grafana](https://grafana.com/grafana) is an open-source tool used for analyzing and visualizing metrics.
+
+This following tutorial guides you through deploying and integrating Databend, Prometheus, and Grafana. In this tutorial, you'll deploy a local Databend and install Prometheus and Grafana with Docker. Before you start, ensure that you have Docker installed.
 
 ## Tutorial: Monitor Databend with Prometheus & Grafana
 
 ### Step 1. Deploy Databend
 
-Follow the [Deployment Guide](https://databend.rs/doc/deploy) to deploy Databend.
+Follow the [Deployment Guide](https://databend.rs/doc/deploy) to deploy a standalone Databend.
 
-In this example, we use the default configuration located in the `configs` directory of release to deploy a standalone  Databend. You can also find these configurations at [datafuselabs/databend - configs](https://github.com/datafuselabs/databend/tree/main/scripts/distribution/configs).
-
-Therefore, the metrics API for databend-meta is `0.0.0.0:28101/v1/metrics`, while the metrics API for databend-query is `0.0.0.0:7070/metrics`.
+:::tip
+This tutorial uses the [default configuration files](https://github.com/datafuselabs/databend/tree/main/scripts/distribution/configs) in the `configs` folder of the install package. The metrics API for databend-meta is `0.0.0.0:28101/v1/metrics`, and the metrics API for databend-query is `0.0.0.0:7070/metrics`.
+:::
 
 ### Step 2. Deploy Prometheus
 
-Please refer [Prometheus Installation](https://prometheus.io/docs/prometheus/latest/installation/). For convenience, Docker images are used in this tutorial.
+The steps below describe how to install and deploy Prometheus using Docker.
 
-1. Pull Prometheus' Docker Image
+1. Pull the latest Docker image of Prometheus from the Docker Hub registry.
 
-    ```bash
-    docker pull prom/prometheus
-    ```
+   ```bash
+   docker pull prom/prometheus
+   ```
 
-2. Edit Prometheus' configuration
+2. Edit the configuration file **prometheus.yml**.
 
-    We use [prometheus/prometheus - prometheus.yml](https://github.com/prometheus/prometheus/blob/main/documentation/examples/prometheus.yml) as the base configuration and add the necessary configurations for scraping Databend's metrics.
+   Add the following script to the end of the file prometheus.yml that can be found in the `/etc/prometheus/prometheus.yml` directory. Please note that, with Docker, there are multiple ways to modify a file for a container. In this tutorial, we demonstrate how to achieve this by saving the file to a local folder and mapping it when running the Prometheus image.
 
-    ```yaml
-      - job_name: "databend-query"
+   :::tip
+   Docker containers can connect to local services running on the host by using `host.docker.internal`. This feature is available by default only on Docker for Windows/Mac. However, it is also available on Linux starting from version **20.03**.
+   :::
 
-        # metrics_path defaults to '/metrics'
-        # scheme defaults to 'http'.
+   ```yaml
+   - job_name: "databend-query"
 
-        static_configs:
-          - targets: ["0.0.0.0:7070"]
+     # metrics_path defaults to '/metrics'
+     # scheme defaults to 'http'.
 
-      - job_name: "databend-meta"
+     static_configs:
+       - targets: ["host.docker.internal:7070"]
 
-        metrics_path: '/v1/metrics'
-        # scheme defaults to 'http'.
+   - job_name: "databend-meta"
 
-        static_configs:
-          - targets: ["0.0.0.0:28101"]
-    ```
+     metrics_path: "/v1/metrics"
+     # scheme defaults to 'http'.
 
-3. Deploy Prometheus
+     static_configs:
+       - targets: ["host.docker.internal:28101"]
+   ```
 
-    For convenience, the host machine network is used here. Please modify it according to actual situation.
+3. Deploy Prometheus.
 
-    ```bash
-    docker run \
-    --network host \
-    -v /path/to/prometheus.yml:/etc/prometheus/prometheus.yml \
-    prom/prometheus
-    ```
+   If you saved and edited the file `prometheus.yml` in a local folder, you need to create a mapping using the `-v` option in the command. To do so, replace `/path/to/prometheus.yml` in the command below with the path to your local `prometheus.yml`.
+
+   ```bash
+   docker run \
+   -p 9090:9090 \
+   --add-host=host.docker.internal:host-gateway \
+   -v /path/to/prometheus.yml:/etc/prometheus/prometheus.yml \
+   prom/prometheus
+   ```
 
 4. Check Metrics Status
 
-    Execute `up` in Prometheus UI (default `http://0.0.0.0:9090`). `1` represents normal, `0` represents abnormal.
+   Check the value on the right of each instance. `1` means the instance is healthy, and `0` means that the scrape failed.
 
-    ![Prometheus up](../../public/img/tracing/prometheus-up.png)
+   ![Prometheus up](../../public/img/tracing/prometheus-up.png)
 
 ### Step 3. Deploy Grafana
 
-Please refer [Grafana Installation](https://grafana.com/docs/grafana/latest/setup-grafana/installation/). For convenience, Docker images are used in this tutorial.
+Check the value on the right of each instance. 1 means the instance is healthy, and 0 means that the scrape failed.
 
-1. Pull Grafana's Docker Image
+1. Pull the latest Docker image of Grafana from the Docker Hub registry.
 
-    ```bash
-    docker pull grafana/grafana
-    ```
+   ```bash
+   docker pull grafana/grafana
+   ```
 
-2. Deploy Grafana
+2. Deploy Grafana.
 
-    For convenience, the host machine network is used here. Please modify it according to actual situation.
+   ```bash
+   docker run \
+   -p 3000:3000 \
+   --add-host=host.docker.internal:host-gateway \
+   grafana/grafana
+   ```
 
-    ```bash
-    docker run \
-    --network host \
-    grafana/grafana
-    ```
+3. Add a data source of Prometheus type.
 
-3. Add DataSource
+   Open your web browser and go to http://0.0.0.0:3000. Log in with the user name `admin` and password `admin` first, and then add a data source of Prometheus type on **Configuration** > **Data Sources** > **Add data source**.
 
-    Access Grafana's web page (default `http://0.0.0.0:3000`), the username and default password are both `admin`.
+   Please note that set the URL to `http://host.docker.internal:9090` for the data source.
 
-    We need to add a `Prometheus` type data source by selecting `Configuration → Data Sources → Add data source`.
+   ![Grafana data source](../../public/img/tracing/grafana-datasource.png)
 
-    ![Grafana data source](../../public/img/tracing/grafana-datasource.png)
+4. Create dashboards.
 
-4. Configure Grafana Dashboard
+   Databend recommend import the files in [datafuselabs/helm-charts - dashboards](https://github.com/datafuselabs/helm-charts/tree/main/dashboards) to create your dashboards. To do so, download the files first, then go to `http://0.0.0.0:3000/dashboard/import` to import the downloaded files one by one and select the `Prometheus` data source for each dashboard.
 
-    We recommend using the JSON files in [datafuselabs/helm-charts - dashboards](https://github.com/datafuselabs/helm-charts/tree/main/dashboards) to configure the Grafana dashboard, or customize it according to your own needs.
+   ![Grafana import query json](../../public/img/tracing/grafana-query-json.png)
 
-    Please visit `http://0.0.0.0:3000/dashboard/import` and upload the corresponding JSON file. Then, select the `Prometheus` data source.
-
-    ![Grafana import query json](../../public/img/tracing/grafana-query-json.png)
-
-5. View Grafana Dashboard
-
-    Based on the `UID`, we can access the corresponding dashboard. In this example, the address we want to access is: `http://0.0.0.0:3000/d/cxu72qHVa/`.
-
-    ![Grafana query dashboard](../../public/img/tracing/grafana-query-dashboard.png)
+   ![Grafana query dashboard](../../public/img/tracing/grafana-query-dashboard.png)
