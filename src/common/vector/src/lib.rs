@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,22 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
-#![allow(incomplete_features)]
-#![feature(allocator_api)]
-#![feature(thread_local)]
-#![feature(ptr_metadata)]
-#![feature(result_flattening)]
-#![feature(try_trait_v2)]
-#![feature(thread_id_value)]
-#![feature(backtrace_frames)]
-#![feature(alloc_error_hook)]
+pub(crate) mod compute;
+mod distance;
 
-pub mod base;
-pub mod containers;
-pub mod mem_allocator;
-pub mod rangemap;
-pub mod runtime;
-
-pub use runtime::match_join_handle;
-pub use runtime::set_alloc_error_hook;
+pub use distance::cosine_distance;

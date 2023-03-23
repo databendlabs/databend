@@ -39,6 +39,7 @@ mod hash;
 mod other;
 mod string;
 mod string_multi_args;
+mod vector;
 
 pub use comparison::check_pattern_type;
 pub use comparison::is_like_pattern_escape;
@@ -70,6 +71,7 @@ fn builtin_functions() -> FunctionRegistry {
     hash::register(&mut registry);
     other::register(&mut registry);
     decimal::register(&mut registry);
+    vector::register(&mut registry);
 
     registry
 }

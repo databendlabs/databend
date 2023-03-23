@@ -1525,6 +1525,7 @@ dependencies = [
  "common-expression",
  "common-hashtable",
  "common-io",
+ "common-vector",
  "crc32fast",
  "criterion",
  "ctor",
@@ -2445,6 +2446,14 @@ dependencies = [
  "serde_json",
  "tracing",
  "wiremock",
+]
+
+[[package]]
+name = "common-vector"
+version = "0.1.0"
+dependencies = [
+ "approx",
+ "common-exception",
 ]
 
 [[package]]
