@@ -1,0 +1,52 @@
+statement ok
+DROP DATABASE IF EXISTS showcolumn
+
+statement ok
+CREATE DATABASE showcolumn
+
+statement ok
+CREATE TABLE showcolumn.t1(c1 int) ENGINE = Null
+
+statement ok
+CREATE TABLE showcolumn.t2(c1 int) ENGINE = Null
+
+statement ok
+CREATE TABLE showcolumn.t3(c1 int null default null, c2 Datetime, c3 String Default 'c3') ENGINE = Null;
+
+query TTTTTT
+SHOW COLUMNS FROM showcolumn.t3
+----
+c1 Nullable(Int32) YES INT DEFAULT NULL
+c2 Timestamp NO TIMESTAMP (empty) (empty)
+c3 String NO VARCHAR DEFAULT 'c3'
+
+statement ok
+use showcolumn
+
+query TTTTTTT
+SHOW FULL COLUMNS IN t3
+----
+c1 Nullable(Int32) YES INT DEFAULT NULL (empty)
+c2 Timestamp NO TIMESTAMP (empty) (empty) (empty)
+c3 String NO VARCHAR DEFAULT 'c3' (empty)
+
+query T
+explain show full columns in t3
+----
+Sort
+├── sort keys: [database ASC NULLS LAST, table ASC NULLS LAST, name ASC NULLS LAST]
+├── estimated rows: 0.00
+└── Filter
+    ├── filters: [columns.database (#1) = "showcolumn", columns.table (#2) = "t3"]
+    ├── estimated rows: 0.00
+    └── TableScan
+        ├── table: default.system.columns
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [columns.database (#1) = "showcolumn" AND columns.table (#2) = "t3"], limit: NONE]
+        └── estimated rows: 0.00
+
+statement ok
+DROP DATABASE showcolumn
