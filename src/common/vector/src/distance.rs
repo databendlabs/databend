@@ -19,24 +19,19 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 /// Fallback Cosine Distance function.
-fn cosine_dist(from: &[f32], to: &[f32], dimension: usize) -> Vec<f32> {
-    let n = to.len() / dimension;
+fn cosine_dist(from: &[f32], to: &[f32]) -> f32 {
+    let len = from.len();
 
-    let distances: Vec<f32> = (0..n)
-        .map(|idx| {
-            let vector = &to[idx * dimension..(idx + 1) * dimension];
-            let mut x_sq = 0_f32;
-            let mut y_sq = 0_f32;
-            let mut xy = 0_f32;
-            from.iter().zip(vector.iter()).for_each(|(x, y)| {
-                xy += x * y;
-                x_sq += x.powi(2);
-                y_sq += y.powi(2);
-            });
-            1.0 - xy / (x_sq.sqrt() * y_sq.sqrt())
-        })
-        .collect();
-    distances
+    let vector = &to[0..len];
+    let mut x_sq = 0_f32;
+    let mut y_sq = 0_f32;
+    let mut xy = 0_f32;
+    from.iter().zip(vector.iter()).for_each(|(x, y)| {
+        xy += x * y;
+        x_sq += x.powi(2);
+        y_sq += y.powi(2);
+    });
+    1.0 - xy / (x_sq.sqrt() * y_sq.sqrt())
 }
 
 #[cfg(any(target_arch = "aarch64"))]
@@ -78,34 +73,29 @@ unsafe fn cosine_dist_fma(x_vector: &[f32], y_vector: &[f32], x_norm: f32) -> f3
 }
 
 #[inline]
-fn cosine_dist_simd(from: &[f32], to: &[f32], dimension: usize) -> Vec<f32> {
+fn cosine_dist_simd(from: &[f32], to: &[f32]) -> f32 {
     let x = from;
-    let to_values = to;
+    let y = to;
     let x_norm = super::compute::normalize(x);
-    let n = to.len() / dimension;
-    let mut builder: Vec<f32> = Vec::with_capacity(n);
-    for y in to_values.chunks_exact(dimension) {
-        #[cfg(any(target_arch = "aarch64"))]
-        {
-            builder.push(unsafe { cosine_dist_neon(x, y, x_norm) });
-        }
-        #[cfg(any(target_arch = "x86_64"))]
-        {
-            builder.push(unsafe { cosine_dist_fma(x, y, x_norm) });
-        }
+    #[cfg(any(target_arch = "aarch64"))]
+    {
+        unsafe { cosine_dist_neon(x, y, x_norm) }
     }
-    builder
+    #[cfg(any(target_arch = "x86_64"))]
+    {
+        unsafe { cosine_dist_fma(x, y, x_norm) }
+    }
 }
 
 /// Cosine Distance
 ///
 /// <https://en.wikipedia.org/wiki/Cosine_similarity>
-pub fn cosine_distance(from: &[f32], to: &[f32], dimension: usize) -> Result<Vec<f32>> {
-    if from.len() != to.len() || from.len() != dimension {
+pub fn cosine_distance(from: &[f32], to: &[f32]) -> Result<f32> {
+    if from.len() != to.len() {
         return Err(ErrorCode::InvalidArgument(format!(
-            "Vector len:{:} not equal dimension:{:}",
+            "Vector len:{:} not equal:{:}",
             from.len(),
-            dimension,
+            to.len(),
         )));
     }
 
@@ -113,17 +103,17 @@ pub fn cosine_distance(from: &[f32], to: &[f32], dimension: usize) -> Result<Vec
     {
         use std::arch::is_aarch64_feature_detected;
         if is_aarch64_feature_detected!("neon") && from.len() % 4 == 0 {
-            return Ok(cosine_dist_simd(from, to, dimension));
+            return Ok(cosine_dist_simd(from, to));
         }
     }
 
     #[cfg(target_arch = "x86_64")]
     {
         if is_x86_feature_detected!("fma") && from.len() % 8 == 0 {
-            return Ok(cosine_dist_simd(from, to, dimension));
+            return Ok(cosine_dist_simd(from, to));
         }
     }
 
     // Fallback
-    Ok(cosine_dist(from, to, dimension))
+    Ok(cosine_dist(from, to))
 }
