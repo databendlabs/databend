@@ -463,7 +463,11 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
             .mutable_columns
             .iter_mut()
             .map(|col| {
-                let empty_builder = ColumnBuilder::with_capacity(&col.data_type(), 0);
+                let empty_builder = ColumnBuilder::with_capacity_hint(
+                    &col.data_type(),
+                    self.ctx.block_compact_thresholds.min_rows_per_block,
+                    false,
+                );
                 std::mem::replace(col, empty_builder).build()
             })
             .collect();
@@ -504,9 +508,10 @@ impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
             .fields()
             .iter()
             .map(|f| {
-                ColumnBuilder::with_capacity(
+                ColumnBuilder::with_capacity_hint(
                     &f.data_type().into(),
                     ctx.block_compact_thresholds.min_rows_per_block,
+                    false,
                 )
             })
             .collect();
