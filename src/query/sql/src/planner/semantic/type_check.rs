@@ -1050,7 +1050,7 @@ impl<'a> TypeChecker<'a> {
         let registry = &BUILTIN_FUNCTIONS;
         let expr = type_check::check(&raw_expr, registry)?;
 
-        if !expr.is_deterministic() {
+        if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
             self.ctx.set_cacheable(false);
         }
 

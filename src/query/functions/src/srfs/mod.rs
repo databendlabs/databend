@@ -18,7 +18,6 @@ use common_expression::types::DataType;
 use common_expression::Column;
 use common_expression::Function;
 use common_expression::FunctionEval;
-use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::Scalar;
@@ -64,7 +63,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(
                     DataType::Generic(0),
                 ))]),
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::SRF {
                 eval: Box::new(unnest_impl),
@@ -90,7 +88,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(
                     DataType::Generic(0),
                 ))]),
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::SRF {
                 eval: Box::new(unnest_impl),
@@ -114,7 +111,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(
                     DataType::Generic(0),
                 ))]),
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::SRF {
                 eval: Box::new(unnest_impl),
@@ -138,7 +134,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(
                     DataType::Generic(0),
                 ))]),
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::SRF {
                 eval: Box::new(unnest_impl),
@@ -162,7 +157,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(
                     DataType::Generic(0),
                 ))]),
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::SRF {
                 eval: Box::new(unnest_impl),
@@ -184,7 +178,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(
                     DataType::Generic(0),
                 ))]),
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::SRF {
                 eval: Box::new(unnest_impl),
@@ -206,7 +199,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(
                     DataType::Generic(0),
                 ))]),
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::SRF {
                 eval: Box::new(unnest_impl),
@@ -226,7 +218,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(
                     DataType::Generic(0),
                 ))]),
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::SRF {
                 eval: Box::new(unnest_impl),
@@ -246,7 +237,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(
                     DataType::Generic(0),
                 ))]),
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::SRF {
                 eval: Box::new(unnest_impl),
@@ -266,7 +256,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(
                     DataType::Generic(0),
                 ))]),
-                property: FunctionProperty::default(),
             },
             eval: FunctionEval::SRF {
                 eval: Box::new(unnest_impl),

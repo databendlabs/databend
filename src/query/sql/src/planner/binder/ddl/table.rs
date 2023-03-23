@@ -989,7 +989,7 @@ impl Binder {
         for cluster_by in cluster_by.iter() {
             let (cluster_key, _) = scalar_binder.bind(cluster_by).await?;
             let expr = cluster_key.as_expr_with_col_index()?;
-            if !expr.is_deterministic() {
+            if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Cluster by expression `{:#}` is not deterministic",
                     cluster_by

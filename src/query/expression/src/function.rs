@@ -48,7 +48,6 @@ pub struct FunctionSignature {
     pub name: String,
     pub args_type: Vec<DataType>,
     pub return_type: DataType,
-    pub property: FunctionProperty,
 }
 
 pub type AutoCastRules<'a> = &'a [(DataType, DataType)];
@@ -172,7 +171,6 @@ impl Function {
                     .map(|ty| ty.wrap_nullable())
                     .collect(),
                 return_type: self.signature.return_type.wrap_nullable(),
-                property: self.signature.property.clone(),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_| FunctionDomain::Full),
@@ -202,6 +200,8 @@ pub struct FunctionRegistry {
     pub additional_cast_rules: HashMap<String, Vec<(DataType, DataType)>>,
     /// The auto rules that should use TRY_CAST instead of CAST.
     pub auto_try_cast_rules: Vec<(DataType, DataType)>,
+
+    pub properties: HashMap<String, FunctionProperty>,
 }
 
 impl FunctionRegistry {
@@ -312,6 +312,10 @@ impl FunctionRegistry {
         self.auto_try_cast_rules
             .iter()
             .any(|(src_ty, dest_ty)| arg_type == src_ty && sig_type == dest_ty)
+    }
+
+    pub fn get_property(&self, func_name: &str) -> FunctionProperty {
+        self.properties.get(func_name).cloned().unwrap_or_default()
     }
 
     pub fn register_function(&mut self, func: Function) {
