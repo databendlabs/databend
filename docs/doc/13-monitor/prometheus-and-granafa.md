@@ -79,7 +79,7 @@ The steps below describe how to install and deploy Prometheus using Docker.
 
 ### Step 3. Deploy Grafana
 
-Check the value on the right of each instance. 1 means the instance is healthy, and 0 means that the scrape failed.
+The steps below describe how to install and deploy Grafana using Docker.
 
 1. Pull the latest Docker image of Grafana from the Docker Hub registry.
 
