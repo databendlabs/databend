@@ -29,6 +29,7 @@ use storages_common_index::RangeIndex;
 use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::io::BlockReader;
 use crate::operations::fuse_source::build_fuse_source_pipeline;
+use crate::operations::fuse_virtual_column::VirtualColumnTransform;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -156,13 +157,25 @@ impl FuseTable {
         });
 
         build_fuse_source_pipeline(
-            ctx,
+            ctx.clone(),
             pipeline,
             self.storage_format,
             block_reader,
             plan,
             topk,
             max_io_requests,
-        )
+        )?;
+
+        if let Some(PushDownInfo {
+            virtual_columns: Some(virtual_columns),
+            ..
+        }) = &plan.push_downs
+        {
+            pipeline.add_transform(|input, output| {
+                VirtualColumnTransform::create(ctx.clone(), input, output, virtual_columns.clone())
+            })?;
+        }
+
+        Ok(())
     }
 }

@@ -419,6 +419,7 @@ impl SubqueryRewriter {
                 Scan {
                     table_index,
                     columns: self.derived_columns.values().cloned().collect(),
+                    virtual_source_columns: None,
                     push_down_predicates: None,
                     limit: None,
                     order_by: None,
@@ -428,6 +429,7 @@ impl SubqueryRewriter {
                         is_accurate: false,
                     },
                     prewhere: None,
+                    virtual_columns: None,
                 }
                 .into(),
             );

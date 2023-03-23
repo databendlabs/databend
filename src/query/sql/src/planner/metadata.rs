@@ -365,6 +365,14 @@ impl ColumnEntry {
             ColumnEntry::InternalColumn(internal_column) => internal_column.column_index,
         }
     }
+
+    pub fn name(&self) -> &String {
+        match self {
+            ColumnEntry::BaseTableColumn(base) => &base.column_name,
+            ColumnEntry::DerivedColumn(derived) => &derived.alias,
+            ColumnEntry::InternalColumn(internal) => internal.internal_column.column_name(),
+        }
+    }
 }
 
 pub fn optimize_remove_count_args(name: &str, distinct: bool, args: &[&Expr]) -> bool {

@@ -1366,6 +1366,7 @@ dependencies = [
  "dashmap",
  "dyn-clone",
  "goldenfile",
+ "jsonb"
  "parking_lot 0.12.1",
  "rand 0.8.5",
  "serde",
@@ -2058,6 +2059,7 @@ dependencies = [
  "educe",
  "globiter",
  "itertools",
+ "jsonb",
  "num-derive",
  "num-traits",
  "once_cell",

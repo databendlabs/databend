@@ -57,6 +57,7 @@ use common_functions::is_builtin_function;
 use common_functions::scalars::BUILTIN_FUNCTIONS;
 use common_functions::srfs::BUILTIN_SET_RETURNING_FUNCTIONS;
 use common_users::UserApiProvider;
+use jsonb::JsonPath;
 
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
@@ -80,6 +81,7 @@ use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::plans::VirtualColumnRef;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncFrameBound;
@@ -88,6 +90,7 @@ use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
+use crate::ColumnSet;
 use crate::MetadataRef;
 
 /// A helper for type checking.
@@ -1883,6 +1886,10 @@ impl<'a> TypeChecker<'a> {
                             )
                             .await?;
                         scalar = inner_scalar;
+                    } else if let TableDataType::Variant = table_data_type {
+                        return self
+                            .resolve_variant_map_access_pushdown(column.clone(), &mut paths)
+                            .await;
                     }
                 }
             }
@@ -2063,6 +2070,65 @@ impl<'a> TypeChecker<'a> {
                 Ok(Box::new((scalar, return_type)))
             }
         }
+    }
+
+    #[async_recursion::async_recursion]
+    async fn resolve_variant_map_access_pushdown(
+        &mut self,
+        column: ColumnBinding,
+        paths: &mut VecDeque<(Span, Literal)>,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let column_indices = ColumnSet::from([column.index]);
+        let table_index = self
+            .metadata
+            .read()
+            .table_index_by_column_indexes(&column_indices)
+            .unwrap();
+        let column_name = column.column_name.clone();
+
+        // todo check engine
+        let mut name = String::new();
+        name.push_str(&column_name);
+        let mut json_paths = Vec::with_capacity(paths.len());
+        while let Some((_, path)) = paths.pop_front() {
+            let json_path = match path {
+                Literal::UInt64(idx) => JsonPath::UInt64(idx),
+                Literal::String(name) => JsonPath::String(name.clone()),
+                _ => unreachable!(),
+            };
+            name.push_str(&json_path.to_string());
+            json_paths.push(json_path);
+        }
+
+        let mut index = 0;
+        // Check the same virtual columns
+        for column in self.metadata.read().columns_by_table_index(table_index) {
+            if column.name() == &name {
+                index = column.index();
+                break;
+            }
+        }
+        if index == 0 {
+            let table_data_type = TableDataType::Nullable(Box::new(TableDataType::Variant));
+            index = self.metadata.write().add_base_table_column(
+                name.clone(),
+                table_data_type,
+                table_index,
+                None,
+                None,
+            );
+        }
+        let data_type = DataType::Nullable(Box::new(DataType::Variant));
+        let scalar = ScalarExpr::VirtualColumnRef(VirtualColumnRef {
+            column,
+            name,
+            json_paths,
+            index,
+            table_index,
+            data_type: Box::new(data_type.clone()),
+        });
+
+        Ok(Box::new((scalar, data_type)))
     }
 
     #[allow(clippy::only_used_in_recursion)]

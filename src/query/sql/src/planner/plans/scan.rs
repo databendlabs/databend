@@ -37,6 +37,7 @@ use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::SortItem;
+use crate::plans::VirtualColumnRef;
 use crate::IndexType;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -47,6 +48,8 @@ pub struct Prewhere {
     pub prewhere_columns: ColumnSet,
     // prewhere filter predicates
     pub predicates: Vec<ScalarExpr>,
+    // optional prewhere virtual columns
+    pub virtual_columns: Option<Vec<VirtualColumnRef>>,
 }
 
 #[derive(Clone, Debug)]
@@ -62,16 +65,24 @@ pub struct Statistics {
 pub struct Scan {
     pub table_index: IndexType,
     pub columns: ColumnSet,
+    pub virtual_source_columns: Option<ColumnSet>,
     pub push_down_predicates: Option<Vec<ScalarExpr>>,
     pub limit: Option<usize>,
     pub order_by: Option<Vec<SortItem>>,
     pub prewhere: Option<Prewhere>,
+    pub virtual_columns: Option<Vec<VirtualColumnRef>>,
 
     pub statistics: Statistics,
 }
 
 impl Scan {
-    pub fn prune_columns(&self, columns: ColumnSet, prewhere: Option<Prewhere>) -> Self {
+    pub fn prune_columns(
+        &self,
+        columns: ColumnSet,
+        prewhere: Option<Prewhere>,
+        virtual_source_columns: Option<ColumnSet>,
+        virtual_columns: Option<Vec<VirtualColumnRef>>,
+    ) -> Self {
         let col_stats = self
             .statistics
             .col_stats
@@ -92,6 +103,8 @@ impl Scan {
                 is_accurate: self.statistics.is_accurate,
             },
             prewhere,
+            virtual_columns,
+            virtual_source_columns,
         }
     }
 }
@@ -101,6 +114,7 @@ impl PartialEq for Scan {
         self.table_index == other.table_index
             && self.columns == other.columns
             && self.push_down_predicates == other.push_down_predicates
+            && self.virtual_columns == other.virtual_columns
     }
 }
 

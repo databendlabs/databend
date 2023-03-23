@@ -176,6 +176,8 @@ fn test_format() {
                         col_stats: Default::default(),
                         is_accurate: false,
                     },
+                    virtual_source_columns: None,
+                    virtual_columns: None,
                 }
                 .into(),
             ),
@@ -193,6 +195,8 @@ fn test_format() {
                     col_stats: Default::default(),
                     is_accurate: false,
                 },
+                virtual_source_columns: None,
+                virtual_columns: None,
             }
             .into(),
         ),

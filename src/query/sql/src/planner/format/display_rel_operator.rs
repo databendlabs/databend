@@ -102,6 +102,13 @@ pub fn format_scalar(_metadata: &MetadataRef, scalar: &ScalarExpr) -> String {
                 )
             }
         }
+        ScalarExpr::VirtualColumnRef(column_ref) => {
+            if let Some(table_name) = &column_ref.column.table_name {
+                format!("{}.{} (#{})", table_name, column_ref.name, column_ref.index)
+            } else {
+                format!("{} (#{})", column_ref.name, column_ref.index)
+            }
+        }
         ScalarExpr::BoundInternalColumnRef(column_ref) => {
             if let Some(table_name) = &column_ref.column.table_name {
                 format!(

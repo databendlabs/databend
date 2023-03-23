@@ -34,6 +34,7 @@ common-storages-result-cache = { path = "../storages/result_cache" }
 common-storages-view = { path = "../storages/view" }
 common-users = { path = "../users" }
 storages-common-table-meta = { path = "../storages/common/table-meta" }
+jsonb = { workspace = true }
 
 # Github dependencies
 

@@ -26,6 +26,7 @@ use common_exception::Result;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
+use common_expression::TableField;
 
 #[async_trait::async_trait]
 pub trait ToReadDataSourcePlan {
@@ -103,6 +104,18 @@ impl ToReadDataSourcePlan for dyn Table {
                 );
             }
             output_schema = Arc::new(schema);
+        }
+
+        if let Some(ref push_downs) = push_downs {
+            if let Some(ref virtual_columns) = push_downs.virtual_columns {
+                let mut schema = output_schema.as_ref().clone();
+                let fields = virtual_columns
+                    .iter()
+                    .map(|c| TableField::new(&c.name, *c.data_type.clone()))
+                    .collect::<Vec<_>>();
+                schema.add_columns(&fields)?;
+                output_schema = Arc::new(schema);
+            }
         }
         // TODO pass in catalog name
 

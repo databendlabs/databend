@@ -21,9 +21,11 @@ use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::plan::VirtualColumnInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::infer_schema_type;
 use common_expression::type_check::check_function;
 use common_expression::types::DataType;
 use common_expression::ConstantFolder;
@@ -187,6 +189,12 @@ impl PhysicalPlanBuilder {
                     {
                         project_internal_columns.insert(*index, internal_column.to_owned());
                     }
+                    // this column is only used to generate virtual columns
+                    if let Some(virtual_source_columns) = &scan.virtual_source_columns {
+                        if virtual_source_columns.contains(index) {
+                            continue;
+                        }
+                    }
 
                     let name = match column {
                         ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => {
@@ -209,6 +217,29 @@ impl PhysicalPlanBuilder {
                     }
                 }
 
+                let virtual_columns = match &scan.virtual_columns {
+                    Some(virtual_columns) => {
+                        let mut infos: Vec<VirtualColumnInfo> =
+                            Vec::with_capacity(virtual_columns.len());
+                        for virtual_column in virtual_columns {
+                            let source_name = virtual_column.column.column_name.clone();
+                            name_mapping.insert(virtual_column.name.clone(), virtual_column.index);
+
+                            let info = VirtualColumnInfo {
+                                source_name,
+                                name: virtual_column.name.clone(),
+                                json_paths: virtual_column.json_paths.clone(),
+                                data_type: Box::new(
+                                    infer_schema_type(&virtual_column.data_type).unwrap(),
+                                ),
+                            };
+                            infos.push(info);
+                        }
+                        Some(infos)
+                    }
+                    None => None,
+                };
+
                 let table_entry = metadata.table(scan.table_index);
                 let table = table_entry.table();
                 let mut table_schema = table.schema();
@@ -224,7 +255,8 @@ impl PhysicalPlanBuilder {
                     table_schema = Arc::new(schema);
                 }
 
-                let push_downs = self.push_downs(scan, &table_schema, has_inner_column)?;
+                let push_downs =
+                    self.push_downs(scan, &table_schema, virtual_columns, has_inner_column)?;
 
                 let source = table
                     .read_plan_with_catalog(
@@ -855,6 +887,7 @@ impl PhysicalPlanBuilder {
         &self,
         scan: &Scan,
         table_schema: &TableSchema,
+        virtual_columns: Option<Vec<VirtualColumnInfo>>,
         has_inner_column: bool,
     ) -> Result<PushDownInfo> {
         let metadata = self.metadata.read().clone();
@@ -948,11 +981,33 @@ impl PhysicalPlanBuilder {
                 );
                 let filter = filter.as_remote_expr();
 
+                let virtual_columns = match &prewhere.virtual_columns {
+                    Some(virtual_columns) => {
+                        let mut infos: Vec<VirtualColumnInfo> =
+                            Vec::with_capacity(virtual_columns.len());
+                        for virtual_column in virtual_columns {
+                            let source_name = virtual_column.column.column_name.clone();
+                            let info = VirtualColumnInfo {
+                                source_name,
+                                name: virtual_column.name.clone(),
+                                json_paths: virtual_column.json_paths.clone(),
+                                data_type: Box::new(
+                                    infer_schema_type(&virtual_column.data_type).unwrap(),
+                                ),
+                            };
+                            infos.push(info);
+                        }
+                        Some(infos)
+                    }
+                    None => None,
+                };
+
                 Ok::<PrewhereInfo, ErrorCode>(PrewhereInfo {
                     output_columns,
                     prewhere_columns,
                     remain_columns,
                     filter,
+                    virtual_columns,
                 })
             })
             .transpose()?;
@@ -998,12 +1053,19 @@ impl PhysicalPlanBuilder {
             })
             .transpose()?;
 
+        let virtual_source_columns = scan
+            .virtual_source_columns
+            .as_ref()
+            .map(|s| s.iter().copied().collect::<Vec<usize>>());
+
         Ok(PushDownInfo {
             projection: Some(projection),
             filter: push_down_filter,
             prewhere: prewhere_info,
             limit: scan.limit,
             order_by: order_by.unwrap_or_default(),
+            virtual_source_columns,
+            virtual_columns,
         })
     }
 

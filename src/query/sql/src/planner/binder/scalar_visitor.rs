@@ -90,6 +90,7 @@ pub trait ScalarVisitor: Sized {
                                 }
                                 ScalarExpr::BoundColumnRef(_)
                                 | ScalarExpr::BoundInternalColumnRef(_)
+                                | ScalarExpr::VirtualColumnRef(_)
                                 | ScalarExpr::ConstantExpr(_) => {}
                                 ScalarExpr::CastExpr(CastExpr { argument, .. }) => {
                                     stack.push(RecursionProcessing::Call(argument))

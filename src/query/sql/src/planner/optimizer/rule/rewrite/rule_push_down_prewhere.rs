@@ -132,6 +132,7 @@ impl RulePushDownPrewhere {
                 output_columns: get.columns.clone(),
                 prewhere_columns,
                 predicates: prewhere_pred,
+                virtual_columns: None,
             });
         }
         Ok(SExpr::create_leaf(get.into()))

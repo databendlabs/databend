@@ -664,6 +664,7 @@ impl Binder {
                             }) => column_index,
                         })
                         .collect(),
+                    virtual_source_columns: None,
                     push_down_predicates: None,
                     limit: None,
                     order_by: None,
@@ -673,6 +674,7 @@ impl Binder {
                         is_accurate,
                     },
                     prewhere: None,
+                    virtual_columns: None,
                 }
                 .into(),
             ),
