@@ -52,6 +52,7 @@ use common_expression::Domain;
 use common_expression::EvalContext;
 use common_expression::Function;
 use common_expression::FunctionDomain;
+use common_expression::FunctionEval;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
@@ -112,39 +113,43 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Array(Box::new(DataType::Generic(0))),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|args_domain| {
-                FunctionDomain::Domain(args_domain.iter().fold(Domain::Array(None), |acc, x| {
-                    acc.merge(&Domain::Array(Some(Box::new(x.clone()))))
-                }))
-            }),
-            eval: Box::new(|args, ctx| {
-                let len = args.iter().find_map(|arg| match arg {
-                    ValueRef::Column(col) => Some(col.len()),
-                    _ => None,
-                });
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|args_domain| {
+                    FunctionDomain::Domain(
+                        args_domain.iter().fold(Domain::Array(None), |acc, x| {
+                            acc.merge(&Domain::Array(Some(Box::new(x.clone()))))
+                        }),
+                    )
+                }),
+                eval: Box::new(|args, ctx| {
+                    let len = args.iter().find_map(|arg| match arg {
+                        ValueRef::Column(col) => Some(col.len()),
+                        _ => None,
+                    });
 
-                let mut builder: ArrayColumnBuilder<GenericType<0>> =
-                    ArrayColumnBuilder::with_capacity(len.unwrap_or(1), 0, ctx.generics);
+                    let mut builder: ArrayColumnBuilder<GenericType<0>> =
+                        ArrayColumnBuilder::with_capacity(len.unwrap_or(1), 0, ctx.generics);
 
-                for idx in 0..(len.unwrap_or(1)) {
-                    for arg in args {
-                        match arg {
-                            ValueRef::Scalar(scalar) => {
-                                builder.put_item(scalar.clone());
+                    for idx in 0..(len.unwrap_or(1)) {
+                        for arg in args {
+                            match arg {
+                                ValueRef::Scalar(scalar) => {
+                                    builder.put_item(scalar.clone());
+                                }
+                                ValueRef::Column(col) => unsafe {
+                                    builder.put_item(col.index_unchecked(idx));
+                                },
                             }
-                            ValueRef::Column(col) => unsafe {
-                                builder.put_item(col.index_unchecked(idx));
-                            },
                         }
+                        builder.commit_row();
                     }
-                    builder.commit_row();
-                }
 
-                match len {
-                    Some(_) => Value::Column(Column::Array(Box::new(builder.build().upcast()))),
-                    None => Value::Scalar(Scalar::Array(builder.build_scalar())),
-                }
-            }),
+                    match len {
+                        Some(_) => Value::Column(Column::Array(Box::new(builder.build().upcast()))),
+                        None => Value::Scalar(Scalar::Array(builder.build_scalar())),
+                    }
+                }),
+            },
         }))
     });
 
@@ -738,8 +743,10 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
                     return_type,
                     property: FunctionProperty::default(),
                 },
-                calc_domain: Box::new(move |_| FunctionDomain::MayThrow),
-                eval: Box::new(|args, ctx| eval_array_aggr(name, args, ctx)),
+                eval: FunctionEval::Scalar {
+                    calc_domain: Box::new(move |_| FunctionDomain::MayThrow),
+                    eval: Box::new(|args, ctx| eval_array_aggr(name, args, ctx)),
+                },
             }))
         });
     }

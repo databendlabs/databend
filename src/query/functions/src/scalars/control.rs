@@ -25,6 +25,7 @@ use common_expression::types::NullableType;
 use common_expression::Domain;
 use common_expression::Function;
 use common_expression::FunctionDomain;
+use common_expression::FunctionEval;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
@@ -53,52 +54,54 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Generic(0),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|args_domain| {
-                let mut domain = None;
-                for cond_idx in (0..args_domain.len() - 1).step_by(2) {
-                    let (has_true, has_null_or_false) = match &args_domain[cond_idx] {
-                        Domain::Nullable(NullableDomain {
-                            has_null,
-                            value:
-                                Some(box Domain::Boolean(BooleanDomain {
-                                    has_true,
-                                    has_false,
-                                })),
-                        }) => (*has_true, *has_null || *has_false),
-                        Domain::Nullable(NullableDomain { value: None, .. }) => (false, true),
-                        _ => unreachable!(),
-                    };
-                    match (&mut domain, has_true, has_null_or_false) {
-                        (None, true, false) => {
-                            return FunctionDomain::Domain(args_domain[cond_idx + 1].clone());
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|args_domain| {
+                    let mut domain = None;
+                    for cond_idx in (0..args_domain.len() - 1).step_by(2) {
+                        let (has_true, has_null_or_false) = match &args_domain[cond_idx] {
+                            Domain::Nullable(NullableDomain {
+                                has_null,
+                                value:
+                                    Some(box Domain::Boolean(BooleanDomain {
+                                        has_true,
+                                        has_false,
+                                    })),
+                            }) => (*has_true, *has_null || *has_false),
+                            Domain::Nullable(NullableDomain { value: None, .. }) => (false, true),
+                            _ => unreachable!(),
+                        };
+                        match (&mut domain, has_true, has_null_or_false) {
+                            (None, true, false) => {
+                                return FunctionDomain::Domain(args_domain[cond_idx + 1].clone());
+                            }
+                            (None, false, true) => {
+                                continue;
+                            }
+                            (None, true, true) => {
+                                domain = Some(args_domain[cond_idx + 1].clone());
+                            }
+                            (Some(prev_domain), true, false) => {
+                                return FunctionDomain::Domain(
+                                    prev_domain.merge(&args_domain[cond_idx + 1]),
+                                );
+                            }
+                            (Some(_), false, true) => {
+                                continue;
+                            }
+                            (Some(prev_domain), true, true) => {
+                                domain = Some(prev_domain.merge(&args_domain[cond_idx + 1]));
+                            }
+                            (_, false, false) => unreachable!(),
                         }
-                        (None, false, true) => {
-                            continue;
-                        }
-                        (None, true, true) => {
-                            domain = Some(args_domain[cond_idx + 1].clone());
-                        }
-                        (Some(prev_domain), true, false) => {
-                            return FunctionDomain::Domain(
-                                prev_domain.merge(&args_domain[cond_idx + 1]),
-                            );
-                        }
-                        (Some(_), false, true) => {
-                            continue;
-                        }
-                        (Some(prev_domain), true, true) => {
-                            domain = Some(prev_domain.merge(&args_domain[cond_idx + 1]));
-                        }
-                        (_, false, false) => unreachable!(),
                     }
-                }
 
-                FunctionDomain::Domain(match domain {
-                    Some(domain) => domain.merge(args_domain.last().unwrap()),
-                    None => args_domain.last().unwrap().clone(),
-                })
-            }),
-            eval: Box::new(|_, _| unreachable!("`if` should be handled by the `Evaluator`")),
+                    FunctionDomain::Domain(match domain {
+                        Some(domain) => domain.merge(args_domain.last().unwrap()),
+                        None => args_domain.last().unwrap().clone(),
+                    })
+                }),
+                eval: Box::new(|_, _| unreachable!("`if` should be handled by the `Evaluator`")),
+            },
         }))
     });
 

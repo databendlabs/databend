@@ -22,7 +22,7 @@ use common_expression::ColumnIndex;
 use common_expression::DataSchema;
 use common_expression::Expr;
 use common_expression::RawExpr;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::plans::ScalarExpr;
 use crate::ColumnEntry;

@@ -49,6 +49,7 @@ use common_expression::Domain;
 use common_expression::EvalContext;
 use common_expression::Function;
 use common_expression::FunctionDomain;
+use common_expression::FunctionEval;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
@@ -174,13 +175,15 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Boolean,
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| {
-                FunctionDomain::Domain(Domain::Boolean(BooleanDomain {
-                    has_true: false,
-                    has_false: true,
-                }))
-            }),
-            eval: Box::new(|_, _| Value::Scalar(Scalar::Boolean(false))),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_| {
+                    FunctionDomain::Domain(Domain::Boolean(BooleanDomain {
+                        has_true: false,
+                        has_false: true,
+                    }))
+                }),
+                eval: Box::new(|_, _| Value::Scalar(Scalar::Boolean(false))),
+            },
         }))
     });
 
@@ -367,20 +370,22 @@ fn register_grouping(registry: &mut FunctionRegistry) {
                 return_type: DataType::Number(NumberDataType::UInt32),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| FunctionDomain::Full),
-            eval: Box::new(move |args, _| match &args[0] {
-                ValueRef::Scalar(ScalarRef::Number(NumberScalar::UInt32(v))) => Value::Scalar(
-                    Scalar::Number(NumberScalar::UInt32(compute_grouping(&params, *v))),
-                ),
-                ValueRef::Column(Column::Number(NumberColumn::UInt32(col))) => {
-                    let output = col
-                        .iter()
-                        .map(|v| compute_grouping(&params, *v))
-                        .collect::<Vec<_>>();
-                    Value::Column(Column::Number(NumberColumn::UInt32(output.into())))
-                }
-                _ => unreachable!(),
-            }),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_| FunctionDomain::Full),
+                eval: Box::new(move |args, _| match &args[0] {
+                    ValueRef::Scalar(ScalarRef::Number(NumberScalar::UInt32(v))) => Value::Scalar(
+                        Scalar::Number(NumberScalar::UInt32(compute_grouping(&params, *v))),
+                    ),
+                    ValueRef::Column(Column::Number(NumberColumn::UInt32(col))) => {
+                        let output = col
+                            .iter()
+                            .map(|v| compute_grouping(&params, *v))
+                            .collect::<Vec<_>>();
+                        Value::Column(Column::Number(NumberColumn::UInt32(output.into())))
+                    }
+                    _ => unreachable!(),
+                }),
+            },
         }))
     })
 }

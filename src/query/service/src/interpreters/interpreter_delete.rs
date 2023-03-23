@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 

@@ -4,7 +4,7 @@ title: How to Write a Scalar Function
 
 ## What's Scalar Function
 
-A scalar function (also known as User-Defined Functions or UDFs) returns a single value for each row instead of a result set. Scalar functions can be used in most places within a query or SET statement (except the FROM clause).
+A scalar function returns a single value for each row instead of a result set. Scalar functions can be used in most places within a query or SET statement (except the FROM clause).
 
 ```text title="One to One Mapping execution"
 
@@ -96,7 +96,7 @@ In addition, there are different levels of register api depending on the functio
 
 |                                     | Auto Vectorization | Access Output Column Builder | Auto Null Passthrough | Auto Combine Null | Auto Downcast | Throw Runtime Error | Varidic | Tuple |
 | ----------------------------------- | -- | -- | -- | -- | -- | -- | -- | -- |
-| register_n_arg                      | ✔️ | ❌ | ✔️ | ❌ | ✔️ | ❌ | ❌ | ❌ |
+| register_n_arg                      | ✔️ | ❌ | ✔️ | ❌ | ✔️ | ✔️ | ❌ | ❌ |
 | register_passthrough_nullable_n_arg | ❌ | ✔️ | ✔️ | ❌ | ✔️ | ✔️ | ❌ | ❌ |
 | register_combine_nullable_n_arg     | ❌ | ✔️ | ✔️ | ✔️ | ✔️ | ✔️ | ❌ | ❌ |
 | register_n_arg_core                 | ❌ | ✔️ | ❌ | ❌ | ✔️ | ✔️ | ❌ | ❌ |
@@ -146,7 +146,7 @@ with_number_mapped_type!(|NUM_TYPE| match left {
 });
 ```
 
-`cal_domain` is used to calculate the input value set for the output value. This is described by a mathematical formula such as `y = f(x)` where the domain is the set of values `x` that can be used as arguments to `f` to generate values `y`. This allows us to easily filter out values that are not in the domain when indexing data, greatly improving response efficiency.
+`calc_domain` is used to calculate the input value set for the output value. This is described by a mathematical formula such as `y = f(x)` where the domain is the set of values `x` that can be used as arguments to `f` to generate values `y`. This allows us to easily filter out values that are not in the domain when indexing data, greatly improving response efficiency.
 
 `eval` can be understood as the concrete implementation of a function, which takes characters or numbers as input, parses them into expressions, and converts them into another set of values.
 

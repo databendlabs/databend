@@ -45,7 +45,7 @@ use common_expression::types::DataType;
 use common_expression::ColumnId;
 use common_expression::ConstantFolder;
 use common_expression::Scalar;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
 use common_storage::DataOperator;

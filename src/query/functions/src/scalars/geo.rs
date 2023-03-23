@@ -37,6 +37,7 @@ use common_expression::Column;
 use common_expression::EvalContext;
 use common_expression::Function;
 use common_expression::FunctionDomain;
+use common_expression::FunctionEval;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
@@ -214,8 +215,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Number(NumberDataType::UInt8),
                 property: Default::default(),
             },
-            calc_domain: Box::new(|_| FunctionDomain::Full),
-            eval: Box::new(point_in_ellipses_fn),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_| FunctionDomain::Full),
+                eval: Box::new(point_in_ellipses_fn),
+            },
         }))
     });
 
@@ -252,8 +255,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Number(NumberDataType::UInt8),
                 property: Default::default(),
             },
-            calc_domain: Box::new(|_| FunctionDomain::Full),
-            eval: Box::new(point_in_polygon_fn),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_| FunctionDomain::Full),
+                eval: Box::new(point_in_polygon_fn),
+            },
         }))
     });
 
@@ -290,8 +295,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Number(NumberDataType::UInt8),
                 property: Default::default(),
             },
-            calc_domain: Box::new(|_| FunctionDomain::Full),
-            eval: Box::new(point_in_polygon_fn),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_| FunctionDomain::Full),
+                eval: Box::new(point_in_polygon_fn),
+            },
         }))
     });
 
@@ -328,8 +335,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Number(NumberDataType::UInt8),
                 property: Default::default(),
             },
-            calc_domain: Box::new(|_| FunctionDomain::Full),
-            eval: Box::new(point_in_polygon_fn),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_| FunctionDomain::Full),
+                eval: Box::new(point_in_polygon_fn),
+            },
         }))
     });
 }

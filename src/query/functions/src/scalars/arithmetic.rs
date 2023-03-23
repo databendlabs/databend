@@ -58,6 +58,7 @@ use common_expression::ColumnBuilder;
 use common_expression::EvalContext;
 use common_expression::Function;
 use common_expression::FunctionDomain;
+use common_expression::FunctionEval;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
@@ -649,8 +650,10 @@ pub fn register_decimal_minus(registry: &mut FunctionRegistry) {
                 return_type: arg_type.clone(),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
-            eval: Box::new(move |args, _tx| unary_minus_decimal(args, arg_type.clone())),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
+                eval: Box::new(move |args, _tx| unary_minus_decimal(args, arg_type.clone())),
+            },
         }))
     });
 }
@@ -845,8 +848,10 @@ fn register_decimal_to_string(registry: &mut FunctionRegistry) {
                 return_type: StringType::data_type(),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
-            eval: Box::new(move |args, tx| decimal_to_string(args, arg_type.clone(), tx)),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
+                eval: Box::new(move |args, tx| decimal_to_string(args, arg_type.clone(), tx)),
+            },
         }))
     });
 }

@@ -15,7 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::AggregateExpand;
@@ -329,25 +329,16 @@ impl Display for RuntimeFilterSource {
 
 impl Display for ProjectSet {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let scalars = self
+            .srf_exprs
+            .iter()
+            .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS).to_string())
+            .collect::<Vec<String>>();
+
         write!(
             f,
             "ProjectSet: set-returning functions : {}",
-            self.srf_exprs
-                .iter()
-                .map(|(srf_expr, _)| {
-                    format!(
-                        "{}({})",
-                        srf_expr.id.0,
-                        srf_expr
-                            .args
-                            .iter()
-                            .map(|arg| arg.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join(", ")
+            scalars.join(", ")
         )
     }
 }

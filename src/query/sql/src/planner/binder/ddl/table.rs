@@ -58,7 +58,7 @@ use common_expression::DataSchemaRefExt;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::storage::StorageParams;
 use common_storage::DataOperator;
 use common_storages_view::view_table::QUERY;

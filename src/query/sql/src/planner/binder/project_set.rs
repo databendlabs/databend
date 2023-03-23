@@ -20,18 +20,19 @@ use common_ast::Visitor;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
-use common_functions::srfs::check_srf;
-use common_functions::srfs::BUILTIN_SET_RETURNING_FUNCTIONS;
 
 use crate::binder::ExprContext;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
+use crate::plans::BoundColumnRef;
+use crate::plans::FunctionCall;
 use crate::plans::ProjectSet;
 use crate::plans::SrfItem;
 use crate::BindContext;
 use crate::Binder;
 use crate::ColumnBinding;
 use crate::ScalarBinder;
+use crate::ScalarExpr;
 use crate::Visibility;
 
 pub struct SrfCollector {
@@ -48,7 +49,8 @@ impl<'a> Visitor<'a> for SrfCollector {
         params: &'a [Literal],
         over: &'a Option<WindowSpec>,
     ) {
-        if BUILTIN_SET_RETURNING_FUNCTIONS.contains(&name.to_string().to_lowercase()) {
+        // TODO(andylokandy): look up function property: if it is a set-returning function
+        if name.name.to_lowercase() == "unnest" {
             // Collect the srf
             self.srfs.push(Expr::FunctionCall {
                 span,
@@ -89,7 +91,7 @@ impl Binder {
 
         let mut items = Vec::with_capacity(srfs.len());
         for srf in srfs {
-            let (name, args) = match srf {
+            let (name, srf_scalar) = match srf {
                 Expr::FunctionCall { name, args, .. } => {
                     let name = normalize_identifier(name, &self.name_resolution_ctx).to_string();
 
@@ -112,20 +114,22 @@ impl Binder {
                     // Restore the original context
                     bind_context.set_expr_context(original_context);
 
-                    (name, arguments)
+                    let scalar = ScalarExpr::FunctionCall(FunctionCall {
+                        span: srf.span(),
+                        func_name: name.clone(),
+                        params: vec![],
+                        arguments,
+                    });
+
+                    (name, scalar)
                 }
 
                 // Should have been checked by SrfCollector
                 _ => unreachable!(),
             };
 
-            // We checked it here only for the return type of srf
-            let checked_args = args
-                .iter()
-                .map(|arg| arg.as_expr_with_col_index())
-                .collect::<Result<Vec<_>>>()?;
-            let srf_instance = check_srf(&name, &checked_args, &BUILTIN_SET_RETURNING_FUNCTIONS)?;
-            let return_types = srf_instance.return_types;
+            let srf_expr = srf_scalar.as_expr_with_col_index()?;
+            let return_types = srf_expr.data_type().as_tuple().unwrap();
 
             if return_types.len() > 1 {
                 return Err(ErrorCode::Unimplemented(
@@ -133,36 +137,40 @@ impl Binder {
                 ));
             }
 
-            // Add result columns to metadata
-            let columns = return_types
-                .iter()
-                .map(|return_type| {
-                    let column = self
-                        .metadata
-                        .write()
-                        .add_derived_column(name.clone(), return_type.clone());
-                    ColumnBinding {
-                        database_name: None,
-                        table_name: None,
-                        column_name: name.clone(),
-                        index: column,
-                        data_type: Box::new(return_type.clone()),
-                        visibility: Visibility::Visible,
-                    }
-                })
-                .collect::<Vec<_>>();
+            // Add result column to metadata
+            let column_index = self
+                .metadata
+                .write()
+                .add_derived_column(name.clone(), srf_expr.data_type().clone());
+            let column = ColumnBinding {
+                database_name: None,
+                table_name: None,
+                column_name: name.clone(),
+                index: column_index,
+                data_type: Box::new(srf_expr.data_type().clone()),
+                visibility: Visibility::InVisible,
+            };
 
             let item = SrfItem {
-                srf_name: name,
-                args,
-                columns: columns.iter().map(|column| column.index).collect(),
+                scalar: srf_scalar,
+                index: column_index,
             };
             items.push(item);
 
-            // Add the srf to bind context, so we can replace the srfs later.
-            columns.into_iter().for_each(|column| {
-                bind_context.srfs.insert(srf.to_string(), column);
+            // Flatten the tuple fields of the srfs to the top level columns
+            // TODO(andylokandy/leisky): support multiple return types
+            let flatten_result = ScalarExpr::FunctionCall(FunctionCall {
+                span: srf.span(),
+                func_name: "get".to_string(),
+                params: vec![1],
+                arguments: vec![ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: srf.span(),
+                    column,
+                })],
             });
+
+            // Add the srf to bind context, so we can replace the srfs later.
+            bind_context.srfs.insert(srf.to_string(), flatten_result);
         }
 
         let project_set = ProjectSet { srfs: items };

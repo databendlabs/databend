@@ -31,9 +31,8 @@ pub fn codegen_register() {
             #![allow(unused_parens)]
             #![allow(unused_variables)]
             #![allow(clippy::redundant_closure)]
-
-            use std::sync::Arc;
             
+            use crate::FunctionEval;
             use crate::Function;
             use crate::EvalContext;
             use crate::FunctionDomain;
@@ -342,21 +341,19 @@ pub fn codegen_register() {
                     F: Fn({arg_f_closure_sig}) -> FunctionDomain<O> + 'static + Clone + Copy + Send + Sync,
                     G: for <'a> Fn({arg_g_closure_sig} &mut EvalContext) -> Value<O> + 'static + Clone + Copy + Send + Sync,
                 {{
-                    let func = Arc::new(Function {{
+                    let func = Function {{
                         signature: FunctionSignature {{
                             name: name.to_string(),
                             args_type: vec![{arg_sig_type}],
                             return_type: O::data_type(),
                             property,
                         }},
-                        calc_domain: Box::new(erase_calc_domain_generic_{n_args}_arg::<{arg_generics} O>(calc_domain)),
-                        eval: Box::new(erase_function_generic_{n_args}_arg(func)),
-                    }});
-                    let id = self.next_function_id(name);
-                    self.funcs
-                        .entry(name.to_string())
-                        .or_insert_with(Vec::new)
-                        .push((func, id));
+                        eval: FunctionEval::Scalar {{
+                            calc_domain: Box::new(erase_calc_domain_generic_{n_args}_arg::<{arg_generics} O>(calc_domain)),
+                            eval: Box::new(erase_function_generic_{n_args}_arg(func)),
+                        }},
+                    }};
+                    self.register_function(func);
                 }}
             "
         )

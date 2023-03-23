@@ -51,6 +51,7 @@ use common_expression::ColumnBuilder;
 use common_expression::EvalContext;
 use common_expression::Function;
 use common_expression::FunctionDomain;
+use common_expression::FunctionEval;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
@@ -668,8 +669,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Variant,
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| FunctionDomain::MayThrow),
-            eval: Box::new(move |args, ctx| json_object_fn(args, ctx, false)),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_| FunctionDomain::MayThrow),
+                eval: Box::new(move |args, ctx| json_object_fn(args, ctx, false)),
+            },
         }))
     });
 
@@ -681,8 +684,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Variant,
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| FunctionDomain::MayThrow),
-            eval: Box::new(move |args, ctx| json_object_fn(args, ctx, true)),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_| FunctionDomain::MayThrow),
+                eval: Box::new(move |args, ctx| json_object_fn(args, ctx, true)),
+            },
         }))
     });
 }

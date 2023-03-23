@@ -18,8 +18,6 @@
 #![allow(unused_variables)]
 #![allow(clippy::redundant_closure)]
 
-use std::sync::Arc;
-
 use crate::property::Domain;
 use crate::property::FunctionProperty;
 use crate::types::nullable::NullableColumn;
@@ -30,6 +28,7 @@ use crate::values::ValueRef;
 use crate::EvalContext;
 use crate::Function;
 use crate::FunctionDomain;
+use crate::FunctionEval;
 use crate::FunctionRegistry;
 use crate::FunctionSignature;
 
@@ -935,21 +934,19 @@ impl FunctionRegistry {
         F: Fn() -> FunctionDomain<O> + 'static + Clone + Copy + Send + Sync,
         G: for<'a> Fn(&mut EvalContext) -> Value<O> + 'static + Clone + Copy + Send + Sync,
     {
-        let func = Arc::new(Function {
+        let func = Function {
             signature: FunctionSignature {
                 name: name.to_string(),
                 args_type: vec![],
                 return_type: O::data_type(),
                 property,
             },
-            calc_domain: Box::new(erase_calc_domain_generic_0_arg::<O>(calc_domain)),
-            eval: Box::new(erase_function_generic_0_arg(func)),
-        });
-        let id = self.next_function_id(name);
-        self.funcs
-            .entry(name.to_string())
-            .or_insert_with(Vec::new)
-            .push((func, id));
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(erase_calc_domain_generic_0_arg::<O>(calc_domain)),
+                eval: Box::new(erase_function_generic_0_arg(func)),
+            },
+        };
+        self.register_function(func);
     }
 
     pub fn register_1_arg_core<I1: ArgType, O: ArgType, F, G>(
@@ -967,21 +964,19 @@ impl FunctionRegistry {
             + Send
             + Sync,
     {
-        let func = Arc::new(Function {
+        let func = Function {
             signature: FunctionSignature {
                 name: name.to_string(),
                 args_type: vec![I1::data_type()],
                 return_type: O::data_type(),
                 property,
             },
-            calc_domain: Box::new(erase_calc_domain_generic_1_arg::<I1, O>(calc_domain)),
-            eval: Box::new(erase_function_generic_1_arg(func)),
-        });
-        let id = self.next_function_id(name);
-        self.funcs
-            .entry(name.to_string())
-            .or_insert_with(Vec::new)
-            .push((func, id));
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(erase_calc_domain_generic_1_arg::<I1, O>(calc_domain)),
+                eval: Box::new(erase_function_generic_1_arg(func)),
+            },
+        };
+        self.register_function(func);
     }
 
     pub fn register_2_arg_core<I1: ArgType, I2: ArgType, O: ArgType, F, G>(
@@ -999,21 +994,19 @@ impl FunctionRegistry {
             + Send
             + Sync,
     {
-        let func = Arc::new(Function {
+        let func = Function {
             signature: FunctionSignature {
                 name: name.to_string(),
                 args_type: vec![I1::data_type(), I2::data_type()],
                 return_type: O::data_type(),
                 property,
             },
-            calc_domain: Box::new(erase_calc_domain_generic_2_arg::<I1, I2, O>(calc_domain)),
-            eval: Box::new(erase_function_generic_2_arg(func)),
-        });
-        let id = self.next_function_id(name);
-        self.funcs
-            .entry(name.to_string())
-            .or_insert_with(Vec::new)
-            .push((func, id));
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(erase_calc_domain_generic_2_arg::<I1, I2, O>(calc_domain)),
+                eval: Box::new(erase_function_generic_2_arg(func)),
+            },
+        };
+        self.register_function(func);
     }
 
     pub fn register_3_arg_core<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType, F, G>(
@@ -1041,23 +1034,21 @@ impl FunctionRegistry {
             + Send
             + Sync,
     {
-        let func = Arc::new(Function {
+        let func = Function {
             signature: FunctionSignature {
                 name: name.to_string(),
                 args_type: vec![I1::data_type(), I2::data_type(), I3::data_type()],
                 return_type: O::data_type(),
                 property,
             },
-            calc_domain: Box::new(erase_calc_domain_generic_3_arg::<I1, I2, I3, O>(
-                calc_domain,
-            )),
-            eval: Box::new(erase_function_generic_3_arg(func)),
-        });
-        let id = self.next_function_id(name);
-        self.funcs
-            .entry(name.to_string())
-            .or_insert_with(Vec::new)
-            .push((func, id));
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(erase_calc_domain_generic_3_arg::<I1, I2, I3, O>(
+                    calc_domain,
+                )),
+                eval: Box::new(erase_function_generic_3_arg(func)),
+            },
+        };
+        self.register_function(func);
     }
 
     pub fn register_4_arg_core<
@@ -1094,7 +1085,7 @@ impl FunctionRegistry {
             + Send
             + Sync,
     {
-        let func = Arc::new(Function {
+        let func = Function {
             signature: FunctionSignature {
                 name: name.to_string(),
                 args_type: vec![
@@ -1106,16 +1097,14 @@ impl FunctionRegistry {
                 return_type: O::data_type(),
                 property,
             },
-            calc_domain: Box::new(erase_calc_domain_generic_4_arg::<I1, I2, I3, I4, O>(
-                calc_domain,
-            )),
-            eval: Box::new(erase_function_generic_4_arg(func)),
-        });
-        let id = self.next_function_id(name);
-        self.funcs
-            .entry(name.to_string())
-            .or_insert_with(Vec::new)
-            .push((func, id));
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(erase_calc_domain_generic_4_arg::<I1, I2, I3, I4, O>(
+                    calc_domain,
+                )),
+                eval: Box::new(erase_function_generic_4_arg(func)),
+            },
+        };
+        self.register_function(func);
     }
 
     pub fn register_5_arg_core<
@@ -1154,7 +1143,7 @@ impl FunctionRegistry {
             + Send
             + Sync,
     {
-        let func = Arc::new(Function {
+        let func = Function {
             signature: FunctionSignature {
                 name: name.to_string(),
                 args_type: vec![
@@ -1167,16 +1156,14 @@ impl FunctionRegistry {
                 return_type: O::data_type(),
                 property,
             },
-            calc_domain: Box::new(erase_calc_domain_generic_5_arg::<I1, I2, I3, I4, I5, O>(
-                calc_domain,
-            )),
-            eval: Box::new(erase_function_generic_5_arg(func)),
-        });
-        let id = self.next_function_id(name);
-        self.funcs
-            .entry(name.to_string())
-            .or_insert_with(Vec::new)
-            .push((func, id));
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(erase_calc_domain_generic_5_arg::<I1, I2, I3, I4, I5, O>(
+                    calc_domain,
+                )),
+                eval: Box::new(erase_function_generic_5_arg(func)),
+            },
+        };
+        self.register_function(func);
     }
 }
 

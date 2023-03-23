@@ -26,8 +26,7 @@ use common_expression::DataSchemaRefExt;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
-use common_functions::srfs::RemoteSrfExpr;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 
 use crate::executor::explain::PlanStatsInfo;
@@ -148,7 +147,7 @@ pub struct ProjectSet {
 
     pub input: Box<PhysicalPlan>,
 
-    pub srf_exprs: Vec<(RemoteSrfExpr<IndexType>, Vec<IndexType>)>,
+    pub srf_exprs: Vec<(RemoteExpr, IndexType)>,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -158,11 +157,11 @@ impl ProjectSet {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         let mut fields = input_schema.fields().clone();
-        fields.extend(self.srf_exprs.iter().flat_map(|(srf, indices)| {
-            srf.return_types
-                .iter()
-                .zip(indices.iter())
-                .map(|(data_type, index)| DataField::new(&index.to_string(), data_type.clone()))
+        fields.extend(self.srf_exprs.iter().map(|(srf, index)| {
+            DataField::new(
+                &index.to_string(),
+                srf.as_expr(&BUILTIN_FUNCTIONS).data_type().clone(),
+            )
         }));
         Ok(DataSchemaRefExt::create(fields))
     }

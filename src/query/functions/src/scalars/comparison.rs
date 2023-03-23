@@ -39,6 +39,7 @@ use common_expression::Column;
 use common_expression::EvalContext;
 use common_expression::Function;
 use common_expression::FunctionDomain;
+use common_expression::FunctionEval;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
@@ -451,58 +452,60 @@ fn register_tuple_cmp(registry: &mut FunctionRegistry) {
                     return_type: DataType::Boolean,
                     property: FunctionProperty::default(),
                 },
-                calc_domain: Box::new(move |_| FunctionDomain::Full),
-                eval: Box::new(move |args, _| {
-                    let len = args.iter().find_map(|arg| match arg {
-                        ValueRef::Column(col) => Some(col.len()),
-                        _ => None,
-                    });
+                eval: FunctionEval::Scalar {
+                    calc_domain: Box::new(move |_| FunctionDomain::Full),
+                    eval: Box::new(move |args, _| {
+                        let len = args.iter().find_map(|arg| match arg {
+                            ValueRef::Column(col) => Some(col.len()),
+                            _ => None,
+                        });
 
-                    let lhs_fields: Vec<ValueRef<AnyType>> = match &args[0] {
-                        ValueRef::Scalar(ScalarRef::Tuple(fields)) => {
-                            fields.iter().cloned().map(ValueRef::Scalar).collect()
-                        }
-                        ValueRef::Column(Column::Tuple(fields)) => {
-                            fields.iter().cloned().map(ValueRef::Column).collect()
-                        }
-                        _ => unreachable!(),
-                    };
-                    let rhs_fields: Vec<ValueRef<AnyType>> = match &args[1] {
-                        ValueRef::Scalar(ScalarRef::Tuple(fields)) => {
-                            fields.iter().cloned().map(ValueRef::Scalar).collect()
-                        }
-                        ValueRef::Column(Column::Tuple(fields)) => {
-                            fields.iter().cloned().map(ValueRef::Column).collect()
-                        }
-                        _ => unreachable!(),
-                    };
-
-                    let size = len.unwrap_or(1);
-                    let mut builder = BooleanType::create_builder(size, &[]);
-
-                    'outer: for row in 0..size {
-                        for (lhs_field, rhs_field) in lhs_fields.iter().zip(&rhs_fields) {
-                            let lhs = lhs_field.index(row).unwrap();
-                            let rhs = rhs_field.index(row).unwrap();
-                            if let Some(result) = cmp_op(lhs, rhs) {
-                                builder.push(result);
-                                continue 'outer;
+                        let lhs_fields: Vec<ValueRef<AnyType>> = match &args[0] {
+                            ValueRef::Scalar(ScalarRef::Tuple(fields)) => {
+                                fields.iter().cloned().map(ValueRef::Scalar).collect()
                             }
-                        }
-                        builder.push(default_result);
-                    }
+                            ValueRef::Column(Column::Tuple(fields)) => {
+                                fields.iter().cloned().map(ValueRef::Column).collect()
+                            }
+                            _ => unreachable!(),
+                        };
+                        let rhs_fields: Vec<ValueRef<AnyType>> = match &args[1] {
+                            ValueRef::Scalar(ScalarRef::Tuple(fields)) => {
+                                fields.iter().cloned().map(ValueRef::Scalar).collect()
+                            }
+                            ValueRef::Column(Column::Tuple(fields)) => {
+                                fields.iter().cloned().map(ValueRef::Column).collect()
+                            }
+                            _ => unreachable!(),
+                        };
 
-                    match len {
-                        Some(_) => {
-                            let col =
-                                BooleanType::upcast_column(BooleanType::build_column(builder));
-                            Value::Column(col)
+                        let size = len.unwrap_or(1);
+                        let mut builder = BooleanType::create_builder(size, &[]);
+
+                        'outer: for row in 0..size {
+                            for (lhs_field, rhs_field) in lhs_fields.iter().zip(&rhs_fields) {
+                                let lhs = lhs_field.index(row).unwrap();
+                                let rhs = rhs_field.index(row).unwrap();
+                                if let Some(result) = cmp_op(lhs, rhs) {
+                                    builder.push(result);
+                                    continue 'outer;
+                                }
+                            }
+                            builder.push(default_result);
                         }
-                        _ => Value::Scalar(BooleanType::upcast_scalar(BooleanType::build_scalar(
-                            builder,
-                        ))),
-                    }
-                }),
+
+                        match len {
+                            Some(_) => {
+                                let col =
+                                    BooleanType::upcast_column(BooleanType::build_column(builder));
+                                Value::Column(col)
+                            }
+                            _ => Value::Scalar(BooleanType::upcast_scalar(
+                                BooleanType::build_scalar(builder),
+                            )),
+                        }
+                    }),
+                },
             }))
         });
     }
