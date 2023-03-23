@@ -167,6 +167,8 @@ impl<'a> Binder {
                     database: database.name.clone(),
                 }))
             }
+            // Columns
+            Statement::ShowColumns(stmt) => self.bind_show_columns(bind_context, stmt).await?,
             // Tables
             Statement::ShowTables(stmt) => self.bind_show_tables(bind_context, stmt).await?,
             Statement::ShowCreateTable(stmt) => self.bind_show_create_table(stmt).await?,
