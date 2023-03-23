@@ -1,0 +1,23 @@
+ast            : cosine_distance([a], [b])
+raw expr       : cosine_distance(array(a::Float32), array(b::Float32))
+checked expr   : cosine_distance<Array(Float32), Array(Float32)>(array<T0=Float32><T0>(a), array<T0=Float32><T0>(b))
+evaluation:
++--------+---------+---------+---------+
+|        | a       | b       | Output  |
++--------+---------+---------+---------+
+| Type   | Float32 | Float32 | Float32 |
+| Domain | {0..=2} | {3..=5} | Unknown |
+| Row 0  | 0       | 3       | NaN     |
+| Row 1  | 1       | 4       | 0       |
+| Row 2  | 2       | 5       | 0       |
++--------+---------+---------+---------+
+evaluation (internal):
++--------+----------------------+
+| Column | Data                 |
++--------+----------------------+
+| a      | Float32([0, 1, 2])   |
+| b      | Float32([3, 4, 5])   |
+| Output | Float32([NaN, 0, 0]) |
++--------+----------------------+
+
+
