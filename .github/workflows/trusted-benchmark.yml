@@ -125,7 +125,7 @@ jobs:
       matrix:
         dataset:
           - hits
-          - tpch
+          # - tpch
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup_bendsql
