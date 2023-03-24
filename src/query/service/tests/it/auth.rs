@@ -17,7 +17,6 @@ use base64::prelude::*;
 use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_app::principal::AuthInfo;
-use common_meta_app::principal::UserIdentity;
 use common_meta_app::principal::UserInfo;
 use common_users::CustomClaims;
 use common_users::EnsureUser;
@@ -212,7 +211,6 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
     conf.query.jwt_key_file = jwks_url.clone();
     let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
     let auth_mgr = ctx.get_auth_manager();
-    let tenant = "test";
     let user_name = "test";
 
     // without subject
@@ -238,17 +236,12 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let claims = Claims::create(Duration::from_hours(2)).with_subject(user_name.to_string());
         let token = key_pair.sign(claims)?;
 
-        let res = auth_mgr
+        auth_mgr
             .auth(ctx.get_current_session(), &Credential::Jwt { token })
-            .await;
-        assert!(res.is_err());
-
-        assert!(
-            res.err()
-                .unwrap()
-                .to_string()
-                .contains("unknown user 'test'@'%'")
-        );
+            .await?;
+        let user_info = ctx.get_current_user()?;
+        assert_eq!(user_info.name, user_name);
+        assert_eq!(user_info.grants.roles().len(), 0);
     }
 
     // with custom claims
@@ -258,17 +251,12 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
             .with_subject(user_name.to_string());
         let token = key_pair.sign(claims)?;
 
-        let res = auth_mgr
+        auth_mgr
             .auth(ctx.get_current_session(), &Credential::Jwt { token })
-            .await;
-        assert!(res.is_err());
-
-        assert!(
-            res.err()
-                .unwrap()
-                .to_string()
-                .contains("unknown user 'test'@'%'")
-        );
+            .await?;
+        let user_info = ctx.get_current_user()?;
+        assert_eq!(user_info.name, user_name);
+        assert_eq!(user_info.grants.roles().len(), 0);
     }
 
     // with create user
@@ -298,7 +286,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
             .auth(ctx.get_current_session(), &Credential::Jwt { token })
             .await?;
         let user_info = ctx.get_current_user()?;
-        assert_eq!(user_info.grants.roles().len(), 0);
+        assert_eq!(user_info.grants.roles(), &["role1"]);
     }
 
     // with create user and grant roles
@@ -312,16 +300,13 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
             .with_subject(user_name.to_string());
         let token = key_pair.sign(claims)?;
 
-        let res = auth_mgr
+        auth_mgr
             .auth(ctx.get_current_session(), &Credential::Jwt { token })
-            .await;
-        assert!(res.is_ok());
-
-        let user_info = UserApiProvider::instance()
-            .get_user(tenant, UserIdentity::new(user_name, "%"))
             .await?;
-        assert_eq!(user_info.grants.roles().len(), 1);
-        assert_eq!(user_info.grants.roles()[0], role_name.to_string());
+
+        let user_info = ctx.get_current_user()?;
+        assert_eq!(user_info.name, user_name);
+        assert_eq!(user_info.grants.roles(), &["test-role"]);
     }
 
     // with create user and auth role
@@ -367,7 +352,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
             res.err()
                 .unwrap()
                 .to_string()
-                .contains("root user not allowed in jwt auth")
+                .contains("root user is not allowed in jwt auth")
         );
     }
 
@@ -403,7 +388,6 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
     conf.query.jwt_key_file = jwks_url.clone();
     let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
     let auth_mgr = ctx.get_auth_manager();
-    let tenant = "test";
     let user_name = "test";
 
     // without subject
@@ -429,16 +413,11 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let claims = Claims::create(Duration::from_hours(2)).with_subject(user_name.to_string());
         let token = key_pair.sign(claims)?;
 
-        let res = auth_mgr
+        auth_mgr
             .auth(ctx.get_current_session(), &Credential::Jwt { token })
-            .await;
-        assert!(res.is_err());
-        assert!(
-            res.err()
-                .unwrap()
-                .to_string()
-                .contains("unknown user 'test'@'%'")
-        );
+            .await?;
+        let user_info = ctx.get_current_user()?;
+        assert_eq!(user_info.grants.roles().len(), 0);
     }
 
     // with custom claims
@@ -448,16 +427,11 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
             .with_subject(user_name.to_string());
         let token = key_pair.sign(claims)?;
 
-        let res = auth_mgr
+        auth_mgr
             .auth(ctx.get_current_session(), &Credential::Jwt { token })
-            .await;
-        assert!(res.is_err());
-        assert!(
-            res.err()
-                .unwrap()
-                .to_string()
-                .contains("unknown user 'test'@'%'")
-        );
+            .await?;
+        let user_info = ctx.get_current_user()?;
+        assert_eq!(user_info.grants.roles().len(), 0);
     }
 
     // with create user
@@ -487,7 +461,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
             .auth(ctx.get_current_session(), &Credential::Jwt { token })
             .await?;
         let user_info = ctx.get_current_user()?;
-        assert_eq!(user_info.grants.roles().len(), 0);
+        assert_eq!(user_info.grants.roles(), &["role1"]);
     }
 
     // with create user and grant roles
@@ -501,16 +475,12 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
             .with_subject(user_name.to_string());
         let token = key_pair.sign(claims)?;
 
-        let res = auth_mgr
+        auth_mgr
             .auth(ctx.get_current_session(), &Credential::Jwt { token })
-            .await;
-        assert!(res.is_ok());
-
-        let user_info = UserApiProvider::instance()
-            .get_user(tenant, UserIdentity::new(user_name, "%"))
             .await?;
-        assert_eq!(user_info.grants.roles().len(), 1);
-        assert_eq!(user_info.grants.roles()[0], role_name.to_string());
+        let user_info = ctx.get_current_user()?;
+        assert_eq!(user_info.name, user_name);
+        assert_eq!(user_info.grants.roles(), &["test-role"]);
     }
 
     // with create user and auth role
@@ -555,7 +525,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
             res.err()
                 .unwrap()
                 .to_string()
-                .contains("root user not allowed in jwt auth")
+                .contains("root user is not allowed in jwt auth")
         );
     }
 
