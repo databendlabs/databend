@@ -106,7 +106,7 @@ impl BlockCompactMutator {
         for chunk in segment_locations.chunks(max_io_requests) {
             // Read the segments information in parallel.
             let segment_infos = segments_io
-                .read_segments_without_semaphore(chunk)
+                .read_segments(chunk, false)
                 .await?
                 .into_iter()
                 .collect::<Result<Vec<_>>>()?;
@@ -174,7 +174,7 @@ impl BlockCompactMutator {
         if checked_end_at < number_segments {
             for chunk in segment_locations[checked_end_at..].chunks(max_io_requests) {
                 let segment_infos = segments_io
-                    .read_segments_without_semaphore(chunk)
+                    .read_segments(chunk, false)
                     .await?
                     .into_iter()
                     .collect::<Result<Vec<_>>>()?;

@@ -15,13 +15,9 @@
 use std::sync::Arc;
 
 use common_base::runtime::execute_futures_in_parallel;
-use common_base::runtime::Runtime;
-use common_base::runtime::TrySpawn;
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
-use futures::future;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::Location;
@@ -52,6 +48,7 @@ impl SegmentsIO {
         dal: Operator,
         segment_location: Location,
         table_schema: TableSchemaRef,
+        put_cache: bool,
     ) -> Result<Arc<SegmentInfo>> {
         let (path, ver) = segment_location;
         let reader = MetaReaders::segment_info_reader(dal, table_schema);
@@ -61,42 +58,10 @@ impl SegmentsIO {
             location: path,
             len_hint: None,
             ver,
-            put_cache: true,
+            put_cache,
         };
 
         reader.read(&load_params).await
-    }
-
-    // The num of segment_locations must less than equal max_storage_io_requests.
-    #[tracing::instrument(level = "debug", skip_all)]
-    pub async fn read_segments_without_semaphore(
-        &self,
-        segment_locations: &[Location],
-    ) -> Result<Vec<Result<Arc<SegmentInfo>>>> {
-        if segment_locations.is_empty() {
-            return Ok(vec![]);
-        }
-
-        let thread_nums = self.ctx.get_settings().get_max_threads()? as usize;
-        let runtime = Arc::new(Runtime::with_worker_threads(
-            thread_nums,
-            Some("fuse-req-segments-worker".to_owned()),
-        )?);
-
-        let mut join_handlers = Vec::with_capacity(segment_locations.len());
-        for location in segment_locations.iter() {
-            let location = location.clone();
-            let schema = self.schema.clone();
-            let operator = self.operator.clone();
-            join_handlers.push(
-                runtime.spawn(async move { Self::read_segment(operator, location, schema).await }),
-            );
-        }
-
-        let joint: Vec<Result<Arc<SegmentInfo>>> = future::try_join_all(join_handlers)
-            .await
-            .map_err(|e| ErrorCode::StorageOther(format!("read segments failure, {}", e)))?;
-        Ok(joint)
     }
 
     // Read all segments information from s3 in concurrently.
@@ -104,6 +69,7 @@ impl SegmentsIO {
     pub async fn read_segments(
         &self,
         segment_locations: &[Location],
+        put_cache: bool,
     ) -> Result<Vec<Result<Arc<SegmentInfo>>>> {
         if segment_locations.is_empty() {
             return Ok(vec![]);
@@ -116,7 +82,7 @@ impl SegmentsIO {
             if let Some(location) = iter.next() {
                 let location = location.clone();
                 Some(
-                    Self::read_segment(self.operator.clone(), location, schema.clone())
+                    Self::read_segment(self.operator.clone(), location, schema.clone(), put_cache)
                         .instrument(tracing::debug_span!("read_segment")),
                 )
             } else {

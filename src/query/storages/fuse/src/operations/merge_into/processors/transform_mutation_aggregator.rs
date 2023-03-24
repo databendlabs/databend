@@ -139,7 +139,7 @@ impl TableMutationAggregator {
             SegmentsIO::create(self.ctx.clone(), self.dal.clone(), self.schema.clone());
         let segment_locations = self.base_segments.as_slice();
         let segments = segments_io
-            .read_segments(segment_locations)
+            .read_segments(segment_locations, true)
             .await?
             .into_iter()
             .collect::<Result<Vec<_>>>()?;

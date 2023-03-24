@@ -95,7 +95,7 @@ impl<'a> ClusteringInformation<'a> {
                 self.table.schema(),
             );
             let segments = segments_io
-                .read_segments(segment_locations)
+                .read_segments(segment_locations, true)
                 .await?
                 .into_iter()
                 .collect::<Result<Vec<_>>>()?;
