@@ -3,6 +3,10 @@ select unnest([]::array(int));
 ----
 
 query I
+select unnest(null);
+----
+
+query I
 select unnest([1,2,3]);
 ----
 1
@@ -248,6 +252,33 @@ select unnest(a), a from t;
 7 [[5,6],[7,8,9]]
 8 [[5,6],[7,8,9]]
 9 [[5,6],[7,8,9]]
+
+statement ok
+drop table t;
+
+statement ok
+create table t (a array(int) null);
+
+statement ok
+insert into t values ([1,2]), (null), ([3,4,5]);
+
+query I
+select unnest(a) from t;
+----
+1
+2
+3
+4
+5
+
+query IT
+select unnest(a), unnest(null) from t;
+----
+1 NULL
+2 NULL
+3 NULL
+4 NULL
+5 NULL
 
 statement ok
 drop table t;
