@@ -21,6 +21,7 @@ use arrow_array::BooleanArray;
 use arrow_array::LargeStringArray;
 use arrow_array::NullArray;
 use arrow_array::PrimitiveArray;
+use arrow_array::StringArray;
 use arrow_buffer::i256;
 use arrow_buffer::ArrowNativeType;
 use arrow_buffer::Buffer;
@@ -29,12 +30,15 @@ use arrow_data::ArrayDataBuilder;
 use arrow_schema::ArrowError;
 use arrow_schema::DataType;
 use arrow_schema::TimeUnit;
+use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer as Buffer2;
 use common_arrow::arrow::Either;
 use ordered_float::OrderedFloat;
 
 use crate::types::decimal::DecimalColumn;
+use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
+use crate::types::string::StringColumn;
 use crate::Column;
 
 fn try_take_buffer<T: Clone>(buffer: Buffer2<T>) -> Vec<T> {
@@ -174,5 +178,48 @@ impl Column {
             }
         };
         Ok(array)
+    }
+
+    pub fn from_arrow_rs(array: Arc<dyn Array>) -> Result<Self, ArrowError> {
+        let data_type = array.data_type();
+        let column = match data_type {
+            DataType::Null => Column::Null { len: array.len() },
+            DataType::LargeUtf8 => {
+                let array = array.as_any().downcast_ref::<LargeStringArray>().unwrap();
+                let offsets = array.value_offsets().to_vec();
+                let offsets = unsafe { std::mem::transmute::<Vec<i64>, Vec<u64>>(offsets) };
+                Column::String(StringColumn {
+                    offsets: offsets.into(),
+                    data: array.value_data().to_vec().into(),
+                })
+            }
+            DataType::Utf8 => {
+                let array = array.as_any().downcast_ref::<StringArray>().unwrap();
+                let offsets = array
+                    .value_offsets()
+                    .iter()
+                    .map(|x| *x as u64)
+                    .collect::<Vec<_>>();
+                Column::String(StringColumn {
+                    offsets: offsets.into(),
+                    data: array.value_data().to_vec().into(),
+                })
+            }
+            _ => Err(ArrowError::NotYetImplemented(format!(
+                "Column::from_arrow_rs() for {data_type} not implemented yet"
+            )))?,
+        };
+        if let Some(nulls) = array.into_data().nulls() {
+            let validity =
+                Bitmap::try_new(nulls.buffer().to_vec(), nulls.offset()).map_err(|e| {
+                    ArrowError::CastError(format!(
+                        "fail to cast arrow_rs::NullBuffer to arrow2::Bitmap: {e}"
+                    ))
+                })?;
+            let column = NullableColumn { column, validity };
+            Ok(Column::Nullable(Box::new(column)))
+        } else {
+            Ok(column)
+        }
     }
 }
