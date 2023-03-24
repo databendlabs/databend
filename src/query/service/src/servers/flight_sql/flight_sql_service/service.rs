@@ -436,22 +436,22 @@ impl FlightSqlService for FlightSqlServiceImpl {
         query: ActionClosePreparedStatementRequest,
         request: Request<Action>,
     ) {
-        tracing::info!(
-            "do_action_close_prepared_statement with handle {:?}",
-            query.prepared_statement_handle
-        );
-        if self.get_session(&request).is_ok() {
-            let handle = query.prepared_statement_handle.as_ref();
-            if let Ok(handle) = std::str::from_utf8(handle) {
-                match Uuid::try_parse(handle) {
-                    Ok(handle) => {
+        let handle = query.prepared_statement_handle.as_ref();
+        if let Ok(handle) = std::str::from_utf8(handle) {
+            tracing::info!(
+                "do_action_close_prepared_statement with handle {:?}",
+                handle
+            );
+            match Uuid::try_parse(handle) {
+                Ok(handle) => {
+                    if self.get_session(&request).is_ok() {
                         self.statements.remove(&handle);
                     }
-                    Err(e) => {
-                        Status::internal(format!(
-                            "do_get_fallback Error decoding handle: {e} {handle:?}"
-                        ));
-                    }
+                }
+                Err(e) => {
+                    Status::internal(format!(
+                        "do_action_close_prepared_statement Error decoding handle: {e} {handle:?}"
+                    ));
                 }
             }
         }
