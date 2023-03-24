@@ -67,8 +67,8 @@ pub struct AggregateFunctionFeatures {
     /// SUM and COUNT are decomposable when they contain no DISTINCT:
     ///   SUM(S1 ∪ S2) = SUM(SUM(S1), SUM(S2))
     ///   COUNT(S1 ∪ S2) = SUM(COUNT(S1), COUNT(S2))
-    /// AVG(C) can be handled as SUM(C) and COUNT(NOTNULL C) and thus is decomposable.
-    ///   AVG(C) = SUM(C) / COUNT(NOTNULL C)
+    /// AVG(C) can be handled as SUM(C) and COUNT(C) and thus is decomposable.
+    ///   AVG(C) = SUM(C) / COUNT(C)
     pub(crate) is_decomposable: bool,
 
     // Function Category
