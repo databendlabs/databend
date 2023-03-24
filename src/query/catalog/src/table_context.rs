@@ -30,8 +30,8 @@ use common_io::prelude::FormatSettings;
 use common_meta_app::principal::FileFormatOptions;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
+use common_settings::ChangeValue;
 use common_settings::NewSettings;
-use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
@@ -113,7 +113,6 @@ pub trait TableContext: Send + Sync {
     fn get_query_kind(&self) -> String;
     fn get_function_context(&self) -> Result<FunctionContext>;
     fn get_connection_id(&self) -> String;
-    fn get_settings(&self) -> Arc<Settings>;
     fn get_new_settings(&self) -> Arc<NewSettings>;
     fn get_cluster(&self) -> Arc<Cluster>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
@@ -124,8 +123,8 @@ pub trait TableContext: Send + Sync {
     fn set_query_id_result_cache(&self, query_id: String, result_cache_key: String);
     fn set_on_error_map(&self, map: Option<HashMap<String, ErrorCode>>);
 
-    fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()>;
-    fn get_changed_settings(&self) -> Arc<Settings>;
+    fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()>;
+    fn get_changed_settings(&self) -> HashMap<String, ChangeValue>;
 
     // Get the storage data accessor operator from the session manager.
     fn get_data_operator(&self) -> Result<DataOperator>;

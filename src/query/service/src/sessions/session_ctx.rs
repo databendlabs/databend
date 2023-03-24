@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
@@ -23,15 +24,14 @@ use common_config::GlobalConfig;
 use common_exception::Result;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
+use common_settings::ChangeValue;
 use common_settings::NewSettings;
-use common_settings::Settings;
 use parking_lot::RwLock;
 
 use crate::sessions::QueryContextShared;
 
 pub struct SessionContext {
     abort: AtomicBool,
-    settings: Arc<Settings>,
     new_settings: Arc<NewSettings>,
     current_catalog: RwLock<String>,
     current_database: RwLock<String>,
@@ -59,12 +59,8 @@ pub struct SessionContext {
 }
 
 impl SessionContext {
-    pub fn try_create(
-        settings: Arc<Settings>,
-        new_settings: Arc<NewSettings>,
-    ) -> Result<Arc<Self>> {
+    pub fn try_create(new_settings: Arc<NewSettings>) -> Result<Arc<Self>> {
         Ok(Arc::new(SessionContext {
-            settings,
             new_settings,
             abort: Default::default(),
             current_user: Default::default(),
@@ -90,20 +86,18 @@ impl SessionContext {
         self.abort.store(v, Ordering::Relaxed);
     }
 
-    pub fn get_settings(&self) -> Arc<Settings> {
-        self.settings.clone()
-    }
-
     pub fn get_new_settings(&self) -> Arc<NewSettings> {
         self.new_settings.clone()
     }
 
-    pub fn get_changed_settings(&self) -> Arc<Settings> {
-        Arc::new(self.settings.get_changed_settings())
+    pub fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
+        // self.new_settings.get_changed_settings()
+        unimplemented!()
     }
 
-    pub fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
-        self.settings.apply_changed_settings(changed_settings)
+    pub fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
+        // self.settings.apply_changed_settings(changes)
+        unimplemented!()
     }
 
     // Get current catalog name.

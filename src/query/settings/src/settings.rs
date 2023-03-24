@@ -31,12 +31,12 @@ impl NewSettings {
         })
     }
 
-    pub fn has_setting(&self, key: &str) -> bool {
+    pub fn has_setting(&self, key: &str) -> Result<bool> {
         DefaultSettings::has_setting(key)
     }
 
     pub fn check_and_get_default_value(&self, key: &str) -> Result<UserSettingValue> {
-        match DefaultSettings::instance().settings.get(key) {
+        match DefaultSettings::instance()?.settings.get(key) {
             Some(v) => Ok(v.value.clone()),
             None => Err(ErrorCode::UnknownVariable(format!(
                 "Unknown variable: {:?}",
@@ -50,7 +50,7 @@ impl NewSettings {
             return Ok(entry.level.clone());
         }
 
-        match DefaultSettings::has_setting(key) {
+        match DefaultSettings::has_setting(key)? {
             true => Ok(ScopeLevel::Session),
             false => Err(ErrorCode::UnknownVariable(format!(
                 "Unknown variable: {:?}",
@@ -72,7 +72,7 @@ impl NewSettings {
 
     pub fn set_batch_settings(&self, settings: &HashMap<String, String>) -> Result<()> {
         for (k, v) in settings.iter() {
-            if self.has_setting(k.as_str()) {
+            if self.has_setting(k.as_str())? {
                 self.set_setting(k.to_string(), v.to_string())?;
             }
         }
@@ -98,6 +98,7 @@ pub struct SettingsIter<'a> {
 impl<'a> SettingsIter<'a> {
     pub fn create(settings: &'a NewSettings) -> SettingsIter<'a> {
         let iter = DefaultSettings::instance()
+            .unwrap()
             .settings
             .clone()
             .into_iter()

@@ -31,8 +31,6 @@ use common_exception::Result;
 use common_metrics::label_counter;
 use common_metrics::label_gauge;
 use common_settings::NewSettings;
-use common_settings::Settings;
-use common_users::UserApiProvider;
 use futures::future::Either;
 use futures::StreamExt;
 use parking_lot::RwLock;
@@ -106,12 +104,10 @@ impl SessionManager {
         }
 
         let tenant = config.query.tenant_id.clone();
-        let user_api = UserApiProvider::instance();
         let settings = NewSettings::try_create(tenant.clone());
         settings.load_global_changes().await?;
 
-        let session_settings = Settings::try_create(user_api, tenant).await?;
-        let session_ctx = SessionContext::try_create(session_settings, settings)?;
+        let session_ctx = SessionContext::try_create(settings)?;
         let session = Session::try_create(id.clone(), typ.clone(), session_ctx, mysql_conn_id)?;
 
         let mut sessions = self.active_sessions.write();

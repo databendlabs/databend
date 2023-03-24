@@ -187,7 +187,7 @@ impl NewSettings {
     }
 
     pub fn get_max_result_rows(&self) -> Result<u64> {
-        Ok(self.try_get_u64("max_result_rows")?)
+        self.try_get_u64("max_result_rows")
     }
 
     pub fn set_enable_distributed_eval_index(&self, val: bool) -> Result<()> {

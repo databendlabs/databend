@@ -17,13 +17,13 @@ use std::net::SocketAddr;
 use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_app::principal::UserInfo;
-use common_settings::{NewSettings, Settings};
+use common_settings::NewSettings;
 use databend_query::sessions::SessionContext;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_session_context() -> Result<()> {
-    let settings = Settings::default_test_settings()?;
-    let session_ctx = SessionContext::try_create(settings, NewSettings::try_create("default".to_string()))?;
+    let settings = NewSettings::try_create("default".to_string());
+    let session_ctx = SessionContext::try_create(settings)?;
 
     // Abort status.
     {

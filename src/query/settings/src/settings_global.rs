@@ -26,7 +26,7 @@ impl NewSettings {
     pub async fn try_drop_global_setting(&self, key: &str) -> Result<()> {
         self.changes.remove(key);
 
-        if !DefaultSettings::has_setting(key) {
+        if !DefaultSettings::has_setting(key)? {
             return Err(ErrorCode::UnknownVariable(format!(
                 "Unknown variable: {:?}",
                 key
@@ -55,7 +55,7 @@ impl NewSettings {
     }
 
     pub async fn load_global_changes(&self) -> Result<()> {
-        let default_settings = DefaultSettings::instance();
+        let default_settings = DefaultSettings::instance()?;
 
         let api = UserApiProvider::instance();
         let global_settings = NewSettings::load_settings(api, self.tenant.clone()).await?;

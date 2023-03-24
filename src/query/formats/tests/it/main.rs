@@ -17,7 +17,7 @@ use common_expression::TableSchemaRef;
 use common_formats::output_format::OutputFormat;
 use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;
-use common_settings::{NewSettings, Settings};
+use common_settings::NewSettings;
 
 mod field_encoder;
 mod format_option_checker;

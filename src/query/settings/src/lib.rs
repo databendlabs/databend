@@ -40,6 +40,7 @@ use common_meta_types::MatchSeq;
 use common_users::UserApiProvider;
 use dashmap::DashMap;
 use itertools::Itertools;
+pub use settings::ChangeValue;
 pub use settings::NewSettings;
 
 #[derive(Clone)]

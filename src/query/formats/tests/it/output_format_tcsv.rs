@@ -22,7 +22,7 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_formats::FileFormatOptionsExt;
 use common_meta_app::principal::FileFormatOptions;
-use common_settings::{NewSettings, Settings};
+use common_settings::NewSettings;
 use pretty_assertions::assert_eq;
 
 use crate::get_output_format_clickhouse;
