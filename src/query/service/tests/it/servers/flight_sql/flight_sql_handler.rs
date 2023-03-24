@@ -60,12 +60,18 @@ async fn run_query(
     sql: &str,
 ) -> std::result::Result<String, ArrowError> {
     let mut stmt = client.prepare(sql.to_string()).await?;
-    let flight_info = stmt.execute().await?;
-    let ticket = flight_info.endpoint[0].ticket.as_ref().unwrap().clone();
-    let flight_data = client.do_get(ticket).await?;
-    let flight_data: Vec<FlightData> = flight_data.try_collect().await.unwrap();
-    let batches = flight_data_to_batches(&flight_data)?;
-    let res = pretty_format_batches(batches.as_slice())?.to_string();
+    let res = if stmt.dataset_schema()?.fields.is_empty() {
+        // there is a bug in FlightSqlServiceClient::execute_update(), which lead to panic
+        let affected_rows = client.execute_update(sql.to_string()).await?;
+        affected_rows.to_string()
+    } else {
+        let flight_info = stmt.execute().await?;
+        let ticket = flight_info.endpoint[0].ticket.as_ref().unwrap().clone();
+        let flight_data = client.do_get(ticket).await?;
+        let flight_data: Vec<FlightData> = flight_data.try_collect().await.unwrap();
+        let batches = flight_data_to_batches(&flight_data)?;
+        pretty_format_batches(batches.as_slice())?.to_string()
+    };
     Ok(res)
 }
 
@@ -106,7 +112,11 @@ async fn test_query() -> Result<()> {
         let token = client.handshake(TEST_USER, TEST_PASSWORD).await.unwrap();
         println!("Auth succeeded with token: {:?}", token);
         let cases = [
-            "select 1, 'abc', 1.1, 1.1::float32, 1::nullable(int)", // types
+            "select 1, 'abc', 1.1, 1.1::float32, 1::nullable(int)",
+            // "drop table if exists test1",
+            // "create table test1(a int, b string)",
+            // "insert into table test1(a, b) values (1, 'x'), (2, 'y')",
+            // "select * from table test1",
         ];
         for case in cases {
             writeln!(file, "---------- Input ----------").unwrap();
