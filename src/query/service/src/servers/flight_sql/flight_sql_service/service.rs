@@ -413,10 +413,19 @@ impl FlightSqlService for FlightSqlServiceImpl {
             .await
             .map_err(|e| status!("Error getting result schema", e))?;
         tracing::info!(
-            "do_action_create_prepared_statement with query={:?}",
+            "do_action_create_prepared_statement with handler={handle} query={:?}",
             query.query
         );
-        let data_schema = plan.0.schema();
+        // JDBC client use call put when schema.fields == 0
+        let data_schema = if plan.0.has_result_set() {
+            plan.0.schema()
+        } else {
+            Arc::new(DataSchema::empty())
+        };
+        tracing::info!(
+            "do_action_create_prepared_statement with handler={handle}, query={:?}, return schema={data_schema:?}",
+            query.query
+        );
         let schema = (&*data_schema).into();
         self.statements.insert(handle, plan);
         let message = SchemaAsIpc::new(&schema, &IpcWriteOptions::default())
