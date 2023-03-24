@@ -17,7 +17,7 @@ use common_expression::TableSchemaRef;
 use common_formats::output_format::OutputFormat;
 use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;
-use common_settings::Settings;
+use common_settings::{NewSettings, Settings};
 
 mod field_encoder;
 mod format_option_checker;
@@ -30,6 +30,6 @@ fn get_output_format_clickhouse(
     schema: TableSchemaRef,
 ) -> Result<Box<dyn OutputFormat>> {
     let format = ClickhouseFormatType::parse_clickhouse_format(format_name)?;
-    let settings = &Settings::default_test_settings()?;
-    FileFormatOptionsExt::get_output_format_from_clickhouse_format(format, schema, settings)
+    let settings = NewSettings::try_create("default".to_string());
+    FileFormatOptionsExt::get_output_format_from_clickhouse_format(format, schema, &settings)
 }

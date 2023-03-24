@@ -22,7 +22,6 @@ use common_base::base::tokio::task::block_in_place;
 use common_catalog::catalog::CATALOG_DEFAULT;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -36,7 +35,6 @@ use common_expression::TableField;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 use common_settings::NewSettings;
-use common_settings::Settings;
 use parking_lot::RwLock;
 
 use crate::planner::binder::BindContext;

@@ -22,7 +22,7 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_formats::FileFormatOptionsExt;
 use common_meta_app::principal::FileFormatOptions;
-use common_settings::Settings;
+use common_settings::{NewSettings, Settings};
 use pretty_assertions::assert_eq;
 
 use crate::get_output_format_clickhouse;
@@ -61,7 +61,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
     }
 
     {
-        let settings = Settings::default_test_settings()?;
+        let settings = NewSettings::try_create("default".to_string());
         let mut options = BTreeMap::<String, String>::new();
         options.insert("type".to_string(), "csv".to_string());
         options.insert("field_delimiter".to_string(), "$".to_string());
@@ -123,7 +123,7 @@ fn test_data_block_not_nullable() -> Result<()> {
 fn test_field_delimiter_with_ascii_control_code() -> Result<()> {
     let (schema, block) = get_simple_block(false);
 
-    let settings = Settings::default_test_settings()?;
+    let settings = NewSettings::try_create("default".to_string());
     let mut options = BTreeMap::<String, String>::new();
     options.insert("type".to_string(), "csv".to_string());
     options.insert("field_delimiter".to_string(), "\x01".to_string());

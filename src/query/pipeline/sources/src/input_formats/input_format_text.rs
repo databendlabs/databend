@@ -33,7 +33,6 @@ use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
 use common_pipeline_core::Pipeline;
 use common_settings::NewSettings;
-use common_settings::Settings;
 use common_storage::StageFileInfo;
 use opendal::Operator;
 

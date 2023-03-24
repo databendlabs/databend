@@ -44,7 +44,6 @@ use common_expression::TableSchemaRef;
 use common_meta_app::principal::StageInfo;
 use common_pipeline_core::Pipeline;
 use common_settings::NewSettings;
-use common_settings::Settings;
 use common_storage::read_parquet_metas_in_parallel;
 use common_storage::StageFileInfo;
 use futures::AsyncRead;

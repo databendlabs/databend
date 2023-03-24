@@ -17,7 +17,6 @@ use std::time::Duration;
 
 use common_exception::Result;
 use common_settings::NewSettings;
-use common_settings::Settings;
 
 pub struct ExecutorSettings {
     pub query_id: Arc<String>,

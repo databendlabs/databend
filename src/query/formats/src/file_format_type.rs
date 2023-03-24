@@ -19,7 +19,6 @@ use common_expression::TableSchemaRef;
 use common_meta_app::principal::FileFormatOptions;
 use common_meta_app::principal::StageFileFormatType;
 use common_settings::NewSettings;
-use common_settings::Settings;
 
 use crate::delimiter::RecordDelimiter;
 use crate::format_option_checker::get_format_option_checker;

@@ -15,7 +15,6 @@
 use common_ast::ast::Identifier;
 use common_ast::VisitorMut;
 use common_settings::NewSettings;
-use common_settings::Settings;
 
 #[derive(Debug, Clone)]
 pub struct NameResolutionContext {

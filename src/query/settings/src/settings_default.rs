@@ -6,7 +6,6 @@ use common_exception::Result;
 use common_meta_app::principal::UserSettingValue;
 use once_cell::sync::OnceCell;
 
-use crate::settings::NewSettings;
 use crate::ScopeLevel;
 
 static DEFAULT_SETTINGS: OnceCell<Arc<DefaultSettings>> = OnceCell::new();

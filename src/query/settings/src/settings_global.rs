@@ -6,7 +6,6 @@ use common_meta_app::principal::UserSetting;
 use common_meta_app::principal::UserSettingValue;
 use common_meta_types::MatchSeq;
 use common_users::UserApiProvider;
-use dashmap::DashMap;
 
 use crate::settings::ChangeValue;
 use crate::settings::NewSettings;

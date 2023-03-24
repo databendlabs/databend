@@ -36,7 +36,6 @@ use common_meta_app::principal::StageFileCompression;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
 use common_settings::NewSettings;
-use common_settings::Settings;
 use dashmap::DashMap;
 use opendal::Operator;
 

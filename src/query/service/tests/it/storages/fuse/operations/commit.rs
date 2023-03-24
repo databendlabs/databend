@@ -67,7 +67,7 @@ use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
-use common_settings::Settings;
+use common_settings::{NewSettings, Settings};
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
 use common_storages_fuse::operations::AppendOperationLogEntry;
@@ -443,6 +443,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_settings(&self) -> Arc<Settings> {
+        todo!()
+    }
+
+    fn get_new_settings(&self) -> Arc<NewSettings> {
         todo!()
     }
 
