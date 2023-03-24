@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,8 +11,23 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use std::collections::BTreeMap;
 
-//! Defines structured keys used by ShareApi
+use crate::ast::UriLocation;
+use crate::input::Input;
+use crate::parser::expr::*;
+use crate::rule;
+use crate::util::*;
+use crate::ErrorKind;
 
-pub(crate) const ID_GEN_SHARE: &str = "share_id";
-pub(crate) const ID_GEN_SHARE_ENDPOINT: &str = "share_endpoint_id";
+pub fn share_endpoint_uri_location(i: Input) -> IResult<UriLocation> {
+    map_res(
+        rule! {
+            #literal_string
+        },
+        |location| {
+            UriLocation::from_uri(location, "".to_string(), BTreeMap::new())
+                .map_err(|_| ErrorKind::Other("invalid uri"))
+        },
+    )(i)
+}

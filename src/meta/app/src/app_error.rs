@@ -301,6 +301,22 @@ impl ShareAlreadyExists {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("ShareEndpointAlreadyExists: {endpoint} while {context}")]
+pub struct ShareEndpointAlreadyExists {
+    endpoint: String,
+    context: String,
+}
+
+impl ShareEndpointAlreadyExists {
+    pub fn new(endpoint: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            endpoint: endpoint.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("ShareAccountsAlreadyExists: {share_name} while {context}")]
 pub struct ShareAccountsAlreadyExists {
     share_name: String,
@@ -534,6 +550,9 @@ pub enum AppError {
 
     #[error(transparent)]
     WrongShare(#[from] WrongShare),
+
+    #[error(transparent)]
+    ShareEndpointAlreadyExists(#[from] ShareEndpointAlreadyExists),
 }
 
 impl AppErrorMessage for UnknownDatabase {
@@ -666,6 +685,12 @@ impl AppErrorMessage for WrongShare {
     }
 }
 
+impl AppErrorMessage for ShareEndpointAlreadyExists {
+    fn message(&self) -> String {
+        format!("Share endpoint '{}' already exists", self.endpoint)
+    }
+}
+
 impl AppErrorMessage for TxnRetryMaxTimes {
     fn message(&self) -> String {
         format!(
@@ -747,6 +772,9 @@ impl From<AppError> for ErrorCode {
                 ErrorCode::ShareHasNoGrantedPrivilege(err.message())
             }
             AppError::WrongShare(err) => ErrorCode::WrongShare(err.message()),
+            AppError::ShareEndpointAlreadyExists(err) => {
+                ErrorCode::ShareEndpointAlreadyExists(err.message())
+            }
             AppError::TxnRetryMaxTimes(err) => ErrorCode::TxnRetryMaxTimes(err.message()),
             AppError::DuplicatedUpsertFiles(err) => ErrorCode::DuplicatedUpsertFiles(err.message()),
         }

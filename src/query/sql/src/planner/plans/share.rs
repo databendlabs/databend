@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -19,11 +20,44 @@ use common_expression::types::DataType;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
+use common_meta_app::share::CreateShareEndpointReq;
 use common_meta_app::share::CreateShareReq;
 use common_meta_app::share::DropShareReq;
+use common_meta_app::share::ShareEndpointIdent;
 use common_meta_app::share::ShareGrantObjectName;
 use common_meta_app::share::ShareGrantObjectPrivilege;
 use common_meta_app::share::ShareNameIdent;
+
+// Create Share endpoint Plan
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CreateShareEndpointPlan {
+    pub if_not_exists: bool,
+    pub endpoint: ShareEndpointIdent,
+    pub url: String,
+    pub tenant: String,
+    pub args: BTreeMap<String, String>,
+    pub comment: Option<String>,
+}
+
+impl CreateShareEndpointPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+impl From<CreateShareEndpointPlan> for CreateShareEndpointReq {
+    fn from(p: CreateShareEndpointPlan) -> Self {
+        CreateShareEndpointReq {
+            if_not_exists: p.if_not_exists,
+            endpoint: p.endpoint.clone(),
+            url: p.url.clone(),
+            tenant: p.tenant.clone(),
+            args: p.args.clone(),
+            comment: p.comment,
+            create_on: Utc::now(),
+        }
+    }
+}
 
 // Create Share Plan
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -511,6 +511,8 @@ pub trait VisitorMut: Sized {
 
     fn visit_presign(&mut self, _presign: &mut PresignStmt) {}
 
+    fn visit_create_share_endpoint(&mut self, _stmt: &mut CreateShareEndpointStmt) {}
+
     fn visit_create_share(&mut self, _stmt: &mut CreateShareStmt) {}
 
     fn visit_drop_share(&mut self, _stmt: &mut DropShareStmt) {}

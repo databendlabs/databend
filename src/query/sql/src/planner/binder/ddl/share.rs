@@ -14,11 +14,13 @@
 
 use common_ast::ast::*;
 use common_exception::Result;
+use common_meta_app::share::ShareEndpointIdent;
 use itertools::Itertools;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;
 use crate::plans::AlterShareTenantsPlan;
+use crate::plans::CreateShareEndpointPlan;
 use crate::plans::CreateSharePlan;
 use crate::plans::DescSharePlan;
 use crate::plans::DropSharePlan;
@@ -30,6 +32,35 @@ use crate::plans::ShowObjectGrantPrivilegesPlan;
 use crate::plans::ShowSharesPlan;
 
 impl Binder {
+    pub(in crate::planner::binder) async fn bind_create_share_endpoint(
+        &mut self,
+        stmt: &CreateShareEndpointStmt,
+    ) -> Result<Plan> {
+        let CreateShareEndpointStmt {
+            if_not_exists,
+            endpoint,
+            url,
+            tenant,
+            args,
+            comment,
+        } = stmt;
+
+        let endpoint = normalize_identifier(endpoint, &self.name_resolution_ctx).name;
+
+        let plan = CreateShareEndpointPlan {
+            if_not_exists: *if_not_exists,
+            endpoint: ShareEndpointIdent {
+                tenant: self.ctx.get_tenant(),
+                endpoint: endpoint.to_string(),
+            },
+            tenant: tenant.to_string(),
+            url: url.to_string(),
+            args: args.clone(),
+            comment: comment.as_ref().cloned(),
+        };
+        Ok(Plan::CreateShareEndpoint(Box::new(plan)))
+    }
+
     pub(in crate::planner::binder) async fn bind_create_share(
         &mut self,
         stmt: &CreateShareStmt,

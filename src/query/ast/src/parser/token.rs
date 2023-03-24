@@ -247,6 +247,8 @@ pub enum TokenKind {
     ADD,
     #[token("ANY", ignore(ascii_case))]
     ANY,
+    #[token("ARGS", ignore(ascii_case))]
+    ARGS,
     #[token("AUTO", ignore(ascii_case))]
     AUTO,
     #[token("SOME", ignore(ascii_case))]
@@ -395,6 +397,8 @@ pub enum TokenKind {
     ENABLE_VIRTUAL_HOST_STYLE,
     #[token("END", ignore(ascii_case))]
     END,
+    #[token("ENDPOINT", ignore(ascii_case))]
+    ENDPOINT,
     #[token("ENGINE", ignore(ascii_case))]
     ENGINE,
     #[token("ENGINES", ignore(ascii_case))]
@@ -753,6 +757,8 @@ pub enum TokenKind {
     TENANTSETTING,
     #[token("TENANTS", ignore(ascii_case))]
     TENANTS,
+    #[token("TENANT", ignore(ascii_case))]
+    TENANT,
     #[token("THEN", ignore(ascii_case))]
     THEN,
     #[token("TIMESTAMP", ignore(ascii_case))]

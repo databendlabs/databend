@@ -249,6 +249,7 @@ build_exceptions! {
     WrongShare(2711),
     ShareHasNoGrantedDatabase(2712),
     ShareHasNoGrantedPrivilege(2713),
+    ShareEndpointAlreadyExists(2714),
 
     // Variable error codes.
     UnknownVariable(2801),
