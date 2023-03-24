@@ -398,6 +398,25 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+    let show_columns = map(
+        rule! {
+            SHOW ~ FULL? ~ COLUMNS ~ ( FROM | IN ) ~ #ident ~ ((FROM | IN) ~ #period_separated_idents_1_to_2)? ~ #show_limit?
+        },
+        |(_, opt_full, _, _, table, ctl_db, limit)| {
+            let (catalog, database) = match ctl_db {
+                Some((_, (Some(c), d))) => (Some(c), Some(d)),
+                Some((_, (None, d))) => (None, Some(d)),
+                _ => (None, None),
+            };
+            Statement::ShowColumns(ShowColumnsStmt {
+                catalog,
+                database,
+                table,
+                full: opt_full.is_some(),
+                limit,
+            })
+        },
+    );
     let show_create_table = map(
         rule! {
             SHOW ~ CREATE ~ TABLE ~ #period_separated_idents_1_to_3
@@ -1151,6 +1170,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         ),
         rule!(
             #show_tables : "`SHOW [FULL] TABLES [FROM <database>] [<show_limit>]`"
+            | #show_columns : "`SHOW [FULL] COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
             | #show_create_table : "`SHOW CREATE TABLE [<database>.]<table>`"
             | #describe_table : "`DESCRIBE [<database>.]<table>`"
             | #show_fields : "`SHOW FIELDS FROM [<database>.]<table>`"

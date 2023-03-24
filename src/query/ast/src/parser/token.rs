@@ -317,6 +317,8 @@ pub enum TokenKind {
     CHAR,
     #[token("COLUMN", ignore(ascii_case))]
     COLUMN,
+    #[token("COLUMNS", ignore(ascii_case))]
+    COLUMNS,
     #[token("CHARACTER", ignore(ascii_case))]
     CHARACTER,
     #[token("CONFLICT", ignore(ascii_case))]

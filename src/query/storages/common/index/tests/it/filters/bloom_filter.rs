@@ -39,7 +39,7 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::Value;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use storages_common_index::filters::BlockFilter as LatestBloom;
 use storages_common_index::BloomIndex;
 use storages_common_index::FilterEvalResult;

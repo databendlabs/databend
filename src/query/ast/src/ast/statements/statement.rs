@@ -114,6 +114,8 @@ pub enum Statement {
     OptimizeTable(OptimizeTableStmt),
     AnalyzeTable(AnalyzeTableStmt),
     ExistsTable(ExistsTableStmt),
+    // Columns
+    ShowColumns(ShowColumnsStmt),
 
     // Views
     CreateView(CreateViewStmt),
@@ -346,6 +348,7 @@ impl Display for Statement {
             Statement::AlterDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::UseDatabase { database } => write!(f, "USE {database}")?,
             Statement::ShowTables(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowColumns(stmt) => write!(f, "{stmt}")?,
             Statement::ShowCreateTable(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeTable(stmt) => write!(f, "{stmt}")?,
             Statement::ShowTablesStatus(stmt) => write!(f, "{stmt}")?,

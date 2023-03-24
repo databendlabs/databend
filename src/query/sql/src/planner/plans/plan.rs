@@ -236,6 +236,7 @@ pub enum RewriteKind {
     ShowCatalogs,
     ShowDatabases,
     ShowTables,
+    ShowColumns,
     ShowTablesStatus,
 
     ShowFunctions,

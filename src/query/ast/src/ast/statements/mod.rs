@@ -14,6 +14,7 @@
 
 mod call;
 mod catalog;
+mod columns;
 mod copy;
 mod database;
 mod explain;
@@ -33,6 +34,7 @@ mod view;
 
 pub use call::*;
 pub use catalog::*;
+pub use columns::*;
 pub use copy::*;
 pub use database::*;
 pub use explain::*;

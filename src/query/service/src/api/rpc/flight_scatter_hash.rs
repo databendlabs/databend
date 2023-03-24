@@ -32,7 +32,7 @@ use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::Value;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
 

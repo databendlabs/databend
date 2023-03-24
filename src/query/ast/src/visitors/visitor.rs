@@ -404,6 +404,8 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_show_tables(&mut self, _stmt: &'ast ShowTablesStmt) {}
 
+    fn visit_show_columns(&mut self, _stmt: &'ast ShowColumnsStmt) {}
+
     fn visit_show_create_table(&mut self, _stmt: &'ast ShowCreateTableStmt) {}
 
     fn visit_describe_table(&mut self, _stmt: &'ast DescribeTableStmt) {}

@@ -151,38 +151,6 @@ impl<Index: ColumnIndex> RawExpr<Index> {
         walk(self, &mut buf);
         buf
     }
-
-    pub fn sql_display(&self) -> String {
-        match self {
-            RawExpr::Constant { scalar: lit, .. } => format!("{lit}"),
-            RawExpr::ColumnRef { display_name, .. } => display_name.clone(),
-            RawExpr::Cast {
-                is_try,
-                expr,
-                dest_type,
-                ..
-            } => {
-                if *is_try {
-                    format!("TRY_CAST({} AS {dest_type})", expr.sql_display())
-                } else {
-                    format!("CAST({} AS {dest_type})", expr.sql_display())
-                }
-            }
-            RawExpr::FunctionCall { name, args, .. } => {
-                let mut s = String::new();
-                s += name;
-                s += "(";
-                for (i, arg) in args.iter().enumerate() {
-                    if i > 0 {
-                        s += ", ";
-                    }
-                    s += &arg.sql_display();
-                }
-                s += ")";
-                s
-            }
-        }
-    }
 }
 
 impl<Index: ColumnIndex> Expr<Index> {
@@ -219,126 +187,6 @@ impl<Index: ColumnIndex> Expr<Index> {
         let mut buf = HashMap::new();
         walk(self, &mut buf);
         buf
-    }
-
-    pub fn sql_display(&self) -> String {
-        fn write_unary_op<Index: ColumnIndex>(
-            op: &str,
-            expr: &Expr<Index>,
-            precedence: usize,
-            min_precedence: usize,
-        ) -> String {
-            if precedence < min_precedence {
-                format!("({op} {})", write_expr(expr, precedence))
-            } else {
-                format!("{op} {}", write_expr(expr, precedence))
-            }
-        }
-
-        fn write_binary_op<Index: ColumnIndex>(
-            op: &str,
-            lhs: &Expr<Index>,
-            rhs: &Expr<Index>,
-            precedence: usize,
-            min_precedence: usize,
-        ) -> String {
-            if precedence < min_precedence {
-                format!(
-                    "({} {op} {})",
-                    write_expr(lhs, precedence),
-                    write_expr(rhs, precedence)
-                )
-            } else {
-                format!(
-                    "{} {op} {}",
-                    write_expr(lhs, precedence),
-                    write_expr(rhs, precedence)
-                )
-            }
-        }
-
-        fn write_expr<Index: ColumnIndex>(expr: &Expr<Index>, min_precedence: usize) -> String {
-            match expr {
-                Expr::Constant { scalar, .. } => scalar.as_ref().to_string(),
-                Expr::ColumnRef { display_name, .. } => display_name.clone(),
-                Expr::Cast {
-                    is_try,
-                    expr,
-                    dest_type,
-                    ..
-                } => {
-                    if *is_try {
-                        format!("TRY_CAST({} AS {dest_type})", expr.sql_display())
-                    } else {
-                        format!("CAST({} AS {dest_type})", expr.sql_display())
-                    }
-                }
-                Expr::FunctionCall { function, args, .. } => {
-                    match (function.signature.name.as_str(), args.as_slice()) {
-                        ("and", [ref lhs, ref rhs]) => {
-                            write_binary_op("AND", lhs, rhs, 10, min_precedence)
-                        }
-                        ("or", [ref lhs, ref rhs]) => {
-                            write_binary_op("OR", lhs, rhs, 5, min_precedence)
-                        }
-                        ("not", [ref expr]) => write_unary_op("NOT", expr, 15, min_precedence),
-                        ("gte", [ref lhs, ref rhs]) => {
-                            write_binary_op(">=", lhs, rhs, 20, min_precedence)
-                        }
-                        ("gt", [ref lhs, ref rhs]) => {
-                            write_binary_op(">", lhs, rhs, 20, min_precedence)
-                        }
-                        ("lte", [ref lhs, ref rhs]) => {
-                            write_binary_op("<=", lhs, rhs, 20, min_precedence)
-                        }
-                        ("lt", [ref lhs, ref rhs]) => {
-                            write_binary_op("<", lhs, rhs, 20, min_precedence)
-                        }
-                        ("eq", [ref lhs, ref rhs]) => {
-                            write_binary_op("=", lhs, rhs, 20, min_precedence)
-                        }
-                        ("noteq", [ref lhs, ref rhs]) => {
-                            write_binary_op("<>", lhs, rhs, 20, min_precedence)
-                        }
-                        ("plus", [ref expr]) => write_unary_op("+", expr, 50, min_precedence),
-                        ("minus", [ref expr]) => write_unary_op("-", expr, 50, min_precedence),
-                        ("plus", [ref lhs, ref rhs]) => {
-                            write_binary_op("+", lhs, rhs, 30, min_precedence)
-                        }
-                        ("minus", [ref lhs, ref rhs]) => {
-                            write_binary_op("-", lhs, rhs, 30, min_precedence)
-                        }
-                        ("multiply", [ref lhs, ref rhs]) => {
-                            write_binary_op("*", lhs, rhs, 40, min_precedence)
-                        }
-                        ("divide", [ref lhs, ref rhs]) => {
-                            write_binary_op("/", lhs, rhs, 40, min_precedence)
-                        }
-                        ("div", [ref lhs, ref rhs]) => {
-                            write_binary_op("DIV", lhs, rhs, 40, min_precedence)
-                        }
-                        ("modulo", [ref lhs, ref rhs]) => {
-                            write_binary_op("%", lhs, rhs, 40, min_precedence)
-                        }
-                        _ => {
-                            let mut s = String::new();
-                            s += &function.signature.name;
-                            s += "(";
-                            for (i, arg) in args.iter().enumerate() {
-                                if i > 0 {
-                                    s += ", ";
-                                }
-                                s += &arg.sql_display();
-                            }
-                            s += ")";
-                            s
-                        }
-                    }
-                }
-            }
-        }
-
-        write_expr(self, 0)
     }
 
     pub fn project_column_ref<ToIndex: ColumnIndex>(
@@ -445,14 +293,16 @@ impl<Index: ColumnIndex> Expr<Index> {
         }
     }
 
-    pub fn is_deterministic(&self) -> bool {
+    pub fn is_deterministic(&self, registry: &FunctionRegistry) -> bool {
         match self {
             Expr::Constant { .. } => true,
             Expr::ColumnRef { .. } => true,
-            Expr::Cast { expr, .. } => expr.is_deterministic(),
+            Expr::Cast { expr, .. } => expr.is_deterministic(registry),
             Expr::FunctionCall { function, args, .. } => {
-                !function.signature.property.non_deterministic
-                    && args.iter().all(|arg| arg.is_deterministic())
+                !registry
+                    .get_property(&function.signature.name)
+                    .non_deterministic
+                    && args.iter().all(|arg| arg.is_deterministic(registry))
             }
         }
     }

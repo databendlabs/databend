@@ -15,7 +15,7 @@
 use common_ast::ast::FormatTreeNode;
 use common_catalog::plan::PartStatistics;
 use common_exception::Result;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_profile::ProfSpanSetRef;
 use itertools::Itertools;
 
@@ -804,7 +804,7 @@ fn project_set_to_format_tree(
         "set returning functions: {}",
         plan.srf_exprs
             .iter()
-            .map(|(expr, _)| expr.clone().into_srf_expr().sql_display())
+            .map(|(expr, _)| expr.clone().as_expr(&BUILTIN_FUNCTIONS).sql_display())
             .collect::<Vec<_>>()
             .join(", ")
     ))]);

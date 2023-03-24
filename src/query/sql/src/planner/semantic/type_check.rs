@@ -48,14 +48,14 @@ use common_expression::types::decimal::DecimalSize;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
+use common_expression::FunctionKind;
 use common_expression::RawExpr;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_functions::aggregates::AggregateCountFunction;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::is_builtin_function;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
-use common_functions::srfs::BUILTIN_SET_RETURNING_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_users::UserApiProvider;
 
 use super::name_resolution::NameResolutionContext;
@@ -141,21 +141,16 @@ impl<'a> TypeChecker<'a> {
 
     #[async_recursion::async_recursion]
     pub async fn resolve(&mut self, expr: &Expr) -> Result<Box<(ScalarExpr, DataType)>> {
-        if let Some(column_binding) = self.bind_context.srfs.get(&expr.to_string()) {
+        if let Some(scalar) = self.bind_context.srfs.get(&expr.to_string()) {
             if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
                 return Err(ErrorCode::SemanticError(
                     "set-returning functions are only allowed in SELECT clause",
-                ));
+                )
+                .set_span(expr.span()));
             }
             // Found a SRF, return it directly.
             // See `Binder::bind_project_set` for more details.
-            return Ok(Box::new((
-                ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    span: expr.span(),
-                    column: column_binding.clone(),
-                }),
-                *column_binding.data_type.clone(),
-            )));
+            return Ok(Box::new((scalar.clone(), scalar.data_type()?)));
         }
 
         let box (scalar, data_type): Box<(ScalarExpr, DataType)> = match expr {
@@ -594,7 +589,12 @@ impl<'a> TypeChecker<'a> {
 
                 let args: Vec<&Expr> = args.iter().collect();
 
-                if BUILTIN_SET_RETURNING_FUNCTIONS.contains(func_name) {
+                if BUILTIN_FUNCTIONS
+                    .properties
+                    .get(&name.name.to_lowercase())
+                    .map(|property| property.kind == FunctionKind::SRF)
+                    .unwrap_or(false)
+                {
                     if matches!(
                         self.bind_context.expr_context,
                         ExprContext::InSetReturningFunction
@@ -602,14 +602,14 @@ impl<'a> TypeChecker<'a> {
                         return Err(ErrorCode::SemanticError(
                             "set-returning functions cannot be nested".to_string(),
                         )
-                        .set_span(expr.span()));
+                        .set_span(*span));
                     }
 
                     if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
                         return Err(ErrorCode::SemanticError(
                             "set-returning functions can only be used in SELECT".to_string(),
                         )
-                        .set_span(expr.span()));
+                        .set_span(*span));
                     }
 
                     // Should have been handled with `BindContext::srfs`
@@ -703,7 +703,7 @@ impl<'a> TypeChecker<'a> {
                         .map(|literal| match literal {
                             Literal::UInt64(n) => Ok(*n as usize),
                             lit => Err(ErrorCode::SemanticError(format!(
-                                "Invalid parameter {lit} for scalar function"
+                                "invalid parameter {lit} for scalar function"
                             ))
                             .set_span(*span)),
                         })
@@ -1055,7 +1055,7 @@ impl<'a> TypeChecker<'a> {
         let registry = &BUILTIN_FUNCTIONS;
         let expr = type_check::check(&raw_expr, registry)?;
 
-        if !expr.is_deterministic() {
+        if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
             self.ctx.set_cacheable(false);
         }
 
@@ -1437,7 +1437,6 @@ impl<'a> TypeChecker<'a> {
             "is_null",
             "coalesce",
             "last_query_id",
-            "unnest",
         ]
     }
 

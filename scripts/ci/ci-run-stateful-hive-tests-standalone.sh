@@ -11,11 +11,5 @@ echo "Starting standalone DatabendQuery(debug profile)"
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../tests" || exit
 
-for i in $(seq 1 3); do
-	echo "Starting databend-test $i"
-	./databend-test --mode 'standalone' --run-dir 2_stateful_hive
-
-	if [ $? -ne 0 ]; then
-		break
-	fi
-done
+echo "Starting databend-test"
+./databend-test --mode 'standalone' --run-dir 2_stateful_hive
