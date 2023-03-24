@@ -159,7 +159,7 @@ pub struct BindContext {
 
     /// Set-returning functions in current context.
     /// The key is the `Expr::to_string` of the function.
-    pub srfs: DashMap<String, ColumnBinding>,
+    pub srfs: DashMap<String, ScalarExpr>,
 
     pub expr_context: ExprContext,
 }

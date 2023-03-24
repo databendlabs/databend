@@ -81,6 +81,8 @@ collation_name NULL NO NULL (empty)
 domain_catalog NULL NO NULL (empty)
 domain_schema NULL NO NULL (empty)
 domain_name NULL NO NULL (empty)
+privileges NULL NO NULL (empty)
+default VARCHAR NO "" (empty)
 extra NULL NO NULL (empty)
 
 query TTT

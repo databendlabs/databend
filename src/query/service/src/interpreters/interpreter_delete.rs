@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
@@ -66,7 +66,7 @@ impl Interpreter for DeleteInterpreter {
                 cast_expr_to_non_null_boolean(scalar.as_expr_with_col_name()?)?.as_remote_expr();
 
             let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-            if !expr.is_deterministic() {
+            if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
                 return Err(ErrorCode::Unimplemented(
                     "Delete must have deterministic predicate",
                 ));

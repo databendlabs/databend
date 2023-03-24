@@ -14,30 +14,16 @@
 
 use common_arrow::arrow::buffer::Buffer;
 use common_expression::types::ArrayType;
-use common_expression::types::EmptyArrayType;
 use common_expression::types::Float32Type;
 use common_expression::types::F32;
-use common_expression::vectorize_2_arg;
 use common_expression::vectorize_with_builder_2_arg;
 use common_expression::FunctionDomain;
-use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_vector::cosine_distance;
 
 pub fn register(registry: &mut FunctionRegistry) {
-    registry
-        .register_passthrough_nullable_2_arg::<EmptyArrayType, EmptyArrayType, Float32Type, _, _>(
-            "cosine_distance",
-            FunctionProperty::default(),
-            |_, _| FunctionDomain::Full,
-            vectorize_2_arg::<EmptyArrayType, EmptyArrayType, Float32Type>(|_, _, _| {
-                F32::from(0.0)
-            }),
-        );
-
     registry.register_passthrough_nullable_2_arg::<ArrayType<Float32Type>, ArrayType<Float32Type>, Float32Type, _, _>(
         "cosine_distance",
-        FunctionProperty::default(),
         |_,  _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<ArrayType<Float32Type>, ArrayType<Float32Type>,  Float32Type>(
             |lhs, rhs, output, ctx| {

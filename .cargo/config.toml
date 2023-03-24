@@ -1,3 +1,3 @@
 [env]
 # https://android.googlesource.com/platform/external/jemalloc_new/+/refs/heads/master/TUNING.md
-JEMALLOC_SYS_WITH_MALLOC_CONF = "percpu_arena:percpu,oversize_threshold:0,background_thread:true,metadata_thp:auto,dirty_decay_ms:5000,muzzy_decay_ms:5000"
+JEMALLOC_SYS_WITH_MALLOC_CONF = "percpu_arena:percpu,oversize_threshold:0,background_thread:true,dirty_decay_ms:5000,muzzy_decay_ms:5000"

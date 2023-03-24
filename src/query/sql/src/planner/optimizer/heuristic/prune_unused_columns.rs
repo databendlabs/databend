@@ -190,14 +190,12 @@ impl UnusedColumnPruner {
                 let mut used = vec![];
                 // Only keep columns needed by parent plan.
                 for s in op.srfs.iter() {
-                    if !s.columns.iter().any(|c| required.contains(c)) {
+                    if !required.contains(&s.index) {
                         continue;
                     }
                     used.push(s.clone());
-                    s.args.iter().for_each(|scalar| {
-                        scalar.used_columns().iter().for_each(|c| {
-                            required.insert(*c);
-                        })
+                    s.scalar.used_columns().iter().for_each(|c| {
+                        required.insert(*c);
                     })
                 }
 

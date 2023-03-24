@@ -261,7 +261,7 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
         RelOperator::ProjectSet(op) => op
             .srfs
             .iter()
-            .any(|expr| expr.args.iter().any(find_subquery_in_expr)),
+            .any(|expr| find_subquery_in_expr(&expr.scalar)),
     }
 }
 
