@@ -71,6 +71,11 @@ impl AuthMgr {
                 // create a virtual JWT user only available in current session
                 let auth_role = jwt.custom.role.clone();
                 let mut user_info = UserInfo::new(&user_name, "%", AuthInfo::JWT);
+                if user_info.identity().is_root() {
+                    return Err(ErrorCode::AuthenticateFailure(
+                        "root user is not allowed in jwt auth.",
+                    ));
+                }
                 if let Some(ref role) = auth_role {
                     user_info.grants.grant_role(role.clone());
                 }

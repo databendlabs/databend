@@ -96,7 +96,6 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
         let res = auth_mgr
             .auth(ctx.get_current_session(), &Credential::Jwt {
                 token: token1,
-                hostname: None,
             })
             .await;
         assert!(res.is_ok());
@@ -122,7 +121,6 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
         let res = auth_mgr
             .auth(ctx.get_current_session(), &Credential::Jwt {
                 token: token2,
-                hostname: None,
             })
             .await;
         assert!(res.is_ok());
@@ -146,14 +144,13 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
             .with_subject(user2.to_string());
         let token2 = pair2.sign(claims)?;
         let tenant = ctx.get_current_session().get_current_tenant();
-        let user2_info = UserInfo::new(user2, "1.1.1.1", AuthInfo::JWT);
+        let user2_info = UserInfo::new(user2, "%", AuthInfo::JWT);
         UserApiProvider::instance()
             .add_user(tenant.as_str(), user2_info.clone(), true)
             .await?;
         let res2 = auth_mgr
             .auth(ctx.get_current_session(), &Credential::Jwt {
                 token: token2,
-                hostname: Some("1.1.1.1".to_string()),
             })
             .await;
         assert!(res2.is_ok());
@@ -175,7 +172,6 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
         let res3 = auth_mgr
             .auth(ctx.get_current_session(), &Credential::Jwt {
                 token: token3,
-                hostname: None,
             })
             .await;
         assert!(res3.is_err());
@@ -225,10 +221,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
-                token,
-                hostname: None,
-            })
+            .auth(ctx.get_current_session(), &Credential::Jwt { token })
             .await;
         assert!(res.is_err());
 
@@ -246,10 +239,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
-                token,
-                hostname: None,
-            })
+            .auth(ctx.get_current_session(), &Credential::Jwt { token })
             .await;
         assert!(res.is_err());
 
@@ -269,10 +259,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
-                token,
-                hostname: None,
-            })
+            .auth(ctx.get_current_session(), &Credential::Jwt { token })
             .await;
         assert!(res.is_err());
 
@@ -292,10 +279,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
-                token,
-                hostname: None,
-            })
+            .auth(ctx.get_current_session(), &Credential::Jwt { token })
             .await?;
         let user_info = ctx.get_current_user()?;
         assert_eq!(user_info.grants.roles().len(), 0);
@@ -311,10 +295,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
-                token,
-                hostname: None,
-            })
+            .auth(ctx.get_current_session(), &Credential::Jwt { token })
             .await?;
         let user_info = ctx.get_current_user()?;
         assert_eq!(user_info.grants.roles().len(), 0);
@@ -332,10 +313,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
-                token,
-                hostname: None,
-            })
+            .auth(ctx.get_current_session(), &Credential::Jwt { token })
             .await;
         assert!(res.is_ok());
 
@@ -360,10 +338,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
-                token,
-                hostname: None,
-            })
+            .auth(ctx.get_current_session(), &Credential::Jwt { token })
             .await;
         assert!(res.is_ok());
 
@@ -378,32 +353,13 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         assert!(!roles.contains(&"test-auth-role".to_string()));
     }
 
-    // root auth from localhost
-    {
-        let user_name = "root";
-
-        let claims = Claims::create(Duration::from_hours(2)).with_subject(user_name.to_string());
-        let token = key_pair.sign(claims)?;
-
-        let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
-                token,
-                hostname: Some("localhost".to_string()),
-            })
-            .await;
-        assert!(res.is_ok());
-    }
-
-    // root auth outside localhost
+    // root auth not allowed
     {
         let claims = Claims::create(Duration::from_hours(2)).with_subject("root".to_string());
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
-                token,
-                hostname: Some("10.0.0.1".to_string()),
-            })
+            .auth(ctx.get_current_session(), &Credential::Jwt { token })
             .await;
         assert!(res.is_err());
 
@@ -411,7 +367,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
             res.err()
                 .unwrap()
                 .to_string()
-                .contains("only accept root from localhost, current: 'root'@'%'")
+                .contains("root user not allowed in jwt auth")
         );
     }
 
@@ -456,10 +412,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
-                token,
-                hostname: None,
-            })
+            .auth(ctx.get_current_session(), &Credential::Jwt { token })
             .await;
         assert!(res.is_err());
 
@@ -477,10 +430,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
-                token,
-                hostname: None,
-            })
+            .auth(ctx.get_current_session(), &Credential::Jwt { token })
             .await;
         assert!(res.is_err());
         assert!(
@@ -499,10 +449,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
-                token,
-                hostname: None,
-            })
+            .auth(ctx.get_current_session(), &Credential::Jwt { token })
             .await;
         assert!(res.is_err());
         assert!(
@@ -521,10 +468,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
-                token,
-                hostname: None,
-            })
+            .auth(ctx.get_current_session(), &Credential::Jwt { token })
             .await?;
         let user_info = ctx.get_current_user()?;
         assert_eq!(user_info.grants.roles().len(), 0);
@@ -540,10 +484,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
-                token,
-                hostname: None,
-            })
+            .auth(ctx.get_current_session(), &Credential::Jwt { token })
             .await?;
         let user_info = ctx.get_current_user()?;
         assert_eq!(user_info.grants.roles().len(), 0);
@@ -561,10 +502,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
-                token,
-                hostname: None,
-            })
+            .auth(ctx.get_current_session(), &Credential::Jwt { token })
             .await;
         assert!(res.is_ok());
 
@@ -589,10 +527,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
-                token,
-                hostname: None,
-            })
+            .auth(ctx.get_current_session(), &Credential::Jwt { token })
             .await;
         assert!(res.is_ok());
 
@@ -607,39 +542,20 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         assert!(!roles.contains(&"test-auth-role".to_string()));
     }
 
-    // root auth from localhost
-    {
-        let user_name = "root";
-
-        let claims = Claims::create(Duration::from_hours(2)).with_subject(user_name.to_string());
-        let token = key_pair.sign(claims)?;
-
-        let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
-                token,
-                hostname: Some("localhost".to_string()),
-            })
-            .await;
-        assert!(res.is_ok());
-    }
-
-    // root auth outside localhost
+    // root auth not allowed
     {
         let claims = Claims::create(Duration::from_hours(2)).with_subject("root".to_string());
         let token = key_pair.sign(claims)?;
 
         let res = auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
-                token,
-                hostname: Some("10.0.0.1".to_string()),
-            })
+            .auth(ctx.get_current_session(), &Credential::Jwt { token })
             .await;
         assert!(res.is_err());
         assert!(
             res.err()
                 .unwrap()
                 .to_string()
-                .contains("only accept root from localhost, current: 'root'@'%'")
+                .contains("root user not allowed in jwt auth")
         );
     }
 
@@ -687,10 +603,7 @@ async fn test_jwt_auth_mgr_with_management() -> Result<()> {
         let token = key_pair.sign(claims)?;
 
         auth_mgr
-            .auth(ctx.get_current_session(), &Credential::Jwt {
-                token,
-                hostname: None,
-            })
+            .auth(ctx.get_current_session(), &Credential::Jwt { token })
             .await?;
         let user_info = ctx.get_current_user()?;
         let current_tenant = ctx.get_tenant();
