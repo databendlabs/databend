@@ -36,6 +36,7 @@ use arrow_flight::sql::CommandPreparedStatementQuery;
 use arrow_flight::sql::CommandPreparedStatementUpdate;
 use arrow_flight::sql::CommandStatementQuery;
 use arrow_flight::sql::CommandStatementUpdate;
+use arrow_flight::sql::DoPutUpdateResult;
 use arrow_flight::sql::ProstMessageExt;
 use arrow_flight::sql::SqlInfo;
 use arrow_flight::sql::TicketStatementQuery;
@@ -48,6 +49,7 @@ use arrow_flight::HandshakeRequest;
 use arrow_flight::HandshakeResponse;
 use arrow_flight::IpcMessage;
 use arrow_flight::Location;
+use arrow_flight::PutResult;
 use arrow_flight::SchemaAsIpc;
 use arrow_flight::Ticket;
 use arrow_ipc::writer::IpcWriteOptions;
@@ -371,27 +373,52 @@ impl FlightSqlService for FlightSqlServiceImpl {
         ))
     }
 
-    // do_put
+    // called by rust FlightSqlServiceClient, which is used in unit test.
     async fn do_put_statement_update(
         &self,
-        _ticket: CommandStatementUpdate,
-        _request: Request<Streaming<FlightData>>,
+        ticket: CommandStatementUpdate,
+        request: Request<Streaming<FlightData>>,
     ) -> Result<i64, Status> {
-        Err(Status::unimplemented(
-            "do_put_statement_update not implemented",
-        ))
+        let session = self.get_session(&request)?;
+        let query = ticket.query;
+        tracing::info!("do_put_statement_update with query = {query}");
+
+        let (plan, plan_extras) = self
+            .plan_sql(&session, &query)
+            .await
+            .map_err(|e| status!("Error getting result schema", e))?;
+        let res = self
+            .execute_update(session, &plan, &plan_extras)
+            .await
+            .map_err(|e| status!("fail to execute", e))?;
+        Ok(res)
     }
 
     async fn do_put_prepared_statement_query(
         &self,
-        _query: CommandPreparedStatementQuery,
-        _request: Request<Streaming<FlightData>>,
+        query: CommandPreparedStatementQuery,
+        request: Request<Streaming<FlightData>>,
     ) -> Result<Response<<Self as FlightService>::DoPutStream>, Status> {
-        Err(Status::unimplemented(
-            "do_put_prepared_statement_query not implemented",
-        ))
+        let session = self.get_session(&request)?;
+        let handle = Uuid::from_slice(query.prepared_statement_handle.as_ref())
+            .map_err(|e| Status::internal(format!("Error decoding handle: {e}")))?;
+
+        tracing::info!("do_put_prepared_statement_query with handle={handle}");
+
+        let handle_plan = self.statements.get(&handle).unwrap();
+        let record_count = self
+            .execute_update(session, &handle_plan.value().0, &handle_plan.value().1)
+            .await
+            .map_err(|e| status!("fail to execute", e))?;
+        let result = DoPutUpdateResult { record_count };
+        let result = PutResult {
+            app_metadata: result.as_any().encode_to_vec().into(),
+        };
+        let result = futures::stream::iter(vec![Ok(result)]);
+        return Ok(Response::new(Box::pin(result)));
     }
 
+    // called by JDBC
     async fn do_put_prepared_statement_update(
         &self,
         query: CommandPreparedStatementUpdate,
@@ -410,7 +437,6 @@ impl FlightSqlService for FlightSqlServiceImpl {
             .map_err(|e| status!("fail to execute", e))?;
 
         tracing::info!("do_put_prepared_statement_update with handle={handle} return {res}");
-
         Ok(res)
     }
 
