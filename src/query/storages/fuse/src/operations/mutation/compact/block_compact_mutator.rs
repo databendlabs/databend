@@ -103,6 +103,7 @@ impl BlockCompactMutator {
         );
         let mut checker = SegmentCompactChecker::new(self.compact_params.block_per_seg as u64);
         let max_io_requests = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+        let mut is_end = false;
         for chunk in segment_locations.chunks(max_io_requests) {
             // Read the segments information in parallel.
             let segment_infos = segments_io
@@ -136,6 +137,7 @@ impl BlockCompactMutator {
                 }
                 checked_end_at += 1;
                 if compacted_segment_cnt + checker.segments.len() >= limit {
+                    is_end = true;
                     break;
                 }
             }
@@ -150,6 +152,10 @@ impl BlockCompactMutator {
                 );
                 self.ctx.set_status_info(&status);
                 info!(status);
+            }
+
+            if is_end {
+                break;
             }
         }
 
