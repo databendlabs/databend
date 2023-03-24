@@ -407,10 +407,10 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: FunctionEval::SRF {
                 eval: Box::new(|_, num_rows| {
                     let mut columns = Vec::with_capacity(num_rows);
-                    for _ in 0..num_rows {
+                    (0..num_rows).for_each(|_| {
                         let column = ColumnBuilder::with_capacity(&DataType::Null, 0).build();
                         columns.push((Value::Column(Column::Tuple(vec![column])), 0));
-                    }
+                    });
                     columns
                 }),
             },
