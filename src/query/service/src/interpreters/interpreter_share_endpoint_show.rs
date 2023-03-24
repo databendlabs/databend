@@ -58,14 +58,14 @@ impl Interpreter for ShowShareEndpointInterpreter {
         let mut to_tenants: Vec<Vec<u8>> = vec![];
         let mut args: Vec<Vec<u8>> = vec![];
         let mut comments: Vec<Vec<u8>> = vec![];
-        let mut created_ons: Vec<Vec<u8>> = vec![];
+        let mut created_on_vec: Vec<Vec<u8>> = vec![];
         for (endpoint, meta) in resp.share_endpoint_meta_vec {
             endpoints.push(endpoint.endpoint.clone().as_bytes().to_vec());
             urls.push(meta.url.clone().as_bytes().to_vec());
             to_tenants.push(meta.tenant.clone().as_bytes().to_vec());
             args.push(format!("{:?}", meta.args).as_bytes().to_vec());
             comments.push(meta.comment.unwrap_or_default().as_bytes().to_vec());
-            created_ons.push(meta.create_on.to_string().as_bytes().to_vec());
+            created_on_vec.push(meta.create_on.to_string().as_bytes().to_vec());
         }
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
@@ -74,7 +74,7 @@ impl Interpreter for ShowShareEndpointInterpreter {
             StringType::from_data(to_tenants),
             StringType::from_data(args),
             StringType::from_data(comments),
-            StringType::from_data(created_ons),
+            StringType::from_data(created_on_vec),
         ])])
     }
 }
