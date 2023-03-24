@@ -144,7 +144,7 @@ jobs:
 
   publish_linux:
     name: linux assets
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, perf]
     needs: [create_release]
     env:
       RUNNER_PROVIDER: aws
