@@ -422,4 +422,28 @@ impl Plan {
             Plan::RevertTable(plan) => plan.schema(),
         }
     }
+
+    pub fn has_result_set(&self) -> bool {
+        matches!(
+            self,
+            Plan::Query { .. }
+                | Plan::Explain { .. }
+                | Plan::ExplainAst { .. }
+                | Plan::ExplainSyntax { .. }
+                | Plan::ExplainAnalyze { .. }
+                | Plan::Call(_)
+                | Plan::ShowCreateDatabase(_)
+                | Plan::ShowCreateTable(_)
+                | Plan::ShowFileFormats(_)
+                | Plan::ShowRoles(_)
+                | Plan::DescShare(_)
+                | Plan::ShowShares(_)
+                | Plan::ShowShareEndpoint(_)
+                | Plan::ShowObjectGrantPrivileges(_)
+                | Plan::ShowGrantTenantsOfShare(_)
+                | Plan::DescribeTable(_)
+                | Plan::ShowGrants(_)
+                | Plan::Presign(_)
+        )
+    }
 }
