@@ -61,7 +61,30 @@ impl FlightSqlServiceImpl {
         planner.plan_sql(query).await
     }
 
-    pub(super) async fn execute_plan(
+    pub(super) async fn execute_update(
+        &self,
+        session: Arc<Session>,
+        plan: &Plan,
+        plan_extras: &PlanExtras,
+    ) -> Result<i64> {
+        let context = session
+            .create_query_context()
+            .await
+            .map_err(|e| status!("Could not create_query_context", e))?;
+
+        context.attach_query_str(plan.to_string(), plan_extras.stament.to_mask_sql());
+        let interpreter = InterpreterFactory::get(context.clone(), plan).await?;
+
+        let mut blocks = interpreter.execute(context.clone()).await?;
+        while let Some(block) = blocks.next().await {
+            block?;
+        }
+
+        let affected_rows = context.get_write_progress_value().rows;
+        Ok(affected_rows as i64)
+    }
+
+    pub(super) async fn execute_query(
         &self,
         session: Arc<Session>,
         plan: &Plan,

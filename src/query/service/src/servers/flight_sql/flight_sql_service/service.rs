@@ -14,6 +14,7 @@
 
 use std::io::Cursor;
 use std::pin::Pin;
+use std::sync::Arc;
 
 use arrow_flight::flight_descriptor::DescriptorType;
 use arrow_flight::flight_service_server::FlightService;
@@ -52,6 +53,7 @@ use arrow_flight::Ticket;
 use arrow_ipc::writer::IpcWriteOptions;
 use common_base::base::uuid::Uuid;
 use common_exception::Result;
+use common_expression::DataSchema;
 use futures::Stream;
 use prost::bytes::Buf;
 use prost::Message;
@@ -117,7 +119,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
 
         let handle_plan = self.statements.get(&handle).unwrap();
         let stream = self
-            .execute_plan(session, &handle_plan.value().0, &handle_plan.value().1)
+            .execute_query(session, &handle_plan.value().0, &handle_plan.value().1)
             .await
             .map_err(|e| status!("fail to execute", e))?;
         let resp = Response::new(stream);
@@ -392,12 +394,24 @@ impl FlightSqlService for FlightSqlServiceImpl {
 
     async fn do_put_prepared_statement_update(
         &self,
-        _query: CommandPreparedStatementUpdate,
-        _request: Request<Streaming<FlightData>>,
+        query: CommandPreparedStatementUpdate,
+        request: Request<Streaming<FlightData>>,
     ) -> Result<i64, Status> {
-        Err(Status::unimplemented(
-            "do_put_prepared_statement_update not implemented",
-        ))
+        let session = self.get_session(&request)?;
+        let handle = Uuid::from_slice(query.prepared_statement_handle.as_ref())
+            .map_err(|e| Status::internal(format!("Error decoding handle: {e}")))?;
+
+        tracing::info!("do_put_prepared_statement_update with handle={handle}");
+
+        let handle_plan = self.statements.get(&handle).unwrap();
+        let res = self
+            .execute_update(session, &handle_plan.value().0, &handle_plan.value().1)
+            .await
+            .map_err(|e| status!("fail to execute", e))?;
+
+        tracing::info!("do_put_prepared_statement_update with handle={handle} return {res}");
+
+        Ok(res)
     }
 
     async fn do_action_create_prepared_statement(
