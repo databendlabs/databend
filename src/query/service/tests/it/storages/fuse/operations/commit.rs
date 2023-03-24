@@ -476,7 +476,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
+    fn apply_changed_settings(&self, _changes: HashMap<String, ChangeValue>) -> Result<()> {
         todo!()
     }
 

@@ -327,14 +327,11 @@ impl Session {
         self.session_ctx.get_settings()
     }
 
-    pub fn get_changed_settings(self: &Arc<Self>) -> HashMap<String, ChangeValue> {
+    pub fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
         self.session_ctx.get_changed_settings()
     }
 
-    pub fn apply_changed_settings(
-        self: &Arc<Self>,
-        changes: HashMap<String, ChangeValue>,
-    ) -> Result<()> {
+    pub fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
         self.session_ctx.apply_changed_settings(changes)
     }
 

@@ -28,7 +28,6 @@ use crate::settings_default::DefaultSettings;
 
 #[derive(Clone)]
 pub enum ScopeLevel {
-    #[allow(dead_code)]
     Global,
     Session,
 }
@@ -46,7 +45,7 @@ impl Debug for ScopeLevel {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ChangeValue {
     pub level: ScopeLevel,
     pub value: UserSettingValue,
@@ -113,6 +112,24 @@ impl Settings {
         }
 
         Ok(())
+    }
+
+    pub fn get_changes(&self) -> HashMap<String, ChangeValue> {
+        let mut changes = HashMap::new();
+        for entry in self.changes.iter() {
+            changes.insert(entry.key().clone(), entry.value().clone());
+        }
+
+        changes
+    }
+
+    /// # Safety
+    ///
+    /// We will not validate the setting value type
+    pub unsafe fn unchecked_apply_changes(&self, changes: HashMap<String, ChangeValue>) {
+        for (name, value) in changes {
+            self.changes.insert(name, value);
+        }
     }
 }
 

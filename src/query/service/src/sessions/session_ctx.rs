@@ -91,11 +91,14 @@ impl SessionContext {
     }
 
     pub fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
-        unimplemented!()
+        self.settings.get_changes()
     }
 
     pub fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
-        unimplemented!()
+        unsafe {
+            self.settings.unchecked_apply_changes(changes);
+        }
+        Ok(())
     }
 
     // Get current catalog name.
