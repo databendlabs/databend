@@ -70,7 +70,7 @@ pub enum FunctionEval {
         /// Given the domains of the arguments, return the domain of the output value.
         calc_domain: Box<dyn Fn(&[Domain]) -> FunctionDomain<AnyType> + Send + Sync>,
         /// Given a set of arguments, return a single value.
-        /// The result must be in the same length as the input arugments if its a column.
+        /// The result must be in the same length as the input arguments if its a column.
         eval: Box<dyn Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> + Send + Sync>,
     },
     /// Set returning function that returns a series of values.

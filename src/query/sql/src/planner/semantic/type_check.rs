@@ -625,7 +625,7 @@ impl<'a> TypeChecker<'a> {
 
                 let args: Vec<&Expr> = args.iter().collect();
 
-                // Check assumptions if it is a set returing function
+                // Check assumptions if it is a set returning function
                 if BUILTIN_FUNCTIONS
                     .properties
                     .get(&name.name.to_lowercase())
