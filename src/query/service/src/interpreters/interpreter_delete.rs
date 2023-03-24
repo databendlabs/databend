@@ -87,7 +87,7 @@ impl Interpreter for DeleteInterpreter {
         tbl.delete(self.ctx.clone(), filter, col_indices, &mut pipeline)
             .await?;
         if !pipeline.is_empty() {
-            let settings = self.ctx.get_new_settings();
+            let settings = self.ctx.get_settings();
             pipeline.set_max_threads(settings.get_max_threads()? as usize);
             let query_id = self.ctx.get_id();
             let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;

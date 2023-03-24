@@ -61,9 +61,9 @@ pub async fn create_query_context_with_session(
     dummy_session.set_authed_user(user_info, None).await?;
 
     let dummy_query_context = dummy_session.create_query_context().await?;
-    dummy_query_context.get_new_settings().set_max_threads(8)?;
+    dummy_query_context.get_settings().set_max_threads(8)?;
     dummy_query_context
-        .get_new_settings()
+        .get_settings()
         .set_max_memory_usage(16 * 1024 * 1024 * 1024)?;
     Ok((guard, dummy_query_context))
 }
@@ -97,7 +97,7 @@ pub async fn create_query_context_with_config(
         .await?;
     let dummy_query_context = dummy_session.create_query_context().await?;
 
-    dummy_query_context.get_new_settings().set_max_threads(8)?;
+    dummy_query_context.get_settings().set_max_threads(8)?;
     Ok((guard, dummy_query_context))
 }
 
@@ -162,6 +162,6 @@ pub async fn create_query_context_with_cluster(
         Cluster::create(nodes, local_id),
     )?);
 
-    dummy_query_context.get_new_settings().set_max_threads(8)?;
+    dummy_query_context.get_settings().set_max_threads(8)?;
     Ok((guard, dummy_query_context))
 }

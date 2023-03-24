@@ -18,7 +18,7 @@ use common_exception::Result;
 use common_expression::TableSchemaRef;
 use common_meta_app::principal::FileFormatOptions;
 use common_meta_app::principal::StageFileFormatType;
-use common_settings::NewSettings;
+use common_settings::Settings;
 
 use crate::delimiter::RecordDelimiter;
 use crate::format_option_checker::get_format_option_checker;
@@ -51,7 +51,7 @@ pub struct FileFormatOptionsExt {
 impl FileFormatOptionsExt {
     pub fn create_from_file_format_options(
         stage: FileFormatOptions,
-        settings: &NewSettings,
+        settings: &Settings,
     ) -> Result<FileFormatOptionsExt> {
         let timezone = parse_timezone(settings)?;
         let options = FileFormatOptionsExt {
@@ -67,7 +67,7 @@ impl FileFormatOptionsExt {
 
     pub fn create_from_clickhouse_format(
         clickhouse_type: ClickhouseFormatType,
-        settings: &NewSettings,
+        settings: &Settings,
     ) -> Result<FileFormatOptionsExt> {
         let timezone = parse_timezone(settings)?;
 
@@ -120,7 +120,7 @@ impl FileFormatOptionsExt {
     pub fn get_output_format_from_clickhouse_format(
         typ: ClickhouseFormatType,
         schema: TableSchemaRef,
-        settings: &NewSettings,
+        settings: &Settings,
     ) -> Result<Box<dyn OutputFormat>> {
         let mut options = FileFormatOptionsExt::create_from_clickhouse_format(typ, settings)?;
         options.get_output_format(schema)
@@ -129,7 +129,7 @@ impl FileFormatOptionsExt {
     pub fn get_output_format_from_format_options(
         schema: TableSchemaRef,
         options: FileFormatOptions,
-        settings: &NewSettings,
+        settings: &Settings,
     ) -> Result<Box<dyn OutputFormat>> {
         let mut options = FileFormatOptionsExt::create_from_file_format_options(options, settings)?;
         options.get_output_format(schema)
@@ -213,7 +213,7 @@ impl FileFormatTypeExt for StageFileFormatType {
     }
 }
 
-pub fn parse_timezone(settings: &NewSettings) -> Result<Tz> {
+pub fn parse_timezone(settings: &Settings) -> Result<Tz> {
     let tz = settings.get_timezone()?;
     tz.parse::<Tz>()
         .map_err(|_| ErrorCode::InvalidTimezone("Timezone has been checked and should be valid"))

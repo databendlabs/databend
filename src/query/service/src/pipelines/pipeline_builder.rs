@@ -726,8 +726,8 @@ impl PipelineBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let max_threads = self.ctx.get_new_settings().get_max_threads()? as usize;
-        let block_size = self.ctx.get_new_settings().get_max_block_size()? as usize;
+        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+        let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
 
         // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
         if self.main_pipeline.output_len() == 1 || max_threads == 1 {

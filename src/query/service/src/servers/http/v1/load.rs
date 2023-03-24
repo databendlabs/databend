@@ -100,7 +100,7 @@ pub async fn streaming_load(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
-    let settings = context.get_new_settings();
+    let settings = context.get_settings();
 
     for (key, value) in req.headers().iter() {
         if settings
@@ -153,7 +153,7 @@ pub async fn streaming_load(
                 let input_context = Arc::new(
                     InputContext::try_create_from_insert_file_format(
                         rx,
-                        context.get_new_settings(),
+                        context.get_settings(),
                         option_settings.clone(),
                         table_schema,
                         context.get_scan_progress(),

@@ -159,7 +159,7 @@ pub fn optimize_query(
     // Because cbo may change join order and we don't want to
     // break optimizer due to new added nodes by runtime filter.
     // Currently, we only support standalone.
-    if !enable_distributed_query && ctx.get_new_settings().get_runtime_filter()? {
+    if !enable_distributed_query && ctx.get_settings().get_runtime_filter()? {
         result = try_add_runtime_filter_nodes(&result)?;
     }
     if enable_distributed_query {

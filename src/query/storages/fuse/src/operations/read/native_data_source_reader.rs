@@ -51,7 +51,7 @@ impl ReadNativeDataSource<true> {
         block_reader: Arc<BlockReader>,
         partitions: StealablePartitions,
     ) -> Result<ProcessorPtr> {
-        let batch_size = ctx.get_new_settings().get_storage_fetch_part_num()? as usize;
+        let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
         SyncSourcer::create(ctx.clone(), output.clone(), ReadNativeDataSource::<true> {
             id,
             output,
@@ -72,7 +72,7 @@ impl ReadNativeDataSource<false> {
         block_reader: Arc<BlockReader>,
         partitions: StealablePartitions,
     ) -> Result<ProcessorPtr> {
-        let batch_size = ctx.get_new_settings().get_storage_fetch_part_num()? as usize;
+        let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
         Ok(ProcessorPtr::create(Box::new(ReadNativeDataSource::<
             false,
         > {

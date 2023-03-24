@@ -26,7 +26,7 @@ use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserPrivilegeType;
 use common_settings::ChangeValue;
-use common_settings::NewSettings;
+use common_settings::Settings;
 use common_users::RoleCacheManager;
 use common_users::BUILTIN_ROLE_PUBLIC;
 use parking_lot::RwLock;
@@ -135,7 +135,7 @@ impl Session {
 
     // only used for values and mysql output
     pub fn get_format_settings(&self) -> Result<FormatSettings> {
-        let settings = self.session_ctx.get_new_settings();
+        let settings = self.session_ctx.get_settings();
         let tz = settings.get_timezone()?;
         let timezone = tz.parse::<Tz>().map_err(|_| {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
@@ -323,8 +323,8 @@ impl Session {
         )))
     }
 
-    pub fn get_new_settings(self: &Arc<Self>) -> Arc<NewSettings> {
-        self.session_ctx.get_new_settings()
+    pub fn get_settings(self: &Arc<Self>) -> Arc<Settings> {
+        self.session_ctx.get_settings()
     }
 
     pub fn get_changed_settings(self: &Arc<Self>) -> HashMap<String, ChangeValue> {

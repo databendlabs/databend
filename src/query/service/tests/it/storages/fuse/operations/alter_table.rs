@@ -240,7 +240,7 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(&query).await?;
     let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
-    ctx.get_new_settings().set_max_threads(1)?;
+    ctx.get_settings().set_max_threads(1)?;
     let data_stream = interpreter.execute(ctx.clone()).await?;
     let _ = data_stream.try_collect::<Vec<_>>().await;
 

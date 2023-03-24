@@ -226,7 +226,7 @@ impl FuseTable {
             }
         }
 
-        let chunk_size = ctx.get_new_settings().get_max_storage_io_requests()? as usize;
+        let chunk_size = ctx.get_settings().get_max_storage_io_requests()? as usize;
 
         // 4. Purge segments&blocks by chunk size
         {
@@ -393,8 +393,7 @@ impl FuseTable {
         base_timestamp: Option<DateTime<Utc>>,
         snapshot_lites: Vec<TableSnapshotLite>,
     ) -> Result<RetentionPartition> {
-        let retention_interval =
-            Duration::hours(ctx.get_new_settings().get_retention_period()? as i64);
+        let retention_interval = Duration::hours(ctx.get_settings().get_retention_period()? as i64);
         let retention_point = base_timestamp.map(|s| s - retention_interval);
         let (beyond_retention, within_retention) = snapshot_lites
             .into_iter()

@@ -94,7 +94,7 @@ impl Table for RandomTable {
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        let settings = ctx.get_new_settings();
+        let settings = ctx.get_settings();
         let block_size = settings.get_max_block_size()? as usize;
         // If extras.push_downs is None or extras.push_down.limit is None,
         // set limit to `max_block_size`.

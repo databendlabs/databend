@@ -46,7 +46,7 @@ impl Session {
             state: self.process_state(session_ctx),
             database: session_ctx.get_current_database(),
             user: session_ctx.get_current_user(),
-            settings: self.get_new_settings(),
+            settings: self.get_settings(),
             client_address: session_ctx.get_client_host(),
             session_extra_info: self.process_extra_info(session_ctx),
             memory_usage,

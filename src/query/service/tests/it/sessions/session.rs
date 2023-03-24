@@ -40,7 +40,7 @@ async fn test_session() -> Result<()> {
 
     // Settings.
     {
-        let settings = session.get_new_settings();
+        let settings = session.get_settings();
         settings.set_max_threads(3)?;
         let actual = settings.get_max_threads()?;
         assert_eq!(actual, 3);

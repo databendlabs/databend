@@ -31,7 +31,7 @@ use common_meta_app::principal::FileFormatOptions;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
 use common_settings::ChangeValue;
-use common_settings::NewSettings;
+use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
@@ -50,7 +50,7 @@ pub struct ProcessInfo {
     pub state: String,
     pub database: String,
     pub user: Option<UserInfo>,
-    pub settings: Arc<NewSettings>,
+    pub settings: Arc<Settings>,
     pub client_address: Option<SocketAddr>,
     pub session_extra_info: Option<String>,
     pub memory_usage: i64,
@@ -113,7 +113,7 @@ pub trait TableContext: Send + Sync {
     fn get_query_kind(&self) -> String;
     fn get_function_context(&self) -> Result<FunctionContext>;
     fn get_connection_id(&self) -> String;
-    fn get_new_settings(&self) -> Arc<NewSettings>;
+    fn get_settings(&self) -> Arc<Settings>;
     fn get_cluster(&self) -> Arc<Cluster>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
     fn get_stage_attachment(&self) -> Option<StageAttachment>;

@@ -34,7 +34,7 @@ use common_expression::Scalar;
 use common_expression::TableField;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
-use common_settings::NewSettings;
+use common_settings::Settings;
 use parking_lot::RwLock;
 
 use crate::planner::binder::BindContext;
@@ -51,7 +51,7 @@ pub fn parse_exprs(
     table_meta: Arc<dyn Table>,
     sql: &str,
 ) -> Result<Vec<Expr>> {
-    let settings = NewSettings::try_create("".to_string());
+    let settings = Settings::try_create("".to_string());
     let mut bind_context = BindContext::new();
     let metadata = Arc::new(RwLock::new(Metadata::default()));
     let table_index = metadata.write().add_table(

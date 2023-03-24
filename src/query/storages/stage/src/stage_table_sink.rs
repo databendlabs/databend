@@ -73,7 +73,7 @@ impl StageTableSink {
         let output_format = FileFormatOptionsExt::get_output_format_from_format_options(
             table_info.schema(),
             table_info.stage_info.file_format_options.clone(),
-            &ctx.get_new_settings(),
+            &ctx.get_settings(),
         )?;
 
         let max_file_size = Self::adjust_max_file_size(&ctx, &table_info)?;
@@ -105,7 +105,7 @@ impl StageTableSink {
         // 256M per file by default.
         const DEFAULT_SIZE: usize = 256 * 1024 * 1024;
         // max is half of the max memory usage.
-        let max_size = (ctx.get_new_settings().get_max_memory_usage()? / 2) as usize;
+        let max_size = (ctx.get_settings().get_max_memory_usage()? / 2) as usize;
 
         let mut max_file_size = stage_info.stage_info.copy_options.max_file_size;
         if max_file_size == 0 {

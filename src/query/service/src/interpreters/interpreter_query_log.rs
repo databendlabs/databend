@@ -110,7 +110,7 @@ impl InterpreterQueryLog {
         let total_partitions = 0u64;
         let result_rows = 0u64;
         let result_bytes = 0u64;
-        let cpu_usage = ctx.get_new_settings().get_max_threads()? as u32;
+        let cpu_usage = ctx.get_settings().get_max_threads()? as u32;
         let memory_usage = ctx.get_current_session().get_memory_usage() as u64;
 
         // Client.
@@ -122,7 +122,7 @@ impl InterpreterQueryLog {
         // Session settings
         let mut session_settings = String::new();
         let current_session = ctx.get_current_session();
-        for item in current_session.get_new_settings().into_iter() {
+        for item in current_session.get_settings().into_iter() {
             write!(session_settings, "{}={:?}, ", item.name, item.user_value)
                 .expect("write to string must succeed");
         }
@@ -213,7 +213,7 @@ impl InterpreterQueryLog {
 
         let scan_partitions = data_metrics.get_partitions_scanned();
         let total_partitions = data_metrics.get_partitions_total();
-        let cpu_usage = ctx.get_new_settings().get_max_threads()? as u32;
+        let cpu_usage = ctx.get_settings().get_max_threads()? as u32;
         let memory_usage = ctx.get_current_session().get_memory_usage() as u64;
 
         // Result.
@@ -233,7 +233,7 @@ impl InterpreterQueryLog {
         let mut session_settings = String::new();
         let current_session = ctx.get_current_session();
 
-        for item in current_session.get_new_settings().into_iter() {
+        for item in current_session.get_settings().into_iter() {
             write!(session_settings, "{}={:?}, ", item.name, item.user_value)
                 .expect("write to string must succeed");
         }

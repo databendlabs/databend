@@ -46,7 +46,7 @@ impl<T: ?Sized + Table> ReadDataBlockStream for T {
         ctx.set_partitions(plan.parts.clone())?;
         self.read_data(ctx.clone(), plan, &mut pipeline)?;
 
-        let settings = ctx.get_new_settings();
+        let settings = ctx.get_settings();
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
         let query_id = ctx.get_id();
         let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;

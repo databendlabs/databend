@@ -59,7 +59,7 @@ impl TryFrom<Arc<QueryContext>> for GroupBySettings {
     type Error = ErrorCode;
 
     fn try_from(ctx: Arc<QueryContext>) -> std::result::Result<Self, Self::Error> {
-        let settings = ctx.get_new_settings();
+        let settings = ctx.get_settings();
         let convert_threshold = settings.get_group_by_two_level_threshold()? as usize;
         let value = settings.get_spilling_bytes_threshold_per_proc()?;
 

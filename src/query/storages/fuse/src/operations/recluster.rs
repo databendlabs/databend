@@ -169,7 +169,7 @@ impl FuseTable {
                 sort_descs.clone(),
             )?))
         })?;
-        let block_size = ctx.get_new_settings().get_max_block_size()? as usize;
+        let block_size = ctx.get_settings().get_max_block_size()? as usize;
         // construct output fields
         let output_fields: Vec<DataField> = cluster_stats_gen.out_fields.clone();
         let schema = DataSchemaRefExt::create(output_fields);

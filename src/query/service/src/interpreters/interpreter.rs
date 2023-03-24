@@ -79,7 +79,7 @@ pub trait Interpreter: Sync + Send {
             }
         });
 
-        let settings = ctx.get_new_settings();
+        let settings = ctx.get_settings();
         let query_id = ctx.get_id();
         build_res.set_max_threads(settings.get_max_threads()? as usize);
         let settings = ExecutorSettings::try_create(&settings, query_id)?;

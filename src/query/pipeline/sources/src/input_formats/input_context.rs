@@ -35,7 +35,7 @@ use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageFileCompression;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
-use common_settings::NewSettings;
+use common_settings::Settings;
 use dashmap::DashMap;
 use opendal::Operator;
 
@@ -115,7 +115,7 @@ pub struct InputContext {
 
     pub format_options: FileFormatOptionsExt,
     // runtime config
-    pub settings: Arc<NewSettings>,
+    pub settings: Arc<Settings>,
 
     pub read_batch_size: usize,
     pub block_compact_thresholds: BlockThresholds,
@@ -154,7 +154,7 @@ impl InputContext {
 
     pub fn try_create_from_copy(
         operator: Operator,
-        settings: Arc<NewSettings>,
+        settings: Arc<Settings>,
         schema: TableSchemaRef,
         stage_info: StageInfo,
         splits: Vec<Arc<SplitInfo>>,
@@ -194,7 +194,7 @@ impl InputContext {
     pub async fn try_create_from_insert_clickhouse(
         format_name: &str,
         stream_receiver: Receiver<Result<StreamingReadBatch>>,
-        settings: Arc<NewSettings>,
+        settings: Arc<Settings>,
         schema: TableSchemaRef,
         scan_progress: Arc<Progress>,
         block_compact_thresholds: BlockThresholds,
@@ -235,7 +235,7 @@ impl InputContext {
 
     pub async fn try_create_from_insert_file_format(
         stream_receiver: Receiver<Result<StreamingReadBatch>>,
-        settings: Arc<NewSettings>,
+        settings: Arc<Settings>,
         file_format_options: FileFormatOptions,
         schema: TableSchemaRef,
         scan_progress: Arc<Progress>,

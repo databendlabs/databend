@@ -150,7 +150,7 @@ impl InsertInterpreter {
     }
 
     async fn prepared_values(&self, values_str: &str) -> Result<(DataSchemaRef, Vec<Scalar>)> {
-        let settings = self.ctx.get_new_settings();
+        let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
         let tokens = tokenize_sql(values_str)?;
         let expr_or_placeholders = parser_values_with_placeholder(&tokens, sql_dialect)?;
@@ -357,7 +357,7 @@ impl Interpreter for InsertInterpreter {
 
         match &self.plan.source {
             InsertInputSource::Values(data) => {
-                let settings = self.ctx.get_new_settings();
+                let settings = self.ctx.get_settings();
 
                 build_res.main_pipeline.add_source(
                     |output| {
@@ -709,7 +709,7 @@ impl ValueSource {
                 let buf = &reader.remaining_slice()[..row_len as usize];
 
                 let sql = std::str::from_utf8(buf).unwrap();
-                let settings = self.ctx.get_new_settings();
+                let settings = self.ctx.get_settings();
                 let sql_dialect = settings.get_sql_dialect()?;
                 let tokens = tokenize_sql(sql)?;
                 let exprs = parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect)?;

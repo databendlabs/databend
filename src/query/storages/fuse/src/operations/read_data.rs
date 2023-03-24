@@ -62,8 +62,8 @@ impl FuseTable {
     }
 
     fn adjust_io_request(&self, ctx: &Arc<dyn TableContext>) -> Result<usize> {
-        let max_threads = ctx.get_new_settings().get_max_threads()? as usize;
-        let max_io_requests = ctx.get_new_settings().get_max_storage_io_requests()? as usize;
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
 
         if !self.operator.info().can_blocking() {
             Ok(std::cmp::max(max_threads, max_io_requests))

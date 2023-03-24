@@ -140,7 +140,7 @@ impl ParquetTable {
         src_fields.extend_from_slice(remain_reader.output_schema.fields());
         let src_schema = DataSchemaRefExt::create(src_fields);
 
-        let max_threads = ctx.get_new_settings().get_max_threads()? as usize;
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
 
         // Add source pipe.
         if self.operator.info().can_blocking() {
@@ -151,7 +151,7 @@ impl ParquetTable {
         } else {
             let max_io_requests = std::cmp::max(
                 max_threads,
-                ctx.get_new_settings().get_max_storage_io_requests()? as usize,
+                ctx.get_settings().get_max_storage_io_requests()? as usize,
             );
             pipeline.add_source(
                 |output| AsyncParquetSource::create(ctx.clone(), output, source_reader.clone()),

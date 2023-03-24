@@ -30,7 +30,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metrics::label_counter;
 use common_metrics::label_gauge;
-use common_settings::NewSettings;
+use common_settings::Settings;
 use futures::future::Either;
 use futures::StreamExt;
 use parking_lot::RwLock;
@@ -104,7 +104,7 @@ impl SessionManager {
         }
 
         let tenant = config.query.tenant_id.clone();
-        let settings = NewSettings::try_create(tenant.clone());
+        let settings = Settings::try_create(tenant.clone());
         settings.load_global_changes().await?;
 
         let session_ctx = SessionContext::try_create(settings)?;

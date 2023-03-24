@@ -248,7 +248,7 @@ impl Binder {
             // todo: rewrite after https://github.com/jorgecarleitao/arrow2/pull/1286 is merged
             let default_nulls_first = !self
                 .ctx
-                .get_new_settings()
+                .get_settings()
                 .get_sql_dialect()
                 .unwrap()
                 .is_null_biggest();

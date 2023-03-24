@@ -421,9 +421,7 @@ impl CopyInterpreter {
             let operations = ctx.consume_precommit_blocks();
 
             let table_id = to_table.get_id();
-            let expire_hours = ctx
-                .get_new_settings()
-                .get_load_file_metadata_expire_hours()?;
+            let expire_hours = ctx.get_settings().get_load_file_metadata_expire_hours()?;
             let num_copied_files = copied_files.len();
 
             let fail_if_duplicated = !force;

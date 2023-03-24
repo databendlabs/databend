@@ -94,7 +94,7 @@ pub async fn do_deletion(
     };
 
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let settings = ctx.get_new_settings();
+    let settings = ctx.get_settings();
     let mut pipeline = common_pipeline_core::Pipeline::create();
     fuse_table
         .delete(ctx.clone(), filter, col_indices, &mut pipeline)

@@ -142,7 +142,7 @@ async fn test_configs_table_basic() -> Result<()> {
 
     let conf = crate::tests::ConfigBuilder::create().config();
     let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
-    ctx.get_new_settings().set_max_threads(8)?;
+    ctx.get_settings().set_max_threads(8)?;
 
     let table = ConfigsTable::create(1);
 
@@ -173,7 +173,7 @@ async fn test_configs_table_redact() -> Result<()> {
     });
 
     let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
-    ctx.get_new_settings().set_max_threads(8)?;
+    ctx.get_settings().set_max_threads(8)?;
 
     let table = ConfigsTable::create(1);
     let source_plan = table.read_plan(ctx.clone(), None).await?;
@@ -295,7 +295,7 @@ async fn test_roles_table() -> Result<()> {
 
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let tenant = ctx.get_tenant();
-    ctx.get_new_settings().set_max_threads(2)?;
+    ctx.get_settings().set_max_threads(2)?;
 
     {
         let role_info = RoleInfo::new("test");
@@ -323,8 +323,8 @@ async fn test_settings_table() -> Result<()> {
     let file = &mut mint.new_goldenfile("settings_table.txt").unwrap();
 
     let (_guard, ctx) = crate::tests::create_query_context().await?;
-    ctx.get_new_settings().set_max_threads(2)?;
-    ctx.get_new_settings().set_max_memory_usage(1073741824)?;
+    ctx.get_settings().set_max_threads(2)?;
+    ctx.get_settings().set_max_memory_usage(1073741824)?;
 
     let table = SettingsTable::create(1);
 
@@ -354,7 +354,7 @@ async fn test_users_table() -> Result<()> {
 
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let tenant = ctx.get_tenant();
-    ctx.get_new_settings().set_max_threads(2)?;
+    ctx.get_settings().set_max_threads(2)?;
     let auth_data = AuthInfo::None;
     UserApiProvider::instance()
         .add_user(

@@ -261,7 +261,7 @@ impl DataExchangeManager {
         ctx: Arc<QueryContext>,
         actions: QueryFragmentsActions,
     ) -> Result<PipelineBuildResult> {
-        let settings = ctx.get_new_settings();
+        let settings = ctx.get_settings();
         let timeout = settings.get_flight_client_timeout()?;
         let root_actions = actions.get_root_actions()?;
         let conf = GlobalConfig::instance();
@@ -649,7 +649,7 @@ impl QueryCoordinator {
 
         let info = self.info.as_ref().expect("Query info is None");
 
-        let max_threads = info.query_ctx.get_new_settings().get_max_threads()?;
+        let max_threads = info.query_ctx.get_settings().get_max_threads()?;
         let mut pipelines = Vec::with_capacity(self.fragments_coordinator.len());
 
         let mut params = Vec::with_capacity(self.fragments_coordinator.len());
@@ -688,7 +688,7 @@ impl QueryCoordinator {
 
         let query_id = info.query_ctx.get_id();
         let executor_settings =
-            ExecutorSettings::try_create(&info.query_ctx.get_new_settings(), query_id)?;
+            ExecutorSettings::try_create(&info.query_ctx.get_settings(), query_id)?;
 
         let executor = PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
 

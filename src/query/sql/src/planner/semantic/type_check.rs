@@ -273,8 +273,7 @@ impl<'a> TypeChecker<'a> {
                 not,
                 ..
             } => {
-                let get_max_inlist_to_or =
-                    self.ctx.get_new_settings().get_max_inlist_to_or()? as usize;
+                let get_max_inlist_to_or = self.ctx.get_settings().get_max_inlist_to_or()? as usize;
                 if list.len() > get_max_inlist_to_or
                     && list
                         .iter()
@@ -1000,7 +999,7 @@ impl<'a> TypeChecker<'a> {
         if (func_name == "substr" || func_name == "substring")
             && self
                 .ctx
-                .get_new_settings()
+                .get_settings()
                 .get_sql_dialect()
                 .unwrap()
                 .substr_index_zero_literal_as_one()
@@ -1023,7 +1022,7 @@ impl<'a> TypeChecker<'a> {
 
         // rewrite_collation
         let func_name = if self.function_need_collation(func_name, &args)?
-            && self.ctx.get_new_settings().get_collation()? == "utf8"
+            && self.ctx.get_settings().get_collation()? == "utf8"
         {
             format!("{func_name}_utf8")
         } else {
@@ -1493,7 +1492,7 @@ impl<'a> TypeChecker<'a> {
                 .await,
             ),
             ("timezone", &[]) => {
-                let tz = self.ctx.get_new_settings().get_timezone().unwrap();
+                let tz = self.ctx.get_settings().get_timezone().unwrap();
                 Some(
                     self.resolve(&Expr::Literal {
                         span,
@@ -1828,7 +1827,7 @@ impl<'a> TypeChecker<'a> {
                 ))
                 .set_span(span));
             }
-            let settings = self.ctx.get_new_settings();
+            let settings = self.ctx.get_settings();
             let sql_dialect = settings.get_sql_dialect()?;
             let sql_tokens = tokenize_sql(udf.definition.as_str())?;
             let expr = parse_expr(&sql_tokens, sql_dialect)?;
@@ -2349,7 +2348,7 @@ impl<'a> TypeChecker<'a> {
         let names = vec!["substr", "substring", "length"];
         let result = !args.is_empty()
             && matches!(args[0].data_type()?.remove_nullable(), DataType::String)
-            && self.ctx.get_new_settings().get_collation().unwrap() != "binary"
+            && self.ctx.get_settings().get_collation().unwrap() != "binary"
             && names.contains(&name);
         Ok(result)
     }

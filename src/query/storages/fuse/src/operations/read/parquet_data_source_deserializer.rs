@@ -58,9 +58,7 @@ impl DeserializeDataTransform {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
-        let buffer_size = ctx
-            .get_new_settings()
-            .get_parquet_uncompressed_buffer_size()? as usize;
+        let buffer_size = ctx.get_settings().get_parquet_uncompressed_buffer_size()? as usize;
         let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(DeserializeDataTransform {
             scan_progress,

@@ -232,7 +232,7 @@ impl HttpQuery {
                 session.set_current_database(db.clone());
             }
             if let Some(conf_settings) = &session_conf.settings {
-                let settings = session.get_new_settings();
+                let settings = session.get_settings();
                 for (k, v) in conf_settings {
                     settings.set_setting(k.to_string(), v.to_string())?;
                 }

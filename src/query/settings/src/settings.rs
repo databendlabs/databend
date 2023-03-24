@@ -1,4 +1,20 @@
+// Copyright 2023 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use std::collections::HashMap;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -9,7 +25,26 @@ use itertools::Itertools;
 
 use crate::settings_default::DefaultSettingValue;
 use crate::settings_default::DefaultSettings;
-use crate::ScopeLevel;
+
+#[derive(Clone)]
+pub enum ScopeLevel {
+    #[allow(dead_code)]
+    Global,
+    Session,
+}
+
+impl Debug for ScopeLevel {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        match self {
+            ScopeLevel::Global => {
+                write!(f, "GLOBAL")
+            }
+            ScopeLevel::Session => {
+                write!(f, "SESSION")
+            }
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct ChangeValue {
@@ -18,14 +53,14 @@ pub struct ChangeValue {
 }
 
 #[derive(Debug)]
-pub struct NewSettings {
+pub struct Settings {
     pub(crate) tenant: String,
     pub(crate) changes: DashMap<String, ChangeValue>,
 }
 
-impl NewSettings {
-    pub fn try_create(tenant: String) -> Arc<NewSettings> {
-        Arc::new(NewSettings {
+impl Settings {
+    pub fn try_create(tenant: String) -> Arc<Settings> {
+        Arc::new(Settings {
             tenant,
             changes: DashMap::new(),
         })
@@ -91,12 +126,12 @@ pub struct SettingsItem {
 }
 
 pub struct SettingsIter<'a> {
-    settings: &'a NewSettings,
+    settings: &'a Settings,
     inner: std::vec::IntoIter<(String, DefaultSettingValue)>,
 }
 
 impl<'a> SettingsIter<'a> {
-    pub fn create(settings: &'a NewSettings) -> SettingsIter<'a> {
+    pub fn create(settings: &'a Settings) -> SettingsIter<'a> {
         let iter = DefaultSettings::instance()
             .unwrap()
             .settings
@@ -139,7 +174,7 @@ impl<'a> Iterator for SettingsIter<'a> {
     }
 }
 
-impl<'a> IntoIterator for &'a NewSettings {
+impl<'a> IntoIterator for &'a Settings {
     type Item = SettingsItem;
     type IntoIter = SettingsIter<'a>;
 

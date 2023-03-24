@@ -18,7 +18,7 @@ use common_exception::Result;
 use common_expression::TableSchemaRef;
 use common_meta_app::principal::StageInfo;
 use common_pipeline_core::Pipeline;
-use common_settings::NewSettings;
+use common_settings::Settings;
 use common_storage::StageFileInfo;
 use opendal::Operator;
 
@@ -32,7 +32,7 @@ pub trait InputFormat: Send + Sync {
         file_infos: Vec<StageFileInfo>,
         stage_info: &StageInfo,
         op: &Operator,
-        settings: &Arc<NewSettings>,
+        settings: &Arc<Settings>,
     ) -> Result<Vec<Arc<SplitInfo>>>;
 
     async fn infer_schema(&self, path: &str, op: &Operator) -> Result<TableSchemaRef>;

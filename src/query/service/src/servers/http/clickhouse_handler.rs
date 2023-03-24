@@ -149,7 +149,7 @@ async fn execute(
             let mut output_format = FileFormatOptionsExt::get_output_format_from_clickhouse_format(
                 format,
                 table_schema,
-                &ctx.get_new_settings(),
+                &ctx.get_settings(),
             )?;
 
             let prefix = Ok(output_format.serialize_prefix()?);
@@ -231,7 +231,7 @@ pub async fn clickhouse_handler_get(
         .await
         .map_err(InternalServerError)?;
 
-    let settings = session.get_new_settings();
+    let settings = session.get_settings();
     settings
         .set_batch_settings(&params.settings)
         .map_err(BadRequest)?;
@@ -273,7 +273,7 @@ pub async fn clickhouse_handler_post(
         .await
         .map_err(InternalServerError)?;
 
-    let settings = ctx.get_new_settings();
+    let settings = ctx.get_settings();
     settings
         .set_batch_settings(&params.settings)
         .map_err(BadRequest)?;
@@ -323,7 +323,7 @@ pub async fn clickhouse_handler_post(
                 InputContext::try_create_from_insert_clickhouse(
                     format.as_str(),
                     rx,
-                    ctx.get_new_settings(),
+                    ctx.get_settings(),
                     table_schema,
                     ctx.get_scan_progress(),
                     to_table.get_block_compact_thresholds(),
@@ -370,7 +370,7 @@ pub async fn clickhouse_handler_post(
             let input_context = Arc::new(
                 InputContext::try_create_from_insert_file_format(
                     rx,
-                    ctx.get_new_settings(),
+                    ctx.get_settings(),
                     option_settings.clone(),
                     table_schema,
                     ctx.get_scan_progress(),

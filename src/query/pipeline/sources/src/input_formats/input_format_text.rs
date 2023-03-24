@@ -32,7 +32,7 @@ use common_formats::FileFormatOptionsExt;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
 use common_pipeline_core::Pipeline;
-use common_settings::NewSettings;
+use common_settings::Settings;
 use common_storage::StageFileInfo;
 use opendal::Operator;
 
@@ -290,7 +290,7 @@ impl<T: InputFormatTextBase> InputFormat for T {
         file_infos: Vec<StageFileInfo>,
         stage_info: &StageInfo,
         _op: &Operator,
-        _settings: &Arc<NewSettings>,
+        _settings: &Arc<Settings>,
     ) -> Result<Vec<Arc<SplitInfo>>> {
         let mut infos = vec![];
         for info in file_infos {

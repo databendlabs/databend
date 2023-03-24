@@ -133,7 +133,7 @@ impl ReplaceInterpreter {
         value_data: &str,
     ) -> Result<PipelineBuildResult> {
         let mut build_res = PipelineBuildResult::create();
-        let settings = ctx.get_new_settings();
+        let settings = ctx.get_settings();
         build_res.main_pipeline.add_source(
             |output| {
                 let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;

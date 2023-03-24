@@ -25,14 +25,14 @@ use common_exception::Result;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
 use common_settings::ChangeValue;
-use common_settings::NewSettings;
+use common_settings::Settings;
 use parking_lot::RwLock;
 
 use crate::sessions::QueryContextShared;
 
 pub struct SessionContext {
     abort: AtomicBool,
-    new_settings: Arc<NewSettings>,
+    settings: Arc<Settings>,
     current_catalog: RwLock<String>,
     current_database: RwLock<String>,
     // The current tenant can be determined by databend-query's config file, or by X-DATABEND-TENANT
@@ -59,9 +59,9 @@ pub struct SessionContext {
 }
 
 impl SessionContext {
-    pub fn try_create(new_settings: Arc<NewSettings>) -> Result<Arc<Self>> {
+    pub fn try_create(settings: Arc<Settings>) -> Result<Arc<Self>> {
         Ok(Arc::new(SessionContext {
-            new_settings,
+            settings,
             abort: Default::default(),
             current_user: Default::default(),
             current_role: Default::default(),
@@ -86,17 +86,15 @@ impl SessionContext {
         self.abort.store(v, Ordering::Relaxed);
     }
 
-    pub fn get_new_settings(&self) -> Arc<NewSettings> {
-        self.new_settings.clone()
+    pub fn get_settings(&self) -> Arc<Settings> {
+        self.settings.clone()
     }
 
     pub fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
-        // self.new_settings.get_changed_settings()
         unimplemented!()
     }
 
     pub fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
-        // self.settings.apply_changed_settings(changes)
         unimplemented!()
     }
 
@@ -140,7 +138,7 @@ impl SessionContext {
         let conf = GlobalConfig::instance();
 
         if conf.query.internal_enable_sandbox_tenant {
-            let sandbox_tenant = self.new_settings.get_sandbox_tenant().unwrap_or_default();
+            let sandbox_tenant = self.settings.get_sandbox_tenant().unwrap_or_default();
             if !sandbox_tenant.is_empty() {
                 return sandbox_tenant;
             }
