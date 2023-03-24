@@ -2185,6 +2185,7 @@ dependencies = [
  "regex",
  "roaring",
  "serde",
+ "simsearch",
  "storages-common-table-meta",
  "time 0.3.17",
  "tracing",
@@ -8932,6 +8933,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "simsearch"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1649c86f6ff4bec1c5a96b834f1e0da09eff92d85e3963286a61f41afca65de5"
+dependencies = [
+ "strsim",
+ "triple_accel",
+]
+
+[[package]]
 name = "siphasher"
 version = "0.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9908,6 +9919,12 @@ name = "triomphe"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1ee9bd9239c339d714d657fac840c6d2a4f9c45f4f9ec7b0975113458be78db"
+
+[[package]]
+name = "triple_accel"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "622b09ce2fe2df4618636fb92176d205662f59803f39e70d1c333393082de96c"
 
 [[package]]
 name = "trust-dns-proto"
