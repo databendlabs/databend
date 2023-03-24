@@ -11,8 +11,9 @@ doctest = false
 test = false
 
 [dependencies] # In alphabetical order
-
 common-exception = { path = "../exception" }
+
+ndarray = "0.15.6"
 
 [build-dependencies]
 

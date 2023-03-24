@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub(crate) mod compute;
 mod distance;
 
 pub use distance::cosine_distance;
