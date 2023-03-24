@@ -17,6 +17,7 @@ use std::sync::Arc;
 use arrow_array::make_array;
 use arrow_array::Array;
 use arrow_array::ArrowPrimitiveType;
+use arrow_array::BooleanArray;
 use arrow_array::LargeStringArray;
 use arrow_array::NullArray;
 use arrow_array::PrimitiveArray;
@@ -65,6 +66,14 @@ impl Column {
             Column::Null { len } => Arc::new(NullArray::new(len)),
             Column::EmptyArray { len } => Arc::new(NullArray::new(len)),
             Column::EmptyMap { len } => Arc::new(NullArray::new(len)),
+            Column::Boolean(bitmap) => {
+                let buf = bitmap.as_slice().0;
+                let array_data = ArrayData::builder(DataType::Boolean)
+                    .len(bitmap.len())
+                    .add_buffer(buf.into())
+                    .build()?;
+                Arc::new(BooleanArray::from(array_data))
+            }
             Column::String(col) => {
                 let len = col.len();
                 let values: Vec<u8> = try_take_buffer(col.data);
@@ -160,7 +169,7 @@ impl Column {
             _ => {
                 let data_type = self.data_type();
                 Err(ArrowError::NotYetImplemented(format!(
-                    "Column::into_arrow_rs()  for {data_type} not implemented yet"
+                    "Column::into_arrow_rs() for {data_type} not implemented yet"
                 )))?
             }
         };
