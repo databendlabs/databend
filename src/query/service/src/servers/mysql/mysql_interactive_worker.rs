@@ -73,6 +73,7 @@ fn has_result_set_by_plan(plan: &Plan) -> bool {
             | Plan::ShowRoles(_)
             | Plan::DescShare(_)
             | Plan::ShowShares(_)
+            | Plan::ShowShareEndpoint(_)
             | Plan::ShowObjectGrantPrivileges(_)
             | Plan::ShowGrantTenantsOfShare(_)
             | Plan::DescribeTable(_)

@@ -299,7 +299,7 @@ impl FromToProto for mt::ShareEndpointIdent {
 
         Ok(mt::ShareEndpointIdent {
             tenant: p.tenant.clone(),
-            endpoint: p.endpoint.clone(),
+            endpoint: p.endpoint,
         })
     }
 

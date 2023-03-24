@@ -185,6 +185,31 @@ impl Display for ShowSharesStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShowShareEndpointStmt {}
+
+impl Display for ShowShareEndpointStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "SHOW SHARE ENDPOINT")?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DropShareEndpointStmt {
+    pub if_exists: bool,
+    pub endpoint: Identifier,
+}
+
+impl Display for DropShareEndpointStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "DROP SHARE ENDPOINT {}", self.endpoint)?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShowObjectGrantPrivilegesStmt {
     pub object: ShareGrantObjectName,
 }

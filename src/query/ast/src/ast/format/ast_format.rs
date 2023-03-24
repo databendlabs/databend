@@ -1881,6 +1881,20 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
+    fn visit_show_share_endpoint(&mut self, _stmt: &'ast ShowShareEndpointStmt) {
+        let name = "ShowShareEndpoint".to_string();
+        let format_ctx = AstFormatContext::new(name);
+        let node = FormatTreeNode::new(format_ctx);
+        self.children.push(node);
+    }
+
+    fn visit_drop_share_endpoint(&mut self, _stmt: &'ast DropShareEndpointStmt) {
+        let name = "DropShareEndpoint".to_string();
+        let format_ctx = AstFormatContext::new(name);
+        let node = FormatTreeNode::new(format_ctx);
+        self.children.push(node);
+    }
+
     fn visit_create_share(&mut self, stmt: &'ast CreateShareStmt) {
         let mut children = Vec::new();
         let share_format_ctx = AstFormatContext::new(format!("ShareIdentifier {}", stmt.share));

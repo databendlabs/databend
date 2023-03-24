@@ -116,6 +116,8 @@ impl Plan {
             Plan::Kill(p) => Ok(format!("{:?}", p)),
 
             Plan::CreateShareEndpoint(p) => Ok(format!("{:?}", p)),
+            Plan::ShowShareEndpoint(p) => Ok(format!("{:?}", p)),
+            Plan::DropShareEndpoint(p) => Ok(format!("{:?}", p)),
             Plan::CreateShare(p) => Ok(format!("{:?}", p)),
             Plan::DropShare(p) => Ok(format!("{:?}", p)),
             Plan::GrantShareObject(p) => Ok(format!("{:?}", p)),

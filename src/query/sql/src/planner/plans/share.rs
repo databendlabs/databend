@@ -22,7 +22,9 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_meta_app::share::CreateShareEndpointReq;
 use common_meta_app::share::CreateShareReq;
+use common_meta_app::share::DropShareEndpointReq;
 use common_meta_app::share::DropShareReq;
+use common_meta_app::share::GetShareEndpointReq;
 use common_meta_app::share::ShareEndpointIdent;
 use common_meta_app::share::ShareGrantObjectName;
 use common_meta_app::share::ShareGrantObjectPrivilege;
@@ -55,6 +57,60 @@ impl From<CreateShareEndpointPlan> for CreateShareEndpointReq {
             args: p.args.clone(),
             comment: p.comment,
             create_on: Utc::now(),
+        }
+    }
+}
+
+// Create Share endpoint Plan
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ShowShareEndpointPlan {
+    pub tenant: String,
+}
+
+impl ShowShareEndpointPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::new(vec![
+            DataField::new("Endpoint", DataType::String),
+            DataField::new("URL", DataType::String),
+            DataField::new("To Tenant", DataType::String),
+            DataField::new("Args", DataType::String),
+            DataField::new("Comment", DataType::String),
+            DataField::new("Created On", DataType::String),
+        ]))
+    }
+}
+
+impl From<ShowShareEndpointPlan> for GetShareEndpointReq {
+    fn from(p: ShowShareEndpointPlan) -> Self {
+        GetShareEndpointReq {
+            tenant: p.tenant,
+            endpoint: None,
+        }
+    }
+}
+
+// Create Share endpoint Plan
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DropShareEndpointPlan {
+    pub if_exists: bool,
+    pub tenant: String,
+    pub endpoint: String,
+}
+
+impl DropShareEndpointPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+impl From<DropShareEndpointPlan> for DropShareEndpointReq {
+    fn from(p: DropShareEndpointPlan) -> Self {
+        DropShareEndpointReq {
+            if_exists: true,
+            endpoint: ShareEndpointIdent {
+                tenant: p.tenant,
+                endpoint: p.endpoint,
+            },
         }
     }
 }

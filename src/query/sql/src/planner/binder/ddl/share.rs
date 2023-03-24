@@ -23,12 +23,14 @@ use crate::plans::AlterShareTenantsPlan;
 use crate::plans::CreateShareEndpointPlan;
 use crate::plans::CreateSharePlan;
 use crate::plans::DescSharePlan;
+use crate::plans::DropShareEndpointPlan;
 use crate::plans::DropSharePlan;
 use crate::plans::GrantShareObjectPlan;
 use crate::plans::Plan;
 use crate::plans::RevokeShareObjectPlan;
 use crate::plans::ShowGrantTenantsOfSharePlan;
 use crate::plans::ShowObjectGrantPrivilegesPlan;
+use crate::plans::ShowShareEndpointPlan;
 use crate::plans::ShowSharesPlan;
 
 impl Binder {
@@ -51,7 +53,7 @@ impl Binder {
             if_not_exists: *if_not_exists,
             endpoint: ShareEndpointIdent {
                 tenant: self.ctx.get_tenant(),
-                endpoint: endpoint.to_string(),
+                endpoint,
             },
             tenant: tenant.to_string(),
             url: url.to_string(),
@@ -59,6 +61,32 @@ impl Binder {
             comment: comment.as_ref().cloned(),
         };
         Ok(Plan::CreateShareEndpoint(Box::new(plan)))
+    }
+
+    pub(in crate::planner::binder) async fn bind_show_share_endpoint(
+        &mut self,
+        _stmt: &ShowShareEndpointStmt,
+    ) -> Result<Plan> {
+        let plan = ShowShareEndpointPlan {
+            tenant: self.ctx.get_tenant(),
+        };
+        Ok(Plan::ShowShareEndpoint(Box::new(plan)))
+    }
+
+    pub(in crate::planner::binder) async fn bind_drop_share_endpoint(
+        &mut self,
+        stmt: &DropShareEndpointStmt,
+    ) -> Result<Plan> {
+        let DropShareEndpointStmt {
+            if_exists,
+            endpoint,
+        } = stmt;
+        let plan = DropShareEndpointPlan {
+            if_exists: *if_exists,
+            tenant: self.ctx.get_tenant(),
+            endpoint: endpoint.to_string(),
+        };
+        Ok(Plan::DropShareEndpoint(Box::new(plan)))
     }
 
     pub(in crate::planner::binder) async fn bind_create_share(

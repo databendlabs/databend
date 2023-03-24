@@ -340,6 +340,14 @@ impl InterpreterFactory {
             Plan::CreateShareEndpoint(p) => Ok(Arc::new(
                 CreateShareEndpointInterpreter::try_create(ctx, *p.clone())?,
             )),
+            Plan::ShowShareEndpoint(p) => Ok(Arc::new(ShowShareEndpointInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropShareEndpoint(p) => Ok(Arc::new(DropShareEndpointInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
             Plan::CreateShare(p) => Ok(Arc::new(CreateShareInterpreter::try_create(
                 ctx,
                 *p.clone(),

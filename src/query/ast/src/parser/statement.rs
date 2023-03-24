@@ -997,6 +997,23 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+    let show_share_endpoints = map(
+        rule! {
+            SHOW ~ SHARE ~ ENDPOINT
+        },
+        |(_, _, _)| Statement::ShowShareEndpoint(ShowShareEndpointStmt {}),
+    );
+    let drop_share_endpoint = map(
+        rule! {
+            DROP ~ SHARE ~ ENDPOINT ~ (IF ~ EXISTS)? ~ #ident
+        },
+        |(_, _, _, opt_if_exists, endpoint)| {
+            Statement::DropShareEndpoint(DropShareEndpointStmt {
+                if_exists: opt_if_exists.is_some(),
+                endpoint,
+            })
+        },
+    );
     let create_share = map(
         rule! {
             CREATE ~ SHARE ~ (IF ~ NOT ~ EXISTS )? ~ #ident ~ ( COMMENT ~ "=" ~ #literal_string)?
@@ -1205,6 +1222,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         // share
         rule!(
             #create_share_endpoint: "`CREATE SHARE ENDPOINT [IF NOT EXISTS] <endpoint_name> URL=endpoint_location tenant=tenant_name ARGS=(arg=..) [ COMMENT = '<string_literal>' ]`"
+            | #show_share_endpoints: "`SHOW SHARE ENDPOINT`"
+            | #drop_share_endpoint: "`DROP SHARE ENDPOINT <endpoint_name>`"
             | #create_share: "`CREATE SHARE [IF NOT EXISTS] <share_name> [ COMMENT = '<string_literal>' ]`"
             | #drop_share: "`DROP SHARE [IF EXISTS] <share_name>`"
             | #grant_share_object: "`GRANT { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } TO SHARE <share_name>`"
