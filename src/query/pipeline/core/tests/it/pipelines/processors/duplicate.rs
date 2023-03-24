@@ -75,6 +75,29 @@ async fn test_duplicate_output_finish() -> Result<()> {
         assert!(input.is_finished());
     }
 
+    // One output finished, one output no finished and can push.
+    {
+        let input = InputPort::create();
+        let output1 = OutputPort::create();
+        let output2 = OutputPort::create();
+        let mut processor =
+            DuplicateProcessor::create(input.clone(), output1.clone(), output2.clone(), false);
+
+        let upstream_output = OutputPort::create();
+        let downstream_input1 = InputPort::create();
+        let downstream_input2 = InputPort::create();
+
+        unsafe {
+            connect(&input, &upstream_output);
+            connect(&downstream_input1, &output1);
+            connect(&downstream_input2, &output2);
+        }
+
+        downstream_input1.finish();
+        downstream_input2.set_need_data();
+        assert!(matches!(processor.event()?, Event::NeedData));
+    }
+
     Ok(())
 }
 
