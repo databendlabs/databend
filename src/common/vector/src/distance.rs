@@ -14,7 +14,7 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use ndarray::Array;
+use ndarray::ArrayView;
 
 pub fn cosine_distance(from: &[f32], to: &[f32]) -> Result<f32> {
     if from.len() != to.len() {
@@ -25,11 +25,10 @@ pub fn cosine_distance(from: &[f32], to: &[f32]) -> Result<f32> {
         )));
     }
 
-    // TODO: avoid memory copy
-    let a = Array::from_vec(from.to_vec());
-    let b = Array::from_vec(to.to_vec());
+    let a = ArrayView::from(from);
+    let b = ArrayView::from(to);
     let aa_sum = (&a * &a).sum();
     let bb_sum = (&b * &b).sum();
 
-    Ok((a * b).sum() / ((aa_sum).sqrt() * (bb_sum).sqrt()))
+    Ok((&a * &b).sum() / ((aa_sum).sqrt() * (bb_sum).sqrt()))
 }
