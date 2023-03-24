@@ -96,38 +96,37 @@ fn find_specific_dir(dir: &str, suit: PathBuf) -> Result<DirEntry> {
 pub fn get_files(suit: PathBuf) -> Result<Vec<walkdir::Result<DirEntry>>> {
     let args = SqlLogicTestArgs::parse();
     let mut files = vec![];
-    // Skipped dir and specific dir won't be used together!
-    if args.dir.is_none() {
-        for entry in WalkDir::new(suit)
-            .min_depth(0)
-            .max_depth(100)
-            .sort_by(|a, b| a.file_name().cmp(b.file_name()))
-            .into_iter()
-            .filter_entry(|e| {
-                if let Some(skipped_dir) = &args.skipped_dir {
-                    let dirs = skipped_dir.split(',').collect::<Vec<&str>>();
-                    if dirs.contains(&e.file_name().to_str().unwrap()) {
-                        return false;
-                    }
-                }
-                true
-            })
-            .filter(|e| !e.as_ref().unwrap().file_type().is_dir())
-        {
-            files.push(entry);
+
+    let dirs = match args.dir {
+        Some(ref dir) => {
+            // Find specific dir
+            let dir_entry = find_specific_dir(dir, suit);
+            match dir_entry {
+                Ok(dir_entry) => Some(dir_entry.into_path()),
+                // If didn't find specific dir, return empty vec
+                Err(_) => None,
+            }
         }
-        return Ok(files);
-    }
-    // Find specific dir
-    let dir_entry = find_specific_dir(args.dir.as_ref().unwrap(), suit);
-    if dir_entry.is_err() {
-        return Ok(vec![]);
-    }
-    for entry in WalkDir::new(dir_entry.unwrap().into_path())
+        None => Some(suit),
+    };
+    let target = match dirs {
+        Some(dir) => dir,
+        None => return Ok(vec![]),
+    };
+    for entry in WalkDir::new(target)
         .min_depth(0)
         .max_depth(100)
         .sort_by(|a, b| a.file_name().cmp(b.file_name()))
         .into_iter()
+        .filter_entry(|e| {
+            if let Some(skipped_dir) = &args.skipped_dir {
+                let dirs = skipped_dir.split(',').collect::<Vec<&str>>();
+                if dirs.contains(&e.file_name().to_str().unwrap()) {
+                    return false;
+                }
+            }
+            true
+        })
         .filter(|e| !e.as_ref().unwrap().file_type().is_dir())
     {
         files.push(entry);
