@@ -50,6 +50,7 @@ use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableInfo;
+use common_settings::NewSettings;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
@@ -392,7 +393,7 @@ impl TableContext for QueryContext {
     }
 
     fn get_function_context(&self) -> Result<FunctionContext> {
-        let tz = self.get_settings().get_timezone()?;
+        let tz = self.get_new_settings().get_timezone()?;
         let tz = TzFactory::instance().get_by_name(&tz)?;
         Ok(FunctionContext { tz })
     }
@@ -403,6 +404,10 @@ impl TableContext for QueryContext {
 
     fn get_settings(&self) -> Arc<Settings> {
         self.shared.get_settings()
+    }
+
+    fn get_new_settings(&self) -> Arc<NewSettings> {
+        self.shared.get_new_settings()
     }
 
     fn get_cluster(&self) -> Arc<Cluster> {

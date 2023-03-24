@@ -43,6 +43,7 @@ use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_meta_app::principal::StageInfo;
 use common_pipeline_core::Pipeline;
+use common_settings::NewSettings;
 use common_settings::Settings;
 use common_storage::read_parquet_metas_in_parallel;
 use common_storage::StageFileInfo;
@@ -133,7 +134,7 @@ impl InputFormat for InputFormatParquet {
         file_infos: Vec<StageFileInfo>,
         _stage_info: &StageInfo,
         op: &Operator,
-        _settings: &Arc<Settings>,
+        _settings: &Arc<NewSettings>,
     ) -> Result<Vec<Arc<SplitInfo>>> {
         let files = file_infos
             .iter()

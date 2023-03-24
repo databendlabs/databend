@@ -17,49 +17,24 @@ use crate::settings_default::DefaultSettings;
 use crate::ScopeLevel;
 use crate::Settings;
 
+#[derive(Debug)]
 pub struct ChangeValue {
     pub level: ScopeLevel,
     pub value: UserSettingValue,
 }
 
-// #[derive(Clone)]
+#[derive(Debug)]
 pub struct NewSettings {
     pub(crate) tenant: String,
     pub(crate) changes: DashMap<String, ChangeValue>,
 }
 
 impl NewSettings {
-    pub async fn try_create(api: Arc<UserApiProvider>, tenant: String) -> Result<Arc<NewSettings>> {
-        let config = GlobalConfig::instance();
-        let default_settings = DefaultSettings::instance();
-
-        let global_settings = NewSettings::load_settings(api, tenant.clone()).await?;
-
-        let mut changes = DashMap::new();
-        for global_setting in global_settings {
-            let name = global_setting.name;
-            let val = global_setting.value.as_string()?;
-
-            changes.insert(name.clone(), match default_settings.settings.get(&name) {
-                None => {
-                    // the settings may be deprecated
-                    tracing::warn!("Ignore deprecated global setting {} = {}", name, val);
-                    continue;
-                }
-                Some(default_setting_value) => match &default_setting_value.value {
-                    UserSettingValue::UInt64(_) => ChangeValue {
-                        level: ScopeLevel::Global,
-                        value: UserSettingValue::UInt64(val.parse::<u64>()?),
-                    },
-                    UserSettingValue::String(v) => ChangeValue {
-                        level: ScopeLevel::Global,
-                        value: UserSettingValue::String(v.clone()),
-                    },
-                },
-            });
-        }
-
-        Ok(Arc::new(NewSettings { tenant, changes }))
+    pub fn try_create(tenant: String) -> Arc<NewSettings> {
+        Arc::new(NewSettings {
+            tenant,
+            changes: DashMap::new(),
+        })
     }
 
     pub fn has_setting(&self, key: &str) -> bool {
@@ -113,12 +88,12 @@ impl NewSettings {
 }
 
 pub struct SettingsItem {
-    name: String,
-    level: ScopeLevel,
-    desc: &'static str,
-    user_value: UserSettingValue,
-    default_value: UserSettingValue,
-    possible_values: Option<Vec<&'static str>>,
+    pub name: String,
+    pub level: ScopeLevel,
+    pub desc: &'static str,
+    pub user_value: UserSettingValue,
+    pub default_value: UserSettingValue,
+    pub possible_values: Option<Vec<&'static str>>,
 }
 
 pub struct SettingsIter<'a> {

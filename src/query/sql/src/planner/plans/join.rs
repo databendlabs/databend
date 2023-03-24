@@ -395,7 +395,7 @@ impl Operator for Join {
         {
             // TODO(leiysky): we can enforce redistribution here
             required.distribution = Distribution::Serial;
-        } else if ctx.get_settings().get_prefer_broadcast_join()?
+        } else if ctx.get_new_settings().get_prefer_broadcast_join()?
             && !matches!(
                 self.join_type,
                 JoinType::Right

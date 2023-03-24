@@ -47,8 +47,8 @@ pub struct CascadesOptimizer {
 
 impl CascadesOptimizer {
     pub fn create(ctx: Arc<dyn TableContext>, metadata: MetadataRef) -> Result<Self> {
-        let enable_bushy_join = ctx.get_settings().get_enable_bushy_join()? != 0;
-        let explore_rule_set = if ctx.get_settings().get_enable_cbo()? {
+        let enable_bushy_join = ctx.get_new_settings().get_enable_bushy_join()? != 0;
+        let explore_rule_set = if ctx.get_new_settings().get_enable_cbo()? {
             get_explore_rule_set(enable_bushy_join)
         } else {
             RuleSet::create()

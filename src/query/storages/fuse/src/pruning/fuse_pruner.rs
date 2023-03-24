@@ -118,9 +118,9 @@ impl FusePruner {
         )?;
 
         // Constraint the degree of parallelism
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_threads = ctx.get_new_settings().get_max_threads()? as usize;
         let max_concurrency = {
-            let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+            let max_io_requests = ctx.get_new_settings().get_max_storage_io_requests()? as usize;
             // Prevent us from miss-configured max_storage_io_requests setting, e.g. 0
             let v = std::cmp::max(max_io_requests, 10);
             if v > max_io_requests {

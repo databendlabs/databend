@@ -157,7 +157,7 @@ impl FuseTable {
             .await?
             .unwrap_or_else(|| Arc::new(self.new_empty_snapshot()));
 
-        let max_threads = ctx.get_settings().get_max_threads()?;
+        let max_threads = ctx.get_new_settings().get_max_threads()?;
         let segment_partition_num =
             std::cmp::min(base_snapshot.segments.len(), max_threads as usize);
 

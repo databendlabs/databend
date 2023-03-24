@@ -67,7 +67,7 @@ impl Interpreter for ExplainInterpreter {
                     s_expr, metadata, ..
                 } => {
                     let ctx = self.ctx.clone();
-                    let settings = ctx.get_settings();
+                    let settings = ctx.get_new_settings();
 
                     let enable_distributed_eval_index =
                         settings.get_enable_distributed_eval_index()?;
@@ -87,7 +87,7 @@ impl Interpreter for ExplainInterpreter {
                     s_expr, metadata, ..
                 } => {
                     let ctx = self.ctx.clone();
-                    let settings = ctx.get_settings();
+                    let settings = ctx.get_new_settings();
 
                     let enable_distributed_eval_index =
                         settings.get_enable_distributed_eval_index()?;
@@ -112,7 +112,7 @@ impl Interpreter for ExplainInterpreter {
                     ..
                 } => {
                     let ctx = self.ctx.clone();
-                    let settings = ctx.get_settings();
+                    let settings = ctx.get_new_settings();
 
                     let enable_distributed_eval_index =
                         settings.get_enable_distributed_eval_index()?;
@@ -285,7 +285,7 @@ impl ExplainInterpreter {
 
         let prof_span_set = build_res.prof_span_set.clone();
 
-        let settings = self.ctx.get_settings();
+        let settings = self.ctx.get_new_settings();
         let query_id = self.ctx.get_id();
         build_res.set_max_threads(settings.get_max_threads()? as usize);
         let settings = ExecutorSettings::try_create(&settings, query_id)?;

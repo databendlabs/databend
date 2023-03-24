@@ -47,7 +47,7 @@ impl ExchangeTransform {
 
                 // exchange writer sink and resize and exchange reader
                 let len = params.destination_ids.len();
-                let max_threads = ctx.get_settings().get_max_threads()? as usize;
+                let max_threads = ctx.get_new_settings().get_max_threads()? as usize;
 
                 let mut items = Vec::with_capacity(len);
                 let exchange_params = ExchangeParams::ShuffleExchange(params.clone());

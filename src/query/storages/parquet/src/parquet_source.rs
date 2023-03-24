@@ -125,7 +125,7 @@ impl AsyncParquetSource {
         output: Arc<OutputPort>,
         block_reader: Arc<ParquetReader>,
     ) -> Result<ProcessorPtr> {
-        let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
+        let batch_size = ctx.get_new_settings().get_storage_fetch_part_num()? as usize;
         Ok(ProcessorPtr::create(Box::new(AsyncParquetSource {
             ctx,
             output,

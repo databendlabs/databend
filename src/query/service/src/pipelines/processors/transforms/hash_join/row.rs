@@ -67,7 +67,7 @@ pub struct RowSpace {
 
 impl RowSpace {
     pub fn new(ctx: Arc<QueryContext>, data_schema: DataSchemaRef) -> Result<Self> {
-        let buffer_size = ctx.get_settings().get_max_block_size()? * 16;
+        let buffer_size = ctx.get_new_settings().get_max_block_size()? * 16;
         Ok(Self {
             data_schema,
             chunks: RwLock::new(vec![]),

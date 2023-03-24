@@ -117,7 +117,7 @@ impl Table for TracingTable {
         _: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let settings = ctx.get_settings();
+        let settings = ctx.get_new_settings();
 
         let log_files = Self::log_files()?;
         debug!("listed log files: {:?}", log_files);

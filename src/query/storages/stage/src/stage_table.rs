@@ -127,7 +127,7 @@ impl Table for StageTable {
                 files,
                 &stage_info.stage_info,
                 &operator,
-                &ctx.get_settings(),
+                &ctx.get_new_settings(),
             )
             .await?;
 
@@ -165,7 +165,7 @@ impl Table for StageTable {
         }
 
         //  Build copy pipeline.
-        let settings = ctx.get_settings();
+        let settings = ctx.get_new_settings();
         let schema = stage_table_info.schema.clone();
         let stage_info = stage_table_info.stage_info.clone();
         let operator = StageTable::get_op(&stage_table_info.stage_info)?;

@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use common_exception::Result;
+use common_settings::NewSettings;
 use common_settings::Settings;
 
 pub struct ExecutorSettings {
@@ -24,7 +25,7 @@ pub struct ExecutorSettings {
 }
 
 impl ExecutorSettings {
-    pub fn try_create(settings: &Settings, query_id: String) -> Result<ExecutorSettings> {
+    pub fn try_create(settings: &NewSettings, query_id: String) -> Result<ExecutorSettings> {
         let max_execute_time = settings.get_max_execute_time()?;
         Ok(ExecutorSettings {
             query_id: Arc::new(query_id),

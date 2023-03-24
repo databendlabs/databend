@@ -27,10 +27,10 @@ impl ReadSettings {
     pub fn from_ctx(ctx: &Arc<dyn TableContext>) -> Result<ReadSettings> {
         Ok(ReadSettings {
             storage_io_min_bytes_for_seek: ctx
-                .get_settings()
+                .get_new_settings()
                 .get_storage_io_min_bytes_for_seek()?,
             storage_io_max_page_bytes_for_read: ctx
-                .get_settings()
+                .get_new_settings()
                 .get_storage_io_max_page_bytes_for_read()?,
         })
     }

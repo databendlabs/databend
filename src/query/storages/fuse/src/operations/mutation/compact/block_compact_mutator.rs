@@ -102,7 +102,7 @@ impl BlockCompactMutator {
             Arc::new(self.compact_params.base_snapshot.schema.clone()),
         );
         let mut checker = SegmentCompactChecker::new(self.compact_params.block_per_seg as u64);
-        let max_io_requests = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+        let max_io_requests = self.ctx.get_new_settings().get_max_storage_io_requests()? as usize;
         for chunk in segment_locations.chunks(max_io_requests) {
             // Read the segments information in parallel.
             let segment_infos = segments_io

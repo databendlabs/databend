@@ -168,8 +168,8 @@ impl SnapshotsIO {
             })
         });
 
-        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
-        let permit_nums = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+        let threads_nums = self.ctx.get_new_settings().get_max_threads()? as usize;
+        let permit_nums = self.ctx.get_new_settings().get_max_storage_io_requests()? as usize;
         execute_futures_in_parallel(
             tasks,
             threads_nums,
@@ -239,7 +239,7 @@ impl SnapshotsIO {
         }
 
         // 1. Get all the snapshot by chunks.
-        let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+        let max_io_requests = ctx.get_new_settings().get_max_storage_io_requests()? as usize;
         let mut snapshot_lites = Vec::with_capacity(snapshot_files.len());
 
         let start = Instant::now();

@@ -53,7 +53,7 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
         block_reader: Arc<BlockReader>,
         partitions: StealablePartitions,
     ) -> Result<ProcessorPtr> {
-        let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
+        let batch_size = ctx.get_new_settings().get_storage_fetch_part_num()? as usize;
 
         if BLOCKING_IO {
             SyncSourcer::create(ctx.clone(), output.clone(), ReadParquetDataSource::<true> {

@@ -23,6 +23,7 @@ use common_config::GlobalConfig;
 use common_exception::Result;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
+use common_settings::NewSettings;
 use common_settings::Settings;
 use parking_lot::RwLock;
 
@@ -31,6 +32,7 @@ use crate::sessions::QueryContextShared;
 pub struct SessionContext {
     abort: AtomicBool,
     settings: Arc<Settings>,
+    new_settings: Arc<NewSettings>,
     current_catalog: RwLock<String>,
     current_database: RwLock<String>,
     // The current tenant can be determined by databend-query's config file, or by X-DATABEND-TENANT
@@ -57,9 +59,13 @@ pub struct SessionContext {
 }
 
 impl SessionContext {
-    pub fn try_create(settings: Arc<Settings>) -> Result<Arc<Self>> {
+    pub fn try_create(
+        settings: Arc<Settings>,
+        new_settings: Arc<NewSettings>,
+    ) -> Result<Arc<Self>> {
         Ok(Arc::new(SessionContext {
             settings,
+            new_settings,
             abort: Default::default(),
             current_user: Default::default(),
             current_role: Default::default(),
@@ -86,6 +92,10 @@ impl SessionContext {
 
     pub fn get_settings(&self) -> Arc<Settings> {
         self.settings.clone()
+    }
+
+    pub fn get_new_settings(&self) -> Arc<NewSettings> {
+        self.new_settings.clone()
     }
 
     pub fn get_changed_settings(&self) -> Arc<Settings> {
@@ -136,7 +146,7 @@ impl SessionContext {
         let conf = GlobalConfig::instance();
 
         if conf.query.internal_enable_sandbox_tenant {
-            let sandbox_tenant = self.settings.get_sandbox_tenant().unwrap_or_default();
+            let sandbox_tenant = self.new_settings.get_sandbox_tenant().unwrap_or_default();
             if !sandbox_tenant.is_empty() {
                 return sandbox_tenant;
             }

@@ -197,7 +197,7 @@ impl Table for MemoryTable {
 
         let parts = Self::generate_memory_parts(
             0,
-            ctx.get_settings().get_max_threads()? as usize,
+            ctx.get_new_settings().get_max_threads()? as usize,
             blocks.len(),
         );
         Ok((statistics, parts))
@@ -209,7 +209,7 @@ impl Table for MemoryTable {
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let numbers = ctx.get_settings().get_max_threads()? as usize;
+        let numbers = ctx.get_new_settings().get_max_threads()? as usize;
         let read_data_blocks = self.get_read_data_blocks();
 
         // Add source pipe.

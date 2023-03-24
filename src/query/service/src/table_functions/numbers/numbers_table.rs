@@ -137,7 +137,7 @@ impl Table for NumbersTable {
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        let max_block_size = ctx.get_settings().get_max_block_size()?;
+        let max_block_size = ctx.get_new_settings().get_max_block_size()?;
         let mut limit = None;
 
         if let Some(extras) = &push_downs {
@@ -164,7 +164,7 @@ impl Table for NumbersTable {
             fake_partitions as usize,
         );
 
-        let mut worker_num = ctx.get_settings().get_max_threads()?;
+        let mut worker_num = ctx.get_new_settings().get_max_threads()?;
         if worker_num > fake_partitions {
             worker_num = fake_partitions;
         }
@@ -232,7 +232,7 @@ impl NumbersSource {
         ctx: Arc<dyn TableContext>,
         numbers_part: &PartInfoPtr,
     ) -> Result<ProcessorPtr> {
-        let settings = ctx.get_settings();
+        let settings = ctx.get_new_settings();
         let numbers_part = NumbersPartInfo::from_part(numbers_part)?;
 
         SyncSourcer::create(ctx, output, NumbersSource {

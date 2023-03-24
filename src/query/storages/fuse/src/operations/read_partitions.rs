@@ -59,7 +59,7 @@ impl FuseTable {
         let snapshot = self.read_table_snapshot().await?;
         match snapshot {
             Some(snapshot) => {
-                let settings = ctx.get_settings();
+                let settings = ctx.get_new_settings();
                 if settings.get_enable_distributed_eval_index()? && !ctx.get_cluster().is_empty() {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
                     for segment_location in &snapshot.segments {

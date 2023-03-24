@@ -34,7 +34,7 @@ pub fn build_fuse_source_pipeline(
     top_k: Option<TopK>,
     max_io_requests: usize,
 ) -> Result<()> {
-    let max_threads = ctx.get_settings().get_max_threads()? as usize;
+    let max_threads = ctx.get_new_settings().get_max_threads()? as usize;
 
     match storage_format {
         FuseStorageFormat::Native => build_fuse_native_source_pipeline(

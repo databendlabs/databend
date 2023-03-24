@@ -48,7 +48,7 @@ impl Interpreter for ReclusterTableInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
         let ctx = self.ctx.clone();
-        let settings = ctx.get_settings();
+        let settings = ctx.get_new_settings();
         let tenant = ctx.get_tenant();
         let start = SystemTime::now();
 

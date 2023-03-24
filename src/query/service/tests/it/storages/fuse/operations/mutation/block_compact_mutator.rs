@@ -106,7 +106,7 @@ async fn test_compact() -> Result<()> {
 
 async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<bool> {
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let settings = ctx.get_settings();
+    let settings = ctx.get_new_settings();
     let mut pipeline = common_pipeline_core::Pipeline::create();
     if fuse_table
         .compact(ctx.clone(), CompactTarget::Blocks, None, &mut pipeline)

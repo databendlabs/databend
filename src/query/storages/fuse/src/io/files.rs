@@ -51,8 +51,8 @@ impl Files {
                     .map(|location| Self::delete_files(self.operator.clone(), location.to_vec()))
             });
 
-            let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
-            let permit_nums = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+            let threads_nums = self.ctx.get_new_settings().get_max_threads()? as usize;
+            let permit_nums = self.ctx.get_new_settings().get_max_storage_io_requests()? as usize;
             execute_futures_in_parallel(
                 tasks,
                 threads_nums,

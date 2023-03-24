@@ -293,4 +293,24 @@ impl DefaultSettings {
             },
         }
     }
+
+    pub fn try_get_u64(key: &str) -> Result<u64> {
+        match DefaultSettings::instance().settings.get(key) {
+            Some(v) => v.value.as_u64(),
+            None => Err(ErrorCode::UnknownVariable(format!(
+                "Unknown variable: {:?}",
+                key
+            ))),
+        }
+    }
+
+    pub fn try_get_string(key: &str) -> Result<String> {
+        match DefaultSettings::instance().settings.get(key) {
+            Some(v) => v.value.as_string(),
+            None => Err(ErrorCode::UnknownVariable(format!(
+                "Unknown variable: {:?}",
+                key
+            ))),
+        }
+    }
 }

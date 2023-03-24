@@ -69,7 +69,7 @@ pub async fn build_local_pipeline(
         PipelineBuilder::create(ctx.clone(), enable_profiling, ProfSpanSetRef::default());
     let mut build_res = pipeline.finalize(plan)?;
 
-    let settings = ctx.get_settings();
+    let settings = ctx.get_new_settings();
     build_res.set_max_threads(settings.get_max_threads()? as usize);
     Ok(build_res)
 }
@@ -91,7 +91,7 @@ pub async fn build_distributed_pipeline(
         .commit_actions(ctx.clone(), fragments_actions)
         .await?;
 
-    let settings = ctx.get_settings();
+    let settings = ctx.get_new_settings();
     build_res.set_max_threads(settings.get_max_threads()? as usize);
     Ok(build_res)
 }

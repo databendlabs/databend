@@ -96,7 +96,7 @@ impl HiveTable {
         push_downs: &Option<PushDownInfo>,
     ) -> Result<Arc<HiveBlockFilter>> {
         let enable_hive_parquet_predict_pushdown = ctx
-            .get_settings()
+            .get_new_settings()
             .get_enable_hive_parquet_predict_pushdown()?;
 
         if enable_hive_parquet_predict_pushdown == 0 {
@@ -173,10 +173,10 @@ impl HiveTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let push_downs = &plan.push_downs;
-        let chunk_size = ctx.get_settings().get_hive_parquet_chunk_size()? as usize;
+        let chunk_size = ctx.get_new_settings().get_hive_parquet_chunk_size()? as usize;
 
         let parts_len = plan.parts.len();
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_threads = ctx.get_new_settings().get_max_threads()? as usize;
         let max_threads = std::cmp::min(parts_len, max_threads);
 
         let mut source_builder = SourcePipeBuilder::create();

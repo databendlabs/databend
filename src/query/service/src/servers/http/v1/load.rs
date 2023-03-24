@@ -100,7 +100,7 @@ pub async fn streaming_load(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
-    let settings = context.get_settings();
+    let settings = context.get_new_settings();
 
     for (key, value) in req.headers().iter() {
         if settings.has_setting(key.as_str()) {
@@ -109,7 +109,7 @@ pub async fn streaming_load(
                 std::str::from_utf8(remove_quote(value.as_bytes())).map_err(InternalServerError)?;
             let value = unescape_string(unquote).map_err(InternalServerError)?;
             settings
-                .set_settings(key.to_string(), value.to_string(), false)
+                .set_setting(key.to_string(), value.to_string())
                 .map_err(InternalServerError)?
         }
     }
@@ -150,7 +150,7 @@ pub async fn streaming_load(
                 let input_context = Arc::new(
                     InputContext::try_create_from_insert_file_format(
                         rx,
-                        context.get_settings(),
+                        context.get_new_settings(),
                         option_settings.clone(),
                         table_schema,
                         context.get_scan_progress(),

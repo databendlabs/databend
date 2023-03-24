@@ -235,7 +235,7 @@ impl FuseTable {
         projection.sort_by_key(|&i| source_col_indices[i]);
         let ops = vec![BlockOperator::Project { projection }];
 
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_threads = ctx.get_new_settings().get_max_threads()? as usize;
         // Add source pipe.
         pipeline.add_source(
             |output| {

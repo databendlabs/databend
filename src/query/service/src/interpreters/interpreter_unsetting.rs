@@ -47,14 +47,17 @@ impl Interpreter for UnSettingInterpreter {
         let mut keys: Vec<String> = vec![];
         let mut values: Vec<String> = vec![];
         let mut is_globals: Vec<bool> = vec![];
-        let settings = self.ctx.get_settings();
+        let settings = self.ctx.get_new_settings();
         for var in plan.vars {
             let (ok, value) = match var.to_lowercase().as_str() {
                 // To be compatible with some drivers
                 "sql_mode" | "autocommit" => (false, String::from("")),
                 setting => {
                     if matches!(settings.get_setting_level(setting)?, Global) {
-                        self.ctx.get_settings().try_drop_setting(setting).await?;
+                        self.ctx
+                            .get_new_settings()
+                            .try_drop_global_setting(setting)
+                            .await?;
                     }
                     let default_val = {
                         if setting == "max_memory_usage" {
@@ -81,8 +84,8 @@ impl Interpreter for UnSettingInterpreter {
             if ok {
                 // reset the current ctx settings to default val
                 self.ctx
-                    .get_settings()
-                    .set_settings(var.clone(), value.clone(), false)?;
+                    .get_new_settings()
+                    .set_setting(var.clone(), value.clone())?;
                 // set affect
                 keys.push(var);
                 values.push(value);

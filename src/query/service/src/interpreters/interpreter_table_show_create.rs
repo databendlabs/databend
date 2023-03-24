@@ -146,7 +146,7 @@ impl Interpreter for ShowCreateTableInterpreter {
             table_create_sql.push_str(format!(" CLUSTER BY {}", cluster_keys_str).as_str());
         }
 
-        let settings = self.ctx.get_settings();
+        let settings = self.ctx.get_new_settings();
         let hide_options_in_show_create_table = settings
             .get_hide_options_in_show_create_table()
             .unwrap_or(false);

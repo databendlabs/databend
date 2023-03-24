@@ -194,7 +194,12 @@ impl Interpreter for SelectInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         // 0. Need to build physical plan first to get the partitions.
         let physical_plan = self.build_physical_plan().await?;
-        if self.ctx.get_settings().get_enable_query_result_cache()? && self.ctx.get_cacheable() {
+        if self
+            .ctx
+            .get_new_settings()
+            .get_enable_query_result_cache()?
+            && self.ctx.get_cacheable()
+        {
             let key = gen_result_cache_key(self.formatted_ast.as_ref().unwrap());
             // 1. Try to get result from cache.
             let kv_store = UserApiProvider::instance().get_meta_store_client();
@@ -224,7 +229,7 @@ impl Interpreter for SelectInterpreter {
                 &key,
                 kv_store.clone(),
                 self.ctx
-                    .get_settings()
+                    .get_new_settings()
                     .get_query_result_cache_allow_inconsistent()?,
             );
 

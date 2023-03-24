@@ -29,6 +29,7 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
+use common_settings::NewSettings;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
@@ -201,6 +202,10 @@ impl QueryContextShared {
 
     pub fn get_settings(&self) -> Arc<Settings> {
         self.session.get_settings()
+    }
+
+    pub fn get_new_settings(&self) -> Arc<NewSettings> {
+        self.session.get_new_settings()
     }
 
     pub fn get_changed_settings(&self) -> Arc<Settings> {

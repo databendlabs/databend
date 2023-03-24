@@ -35,7 +35,7 @@ use crate::sql::planner::plans::JoinType;
 #[async_trait::async_trait]
 impl HashJoinState for JoinHashTable {
     fn build(&self, input: DataBlock) -> Result<()> {
-        let data_block_size_limit = self.ctx.get_settings().get_max_block_size()? * 16;
+        let data_block_size_limit = self.ctx.get_new_settings().get_max_block_size()? * 16;
         let mut buffer = self.row_space.buffer.write().unwrap();
         buffer.push(input);
         let buffer_row_size = buffer.iter().fold(0, |acc, x| acc + x.num_rows());

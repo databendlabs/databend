@@ -17,6 +17,7 @@
 #![feature(once_cell)]
 mod settings;
 mod settings_default;
+mod settings_getter_setter;
 mod settings_global;
 
 use std::collections::BTreeMap;
@@ -39,6 +40,7 @@ use common_meta_types::MatchSeq;
 use common_users::UserApiProvider;
 use dashmap::DashMap;
 use itertools::Itertools;
+pub use settings::NewSettings;
 
 #[derive(Clone)]
 pub enum ScopeLevel {

@@ -81,7 +81,7 @@ impl TransformHashJoinProbe {
         join_state: Arc<dyn HashJoinState>,
         _output_schema: DataSchemaRef,
     ) -> Result<Box<dyn Processor>> {
-        let default_block_size = ctx.get_settings().get_max_block_size()?;
+        let default_block_size = ctx.get_new_settings().get_max_block_size()?;
         Ok(Box::new(TransformHashJoinProbe {
             input_data: None,
             output_data_blocks: VecDeque::new(),
