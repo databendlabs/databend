@@ -14,6 +14,10 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![deny(unused_crate_dependencies)]
+#![feature(once_cell)]
+mod settings;
+mod settings_default;
+mod settings_global;
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -838,7 +842,7 @@ impl Settings {
         self.settings.get(key).is_some()
     }
 
-    pub fn check_and_get_setting_value(&self, key: &str) -> Result<SettingValue> {
+    fn check_and_get_setting_value(&self, key: &str) -> Result<SettingValue> {
         let setting = self
             .settings
             .get(key)
