@@ -283,6 +283,28 @@ pub struct CreateShareEndpointReply {
     pub share_endpoint_id: u64,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetShareEndpointReq {
+    pub tenant: String,
+    // If `endpoint` is not None, return the specified endpoint,
+    // else return all share endpoints meta of tenant
+    pub endpoint: Option<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetShareEndpointReply {
+    pub share_endpoint_meta_vec: Vec<(ShareEndpointIdent, ShareEndpointMeta)>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct DropShareEndpointReq {
+    pub if_exists: bool,
+    pub endpoint: ShareEndpointIdent,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct DropShareEndpointReply {}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 pub struct ShareEndpointMeta {
     pub url: String,
@@ -883,7 +905,7 @@ mod kvapi_key_impl {
         }
     }
 
-    /// __fd_share/<tenant>/<share_endpoint_name> -> <share_id>
+    /// __fd_share/<tenant>/<share_endpoint_name> -> ShareEndpointId
     impl kvapi::Key for ShareEndpointIdent {
         const PREFIX: &'static str = PREFIX_SHARE_ENDPOINT;
 

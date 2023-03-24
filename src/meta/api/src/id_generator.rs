@@ -119,6 +119,16 @@ mod t {
             assert_eq!(g, t2);
         }
 
+        // Share endpoint id generator
+        {
+            let g = IdGenerator::share_endpoint_id();
+            let k = g.to_string_key();
+            assert_eq!("__fd_id_gen/share_endpoint_id", k);
+
+            let t2 = IdGenerator::from_str_key(&k)?;
+            assert_eq!(g, t2);
+        }
+
         Ok(())
     }
 

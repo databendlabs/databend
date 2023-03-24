@@ -449,6 +449,38 @@ impl UnknownShareId {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("UnknownShareEndpoint: {endpoint} while {context}")]
+pub struct UnknownShareEndpoint {
+    endpoint: String,
+    context: String,
+}
+
+impl UnknownShareEndpoint {
+    pub fn new(endpoint: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            endpoint: endpoint.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("UnknownShareEndpointId: {share_endpoint_id} while {context}")]
+pub struct UnknownShareEndpointId {
+    share_endpoint_id: u64,
+    context: String,
+}
+
+impl UnknownShareEndpointId {
+    pub fn new(share_endpoint_id: u64, context: impl Into<String>) -> Self {
+        Self {
+            share_endpoint_id,
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("TxnRetryMaxTimes: Txn {op} has retry {max_retry} times, abort.")]
 pub struct TxnRetryMaxTimes {
     op: String,
@@ -553,6 +585,12 @@ pub enum AppError {
 
     #[error(transparent)]
     ShareEndpointAlreadyExists(#[from] ShareEndpointAlreadyExists),
+
+    #[error(transparent)]
+    UnknownShareEndpoint(#[from] UnknownShareEndpoint),
+
+    #[error(transparent)]
+    UnknownShareEndpointId(#[from] UnknownShareEndpointId),
 }
 
 impl AppErrorMessage for UnknownDatabase {
@@ -691,6 +729,18 @@ impl AppErrorMessage for ShareEndpointAlreadyExists {
     }
 }
 
+impl AppErrorMessage for UnknownShareEndpoint {
+    fn message(&self) -> String {
+        format!("Unknown share endpoint '{}'", self.endpoint)
+    }
+}
+
+impl AppErrorMessage for UnknownShareEndpointId {
+    fn message(&self) -> String {
+        format!("Unknown share endpoint id '{}'", self.share_endpoint_id)
+    }
+}
+
 impl AppErrorMessage for TxnRetryMaxTimes {
     fn message(&self) -> String {
         format!(
@@ -774,6 +824,10 @@ impl From<AppError> for ErrorCode {
             AppError::WrongShare(err) => ErrorCode::WrongShare(err.message()),
             AppError::ShareEndpointAlreadyExists(err) => {
                 ErrorCode::ShareEndpointAlreadyExists(err.message())
+            }
+            AppError::UnknownShareEndpoint(err) => ErrorCode::UnknownShareEndpoint(err.message()),
+            AppError::UnknownShareEndpointId(err) => {
+                ErrorCode::UnknownShareEndpointId(err.message())
             }
             AppError::TxnRetryMaxTimes(err) => ErrorCode::TxnRetryMaxTimes(err.message()),
             AppError::DuplicatedUpsertFiles(err) => ErrorCode::DuplicatedUpsertFiles(err.message()),

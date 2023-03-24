@@ -288,9 +288,11 @@ impl FromToProto for mt::ShareEndpointMeta {
 
 impl FromToProto for mt::ShareEndpointIdent {
     type PB = pb::ShareEndpointIdent;
+
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
     }
+
     fn from_pb(p: pb::ShareEndpointIdent) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
