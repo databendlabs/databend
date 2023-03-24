@@ -223,7 +223,11 @@ impl Rule for RuleEagerAggregation {
         let mut column_index = 0;
 
         let mut success = false;
-        let d = if eager_aggregations[0].is_empty() { 1 } else { 0 };
+        let d = if eager_aggregations[0].is_empty() {
+            1
+        } else {
+            0
+        };
         if is_eager[d] && is_eager[d ^ 1] {
             // TODO(dousir9):
             // if eager_aggregations[d ^ 1].is_empty() {
@@ -259,7 +263,7 @@ impl Rule for RuleEagerAggregation {
                         &mut final_agg_partial.aggregate_functions[*index],
                         &mut final_agg_final.aggregate_functions[*index],
                     ];
-                    
+
                     // AVG => SUM
                     let sum_index = sum_aggregation_functions[0].index;
                     for aggregate_function in sum_aggregation_functions {
@@ -328,7 +332,7 @@ impl Rule for RuleEagerAggregation {
                         &mut final_agg_partial.aggregate_functions[*index],
                         &mut final_agg_final.aggregate_functions[*index],
                     ];
-                    
+
                     let old_index = final_aggregate_functions[0].index;
                     let new_index = metadata.add_derived_column(
                         format!("_{}_eager_{}", &func_name, column_index),
@@ -357,12 +361,7 @@ impl Rule for RuleEagerAggregation {
                                 column_binding.data_type = Box::new(DataType::Nullable(Box::new(
                                     DataType::Number(NumberDataType::UInt64),
                                 )));
-                                eval_scalar_item.scalar = ScalarExpr::CastExpr(CastExpr {
-                                    span: None,
-                                    is_try: false,
-                                    argument: Box::new(eval_scalar_item.scalar.clone()),
-                                    target_type: Box::new(DataType::Number(NumberDataType::UInt64)),
-                                });
+                                eval_scalar_item.scalar = cast_expr_if_needed(eval_scalar_item.scalar.clone(), DataType::Number(NumberDataType::UInt64));
                             }
                             success = true;
                         }
@@ -392,26 +391,22 @@ impl Rule for RuleEagerAggregation {
                                         visibility: Visibility::Visible,
                                     },
                                 }),
-                                ScalarExpr::CastExpr(CastExpr {
-                                    span: None,
-                                    is_try: false,
-                                    argument: Box::new(ScalarExpr::BoundColumnRef(
-                                        BoundColumnRef {
-                                            span: None,
-                                            column: ColumnBinding {
-                                                database_name: None,
-                                                table_name: None,
-                                                column_name: "_eager".to_string(),
-                                                index: old_to_new[count_index],
-                                                data_type: Box::new(DataType::Nullable(Box::new(
-                                                    DataType::Number(NumberDataType::UInt64),
-                                                ))),
-                                                visibility: Visibility::Visible,
-                                            },
+                                cast_expr_if_needed(
+                                    ScalarExpr::BoundColumnRef(BoundColumnRef {
+                                        span: None,
+                                        column: ColumnBinding {
+                                            database_name: None,
+                                            table_name: None,
+                                            column_name: "_eager".to_string(),
+                                            index: old_to_new[count_index],
+                                            data_type: Box::new(DataType::Nullable(Box::new(
+                                                DataType::Number(NumberDataType::UInt64),
+                                            ))),
+                                            visibility: Visibility::Visible,
                                         },
-                                    )),
-                                    target_type: Box::new(DataType::Number(NumberDataType::UInt64)),
-                                }),
+                                    }),
+                                    DataType::Number(NumberDataType::UInt64),
+                                ),
                             ],
                         });
                         success = true;
@@ -563,5 +558,17 @@ fn modify_final_aggregate_function(agg: &mut AggregateFunction, args_index: usiz
         agg.return_type = Box::new(DataType::Nullable(Box::new(DataType::Number(
             NumberDataType::UInt64,
         ))));
+    }
+}
+
+fn cast_expr_if_needed(expr: ScalarExpr, target_data_type: DataType) -> ScalarExpr {
+    match expr.data_type() {
+        Ok(data_type) if data_type != target_data_type => ScalarExpr::CastExpr(CastExpr {
+            span: None,
+            is_try: false,
+            argument: Box::new(expr),
+            target_type: Box::new(target_data_type),
+        }),
+        _ => expr,
     }
 }
