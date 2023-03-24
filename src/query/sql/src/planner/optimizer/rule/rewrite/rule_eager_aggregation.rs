@@ -273,9 +273,9 @@ impl Rule for RuleEagerAggregation {
                                 metadata.change_derived_column_alias(
                                     aggregate_function.index,
                                     format!(
-                                        "{}(!!{}.{})",
+                                        "{}({}.{})",
                                         agg.func_name.clone(),
-                                        &column.column.table_name.clone().unwrap_or("".to_string()),
+                                        &column.column.table_name.clone().unwrap_or(String::new()),
                                         &column.column.column_name.clone(),
                                     ),
                                 );
@@ -297,8 +297,16 @@ impl Rule for RuleEagerAggregation {
                     ];
 
                     // Generate a new column for COUNT.
+                    let mut table_name = String::new();
+                    let mut column_name = String::new();
+                    if let ScalarExpr::AggregateFunction(agg) = &count_aggregation_functions[0].scalar {
+                        if let ScalarExpr::BoundColumnRef(column) = &agg.args[0] {
+                            table_name = column.column.table_name.clone().unwrap_or(String::new());
+                            column_name = column.column.column_name.clone();
+                        }
+                    }
                     let new_index = metadata.add_derived_column(
-                        format!("_{}_eager_{}", &func_name, column_index),
+                        format!("{}({}.{})", &func_name, table_name, column_name),
                         count_aggregation_functions[0].scalar.data_type()?,
                     );
                     column_index += 1;
@@ -335,7 +343,7 @@ impl Rule for RuleEagerAggregation {
 
                     let old_index = final_aggregate_functions[0].index;
                     let new_index = metadata.add_derived_column(
-                        format!("_{}_eager_{}", &func_name, column_index),
+                        format!("_eager_final_{}", &func_name),
                         final_aggregate_functions[0].scalar.data_type()?,
                     );
                     column_index += 1;
@@ -383,7 +391,7 @@ impl Rule for RuleEagerAggregation {
                                     column: ColumnBinding {
                                         database_name: None,
                                         table_name: None,
-                                        column_name: "_eager".to_string(),
+                                        column_name: "_eager_final_sum".to_string(),
                                         index: old_to_new[sum_index],
                                         data_type: Box::new(DataType::Number(
                                             NumberDataType::Float64,
@@ -397,7 +405,7 @@ impl Rule for RuleEagerAggregation {
                                         column: ColumnBinding {
                                             database_name: None,
                                             table_name: None,
-                                            column_name: "_eager".to_string(),
+                                            column_name: "_eager_final_count".to_string(),
                                             index: old_to_new[count_index],
                                             data_type: Box::new(DataType::Nullable(Box::new(
                                                 DataType::Number(NumberDataType::UInt64),
