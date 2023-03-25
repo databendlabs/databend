@@ -135,17 +135,17 @@ impl<'a> GroupingChecker<'a> {
             ScalarExpr::WindowFunction(win) => {
                 if let Some(column) = self
                     .bind_context
-                    .aggregate_info
-                    .aggregate_functions_map
+                    .windows
+                    .window_functions_map
                     .get(&win.agg_func.display_name)
                 {
-                    let agg_func = &self.bind_context.aggregate_info.aggregate_functions[*column];
+                    let window_info = &self.bind_context.windows.window_functions[*column];
                     let column_binding = ColumnBinding {
                         database_name: None,
                         table_name: None,
-                        column_name: win.agg_func.display_name.clone(),
-                        index: agg_func.index,
-                        data_type: Box::new(agg_func.scalar.data_type()?),
+                        column_name: win.display_name(),
+                        index: window_info.aggregate_function.index,
+                        data_type: Box::new(window_info.aggregate_function.scalar.data_type()?),
                         visibility: Visibility::Visible,
                     };
                     return Ok(BoundColumnRef {
@@ -154,7 +154,7 @@ impl<'a> GroupingChecker<'a> {
                     }
                     .into());
                 }
-                Err(ErrorCode::Internal("Invalid aggregate function"))
+                Err(ErrorCode::Internal("Invalid window function"))
             }
 
             ScalarExpr::AggregateFunction(agg) => {

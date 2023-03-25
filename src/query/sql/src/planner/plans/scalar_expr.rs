@@ -435,16 +435,17 @@ impl WindowFunc {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Default, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct WindowFuncFrame {
     pub units: WindowFuncFrameUnits,
     pub start: WindowFuncFrameBound,
     pub end: WindowFuncFrameBound,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Default, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum WindowFuncFrameBound {
     /// `CURRENT ROW`
+    #[default]
     CurrentRow,
     /// `<N> PRECEDING` or `UNBOUNDED PRECEDING`
     Preceding(Option<Box<ScalarExpr>>),
@@ -452,8 +453,9 @@ pub enum WindowFuncFrameBound {
     Following(Option<Box<ScalarExpr>>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum WindowFuncFrameUnits {
+    #[default]
     Rows,
     Range,
 }

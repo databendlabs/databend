@@ -392,10 +392,8 @@ impl PhysicalPlanBuilder {
             }
 
             RelOperator::EvalScalar(eval_scalar) => {
-                dbg!("eval scalar 0", s_expr.child(0).clone());
                 let input = self.build(s_expr.child(0)?).await?;
                 let input_schema = input.output_schema()?;
-                dbg!("eval scalar 1", input.clone(), input_schema.clone());
                 let exprs = eval_scalar
                     .items
                     .iter()
@@ -681,10 +679,49 @@ impl PhysicalPlanBuilder {
                 Ok(result)
             }
             RelOperator::Window(w) => {
-                println!("window sexpr: {:?}", s_expr.child(0));
+                let input = self.build(s_expr.child(0)?).await?;
+                let input_schema = input.output_schema()?;
+                // let group_items = agg.group_items.iter().map(|v| v.index).collect::<Vec<_>>();
+                let partition_items = w.partition_by.iter().map(|v| v.index).collect::<Vec<_>>();
+                let agg_func = if let ScalarExpr::AggregateFunction(agg) =
+                    &w.aggregate_function.scalar
+                {
+                    Ok(AggregateFunctionDesc {
+                        sig: AggregateFunctionSignature {
+                            name: agg.func_name.clone(),
+                            args: agg.args.iter().map(|s|{s.data_type()}).collect::<Result<_>>()?,
+                            params: agg.params.clone(),
+                            return_type: *agg.return_type.clone(),
+                        },
+                        output_column: w.aggregate_function.index,
+                        args: agg.args.iter().map(|arg| {
+                            if let ScalarExpr::BoundColumnRef(col) = arg {
+                                input_schema.index_of(&col.column.index.to_string())
+                            } else {
+                                Err(ErrorCode::Internal("Window's aggregate function argument must be a BoundColumnRef".to_string()))
+                            }
+                        }).collect::<Result<_>>()?,
+                        arg_indices: agg.args.iter().map(|arg| {
+                            if let ScalarExpr::BoundColumnRef(col) = arg {
+                                Ok(col.column.index)
+                            } else {
+                                Err(ErrorCode::Internal(
+                                    "Aggregate function argument must be a BoundColumnRef".to_string()
+                                ))
+                            }
+                        }).collect::<Result<_>>()?,
+                    })
+                } else {
+                    Err(ErrorCode::Internal(
+                        "Expected aggregate function".to_string(),
+                    ))
+                }?;
+
                 Ok(PhysicalPlan::Window(Window {
                     plan_id: self.next_plan_id(),
-                    input: Box::new(self.build(s_expr.child(0)?).await?),
+                    input: Box::new(input),
+                    agg_func,
+                    partition_by: partition_items,
                 }))
             }
             RelOperator::Sort(sort) => Ok(PhysicalPlan::Sort(Sort {

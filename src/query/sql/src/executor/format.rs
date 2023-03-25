@@ -516,7 +516,43 @@ fn window_to_format_tree(
     metadata: &MetadataRef,
     prof_span_set: &ProfSpanSetRef,
 ) -> Result<FormatTreeNode<String>> {
-    Ok(FormatTreeNode::new("Window".to_string()))
+    let partition_by = plan
+        .partition_by
+        .iter()
+        .map(|col| {
+            let column = metadata.read().column(*col).clone();
+            let name = match column {
+                ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => column_name,
+                ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
+                ColumnEntry::InternalColumn(TableInternalColumn {
+                    internal_column, ..
+                }) => internal_column.column_name().to_string(),
+            };
+            Ok(name)
+        })
+        .collect::<Result<Vec<_>>>()?
+        .join(", ");
+
+    let agg_func = pretty_display_agg_desc(&plan.agg_func, metadata);
+
+    let mut children = vec![
+        FormatTreeNode::new(format!("partition by: [{partition_by}]")),
+        FormatTreeNode::new(format!("aggregate function: [{agg_func}]")),
+    ];
+
+    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
+        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
+        children.push(FormatTreeNode::new(format!(
+            "total process time: {process_time}ms"
+        )));
+    }
+
+    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
+
+    Ok(FormatTreeNode::with_children(
+        "Window".to_string(),
+        children,
+    ))
 }
 
 fn sort_to_format_tree(

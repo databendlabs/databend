@@ -278,7 +278,7 @@ impl Binder {
 
     pub(super) async fn bind_window_function(
         &mut self,
-        window_info: &WindowInfo,
+        window_info: &WindowFunctionInto,
         child: SExpr,
     ) -> Result<SExpr> {
         // Build a ProjectPlan, which will produce aggregate arguments and window partitions
@@ -428,7 +428,7 @@ impl Binder {
         };
 
         // create window info
-        let window_info = WindowInfo {
+        let window_info = WindowFunctionInto {
             aggregate_function: ScalarItem {
                 scalar: replaced_agg.clone().into(),
                 index,
@@ -439,7 +439,11 @@ impl Binder {
         };
 
         // push window info to BindContext
-        window_infos.push(window_info);
+        window_infos.window_functions.push(window_info);
+        window_infos.window_functions_map.insert(
+            replaced_agg.display_name.clone(),
+            window_infos.window_functions.len() - 1,
+        );
 
         let replaced_window = WindowFunc {
             agg_func: replaced_agg,
@@ -451,8 +455,14 @@ impl Binder {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Default, Clone, PartialEq, Eq, Debug)]
 pub struct WindowInfo {
+    pub window_functions: Vec<WindowFunctionInto>,
+    pub window_functions_map: HashMap<String, usize>,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct WindowFunctionInto {
     pub aggregate_function: ScalarItem,
     pub aggregate_arguments: Vec<ScalarItem>,
     pub partition_by_items: Vec<ScalarItem>,

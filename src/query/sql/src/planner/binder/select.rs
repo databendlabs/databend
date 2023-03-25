@@ -146,6 +146,7 @@ impl Binder {
 
         // `analyze_projection` should behind `analyze_aggregate_select` because `analyze_aggregate_select` will rewrite `grouping`.
         let (mut scalar_items, projections) = self.analyze_projection(&select_list)?;
+        // dbg!("scalar_items,", &scalar_items);
 
         let having = if let Some(having) = &stmt.having {
             Some(
@@ -207,7 +208,7 @@ impl Binder {
 
         // bind window
         // window run after the HAVING clause but before the ORDER BY clause.
-        for window_info in from_context.windows.iter() {
+        for window_info in &from_context.windows.window_functions {
             s_expr = self.bind_window_function(window_info, s_expr).await?;
         }
 

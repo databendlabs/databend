@@ -141,6 +141,8 @@ pub trait PhysicalPlanReplacer {
         Ok(PhysicalPlan::Window(Window {
             plan_id: plan.plan_id,
             input: Box::new(input),
+            agg_func: plan.agg_func.clone(),
+            partition_by: plan.partition_by.clone(),
         }))
     }
 

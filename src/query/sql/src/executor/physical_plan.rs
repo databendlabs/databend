@@ -286,11 +286,20 @@ impl AggregateFinal {
 pub struct Window {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
+    pub agg_func: AggregateFunctionDesc,
+    pub partition_by: Vec<IndexType>,
 }
 
 impl Window {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        self.input.output_schema()
+        let input_schema = self.input.output_schema()?;
+        let mut fields = Vec::with_capacity(input_schema.fields().len() + 1);
+        fields.extend_from_slice(input_schema.fields());
+        fields.push(DataField::new(
+            &self.agg_func.output_column.to_string(),
+            self.agg_func.sig.return_type.clone(),
+        ));
+        Ok(DataSchemaRefExt::create(fields))
     }
 }
 

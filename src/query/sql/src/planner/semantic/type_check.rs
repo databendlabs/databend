@@ -719,7 +719,6 @@ impl<'a> TypeChecker<'a> {
                         // window function
                         let mut partitions = vec![];
                         for p in window.partition_by.iter() {
-                            println!("window partition: {:?}", p);
                             let box (part, _part_type) = self.resolve(p).await?;
                             partitions.push(part);
                         }

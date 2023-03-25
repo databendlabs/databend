@@ -216,6 +216,11 @@ fn to_format_tree(
     metadata: MetadataRef,
     children: Vec<FormatTreeNode<FormatContext>>,
 ) -> FormatTreeNode<FormatContext> {
+    dbg!("to_format_tree", &rel_operator);
+    if children.len() > 0 {
+        let ch0 = children[0].payload.to_string();
+        dbg!(ch0);
+    }
     match &rel_operator {
         RelOperator::Join(op) => logical_join_to_format_tree(op, metadata, children),
         RelOperator::Scan(op) => logical_get_to_format_tree(op, metadata, children),
@@ -484,6 +489,10 @@ fn aggregate_to_format_tree(
     metadata: MetadataRef,
     children: Vec<FormatTreeNode<FormatContext>>,
 ) -> FormatTreeNode<FormatContext> {
+    for c in children.iter() {
+        let c = c.payload.to_string();
+        dbg!("c is", c);
+    }
     let group_items = op
         .group_items
         .iter()
@@ -493,7 +502,10 @@ fn aggregate_to_format_tree(
     let agg_funcs = op
         .aggregate_functions
         .iter()
-        .map(|item| format_scalar(&metadata, &item.scalar))
+        .map(|item| {
+            println!("agg format scalar: {:?}", &item.scalar);
+            format_scalar(&metadata, &item.scalar)
+        })
         .collect::<Vec<String>>()
         .join(", ");
     FormatTreeNode::with_children(
@@ -586,6 +598,7 @@ fn eval_scalar_to_format_tree(
     metadata: MetadataRef,
     children: Vec<FormatTreeNode<FormatContext>>,
 ) -> FormatTreeNode<FormatContext> {
+    dbg!("eval scalar items: {:?}", op.items.clone());
     let scalars = op
         .items
         .iter()
