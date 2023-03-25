@@ -25,6 +25,8 @@ use common_expression::Value;
 use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::AggregateFunction;
 use common_functions::aggregates::StateAddr;
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
@@ -56,14 +58,17 @@ pub struct WindowBlock {
 ///
 /// Window function will not change the rows count of the original data.
 pub struct TransformWindow {
+    input: Arc<InputPort>,
+    output: Arc<OutputPort>,
+    state: ProcessorState,
+    input_is_finished: bool,
+
     function: Arc<dyn AggregateFunction>,
     arguments: Vec<usize>,
 
-    state_place: StateAddr,
-    arena: Area,
+    place: StateAddr,
 
     partition_indices: Vec<usize>,
-    order_by_indices: Vec<usize>,
 
     /// A queue of data blocks that we need to process.
     /// If partition is ended, we may free the data block from front of the queue.
@@ -73,7 +78,6 @@ pub struct TransformWindow {
 
     /// monotonically increasing index of the current block in the queue.
     first_block: usize,
-    current_block: usize,
 
     // Partition: [`partition_start`, `partition_end`). `partition_end` is excluded.
     partition_start: RowPtr,
@@ -91,7 +95,6 @@ pub struct TransformWindow {
 
     // Used for rank
     current_row_in_partition: usize,
-    input_is_finished: bool,
 }
 
 impl TransformWindow {
@@ -99,16 +102,9 @@ impl TransformWindow {
         function: Arc<dyn AggregateFunction>,
         arguments: Vec<usize>,
         partition_indices: Vec<usize>,
-        order_by_indices: Vec<usize>,
         frame_kind: WindowFrame,
     ) -> Result<ProcessorPtr> {
-        let transform = Self::try_create(
-            function,
-            arguments,
-            partition_indices,
-            order_by_indices,
-            frame_kind,
-        )?;
+        let transform = Self::try_create(function, arguments, partition_indices, frame_kind)?;
         Ok(ProcessorPtr::create(Box::new(transform)))
     }
 
@@ -116,7 +112,6 @@ impl TransformWindow {
         function: Arc<dyn AggregateFunction>,
         arguments: Vec<usize>,
         partition_indices: Vec<usize>,
-        order_by_indices: Vec<usize>,
         frame_kind: WindowFrame,
     ) -> Result<Self> {
         let mut arena = Area::create();
@@ -126,16 +121,16 @@ impl TransformWindow {
         let state_place = state_place.next(state_offset[0]);
 
         Ok(Self {
+            input: InputPort::create(),
+            output: OutputPort::create(),
+            state: ProcessorState::Consume,
             function,
             arguments,
             partition_indices,
-            order_by_indices,
-            state_place,
-            arena,
+            place: state_place,
             blocks: VecDeque::new(),
             outputs: VecDeque::new(),
             first_block: 0,
-            current_block: 0,
             partition_start: RowPtr::default(),
             partition_end: RowPtr::default(),
             partition_ended: false,
@@ -151,8 +146,13 @@ impl TransformWindow {
     }
 
     #[inline(always)]
-    fn blocks_start(&self) -> RowPtr {
-        RowPtr::new(self.first_block, 0)
+    pub fn input_port(&self) -> Arc<InputPort> {
+        self.input.clone()
+    }
+
+    #[inline(always)]
+    pub fn output_port(&self) -> Arc<OutputPort> {
+        self.output.clone()
     }
 
     #[inline(always)]
@@ -453,7 +453,7 @@ impl TransformWindow {
 
         // TODO: for some case, current frame can continue to use the previous frame's state
         // Reset state
-        self.function.init_state(self.state_place);
+        self.function.init_state(self.place);
 
         for block in row_start.block..=row_end.block.min(block_end.block - 1) {
             let block_row_start = if block == row_start.block {
@@ -471,18 +471,23 @@ impl TransformWindow {
             let columns = Self::aggregate_arguments(data, &self.arguments);
 
             for row in block_row_start..block_row_end {
-                self.function
-                    .accumulate_row(self.state_place, &columns, row)?;
+                self.function.accumulate_row(self.place, &columns, row)?;
             }
         }
 
         let function = self.function.clone();
-        let place = self.state_place;
+        let place = self.place;
         let builder = self.builder_at(self.current_row);
         function.merge_result(place, builder)?;
 
         Ok(())
     }
+}
+
+enum ProcessorState {
+    Consume,
+    AddBlock(Option<DataBlock>),
+    Output,
 }
 
 #[async_trait::async_trait]
@@ -496,14 +501,65 @@ impl Processor for TransformWindow {
     }
 
     fn event(&mut self) -> Result<Event> {
-        todo!()
+        if self.output.is_finished() {
+            self.input.finish();
+            return Ok(Event::Finished);
+        }
+
+        if !self.output.can_push() {
+            return Ok(Event::NeedConsume);
+        }
+
+        self.input_is_finished = self.input.is_finished();
+        match self.state {
+            ProcessorState::Consume => {
+                let has_data = self.input.has_data();
+                let data = self.input.pull_data().transpose()?;
+                match (self.input_is_finished, has_data) {
+                    (_, true) => {
+                        self.state = ProcessorState::AddBlock(data);
+                        Ok(Event::Sync)
+                    }
+                    (false, false) => Ok(Event::NeedData),
+                    (true, _) => {
+                        if !self.blocks.is_empty() {
+                            self.state = ProcessorState::AddBlock(None);
+                            Ok(Event::Sync)
+                        } else {
+                            self.output.finish();
+                            Ok(Event::Finished)
+                        }
+                    }
+                }
+            }
+            ProcessorState::Output => {
+                let output = self.outputs.pop_front().unwrap();
+                self.output.push_data(Ok(output));
+                Ok(Event::NeedConsume)
+            }
+            _ => unreachable!(),
+        }
     }
 
     fn process(&mut self) -> Result<()> {
-        todo!()
+        if let ProcessorState::AddBlock(data) =
+            std::mem::replace(&mut self.state, ProcessorState::Consume)
+        {
+            self.add_block(data)?;
+            self.check_outputs();
+            self.state = if self.outputs.is_empty() {
+                ProcessorState::Consume
+            } else {
+                ProcessorState::Output
+            };
+        } else {
+            unreachable!()
+        }
+        Ok(())
     }
 }
 
+#[test]
 mod tests {
     use common_exception::Result;
     use common_expression::block_debug::assert_blocks_eq;
@@ -513,23 +569,18 @@ mod tests {
     use common_expression::Column;
     use common_expression::ColumnBuilder;
     use common_expression::DataBlock;
-    use common_expression::FromData;
     use common_functions::aggregates::AggregateFunctionFactory;
 
     use super::TransformWindow;
     use super::WindowBlock;
-    use crate::pipelines::processors::transforms::window::transform_window::RowPtr;
     use crate::pipelines::processors::transforms::WindowFrame;
-    use crate::pipelines::processors::transforms::WindowFrameBound;
 
     fn get_transform_window(
         window_frame: WindowFrame,
         arg_type: DataType,
     ) -> Result<TransformWindow> {
         let function = AggregateFunctionFactory::instance().get("sum", vec![], vec![arg_type])?;
-        let mut transform =
-            TransformWindow::try_create(function, vec![0], vec![0], vec![0], window_frame)?;
-        Ok(transform)
+        TransformWindow::try_create(function, vec![0], vec![0], window_frame)
     }
 
     fn get_transform_window_with_data(
