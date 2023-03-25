@@ -1,9 +1,5 @@
 name: "Test Unite"
 description: "Running unit tests"
-inputs:
-  codecov_token:
-    description: "CodeCov Token"
-    required: true
 
 runs:
   using: "composite"
