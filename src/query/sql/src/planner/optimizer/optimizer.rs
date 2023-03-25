@@ -25,6 +25,7 @@ use super::format::display_memo;
 use super::Memo;
 use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::distributed::optimize_distributed_query;
+use crate::optimizer::hyper_dp::DPhpy;
 use crate::optimizer::runtime_filter::try_add_runtime_filter_nodes;
 use crate::optimizer::util::contains_local_table_scan;
 use crate::optimizer::HeuristicOptimizer;
@@ -148,9 +149,12 @@ pub fn optimize_query(
     let contains_local_table_scan = contains_local_table_scan(&s_expr, &metadata);
 
     let mut heuristic = HeuristicOptimizer::new(ctx.clone(), bind_context, metadata.clone());
-    let mut result = heuristic.optimize(s_expr)?;
-    let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata)?;
-    result = cascades.optimize(result)?;
+    let result = heuristic.optimize(s_expr)?;
+    let (mut result, optimized) = DPhpy::new(metadata.clone()).optimize(result)?;
+    if !optimized {
+        let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata)?;
+        result = cascades.optimize(result)?;
+    }
     // So far, we don't have ability to execute distributed query
     // with reading data from local tales(e.g. system tables).
     let enable_distributed_query =

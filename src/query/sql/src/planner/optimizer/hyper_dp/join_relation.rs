@@ -13,26 +13,24 @@
 // limitations under the License.
 
 use std::collections::HashSet;
-use std::ops::Index;
 
 use ahash::HashMap;
 use common_exception::Result;
 
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
-use crate::plans::RelOperator;
 use crate::IndexType;
 
 pub struct JoinRelation {
     s_expr: SExpr,
-    parent_s_expr: SExpr,
+    // parent_s_expr: SExpr,
 }
 
 impl JoinRelation {
-    pub fn new(s_expr: &SExpr, parent: &SExpr) -> Self {
+    pub fn new(s_expr: &SExpr, _parent: &SExpr) -> Self {
         Self {
             s_expr: s_expr.clone(),
-            parent_s_expr: parent.clone(),
+            // parent_s_expr: parent.clone(),
         }
     }
 
@@ -42,7 +40,7 @@ impl JoinRelation {
     }
 }
 
-#[derive(Default, Clone, Eq, PartialEq)]
+#[derive(Default, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct JoinRelationSet {
     relations: Vec<IndexType>,
 }
@@ -90,6 +88,7 @@ impl JoinRelationSet {
     }
 }
 
+#[derive(Default, Clone)]
 struct RelationSetNode {
     relation_set: JoinRelationSet,
     // Key is relation id
@@ -102,7 +101,7 @@ struct RelationSetNode {
 //       [{},{1}]  [{3}, {}]
 //          /
 //      [{1, 2}, {}]
-#[derive(Default, Clone, Default)]
+#[derive(Default, Clone)]
 pub struct RelationSetTree {
     root: RelationSetNode,
 }

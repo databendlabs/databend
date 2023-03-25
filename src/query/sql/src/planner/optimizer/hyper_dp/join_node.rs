@@ -14,11 +14,11 @@
 
 use crate::optimizer::hyper_dp::join_relation::JoinRelationSet;
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct JoinNode {
     pub leaves: JoinRelationSet,
-    pub left: JoinNode,
-    pub right: JoinNode,
+    pub left: Box<JoinNode>,
+    pub right: Box<JoinNode>,
     pub cost: f64,
 }
 
@@ -26,8 +26,8 @@ impl JoinNode {
     pub fn new(leaves: JoinRelationSet, left: JoinNode, right: JoinNode, cost: f64) -> Self {
         Self {
             leaves,
-            left,
-            right,
+            left: Box::new(left),
+            right: Box::new(right),
             cost,
         }
     }

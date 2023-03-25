@@ -110,65 +110,66 @@ impl ScalarExpr {
     }
 
     // Get used tables in ScalarExpr
-    pub fn used_tables(&self, metadata: MetadataRef) -> Vec<IndexType> {
+    pub fn used_tables(&self, metadata: MetadataRef) -> Result<Vec<IndexType>> {
         match self {
             ScalarExpr::BoundColumnRef(scalar) => {
+                let mut tables = vec![];
                 if let Some(table_name) = &scalar.column.table_name {
                     // From metadata find table index
                     let metadata = metadata.read();
                     if let Some(table_index) =
                         metadata.get_table_index(scalar.column.database_name.as_deref(), table_name)
                     {
-                        vec![table_index]
+                        tables = vec![table_index];
                     }
                 }
-                vec![]
+                Ok(tables)
             }
-            ScalarExpr::BoundInternalColumnRef(_) | ScalarExpr::ConstantExpr(_) => vec![],
+            ScalarExpr::BoundInternalColumnRef(_) | ScalarExpr::ConstantExpr(_) => Ok(vec![]),
             ScalarExpr::AndExpr(scalar) => {
-                let mut left: Vec<IndexType> = scalar.left.used_tables(metadata.clone());
-                let mut right: Vec<IndexType> = scalar.right.used_tables(metadata);
+                let mut left: Vec<IndexType> = scalar.left.used_tables(metadata.clone())?;
+                let mut right: Vec<IndexType> = scalar.right.used_tables(metadata)?;
                 left.append(&mut right);
-                left
+                Ok(left)
             }
             ScalarExpr::OrExpr(scalar) => {
-                let mut left: Vec<IndexType> = scalar.left.used_tables(metadata.clone());
-                let mut right: Vec<IndexType> = scalar.right.used_tables(metadata);
+                let mut left: Vec<IndexType> = scalar.left.used_tables(metadata.clone())?;
+                let mut right: Vec<IndexType> = scalar.right.used_tables(metadata)?;
                 left.append(&mut right);
-                left
+                Ok(left)
             }
             ScalarExpr::NotExpr(scalar) => scalar.argument.used_tables(metadata),
             ScalarExpr::ComparisonExpr(scalar) => {
-                let mut left: Vec<IndexType> = scalar.left.used_tables(metadata.clone());
-                let mut right: Vec<IndexType> = scalar.right.used_tables(metadata);
+                let mut left: Vec<IndexType> = scalar.left.used_tables(metadata.clone())?;
+                let mut right: Vec<IndexType> = scalar.right.used_tables(metadata)?;
                 left.append(&mut right);
-                left
+                Ok(left)
             }
             ScalarExpr::WindowFunction(scalar) => {
                 let mut result = vec![];
                 for scalar in &scalar.agg_func.args {
-                    result.append(&mut scalar.used_tables(metadata.clone()));
+                    result.append(&mut scalar.used_tables(metadata.clone())?);
                 }
-                result
+                Ok(result)
             }
             ScalarExpr::AggregateFunction(scalar) => {
                 let mut result = vec![];
                 for scalar in &scalar.args {
-                    result.append(&mut scalar.used_tables(metadata.clone()));
+                    result.append(&mut scalar.used_tables(metadata.clone())?);
                 }
-                result
+                Ok(result)
             }
             ScalarExpr::FunctionCall(scalar) => {
                 let mut result = vec![];
                 for scalar in &scalar.arguments {
-                    result.append(&mut scalar.used_tables(metadata.clone()));
+                    result.append(&mut scalar.used_tables(metadata.clone())?);
                 }
-                result
+                Ok(result)
             }
             ScalarExpr::CastExpr(scalar) => scalar.argument.used_tables(metadata.clone()),
             ScalarExpr::SubqueryExpr(_) => Err(ErrorCode::Unimplemented(
                 "SubqueryExpr doesn't support used_tables method".to_string(),
-            ))?,
+            )),
         }
     }
 
