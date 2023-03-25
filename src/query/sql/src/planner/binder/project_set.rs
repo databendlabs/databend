@@ -52,8 +52,7 @@ impl<'a> Visitor<'a> for SrfCollector {
         over: &'a Option<WindowSpec>,
     ) {
         if BUILTIN_FUNCTIONS
-            .properties
-            .get(&name.name.to_lowercase())
+            .get_property(&name.name)
             .map(|property| property.kind == FunctionKind::SRF)
             .unwrap_or(false)
         {
