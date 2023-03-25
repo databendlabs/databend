@@ -157,13 +157,60 @@ impl DPhpy {
 
     // This method will run dynamic programming algorithm to find the optimal join order
     fn solve(&mut self) -> Result<bool> {
-        todo!()
+        // Initial `dp_table` with plan for single relation
+        for (idx, relation) in self.join_relations.iter().enumerate() {
+            // Get node (aka relation_set) in `relation_set_tree`
+            let nodes = self.relation_set_tree.get_relation_set_by_index(idx)?;
+            let mut join = JoinNode::default();
+            join.leaves = nodes.clone();
+            join.cost = relation.cost()?;
+            let _ = self.dp_table.insert(nodes, join);
+        }
+
+        for idx in self.join_relations.len()..0 {
+            // Get node from `relation_set_tree`
+            let node = self.relation_set_tree.get_relation_set_by_index(idx)?;
+            if !self.emit_csg(&node) {
+                return Ok(false);
+            }
+
+            // Create forbidden node set
+            let mut forbidden_nodes = [0..idx].iter().collect();
+            if !self.enumerate_csg_rec(&node, &forbidden_nodes) {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     }
 
     // EmitCsg will take a non-empty subset of hyper_graph's nodes(V) which contains a connected subgraph.
     // Then it will possibly generate a connected complement which will combine `nodes` to be a csg-cmp-pair.
     fn emit_csg(&mut self, nodes: &JoinRelationSet) -> Result<bool> {
-        todo!()
+        let mut forbidden_nodes: HashSet<IndexType> = [0..(nodes.relations()[0])].iter().collect();
+        forbidden_nodes.extend(nodes.relations());
+
+        // Get neighbors of `nodes`
+        let mut neighbors = self.query_graph.neighbors(nodes, &forbidden_nodes)?;
+        if neighbors.is_empty() {
+            return Ok(true);
+        }
+        neighbors.sort();
+        // Traverse all neighbors by desc
+        for neighbor in neighbors.iter().rev() {
+            let neighbor_relations = self
+                .relation_set_tree
+                .get_relation_set_by_index(*neighbor)?;
+            // Check if neighbor is connected with `nodes`
+            if self.query_graph.is_connected(nodes, &neighbor_relations) {
+                if !self.emit_csg_cmp(nodes, &neighbor_relations) {
+                    return Ok(false);
+                }
+            }
+            if !self.enumerate_cmp_rec(nodes, &neighbor_relations, &forbidden_nodes) {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     }
 
     // EnumerateCsgRec will extend the given `nodes`.
@@ -189,6 +236,29 @@ impl DPhpy {
         right: &JoinRelationSet,
         forbidden_nodes: &HashSet<IndexType>,
     ) -> Result<bool> {
-        todo!()
+        let neighbor_set = self.query_graph.neighbors(right, forbidden_nodes)?;
+        if neighbor_set.is_empty() {
+            return Ok(true);
+        }
+        for neighbor in neighbor_set.iter() {
+            let neighbor_relations = self
+                .relation_set_tree
+                .get_relation_set_by_index(*neighbor)?;
+            // Merge `right` with `neighbor_relations`
+            let merged_relation_set = self
+                .relation_set_tree
+                .merge_relation_set(right, &neighbor_relations);
+            if self.dp_table.contains_key(&merged_relation_set) {
+                if !self.query_graph.is_connected(left, &merged_relation_set) {
+                    if !self.emit_csg_cmp(left, &merged_relation_set) {
+                        return Ok(false);
+                    }
+                }
+            }
+        }
+
+        // Continue to enumerate cmp
+
+        Ok(true)
     }
 }

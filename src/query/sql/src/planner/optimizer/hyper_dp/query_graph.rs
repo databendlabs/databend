@@ -52,13 +52,50 @@ impl QueryGraph {
         }
     }
 
+    // Check if `nodes` is connected to `neighbor`
+    pub fn is_connected(
+        &self,
+        nodes: &JoinRelationSet,
+        neighbor: &JoinRelationSet,
+    ) -> Result<bool> {
+        let mut edge = &self.root_edge;
+        for node in nodes.iter() {
+            if !edge.children.contains_key(node) {
+                continue;
+            }
+            edge = edge.children.get(node).unwrap();
+            for neighbor_info in edge.neighbors.iter() {
+                if neighbor.is_subset(&neighbor_info.neighbors) {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
+    }
+
     // Get all neighbors of `nodes` which are not in `forbidden_nodes`
     pub fn neighbors(
         &self,
         nodes: &JoinRelationSet,
-        forbidden_nodes: HashSet<IndexType>,
+        forbidden_nodes: &HashSet<IndexType>,
     ) -> Result<Vec<IndexType>> {
-        todo!()
+        let mut neighbors = vec![];
+        // Find neighbors for nodes that aren't in `forbidden_nodes`
+        let mut edge = &self.root_edge;
+        for relation in nodes.iter() {
+            if !edge.children.contains_key(relation) {
+                continue;
+            }
+            edge = edge.children.get(relation).unwrap();
+            for neighbor_info in edge.neighbors.iter() {
+                for neighbor in neighbor_info.neighbors.iter() {
+                    if !forbidden_nodes.contains(neighbor) {
+                        neighbors.push(*neighbor);
+                    }
+                }
+            }
+        }
+        Ok(neighbors)
     }
 
     // create edges for relation set

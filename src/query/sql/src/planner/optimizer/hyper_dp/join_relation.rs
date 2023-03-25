@@ -18,6 +18,7 @@ use std::ops::Index;
 use ahash::HashMap;
 use common_exception::Result;
 
+use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::RelOperator;
 use crate::IndexType;
@@ -34,6 +35,11 @@ impl JoinRelation {
             parent_s_expr: parent.clone(),
         }
     }
+
+    pub fn cost(&self) -> Result<f64> {
+        let rel_expr = RelExpr::with_s_expr(&self.s_expr);
+        Ok(rel_expr.derive_relational_prop()?.cardinality)
+    }
 }
 
 #[derive(Default, Clone, Eq, PartialEq)]
@@ -46,9 +52,20 @@ impl JoinRelationSet {
         Self { relations }
     }
 
+    pub fn relations(&self) -> &[IndexType] {
+        &self.relations
+    }
+
     // Check if the set is empty
     pub fn is_empty(&self) -> bool {
         self.relations.is_empty()
+    }
+
+    // Check if the first set is subset of the second set
+    pub fn is_subset(&self, other: &Self) -> bool {
+        self.relations
+            .iter()
+            .all(|idx| other.relations.contains(idx))
     }
 
     // Check if two sets aren't intersecting
@@ -81,6 +98,10 @@ pub struct RelationSetTree {
 }
 
 impl RelationSetTree {
+    pub fn get_relation_set_by_index(&mut self, idx: usize) -> Result<JoinRelationSet> {
+        self.get_relation_set(&[idx as IndexType].iter().cloned().collect())
+    }
+
     pub fn get_relation_set(&mut self, idx_set: &HashSet<IndexType>) -> Result<JoinRelationSet> {
         let mut relations: Vec<IndexType> = idx_set.iter().map(|idx| *idx).collect();
         // Make relations ordered
@@ -96,5 +117,16 @@ impl RelationSetTree {
             node.relation_set = JoinRelationSet::new(relations);
         }
         Ok(node.relation_set.clone())
+    }
+
+    pub fn merge_relation_set(
+        &self,
+        left_set: &JoinRelationSet,
+        right_set: &JoinRelationSet,
+    ) -> JoinRelationSet {
+        let mut relations = left_set.relations().to_vec();
+        relations.extend(right_set.relations().iter());
+        relations.sort();
+        JoinRelationSet::new(relations)
     }
 }
