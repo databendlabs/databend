@@ -220,7 +220,36 @@ impl DPhpy {
         nodes: &JoinRelationSet,
         forbidden_nodes: &HashSet<IndexType>,
     ) -> Result<bool> {
-        todo!()
+        let neighbors = self.query_graph.neighbors(nodes, forbidden_nodes)?;
+        if neighbors.is_empty() {
+            return Ok(true);
+        }
+
+        let mut merged_sets = Vec::new();
+        for neighbor in neighbors.iter() {
+            let neighbor_relations = self
+                .relation_set_tree
+                .get_relation_set_by_index(*neighbor)?;
+            let merged_relation_set = self
+                .relation_set_tree
+                .merge_relation_set(nodes, &neighbor_relations);
+            if self.dp_table.contains_key(&merged_relation_set) {
+                if !self.emit_csg(&merged_relation_set) {
+                    return Ok(false);
+                }
+            }
+            merged_sets.push(merged_relation_set);
+        }
+
+        let mut new_forbidden_nodes = forbidden_nodes.clone();
+        for neighbor in neighbors.iter() {
+            new_forbidden_nodes = forbidden_nodes.clone();
+            new_forbidden_nodes.insert(*neighbor);
+            if !self.enumerate_csg_rec(merged_sets[neighbor], &new_forbidden_nodes)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     }
 
     // EmitCsgCmp will join the optimal plan from left and right
@@ -240,6 +269,7 @@ impl DPhpy {
         if neighbor_set.is_empty() {
             return Ok(true);
         }
+        let mut merged_sets = Vec::new();
         for neighbor in neighbor_set.iter() {
             let neighbor_relations = self
                 .relation_set_tree
@@ -249,16 +279,22 @@ impl DPhpy {
                 .relation_set_tree
                 .merge_relation_set(right, &neighbor_relations);
             if self.dp_table.contains_key(&merged_relation_set) {
-                if !self.query_graph.is_connected(left, &merged_relation_set) {
+                if self.query_graph.is_connected(left, &merged_relation_set) {
                     if !self.emit_csg_cmp(left, &merged_relation_set) {
                         return Ok(false);
                     }
                 }
             }
+            merged_sets.push(merged_relation_set);
         }
-
         // Continue to enumerate cmp
-
+        let mut new_forbidden_nodes = forbidden_nodes.clone();
+        for neighbor in neighbor_set.iter() {
+            new_forbidden_nodes.insert(*neighbor);
+            if !self.enumerate_cmp_rec(left, merged_sets[neighbor], &new_forbidden_nodes)? {
+                return Ok(false);
+            }
+        }
         Ok(true)
     }
 }
