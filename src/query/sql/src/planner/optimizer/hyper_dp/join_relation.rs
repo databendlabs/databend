@@ -112,7 +112,7 @@ impl RelationSetTree {
     }
 
     pub fn get_relation_set(&mut self, idx_set: &HashSet<IndexType>) -> Result<JoinRelationSet> {
-        let mut relations: Vec<IndexType> = idx_set.iter().map(|idx| *idx).collect();
+        let mut relations: Vec<IndexType> = idx_set.iter().copied().collect();
         // Make relations ordered
         relations.sort();
         let mut node = &mut self.root;

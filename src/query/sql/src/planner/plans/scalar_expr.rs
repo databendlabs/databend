@@ -166,7 +166,7 @@ impl ScalarExpr {
                 }
                 Ok(result)
             }
-            ScalarExpr::CastExpr(scalar) => scalar.argument.used_tables(metadata.clone()),
+            ScalarExpr::CastExpr(scalar) => scalar.argument.used_tables(metadata),
             ScalarExpr::SubqueryExpr(_) => Err(ErrorCode::Unimplemented(
                 "SubqueryExpr doesn't support used_tables method".to_string(),
             )),

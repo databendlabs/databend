@@ -70,7 +70,7 @@ impl DPhpy {
             s_expr = s_expr.children()[0].clone();
         }
 
-        return match &s_expr.plan {
+        match &s_expr.plan {
             RelOperator::Scan(op) => {
                 debug_assert!(parent.is_some());
                 let join_relation = JoinRelation::new(&s_expr, &parent.unwrap());
@@ -100,7 +100,7 @@ impl DPhpy {
                 // Currently, we don't consider set operators
                 Ok(false)
             }
-        };
+        }
     }
 
     // The input plan tree has been optimized by heuristic optimizer
@@ -178,9 +178,11 @@ impl DPhpy {
         for (idx, relation) in self.join_relations.iter().enumerate() {
             // Get node (aka relation_set) in `relation_set_tree`
             let nodes = self.relation_set_tree.get_relation_set_by_index(idx)?;
-            let mut join = JoinNode::default();
-            join.leaves = nodes.clone();
-            join.cost = relation.cost()?;
+            let join = JoinNode {
+                leaves: nodes.clone(),
+                cost: relation.cost()?,
+                ..Default::default()
+            };
             let _ = self.dp_table.insert(nodes, join);
         }
 
@@ -218,10 +220,10 @@ impl DPhpy {
                 .relation_set_tree
                 .get_relation_set_by_index(*neighbor)?;
             // Check if neighbor is connected with `nodes`
-            if self.query_graph.is_connected(nodes, &neighbor_relations)? {
-                if !self.emit_csg_cmp(nodes, &neighbor_relations)? {
-                    return Ok(false);
-                }
+            if self.query_graph.is_connected(nodes, &neighbor_relations)?
+                && !self.emit_csg_cmp(nodes, &neighbor_relations)?
+            {
+                return Ok(false);
             }
             if !self.enumerate_cmp_rec(nodes, &neighbor_relations, &forbidden_nodes)? {
                 return Ok(false);
@@ -248,10 +250,10 @@ impl DPhpy {
                 .relation_set_tree
                 .get_relation_set_by_index(*neighbor)?;
             let merged_relation_set = nodes.merge_relation_set(&neighbor_relations);
-            if self.dp_table.contains_key(&merged_relation_set) {
-                if !self.emit_csg(&merged_relation_set)? {
-                    return Ok(false);
-                }
+            if self.dp_table.contains_key(&merged_relation_set)
+                && !self.emit_csg(&merged_relation_set)?
+            {
+                return Ok(false);
             }
             merged_sets.push(merged_relation_set);
         }
@@ -323,12 +325,11 @@ impl DPhpy {
                 .get_relation_set_by_index(*neighbor)?;
             // Merge `right` with `neighbor_relations`
             let merged_relation_set = right.merge_relation_set(&neighbor_relations);
-            if self.dp_table.contains_key(&merged_relation_set) {
-                if self.query_graph.is_connected(left, &merged_relation_set)? {
-                    if !self.emit_csg_cmp(left, &merged_relation_set)? {
-                        return Ok(false);
-                    }
-                }
+            if self.dp_table.contains_key(&merged_relation_set)
+                && self.query_graph.is_connected(left, &merged_relation_set)?
+                && !self.emit_csg_cmp(left, &merged_relation_set)?
+            {
+                return Ok(false);
             }
             merged_sets.push(merged_relation_set);
         }
