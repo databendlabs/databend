@@ -31,7 +31,6 @@ use crate::sessions::SessionType;
 
 impl FlightSqlServiceImpl {
     pub(super) fn get_session<T>(&self, req: &Request<T>) -> Result<Arc<Session>, Status> {
-        println!("{:?}", req.metadata());
         let auth = req
             .metadata()
             .get("authorization")
