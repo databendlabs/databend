@@ -22,6 +22,7 @@ codespan-reporting = { git = "https://github.com/brendanzab/codespan", rev = "c8
 
 anyhow = { workspace = true }
 bincode = { version = "2.0.0-rc.1", features = ["serde", "std", "alloc"] }
+http = "0.2"
 opendal = { workspace = true }
 paste = "1.0.9"
 prost = { workspace = true }

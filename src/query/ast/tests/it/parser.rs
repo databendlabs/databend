@@ -70,6 +70,9 @@ fn test_statement() {
         r#"show full tables"#,
         r#"show full tables from db"#,
         r#"show full tables from ctl.db"#,
+        r#"show full columns in t in db"#,
+        r#"show columns in t from ctl.db"#,
+        r#"show full columns from t from db like 'id%'"#,
         r#"show processlist;"#,
         r#"show create table a.b;"#,
         r#"show create table a.b format TabSeparatedWithNamesAndTypes;"#,
@@ -337,6 +340,7 @@ fn test_statement() {
         r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200"#,
         r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200 CONTENT_TYPE='application/octet-stream'"#,
         r#"PRESIGN UPLOAD @my_stage/path/to/file CONTENT_TYPE='application/octet-stream' EXPIRE=7200"#,
+        r#"CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';"#,
         r#"CREATE SHARE t COMMENT='share comment';"#,
         r#"CREATE SHARE IF NOT EXISTS t;"#,
         r#"DROP SHARE a;"#,
@@ -485,6 +489,8 @@ fn test_query() {
         r#"select * from t1 union select * from t2 intersect select * from t3"#,
         r#"(select * from t1 union select * from t2) union select * from t3"#,
         r#"select * from t1 union (select * from t2 union select * from t3)"#,
+        r#"select * from monthly_sales pivot(sum(amount) for month in ('JAN', 'FEB', 'MAR', 'APR')) order by empid"#,
+        r#"select * from monthly_sales_1 unpivot(sales for month in (jan, feb, mar, april)) order by empid"#,
     ];
 
     for case in cases {

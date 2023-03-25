@@ -64,7 +64,6 @@ use parking_lot::RwLock;
 use tracing::debug;
 
 use crate::api::DataExchangeManager;
-use crate::auth::AuthMgr;
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
@@ -159,10 +158,6 @@ impl QueryContext {
         DataExchangeManager::instance()
     }
 
-    pub fn get_auth_manager(&self) -> Arc<AuthMgr> {
-        self.shared.get_auth_manager()
-    }
-
     // Get the current session.
     pub fn get_current_session(&self) -> Arc<Session> {
         self.shared.session.clone()
@@ -198,6 +193,10 @@ impl QueryContext {
 
     pub fn set_affect(self: &Arc<Self>, affect: QueryAffect) {
         self.shared.set_affect(affect)
+    }
+
+    pub fn set_id(&self, id: String) {
+        *self.shared.init_query_id.write() = id;
     }
 
     pub fn set_executor(&self, weak_ptr: Weak<PipelineExecutor>) {

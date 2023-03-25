@@ -398,7 +398,7 @@ impl Catalog for HiveCatalog {
 
     // List all table functions' names.
     fn list_table_functions(&self) -> Vec<String> {
-        unimplemented!()
+        vec![]
     }
 
     // Get table engines

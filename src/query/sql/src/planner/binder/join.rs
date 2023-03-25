@@ -25,7 +25,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
 use common_expression::type_check::common_super_type;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
@@ -500,7 +500,7 @@ impl<'a> JoinConditionResolver<'a> {
             &mut join_context,
         );
         let mut scalar_binder = ScalarBinder::new(
-            &join_context,
+            &mut join_context,
             self.ctx.clone(),
             self.name_resolution_ctx,
             self.metadata.clone(),
@@ -665,7 +665,7 @@ impl<'a> JoinConditionResolver<'a> {
             &mut join_context,
         );
         let mut scalar_binder = ScalarBinder::new(
-            &join_context,
+            &mut join_context,
             self.ctx.clone(),
             self.name_resolution_ctx,
             self.metadata.clone(),

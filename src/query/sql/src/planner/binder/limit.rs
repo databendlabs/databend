@@ -19,26 +19,17 @@ use common_exception::Result;
 
 use crate::binder::Binder;
 use crate::optimizer::SExpr;
-use crate::planner::semantic::TypeChecker;
 use crate::plans::Limit;
 use crate::BindContext;
 
 impl Binder {
     pub(super) async fn bind_limit(
         &mut self,
-        bind_context: &BindContext,
+        _bind_context: &BindContext,
         child: SExpr,
         limit: Option<&Expr>,
         offset: &Option<Expr>,
     ) -> Result<SExpr> {
-        let _type_checker = TypeChecker::new(
-            bind_context,
-            self.ctx.clone(),
-            &self.name_resolution_ctx,
-            self.metadata.clone(),
-            &[],
-        );
-
         let limit_cnt = match limit {
             Some(limit) => Some(
                 Self::bind_limit_argument(limit)

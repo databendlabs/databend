@@ -44,7 +44,7 @@ use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::StateAddr;
-use crate::scalars::BUILTIN_FUNCTIONS;
+use crate::BUILTIN_FUNCTIONS;
 
 const MEDIAN: u8 = 0;
 const QUANTILE_CONT: u8 = 1;
@@ -229,6 +229,15 @@ where T: Number + AsPrimitive<f64>
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<QuantileState>();
         state.merge_result(builder, self.levels.clone())
+    }
+
+    fn need_manual_drop_state(&self) -> bool {
+        true
+    }
+
+    unsafe fn drop_state(&self, place: StateAddr) {
+        let state = place.get::<QuantileState>();
+        std::ptr::drop_in_place(state);
     }
 }
 

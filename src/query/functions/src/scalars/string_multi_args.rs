@@ -30,7 +30,7 @@ use common_expression::Domain;
 use common_expression::EvalContext;
 use common_expression::Function;
 use common_expression::FunctionDomain;
-use common_expression::FunctionProperty;
+use common_expression::FunctionEval;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::Scalar;
@@ -49,16 +49,17 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "concat".to_string(),
                 args_type: vec![DataType::String; args_type.len()],
                 return_type: DataType::String,
-                property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|args_domain| {
-                let domain = args_domain[0].as_string().unwrap();
-                FunctionDomain::Domain(Domain::String(StringDomain {
-                    min: domain.min.clone(),
-                    max: None,
-                }))
-            }),
-            eval: Box::new(concat_fn),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|args_domain| {
+                    let domain = args_domain[0].as_string().unwrap();
+                    FunctionDomain::Domain(Domain::String(StringDomain {
+                        min: domain.min.clone(),
+                        max: None,
+                    }))
+                }),
+                eval: Box::new(concat_fn),
+            },
         };
 
         if has_null {
@@ -78,10 +79,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "concat".to_string(),
                 args_type: vec![DataType::Nullable(Box::new(DataType::String)); args_type.len()],
                 return_type: DataType::Nullable(Box::new(DataType::String)),
-                property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| FunctionDomain::Full),
-            eval: Box::new(wrap_nullable(concat_fn)),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_| FunctionDomain::Full),
+                eval: Box::new(wrap_nullable(concat_fn)),
+            },
         }))
     });
 
@@ -94,60 +96,61 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "concat_ws".to_string(),
                 args_type: vec![DataType::String; args_type.len()],
                 return_type: DataType::String,
-                property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|args_domain| {
-                let domain = args_domain[1].as_string().unwrap();
-                FunctionDomain::Domain(Domain::String(StringDomain {
-                    min: domain.min.clone(),
-                    max: None,
-                }))
-            }),
-            eval: Box::new(|args, _| {
-                let len = args.iter().find_map(|arg| match arg {
-                    ValueRef::Column(col) => Some(col.len()),
-                    _ => None,
-                });
-                let args = args
-                    .iter()
-                    .map(|arg| arg.try_downcast::<StringType>().unwrap())
-                    .collect::<Vec<_>>();
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|args_domain| {
+                    let domain = args_domain[1].as_string().unwrap();
+                    FunctionDomain::Domain(Domain::String(StringDomain {
+                        min: domain.min.clone(),
+                        max: None,
+                    }))
+                }),
+                eval: Box::new(|args, _| {
+                    let len = args.iter().find_map(|arg| match arg {
+                        ValueRef::Column(col) => Some(col.len()),
+                        _ => None,
+                    });
+                    let args = args
+                        .iter()
+                        .map(|arg| arg.try_downcast::<StringType>().unwrap())
+                        .collect::<Vec<_>>();
 
-                let size = len.unwrap_or(1);
-                let mut builder = StringColumnBuilder::with_capacity(size, 0);
+                    let size = len.unwrap_or(1);
+                    let mut builder = StringColumnBuilder::with_capacity(size, 0);
 
-                match &args[0] {
-                    ValueRef::Scalar(sep) => {
-                        for idx in 0..size {
-                            for (arg_index, arg) in args.iter().skip(1).enumerate() {
-                                if arg_index != 0 {
-                                    builder.put_slice(sep);
-                                }
-                                unsafe { builder.put_slice(arg.index_unchecked(idx)) }
-                            }
-                            builder.commit_row();
-                        }
-                    }
-                    ValueRef::Column(c) => {
-                        for idx in 0..size {
-                            for (arg_index, arg) in args.iter().skip(1).enumerate() {
-                                if arg_index != 0 {
-                                    unsafe {
-                                        builder.put_slice(c.index_unchecked(idx));
+                    match &args[0] {
+                        ValueRef::Scalar(sep) => {
+                            for idx in 0..size {
+                                for (arg_index, arg) in args.iter().skip(1).enumerate() {
+                                    if arg_index != 0 {
+                                        builder.put_slice(sep);
                                     }
+                                    unsafe { builder.put_slice(arg.index_unchecked(idx)) }
                                 }
-                                unsafe { builder.put_slice(arg.index_unchecked(idx)) }
+                                builder.commit_row();
                             }
-                            builder.commit_row();
+                        }
+                        ValueRef::Column(c) => {
+                            for idx in 0..size {
+                                for (arg_index, arg) in args.iter().skip(1).enumerate() {
+                                    if arg_index != 0 {
+                                        unsafe {
+                                            builder.put_slice(c.index_unchecked(idx));
+                                        }
+                                    }
+                                    unsafe { builder.put_slice(arg.index_unchecked(idx)) }
+                                }
+                                builder.commit_row();
+                            }
                         }
                     }
-                }
 
-                match len {
-                    Some(_) => Value::Column(Column::String(builder.build())),
-                    _ => Value::Scalar(Scalar::String(builder.build_scalar())),
-                }
-            }),
+                    match len {
+                        Some(_) => Value::Column(Column::String(builder.build())),
+                        _ => Value::Scalar(Scalar::String(builder.build_scalar())),
+                    }
+                }),
+            },
         }))
     });
 
@@ -161,85 +164,86 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "concat_ws".to_string(),
                 args_type: vec![DataType::Nullable(Box::new(DataType::String)); args_type.len()],
                 return_type: DataType::Nullable(Box::new(DataType::String)),
-                property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| FunctionDomain::Full),
-            eval: Box::new(|args, _| {
-                type T = NullableType<StringType>;
-                let len = args.iter().find_map(|arg| match arg {
-                    ValueRef::Column(col) => Some(col.len()),
-                    _ => None,
-                });
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_| FunctionDomain::Full),
+                eval: Box::new(|args, _| {
+                    type T = NullableType<StringType>;
+                    let len = args.iter().find_map(|arg| match arg {
+                        ValueRef::Column(col) => Some(col.len()),
+                        _ => None,
+                    });
 
-                let size = len.unwrap_or(1);
-                let new_args = args
-                    .iter()
-                    .map(|arg| arg.try_downcast::<T>().unwrap())
-                    .collect::<Vec<_>>();
+                    let size = len.unwrap_or(1);
+                    let new_args = args
+                        .iter()
+                        .map(|arg| arg.try_downcast::<T>().unwrap())
+                        .collect::<Vec<_>>();
 
-                let mut nullable_builder = T::create_builder(size, &[]);
-                match &new_args[0] {
-                    ValueRef::Scalar(None) => {
-                        return Value::Scalar(T::upcast_scalar(None));
-                    }
-                    ValueRef::Scalar(Some(v)) => {
-                        let builder = &mut nullable_builder.builder;
-                        nullable_builder.validity.extend_constant(size, true);
-
-                        for idx in 0..size {
-                            for (i, s) in new_args
-                                .iter()
-                                .skip(1)
-                                .filter_map(|arg| unsafe { arg.index_unchecked(idx) })
-                                .enumerate()
-                            {
-                                if i != 0 {
-                                    builder.put_slice(v);
-                                }
-                                builder.put_slice(s);
-                            }
-                            builder.commit_row();
+                    let mut nullable_builder = T::create_builder(size, &[]);
+                    match &new_args[0] {
+                        ValueRef::Scalar(None) => {
+                            return Value::Scalar(T::upcast_scalar(None));
                         }
-                    }
-                    ValueRef::Column(_) => {
-                        let builder = &mut nullable_builder.builder;
-                        let validity = &mut nullable_builder.validity;
+                        ValueRef::Scalar(Some(v)) => {
+                            let builder = &mut nullable_builder.builder;
+                            nullable_builder.validity.extend_constant(size, true);
 
-                        for idx in 0..size {
-                            unsafe {
-                                match new_args[0].index_unchecked(idx) {
-                                    Some(sep) => {
-                                        for (i, str) in new_args
-                                            .iter()
-                                            .skip(1)
-                                            .filter_map(|arg| arg.index_unchecked(idx))
-                                            .enumerate()
-                                        {
-                                            if i != 0 {
-                                                builder.put_slice(sep);
+                            for idx in 0..size {
+                                for (i, s) in new_args
+                                    .iter()
+                                    .skip(1)
+                                    .filter_map(|arg| unsafe { arg.index_unchecked(idx) })
+                                    .enumerate()
+                                {
+                                    if i != 0 {
+                                        builder.put_slice(v);
+                                    }
+                                    builder.put_slice(s);
+                                }
+                                builder.commit_row();
+                            }
+                        }
+                        ValueRef::Column(_) => {
+                            let builder = &mut nullable_builder.builder;
+                            let validity = &mut nullable_builder.validity;
+
+                            for idx in 0..size {
+                                unsafe {
+                                    match new_args[0].index_unchecked(idx) {
+                                        Some(sep) => {
+                                            for (i, str) in new_args
+                                                .iter()
+                                                .skip(1)
+                                                .filter_map(|arg| arg.index_unchecked(idx))
+                                                .enumerate()
+                                            {
+                                                if i != 0 {
+                                                    builder.put_slice(sep);
+                                                }
+                                                builder.put_slice(str);
                                             }
-                                            builder.put_slice(str);
+                                            builder.commit_row();
+                                            validity.push(true);
                                         }
-                                        builder.commit_row();
-                                        validity.push(true);
-                                    }
-                                    None => {
-                                        builder.commit_row();
-                                        validity.push(false);
+                                        None => {
+                                            builder.commit_row();
+                                            validity.push(false);
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
-                match len {
-                    Some(_) => {
-                        let col = T::upcast_column(nullable_builder.build());
-                        Value::Column(col)
+                    match len {
+                        Some(_) => {
+                            let col = T::upcast_column(nullable_builder.build());
+                            Value::Column(col)
+                        }
+                        _ => Value::Scalar(T::upcast_scalar(nullable_builder.build_scalar())),
                     }
-                    _ => Value::Scalar(T::upcast_scalar(nullable_builder.build_scalar())),
-                }
-            }),
+                }),
+            },
         }))
     });
 
@@ -253,10 +257,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "char".to_string(),
                 args_type: vec![DataType::Number(NumberDataType::UInt8); args_type.len()],
                 return_type: DataType::String,
-                property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| FunctionDomain::Full),
-            eval: Box::new(char_fn),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_| FunctionDomain::Full),
+                eval: Box::new(char_fn),
+            },
         };
 
         if has_null {
@@ -281,10 +286,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                     args_type.len()
                 ],
                 return_type: DataType::Nullable(Box::new(DataType::String)),
-                property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| FunctionDomain::MayThrow),
-            eval: Box::new(wrap_nullable(char_fn)),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_| FunctionDomain::MayThrow),
+                eval: Box::new(wrap_nullable(char_fn)),
+            },
         }))
     });
 
@@ -328,10 +334,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "regexp_instr".to_string(),
                 args_type,
                 return_type: DataType::Number(NumberDataType::UInt64),
-                property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| FunctionDomain::MayThrow),
-            eval: Box::new(regexp_instr_fn),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_| FunctionDomain::MayThrow),
+                eval: Box::new(regexp_instr_fn),
+            },
         };
         if has_null {
             Some(Arc::new(f.wrap_nullable()))
@@ -354,10 +361,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "regexp_like".to_string(),
                 args_type,
                 return_type: DataType::Boolean,
-                property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| FunctionDomain::MayThrow),
-            eval: Box::new(regexp_like_fn),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_| FunctionDomain::MayThrow),
+                eval: Box::new(regexp_like_fn),
+            },
         };
 
         if has_null {
@@ -402,10 +410,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "regexp_replace".to_string(),
                 args_type,
                 return_type: DataType::String,
-                property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| FunctionDomain::MayThrow),
-            eval: Box::new(regexp_replace_fn),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_| FunctionDomain::MayThrow),
+                eval: Box::new(regexp_replace_fn),
+            },
         };
 
         if has_null {
@@ -446,10 +455,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "regexp_substr".to_string(),
                 args_type,
                 return_type: DataType::Nullable(Box::new(DataType::String)),
-                property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| FunctionDomain::MayThrow),
-            eval: Box::new(regexp_substr_fn),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_| FunctionDomain::MayThrow),
+                eval: Box::new(regexp_substr_fn),
+            },
         };
 
         if has_null {

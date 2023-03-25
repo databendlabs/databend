@@ -1,0 +1,23 @@
+[package]
+name = "common-vector"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[lib]
+doctest = false
+test = false
+
+[dependencies] # In alphabetical order
+common-exception = { path = "../exception" }
+
+ndarray = "0.15.6"
+
+[build-dependencies]
+
+[features]
+
+[dev-dependencies]
+approx = "0.5.1"

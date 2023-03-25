@@ -14,7 +14,8 @@
 
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::Literal;
+use common_expression::types::NumberScalar;
+use common_expression::Scalar;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::RuleID;
@@ -104,8 +105,7 @@ impl Rule for RuleFoldCountAggregate {
             for item in scalars.iter_mut() {
                 item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
                     span: item.scalar.span(),
-                    value: Literal::UInt64(card),
-                    data_type: Box::new(item.scalar.data_type()?),
+                    value: Scalar::Number(NumberScalar::UInt64(card)),
                 });
             }
             let eval_scalar = EvalScalar { items: scalars };
@@ -126,8 +126,7 @@ impl Rule for RuleFoldCountAggregate {
                     if agg_func.args.is_empty() {
                         item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
                             span: item.scalar.span(),
-                            value: Literal::UInt64(table_card),
-                            data_type: Box::new(item.scalar.data_type()?),
+                            value: Scalar::Number(NumberScalar::UInt64(table_card)),
                         });
                         return Ok(());
                     } else {
@@ -137,8 +136,9 @@ impl Rule for RuleFoldCountAggregate {
                             if let Some(card) = col_stat {
                                 item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
                                     span: item.scalar.span(),
-                                    value: Literal::UInt64(table_card - card.null_count),
-                                    data_type: Box::new(item.scalar.data_type()?),
+                                    value: Scalar::Number(NumberScalar::UInt64(
+                                        table_card - card.null_count,
+                                    )),
                                 });
                             } else {
                                 return Ok(());

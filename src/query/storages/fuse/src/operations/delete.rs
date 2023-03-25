@@ -37,7 +37,7 @@ use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_expression::Value;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_sql::evaluator::BlockOperator;

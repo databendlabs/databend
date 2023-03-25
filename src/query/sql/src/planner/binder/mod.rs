@@ -31,6 +31,7 @@ mod limit;
 mod location;
 mod presign;
 mod project;
+mod project_set;
 mod replace;
 mod scalar;
 mod scalar_common;

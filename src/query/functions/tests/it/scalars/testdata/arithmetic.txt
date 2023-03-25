@@ -22,7 +22,7 @@ evaluation (internal):
 
 
 ast            : a2 + 10
-raw expr       : plus(a2::UInt8 NULL, 10_u8)
+raw expr       : plus(a2::UInt8 NULL, 10)
 checked expr   : plus<UInt8 NULL, UInt8 NULL>(a2, CAST(10_u8 AS UInt8 NULL))
 optimized expr : plus<UInt8 NULL, UInt8 NULL>(a2, 10_u8)
 evaluation:
@@ -137,7 +137,7 @@ evaluation (internal):
 
 
 ast            : a2 - 10
-raw expr       : minus(a2::UInt8 NULL, 10_u8)
+raw expr       : minus(a2::UInt8 NULL, 10)
 checked expr   : minus<UInt8 NULL, UInt8 NULL>(a2, CAST(10_u8 AS UInt8 NULL))
 optimized expr : minus<UInt8 NULL, UInt8 NULL>(a2, 10_u8)
 evaluation:
@@ -274,7 +274,7 @@ evaluation (internal):
 
 
 ast            : a2 * 10
-raw expr       : multiply(a2::UInt8 NULL, 10_u8)
+raw expr       : multiply(a2::UInt8 NULL, 10)
 checked expr   : multiply<UInt8 NULL, UInt8 NULL>(a2, CAST(10_u8 AS UInt8 NULL))
 optimized expr : multiply<UInt8 NULL, UInt8 NULL>(a2, 10_u8)
 evaluation:
@@ -389,7 +389,7 @@ evaluation (internal):
 
 
 ast            : a2 / 10
-raw expr       : divide(a2::UInt8 NULL, 10_u8)
+raw expr       : divide(a2::UInt8 NULL, 10)
 checked expr   : divide<UInt8 NULL, UInt8 NULL>(a2, CAST(10_u8 AS UInt8 NULL))
 optimized expr : divide<UInt8 NULL, UInt8 NULL>(a2, 10_u8)
 evaluation:
@@ -535,7 +535,7 @@ evaluation (internal):
 
 
 ast            : a2 div 10
-raw expr       : div(a2::UInt8 NULL, 10_u8)
+raw expr       : div(a2::UInt8 NULL, 10)
 checked expr   : div<UInt8 NULL, UInt8 NULL>(a2, CAST(10_u8 AS UInt8 NULL))
 optimized expr : div<UInt8 NULL, UInt8 NULL>(a2, 10_u8)
 evaluation:
@@ -658,7 +658,7 @@ error:
 
 
 ast            : (a + 3)  % b
-raw expr       : modulo(plus(a::Int8, 3_u8), b::Int16)
+raw expr       : modulo(plus(a::Int8, 3), b::Int16)
 checked expr   : modulo<Int16, Int16>(plus<Int8, UInt8>(a, 3_u8), b)
 evaluation:
 +--------+---------+---------+---------+
@@ -681,7 +681,7 @@ evaluation (internal):
 
 
 ast            : a2 % 4
-raw expr       : modulo(a2::UInt8 NULL, 4_u8)
+raw expr       : modulo(a2::UInt8 NULL, 4)
 checked expr   : modulo<UInt8 NULL, UInt8 NULL>(a2, CAST(4_u8 AS UInt8 NULL))
 optimized expr : modulo<UInt8 NULL, UInt8 NULL>(a2, 4_u8)
 evaluation:
@@ -704,7 +704,7 @@ evaluation (internal):
 
 
 ast            : (a2 + 4) % c
-raw expr       : modulo(plus(a2::UInt8 NULL, 4_u8), c::UInt32)
+raw expr       : modulo(plus(a2::UInt8 NULL, 4), c::UInt32)
 checked expr   : modulo<UInt16 NULL, UInt32 NULL>(plus<UInt8 NULL, UInt8 NULL>(a2, CAST(4_u8 AS UInt8 NULL)), CAST(c AS UInt32 NULL))
 optimized expr : modulo<UInt16 NULL, UInt32 NULL>(plus<UInt8 NULL, UInt8 NULL>(a2, 4_u8), CAST(c AS UInt32 NULL))
 evaluation:
@@ -728,7 +728,7 @@ evaluation (internal):
 
 
 ast            : c % (b + 3)
-raw expr       : modulo(c::UInt32, plus(b::Int16, 3_u8))
+raw expr       : modulo(c::UInt32, plus(b::Int16, 3))
 checked expr   : modulo<UInt32, Int32>(c, plus<Int16, UInt8>(b, 3_u8))
 evaluation:
 +--------+---------+-----------+---------+
@@ -751,7 +751,7 @@ evaluation (internal):
 
 
 ast            : c % (d - 3)
-raw expr       : modulo(c::UInt32, minus(d::Float64, 3_u8))
+raw expr       : modulo(c::UInt32, minus(d::Float64, 3))
 checked expr   : modulo<UInt32, Float64>(c, minus<Float64, UInt8>(d, 3_u8))
 evaluation:
 +--------+-----------+------------+---------+
@@ -937,7 +937,7 @@ evaluation (internal):
 
 
 ast            : a ^ 2
-raw expr       : pow(a::Int8, 2_u8)
+raw expr       : pow(a::Int8, 2)
 checked expr   : pow<Float64, Float64>(to_float64<Int8>(a), to_float64<UInt8>(2_u8))
 optimized expr : pow<Float64, Float64>(to_float64<Int8>(a), 2_f64)
 evaluation:
@@ -1005,7 +1005,7 @@ evaluation (internal):
 
 
 ast            : c ^ 0
-raw expr       : pow(c::UInt32, 0_u8)
+raw expr       : pow(c::UInt32, 0)
 checked expr   : pow<Float64, Float64>(to_float64<UInt32>(c), to_float64<UInt8>(0_u8))
 optimized expr : pow<Float64, Float64>(to_float64<UInt32>(c), 0_f64)
 evaluation:
@@ -1491,7 +1491,7 @@ evaluation (internal):
 
 
 ast            : 12!
-raw expr       : factorial(12_u8)
+raw expr       : factorial(12)
 checked expr   : factorial<UInt8>(12_u8)
 optimized expr : 479001600_i64
 output type    : Int64
@@ -1523,7 +1523,7 @@ evaluation (internal):
 
 
 ast            : a2 # 10
-raw expr       : bit_xor(a2::UInt8 NULL, 10_u8)
+raw expr       : bit_xor(a2::UInt8 NULL, 10)
 checked expr   : bit_xor<UInt8 NULL, UInt8 NULL>(a2, CAST(10_u8 AS UInt8 NULL))
 optimized expr : bit_xor<UInt8 NULL, UInt8 NULL>(a2, 10_u8)
 evaluation:
@@ -1615,7 +1615,7 @@ evaluation (internal):
 
 
 ast            : a2 & 10
-raw expr       : bit_and(a2::UInt8 NULL, 10_u8)
+raw expr       : bit_and(a2::UInt8 NULL, 10)
 checked expr   : bit_and<UInt8 NULL, UInt8 NULL>(a2, CAST(10_u8 AS UInt8 NULL))
 optimized expr : bit_and<UInt8 NULL, UInt8 NULL>(a2, 10_u8)
 evaluation:
@@ -1707,7 +1707,7 @@ evaluation (internal):
 
 
 ast            : a2 | 10
-raw expr       : bit_or(a2::UInt8 NULL, 10_u8)
+raw expr       : bit_or(a2::UInt8 NULL, 10)
 checked expr   : bit_or<UInt8 NULL, UInt8 NULL>(a2, CAST(10_u8 AS UInt8 NULL))
 optimized expr : bit_or<UInt8 NULL, UInt8 NULL>(a2, 10_u8)
 evaluation:
@@ -1864,7 +1864,7 @@ evaluation (internal):
 
 
 ast            : a << 4
-raw expr       : bit_shift_left(a::Int8, 4_u8)
+raw expr       : bit_shift_left(a::Int8, 4)
 checked expr   : bit_shift_left<Int8, UInt8>(a, 4_u8)
 evaluation:
 +--------+---------+----------------------------------------------+
@@ -1886,7 +1886,7 @@ evaluation (internal):
 
 
 ast            : a2 << 2
-raw expr       : bit_shift_left(a2::UInt8 NULL, 2_u8)
+raw expr       : bit_shift_left(a2::UInt8 NULL, 2)
 checked expr   : bit_shift_left<UInt8 NULL, UInt8 NULL>(a2, CAST(2_u8 AS UInt8 NULL))
 optimized expr : bit_shift_left<UInt8 NULL, UInt8 NULL>(a2, 2_u8)
 evaluation:
@@ -1909,7 +1909,7 @@ evaluation (internal):
 
 
 ast            : a2 << 4
-raw expr       : bit_shift_left(a2::UInt8 NULL, 4_u8)
+raw expr       : bit_shift_left(a2::UInt8 NULL, 4)
 checked expr   : bit_shift_left<UInt8 NULL, UInt8 NULL>(a2, CAST(4_u8 AS UInt8 NULL))
 optimized expr : bit_shift_left<UInt8 NULL, UInt8 NULL>(a2, 4_u8)
 evaluation:
@@ -1932,7 +1932,7 @@ evaluation (internal):
 
 
 ast            : c << 2
-raw expr       : bit_shift_left(c::UInt32, 2_u8)
+raw expr       : bit_shift_left(c::UInt32, 2)
 checked expr   : bit_shift_left<UInt32, UInt8>(c, 2_u8)
 evaluation:
 +--------+-----------+----------------------------------------------+
@@ -1954,7 +1954,7 @@ evaluation (internal):
 
 
 ast            : a >> 1
-raw expr       : bit_shift_right(a::Int8, 1_u8)
+raw expr       : bit_shift_right(a::Int8, 1)
 checked expr   : bit_shift_right<Int8, UInt8>(a, 1_u8)
 evaluation:
 +--------+---------+----------------------------------------------+
@@ -1976,7 +1976,7 @@ evaluation (internal):
 
 
 ast            : a2 >> 1
-raw expr       : bit_shift_right(a2::UInt8 NULL, 1_u8)
+raw expr       : bit_shift_right(a2::UInt8 NULL, 1)
 checked expr   : bit_shift_right<UInt8 NULL, UInt8 NULL>(a2, CAST(1_u8 AS UInt8 NULL))
 optimized expr : bit_shift_right<UInt8 NULL, UInt8 NULL>(a2, 1_u8)
 evaluation:
@@ -1999,7 +1999,7 @@ evaluation (internal):
 
 
 ast            : a2 >> 2
-raw expr       : bit_shift_right(a2::UInt8 NULL, 2_u8)
+raw expr       : bit_shift_right(a2::UInt8 NULL, 2)
 checked expr   : bit_shift_right<UInt8 NULL, UInt8 NULL>(a2, CAST(2_u8 AS UInt8 NULL))
 optimized expr : bit_shift_right<UInt8 NULL, UInt8 NULL>(a2, 2_u8)
 evaluation:
@@ -2022,7 +2022,7 @@ evaluation (internal):
 
 
 ast            : c >> 2
-raw expr       : bit_shift_right(c::UInt32, 2_u8)
+raw expr       : bit_shift_right(c::UInt32, 2)
 checked expr   : bit_shift_right<UInt32, UInt8>(c, 2_u8)
 evaluation:
 +--------+-----------+----------------------------------------------+

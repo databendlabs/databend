@@ -8,7 +8,7 @@ output         : {}
 
 
 ast            : map([1,2], ['a','b'])
-raw expr       : map(array(1_u8, 2_u8), array("a", "b"))
+raw expr       : map(array(1, 2), array("a", "b"))
 checked expr   : map<T0=UInt8, T1=String><Array(T0), Array(T1)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=String><T0, T0>("a", "b"))
 optimized expr : {1_u8:"a", 2_u8:"b"}
 output type    : Map(UInt8, String)
@@ -107,7 +107,7 @@ evaluation (internal):
 
 
 ast            : map([],[])[1]
-raw expr       : get(map(array(), array()), 1_u8)
+raw expr       : get(map(array(), array()), 1)
 checked expr   : get<T0=UInt8><Map(Nothing) NULL, T0 NULL>(CAST(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()) AS Map(Nothing) NULL), CAST(1_u8 AS UInt8 NULL))
 optimized expr : NULL
 output type    : NULL
@@ -116,7 +116,7 @@ output         : NULL
 
 
 ast            : map([1,2],['a','b'])[1]
-raw expr       : get(map(array(1_u8, 2_u8), array("a", "b")), 1_u8)
+raw expr       : get(map(array(1, 2), array("a", "b")), 1)
 checked expr   : get<T0=UInt8, T1=String><Map(T0, T1), T0>(map<T0=UInt8, T1=String><Array(T0), Array(T1)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=String><T0, T0>("a", "b")), 1_u8)
 optimized expr : "a"
 output type    : String NULL
@@ -125,7 +125,7 @@ output         : "a"
 
 
 ast            : map([1,2],['a','b'])[10]
-raw expr       : get(map(array(1_u8, 2_u8), array("a", "b")), 10_u8)
+raw expr       : get(map(array(1, 2), array("a", "b")), 10)
 checked expr   : get<T0=UInt8, T1=String><Map(T0, T1), T0>(map<T0=UInt8, T1=String><Array(T0), Array(T1)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=String><T0, T0>("a", "b")), 10_u8)
 optimized expr : NULL
 output type    : String NULL
@@ -134,7 +134,7 @@ output         : NULL
 
 
 ast            : map(['a','b'],[1,2])['a']
-raw expr       : get(map(array("a", "b"), array(1_u8, 2_u8)), "a")
+raw expr       : get(map(array("a", "b"), array(1, 2)), "a")
 checked expr   : get<T0=String, T1=UInt8><Map(T0, T1), T0>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0>("a", "b"), array<T0=UInt8><T0, T0>(1_u8, 2_u8)), "a")
 optimized expr : 1_u8
 output type    : UInt8 NULL
@@ -143,7 +143,7 @@ output         : 1
 
 
 ast            : map(['a','b'],[1,2])['x']
-raw expr       : get(map(array("a", "b"), array(1_u8, 2_u8)), "x")
+raw expr       : get(map(array("a", "b"), array(1, 2)), "x")
 checked expr   : get<T0=String, T1=UInt8><Map(T0, T1), T0>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0>("a", "b"), array<T0=UInt8><T0, T0>(1_u8, 2_u8)), "x")
 optimized expr : NULL
 output type    : UInt8 NULL
@@ -179,7 +179,7 @@ output         : NULL
 
 
 ast            : map([k1,k2],[v1,v2])[1]
-raw expr       : get(map(array(k1::Int16, k2::Int16), array(v1::String, v2::String)), 1_u8)
+raw expr       : get(map(array(k1::Int16, k2::Int16), array(v1::String, v2::String)), 1)
 checked expr   : get<T0=Int16, T1=String><Map(T0, T1), T0>(map<T0=Int16, T1=String><Array(T0), Array(T1)>(array<T0=Int16><T0, T0>(k1, k2), array<T0=String><T0, T0>(v1, v2)), to_int16<UInt8>(1_u8))
 optimized expr : get<T0=Int16, T1=String><Map(T0, T1), T0>(map<T0=Int16, T1=String><Array(T0), Array(T1)>(array<T0=Int16><T0, T0>(k1, k2), array<T0=String><T0, T0>(v1, v2)), 1_i16)
 evaluation:

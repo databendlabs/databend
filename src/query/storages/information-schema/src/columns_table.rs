@@ -39,7 +39,7 @@ impl ColumnsTable {
             when is_nullable='YES' then 1
             end as nullable,
             is_nullable AS is_nullable,
-            data_type AS data_type,
+            type AS data_type,
             data_type AS column_type,
             NULL AS character_maximum_length,
             NULL AS character_octet_length,
@@ -56,6 +56,8 @@ impl ColumnsTable {
             NULL AS domain_catalog,
             NULL AS domain_schema,
             NULL AS domain_name,
+            NULL AS privileges,
+            default_expression as default,
             NULL AS extra
         FROM system.columns;";
 

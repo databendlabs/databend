@@ -33,7 +33,6 @@ use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::UnionAll;
-use crate::plans::Unnest;
 use crate::plans::WindowFunc;
 use crate::ColumnBinding;
 use crate::IndexType;
@@ -221,9 +220,5 @@ fn replace_column_binding(
         ScalarExpr::SubqueryExpr(_) => Err(ErrorCode::Unimplemented(
             "replace_column_binding: don't support subquery",
         )),
-        ScalarExpr::Unnest(expr) => Ok(ScalarExpr::Unnest(Unnest {
-            argument: Box::new(replace_column_binding(index_pairs, *expr.argument)?),
-            return_type: expr.return_type,
-        })),
     }
 }

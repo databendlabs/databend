@@ -15,10 +15,15 @@
 use std::collections::HashMap;
 
 use async_recursion::async_recursion;
+use common_ast::ast::BinaryOperator;
 use common_ast::ast::Expr;
+use common_ast::ast::Expr::Array;
+use common_ast::ast::GroupBy;
+use common_ast::ast::Identifier;
 use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
 use common_ast::ast::JoinOperator;
+use common_ast::ast::Literal;
 use common_ast::ast::OrderByExpr;
 use common_ast::ast::Query;
 use common_ast::ast::SelectStmt;
@@ -31,11 +36,13 @@ use common_exception::Result;
 use common_exception::Span;
 use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::join::JoinConditions;
+use crate::binder::project_set::SrfCollector;
 use crate::binder::scalar_common::split_conjunctions;
 use crate::binder::CteInfo;
+use crate::binder::ExprContext;
 use crate::binder::Visibility;
 use crate::optimizer::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
@@ -68,7 +75,7 @@ pub struct SelectItem<'a> {
 impl Binder {
     pub(super) async fn bind_select_stmt(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &SelectStmt,
         order_by: &[OrderByExpr],
     ) -> Result<(SExpr, BindContext)> {
@@ -93,11 +100,34 @@ impl Binder {
                 .await?
         };
 
+        let mut rewriter = SelectRewriter::new(
+            from_context.all_column_bindings(),
+            self.name_resolution_ctx.unquoted_ident_case_sensitive,
+        );
+        let new_stmt = rewriter.rewrite(stmt)?;
+        let stmt = new_stmt.as_ref().unwrap_or(stmt);
+
         if let Some(expr) = &stmt.selection {
             s_expr = self.bind_where(&mut from_context, expr, s_expr).await?;
         }
 
         let window_order_by_exprs = self.fetch_window_order_by_expr(&stmt.select_list).await;
+
+        // Collect set returning functions
+        let set_returning_functions = {
+            let mut collector = SrfCollector::new();
+            stmt.select_list.iter().for_each(|item| {
+                if let SelectTarget::AliasedExpr { expr, .. } = item {
+                    collector.visit(expr);
+                }
+            });
+            collector.into_srfs()
+        };
+
+        // Bind set returning functions
+        s_expr = self
+            .bind_project_set(&mut from_context, &set_returning_functions, s_expr)
+            .await?;
 
         // Generate a analyzed select list with from context
         let mut select_list = self
@@ -158,7 +188,7 @@ impl Binder {
 
         if let Some((having, span)) = having {
             s_expr = self
-                .bind_having(&from_context, having, span, s_expr)
+                .bind_having(&mut from_context, having, span, s_expr)
                 .await?;
         }
 
@@ -219,7 +249,7 @@ impl Binder {
     #[async_recursion]
     pub(crate) async fn bind_set_expr(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         set_expr: &SetExpr,
         order_by: &[OrderByExpr],
     ) -> Result<(SExpr, BindContext)> {
@@ -242,7 +272,7 @@ impl Binder {
     #[async_recursion]
     pub(crate) async fn bind_query(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         query: &Query,
     ) -> Result<(SExpr, BindContext)> {
         if let Some(with) = &query.with {
@@ -266,11 +296,11 @@ impl Binder {
                     .await?
             }
             SetExpr::SetOperation(_) => {
-                let (mut s_expr, bind_context) =
+                let (mut s_expr, mut bind_context) =
                     self.bind_set_expr(bind_context, &query.body, &[]).await?;
                 if !query.order_by.is_empty() {
                     s_expr = self
-                        .bind_order_by_for_set_operation(&bind_context, s_expr, &query.order_by)
+                        .bind_order_by_for_set_operation(&mut bind_context, s_expr, &query.order_by)
                         .await?;
                 }
                 (s_expr, bind_context)
@@ -307,6 +337,8 @@ impl Binder {
         expr: &Expr,
         child: SExpr,
     ) -> Result<SExpr> {
+        bind_context.set_expr_context(ExprContext::WhereClause);
+
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
             self.ctx.clone(),
@@ -331,7 +363,7 @@ impl Binder {
 
     pub(super) async fn bind_set_operator(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         left: &SetExpr,
         right: &SetExpr,
         op: &SetOperator,
@@ -643,5 +675,237 @@ impl Binder {
             );
         }
         Ok((new_bind_context, pairs, left_expr, right_expr))
+    }
+}
+
+/// It is useful when implementing some SQL syntax sugar,
+///
+/// [`column_binding`] contains the column binding information of the SelectStmt.
+///
+/// to rewrite the SelectStmt, just add a new rewrite_* function and call it in the `rewrite` function.
+struct SelectRewriter<'a> {
+    column_binding: &'a [ColumnBinding],
+    new_stmt: Option<SelectStmt>,
+    is_unquoted_ident_case_sensitive: bool,
+}
+
+// helper functions to SelectRewriter
+impl<'a> SelectRewriter<'a> {
+    fn compare_unquoted_ident(&self, a: &str, b: &str) -> bool {
+        if self.is_unquoted_ident_case_sensitive {
+            a == b
+        } else {
+            a.eq_ignore_ascii_case(b)
+        }
+    }
+    fn parse_aggregate_function(expr: &Expr) -> Result<(&Identifier, &[Expr])> {
+        match expr {
+            Expr::FunctionCall { name, args, .. } => Ok((name, args)),
+            _ => Err(ErrorCode::SyntaxException("Aggregate function is required")),
+        }
+    }
+
+    fn ident_from_string(s: &str) -> Identifier {
+        Identifier {
+            name: s.to_string(),
+            quote: None,
+            span: None,
+        }
+    }
+
+    fn expr_eq_from_col_and_value(col: Identifier, value: Expr) -> Expr {
+        Expr::BinaryOp {
+            span: None,
+            left: Box::new(Expr::ColumnRef {
+                column: col,
+                span: None,
+                database: None,
+                table: None,
+            }),
+            op: BinaryOperator::Eq,
+            right: Box::new(value),
+        }
+    }
+
+    fn target_func_from_name_args(
+        name: Identifier,
+        args: Vec<Expr>,
+        alias: Option<Identifier>,
+    ) -> SelectTarget {
+        SelectTarget::AliasedExpr {
+            expr: Box::new(Expr::FunctionCall {
+                span: Span::default(),
+                distinct: false,
+                name,
+                args,
+                params: vec![],
+                window: None,
+            }),
+            alias,
+        }
+    }
+
+    fn expr_literal_array_from_vec_ident(exprs: Vec<Identifier>) -> Expr {
+        Array {
+            span: Span::default(),
+            exprs: exprs
+                .into_iter()
+                .map(|expr| Expr::Literal {
+                    span: None,
+                    lit: Literal::String(expr.name),
+                })
+                .collect(),
+        }
+    }
+
+    fn expr_column_ref_array_from_vec_ident(exprs: Vec<Identifier>) -> Expr {
+        Array {
+            span: Span::default(),
+            exprs: exprs
+                .into_iter()
+                .map(|expr| Expr::ColumnRef {
+                    span: None,
+                    column: expr,
+                    database: None,
+                    table: None,
+                })
+                .collect(),
+        }
+    }
+
+    // For Expr::Literal, expr.to_string() is quoted, sometimes we need the raw string.
+    fn raw_string_from_literal_expr(expr: &Expr) -> Option<String> {
+        match expr {
+            Expr::Literal { lit, .. } => match lit {
+                Literal::String(v) => Some(v.clone()),
+                _ => Some(expr.to_string()),
+            },
+            _ => None,
+        }
+    }
+}
+
+impl<'a> SelectRewriter<'a> {
+    fn new(column_binding: &'a [ColumnBinding], is_unquoted_ident_case_sensitive: bool) -> Self {
+        SelectRewriter {
+            column_binding,
+            new_stmt: None,
+            is_unquoted_ident_case_sensitive,
+        }
+    }
+
+    fn rewrite(&mut self, stmt: &SelectStmt) -> Result<Option<SelectStmt>> {
+        self.rewrite_pivot(stmt)?;
+        self.rewrite_unpivot(stmt)?;
+        Ok(self.new_stmt.take())
+    }
+    fn rewrite_pivot(&mut self, stmt: &SelectStmt) -> Result<()> {
+        if stmt.from.len() != 1 || stmt.from[0].pivot().is_none() {
+            return Ok(());
+        }
+        let pivot = stmt.from[0].pivot().unwrap();
+        let (aggregate_name, aggregate_args) = Self::parse_aggregate_function(&pivot.aggregate)?;
+        let aggregate_columns = aggregate_args
+            .iter()
+            .map(|expr| match expr {
+                Expr::ColumnRef { column, .. } => Some(column.clone()),
+                _ => None,
+            })
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(|| ErrorCode::SyntaxException("Aggregate column not found"))?;
+        let aggregate_column_names = aggregate_columns
+            .iter()
+            .map(|col| col.name.as_str())
+            .collect::<Vec<_>>();
+        let new_group_by = stmt.group_by.clone().unwrap_or_else(|| {
+            GroupBy::Normal(
+                self.column_binding
+                    .iter()
+                    .filter(|col_bind| {
+                        !self
+                            .compare_unquoted_ident(&col_bind.column_name, &pivot.value_column.name)
+                            && !aggregate_column_names
+                                .iter()
+                                .any(|col| self.compare_unquoted_ident(col, &col_bind.column_name))
+                    })
+                    .map(|col| Expr::Literal {
+                        span: Span::default(),
+                        lit: Literal::UInt64(col.index as u64 + 1),
+                    })
+                    .collect(),
+            )
+        });
+
+        let mut new_select_list = stmt.select_list.clone();
+        if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
+            let mut exclude_columns = aggregate_columns;
+            exclude_columns.push(pivot.value_column.clone());
+            star.exclude(exclude_columns);
+        };
+        let new_aggregate_name = Identifier {
+            name: format!("{}_if", aggregate_name.name),
+            ..aggregate_name.clone()
+        };
+        for value in &pivot.values {
+            let mut args = aggregate_args.to_vec();
+            args.push(Self::expr_eq_from_col_and_value(
+                pivot.value_column.clone(),
+                value.clone(),
+            ));
+            let alias = Self::raw_string_from_literal_expr(value)
+                .ok_or_else(|| ErrorCode::SyntaxException("Pivot value should be literal"))?;
+            new_select_list.push(Self::target_func_from_name_args(
+                new_aggregate_name.clone(),
+                args,
+                Some(Self::ident_from_string(&alias)),
+            ));
+        }
+
+        if let Some(ref mut new_stmt) = self.new_stmt {
+            new_stmt.select_list = new_select_list;
+            new_stmt.group_by = Some(new_group_by);
+        } else {
+            self.new_stmt = Some(SelectStmt {
+                select_list: new_select_list,
+                group_by: Some(new_group_by),
+                ..stmt.clone()
+            });
+        }
+        Ok(())
+    }
+
+    fn rewrite_unpivot(&mut self, stmt: &SelectStmt) -> Result<()> {
+        if stmt.from.len() != 1 || stmt.from[0].unpivot().is_none() {
+            return Ok(());
+        }
+        let unpivot = stmt.from[0].unpivot().unwrap();
+        let mut new_select_list = stmt.select_list.clone();
+        if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
+            star.exclude(unpivot.names.clone());
+        };
+        new_select_list.push(Self::target_func_from_name_args(
+            Self::ident_from_string("unnest"),
+            vec![Self::expr_literal_array_from_vec_ident(
+                unpivot.names.clone(),
+            )],
+            Some(unpivot.column_name.clone()),
+        ));
+        new_select_list.push(Self::target_func_from_name_args(
+            Self::ident_from_string("unnest"),
+            vec![Self::expr_column_ref_array_from_vec_ident(
+                unpivot.names.clone(),
+            )],
+            Some(unpivot.value_column.clone()),
+        ));
+
+        if let Some(ref mut new_stmt) = self.new_stmt {
+            new_stmt.select_list = new_select_list;
+        } else {
+            self.new_stmt = Some(SelectStmt {
+                select_list: new_select_list,
+                ..stmt.clone()
+            });
+        };
+        Ok(())
     }
 }

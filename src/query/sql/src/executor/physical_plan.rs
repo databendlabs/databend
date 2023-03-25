@@ -24,9 +24,9 @@ use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::FieldIndex;
-use common_expression::Literal;
 use common_expression::RemoteExpr;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_expression::Scalar;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 
 use crate::executor::explain::PlanStatsInfo;
@@ -140,29 +140,29 @@ impl EvalScalar {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct Unnest {
+pub struct ProjectSet {
     /// A unique id of operator in a `PhysicalPlan` tree.
     /// Only used for display.
     pub plan_id: u32,
 
     pub input: Box<PhysicalPlan>,
 
-    /// How many unnest columns.
-    pub num_columns: usize,
+    pub srf_exprs: Vec<(RemoteExpr, IndexType)>,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
 
-impl Unnest {
+impl ProjectSet {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         let mut fields = input_schema.fields().clone();
-        let skip = fields.len() - self.num_columns;
-        for f in fields.iter_mut().skip(skip) {
-            let inner_type = f.data_type().as_array().unwrap();
-            *f = DataField::new(f.name(), inner_type.unnest().wrap_nullable());
-        }
+        fields.extend(self.srf_exprs.iter().map(|(srf, index)| {
+            DataField::new(
+                &index.to_string(),
+                srf.as_expr(&BUILTIN_FUNCTIONS).data_type().clone(),
+            )
+        }));
         Ok(DataSchemaRefExt::create(fields))
     }
 }
@@ -555,7 +555,7 @@ pub enum PhysicalPlan {
     Filter(Filter),
     Project(Project),
     EvalScalar(EvalScalar),
-    Unnest(Unnest),
+    ProjectSet(ProjectSet),
     AggregateExpand(AggregateExpand),
     AggregatePartial(AggregatePartial),
     AggregateFinal(AggregateFinal),
@@ -600,7 +600,7 @@ impl PhysicalPlan {
             PhysicalPlan::ExchangeSink(plan) => plan.output_schema(),
             PhysicalPlan::UnionAll(plan) => plan.output_schema(),
             PhysicalPlan::DistributedInsertSelect(plan) => plan.output_schema(),
-            PhysicalPlan::Unnest(plan) => plan.output_schema(),
+            PhysicalPlan::ProjectSet(plan) => plan.output_schema(),
             PhysicalPlan::RuntimeFilterSource(plan) => plan.output_schema(),
         }
     }
@@ -622,7 +622,7 @@ impl PhysicalPlan {
             PhysicalPlan::DistributedInsertSelect(_) => "DistributedInsertSelect".to_string(),
             PhysicalPlan::ExchangeSource(_) => "Exchange Source".to_string(),
             PhysicalPlan::ExchangeSink(_) => "Exchange Sink".to_string(),
-            PhysicalPlan::Unnest(_) => "Unnest".to_string(),
+            PhysicalPlan::ProjectSet(_) => "Unnest".to_string(),
             PhysicalPlan::RuntimeFilterSource(_) => "RuntimeFilterSource".to_string(),
         }
     }
@@ -650,7 +650,7 @@ impl PhysicalPlan {
             PhysicalPlan::DistributedInsertSelect(plan) => {
                 Box::new(std::iter::once(plan.input.as_ref()))
             }
-            PhysicalPlan::Unnest(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::ProjectSet(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::RuntimeFilterSource(plan) => Box::new(
                 std::iter::once(plan.left_side.as_ref())
                     .chain(std::iter::once(plan.right_side.as_ref())),
@@ -671,7 +671,7 @@ pub struct AggregateFunctionDesc {
 pub struct AggregateFunctionSignature {
     pub name: String,
     pub args: Vec<DataType>,
-    pub params: Vec<Literal>,
+    pub params: Vec<Scalar>,
     pub return_type: DataType,
 }
 

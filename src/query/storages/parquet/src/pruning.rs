@@ -453,8 +453,9 @@ mod tests {
     use common_exception::Result;
     use common_expression::types::DataType;
     use common_expression::types::NumberDataType;
+    use common_expression::types::NumberScalar;
     use common_expression::FunctionContext;
-    use common_expression::Literal;
+    use common_expression::Scalar;
     use common_expression::TableDataType;
     use common_expression::TableField;
     use common_expression::TableSchemaRef;
@@ -689,8 +690,7 @@ mod tests {
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
                         span: None,
-                        value: Literal::Int32(12),
-                        data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                        value: Scalar::Number(NumberScalar::Int32(12)),
                     }),
                 ],
             });
@@ -720,8 +720,7 @@ mod tests {
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
                         span: None,
-                        value: Literal::Int32(0),
-                        data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                        value: Scalar::Number(NumberScalar::Int32(0)),
                     }),
                 ],
             });
@@ -751,8 +750,7 @@ mod tests {
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
                         span: None,
-                        value: Literal::Int32(5),
-                        data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                        value: Scalar::Number(NumberScalar::Int32(5)),
                     }),
                 ],
             });
@@ -792,8 +790,7 @@ mod tests {
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
                         span: None,
-                        value: Literal::Int32(12),
-                        data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                        value: Scalar::Number(NumberScalar::Int32(12)),
                     }),
                 ],
             });
@@ -824,8 +821,7 @@ mod tests {
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
                         span: None,
-                        value: Literal::Int32(5),
-                        data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                        value: Scalar::Number(NumberScalar::Int32(5)),
                     }),
                 ],
             });
@@ -856,8 +852,7 @@ mod tests {
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
                         span: None,
-                        value: Literal::Int32(10),
-                        data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                        value: Scalar::Number(NumberScalar::Int32(10)),
                     }),
                 ],
             });
@@ -888,8 +883,7 @@ mod tests {
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
                         span: None,
-                        value: Literal::Int32(10),
-                        data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                        value: Scalar::Number(NumberScalar::Int32(10)),
                     }),
                 ],
             });

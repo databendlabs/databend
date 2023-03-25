@@ -45,7 +45,7 @@ use common_expression::types::DataType;
 use common_expression::ColumnId;
 use common_expression::ConstantFolder;
 use common_expression::Scalar;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
 use common_storage::DataOperator;
@@ -65,6 +65,7 @@ use crate::binder::table_args::bind_table_args;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
 use crate::binder::CteInfo;
+use crate::binder::ExprContext;
 use crate::binder::Visibility;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
@@ -139,7 +140,7 @@ impl Binder {
     #[async_recursion]
     async fn bind_single_table(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         table_ref: &TableReference,
     ) -> Result<(SExpr, BindContext)> {
         match table_ref {
@@ -150,6 +151,8 @@ impl Binder {
                 table,
                 alias,
                 travel_point,
+                pivot: _,
+                unpivot: _,
             } => {
                 let (catalog, database, table_name) =
                     self.normalize_object_identifier_triple(catalog, database, table);
@@ -231,7 +234,7 @@ impl Binder {
                                 false,
                             );
                             let (s_expr, mut new_bind_context) =
-                                self.bind_query(&new_bind_context, query).await?;
+                                self.bind_query(&mut new_bind_context, query).await?;
                             if let Some(alias) = alias {
                                 // view maybe has alias, e.g. select v1.col1 from v as v1;
                                 new_bind_context
@@ -384,9 +387,9 @@ impl Binder {
                 alias,
             } => {
                 // For subquery, we need use a new context to bind it.
-                let new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+                let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
                 let (s_expr, mut new_bind_context) =
-                    self.bind_query(&new_bind_context, subquery).await?;
+                    self.bind_query(&mut new_bind_context, subquery).await?;
                 if let Some(alias) = alias {
                     new_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 }
@@ -463,7 +466,7 @@ impl Binder {
 
     pub(super) async fn bind_table_reference(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         table_ref: &TableReference,
     ) -> Result<(SExpr, BindContext)> {
         let mut current_ref = table_ref;
@@ -542,7 +545,7 @@ impl Binder {
         alias: &Option<TableAlias>,
         cte_info: &CteInfo,
     ) -> Result<(SExpr, BindContext)> {
-        let new_bind_context = BindContext {
+        let mut new_bind_context = BindContext {
             parent: Some(Box::new(bind_context.clone())),
             bound_internal_columns: BTreeMap::new(),
             columns: vec![],
@@ -551,9 +554,12 @@ impl Binder {
             in_grouping: false,
             ctes_map: Box::new(DashMap::new()),
             view_info: None,
+            srfs: Default::default(),
+            expr_context: ExprContext::default(),
         };
-        let (s_expr, mut new_bind_context) =
-            self.bind_query(&new_bind_context, &cte_info.query).await?;
+        let (s_expr, mut new_bind_context) = self
+            .bind_query(&mut new_bind_context, &cte_info.query)
+            .await?;
         let mut cols_alias = cte_info.columns_alias.clone();
         if let Some(alias) = alias {
             for (idx, col_alias) in alias.columns.iter().enumerate() {
@@ -638,6 +644,7 @@ impl Binder {
 
         let is_accurate = table.table().engine().to_lowercase() == "fuse";
         let stat = table.table().table_statistics()?;
+
         Ok((
             SExpr::create_leaf(
                 Scan {
@@ -693,7 +700,7 @@ impl Binder {
 
     pub(crate) async fn resolve_data_travel_point(
         &self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         travel_point: &TimeTravelPoint,
     ) -> Result<NavigationPoint> {
         match travel_point {

@@ -300,7 +300,7 @@ impl Catalog for IcebergCatalog {
 
     // List all table functions' names.
     fn list_table_functions(&self) -> Vec<String> {
-        unimplemented!()
+        vec![]
     }
 
     fn as_any(&self) -> &dyn Any {

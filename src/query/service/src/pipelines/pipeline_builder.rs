@@ -28,7 +28,7 @@ use common_expression::HashMethodKind;
 use common_expression::SortColumnDescription;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
@@ -54,11 +54,11 @@ use common_sql::executor::HashJoin;
 use common_sql::executor::Limit;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
+use common_sql::executor::ProjectSet;
 use common_sql::executor::RuntimeFilterSource;
 use common_sql::executor::Sort;
 use common_sql::executor::TableScan;
 use common_sql::executor::UnionAll;
-use common_sql::executor::Unnest;
 use common_sql::plans::JoinType;
 use common_sql::ColumnBinding;
 use common_sql::IndexType;
@@ -174,7 +174,7 @@ impl PipelineBuilder {
             PhysicalPlan::DistributedInsertSelect(insert_select) => {
                 self.build_distributed_insert_select(insert_select)
             }
-            PhysicalPlan::Unnest(unnest) => self.build_unnest(unnest),
+            PhysicalPlan::ProjectSet(project_set) => self.build_project_set(project_set),
             PhysicalPlan::Exchange(_) => Err(ErrorCode::Internal(
                 "Invalid physical plan with PhysicalPlan::Exchange",
             )),
@@ -403,11 +403,15 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    fn build_unnest(&mut self, unnest: &Unnest) -> Result<()> {
-        self.build_pipeline(&unnest.input)?;
+    fn build_project_set(&mut self, project_set: &ProjectSet) -> Result<()> {
+        self.build_pipeline(&project_set.input)?;
 
-        let op = BlockOperator::Unnest {
-            num_columns: unnest.num_columns,
+        let op = BlockOperator::FlatMap {
+            srf_exprs: project_set
+                .srf_exprs
+                .iter()
+                .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS))
+                .collect(),
         };
 
         let func_ctx = self.ctx.get_function_context()?;
@@ -419,7 +423,7 @@ impl PipelineBuilder {
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProfileWrapper::create(
                     transform,
-                    unnest.plan_id,
+                    project_set.plan_id,
                     self.prof_span_set.clone(),
                 )))
             } else {
@@ -684,15 +688,9 @@ impl PipelineBuilder {
             .iter()
             .map(|agg_func| {
                 agg_args.push(agg_func.args.clone());
-                let params = agg_func
-                    .sig
-                    .params
-                    .iter()
-                    .map(|p| p.clone().into_scalar())
-                    .collect();
                 AggregateFunctionFactory::instance().get(
                     agg_func.sig.name.as_str(),
-                    params,
+                    agg_func.sig.params.clone(),
                     agg_func.sig.args.clone(),
                 )
             })
@@ -831,7 +829,6 @@ impl PipelineBuilder {
             || join.join_type == JoinType::Single)
             && join.non_equi_conditions.is_empty()
         {
-            self.main_pipeline.resize(1)?;
             self.main_pipeline.add_transform(|input, output| {
                 let transform = TransformLeftJoin::try_create(
                     input,

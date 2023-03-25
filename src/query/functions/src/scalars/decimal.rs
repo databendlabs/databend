@@ -27,7 +27,7 @@ use common_expression::ColumnBuilder;
 use common_expression::EvalContext;
 use common_expression::Function;
 use common_expression::FunctionDomain;
-use common_expression::FunctionProperty;
+use common_expression::FunctionEval;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::Scalar;
@@ -132,12 +132,17 @@ macro_rules! binary_decimal {
                 let mut result = Vec::with_capacity(buffer_a.len());
 
                 for (a, b) in buffer_a.iter().zip(buffer_b.iter()) {
-                    let t = (a * scale_a).$op(b) / scale_b;
-                    if t < min_for_precision || t > max_for_precision {
-                        $ctx.set_error(result.len(), "Decimal overflow");
+                    if $is_divide && std::intrinsics::unlikely(*b == zero) {
+                        $ctx.set_error(result.len(), "divided by zero");
                         result.push(one);
                     } else {
-                        result.push(t);
+                        let t = (a * scale_a).$op(b) / scale_b;
+                        if t < min_for_precision || t > max_for_precision {
+                            $ctx.set_error(result.len(), "Decimal overflow");
+                            result.push(one);
+                        } else {
+                            result.push(t);
+                        }
                     }
                 }
                 Value::Column(Column::Decimal(DecimalColumn::$decimal_type(
@@ -180,12 +185,17 @@ macro_rules! binary_decimal {
                 let mut result = Vec::with_capacity(buffer.len());
 
                 for b in buffer.iter() {
-                    let t = (a * scale_a).$op(b) / scale_b;
-                    if t < min_for_precision || t > max_for_precision {
-                        $ctx.set_error(result.len(), "Decimal overflow");
+                    if $is_divide && std::intrinsics::unlikely(*b == zero) {
+                        $ctx.set_error(result.len(), "divided by zero");
                         result.push(one);
                     } else {
-                        result.push(t);
+                        let t = (a * scale_a).$op(b) / scale_b;
+                        if t < min_for_precision || t > max_for_precision {
+                            $ctx.set_error(result.len(), "Decimal overflow");
+                            result.push(one);
+                        } else {
+                            result.push(t);
+                        }
                     }
                 }
                 Value::Column(Column::Decimal(DecimalColumn::$decimal_type(
@@ -253,17 +263,18 @@ macro_rules! register_decimal_compare_op {
                         DataType::Decimal(return_type.clone()),
                     ],
                     return_type: DataType::Boolean,
-                    property: FunctionProperty::default(),
                 },
-                calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
-                eval: Box::new(move |args, _ctx| {
-                    op_decimal!(
-                        &args[0],
-                        &args[1],
-                        &DataType::Decimal(return_type.clone()),
-                        $op
-                    )
-                }),
+                eval: FunctionEval::Scalar {
+                    calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
+                    eval: Box::new(move |args, _ctx| {
+                        op_decimal!(
+                            &args[0],
+                            &args[1],
+                            &DataType::Decimal(return_type.clone()),
+                            $op
+                        )
+                    }),
+                },
             };
             if has_nullable {
                 Some(Arc::new(function.wrap_nullable()))
@@ -332,21 +343,22 @@ macro_rules! register_decimal_binary_op {
                         DataType::Decimal(return_type.clone()),
                     ],
                     return_type: DataType::Decimal(return_type.clone()),
-                    property: FunctionProperty::default(),
                 },
-                calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
-                eval: Box::new(move |args, ctx| {
-                    op_decimal!(
-                        &args[0],
-                        &args[1],
-                        ctx,
-                        &DataType::Decimal(return_type.clone()),
-                        $op,
-                        scale_a,
-                        scale_b,
-                        is_divide
-                    )
-                }),
+                eval: FunctionEval::Scalar {
+                    calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
+                    eval: Box::new(move |args, ctx| {
+                        op_decimal!(
+                            &args[0],
+                            &args[1],
+                            ctx,
+                            &DataType::Decimal(return_type.clone()),
+                            $op,
+                            scale_a,
+                            scale_b,
+                            is_divide
+                        )
+                    }),
+                },
             };
             if has_nullable {
                 Some(Arc::new(function.wrap_nullable()))
@@ -407,12 +419,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "to_decimal".to_string(),
                 args_type: args_type.to_owned(),
                 return_type: return_type.clone(),
-                property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
-            eval: Box::new(move |args, tx| {
-                convert_to_decimal(args, tx, from_type.clone(), return_type.clone())
-            }),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
+                eval: Box::new(move |args, tx| {
+                    convert_to_decimal(args, tx, from_type.clone(), return_type.clone())
+                }),
+            },
         }))
     });
 }
@@ -433,10 +446,11 @@ pub(crate) fn register_decimal_to_float64(registry: &mut FunctionRegistry) {
                 name: "to_float64".to_string(),
                 args_type: vec![arg_type.clone()],
                 return_type: Float64Type::data_type(),
-                property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
-            eval: Box::new(move |args, tx| decimal_to_float64(args, arg_type.clone(), tx)),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
+                eval: Box::new(move |args, tx| decimal_to_float64(args, arg_type.clone(), tx)),
+            },
         }))
     });
 }
@@ -457,10 +471,11 @@ pub(crate) fn register_decimal_to_float32(registry: &mut FunctionRegistry) {
                 name: "to_float32".to_string(),
                 args_type: vec![arg_type.clone()],
                 return_type: Float32Type::data_type(),
-                property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
-            eval: Box::new(move |args, tx| decimal_to_float32(args, arg_type.clone(), tx)),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
+                eval: Box::new(move |args, tx| decimal_to_float32(args, arg_type.clone(), tx)),
+            },
         }))
     });
 }

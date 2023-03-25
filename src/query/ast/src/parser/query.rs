@@ -264,6 +264,8 @@ pub enum TableReferenceElement {
         table: Identifier,
         alias: Option<TableAlias>,
         travel_point: Option<TimeTravelPoint>,
+        pivot: Option<Box<Pivot>>,
+        unpivot: Option<Box<Unpivot>>,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
@@ -292,16 +294,42 @@ pub enum TableReferenceElement {
 }
 
 pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceElement>> {
+    // PIVOT(expr FOR col IN (ident, ...))
+    let pivot = map(
+        rule! {
+           PIVOT ~ "(" ~ #expr ~ FOR ~ #ident ~ IN ~ "(" ~ #comma_separated_list1(expr) ~ ")" ~ ")"
+        },
+        |(_pivot, _, aggregate, _for, value_column, _in, _, values, _, _)| Pivot {
+            aggregate,
+            value_column,
+            values,
+        },
+    );
+    // UNPIVOT(ident for ident IN (ident, ...))
+    let unpivot = map(
+        rule! {
+            UNPIVOT ~ "(" ~ #ident ~ FOR ~ #ident ~ IN ~ "(" ~ #comma_separated_list1(ident) ~ ")" ~ ")"
+        },
+        |(_unpivot, _, value_column, _for, column_name, _in, _, names, _, _)| Unpivot {
+            value_column,
+            column_name,
+            names,
+        },
+    );
     let aliased_table = map(
         rule! {
-            #period_separated_idents_1_to_3 ~ (AT ~ #travel_point)? ~ #table_alias?
+            #period_separated_idents_1_to_3 ~ (AT ~ #travel_point)? ~ #table_alias? ~ #pivot? ~ #unpivot?
         },
-        |((catalog, database, table), travel_point_opt, alias)| TableReferenceElement::Table {
-            catalog,
-            database,
-            table,
-            alias,
-            travel_point: travel_point_opt.map(|p| p.1),
+        |((catalog, database, table), travel_point_opt, alias, pivot, unpivot)| {
+            TableReferenceElement::Table {
+                catalog,
+                database,
+                table,
+                alias,
+                travel_point: travel_point_opt.map(|p| p.1),
+                pivot: pivot.map(Box::new),
+                unpivot: unpivot.map(Box::new),
+            }
         },
     );
     let table_function = map(
@@ -426,6 +454,8 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 table,
                 alias,
                 travel_point,
+                pivot,
+                unpivot,
             } => TableReference::Table {
                 span: transform_span(input.span.0),
                 catalog,
@@ -433,6 +463,8 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 table,
                 alias,
                 travel_point,
+                pivot,
+                unpivot,
             },
             TableReferenceElement::TableFunction {
                 name,

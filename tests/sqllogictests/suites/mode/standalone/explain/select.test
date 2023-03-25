@@ -28,19 +28,19 @@ Filter
 query T
 explain select * from (select number as a, number + 1 as b from numbers(1)) as t1 where a = 1 and b = 1
 ----
-Filter
-├── filters: [t1.a (#0) = 1, t1.b (#1) = 1]
+EvalScalar
+├── expressions: [numbers.number (#0) + 1]
 ├── estimated rows: 0.11
-└── EvalScalar
-    ├── expressions: [numbers.number (#0) + 1]
-    ├── estimated rows: 1.00
+└── Filter
+    ├── filters: [t1.a (#0) = 1, numbers.number (#0) + 1 = 1]
+    ├── estimated rows: 0.11
     └── TableScan
         ├── table: default.system.numbers
         ├── read rows: 1
         ├── read bytes: 8
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── push downs: [filters: [], limit: NONE]
+        ├── push downs: [filters: [t1.a (#0) = 1 AND numbers.number (#0) + 1 = 1], limit: NONE]
         └── estimated rows: 1.00
 
 query T

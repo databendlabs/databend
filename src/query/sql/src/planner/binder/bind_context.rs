@@ -39,6 +39,23 @@ use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 
+/// Context of current expression, this is used to check if
+/// the expression is valid in current context.
+#[derive(Debug, Clone, Default)]
+pub enum ExprContext {
+    SelectClause,
+    WhereClause,
+    HavingClause,
+    OrderByClause,
+    LimitClause,
+
+    InSetReturningFunction,
+    InAggregateFunction,
+
+    #[default]
+    Unknown,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum Visibility {
     // Default for a column
@@ -139,6 +156,12 @@ pub struct BindContext {
     ///
     /// It's used to check if the view has a loop dependency.
     pub view_info: Option<(String, String)>,
+
+    /// Set-returning functions in current context.
+    /// The key is the `Expr::to_string` of the function.
+    pub srfs: DashMap<String, ScalarExpr>,
+
+    pub expr_context: ExprContext,
 }
 
 #[derive(Clone, Debug)]
@@ -158,6 +181,8 @@ impl BindContext {
             in_grouping: false,
             ctes_map: Box::new(DashMap::new()),
             view_info: None,
+            srfs: DashMap::new(),
+            expr_context: ExprContext::default(),
         }
     }
 
@@ -171,6 +196,8 @@ impl BindContext {
             in_grouping: false,
             ctes_map: parent.ctes_map.clone(),
             view_info: None,
+            srfs: DashMap::new(),
+            expr_context: ExprContext::default(),
         }
     }
 
@@ -432,6 +459,10 @@ impl BindContext {
 
     pub fn column_set(&self) -> ColumnSet {
         self.columns.iter().map(|c| c.index).collect()
+    }
+
+    pub fn set_expr_context(&mut self, expr_context: ExprContext) {
+        self.expr_context = expr_context;
     }
 }
 

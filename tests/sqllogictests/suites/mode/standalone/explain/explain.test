@@ -98,7 +98,7 @@ explain raw select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.
 EvalScalar
 ├── scalars: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
 └── Filter
-    ├── filters: [((t1.a (#0) eq t2.a (#2)) AND (t1.a (#0) gt 3_u8)) OR (t1.a (#0) eq t2.a (#2))]
+    ├── filters: [((t1.a (#0) eq t2.a (#2)) AND (t1.a (#0) gt 3)) OR (t1.a (#0) eq t2.a (#2))]
     └── CrossJoin
         ├── equi conditions: []
         ├── non-equi conditions: []
@@ -122,7 +122,7 @@ EvalScalar
     ├── equi conditions: [(t1.a (#0) eq t2.a (#2)) AND (t1.b (#1) eq t2.b (#3))]
     ├── non-equi conditions: []
     ├── Filter
-    │   ├── filters: [t1.a (#0) gt 2_u8]
+    │   ├── filters: [t1.a (#0) gt 2]
     │   └── LogicalGet
     │       ├── table: default.default.t1
     │       ├── filters: []
@@ -521,6 +521,34 @@ Query (children 1)
             └── TableIdentifier unknown_table1
 
 query T
+explain ast SELECT * FROM monthly_sales PIVOT(SUM(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) ORDER BY EMPID
+----
+Query (children 2)
+├── QueryBody (children 1)
+│   └── SelectQuery (children 2)
+│       ├── SelectList (children 1)
+│       │   └── Target *
+│       └── TableList (children 1)
+│           └── TableIdentifier monthly_sales PIVOT(SUM(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR'))
+└── OrderByList (children 1)
+    └── OrderByElement (children 1)
+         └── ColumnIdentifier EMPID
+
+query T
+explain ast SELECT * FROM monthly_sales_1 UNPIVOT(sales FOR month IN (jan, feb, mar, april)) ORDER BY empid
+----
+Query (children 2)
+├── QueryBody (children 1)
+│   └── SelectQuery (children 2)
+│       ├── SelectList (children 1)
+│       │   └── Target *
+│       └── TableList (children 1)
+│           └── TableIdentifier monthly_sales_1 UNPIVOT(sales FOR month IN (jan, feb, mar, april))
+└── OrderByList (children 1)
+     └── OrderByElement (children 1)
+         └── ColumnIdentifier empid
+
+query T
 explain select a from t1 UNION ALL select a from t2
 ----
 UnionAll
@@ -907,3 +935,42 @@ Query (children 1)
                 ├── Literal String("p3")
                 ├── prune_page=>Literal Boolean(true)
                 └── refresh_meta_cache=>Literal Boolean(true)
+
+statement ok
+create table t4(a int, b string);
+
+query T
+explain select * from t4 where a = 1 and try_cast(get(try_parse_json(b),'bb') as varchar) = 'xx';
+----
+Filter
+├── filters: [t4.a (#0) = 1, is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL) = "xx")]
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.t4
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [is_true(CAST(t4.a (#0) = 1 AS Boolean NULL) AND TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL) = "xx")], limit: NONE]
+    └── estimated rows: 0.00
+
+statement ok
+create view v4 as select a as a, try_cast(get(try_parse_json(b), 'bb') as varchar) as b from t4;
+
+query T
+explain select * from v4 where b = 'xx';
+----
+EvalScalar
+├── expressions: [TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL)]
+├── estimated rows: 0.00
+└── Filter
+    ├── filters: [is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL) = "xx")]
+    ├── estimated rows: 0.00
+    └── TableScan
+        ├── table: default.default.t4
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL) = "xx")], limit: NONE]
+        └── estimated rows: 0.00

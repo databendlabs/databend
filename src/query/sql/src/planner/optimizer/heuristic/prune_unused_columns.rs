@@ -186,6 +186,25 @@ impl UnusedColumnPruner {
                 ))
             }
 
+            RelOperator::ProjectSet(op) => {
+                let mut used = vec![];
+                // Only keep columns needed by parent plan.
+                for s in op.srfs.iter() {
+                    if !required.contains(&s.index) {
+                        continue;
+                    }
+                    used.push(s.clone());
+                    s.scalar.used_columns().iter().for_each(|c| {
+                        required.insert(*c);
+                    })
+                }
+
+                Ok(SExpr::create_unary(
+                    RelOperator::ProjectSet(op.clone()),
+                    Self::keep_required_columns(expr.child(0)?, required)?,
+                ))
+            }
+
             RelOperator::DummyTableScan(_) => Ok(expr.clone()),
 
             _ => Err(ErrorCode::Internal(

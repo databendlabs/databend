@@ -40,26 +40,30 @@ use common_exception::Result;
 use common_exception::Span;
 use common_expression::infer_schema_type;
 use common_expression::type_check;
-use common_expression::type_check::check_literal;
 use common_expression::type_check::check_number;
 use common_expression::type_check::common_super_type;
 use common_expression::types::decimal::DecimalDataType;
+use common_expression::types::decimal::DecimalScalar;
 use common_expression::types::decimal::DecimalSize;
-use common_expression::types::number::F64;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use common_expression::types::NumberScalar;
+use common_expression::FunctionKind;
 use common_expression::RawExpr;
+use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_functions::aggregates::AggregateCountFunction;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::is_builtin_function;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_users::UserApiProvider;
+use simsearch::SimSearch;
 
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
 use crate::binder::wrap_cast;
 use crate::binder::Binder;
+use crate::binder::ExprContext;
 use crate::binder::NameResolutionResult;
 use crate::optimizer::RelExpr;
 use crate::planner::metadata::optimize_remove_count_args;
@@ -77,7 +81,6 @@ use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
-use crate::plans::Unnest;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncFrameBound;
@@ -98,7 +101,7 @@ use crate::MetadataRef;
 /// If failed, a `SemanticError` will be raised. This may caused by incompatible
 /// argument types of expressions, or unresolvable columns.
 pub struct TypeChecker<'a> {
-    bind_context: &'a BindContext,
+    bind_context: &'a mut BindContext,
     ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
@@ -112,7 +115,7 @@ pub struct TypeChecker<'a> {
 
 impl<'a> TypeChecker<'a> {
     pub fn new(
-        bind_context: &'a BindContext,
+        bind_context: &'a mut BindContext,
         ctx: Arc<dyn TableContext>,
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
@@ -128,40 +131,29 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
+    #[allow(dead_code)]
     fn post_resolve(
         &mut self,
         scalar: &ScalarExpr,
         data_type: &DataType,
     ) -> Result<(ScalarExpr, DataType)> {
-        // TODO(leiysky): constant folding with new expression
-        //
-        // if let Ok((value, value_type)) = Evaluator::eval_scalar(scalar).and_then(|evaluator| {
-        //     let func_ctx = self.ctx.try_get_function_context()?;
-        //     if scalar.is_deterministic() {
-        //         evaluator.try_eval_const(&func_ctx)
-        //     } else {
-        //         Err(ErrorCode::Internal(
-        //             "Constant folding requires the function deterministic",
-        //         ))
-        //     }
-        // }) {
-        //     Ok((
-        //         ConstantExpr {
-        //             value,
-        //             data_type: Box::new(value_type),
-        //         }
-        //         .into(),
-        //         data_type.clone(),
-        //     ))
-        // } else {
-        //     Ok((scalar.clone(), data_type.clone()))
-        // }
-
         Ok((scalar.clone(), data_type.clone()))
     }
 
     #[async_recursion::async_recursion]
     pub async fn resolve(&mut self, expr: &Expr) -> Result<Box<(ScalarExpr, DataType)>> {
+        if let Some(scalar) = self.bind_context.srfs.get(&expr.to_string()) {
+            if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
+                return Err(ErrorCode::SemanticError(
+                    "set-returning functions are only allowed in SELECT clause",
+                )
+                .set_span(expr.span()));
+            }
+            // Found a SRF, return it directly.
+            // See `Binder::bind_project_set` for more details.
+            return Ok(Box::new((scalar.clone(), scalar.data_type()?)));
+        }
+
         let box (scalar, data_type): Box<(ScalarExpr, DataType)> = match expr {
             Expr::ColumnRef {
                 span,
@@ -577,15 +569,7 @@ impl<'a> TypeChecker<'a> {
 
             Expr::Literal { span, lit } => {
                 let box (value, data_type) = self.resolve_literal(lit)?;
-                Box::new((
-                    ConstantExpr {
-                        span: *span,
-                        value,
-                        data_type: Box::new(data_type.clone()),
-                    }
-                    .into(),
-                    data_type,
-                ))
+                Box::new((ConstantExpr { span: *span, value }.into(), data_type))
             }
 
             Expr::FunctionCall {
@@ -596,15 +580,78 @@ impl<'a> TypeChecker<'a> {
                 params,
                 window,
             } => {
-                let func_name = name.name.to_lowercase();
+                let func_name = normalize_identifier(name, self.name_resolution_ctx).to_string();
                 let func_name = func_name.as_str();
                 if !is_builtin_function(func_name)
                     && !Self::all_rewritable_scalar_function().contains(&func_name)
                 {
-                    return self.resolve_udf(*span, func_name, args).await;
+                    if let Some(udf) = self.resolve_udf(*span, func_name, args).await? {
+                        return Ok(udf);
+                    } else {
+                        // Function not found, try to find and suggest similar function name.
+                        let all_funcs = BUILTIN_FUNCTIONS
+                            .all_function_names()
+                            .into_iter()
+                            .chain(AggregateFunctionFactory::instance().registered_names())
+                            .chain(
+                                Self::all_rewritable_scalar_function()
+                                    .iter()
+                                    .cloned()
+                                    .map(str::to_string),
+                            );
+                        let mut engine: SimSearch<String> = SimSearch::new();
+                        for func_name in all_funcs {
+                            engine.insert(func_name.clone(), &func_name);
+                        }
+                        let possible_funcs = engine
+                            .search(func_name)
+                            .iter()
+                            .map(|name| format!("'{name}'"))
+                            .collect::<Vec<_>>();
+                        if possible_funcs.is_empty() {
+                            return Err(ErrorCode::UnknownFunction(format!(
+                                "no function matches the given name: {func_name}"
+                            ))
+                            .set_span(*span));
+                        } else {
+                            return Err(ErrorCode::UnknownFunction(format!(
+                                "no function matches the given name: '{func_name}', do you mean {}?",
+                                possible_funcs.join(", ")
+                            ))
+                            .set_span(*span));
+                        }
+                    }
                 }
 
                 let args: Vec<&Expr> = args.iter().collect();
+
+                // Check assumptions if it is a set returning function
+                if BUILTIN_FUNCTIONS
+                    .properties
+                    .get(&name.name.to_lowercase())
+                    .map(|property| property.kind == FunctionKind::SRF)
+                    .unwrap_or(false)
+                {
+                    if matches!(
+                        self.bind_context.expr_context,
+                        ExprContext::InSetReturningFunction
+                    ) {
+                        return Err(ErrorCode::SemanticError(
+                            "set-returning functions cannot be nested".to_string(),
+                        )
+                        .set_span(*span));
+                    }
+
+                    if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
+                        return Err(ErrorCode::SemanticError(
+                            "set-returning functions can only be used in SELECT".to_string(),
+                        )
+                        .set_span(*span));
+                    }
+
+                    // Should have been handled with `BindContext::srfs`
+                    return Err(ErrorCode::Internal("Logical error, there is a bug!"));
+                }
 
                 if AggregateFunctionFactory::instance().contains(func_name) {
                     if self.in_aggregate_function {
@@ -621,11 +668,6 @@ impl<'a> TypeChecker<'a> {
                         .iter()
                         .map(|literal| self.resolve_literal(literal).map(|box (value, _)| value))
                         .collect::<Result<Vec<_>>>()?;
-
-                    let scalar_params = params
-                        .iter()
-                        .map(|param| check_literal(param).0)
-                        .collect::<Vec<_>>();
 
                     self.in_aggregate_function = true;
                     let mut arguments = vec![];
@@ -652,7 +694,7 @@ impl<'a> TypeChecker<'a> {
                     };
 
                     let agg_func = AggregateFunctionFactory::instance()
-                        .get(&func_name, scalar_params, arg_types)
+                        .get(&func_name, params.clone(), arg_types)
                         .map_err(|e| e.set_span(*span))?;
 
                     let args = if optimize_remove_count_args(&func_name, distinct, args.as_slice())
@@ -698,7 +740,7 @@ impl<'a> TypeChecker<'a> {
                         .map(|literal| match literal {
                             Literal::UInt64(n) => Ok(*n as usize),
                             lit => Err(ErrorCode::SemanticError(format!(
-                                "Invalid parameter {lit} for scalar function"
+                                "invalid parameter {lit} for scalar function"
                             ))
                             .set_span(*span)),
                         })
@@ -880,17 +922,16 @@ impl<'a> TypeChecker<'a> {
             Expr::Tuple { span, exprs, .. } => self.resolve_tuple(*span, exprs).await?,
         };
 
-        Ok(Box::new(self.post_resolve(&scalar, &data_type)?))
+        Ok(Box::new((scalar, data_type)))
     }
 
     // TODO: remove this function
     fn rewrite_substring(args: &mut [ScalarExpr]) {
         if let ScalarExpr::ConstantExpr(expr) = &args[1] {
-            if let common_expression::Literal::UInt8(0) = expr.value {
+            if let common_expression::Scalar::Number(NumberScalar::UInt8(0)) = expr.value {
                 args[1] = ConstantExpr {
                     span: expr.span,
-                    value: common_expression::Literal::Int64(1),
-                    data_type: Box::new(DataType::Number(NumberDataType::Int64)),
+                    value: common_expression::Scalar::Number(NumberScalar::Int64(1)),
                 }
                 .into();
             }
@@ -1051,7 +1092,7 @@ impl<'a> TypeChecker<'a> {
         let registry = &BUILTIN_FUNCTIONS;
         let expr = type_check::check(&raw_expr, registry)?;
 
-        if !expr.is_deterministic() {
+        if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
             self.ctx.set_cacheable(false);
         }
 
@@ -1357,8 +1398,8 @@ impl<'a> TypeChecker<'a> {
         );
 
         // Create new `BindContext` with current `bind_context` as its parent, so we can resolve outer columns.
-        let bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
-        let (s_expr, output_context) = binder.bind_query(&bind_context, subquery).await?;
+        let mut bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
+        let (s_expr, output_context) = binder.bind_query(&mut bind_context, subquery).await?;
 
         if (typ == SubqueryType::Scalar || typ == SubqueryType::Any)
             && output_context.columns.len() > 1
@@ -1433,7 +1474,6 @@ impl<'a> TypeChecker<'a> {
             "is_null",
             "coalesce",
             "last_query_id",
-            "unnest",
         ]
     }
 
@@ -1631,35 +1671,6 @@ impl<'a> TypeChecker<'a> {
                     Err(e) => Err(e),
                 })
             }
-            ("unnest", args) => {
-                if args.len() != 1 {
-                    return Some(Err(ErrorCode::SemanticError(
-                        "Unnest can only be applied to one array type argument".to_string(),
-                    )
-                    .set_span(span)));
-                }
-                let inner_res = self.resolve(args[0]).await;
-                if inner_res.is_err() {
-                    return Some(inner_res);
-                }
-                let box (inner_expr, inner_type) = inner_res.unwrap();
-                Some(match inner_type {
-                    DataType::Array(inner) => {
-                        let return_type = Box::new(inner.unnest().wrap_nullable());
-                        Ok(Box::new((
-                            ScalarExpr::Unnest(Unnest {
-                                return_type,
-                                argument: Box::new(inner_expr),
-                            }),
-                            *inner,
-                        )))
-                    }
-                    _ => Err(ErrorCode::SemanticError(
-                        "Unnest can only be applied to one array type argument".to_string(),
-                    )
-                    .set_span(span)),
-                })
-            }
             _ => None,
         }
     }
@@ -1684,8 +1695,7 @@ impl<'a> TypeChecker<'a> {
         } else {
             let trim_scalar = ConstantExpr {
                 span,
-                value: common_expression::Literal::String(" ".as_bytes().to_vec()),
-                data_type: Box::new(DataType::String),
+                value: common_expression::Scalar::String(" ".as_bytes().to_vec()),
             }
             .into();
             ("trim_both", trim_scalar, DataType::String)
@@ -1702,60 +1712,56 @@ impl<'a> TypeChecker<'a> {
     pub fn resolve_literal(
         &self,
         literal: &common_ast::ast::Literal,
-    ) -> Result<Box<(common_expression::Literal, DataType)>> {
+    ) -> Result<Box<(Scalar, DataType)>> {
         let value = match literal {
             Literal::UInt64(uint) => {
                 // how to use match range?
                 if *uint <= u8::MAX as u64 {
-                    common_expression::Literal::UInt8(*uint as u8)
+                    Scalar::Number(NumberScalar::UInt8(*uint as u8))
                 } else if *uint <= u16::MAX as u64 {
-                    common_expression::Literal::UInt16(*uint as u16)
+                    Scalar::Number(NumberScalar::UInt16(*uint as u16))
                 } else if *uint <= u32::MAX as u64 {
-                    common_expression::Literal::UInt32(*uint as u32)
+                    Scalar::Number(NumberScalar::UInt32(*uint as u32))
                 } else {
-                    common_expression::Literal::UInt64(*uint)
+                    Scalar::Number(NumberScalar::UInt64(*uint))
                 }
             }
             Literal::Int64(int) => {
                 if *int >= i8::MIN as i64 && *int <= i8::MAX as i64 {
-                    common_expression::Literal::Int8(*int as i8)
+                    Scalar::Number(NumberScalar::Int8(*int as i8))
                 } else if *int >= i16::MIN as i64 && *int <= i16::MAX as i64 {
-                    common_expression::Literal::Int16(*int as i16)
+                    Scalar::Number(NumberScalar::Int16(*int as i16))
                 } else if *int >= i32::MIN as i64 && *int <= i32::MAX as i64 {
-                    common_expression::Literal::Int32(*int as i32)
+                    Scalar::Number(NumberScalar::Int32(*int as i32))
                 } else {
-                    common_expression::Literal::Int64(*int)
+                    Scalar::Number(NumberScalar::Int64(*int))
                 }
             }
             Literal::Decimal128 {
                 value,
                 precision,
                 scale,
-            } => common_expression::Literal::Decimal128 {
-                value: *value,
+            } => Scalar::Decimal(DecimalScalar::Decimal128(*value, DecimalSize {
                 precision: *precision,
                 scale: *scale,
-            },
+            })),
             Literal::Decimal256 {
                 value,
                 precision,
                 scale,
-            } => common_expression::Literal::Decimal256 {
-                value: *value,
+            } => Scalar::Decimal(DecimalScalar::Decimal256(*value, DecimalSize {
                 precision: *precision,
                 scale: *scale,
-            },
-            Literal::Float(float) => common_expression::Literal::Float64(F64::from(*float)),
-            Literal::String(string) => {
-                common_expression::Literal::String(string.as_bytes().to_vec())
-            }
-            Literal::Boolean(boolean) => common_expression::Literal::Boolean(*boolean),
-            Literal::Null => common_expression::Literal::Null,
+            })),
+            Literal::Float(float) => Scalar::Number(NumberScalar::Float64((*float).into())),
+            Literal::String(string) => Scalar::String(string.as_bytes().to_vec()),
+            Literal::Boolean(boolean) => Scalar::Boolean(*boolean),
+            Literal::Null => Scalar::Null,
             _ => Err(ErrorCode::SemanticError(format!(
                 "Unsupported literal value: {literal}"
             )))?,
         };
-        let (_, data_type) = check_literal(&value);
+        let data_type = value.as_ref().infer_data_type();
         Ok(Box::new((value, data_type)))
     }
 
@@ -1844,47 +1850,48 @@ impl<'a> TypeChecker<'a> {
         span: Span,
         func_name: &str,
         arguments: &[Expr],
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
+    ) -> Result<Option<Box<(ScalarExpr, DataType)>>> {
         let udf = UserApiProvider::instance()
             .get_udf(self.ctx.get_tenant().as_str(), func_name)
             .await;
-        if let Ok(udf) = udf {
-            let parameters = udf.parameters;
-            if parameters.len() != arguments.len() {
-                return Err(ErrorCode::SyntaxException(format!(
-                    "Require {} parameters, but got: {}",
-                    parameters.len(),
-                    arguments.len()
-                ))
-                .set_span(span));
-            }
-            let settings = self.ctx.get_settings();
-            let sql_dialect = settings.get_sql_dialect()?;
-            let sql_tokens = tokenize_sql(udf.definition.as_str())?;
-            let expr = parse_expr(&sql_tokens, sql_dialect)?;
-            let mut args_map = HashMap::new();
-            arguments.iter().enumerate().for_each(|(idx, argument)| {
-                if let Some(parameter) = parameters.get(idx) {
-                    args_map.insert(parameter, (*argument).clone());
-                }
-            });
-            let udf_expr = self
-                .clone_expr_with_replacement(&expr, &|nest_expr| {
-                    if let Expr::ColumnRef { column, .. } = nest_expr {
-                        if let Some(arg) = args_map.get(&column.name) {
-                            return Ok(Some(arg.clone()));
-                        }
-                    }
-                    Ok(None)
-                })
-                .map_err(|e| e.set_span(span))?;
-            self.resolve(&udf_expr).await
+
+        let udf = if let Ok(udf) = udf {
+            udf
         } else {
-            Err(ErrorCode::UnknownFunction(format!(
-                "no function matches the given name: {func_name}"
+            return Ok(None);
+        };
+
+        let parameters = udf.parameters;
+        if parameters.len() != arguments.len() {
+            return Err(ErrorCode::SyntaxException(format!(
+                "Require {} parameters, but got: {}",
+                parameters.len(),
+                arguments.len()
             ))
-            .set_span(span))
+            .set_span(span));
         }
+        let settings = self.ctx.get_settings();
+        let sql_dialect = settings.get_sql_dialect()?;
+        let sql_tokens = tokenize_sql(udf.definition.as_str())?;
+        let expr = parse_expr(&sql_tokens, sql_dialect)?;
+        let mut args_map = HashMap::new();
+        arguments.iter().enumerate().for_each(|(idx, argument)| {
+            if let Some(parameter) = parameters.get(idx) {
+                args_map.insert(parameter, (*argument).clone());
+            }
+        });
+        let udf_expr = self
+            .clone_expr_with_replacement(&expr, &|nest_expr| {
+                if let Expr::ColumnRef { column, .. } = nest_expr {
+                    if let Some(arg) = args_map.get(&column.name) {
+                        return Ok(Some(arg.clone()));
+                    }
+                }
+                Ok(None)
+            })
+            .map_err(|e| e.set_span(span))?;
+
+        Ok(Some(self.resolve(&udf_expr).await?))
     }
 
     #[async_recursion::async_recursion]
@@ -1966,11 +1973,10 @@ impl<'a> TypeChecker<'a> {
                 .into();
                 continue;
             }
-            let box (path_value, path_data_type) = self.resolve_literal(&path_lit)?;
+            let box (path_value, _) = self.resolve_literal(&path_lit)?;
             let path_scalar: ScalarExpr = ConstantExpr {
                 span,
                 value: path_value,
-                data_type: Box::new(path_data_type.clone()),
             }
             .into();
             if let TableDataType::Array(inner_type) = table_data_type {

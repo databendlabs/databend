@@ -93,10 +93,10 @@ pub struct JwkKeys {
 }
 
 pub struct JwkKeyStore {
-    url: String,
+    pub(crate) url: String,
     keys: Arc<RwLock<HashMap<String, PubKey>>>,
-    last_refreshed_at: RwLock<Option<Instant>>,
-    refresh_interval: Duration,
+    pub(crate) last_refreshed_at: RwLock<Option<Instant>>,
+    pub(crate) refresh_interval: Duration,
 }
 
 impl JwkKeyStore {

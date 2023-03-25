@@ -80,7 +80,7 @@ impl Processor for DuplicateProcessor {
             return Ok(Event::Finished);
         }
 
-        if !can_push1 || !can_push2 {
+        if (!is_finished1 && !can_push1) || (!is_finished2 && !can_push2) {
             return Ok(Event::NeedConsume);
         }
 
