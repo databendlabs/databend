@@ -57,6 +57,10 @@ impl JoinRelationSet {
             .iter()
             .all(|idx| !other.relations.contains(idx))
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = &IndexType> {
+        self.relations.iter()
+    }
 }
 
 struct RelationSetNode {

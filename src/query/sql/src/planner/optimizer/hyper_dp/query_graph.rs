@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 
 use common_exception::Result;
@@ -26,11 +27,15 @@ struct NeighborInfo {
 
 struct QueryEdge {
     neighbors: Vec<NeighborInfo>,
+    children: HashMap<IndexType, QueryEdge>,
 }
 
 impl QueryEdge {
     fn new() -> Self {
-        Self { neighbors: vec![] }
+        Self {
+            neighbors: vec![],
+            children: Default::default(),
+        }
     }
 }
 
@@ -56,12 +61,39 @@ impl QueryGraph {
         todo!()
     }
 
+    // create edges for relation set
+    fn create_edges_for_relation_set(
+        &mut self,
+        relation_set: &JoinRelationSet,
+    ) -> Result<&mut QueryEdge> {
+        let mut edge = &mut self.root_edge;
+        for relation in relation_set.iter() {
+            if !edge.children.contains_key(relation) {
+                edge.children.insert(*relation, QueryEdge::new());
+            }
+            edge = edge.children.get_mut(relation).unwrap();
+        }
+        Ok(edge)
+    }
+
     // Create edges for left set and right set
     pub fn create_edges(
         &mut self,
         left_set: &JoinRelationSet,
         right_set: &JoinRelationSet,
     ) -> Result<()> {
-        todo!()
+        let left_edge = self.create_edges_for_relation_set(left_set)?;
+        for neighbor_info in left_edge.neighbors.iter() {
+            if neighbor_info.neighbors.eq(right_set) {
+                // Todo: add filter info to `neighbor_info`? Maybe used in emit_csg
+                return Ok(());
+            }
+        }
+
+        let neighbor_info = NeighborInfo {
+            neighbors: right_set.clone(),
+        };
+        left_edge.neighbors.push(neighbor_info);
+        Ok(())
     }
 }
