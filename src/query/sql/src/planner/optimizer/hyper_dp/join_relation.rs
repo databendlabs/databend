@@ -78,6 +78,16 @@ impl JoinRelationSet {
     pub fn iter(&self) -> impl Iterator<Item = &IndexType> {
         self.relations.iter()
     }
+
+    pub fn merge_relation_set(&self, other: &Self) -> JoinRelationSet {
+        let mut res = JoinRelationSet {
+            relations: self.relations.clone(),
+        };
+        res.relations.extend_from_slice(&other.relations);
+        res.relations.sort();
+        res.relations.dedup();
+        res
+    }
 }
 
 struct RelationSetNode {
@@ -117,16 +127,5 @@ impl RelationSetTree {
             node.relation_set = JoinRelationSet::new(relations);
         }
         Ok(node.relation_set.clone())
-    }
-
-    pub fn merge_relation_set(
-        &self,
-        left_set: &JoinRelationSet,
-        right_set: &JoinRelationSet,
-    ) -> JoinRelationSet {
-        let mut relations = left_set.relations().to_vec();
-        relations.extend(right_set.relations().iter());
-        relations.sort();
-        JoinRelationSet::new(relations)
     }
 }

@@ -29,6 +29,9 @@ use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;
 
+static COST_FACTOR_COMPUTE_PER_ROW: f64 = 1.0;
+static COST_FACTOR_HASH_TABLE_PER_ROW: f64 = 10.0;
+
 // The join reorder algorithm follows the paper: Dynamic Programming Strikes Back
 // See the paper for more details.
 // Current, we only support inner join
@@ -151,8 +154,23 @@ impl DPhpy {
                 continue;
             }
         }
+
         let optimized = self.solve()?;
-        todo!()
+
+        // Get all join relations in `relation_set_tree`
+        let all_relations = self
+            .relation_set_tree
+            .get_relation_set(&[0..self.join_relations.len()].iter().collect())?;
+        if optimized {
+            if let Some(final_plan) = self.dp_table.get(&all_relations) {
+                dbg!(final_plan);
+                todo!("Convert final plan to SExpr")
+            } else {
+                Ok((s_expr.clone(), false))
+            }
+        } else {
+            Ok((s_expr.clone(), false))
+        }
     }
 
     // This method will run dynamic programming algorithm to find the optimal join order
@@ -230,9 +248,7 @@ impl DPhpy {
             let neighbor_relations = self
                 .relation_set_tree
                 .get_relation_set_by_index(*neighbor)?;
-            let merged_relation_set = self
-                .relation_set_tree
-                .merge_relation_set(nodes, &neighbor_relations);
+            let merged_relation_set = nodes.merge_relation_set(&neighbor_relations);
             if self.dp_table.contains_key(&merged_relation_set) {
                 if !self.emit_csg(&merged_relation_set) {
                     return Ok(false);
@@ -254,7 +270,39 @@ impl DPhpy {
 
     // EmitCsgCmp will join the optimal plan from left and right
     fn emit_csg_cmp(&mut self, left: &JoinRelationSet, right: &JoinRelationSet) -> Result<bool> {
-        todo!()
+        debug_assert!(self.dp_table.contains_key(left));
+        debug_assert!(self.dp_table.contains_key(right));
+        let mut left_join = self.dp_table.get(left).unwrap();
+        let mut right_join = self.dp_table.get(right).unwrap();
+
+        let parent_set = left.merge_relation_set(right);
+
+        if left_join.cost < right_join.cost {
+            // swap left_join and right_join
+            std::mem::swap(&mut left_join, &mut right_join);
+        }
+        let mut cost = 0.0;
+        let parent_node = self.dp_table.get(&parent_set);
+        // Todo: consider cross join? aka. there is no join condition
+        if let Some(plan) = parent_node {
+            cost = plan.cost;
+        } else {
+            cost = left_join.cost * COST_FACTOR_COMPUTE_PER_ROW
+                + right_join.cost * COST_FACTOR_HASH_TABLE_PER_ROW;
+        }
+
+        let join_node = JoinNode::new(
+            parent_set.clone(),
+            left_join.clone(),
+            right_join.clone(),
+            cost,
+        );
+
+        if parent_node.is_none() || parent_node.unwrap().cost > join_node.cost {
+            // Update `dp_table`
+            self.dp_table.insert(parent_set, join_node);
+        }
+        Ok(true)
     }
 
     // The second parameter is a set which is connected and must be extended until a valid csg-cmp-pair is reached.
@@ -275,9 +323,7 @@ impl DPhpy {
                 .relation_set_tree
                 .get_relation_set_by_index(*neighbor)?;
             // Merge `right` with `neighbor_relations`
-            let merged_relation_set = self
-                .relation_set_tree
-                .merge_relation_set(right, &neighbor_relations);
+            let merged_relation_set = right.merge_relation_set(&neighbor_relations);
             if self.dp_table.contains_key(&merged_relation_set) {
                 if self.query_graph.is_connected(left, &merged_relation_set) {
                     if !self.emit_csg_cmp(left, &merged_relation_set) {

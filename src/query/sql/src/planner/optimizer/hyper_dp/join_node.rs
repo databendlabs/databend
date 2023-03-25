@@ -22,4 +22,13 @@ pub struct JoinNode {
     pub cost: f64,
 }
 
-impl JoinNode {}
+impl JoinNode {
+    pub fn new(leaves: JoinRelationSet, left: JoinNode, right: JoinNode, cost: f64) -> Self {
+        Self {
+            leaves,
+            left,
+            right,
+            cost,
+        }
+    }
+}
