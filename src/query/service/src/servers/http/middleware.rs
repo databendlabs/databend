@@ -100,7 +100,6 @@ fn auth_by_header(
         match Bearer::decode(value) {
             Some(bearer) => Ok(Credential::Jwt {
                 token: bearer.token().to_string(),
-                hostname: client_ip,
             }),
             None => Err(ErrorCode::AuthenticateFailure("bad Bearer auth header")),
         }

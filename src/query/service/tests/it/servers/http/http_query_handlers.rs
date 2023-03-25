@@ -738,7 +738,7 @@ async fn post_json_to_endpoint(
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_auth_jwt() -> Result<()> {
-    let user_name = "root";
+    let user_name = "test_user";
 
     let kid = "test_kid";
     let key_pair = RS256KeyPair::generate(2048)?.with_key_id(kid);
@@ -788,8 +788,7 @@ async fn test_auth_jwt() -> Result<()> {
 
     let token = key_pair.sign(claims)?;
     let bear = headers::Authorization::bearer(&token).unwrap();
-    // root user can only login in localhost
-    assert_auth_current_user(&ep, user_name, bear, "127.0.0.1").await?;
+    assert_auth_current_user(&ep, user_name, bear, "%").await?;
     Ok(())
 }
 
