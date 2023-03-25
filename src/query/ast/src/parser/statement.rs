@@ -35,6 +35,7 @@ use crate::input::Input;
 use crate::parser::expr::subexpr;
 use crate::parser::expr::*;
 use crate::parser::query::*;
+use crate::parser::share::share_endpoint_uri_location;
 use crate::parser::stage::*;
 use crate::parser::token::*;
 use crate::rule;
@@ -976,6 +977,62 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
 
     // share statements
+    let create_share_endpoint = map(
+        rule! {
+            CREATE ~ SHARE ~ ENDPOINT ~ (IF ~ NOT ~ EXISTS )?
+             ~ #ident
+             ~ URL ~ "=" ~ #share_endpoint_uri_location
+             ~ TENANT ~ "=" ~ #ident
+             ~ ARGS ~ "=" ~ #options
+             ~ ( COMMENT ~ "=" ~ #literal_string)?
+        },
+        |(
+            _,
+            _,
+            _,
+            opt_if_not_exists,
+            endpoint,
+            _,
+            _,
+            url,
+            _,
+            _,
+            tenant,
+            _,
+            _,
+            args,
+            comment_opt,
+        )| {
+            Statement::CreateShareEndpoint(CreateShareEndpointStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                endpoint,
+                url,
+                tenant,
+                args,
+                comment: match comment_opt {
+                    Some(opt) => Some(opt.2),
+                    None => None,
+                },
+            })
+        },
+    );
+    let show_share_endpoints = map(
+        rule! {
+            SHOW ~ SHARE ~ ENDPOINT
+        },
+        |(_, _, _)| Statement::ShowShareEndpoint(ShowShareEndpointStmt {}),
+    );
+    let drop_share_endpoint = map(
+        rule! {
+            DROP ~ SHARE ~ ENDPOINT ~ (IF ~ EXISTS)? ~ #ident
+        },
+        |(_, _, _, opt_if_exists, endpoint)| {
+            Statement::DropShareEndpoint(DropShareEndpointStmt {
+                if_exists: opt_if_exists.is_some(),
+                endpoint,
+            })
+        },
+    );
     let create_share = map(
         rule! {
             CREATE ~ SHARE ~ (IF ~ NOT ~ EXISTS )? ~ #ident ~ ( COMMENT ~ "=" ~ #literal_string)?
@@ -1184,7 +1241,10 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         ),
         // share
         rule!(
-            #create_share: "`CREATE SHARE [IF NOT EXISTS] <share_name> [ COMMENT = '<string_literal>' ]`"
+            #create_share_endpoint: "`CREATE SHARE ENDPOINT [IF NOT EXISTS] <endpoint_name> URL=endpoint_location tenant=tenant_name ARGS=(arg=..) [ COMMENT = '<string_literal>' ]`"
+            | #show_share_endpoints: "`SHOW SHARE ENDPOINT`"
+            | #drop_share_endpoint: "`DROP SHARE ENDPOINT <endpoint_name>`"
+            | #create_share: "`CREATE SHARE [IF NOT EXISTS] <share_name> [ COMMENT = '<string_literal>' ]`"
             | #drop_share: "`DROP SHARE [IF EXISTS] <share_name>`"
             | #grant_share_object: "`GRANT { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } TO SHARE <share_name>`"
             | #revoke_share_object: "`REVOKE { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } FROM SHARE <share_name>`"

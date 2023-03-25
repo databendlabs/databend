@@ -421,7 +421,10 @@ impl AccessChecker for PrivilegeAccess {
                         .await?;
                 }
             },
-            Plan::CreateShare(_)
+            Plan::CreateShareEndpoint(_)
+            | Plan::ShowShareEndpoint(_)
+            | Plan::DropShareEndpoint(_)
+            | Plan::CreateShare(_)
             | Plan::DropShare(_)
             | Plan::DescShare(_)
             | Plan::ShowShares(_)

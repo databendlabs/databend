@@ -1889,6 +1889,36 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
+    fn visit_create_share_endpoint(&mut self, stmt: &'ast CreateShareEndpointStmt) {
+        let mut children = Vec::new();
+        let share_endpoint_format_ctx =
+            AstFormatContext::new(format!("ShareEndpoint {}", stmt.endpoint));
+        children.push(FormatTreeNode::new(share_endpoint_format_ctx));
+        if let Some(comment) = &stmt.comment {
+            let comment_format_ctx = AstFormatContext::new(format!("Comment {}", comment));
+            children.push(FormatTreeNode::new(comment_format_ctx));
+        }
+
+        let name = "CreateShareEndpoint".to_string();
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
+    fn visit_show_share_endpoint(&mut self, _stmt: &'ast ShowShareEndpointStmt) {
+        let name = "ShowShareEndpoint".to_string();
+        let format_ctx = AstFormatContext::new(name);
+        let node = FormatTreeNode::new(format_ctx);
+        self.children.push(node);
+    }
+
+    fn visit_drop_share_endpoint(&mut self, _stmt: &'ast DropShareEndpointStmt) {
+        let name = "DropShareEndpoint".to_string();
+        let format_ctx = AstFormatContext::new(name);
+        let node = FormatTreeNode::new(format_ctx);
+        self.children.push(node);
+    }
+
     fn visit_create_share(&mut self, stmt: &'ast CreateShareStmt) {
         let mut children = Vec::new();
         let share_format_ctx = AstFormatContext::new(format!("ShareIdentifier {}", stmt.share));
