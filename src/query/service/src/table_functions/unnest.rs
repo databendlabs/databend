@@ -56,7 +56,7 @@ impl UnnestTable {
 
         let column = match &args[0] {
             Scalar::Array(column) => column.unnest(),
-            Scalar::EmptyArray => Column::Null { len: 0 },
+            Scalar::Null | Scalar::EmptyArray => Column::Null { len: 0 },
             _ => {
                 return Err(ErrorCode::BadArguments(
                     "The argument of table function unnest should be an array",

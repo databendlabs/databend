@@ -2,7 +2,7 @@ query I
 select unnest([]::array(int));
 ----
 
-query I
+query T
 select unnest(null);
 ----
 
@@ -287,6 +287,14 @@ statement ok
 DROP DATABASE db_02_0062;
 
 # Test table function
+
+query T
+select * from unnest([])
+----
+
+query T
+select * from unnest(null)
+----
 
 query I
 select * from unnest([1,2,3]);
