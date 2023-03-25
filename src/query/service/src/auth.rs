@@ -14,7 +14,8 @@
 
 use std::sync::Arc;
 
-pub use common_config::InnerConfig;
+use common_base::base::GlobalInstance;
+use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::AuthInfo;
@@ -40,7 +41,16 @@ pub enum Credential {
 }
 
 impl AuthMgr {
-    pub fn create(cfg: &InnerConfig) -> Arc<AuthMgr> {
+    pub fn init(cfg: &InnerConfig) -> Result<()> {
+        GlobalInstance::set(AuthMgr::create(cfg));
+        Ok(())
+    }
+
+    pub fn instance() -> Arc<AuthMgr> {
+        GlobalInstance::get()
+    }
+
+    fn create(cfg: &InnerConfig) -> Arc<AuthMgr> {
         Arc::new(AuthMgr {
             jwt_auth: JwtAuthenticator::create(
                 cfg.query.jwt_key_file.clone(),

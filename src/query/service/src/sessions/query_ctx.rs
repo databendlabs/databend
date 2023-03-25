@@ -64,7 +64,6 @@ use parking_lot::RwLock;
 use tracing::debug;
 
 use crate::api::DataExchangeManager;
-use crate::auth::AuthMgr;
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
@@ -157,10 +156,6 @@ impl QueryContext {
 
     pub fn get_exchange_manager(&self) -> Arc<DataExchangeManager> {
         DataExchangeManager::instance()
-    }
-
-    pub fn get_auth_manager(&self) -> Arc<AuthMgr> {
-        self.shared.get_auth_manager()
     }
 
     // Get the current session.
