@@ -21,6 +21,7 @@ use common_meta_app::principal::UserInfo;
 use common_users::CustomClaims;
 use common_users::EnsureUser;
 use common_users::UserApiProvider;
+use databend_query::auth::AuthMgr;
 use databend_query::auth::Credential;
 use databend_query::sessions::TableContext;
 use jwt_simple::prelude::*;
@@ -79,7 +80,7 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
     conf.query.jwt_key_file = first_url.clone();
     conf.query.jwt_key_files = vec![second_url];
     let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
-    let auth_mgr = ctx.get_auth_manager();
+    let auth_mgr = AuthMgr::instance();
     {
         let user_name = "test-user2";
         let role_name = "test-role";
@@ -210,7 +211,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
     let mut conf = crate::tests::ConfigBuilder::create().config();
     conf.query.jwt_key_file = jwks_url.clone();
     let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
-    let auth_mgr = ctx.get_auth_manager();
+    let auth_mgr = AuthMgr::instance();
     let user_name = "test";
 
     // without subject
@@ -387,7 +388,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
     let mut conf = crate::tests::ConfigBuilder::create().config();
     conf.query.jwt_key_file = jwks_url.clone();
     let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
-    let auth_mgr = ctx.get_auth_manager();
+    let auth_mgr = AuthMgr::instance();
     let user_name = "test";
 
     // without subject
@@ -560,7 +561,7 @@ async fn test_jwt_auth_mgr_with_management() -> Result<()> {
         .config();
     conf.query.jwt_key_file = format!("http://{}{}", server.address(), json_path);
     let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
-    let auth_mgr = ctx.get_auth_manager();
+    let auth_mgr = AuthMgr::instance();
 
     // with create user in other tenant
     {
