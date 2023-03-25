@@ -63,12 +63,6 @@ pub enum RawExpr<Index: ColumnIndex = usize> {
         params: Vec<usize>,
         args: Vec<RawExpr<Index>>,
     },
-    // WindowFuncion {
-    //     span: Span,
-    //     name: String,
-    //     params: Vec<usize>,
-    //     args: Vec<RawExpr<Index>>,
-    // }
 }
 
 /// A type-checked and ready to be evaluated expression, having all overloads chosen for function calls.
