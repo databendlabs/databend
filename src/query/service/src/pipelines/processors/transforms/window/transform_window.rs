@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Some variables and functions are named and designed with reference to ClickHouse.
+// - https://github.com/ClickHouse/ClickHouse/blob/master/src/Processors/Transforms/WindowTransform.h
+// - https://github.com/ClickHouse/ClickHouse/blob/master/src/Processors/Transforms/WindowTransform.cpp
+
 use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -559,7 +563,7 @@ impl Processor for TransformWindow {
     }
 }
 
-#[test]
+#[cfg(test)]
 mod tests {
     use common_exception::Result;
     use common_expression::block_debug::assert_blocks_eq;
@@ -569,11 +573,14 @@ mod tests {
     use common_expression::Column;
     use common_expression::ColumnBuilder;
     use common_expression::DataBlock;
+    use common_expression::FromData;
     use common_functions::aggregates::AggregateFunctionFactory;
 
     use super::TransformWindow;
     use super::WindowBlock;
+    use crate::pipelines::processors::transforms::window::transform_window::RowPtr;
     use crate::pipelines::processors::transforms::WindowFrame;
+    use crate::pipelines::processors::transforms::WindowFrameBound;
 
     fn get_transform_window(
         window_frame: WindowFrame,
