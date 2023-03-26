@@ -45,16 +45,16 @@ Stay connected with the latest news about Databend.
 
 Flight SQL is an innovative open database protocol that caters to modern architectures. It boasts a columnar-oriented design and provides seamless support for parallel processing of data partitions.
 
-The benefits of supporting FlightSQL include reducing serialization and deserialization during query execution, as well as easily supporting SDKs in different languages using predefined proto.
+The benefits of supporting FlightSQL include reducing serialization and deserialization during query execution, as well as easily supporting SDKs in different languages using predefined `*.proto` files.
 
-Databend is actively working on supporting the FlightSQL Handler. If you're interested, visit the following materials.
+We're currently engaged in developing support for the FlightSQL Handler. If you're interested, refer to the following links:
 
 - [Issue #10745 | tracking: FlightSQL handler](https://github.com/datafuselabs/databend/issues/10745)
 - [PR #10732 | feat: basic impl for FlightSQL handler](https://github.com/datafuselabs/databend/pull/10732).
 
 ### Natural Language to SQL
 
-Are you still struggling with how to write complex queries? By integrating with popular AI services, Databend provides you with an efficient built-in solution - the `AI_TO_SQL` function.
+By integrating with the popular AI services, Databend now provide you an efficient built-in solution - the `AI_TO_SQL` function.
 
 With this function, instructions written in natural language can be converted into SQL query statements aligned with table schema. With just a few modifications (or possibly none at all), it can be put into production.
 
@@ -71,7 +71,7 @@ generated_sql: SELECT name, SUM(price) AS total_spent, COUNT(order_id) AS total_
                GROUP BY name;
 ```
 
-If you want to quickly experience our natural language to SQL function, you can try [deploying Databend](https://databend.rs/doc/deploy) or [registering for our cloud service](https://app.databend.com/). In addition, reading related materials can also help you learn more information:
+The function is now available on both Databend and Databend Cloud. To learn more about how it works, refer to the following links:
 
 - [Doc | AI Functions - AI_TO_SQL](https://databend.rs/doc/sql-functions/ai-functions/ai-to-sql)
 - [Blog | Databend Understands You Better with OpenAI](https://databend.rs/blog/ai2sql)
@@ -82,7 +82,7 @@ Discover some fascinating code snippets or projects that showcase our work or le
 
 ### Vector Similarity Calculation in Databend
 
-Databend adds a new function called `cosine_distance`. This function accepts two input vectors, `from` and `to`, which are represented as slices of f32 values.
+Databend has added a new function called `cosine_distance`. This function accepts two input vectors, `from` and `to`, which are represented as slices of f32 values.
 
 ```sql
 select cosine_distance([3.0, 45.0, 7.0, 2.0, 5.0, 20.0, 13.0, 12.0], [2.0, 54.0, 13.0, 15.0, 22.0, 34.0, 50.0, 1.0]) as sim
@@ -117,8 +117,8 @@ Do you remember how to register scalar functions in Databend? You can check [Doc
 
 Here are some noteworthy items recorded here, perhaps you can find something that interests you.
 
-- Learn how to monitor Databend using Prometheus and Grafana by reading our new document. *[Doc | Monitor - Prometheus & Grafana](https://databend.rs/doc/monitor/prometheus-and-granafa)*
-- If you want to connect Metabase with Databend and create dashboards, we have developed the [Metabase Databend Driver](https://github.com/databendcloud/metabase-databend-driver/releases/latest) and provided simple steps. *[Doc | Integrations - Metabase](https://databend.rs/doc/integrations/gui-tool/metabase)*
+- Learn how to monitor Databend using Prometheus and Grafana: *[Doc | Monitor - Prometheus & Grafana](https://databend.rs/doc/monitor/prometheus-and-granafa)*
+- [Metabase Databend Driver](https://github.com/databendcloud/metabase-databend-driver/releases/latest) helps you connect Databend to Metabase and dashboard your data: *[Doc | Integrations - Metabase](https://databend.rs/doc/integrations/gui-tool/metabase)*
 - Databend now supports `PIVOT`, `UNPIVOT`, `GROUP BY CUBE` and `GROUP BY ROLLUP` query syntax. For more information, please see PR [#10676](https://github.com/datafuselabs/databend/pull/10676) and [#10601](https://github.com/datafuselabs/databend/pull/10601).
 
 ## What's Up Next
@@ -127,9 +127,9 @@ We're always open to cutting-edge technologies and innovative ideas. You're more
 
 ### Enable `-Zgitoxide` to Speed up Git Dependencies Download
 
-To accelerate the download of our git dependencies, we can activate `-Zgitoxide`. This option is significantly faster than using Git alone.
+Enabling `-Zgitoxide` can speed up the download of our Git dependencies significantly, which is much faster than using Git only.
 
-This feature integrates cargo with [gitoxide](https://github.com/Byron/gitoxide), which is a pure Rust implementation of Git that is idiomatic, lean, fast and safe.
+This feature integrates cargo with [gitoxide](https://github.com/Byron/gitoxide), a pure Rust implementation of Git that is idiomatic, lean, fast, and safe.
 
 [![asciicast](https://asciinema.org/a/542159.svg)](https://asciinema.org/a/542159)
 
