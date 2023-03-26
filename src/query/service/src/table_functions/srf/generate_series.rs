@@ -68,28 +68,7 @@ impl GenerateSeriesTable {
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        // Check args.
-        validate_function_arg(
-            table_func_name,
-            table_args.positioned.len(),
-            Some((2, 3)),
-            2,
-        )?;
-
-        // Check if the parameter type is a Number or a Decimal.
-        let check_number = |arg: &Scalar| -> Result<Scalar> {
-            match arg {
-                Scalar::Number(_) | Scalar::Decimal(_) => Ok(arg.clone()),
-                _ => Err(ErrorCode::BadArguments("Expected number argument.")),
-            }
-        };
-
-        let start = check_number(&table_args.positioned[0])?;
-        let end = check_number(&table_args.positioned[1])?;
-        let mut step = Scalar::Number(NumberScalar::Int64(1));
-        if table_args.positioned.len() == 3 {
-            step = check_number(&table_args.positioned[2])?;
-        }
+        validate_args(table_args.positioned, table_func_name)?;
 
         let schema = TableSchema::new(vec![TableField::new(
             "generate_series",
@@ -378,4 +357,28 @@ pub fn number_scalars_have_float(scalars: Vec<Scalar>) -> bool {
         }
     }
     false
+}
+
+pub fn validate_args(args: Vec<Scalar>, table_func_name: &str) -> Result<()> {
+    // Check args len.
+    validate_function_arg(
+        table_func_name,
+        table_args.positioned.len(),
+        Some((2, 3)),
+        2,
+    )?;
+
+    if args
+        .iter()
+        .all(|arg| matches!(Scalar::Number(_) | Scalar::Decimal(_)))
+        || args.iter().all(|arg| matches!(Scalar::Date(_)))
+        || args.iter().all(|arg| matches!(Scalar::Timestamp(_)))
+    {
+        Ok(())
+    } else {
+        Err(ErrorCode::BadDataValueType(format!(
+            "Expected same scalar type, but got {:?}",
+            args
+        )))
+    }
 }
