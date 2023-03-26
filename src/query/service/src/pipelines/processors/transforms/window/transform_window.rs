@@ -32,7 +32,6 @@ use common_functions::aggregates::StateAddr;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
-use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
 use super::frame::WindowFrame;
@@ -102,17 +101,9 @@ pub struct TransformWindow {
 }
 
 impl TransformWindow {
-    pub fn try_create_processor(
-        function: Arc<dyn AggregateFunction>,
-        arguments: Vec<usize>,
-        partition_indices: Vec<usize>,
-        frame_kind: WindowFrame,
-    ) -> Result<ProcessorPtr> {
-        let transform = Self::try_create(function, arguments, partition_indices, frame_kind)?;
-        Ok(ProcessorPtr::create(Box::new(transform)))
-    }
-
-    fn try_create(
+    pub fn try_create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
         function: Arc<dyn AggregateFunction>,
         arguments: Vec<usize>,
         partition_indices: Vec<usize>,
@@ -125,8 +116,8 @@ impl TransformWindow {
         let state_place = state_place.next(state_offset[0]);
 
         Ok(Self {
-            input: InputPort::create(),
-            output: OutputPort::create(),
+            input,
+            output,
             state: ProcessorState::Consume,
             function,
             arguments,
@@ -147,16 +138,6 @@ impl TransformWindow {
             current_row_in_partition: 1,
             input_is_finished: false,
         })
-    }
-
-    #[inline(always)]
-    pub fn input_port(&self) -> Arc<InputPort> {
-        self.input.clone()
-    }
-
-    #[inline(always)]
-    pub fn output_port(&self) -> Arc<OutputPort> {
-        self.output.clone()
     }
 
     #[inline(always)]
@@ -514,18 +495,20 @@ impl Processor for TransformWindow {
             return Ok(Event::NeedConsume);
         }
 
-        self.input_is_finished = self.input.is_finished();
+        let input_is_finished = self.input.is_finished();
         match self.state {
             ProcessorState::Consume => {
                 let has_data = self.input.has_data();
                 let data = self.input.pull_data().transpose()?;
-                match (self.input_is_finished, has_data) {
+                match (input_is_finished, has_data) {
                     (_, true) => {
                         self.state = ProcessorState::AddBlock(data);
                         Ok(Event::Sync)
                     }
                     (false, false) => Ok(Event::NeedData),
                     (true, _) => {
+                        // input_is_finished should be set after adding block.
+                        self.input_is_finished = true;
                         if !self.blocks.is_empty() {
                             self.state = ProcessorState::AddBlock(None);
                             Ok(Event::Sync)
@@ -539,6 +522,9 @@ impl Processor for TransformWindow {
             ProcessorState::Output => {
                 let output = self.outputs.pop_front().unwrap();
                 self.output.push_data(Ok(output));
+                if self.outputs.is_empty() {
+                    self.state = ProcessorState::Consume;
+                }
                 Ok(Event::NeedConsume)
             }
             _ => unreachable!(),
@@ -575,6 +561,8 @@ mod tests {
     use common_expression::DataBlock;
     use common_expression::FromData;
     use common_functions::aggregates::AggregateFunctionFactory;
+    use common_pipeline_core::processors::port::InputPort;
+    use common_pipeline_core::processors::port::OutputPort;
 
     use super::TransformWindow;
     use super::WindowBlock;
@@ -587,7 +575,14 @@ mod tests {
         arg_type: DataType,
     ) -> Result<TransformWindow> {
         let function = AggregateFunctionFactory::instance().get("sum", vec![], vec![arg_type])?;
-        TransformWindow::try_create(function, vec![0], vec![0], window_frame)
+        TransformWindow::try_create(
+            InputPort::create(),
+            OutputPort::create(),
+            function,
+            vec![0],
+            vec![0],
+            window_frame,
+        )
     }
 
     fn get_transform_window_with_data(
