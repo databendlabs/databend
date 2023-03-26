@@ -22,5 +22,5 @@ mod pruning;
 mod statistics;
 mod table;
 mod table_functions;
-mod table_test_fixture;
-mod utils;
+pub(crate) mod table_test_fixture;
+pub(crate) mod utils;

@@ -86,6 +86,8 @@ members = [
     "src/meta/service",
     # sqllogictest
     "tests/sqllogictests",
+    # sqlunittest
+    "tests/sqlunittests/optimizer",
 ]
 
 [workspace.dependencies]

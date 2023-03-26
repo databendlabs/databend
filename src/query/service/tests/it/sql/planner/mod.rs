@@ -15,3 +15,4 @@
 mod builders;
 mod format;
 mod semantic;
+mod optimizer;

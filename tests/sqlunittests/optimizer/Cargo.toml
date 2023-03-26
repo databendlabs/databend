@@ -1,0 +1,6 @@
+[package]
+name = "databend-sqlunittests"
+version = "0.1.0"
+
+[dependencies]
+common-config = { path = "../../../src/query/config" }
