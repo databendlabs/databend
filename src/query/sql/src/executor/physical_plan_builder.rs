@@ -680,8 +680,6 @@ impl PhysicalPlanBuilder {
             }
             RelOperator::Window(w) => {
                 let input = self.build(s_expr.child(0)?).await?;
-                let input_schema = input.output_schema()?;
-                // let group_items = agg.group_items.iter().map(|v| v.index).collect::<Vec<_>>();
                 let partition_items = w.partition_by.iter().map(|v| v.index).collect::<Vec<_>>();
                 let agg_func = if let ScalarExpr::AggregateFunction(agg) =
                     &w.aggregate_function.scalar
@@ -696,7 +694,7 @@ impl PhysicalPlanBuilder {
                         output_column: w.aggregate_function.index,
                         args: agg.args.iter().map(|arg| {
                             if let ScalarExpr::BoundColumnRef(col) = arg {
-                                input_schema.index_of(&col.column.index.to_string())
+                                Ok(col.column.index)
                             } else {
                                 Err(ErrorCode::Internal("Window's aggregate function argument must be a BoundColumnRef".to_string()))
                             }
