@@ -292,6 +292,15 @@ impl Rule for RulePushDownFilterEvalScalar {
         let scalar_rel_expr = RelExpr::with_s_expr(s_expr);
         let eval_scalar_prop = scalar_rel_expr.derive_relational_prop_child(0)?;
 
+        println!("eval_scalar_prop {:?}", eval_scalar_prop.outer_columns);
+        println!(
+            "eval_scalar_child_prop {:?}",
+            eval_scalar_child_prop.outer_columns
+        );
+
+        println!("used_columns {:?}", used_columns);
+        println!("predicates {:?}", filter.predicates);
+
         // Replacing `DerivedColumn` in `Filter` with the column expression defined in the view.
         // This allows us to eliminate the `EvalScalar` and push the filter down to the `Scan`.
         if used_columns.is_subset(&eval_scalar_prop.output_columns)
@@ -316,6 +325,8 @@ impl Rule for RulePushDownFilterEvalScalar {
             for pred in filter.predicates.iter() {
                 used_columns = used_columns.union(&pred.used_columns()).cloned().collect();
             }
+
+            println!("new predicates {:?}", filter.predicates);
         }
 
         // Check if `Filter` can be satisfied by children of `EvalScalar`
