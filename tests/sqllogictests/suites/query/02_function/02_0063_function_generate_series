@@ -12,50 +12,18 @@ select * from generate_series(1,10,1);
 9
 10
 
-query I
-select * from generate_series(10,1,-1);
+query T
+select * from generate_series('2021-03-26 00:00'::timestamp,'2021-03-27 12:00'::timestamp,86400000000);
 ----
-10
-9
-8
-7
-6
-5
-4
-3
-2
-1
+2021-03-26T00:00:00Z
+2021-03-27T00:00:00Z
+
+query T
+select * from generate_series('2021-03-26'::date,'2021-03-27'::date,1);
+----
+2021-03-26T00:00:00Z
+2021-03-27T00:00:00Z
 
 query F
-select * from generate_series(1.0,5.0,0.5);
-----
-1.0
-1.5
-2.0
-2.5
-3.0
-3.5
-4.0
-4.5
-5.0
-
-query F
-select * from generate_series(-1.0,-5.0,-0.5);
-----
--1.0
--1.5
--2.0
--2.5
--3.0
--3.5
--4.0
--4.5
--5.0
-
-query F
-select * from generate_series(1.0,5.0,0);
-----
-
-query F
-select * from generate_series(1.0,5.0,-1.0);
+select * from generate_series(1,5,0);
 ----

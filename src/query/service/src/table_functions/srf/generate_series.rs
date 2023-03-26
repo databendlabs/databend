@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::any::Any;
+use std::mem::discriminant;
 use std::sync::Arc;
 
 use chrono::NaiveDateTime;
@@ -26,19 +27,19 @@ use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::infer_schema_type;
 use common_expression::type_check::check_number;
 use common_expression::types::DataType;
-use common_expression::types::Float64Type;
+use common_expression::types::DateType;
 use common_expression::types::Int64Type;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
-use common_expression::types::F64;
+use common_expression::types::TimestampType;
 use common_expression::DataBlock;
 use common_expression::Expr;
 use common_expression::FromData;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
-use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_functions::BUILTIN_FUNCTIONS;
@@ -68,16 +69,21 @@ impl GenerateSeriesTable {
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        validate_args(table_args.positioned, table_func_name)?;
+        println!("args:{:?}", table_args.positioned);
+        validate_args(&table_args.positioned, table_func_name)?;
 
+        // The data types of start and end have been checked for consistency, and the input types are returned
         let schema = TableSchema::new(vec![TableField::new(
             "generate_series",
-            if number_scalars_have_float(vec![start.clone(), end.clone(), step.clone()]) {
-                TableDataType::Number(NumberDataType::Float64)
-            } else {
-                TableDataType::Number(NumberDataType::Int64)
-            },
+            infer_schema_type(&table_args.positioned[0].as_ref().infer_data_type())?,
         )]);
+
+        let start = table_args.positioned[0].clone();
+        let end = table_args.positioned[1].clone();
+        let mut step = Scalar::Number(NumberScalar::Int64(1));
+        if table_args.positioned.len() == 3 {
+            step = table_args.positioned[2].clone();
+        }
 
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
@@ -225,159 +231,93 @@ impl AsyncSource for GenerateSeriesSource {
         if self.finished {
             return Ok(None);
         }
-        let have_float = number_scalars_have_float(vec![
-            self.start.clone(),
-            self.end.clone(),
-            self.step.clone(),
-        ]);
-        if have_float {
-            let dest_type = DataType::Number(NumberDataType::Float64);
-            let start: F64 = check_number(
-                None,
-                FunctionContext::default(),
-                &Expr::<usize>::Cast {
+        let dest_type = DataType::Number(NumberDataType::Int64);
+        let start: i64 = check_number(
+            None,
+            FunctionContext::default(),
+            &Expr::<usize>::Cast {
+                span: None,
+                is_try: false,
+                expr: Box::new(Expr::Constant {
                     span: None,
-                    is_try: false,
-                    expr: Box::new(Expr::Constant {
-                        span: None,
-                        scalar: self.start.clone(),
-                        data_type: self.start.clone().as_ref().infer_data_type(),
-                    }),
-                    dest_type: dest_type.clone(),
-                },
-                &BUILTIN_FUNCTIONS,
-            )?;
-            let end: F64 = check_number(
-                None,
-                FunctionContext::default(),
-                &Expr::<usize>::Cast {
-                    span: None,
-                    is_try: false,
-                    expr: Box::new(Expr::Constant {
-                        span: None,
-                        scalar: self.end.clone(),
-                        data_type: self.end.clone().as_ref().infer_data_type(),
-                    }),
-                    dest_type: dest_type.clone(),
-                },
-                &BUILTIN_FUNCTIONS,
-            )?;
-            let step: F64 = check_number(
-                None,
-                FunctionContext::default(),
-                &Expr::<usize>::Cast {
-                    span: None,
-                    is_try: false,
-                    expr: Box::new(Expr::Constant {
-                        span: None,
-                        scalar: self.step.clone(),
-                        data_type: self.step.clone().as_ref().infer_data_type(),
-                    }),
-                    dest_type,
-                },
-                &BUILTIN_FUNCTIONS,
-            )?;
-
-            self.finished = true;
-            Ok(Some(DataBlock::new_from_columns(vec![
-                Float64Type::from_data(range(start, end, step).into_iter()),
-            ])))
-        } else {
-            let dest_type = DataType::Number(NumberDataType::Int64);
-            let start: i64 = check_number(
-                None,
-                FunctionContext::default(),
-                &Expr::<usize>::Cast {
-                    span: None,
-                    is_try: false,
-                    expr: Box::new(Expr::Constant {
-                        span: None,
-                        scalar: self.start.clone(),
-                        data_type: self.start.clone().as_ref().infer_data_type(),
-                    }),
-                    dest_type: dest_type.clone(),
-                },
-                &BUILTIN_FUNCTIONS,
-            )?;
-            let end: i64 = check_number(
-                None,
-                FunctionContext::default(),
-                &Expr::<usize>::Cast {
-                    span: None,
-                    is_try: false,
-                    expr: Box::new(Expr::Constant {
-                        span: None,
-                        scalar: self.end.clone(),
-                        data_type: self.end.clone().as_ref().infer_data_type(),
-                    }),
-                    dest_type: dest_type.clone(),
-                },
-                &BUILTIN_FUNCTIONS,
-            )?;
-            let step: i64 = check_number(
-                None,
-                FunctionContext::default(),
-                &Expr::<usize>::Cast {
-                    span: None,
-                    is_try: false,
-                    expr: Box::new(Expr::Constant {
-                        span: None,
-                        scalar: self.step.clone(),
-                        data_type: self.step.clone().as_ref().infer_data_type(),
-                    }),
-                    dest_type,
-                },
-                &BUILTIN_FUNCTIONS,
-            )?;
-            self.finished = true;
-            Ok(Some(DataBlock::new_from_columns(vec![
-                Int64Type::from_data(range(start, end, step).into_iter()),
-            ])))
-        }
-    }
-}
-
-pub fn number_scalars_have_float(scalars: Vec<Scalar>) -> bool {
-    for scalar in scalars {
-        match scalar {
-            Scalar::Number(n) => match n {
-                NumberScalar::UInt8(_) => (),
-                NumberScalar::UInt16(_) => (),
-                NumberScalar::UInt32(_) => (),
-                NumberScalar::UInt64(_) => (),
-                NumberScalar::Int8(_) => (),
-                NumberScalar::Int16(_) => (),
-                NumberScalar::Int32(_) => (),
-                NumberScalar::Int64(_) => (),
-                NumberScalar::Float32(_) => return true,
-                NumberScalar::Float64(_) => return true,
+                    scalar: self.start.clone(),
+                    data_type: self.start.clone().as_ref().infer_data_type(),
+                }),
+                dest_type: dest_type.clone(),
             },
-            Scalar::Decimal(_) => return true,
-            _ => (),
-        }
+            &BUILTIN_FUNCTIONS,
+        )?;
+        let end: i64 = check_number(
+            None,
+            FunctionContext::default(),
+            &Expr::<usize>::Cast {
+                span: None,
+                is_try: false,
+                expr: Box::new(Expr::Constant {
+                    span: None,
+                    scalar: self.end.clone(),
+                    data_type: self.end.clone().as_ref().infer_data_type(),
+                }),
+                dest_type: dest_type.clone(),
+            },
+            &BUILTIN_FUNCTIONS,
+        )?;
+        let step: i64 = check_number(
+            None,
+            FunctionContext::default(),
+            &Expr::<usize>::Cast {
+                span: None,
+                is_try: false,
+                expr: Box::new(Expr::Constant {
+                    span: None,
+                    scalar: self.step.clone(),
+                    data_type: self.step.clone().as_ref().infer_data_type(),
+                }),
+                dest_type,
+            },
+            &BUILTIN_FUNCTIONS,
+        )?;
+        self.finished = true;
+
+        let columns = match self.start {
+            Scalar::Number(_) => Int64Type::from_data(range(start, end, step).into_iter()),
+            Scalar::Timestamp(_) => TimestampType::from_data(range(start, end, step).into_iter()),
+            Scalar::Date(_) => {
+                DateType::from_data(range(start as i32, end as i32, step as i32).into_iter())
+            }
+            _ => {
+                return Err(ErrorCode::BadDataValueType(format!(
+                    "No support Type, got start is {:?} and end is {:?}",
+                    self.start, self.end
+                )));
+            }
+        };
+        Ok(Some(DataBlock::new_from_columns(vec![columns])))
     }
-    false
 }
 
-pub fn validate_args(args: Vec<Scalar>, table_func_name: &str) -> Result<()> {
+pub fn validate_args(args: &Vec<Scalar>, table_func_name: &str) -> Result<()> {
     // Check args len.
-    validate_function_arg(
-        table_func_name,
-        table_args.positioned.len(),
-        Some((2, 3)),
-        2,
-    )?;
+    validate_function_arg(table_func_name, args.len(), Some((2, 3)), 2)?;
 
-    if args
-        .iter()
-        .all(|arg| matches!(Scalar::Number(_) | Scalar::Decimal(_)))
-        || args.iter().all(|arg| matches!(Scalar::Date(_)))
-        || args.iter().all(|arg| matches!(Scalar::Timestamp(_)))
-    {
+    // Check whether the data types of start and end are consistent.
+    if discriminant(&args[0]) != discriminant(&args[1]) {
+        return Err(ErrorCode::BadDataValueType(format!(
+            "Expected same scalar type, but got start is {:?} and end is {:?}",
+            args[0], args[1]
+        )));
+    }
+
+    if args.iter().all(|arg| {
+        matches!(
+            arg,
+            Scalar::Number(_) | Scalar::Date(_) | Scalar::Timestamp(_)
+        )
+    }) {
         Ok(())
     } else {
         Err(ErrorCode::BadDataValueType(format!(
-            "Expected same scalar type, but got {:?}",
+            "Expected Number, Date or Timestamp type, but got {:?}",
             args
         )))
     }
