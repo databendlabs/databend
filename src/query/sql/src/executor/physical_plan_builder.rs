@@ -871,7 +871,7 @@ impl PhysicalPlanBuilder {
                 let expr = predicates
                     .into_iter()
                     .reduce(|lhs, rhs| {
-                        let (lhs, _) = ConstantFolder::fold(&rhs, func_ctx, &BUILTIN_FUNCTIONS);
+                        let (lhs, _) = ConstantFolder::fold(&lhs, func_ctx, &BUILTIN_FUNCTIONS);
 
                         match lhs.as_constant() {
                             Some((_, Scalar::Boolean(false), _)) => has_false_constant = true,
