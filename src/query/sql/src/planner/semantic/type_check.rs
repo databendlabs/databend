@@ -627,8 +627,7 @@ impl<'a> TypeChecker<'a> {
 
                 // Check assumptions if it is a set returning function
                 if BUILTIN_FUNCTIONS
-                    .properties
-                    .get(&name.name.to_lowercase())
+                    .get_property(&name.name)
                     .map(|property| property.kind == FunctionKind::SRF)
                     .unwrap_or(false)
                 {

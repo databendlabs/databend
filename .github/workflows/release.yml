@@ -495,7 +495,7 @@ jobs:
             cat ${file} >> sha256sums.txt
           done
       - name: Upload checksums
-        shell: bash'
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

@@ -22,7 +22,6 @@ use common_meta_types::MetaId;
 use itertools::Itertools;
 use parking_lot::RwLock;
 
-use super::UnnestTable;
 use crate::catalogs::SYS_TBL_FUC_ID_END;
 use crate::catalogs::SYS_TBL_FUNC_ID_BEGIN;
 use crate::storages::fuse::table_functions::ClusteringInformationTable;
@@ -143,11 +142,6 @@ impl TableFunctionFactory {
         creators.insert(
             "list_stage".to_string(),
             (next_id(), Arc::new(ListStageTable::create)),
-        );
-
-        creators.insert(
-            "unnest".to_string(),
-            (next_id(), Arc::new(UnnestTable::create)),
         );
 
         creators.insert(

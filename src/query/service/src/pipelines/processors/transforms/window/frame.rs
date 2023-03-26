@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,5 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod executor;
-mod processors;
+#[derive(Clone)]
+pub enum WindowFrameBound {
+    /// `CURRENT ROW`
+    CurrentRow,
+    /// `<N> PRECEDING` or `UNBOUNDED PRECEDING`.
+    Preceding(Option<usize>),
+    /// `<N> FOLLOWING` or `UNBOUNDED FOLLOWING`.
+    Following(Option<usize>),
+}
+
+#[derive(Clone)]
+pub struct WindowFrame {
+    // TODO: support RANGE frame, only support Rows frame now.
+    pub start_bound: WindowFrameBound,
+    pub end_bound: WindowFrameBound,
+}
