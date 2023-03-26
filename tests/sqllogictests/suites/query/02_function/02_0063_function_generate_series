@@ -15,8 +15,8 @@ select * from generate_series(1,10,1);
 query T
 select * from generate_series('2021-03-26 00:00'::timestamp,'2021-03-27 12:00'::timestamp,86400000000);
 ----
-2021-03-26T00:00:00Z
-2021-03-27T00:00:00Z
+2021-03-26 00:00:00.000000
+2021-03-27 00:00:00.000000
 
 query T
 select * from generate_series('2021-03-26'::date,'2021-03-27'::date,1);

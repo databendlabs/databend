@@ -13,7 +13,5 @@
 //  limitations under the License.
 
 mod generate_series;
-mod unnest;
 
 pub use generate_series::GenerateSeriesTable;
-pub use unnest::UnnestTable;
