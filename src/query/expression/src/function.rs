@@ -265,8 +265,18 @@ impl FunctionRegistry {
             .any(|(src_ty, dest_ty)| arg_type == src_ty && sig_type == dest_ty)
     }
 
-    pub fn get_property(&self, func_name: &str) -> FunctionProperty {
-        self.properties.get(func_name).cloned().unwrap_or_default()
+    pub fn get_property(&self, func_name: &str) -> Option<FunctionProperty> {
+        let func_name = func_name.to_lowercase();
+        if self.contains(&func_name) {
+            Some(
+                self.properties
+                    .get(&func_name.to_lowercase())
+                    .cloned()
+                    .unwrap_or_default(),
+            )
+        } else {
+            None
+        }
     }
 
     pub fn register_function(&mut self, func: Function) {

@@ -301,6 +301,7 @@ impl<Index: ColumnIndex> Expr<Index> {
             Expr::FunctionCall { function, args, .. } => {
                 !registry
                     .get_property(&function.signature.name)
+                    .unwrap()
                     .non_deterministic
                     && args.iter().all(|arg| arg.is_deterministic(registry))
             }
