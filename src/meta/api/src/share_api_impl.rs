@@ -18,6 +18,7 @@ use std::collections::HashSet;
 use common_meta_app::app_error::AppError;
 use common_meta_app::app_error::ShareAccountsAlreadyExists;
 use common_meta_app::app_error::ShareAlreadyExists;
+use common_meta_app::app_error::ShareEndpointAlreadyExists;
 use common_meta_app::app_error::TxnRetryMaxTimes;
 use common_meta_app::app_error::UnknownShare;
 use common_meta_app::app_error::UnknownShareAccounts;
@@ -64,6 +65,8 @@ use crate::table_has_to_exist;
 use crate::txn_cond_seq;
 use crate::txn_op_del;
 use crate::txn_op_put;
+use crate::util::get_share_endpoint_id_to_name_or_err;
+use crate::util::get_share_endpoint_or_err;
 use crate::util::list_tables_from_unshare_db;
 use crate::ShareApi;
 use crate::TXN_MAX_RETRY_TIMES;
@@ -150,7 +153,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                     name = debug(&name_key),
                     id = debug(&id_key),
                     succ = display(succ),
-                    "create_database"
+                    "create_share"
                 );
 
                 if succ {
@@ -955,6 +958,201 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             }
         }
         Ok(GetObjectGrantPrivilegesReply { privileges })
+    }
+
+    async fn create_share_endpoint(
+        &self,
+        req: CreateShareEndpointReq,
+    ) -> Result<CreateShareEndpointReply, KVAppError> {
+        debug!(req = debug(&req), "ShareApi: {}", func_name!());
+
+        let name_key = &req.endpoint;
+        let mut retry = 0;
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
+
+            // Get share endpoint by name to ensure absence
+            let (share_endpoint_id_seq, share_endpoint_id) = get_u64_value(self, name_key).await?;
+            debug!(
+                share_endpoint_id_seq,
+                share_endpoint_id,
+                ?name_key,
+                "get_share_endpoint"
+            );
+
+            if share_endpoint_id_seq > 0 {
+                return if req.if_not_exists {
+                    Ok(CreateShareEndpointReply { share_endpoint_id })
+                } else {
+                    Err(KVAppError::AppError(AppError::ShareEndpointAlreadyExists(
+                        ShareEndpointAlreadyExists::new(
+                            &name_key.endpoint,
+                            format!("create share endpoint: tenant: {}", name_key.tenant),
+                        ),
+                    )))
+                };
+            }
+
+            // Create share endpoint by inserting these record:
+            // (tenant, endpoint) -> share_endpoint_id
+            // (share_endpoint_id) -> share_endpoint_meta
+            // (share) -> (tenant,share_name)
+
+            let share_endpoint_id = fetch_id(self, IdGenerator::share_endpoint_id()).await?;
+            let id_key = ShareEndpointId { share_endpoint_id };
+            let id_to_name_key = ShareEndpointIdToName { share_endpoint_id };
+
+            debug!(
+                share_endpoint_id,
+                name_key = debug(&name_key),
+                "new share endpoint id"
+            );
+
+            // Create share endpoint by transaction.
+            {
+                let share_endpoint_meta = ShareEndpointMeta::new(&req);
+                let txn_req = TxnRequest {
+                    condition: vec![
+                        txn_cond_seq(name_key, Eq, 0),
+                        txn_cond_seq(&id_to_name_key, Eq, 0),
+                    ],
+                    if_then: vec![
+                        txn_op_put(name_key, serialize_u64(share_endpoint_id)?), /* (tenant, share_endpoint_name) -> share_endpoint_id */
+                        txn_op_put(&id_key, serialize_struct(&share_endpoint_meta)?), /* (share_endpoint_id) -> share_endpoint_meta */
+                        txn_op_put(&id_to_name_key, serialize_struct(name_key)?), /* __fd_share_endpoint_id_to_name/<share_endpoint_id> -> (tenant,share_endpoint_name) */
+                    ],
+                    else_then: vec![],
+                };
+
+                let (succ, _responses) = send_txn(self, txn_req).await?;
+
+                debug!(
+                    name = debug(&name_key),
+                    id = debug(&id_key),
+                    succ = display(succ),
+                    "create_share_endpoint"
+                );
+
+                if succ {
+                    return Ok(CreateShareEndpointReply { share_endpoint_id });
+                }
+            }
+        }
+
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
+            TxnRetryMaxTimes::new("create_share_endpoint", TXN_MAX_RETRY_TIMES),
+        )))
+    }
+
+    async fn get_share_endpoint(
+        &self,
+        req: GetShareEndpointReq,
+    ) -> Result<GetShareEndpointReply, KVAppError> {
+        let mut share_endpoint_meta_vec = vec![];
+
+        let tenant_share_endpoint_name_key = ShareEndpointIdent {
+            tenant: req.tenant.clone(),
+            endpoint: match req.endpoint {
+                Some(ref endpoint) => endpoint.clone(),
+                None => "".to_string(),
+            },
+        };
+        let share_endpoints = list_keys(self, &tenant_share_endpoint_name_key).await?;
+
+        for share_endpoint in share_endpoints {
+            let (_seq, share_endpoint_id) = get_u64_value(self, &share_endpoint).await?;
+            let id_key = ShareEndpointId { share_endpoint_id };
+            let (_seq, share_endpoint_meta): (u64, Option<ShareEndpointMeta>) =
+                get_pb_value(self, &id_key).await?;
+            if let Some(share_endpoint_meta) = share_endpoint_meta {
+                share_endpoint_meta_vec.push((share_endpoint, share_endpoint_meta));
+            }
+        }
+
+        Ok(GetShareEndpointReply {
+            share_endpoint_meta_vec,
+        })
+    }
+
+    async fn drop_share_endpoint(
+        &self,
+        req: DropShareEndpointReq,
+    ) -> Result<DropShareEndpointReply, KVAppError> {
+        debug!(req = debug(&req), "ShareApi: {}", func_name!());
+
+        let name_key = &req.endpoint;
+        let mut retry = 0;
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
+
+            let (
+                share_endpoint_id_seq,
+                share_endpoint_id,
+                share_endpoint_meta_seq,
+                _share_endpoint_meta,
+            ) = get_share_endpoint_or_err(
+                self,
+                name_key,
+                format!("drop_share_endpoint: {}", &name_key),
+            )
+            .await?;
+
+            let (share_endpoint_name_seq, _share_endpoint) = get_share_endpoint_id_to_name_or_err(
+                self,
+                share_endpoint_id,
+                format!("drop_share_endpoint: {}", &name_key),
+            )
+            .await?;
+
+            // Delete share endpoint by these operations:
+            // del (tenant, share_endpoint)
+            // del share_endpoint_id
+            // del (share_endpoint_id) -> (tenant, share_endpoint)
+
+            let mut condition = vec![];
+            let mut if_then = vec![];
+
+            let share_id_key = ShareEndpointId { share_endpoint_id };
+            let id_name_key = ShareEndpointIdToName { share_endpoint_id };
+
+            debug!(
+                share_endpoint_id,
+                name_key = debug(&name_key),
+                "drop_share_endpoint"
+            );
+
+            {
+                condition.push(txn_cond_seq(name_key, Eq, share_endpoint_id_seq));
+                condition.push(txn_cond_seq(&share_id_key, Eq, share_endpoint_meta_seq));
+                condition.push(txn_cond_seq(&id_name_key, Eq, share_endpoint_name_seq));
+                if_then.push(txn_op_del(name_key)); // del (tenant, share_endpoint)
+                if_then.push(txn_op_del(&share_id_key)); // del share_endpoint_id
+                if_then.push(txn_op_del(&id_name_key)); // del (share_endpoint_id) -> (tenant, share_endpoint)
+
+                let txn_req = TxnRequest {
+                    condition,
+                    if_then,
+                    else_then: vec![],
+                };
+
+                let (succ, _responses) = send_txn(self, txn_req).await?;
+
+                debug!(
+                    name = debug(&name_key),
+                    id = debug(&share_id_key),
+                    succ = display(succ),
+                    "drop_share_endpoint"
+                );
+
+                if succ {
+                    return Ok(DropShareEndpointReply {});
+                }
+            }
+        }
+
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
+            TxnRetryMaxTimes::new("drop_share_endpoint", TXN_MAX_RETRY_TIMES),
+        )))
     }
 }
 

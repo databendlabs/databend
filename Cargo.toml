@@ -26,6 +26,7 @@ members = [
     "src/common/tracing",
     "src/common/storage",
     "src/common/profile",
+    "src/common/vector",
     # Query
     "src/query/ast",
     "src/query/codegen",

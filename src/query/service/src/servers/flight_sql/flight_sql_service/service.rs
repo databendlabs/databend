@@ -14,6 +14,7 @@
 
 use std::io::Cursor;
 use std::pin::Pin;
+use std::sync::Arc;
 
 use arrow_flight::flight_descriptor::DescriptorType;
 use arrow_flight::flight_service_server::FlightService;
@@ -35,6 +36,7 @@ use arrow_flight::sql::CommandPreparedStatementQuery;
 use arrow_flight::sql::CommandPreparedStatementUpdate;
 use arrow_flight::sql::CommandStatementQuery;
 use arrow_flight::sql::CommandStatementUpdate;
+use arrow_flight::sql::DoPutUpdateResult;
 use arrow_flight::sql::ProstMessageExt;
 use arrow_flight::sql::SqlInfo;
 use arrow_flight::sql::TicketStatementQuery;
@@ -47,11 +49,13 @@ use arrow_flight::HandshakeRequest;
 use arrow_flight::HandshakeResponse;
 use arrow_flight::IpcMessage;
 use arrow_flight::Location;
+use arrow_flight::PutResult;
 use arrow_flight::SchemaAsIpc;
 use arrow_flight::Ticket;
 use arrow_ipc::writer::IpcWriteOptions;
 use common_base::base::uuid::Uuid;
 use common_exception::Result;
+use common_expression::DataSchema;
 use futures::Stream;
 use prost::bytes::Buf;
 use prost::Message;
@@ -117,7 +121,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
 
         let handle_plan = self.statements.get(&handle).unwrap();
         let stream = self
-            .execute_plan(session, &handle_plan.value().0, &handle_plan.value().1)
+            .execute_query(session, &handle_plan.value().0, &handle_plan.value().1)
             .await
             .map_err(|e| status!("fail to execute", e))?;
         let resp = Response::new(stream);
@@ -369,35 +373,71 @@ impl FlightSqlService for FlightSqlServiceImpl {
         ))
     }
 
-    // do_put
+    // called by rust FlightSqlServiceClient, which is used in unit test.
     async fn do_put_statement_update(
         &self,
-        _ticket: CommandStatementUpdate,
-        _request: Request<Streaming<FlightData>>,
+        ticket: CommandStatementUpdate,
+        request: Request<Streaming<FlightData>>,
     ) -> Result<i64, Status> {
-        Err(Status::unimplemented(
-            "do_put_statement_update not implemented",
-        ))
+        let session = self.get_session(&request)?;
+        let query = ticket.query;
+        tracing::info!("do_put_statement_update with query = {query}");
+
+        let (plan, plan_extras) = self
+            .plan_sql(&session, &query)
+            .await
+            .map_err(|e| status!("Error getting result schema", e))?;
+        let res = self
+            .execute_update(session, &plan, &plan_extras)
+            .await
+            .map_err(|e| status!("fail to execute", e))?;
+        Ok(res)
     }
 
     async fn do_put_prepared_statement_query(
         &self,
-        _query: CommandPreparedStatementQuery,
-        _request: Request<Streaming<FlightData>>,
+        query: CommandPreparedStatementQuery,
+        request: Request<Streaming<FlightData>>,
     ) -> Result<Response<<Self as FlightService>::DoPutStream>, Status> {
-        Err(Status::unimplemented(
-            "do_put_prepared_statement_query not implemented",
-        ))
+        let session = self.get_session(&request)?;
+        let handle = Uuid::from_slice(query.prepared_statement_handle.as_ref())
+            .map_err(|e| Status::internal(format!("Error decoding handle: {e}")))?;
+
+        tracing::info!("do_put_prepared_statement_query with handle={handle}");
+
+        let handle_plan = self.statements.get(&handle).unwrap();
+        let record_count = self
+            .execute_update(session, &handle_plan.value().0, &handle_plan.value().1)
+            .await
+            .map_err(|e| status!("fail to execute", e))?;
+        let result = DoPutUpdateResult { record_count };
+        let result = PutResult {
+            app_metadata: result.as_any().encode_to_vec().into(),
+        };
+        let result = futures::stream::iter(vec![Ok(result)]);
+        return Ok(Response::new(Box::pin(result)));
     }
 
+    // called by JDBC
     async fn do_put_prepared_statement_update(
         &self,
-        _query: CommandPreparedStatementUpdate,
-        _request: Request<Streaming<FlightData>>,
+        query: CommandPreparedStatementUpdate,
+        request: Request<Streaming<FlightData>>,
     ) -> Result<i64, Status> {
-        Err(Status::unimplemented(
-            "do_put_prepared_statement_update not implemented",
-        ))
+        let session = self.get_session(&request)?;
+        let handle = Uuid::from_slice(query.prepared_statement_handle.as_ref())
+            .map_err(|e| Status::internal(format!("Error decoding handle: {e}")))?;
+
+        tracing::info!("do_put_prepared_statement_update with handle={handle}");
+
+        let handle_plan = self.statements.get(&handle).unwrap();
+        let res = self
+            .execute_update(session, &handle_plan.value().0, &handle_plan.value().1)
+            .await
+            .map_err(|e| status!("fail to execute", e))?;
+
+        tracing::info!("do_put_prepared_statement_update with handle={handle} return {res}");
+        Ok(res)
     }
 
     async fn do_action_create_prepared_statement(
@@ -413,10 +453,19 @@ impl FlightSqlService for FlightSqlServiceImpl {
             .await
             .map_err(|e| status!("Error getting result schema", e))?;
         tracing::info!(
-            "do_action_create_prepared_statement with query={:?}",
+            "do_action_create_prepared_statement with handler={handle} query={:?}",
             query.query
         );
-        let data_schema = plan.0.schema();
+        // JDBC client use call put when schema.fields == 0
+        let data_schema = if plan.0.has_result_set() {
+            plan.0.schema()
+        } else {
+            Arc::new(DataSchema::empty())
+        };
+        tracing::info!(
+            "do_action_create_prepared_statement with handler={handle}, query={:?}, return schema={data_schema:?}",
+            query.query
+        );
         let schema = (&*data_schema).into();
         self.statements.insert(handle, plan);
         let message = SchemaAsIpc::new(&schema, &IpcWriteOptions::default())
@@ -436,22 +485,22 @@ impl FlightSqlService for FlightSqlServiceImpl {
         query: ActionClosePreparedStatementRequest,
         request: Request<Action>,
     ) {
-        tracing::info!(
-            "do_action_close_prepared_statement with handle {:?}",
-            query.prepared_statement_handle
-        );
-        if self.get_session(&request).is_ok() {
-            let handle = query.prepared_statement_handle.as_ref();
-            if let Ok(handle) = std::str::from_utf8(handle) {
-                match Uuid::try_parse(handle) {
-                    Ok(handle) => {
+        let handle = query.prepared_statement_handle.as_ref();
+        if let Ok(handle) = std::str::from_utf8(handle) {
+            tracing::info!(
+                "do_action_close_prepared_statement with handle {:?}",
+                handle
+            );
+            match Uuid::try_parse(handle) {
+                Ok(handle) => {
+                    if self.get_session(&request).is_ok() {
                         self.statements.remove(&handle);
                     }
-                    Err(e) => {
-                        Status::internal(format!(
-                            "do_get_fallback Error decoding handle: {e} {handle:?}"
-                        ));
-                    }
+                }
+                Err(e) => {
+                    Status::internal(format!(
+                        "do_action_close_prepared_statement Error decoding handle: {e} {handle:?}"
+                    ));
                 }
             }
         }

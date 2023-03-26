@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use arrow_schema::ArrowError;
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field as ArrowField;
 use arrow_schema::Schema as ArrowSchema;
 use arrow_schema::TimeUnit;
 
+use crate::types::decimal::DecimalSize;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
 use crate::types::NumberDataType;
@@ -125,5 +127,75 @@ impl From<&DataSchema> for ArrowSchema {
             fields: value.fields.iter().map(|f| f.into()).collect::<Vec<_>>(),
             metadata: Default::default(),
         }
+    }
+}
+
+impl TryFrom<&ArrowField> for DataField {
+    type Error = ArrowError;
+
+    fn try_from(f: &ArrowField) -> Result<Self, ArrowError> {
+        let ty = f.data_type().try_into()?;
+        if f.is_nullable() {
+            Ok(DataField::new_nullable(f.name().as_str(), ty))
+        } else {
+            Ok(DataField::new(f.name(), ty))
+        }
+    }
+}
+
+impl TryFrom<&ArrowSchema> for DataSchema {
+    type Error = ArrowError;
+
+    fn try_from(schema: &ArrowSchema) -> Result<Self, ArrowError> {
+        let mut fields = vec![];
+        for field in &schema.fields {
+            fields.push(DataField::try_from(field)?)
+        }
+        Ok(DataSchema {
+            fields,
+            metadata: Default::default(),
+        })
+    }
+}
+
+impl TryFrom<&ArrowDataType> for DataType {
+    type Error = ArrowError;
+
+    fn try_from(ty: &ArrowDataType) -> Result<Self, ArrowError> {
+        let data_type = match ty {
+            ArrowDataType::Null => DataType::Null,
+            ArrowDataType::Boolean => DataType::Boolean,
+            ArrowDataType::Int8 => DataType::Number(NumberDataType::Int8),
+            ArrowDataType::Int16 => DataType::Number(NumberDataType::Int16),
+            ArrowDataType::Int32 => DataType::Number(NumberDataType::Int32),
+            ArrowDataType::Int64 => DataType::Number(NumberDataType::Int64),
+            ArrowDataType::UInt8 => DataType::Number(NumberDataType::UInt8),
+            ArrowDataType::UInt16 => DataType::Number(NumberDataType::UInt16),
+            ArrowDataType::UInt32 => DataType::Number(NumberDataType::UInt32),
+            ArrowDataType::UInt64 => DataType::Number(NumberDataType::UInt64),
+            ArrowDataType::Float32 | ArrowDataType::Float16 => {
+                DataType::Number(NumberDataType::Float32)
+            }
+            ArrowDataType::Float64 => DataType::Number(NumberDataType::Float64),
+            ArrowDataType::Timestamp(_unit, _tz) => DataType::Timestamp,
+            ArrowDataType::Date32 | ArrowDataType::Date64 => DataType::Date,
+            ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 => DataType::String,
+            ArrowDataType::Decimal128(p, s) => {
+                DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
+                    precision: *p,
+                    scale: (*s) as u8,
+                }))
+            }
+            ArrowDataType::Decimal256(p, s) => {
+                DataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
+                    precision: *p,
+                    scale: (*s) as u8,
+                }))
+            }
+            _ => Err(ArrowError::CastError(format!(
+                "cast {ty} to DataType not not implemented yet"
+            )))?,
+        };
+        Ok(data_type)
     }
 }

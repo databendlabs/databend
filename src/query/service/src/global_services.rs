@@ -27,6 +27,7 @@ use common_users::UserApiProvider;
 use storages_common_cache_manager::CacheManager;
 
 use crate::api::DataExchangeManager;
+use crate::auth::AuthMgr;
 use crate::catalogs::CatalogManagerHelper;
 use crate::clusters::ClusterDiscovery;
 use crate::servers::http::v1::HttpQueryManager;
@@ -66,6 +67,7 @@ impl GlobalServices {
         HttpQueryManager::init(&config).await?;
         DataExchangeManager::init()?;
         SessionManager::init(&config)?;
+        AuthMgr::init(&config)?;
         UserApiProvider::init(
             config.meta.to_meta_grpc_client_conf(),
             config.query.idm,

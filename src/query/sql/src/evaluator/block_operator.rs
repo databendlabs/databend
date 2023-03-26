@@ -26,6 +26,7 @@ use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FieldIndex;
 use common_expression::FunctionContext;
+use common_expression::ScalarRef;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::InputPort;
@@ -140,14 +141,28 @@ impl BlockOperator {
                             // TODO(leiysky): this can be optimized by using a `zip` array function
                             if repeat_times < max_num_rows {
                                 for field in fields {
-                                    let nullable_column = field.as_nullable().unwrap();
-                                    let mut column_builder = NullableColumnBuilder::from_column(
-                                        (**nullable_column).clone(),
-                                    );
-                                    (0..(max_num_rows - repeat_times)).for_each(|_| {
-                                        column_builder.push_null();
-                                    });
-                                    *field = Column::Nullable(Box::new(column_builder.build()));
+                                    match field {
+                                        Column::Null { .. } => {
+                                            *field = ColumnBuilder::repeat(
+                                                &ScalarRef::Null,
+                                                max_num_rows,
+                                                &DataType::Null,
+                                            )
+                                            .build();
+                                        }
+                                        Column::Nullable(box nullable_column) => {
+                                            let mut column_builder =
+                                                NullableColumnBuilder::from_column(
+                                                    (*nullable_column).clone(),
+                                                );
+                                            (0..(max_num_rows - repeat_times)).for_each(|_| {
+                                                column_builder.push_null();
+                                            });
+                                            *field =
+                                                Column::Nullable(Box::new(column_builder.build()));
+                                        }
+                                        _ => unreachable!(),
+                                    }
                                 }
                             }
                         }
