@@ -720,6 +720,7 @@ impl PhysicalPlanBuilder {
                     input: Box::new(input),
                     agg_func,
                     partition_by: partition_items,
+                    window_frame: w.frame.clone(),
                 }))
             }
             RelOperator::Sort(sort) => Ok(PhysicalPlan::Sort(Sort {

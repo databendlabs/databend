@@ -33,6 +33,7 @@ use crate::executor::explain::PlanStatsInfo;
 use crate::optimizer::ColumnSet;
 use crate::plans::JoinType;
 use crate::plans::RuntimeFilterId;
+use crate::plans::WindowFuncFrame;
 use crate::ColumnBinding;
 use crate::IndexType;
 
@@ -288,6 +289,7 @@ pub struct Window {
     pub input: Box<PhysicalPlan>,
     pub agg_func: AggregateFunctionDesc,
     pub partition_by: Vec<IndexType>,
+    pub window_frame: WindowFuncFrame,
 }
 
 impl Window {

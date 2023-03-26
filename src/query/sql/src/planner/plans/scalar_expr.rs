@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::hash::Hash;
 use std::hash::Hasher;
 
@@ -435,29 +436,77 @@ impl WindowFunc {
     }
 }
 
-#[derive(Default, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Default, Clone, PartialEq, Eq, Hash, Debug, serde::Serialize, serde::Deserialize)]
 pub struct WindowFuncFrame {
     pub units: WindowFuncFrameUnits,
     pub start: WindowFuncFrameBound,
     pub end: WindowFuncFrameBound,
 }
 
-#[derive(Default, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum WindowFuncFrameUnits {
+    #[default]
+    Rows,
+    Range,
+}
+
+#[derive(Default, Clone, PartialEq, Eq, Hash, Debug, serde::Serialize, serde::Deserialize)]
 pub enum WindowFuncFrameBound {
     /// `CURRENT ROW`
     #[default]
     CurrentRow,
     /// `<N> PRECEDING` or `UNBOUNDED PRECEDING`
-    Preceding(Option<Box<ScalarExpr>>),
+    Preceding(Option<usize>),
     /// `<N> FOLLOWING` or `UNBOUNDED FOLLOWING`.
-    Following(Option<Box<ScalarExpr>>),
+    Following(Option<usize>),
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Hash)]
-pub enum WindowFuncFrameUnits {
-    #[default]
-    Rows,
-    Range,
+impl PartialOrd for WindowFuncFrameBound {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match self {
+            WindowFuncFrameBound::CurrentRow => match other {
+                WindowFuncFrameBound::CurrentRow => Some(Ordering::Equal),
+                WindowFuncFrameBound::Preceding(_) => Some(Ordering::Greater),
+                WindowFuncFrameBound::Following(_) => Some(Ordering::Less),
+            },
+            WindowFuncFrameBound::Preceding(p) => match other {
+                WindowFuncFrameBound::CurrentRow => Some(Ordering::Less),
+                WindowFuncFrameBound::Preceding(p1) => match p {
+                    None => match p1 {
+                        None => Some(Ordering::Equal),
+                        Some(_) => Some(Ordering::Less),
+                    },
+                    Some(n) => match p1 {
+                        None => Some(Ordering::Greater),
+                        Some(n1) => match n.cmp(n1) {
+                            Ordering::Less => Some(Ordering::Greater),
+                            Ordering::Equal => Some(Ordering::Equal),
+                            Ordering::Greater => Some(Ordering::Less),
+                        },
+                    },
+                },
+                WindowFuncFrameBound::Following(_) => Some(Ordering::Less),
+            },
+            WindowFuncFrameBound::Following(f) => match other {
+                WindowFuncFrameBound::CurrentRow => Some(Ordering::Greater),
+                WindowFuncFrameBound::Preceding(_) => Some(Ordering::Greater),
+                WindowFuncFrameBound::Following(f1) => match f {
+                    None => match f1 {
+                        None => Some(Ordering::Equal),
+                        Some(_) => Some(Ordering::Greater),
+                    },
+                    Some(n) => match f1 {
+                        None => Some(Ordering::Less),
+                        Some(n1) => match n.cmp(n1) {
+                            Ordering::Less => Some(Ordering::Greater),
+                            Ordering::Equal => Some(Ordering::Equal),
+                            Ordering::Greater => Some(Ordering::Less),
+                        },
+                    },
+                },
+            },
+        }
+    }
 }
 
 #[derive(Clone, Debug, Educe)]

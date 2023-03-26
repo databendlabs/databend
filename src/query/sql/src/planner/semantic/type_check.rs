@@ -948,7 +948,7 @@ impl<'a> TypeChecker<'a> {
         return_type: DataType,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let (units, start, end) = if let Some(frame) = window_frame {
-            let units = match frame.units.clone() {
+            let units = match frame.units {
                 WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,
                 WindowFrameUnits::Range => WindowFuncFrameUnits::Range,
             };
@@ -956,16 +956,16 @@ impl<'a> TypeChecker<'a> {
                 WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
                 WindowFrameBound::Preceding(f) => {
                     if let Some(box expr) = f {
-                        let box (result_expr, _) = self.resolve(&expr).await?;
-                        WindowFuncFrameBound::Preceding(Some(Box::new(result_expr)))
+                        let result = Self::resolve_window_frame(&expr);
+                        WindowFuncFrameBound::Preceding(result)
                     } else {
                         WindowFuncFrameBound::Preceding(None)
                     }
                 }
                 WindowFrameBound::Following(f) => {
                     if let Some(box expr) = f {
-                        let box (result_expr, _) = self.resolve(&expr).await?;
-                        WindowFuncFrameBound::Following(Some(Box::new(result_expr)))
+                        let result = Self::resolve_window_frame(&expr);
+                        WindowFuncFrameBound::Following(result)
                     } else {
                         WindowFuncFrameBound::Following(None)
                     }
@@ -976,16 +976,16 @@ impl<'a> TypeChecker<'a> {
                 WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
                 WindowFrameBound::Preceding(f) => {
                     if let Some(box expr) = f {
-                        let box (result_expr, _) = self.resolve(&expr).await?;
-                        WindowFuncFrameBound::Preceding(Some(Box::new(result_expr)))
+                        let result = Self::resolve_window_frame(&expr);
+                        WindowFuncFrameBound::Preceding(result)
                     } else {
                         WindowFuncFrameBound::Preceding(None)
                     }
                 }
                 WindowFrameBound::Following(f) => {
                     if let Some(box expr) = f {
-                        let box (result_expr, _) = self.resolve(&expr).await?;
-                        WindowFuncFrameBound::Following(Some(Box::new(result_expr)))
+                        let result = Self::resolve_window_frame(&expr);
+                        WindowFuncFrameBound::Following(result)
                     } else {
                         WindowFuncFrameBound::Following(None)
                     }
@@ -999,6 +999,8 @@ impl<'a> TypeChecker<'a> {
             (units, start, end)
         };
 
+        Self::check_frame_bound(start.clone(), end.clone())?;
+
         let window_func = WindowFunc {
             agg_func,
             partition_by: partitions,
@@ -1006,6 +1008,59 @@ impl<'a> TypeChecker<'a> {
         };
 
         Ok(Box::new((window_func.into(), return_type)))
+    }
+
+    // just support integer
+    pub fn resolve_window_frame(expr: &Expr) -> Option<usize> {
+        match expr {
+            Expr::Literal {
+                lit: Literal::UInt64(value),
+                ..
+            } => Some(*value as usize),
+            _ => None,
+        }
+    }
+
+    fn check_frame_bound(start: WindowFuncFrameBound, end: WindowFuncFrameBound) -> Result<()> {
+        match start {
+            WindowFuncFrameBound::CurrentRow => {
+                if start > end {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "frame semantic error, start:{:?}, end:{:?}",
+                        start, end
+                    )));
+                }
+            }
+            _ => {
+                if start >= end {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "frame semantic error, start:{:?}, end:{:?}",
+                        start, end
+                    )));
+                }
+            }
+        }
+
+        match end {
+            WindowFuncFrameBound::CurrentRow => {
+                if start > end {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "frame semantic error, start:{:?}, end:{:?}",
+                        start, end
+                    )));
+                }
+            }
+            _ => {
+                if start >= end {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "frame semantic error, start:{:?}, end:{:?}",
+                        start, end
+                    )));
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Resolve function call.

@@ -33,9 +33,9 @@ use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::Processor;
+use common_sql::plans::WindowFuncFrame;
+use common_sql::plans::WindowFuncFrameBound;
 
-use super::frame::WindowFrame;
-use super::WindowFrameBound;
 use crate::pipelines::processors::transforms::group_by::Area;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
@@ -88,7 +88,7 @@ pub struct TransformWindow {
     partition_ended: bool,
 
     // Frame: [`frame_start`, `frame_end`). `frame_end` is excluded.
-    frame_kind: WindowFrame,
+    frame_kind: WindowFuncFrame,
     frame_start: RowPtr,
     frame_end: RowPtr,
     frame_started: bool,
@@ -111,7 +111,26 @@ impl TransformWindow {
         function: Arc<dyn AggregateFunction>,
         arguments: Vec<usize>,
         partition_indices: Vec<usize>,
-        frame_kind: WindowFrame,
+        frame_kind: WindowFuncFrame,
+    ) -> Result<Box<dyn Processor>> {
+        let transform = Self::create(
+            input,
+            output,
+            function,
+            arguments,
+            partition_indices,
+            frame_kind,
+        )?;
+        Ok(Box::new(transform))
+    }
+
+    pub fn create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        function: Arc<dyn AggregateFunction>,
+        arguments: Vec<usize>,
+        partition_indices: Vec<usize>,
+        frame_kind: WindowFuncFrame,
     ) -> Result<Self> {
         let mut arena = Area::create();
         let mut state_offset = Vec::with_capacity(1);
@@ -267,12 +286,12 @@ impl TransformWindow {
         if self.frame_started {
             return;
         }
-        match &self.frame_kind.start_bound {
-            WindowFrameBound::CurrentRow => {
+        match &self.frame_kind.start {
+            WindowFuncFrameBound::CurrentRow => {
                 self.frame_started = true;
                 self.frame_start = self.current_row;
             }
-            WindowFrameBound::Preceding(Some(n)) => {
+            WindowFuncFrameBound::Preceding(Some(n)) => {
                 self.frame_started = true;
                 if self.current_row_in_partition - 1 <= *n {
                     self.frame_start = self.partition_start;
@@ -280,10 +299,11 @@ impl TransformWindow {
                     self.frame_start = self.advance_row(self.prev_frame_start);
                 }
             }
-            WindowFrameBound::Preceding(_) => {
+            WindowFuncFrameBound::Preceding(_) => {
                 self.frame_started = true;
                 self.frame_start = self.partition_start;
             }
+<<<<<<< HEAD
             WindowFrameBound::Following(Some(n)) => {
                 self.frame_start = if self.current_row_in_partition == 1 {
                     self.add_rows_within_partition(self.current_row, *n)
@@ -292,20 +312,25 @@ impl TransformWindow {
                         .min(self.partition_end)
                 };
                 self.frame_started = self.partition_ended || self.frame_start < self.partition_end;
+=======
+            WindowFuncFrameBound::Following(Some(n)) => {
+                self.frame_start = self.current_row_add_within_partition(*n);
+                self.frame_started = self.partition_ended || self.frame_start < self.partition_end
+>>>>>>> 826550fb47 (fix)
             }
-            WindowFrameBound::Following(_) => {
+            WindowFuncFrameBound::Following(_) => {
                 unreachable!()
             }
         }
     }
 
     fn advance_frame_end(&mut self) {
-        match &self.frame_kind.end_bound {
-            WindowFrameBound::CurrentRow => {
+        match &self.frame_kind.end {
+            WindowFuncFrameBound::CurrentRow => {
                 self.frame_ended = true;
                 self.frame_end = self.current_row;
             }
-            WindowFrameBound::Preceding(Some(n)) => {
+            WindowFuncFrameBound::Preceding(Some(n)) => {
                 self.frame_ended = true;
                 if self.current_row_in_partition - 1 <= *n {
                     self.frame_end = self.partition_start;
@@ -313,9 +338,10 @@ impl TransformWindow {
                     self.frame_end = self.advance_row(self.prev_frame_end);
                 }
             }
-            WindowFrameBound::Preceding(_) => {
+            WindowFuncFrameBound::Preceding(_) => {
                 unreachable!()
             }
+<<<<<<< HEAD
             WindowFrameBound::Following(Some(n)) => {
                 self.frame_end = if self.current_row_in_partition == 1 {
                     let next_end = self.add_rows_within_partition(self.current_row, *n);
@@ -328,8 +354,15 @@ impl TransformWindow {
                     self.advance_row(self.prev_frame_end)
                 }
                 .min(self.partition_end);
+=======
+            WindowFuncFrameBound::Following(Some(n)) => {
+                self.frame_end = self.current_row_add_within_partition(*n);
+                self.frame_ended = self.partition_ended || self.frame_end < self.partition_end;
+                // Frame end is excluded.
+                self.frame_end = self.advance_row(self.frame_end).min(self.partition_end);
+>>>>>>> 826550fb47 (fix)
             }
-            WindowFrameBound::Following(_) => {
+            WindowFuncFrameBound::Following(_) => {
                 self.frame_ended = self.partition_ended;
                 self.frame_end = self.partition_end;
             }
@@ -621,21 +654,25 @@ mod tests {
     use common_pipeline_core::processors::connect;
     use common_pipeline_core::processors::port::InputPort;
     use common_pipeline_core::processors::port::OutputPort;
+<<<<<<< HEAD
     use common_pipeline_core::processors::processor::Event;
     use common_pipeline_core::processors::Processor;
+=======
+    use common_sql::plans::WindowFuncFrame;
+    use common_sql::plans::WindowFuncFrameBound;
+    use common_sql::plans::WindowFuncFrameUnits;
+>>>>>>> 826550fb47 (fix)
 
     use super::TransformWindow;
     use super::WindowBlock;
     use crate::pipelines::processors::transforms::window::transform_window::RowPtr;
-    use crate::pipelines::processors::transforms::WindowFrame;
-    use crate::pipelines::processors::transforms::WindowFrameBound;
 
     fn get_transform_window(
-        window_frame: WindowFrame,
+        window_frame: WindowFuncFrame,
         arg_type: DataType,
     ) -> Result<TransformWindow> {
         let function = AggregateFunctionFactory::instance().get("sum", vec![], vec![arg_type])?;
-        TransformWindow::try_create(
+        TransformWindow::create(
             InputPort::create(),
             OutputPort::create(),
             function,
@@ -646,7 +683,7 @@ mod tests {
     }
 
     fn get_transform_window_with_data(
-        window_frame: WindowFrame,
+        window_frame: WindowFuncFrame,
         column: Column,
     ) -> Result<TransformWindow> {
         let data_type = column.data_type();
@@ -663,9 +700,10 @@ mod tests {
     fn test_partition_advance() -> Result<()> {
         {
             let mut transform = get_transform_window_with_data(
-                WindowFrame {
-                    start_bound: WindowFrameBound::CurrentRow,
-                    end_bound: WindowFrameBound::CurrentRow,
+                WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start: WindowFuncFrameBound::CurrentRow,
+                    end: WindowFuncFrameBound::CurrentRow,
                 },
                 Int32Type::from_data(vec![1, 1, 1]),
             )?;
@@ -678,9 +716,10 @@ mod tests {
 
         {
             let mut transform = get_transform_window_with_data(
-                WindowFrame {
-                    start_bound: WindowFrameBound::CurrentRow,
-                    end_bound: WindowFrameBound::CurrentRow,
+                WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start: WindowFuncFrameBound::CurrentRow,
+                    end: WindowFuncFrameBound::CurrentRow,
                 },
                 Int32Type::from_data(vec![1, 1, 2]),
             )?;
@@ -697,9 +736,10 @@ mod tests {
     fn test_frame_advance() -> Result<()> {
         {
             let mut transform = get_transform_window_with_data(
-                WindowFrame {
-                    start_bound: WindowFrameBound::Following(Some(4)),
-                    end_bound: WindowFrameBound::Following(Some(5)),
+                WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start: WindowFuncFrameBound::Following(Some(4)),
+                    end: WindowFuncFrameBound::Following(Some(5)),
                 },
                 Int32Type::from_data(vec![1, 1, 1]),
             )?;
@@ -715,9 +755,10 @@ mod tests {
 
         {
             let mut transform = get_transform_window_with_data(
-                WindowFrame {
-                    start_bound: WindowFrameBound::Preceding(Some(2)),
-                    end_bound: WindowFrameBound::Following(Some(5)),
+                WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start: WindowFuncFrameBound::Preceding(Some(2)),
+                    end: WindowFuncFrameBound::Following(Some(5)),
                 },
                 Int32Type::from_data(vec![1, 1, 1]),
             )?;
@@ -738,9 +779,10 @@ mod tests {
 
         {
             let mut transform = get_transform_window_with_data(
-                WindowFrame {
-                    start_bound: WindowFrameBound::Preceding(Some(2)),
-                    end_bound: WindowFrameBound::Following(Some(1)),
+                WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start: WindowFuncFrameBound::Preceding(Some(2)),
+                    end: WindowFuncFrameBound::Following(Some(1)),
                 },
                 Int32Type::from_data(vec![1, 1, 1]),
             )?;
@@ -764,9 +806,10 @@ mod tests {
 
         {
             let mut transform = get_transform_window_with_data(
-                WindowFrame {
-                    start_bound: WindowFrameBound::Preceding(None),
-                    end_bound: WindowFrameBound::Following(None),
+                WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start: WindowFuncFrameBound::Preceding(None),
+                    end: WindowFuncFrameBound::Following(None),
                 },
                 Int32Type::from_data(vec![1, 1, 1, 2]),
             )?;
@@ -795,9 +838,10 @@ mod tests {
     fn test_add_block() -> Result<()> {
         {
             let mut transform = get_transform_window(
-                WindowFrame {
-                    start_bound: WindowFrameBound::Preceding(None),
-                    end_bound: WindowFrameBound::Following(None),
+                WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start: WindowFuncFrameBound::Preceding(None),
+                    end: WindowFuncFrameBound::Following(None),
                 },
                 DataType::Number(NumberDataType::Int32),
             )?;
@@ -830,9 +874,10 @@ mod tests {
 
         {
             let mut transform = get_transform_window(
-                WindowFrame {
-                    start_bound: WindowFrameBound::Preceding(None),
-                    end_bound: WindowFrameBound::Following(None),
+                WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start: WindowFuncFrameBound::Preceding(None),
+                    end: WindowFuncFrameBound::Following(None),
                 },
                 DataType::Number(NumberDataType::Int32),
             )?;
@@ -891,9 +936,10 @@ mod tests {
 
         {
             let mut transform = get_transform_window(
-                WindowFrame {
-                    start_bound: WindowFrameBound::Preceding(None),
-                    end_bound: WindowFrameBound::Following(None),
+                WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start: WindowFuncFrameBound::Preceding(None),
+                    end: WindowFuncFrameBound::Following(None),
                 },
                 DataType::Number(NumberDataType::Int32),
             )?;
@@ -952,6 +998,7 @@ mod tests {
 
         {
             let mut transform = get_transform_window(
+<<<<<<< HEAD
                 WindowFrame {
                     start_bound: WindowFrameBound::Preceding(None),
                     end_bound: WindowFrameBound::Following(None),
@@ -1077,6 +1124,12 @@ mod tests {
                 WindowFrame {
                     start_bound: WindowFrameBound::Preceding(Some(1)),
                     end_bound: WindowFrameBound::Following(Some(1)),
+=======
+                WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start: WindowFuncFrameBound::Preceding(Some(1)),
+                    end: WindowFuncFrameBound::Following(Some(1)),
+>>>>>>> 826550fb47 (fix)
                 },
                 DataType::Number(NumberDataType::Int32),
             )?;

@@ -715,10 +715,24 @@ impl PipelineBuilder {
         self.build_pipeline(&window.input)?;
 
         // let input_schema = window.input.output_schema()?;
+        let agg_func = AggregateFunctionFactory::instance().get(
+            window.agg_func.sig.name.as_str(),
+            window.agg_func.sig.params.clone(),
+            window.agg_func.sig.args.clone(),
+        )?;
+
+        let arguments = window.agg_func.args.clone();
 
         // Window
         self.main_pipeline.add_transform(|input, output| {
-            let transform = TransformWindow::create();
+            let transform = TransformWindow::try_create(
+                input,
+                output,
+                agg_func.clone(),
+                arguments.clone(),
+                window.partition_by.clone(),
+                window.window_frame.clone(),
+            )?;
             Ok(ProcessorPtr::create(transform))
         })
     }
