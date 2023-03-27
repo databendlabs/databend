@@ -65,35 +65,34 @@ runs:
       working-directory: benchmark/clickbench
       shell: bash
       run: |
-        jq ".date = \"$(date -u +%Y-%m-%d)\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+        yq -i ".date = \"$(date -u +%Y-%m-%d)\"" result.json
         case ${{ inputs.source }} in
           pr)
-            BENCHMARK_SYSTEM="Databend(PR#${{ inputs.source_id }})"
+            yq -i '.system = "Databend(PR#${{ inputs.source_id }})"' result.json
             ;;
           release)
-            BENCHMARK_SYSTEM="Databend(Release@${{ inputs.source_id }})"
+            yq -i '.system = "Databend(Release@${{ inputs.source_id }})"' result.json
             ;;
           *)
             echo "Unspported benchmark source: ${{ inputs.source }}"
             exit 1
         esac
-        jq ".system = \"${BENCHMARK_SYSTEM}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
 
         case ${{ inputs.size }} in
           Medium)
-            BENCHMARK_CLUSTER_SIZE=16
+            yq -i '.cluster_size = "16"' result.json
+            yq -i '.machine = "16×Medium"' result.json
             ;;
           Large)
-            BENCHMARK_CLUSTER_SIZE=64
+            yq -i '.cluster_size = "64"' result.json
+            yq -i '.machine = "64×Large"' result.json
             ;;
           *)
             echo "Unspported benchmark size: ${{ inputs.size }}"
             exit 1
         esac
-        jq ".cluster_size = \"${BENCHMARK_CLUSTER_SIZE}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
-        jq ".machine = \"${BENCHMARK_CLUSTER_SIZE}×${{ inputs.size }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
-        jq ".tags = [\"s3\"]" <result.json >result.json.tmp && mv result.json.tmp result.json
-        jq ".comment = \"commit:${{ inputs.sha }}\"" <result.json >result.json.tmp && mv result.json.tmp result.json
+        yq -i '.tags = ["s3"]' result.json
+        yq -i '.comment = "commit:${{ inputs.sha }}"' result.json
         mv result.json result-${{ inputs.dataset }}-cloud-${{ inputs.size }}.json
 
     - name: Upload artifact
