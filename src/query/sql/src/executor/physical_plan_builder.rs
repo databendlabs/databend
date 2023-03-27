@@ -32,7 +32,6 @@ use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::Expr;
 use common_expression::RemoteExpr;
-use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_functions::BUILTIN_FUNCTIONS;
 
@@ -864,41 +863,16 @@ impl PhysicalPlanBuilder {
                     .map(|p| p.as_expr_with_col_name())
                     .collect();
 
-                let mut has_false_constant = false;
-                let func_ctx = self.ctx.get_function_context()?;
-
                 let predicates = predicates?;
                 let expr = predicates
                     .into_iter()
                     .reduce(|lhs, rhs| {
-                        let (lhs, _) = ConstantFolder::fold(&lhs, func_ctx, &BUILTIN_FUNCTIONS);
-
-                        match lhs.as_constant() {
-                            Some((_, Scalar::Boolean(false), _)) => has_false_constant = true,
-                            _ => (),
-                        }
-
-                        let (rhs, _) = ConstantFolder::fold(&rhs, func_ctx, &BUILTIN_FUNCTIONS);
-
-                        match rhs.as_constant() {
-                            Some((_, Scalar::Boolean(false), _)) => has_false_constant = true,
-                            _ => (),
-                        }
-
                         check_function(None, "and", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS).unwrap()
                     })
                     .unwrap();
 
-                if has_false_constant {
-                    return Ok(Expr::Constant {
-                        span: None,
-                        scalar: Scalar::Boolean(false),
-                        data_type: DataType::Boolean,
-                    }
-                    .as_remote_expr());
-                }
-
                 let expr = cast_expr_to_non_null_boolean(expr)?;
+
                 let (expr, _) = ConstantFolder::fold(
                     &expr,
                     self.ctx.get_function_context()?,

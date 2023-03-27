@@ -1009,7 +1009,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 };
 
                 let func_domain = args_domain.and_then(|domains| match (calc_domain)(&domains) {
-                    FunctionDomain::MayThrow => Some(Domain::full(return_type)),
+                    FunctionDomain::MayThrow => None,
                     FunctionDomain::Full => Some(Domain::full(return_type)),
                     FunctionDomain::Domain(domain) => Some(domain),
                 });
