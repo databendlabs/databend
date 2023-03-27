@@ -824,7 +824,7 @@ impl<'a> Evaluator<'a> {
         }
 
         for arg in args {
-            let cond = self.partial_run(&arg, validity.clone())?;
+            let cond = self.partial_run(arg, validity.clone())?;
             match cond.try_downcast::<NullableType<BooleanType>>().unwrap() {
                 Value::Scalar(None | Some(false)) => {
                     return Ok(Value::Scalar(Scalar::Boolean(false)));
