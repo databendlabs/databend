@@ -305,15 +305,6 @@ jobs:
       - name: Get the version
         id: get_version
         run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
-      - uses: ./.github/actions/setup_docker
-        id: login
-        with:
-          repo: databend
-          ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
-          dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
-          dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Download binaries for usage
         id: download_binaries
         run: |
@@ -328,6 +319,15 @@ jobs:
               mkdir -p ./distro/linux/${platform}
               cp ./target/${target}/release/databend-* ./distro/linux/${platform}
           done
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+      - uses: ./.github/actions/setup_docker
+        id: login
+        with:
+          repo: databend
+          ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
+          dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Build and push
         id: docker_build
         uses: docker/build-push-action@v3
@@ -369,15 +369,6 @@ jobs:
       - name: Get the version
         id: get_version
         run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
-      - uses: ./.github/actions/setup_docker
-        id: login
-        with:
-          repo: databend-${{ matrix.service }}
-          ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
-          dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
-          dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Download binaries for usage
         id: download_binaries
         run: |
@@ -392,6 +383,15 @@ jobs:
               mkdir -p ./distro/linux/${platform}
               cp ./target/${target}/release/databend-* ./distro/linux/${platform}
           done
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+      - uses: ./.github/actions/setup_docker
+        id: login
+        with:
+          repo: databend-${{ matrix.service }}
+          ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
+          dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: get image tags
         id: get_image_tags
         shell: bash
