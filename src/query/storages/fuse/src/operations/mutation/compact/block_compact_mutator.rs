@@ -258,11 +258,7 @@ impl BlockCompactMutator {
                     .map_or((0, vec![]), |(k, v)| (k, vec![v]))
             };
             blocks.extend(builder.take_blocks());
-            if blocks.len() > 1 || !builder.check_column_ids(&blocks[0]) {
-                tasks.push_back((index, blocks));
-            } else {
-                unreachable!("expect more than one block");
-            }
+            tasks.push_back((index, blocks));
         }
 
         let mut partitions = tasks
