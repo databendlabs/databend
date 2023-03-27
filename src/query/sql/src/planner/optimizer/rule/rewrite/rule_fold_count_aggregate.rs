@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_expression::types::DataType;
 use common_expression::types::NumberScalar;
 use common_expression::Scalar;
 
@@ -80,10 +79,9 @@ impl Rule for RuleFoldCountAggregate {
                 ScalarExpr::AggregateFunction(agg_func) => {
                     agg_func.func_name == "count"
                         && (agg_func.args.is_empty()
-                            || !matches!(
-                                agg_func.args[0].data_type(),
-                                Ok(DataType::Nullable(_)) | Ok(DataType::Null)
-                            ))
+                            || agg_func.args[0]
+                                .data_type()
+                                .map_or(false, |t| t.is_nullable_or_null()))
                         && !agg_func.distinct
                 }
                 _ => false,
@@ -94,7 +92,9 @@ impl Rule for RuleFoldCountAggregate {
                 ScalarExpr::AggregateFunction(agg_func) => {
                     agg_func.func_name == "count"
                         && (agg_func.args.is_empty()
-                            || matches!(agg_func.args[0].data_type(), Ok(DataType::Nullable(_))))
+                            || agg_func.args[0]
+                                .data_type()
+                                .map_or(false, |t| t.is_nullable()))
                         && !agg_func.distinct
                 }
                 _ => false,

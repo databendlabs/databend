@@ -18,9 +18,7 @@ use std::collections::HashSet;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
-use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
-use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
@@ -166,21 +164,8 @@ impl SubqueryRewriter {
                 }
 
                 JoinPredicate::Both { left, right } => {
-                    if left.data_type()?.eq(&right.data_type()?) {
-                        left_conditions.push(left.clone());
-                        right_conditions.push(right.clone());
-                        continue;
-                    }
-                    let join_type = common_super_type(
-                        left.data_type()?,
-                        right.data_type()?,
-                        &BUILTIN_FUNCTIONS.default_cast_rules,
-                    )
-                    .ok_or_else(|| ErrorCode::Internal("Cannot find common type"))?;
-                    let left = wrap_cast(left, &join_type);
-                    let right = wrap_cast(right, &join_type);
-                    left_conditions.push(left);
-                    right_conditions.push(right);
+                    left_conditions.push(left.clone());
+                    right_conditions.push(right.clone());
                 }
             }
         }

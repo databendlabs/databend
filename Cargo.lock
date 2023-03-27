@@ -2029,7 +2029,6 @@ dependencies = [
 name = "common-openai"
 version = "0.1.0"
 dependencies = [
- "common-base",
  "common-exception",
  "openai_api_rust",
 ]

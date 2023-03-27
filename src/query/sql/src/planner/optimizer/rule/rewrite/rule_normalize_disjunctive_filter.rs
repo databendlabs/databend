@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_expression::types::DataType;
 use common_expression::Scalar;
 
 use crate::binder::split_conjunctions;
@@ -58,15 +57,12 @@ fn predicate_scalar(scalar: &ScalarExpr) -> PredicateScalar {
     }
 }
 
-fn normalize_predicate_scalar(
-    predicate_scalar: PredicateScalar,
-    return_type: DataType,
-) -> ScalarExpr {
+fn normalize_predicate_scalar(predicate_scalar: PredicateScalar) -> ScalarExpr {
     match predicate_scalar {
         PredicateScalar::And { args } => {
             assert!(args.len() >= 2);
             args.into_iter()
-                .map(|arg| normalize_predicate_scalar(arg, return_type.clone()))
+                .map(normalize_predicate_scalar)
                 .reduce(|lhs, rhs| {
                     ScalarExpr::AndExpr(AndExpr {
                         left: Box::from(lhs),
@@ -78,7 +74,7 @@ fn normalize_predicate_scalar(
         PredicateScalar::Or { args } => {
             assert!(args.len() >= 2);
             args.into_iter()
-                .map(|arg| normalize_predicate_scalar(arg, return_type.clone()))
+                .map(normalize_predicate_scalar)
                 .reduce(|lhs, rhs| {
                     ScalarExpr::OrExpr(OrExpr {
                         left: Box::from(lhs),
@@ -139,10 +135,7 @@ impl Rule for RuleNormalizeDisjunctiveFilter {
             if has_rewritten {
                 rewritten = true;
             }
-            rewritten_predicates.push(normalize_predicate_scalar(
-                rewritten_predicate_scalar,
-                predicate.data_type()?,
-            ));
+            rewritten_predicates.push(normalize_predicate_scalar(rewritten_predicate_scalar));
         }
         let mut split_predicates: Vec<ScalarExpr> = Vec::with_capacity(rewritten_predicates.len());
         for predicate in rewritten_predicates.iter() {
