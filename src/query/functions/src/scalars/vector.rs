@@ -55,7 +55,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             |data, api_key, output, ctx| {
                 let data = std::str::from_utf8(data).unwrap();
                 let api_key = std::str::from_utf8(api_key).unwrap();
-                let openai = OpenAI::create(api_key.to_string(), AIModel::TextDavinci003);
+                let openai = OpenAI::create(api_key.to_string(), AIModel::TextEmbeddingAda003);
                 let result = openai.embedding_request(&[data.to_string()]);
                 match result {
                     Ok((embeddings, _)) => {
