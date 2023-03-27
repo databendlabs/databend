@@ -12,5 +12,5 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.W
 
+mod ai_to_sql;
 mod numbers_table;
-mod openai;

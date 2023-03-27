@@ -12,6 +12,31 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod ai_to_sql;
+pub enum AIModel {
+    TextDavinci003,
+}
 
-pub use ai_to_sql::GPT2SQLTable;
+// https://platform.openai.com/examples
+impl ToString for AIModel {
+    fn to_string(&self) -> String {
+        match self {
+            AIModel::TextDavinci003 => "text-davinci-003".to_string(),
+        }
+    }
+}
+
+pub struct OpenAI {
+    pub(crate) api_key: String,
+    pub(crate) api_base: String,
+    pub(crate) model: AIModel,
+}
+
+impl OpenAI {
+    pub fn create(api_key: String, model: AIModel) -> Self {
+        OpenAI {
+            api_key,
+            api_base: "https://api.openai.com/v1/".to_string(),
+            model,
+        }
+    }
+}

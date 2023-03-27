@@ -37,24 +37,21 @@ use common_expression::TableSchema;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_openai::AIModel;
+use common_openai::OpenAI;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
-use common_sql::validate_function_arg;
 use common_storages_factory::Table;
 use common_storages_fuse::table_functions::string_literal;
 use common_storages_fuse::TableContext;
 use common_storages_view::view_table::VIEW_ENGINE;
 use tracing::info;
 
-use crate::table_functions::openai::AIModel;
-use crate::table_functions::openai::OpenAI;
-
 pub struct GPT2SQLTable {
     prompt: String,
-    api_key: String,
     table_info: TableInfo,
 }
 
@@ -66,45 +63,13 @@ impl GPT2SQLTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         // Check args.
-        validate_function_arg(
-            table_func_name,
-            table_args.positioned.len(),
-            Some((1, 2)),
-            2,
+        let args = table_args.expect_all_positioned(table_func_name, Some(1))?;
+        let prompt = String::from_utf8(
+            args[0]
+                .clone()
+                .into_string()
+                .map_err(|_| ErrorCode::BadArguments("Expected string argument."))?,
         )?;
-
-        let (prompt, api_key) = match table_args.positioned.len() {
-            1 => {
-                let prompt = String::from_utf8(
-                    table_args.positioned[0]
-                        .clone()
-                        .into_string()
-                        .map_err(|_| ErrorCode::BadArguments("Expected string argument."))?,
-                )?;
-
-                (prompt, "".to_string())
-            }
-
-            2 => {
-                let prompt = String::from_utf8(
-                    table_args.positioned[0]
-                        .clone()
-                        .into_string()
-                        .map_err(|_| ErrorCode::BadArguments("Expected string argument."))?,
-                )?;
-                let api_key = String::from_utf8(
-                    table_args.positioned[1]
-                        .clone()
-                        .into_string()
-                        .map_err(|_| ErrorCode::BadArguments("Expected string argument."))?,
-                )?;
-
-                (prompt, api_key)
-            }
-
-            // This case never happened, because the check above.
-            _ => ("".to_string(), "".to_string()),
-        };
 
         let schema = TableSchema::new(vec![
             TableField::new("database", TableDataType::String),
@@ -128,11 +93,7 @@ impl GPT2SQLTable {
             ..Default::default()
         };
 
-        Ok(Arc::new(GPT2SQLTable {
-            prompt,
-            api_key,
-            table_info,
-        }))
+        Ok(Arc::new(GPT2SQLTable { prompt, table_info }))
     }
 }
 
@@ -167,10 +128,9 @@ impl Table for GPT2SQLTable {
     }
 
     fn table_args(&self) -> Option<TableArgs> {
-        Some(TableArgs::new_positioned(vec![
-            string_literal(self.prompt.as_str()),
-            string_literal(self.api_key.as_str()),
-        ]))
+        Some(TableArgs::new_positioned(vec![string_literal(
+            self.prompt.as_str(),
+        )]))
     }
 
     fn read_data(
@@ -180,14 +140,7 @@ impl Table for GPT2SQLTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_source(
-            |output| {
-                GPT2SQLSource::create(
-                    ctx.clone(),
-                    output,
-                    self.prompt.clone(),
-                    self.api_key.clone(),
-                )
-            },
+            |output| GPT2SQLSource::create(ctx.clone(), output, self.prompt.clone()),
             1,
         )?;
         Ok(())
@@ -197,7 +150,6 @@ impl Table for GPT2SQLTable {
 struct GPT2SQLSource {
     ctx: Arc<dyn TableContext>,
     prompt: String,
-    api_key: String,
     finished: bool,
 }
 
@@ -206,11 +158,9 @@ impl GPT2SQLSource {
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         prompt: String,
-        api_key: String,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx.clone(), output, GPT2SQLSource {
             prompt,
-            api_key,
             ctx,
             finished: false,
         })
@@ -265,24 +215,13 @@ impl AsyncSource for GPT2SQLSource {
         info!("openai request prompt: {}", prompt);
 
         // Response.
-        let api_key = if self.api_key.is_empty() {
-            GlobalConfig::instance().query.openai_api_key.clone()
-        } else {
-            self.api_key.clone()
-        };
-        let openai = OpenAI::create(api_key, AIModel::CodeDavinci002);
-        let request = openai.completion_request(prompt)?;
+        let api_key = GlobalConfig::instance().query.openai_api_key.clone();
+        let openai = OpenAI::create(api_key, AIModel::TextDavinci003);
+        let (sql, _) = openai.completion_request(prompt)?;
 
-        let response = openai
-            .client()?
-            .completions()
-            .create(request)
-            .await
-            .map_err(|e| ErrorCode::Internal(format!("openai response error: {:?}", e)))?;
-
-        let database = self.ctx.get_current_database();
-        let sql = format!("SELECT{}", response.choices.first().unwrap().text.clone());
+        let sql = format!("SELECT{}", sql);
         info!("openai response sql: {}", sql);
+        let database = self.ctx.get_current_database();
         let database: Vec<Vec<u8>> = vec![database.into_bytes()];
         let sql: Vec<Vec<u8>> = vec![sql.into_bytes()];
 
