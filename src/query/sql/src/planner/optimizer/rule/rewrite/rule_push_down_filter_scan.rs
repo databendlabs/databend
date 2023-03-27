@@ -75,25 +75,35 @@ impl RulePushDownFilterScan {
     ) -> Result<ScalarExpr> {
         match predicate {
             ScalarExpr::BoundColumnRef(column) => {
-                for column_entry in column_entries {
-                    if let ColumnEntry::BaseTableColumn(base_column) = column_entry {
-                        if base_column.column_index == column.column.index {
-                            for table_entry in table_entries {
-                                if table_entry.index() == base_column.table_index {
-                                    return Ok(ScalarExpr::BoundColumnRef(BoundColumnRef {
-                                        span: column.span,
-                                        column: ColumnBinding {
-                                            database_name: Some(table_entry.database().to_string()),
-                                            table_name: Some(table_entry.name().to_string()),
-                                            column_name: base_column.column_name.clone(),
-                                            index: base_column.column_index,
-                                            data_type: column.column.data_type.clone(),
-                                            visibility: column.column.visibility.clone(),
-                                        },
-                                    }));
-                                }
+                if let Some(base_column) =
+                    column_entries
+                        .iter()
+                        .find_map(|column_entry| match column_entry {
+                            ColumnEntry::BaseTableColumn(base_column)
+                                if base_column.column_index == column.column.index =>
+                            {
+                                Some(base_column)
                             }
-                        }
+                            _ => None,
+                        })
+                {
+                    if let Some(table_entry) = table_entries
+                        .iter()
+                        .find(|table_entry| table_entry.index() == base_column.table_index)
+                    {
+                        let column_binding = ColumnBinding {
+                            database_name: Some(table_entry.database().to_string()),
+                            table_name: Some(table_entry.name().to_string()),
+                            column_name: base_column.column_name.clone(),
+                            index: base_column.column_index,
+                            data_type: column.column.data_type.clone(),
+                            visibility: column.column.visibility.clone(),
+                        };
+                        let bound_column_ref = BoundColumnRef {
+                            span: column.span,
+                            column: column_binding,
+                        };
+                        return Ok(ScalarExpr::BoundColumnRef(bound_column_ref));
                     }
                 }
                 Ok(predicate.clone())
