@@ -14,7 +14,6 @@ test = false
 
 [dependencies]
 # Workspace dependencies
-common-base = { path = "../base" }
 common-exception = { path = "../exception" }
 
 # Github dependencies
