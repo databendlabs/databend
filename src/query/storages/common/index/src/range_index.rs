@@ -82,15 +82,12 @@ impl RangeIndex {
             })
             .collect::<Result<_>>()?;
 
-        println!("expr {}", self.expr);
-        println!("input_domains {:?}", input_domains);
         let (new_expr, _) = ConstantFolder::fold_with_domain(
             &self.expr,
             input_domains,
             self.func_ctx,
             &BUILTIN_FUNCTIONS,
         );
-        println!("new_expr {}", new_expr);
 
         // Only return false, which means to skip this block, when the expression is folded to a constant false.
         Ok(!matches!(new_expr, Expr::Constant {
