@@ -2,7 +2,12 @@
 title: PIVOT
 ---
 
-The PIVOT operation in Databend allows you to transform a table by rotating it and aggregating results based on specified columns. It is a useful operation for summarizing and analyzing large amounts of data in a more readable format. In this document, we will explain the syntax and provide an example of how to use the PIVOT operation.
+The `PIVOT` operation in Databend allows you to transform a table by rotating it and aggregating results based on specified columns. 
+
+It is a useful operation for summarizing and analyzing large amounts of data in a more readable format. In this document, we will explain the syntax and provide an example of how to use the `PIVOT` operation.
+
+**See also:**
+[UNPIVOT](./05-query-unpivot.md)
 
 
 ## Syntax
@@ -17,15 +22,15 @@ FROM ...
 ```
 
 Where:
-`<aggregate_function>`: The aggregate function for combining the grouped values from `pivot_column`.
-`<pivot_column>`: The column that will be aggregated using the specified `<aggregate_function>`.
-`<value_column>`: The column whose unique values will become new columns in the pivoted result set.
-`<pivot_value_N>`: A unique value from the `<value_column>` that will become a new column in the pivoted result set.
+* `<aggregate_function>`: The aggregate function for combining the grouped values from `pivot_column`.
+* `<pivot_column>`: The column that will be aggregated using the specified `<aggregate_function>`.
+* `<value_column>`: The column whose unique values will become new columns in the pivoted result set.
+* `<pivot_value_N>`: A unique value from the `<value_column>` that will become a new column in the pivoted result set.
 
 
 ## Examples
 
-Let's say we have a table called monthly_sales that contains sales data for different employees across different months. We can use the PIVOT operation to summarize the data and calculate the total sales for each employee in each month.
+Let's say we have a table called monthly_sales that contains sales data for different employees across different months. We can use the `PIVOT` operation to summarize the data and calculate the total sales for each employee in each month.
 
 ### Creating and Inserting Data
 
@@ -71,10 +76,10 @@ ORDER BY EMPID;
 
 Output:
 ```sql
-+-------+---------------------------------+---------------------------------+---------------------------------+---------------------------------+
-| empid | sum_if(amount, (month = 'jan')) | sum_if(amount, (month = 'feb')) | sum_if(amount, (month = 'mar')) | sum_if(amount, (month = 'apr')) |
-+-------+---------------------------------+---------------------------------+---------------------------------+---------------------------------+
-|     1 |                           10400 |                            8000 |                           11000 |                           18000 |
-|     2 |                           39500 |                           90700 |                           12000 |                            5300 |
-+-------+---------------------------------+---------------------------------+---------------------------------+---------------------------------+
++-------+-------+-------+-------+-------+
+| empid | jan   | feb   | mar   | apr   |
++-------+-------+-------+-------+-------+
+|     1 | 10400 |  8000 | 11000 | 18000 |
+|     2 | 39500 | 90700 | 12000 |  5300 |
++-------+-------+-------+-------+-------+
 ```
