@@ -443,6 +443,54 @@ impl TransformWindow {
     }
 
     fn apply_aggregate(&mut self) -> Result<()> {
+        let WindowFrame {
+            start_bound,
+            end_bound,
+        } = &self.frame_kind;
+        match (start_bound, end_bound) {
+            (WindowFrameBound::Preceding(None), WindowFrameBound::Following(None)) => {
+                self.apply_aggregate_for_unbounded_frame()
+            }
+            (WindowFrameBound::Preceding(None), _) => {
+                self.apply_aggregate_for_unbounded_preceding()
+            }
+            (_, _) => self.apply_aggregate_common(),
+        }
+    }
+
+    #[inline]
+    fn merge_result_of_current_row(&mut self) -> Result<()> {
+        let function = self.function.clone();
+        let place = self.place;
+        let builder = self.builder_at(self.current_row);
+        function.merge_result(place, builder)
+    }
+
+    #[inline]
+    fn apply_aggregate_for_unbounded_frame(&mut self) -> Result<()> {
+        if self.current_row_in_partition == 1 {
+            self.apply_aggregate_common()
+        } else {
+            self.merge_result_of_current_row()
+        }
+    }
+
+    #[inline]
+    fn apply_aggregate_for_unbounded_preceding(&mut self) -> Result<()> {
+        if self.current_row_in_partition == 1 {
+            self.apply_aggregate_common()
+        } else if self.frame_end != self.prev_frame_end {
+            let row = self.prev_frame_end.row;
+            let data = self.block_at(self.prev_frame_end);
+            let columns = Self::aggregate_arguments(data, &self.arguments);
+            self.function.accumulate_row(self.place, &columns, row)?;
+            self.merge_result_of_current_row()
+        } else {
+            self.merge_result_of_current_row()
+        }
+    }
+
+    fn apply_aggregate_common(&mut self) -> Result<()> {
         let block_end = self.blocks_end();
         let row_start = self.frame_start;
         let row_end = self.frame_end;
@@ -471,12 +519,7 @@ impl TransformWindow {
             }
         }
 
-        let function = self.function.clone();
-        let place = self.place;
-        let builder = self.builder_at(self.current_row);
-        function.merge_result(place, builder)?;
-
-        Ok(())
+        self.merge_result_of_current_row()
     }
 }
 
@@ -899,6 +942,128 @@ mod tests {
                     "| Column 0 | Column 1 |",
                     "+----------+----------+",
                     "| 5        | 5        |",
+                    "| 4        | 8        |",
+                    "| 4        | 8        |",
+                    "+----------+----------+",
+                ],
+                &[output],
+            );
+        }
+
+        {
+            let mut transform = get_transform_window(
+                WindowFrame {
+                    start_bound: WindowFrameBound::Preceding(None),
+                    end_bound: WindowFrameBound::Following(None),
+                },
+                DataType::Number(NumberDataType::Int32),
+            )?;
+
+            transform.add_block(Some(DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
+            ])))?;
+
+            transform.add_block(Some(DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![3, 4, 4]),
+            ])))?;
+
+            transform.check_outputs();
+
+            let output = transform.outputs.pop_front().unwrap();
+
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 1        | 3        |",
+                    "| 1        | 3        |",
+                    "| 1        | 3        |",
+                    "| 2        | 4        |",
+                    "| 2        | 4        |",
+                    "| 3        | 12       |",
+                    "| 3        | 12       |",
+                    "| 3        | 12       |",
+                    "+----------+----------+",
+                ],
+                &[output],
+            );
+
+            transform.input_is_finished = true;
+
+            transform.add_block(None)?;
+
+            transform.check_outputs();
+
+            let output = transform.outputs.pop_front().unwrap();
+
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 3        | 12       |",
+                    "| 4        | 8        |",
+                    "| 4        | 8        |",
+                    "+----------+----------+",
+                ],
+                &[output],
+            );
+        }
+
+        {
+            let mut transform = get_transform_window(
+                WindowFrame {
+                    start_bound: WindowFrameBound::Preceding(None),
+                    end_bound: WindowFrameBound::Following(Some(1)),
+                },
+                DataType::Number(NumberDataType::Int32),
+            )?;
+
+            transform.add_block(Some(DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
+            ])))?;
+
+            transform.add_block(Some(DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![3, 4, 4]),
+            ])))?;
+
+            transform.check_outputs();
+
+            let output = transform.outputs.pop_front().unwrap();
+
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 1        | 2        |",
+                    "| 1        | 3        |",
+                    "| 1        | 3        |",
+                    "| 2        | 4        |",
+                    "| 2        | 4        |",
+                    "| 3        | 6        |",
+                    "| 3        | 9        |",
+                    "| 3        | 12       |",
+                    "+----------+----------+",
+                ],
+                &[output],
+            );
+
+            transform.input_is_finished = true;
+
+            transform.add_block(None)?;
+
+            transform.check_outputs();
+
+            let output = transform.outputs.pop_front().unwrap();
+
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 3        | 12       |",
                     "| 4        | 8        |",
                     "| 4        | 8        |",
                     "+----------+----------+",
