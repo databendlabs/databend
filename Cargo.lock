@@ -2026,6 +2026,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-openai"
+version = "0.1.0"
+dependencies = [
+ "common-base",
+ "common-exception",
+ "openai_api_rust",
+]
+
+[[package]]
 name = "common-pipeline-core"
 version = "0.1.0"
 dependencies = [
@@ -3239,6 +3248,7 @@ dependencies = [
  "common-meta-store",
  "common-meta-types",
  "common-metrics",
+ "common-openai",
  "common-pipeline-core",
  "common-pipeline-sinks",
  "common-pipeline-sources",
@@ -3283,7 +3293,6 @@ dependencies = [
  "naive-cityhash",
  "num",
  "once_cell",
- "openai_api_rust",
  "opendal",
  "opensrv-mysql",
  "ordered-float 3.4.0",

@@ -66,6 +66,7 @@ jsonb = { workspace = true }
 common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
 common-metrics = { path = "../../common/metrics" }
+common-openai = { path = "../../common/openai" }
 common-pipeline-core = { path = "../pipeline/core" }
 common-pipeline-sinks = { path = "../pipeline/sinks" }
 common-pipeline-sources = { path = "../pipeline/sources" }
@@ -126,7 +127,6 @@ match-template = "0.0.1"
 metrics = "0.20.1"
 naive-cityhash = "0.2.0"
 once_cell = "1.15.0"
-openai_api_rust = "0.1.3"
 opendal = { workspace = true }
 opensrv-mysql = { git = "https://github.com/datafuselabs/opensrv", rev = "5e37788" }
 parking_lot = "0.12.1"

@@ -14,46 +14,18 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use openai_api_rust::completions::Completion;
 use openai_api_rust::completions::CompletionsApi;
 use openai_api_rust::completions::CompletionsBody;
 use openai_api_rust::Auth;
 
-pub enum AIModel {
-    CodeDavinci002,
-}
-
-// https://platform.openai.com/examples
-impl ToString for AIModel {
-    fn to_string(&self) -> String {
-        match self {
-            AIModel::CodeDavinci002 => "code-davinci-002".to_string(),
-        }
-    }
-}
-
-pub struct OpenAI {
-    api_key: String,
-    api_base: String,
-    api_org: String,
-    model: AIModel,
-}
+use crate::OpenAI;
 
 impl OpenAI {
-    pub fn create(api_key: String, model: AIModel) -> Self {
-        OpenAI {
-            api_key,
-            api_base: "https://api.openai.com/v1/".to_string(),
-            api_org: "databend".to_string(),
-            model,
-        }
-    }
-
-    pub fn completion_request(&self, prompt: String) -> Result<Completion> {
+    pub fn completion_request(&self, prompt: String) -> Result<(String, Option<u32>)> {
         let openai = openai_api_rust::OpenAI::new(
             Auth {
                 api_key: self.api_key.clone(),
-                organization: Some(self.api_org.clone()),
+                organization: None,
             },
             &self.api_base,
         );
@@ -75,8 +47,17 @@ impl OpenAI {
             logit_bias: None,
             user: None,
         };
-        openai
-            .completion_create(&body)
-            .map_err(|e| ErrorCode::Internal(format!("openai completion request error: {:?}", e)))
+        let resp = openai.completion_create(&body).map_err(|e| {
+            ErrorCode::Internal(format!("openai completion request error: {:?}", e))
+        })?;
+
+        let usage = resp.usage.total_tokens;
+        let sql = if resp.choices.is_empty() {
+            "".to_string()
+        } else {
+            resp.choices[0].text.clone().unwrap_or("".to_string())
+        };
+
+        Ok((sql, usage))
     }
 }

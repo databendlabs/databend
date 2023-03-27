@@ -37,6 +37,8 @@ use common_expression::TableSchema;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_openai::AIModel;
+use common_openai::OpenAI;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
@@ -47,9 +49,6 @@ use common_storages_fuse::table_functions::string_literal;
 use common_storages_fuse::TableContext;
 use common_storages_view::view_table::VIEW_ENGINE;
 use tracing::info;
-
-use crate::table_functions::openai::AIModel;
-use crate::table_functions::openai::OpenAI;
 
 pub struct GPT2SQLTable {
     prompt: String,
@@ -218,12 +217,7 @@ impl AsyncSource for GPT2SQLSource {
         // Response.
         let api_key = GlobalConfig::instance().query.openai_api_key.clone();
         let openai = OpenAI::create(api_key, AIModel::CodeDavinci002);
-        let resp = openai.completion_request(prompt)?;
-        let sql = if resp.choices.is_empty() {
-            "".to_string()
-        } else {
-            resp.choices[0].text.clone().unwrap_or("".to_string())
-        };
+        let (sql, _) = openai.completion_request(prompt)?;
 
         let sql = format!("SELECT{}", sql);
         info!("openai response sql: {}", sql);
