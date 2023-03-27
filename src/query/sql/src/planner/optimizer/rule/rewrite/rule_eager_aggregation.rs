@@ -675,21 +675,7 @@ fn modify_final_aggregate_function(agg: &mut AggregateFunction, args_index: usiz
             NumberDataType::UInt64,
         ))));
     }
-    if agg.args.is_empty() {
-        agg.args.push(ScalarExpr::BoundColumnRef(BoundColumnRef {
-            span: None,
-            column: ColumnBinding {
-                database_name: None,
-                table_name: None,
-                column_name: "_eager".to_string(),
-                index: args_index,
-                data_type: agg.return_type.clone(),
-                visibility: Visibility::Visible,
-            },
-        }));
-        return;
-    }
-    agg.args[0] = ScalarExpr::BoundColumnRef(BoundColumnRef {
+    let agg_func = ScalarExpr::BoundColumnRef(BoundColumnRef {
         span: None,
         column: ColumnBinding {
             database_name: None,
@@ -700,6 +686,12 @@ fn modify_final_aggregate_function(agg: &mut AggregateFunction, args_index: usiz
             visibility: Visibility::Visible,
         },
     });
+    if agg.args.is_empty() {
+        // eager count
+        agg.args.push(agg_func);
+    } else {
+        agg.args[0] = agg_func;
+    }
 }
 
 fn cast_expr_if_needed(expr: ScalarExpr, target_data_type: DataType) -> ScalarExpr {
