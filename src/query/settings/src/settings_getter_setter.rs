@@ -19,6 +19,7 @@ use common_meta_app::principal::UserSettingValue;
 
 use crate::settings::Settings;
 use crate::settings_default::DefaultSettings;
+use crate::ChangeValue;
 use crate::ScopeLevel;
 
 impl Settings {
@@ -38,19 +39,27 @@ impl Settings {
     }
 
     fn try_set_u64(&self, key: &str, val: u64) -> Result<()> {
-        if let Some(mut entry) = self.changes.get_mut(key) {
-            if !matches!(&entry.value, UserSettingValue::UInt64(_)) {
-                return Err(ErrorCode::BadArguments(format!(
-                    "Set a integer({}) into {:?}.",
-                    val, key
-                )));
+        match DefaultSettings::instance()?.settings.get(key) {
+            None => Err(ErrorCode::UnknownVariable(format!(
+                "Unknown variable: {:?}",
+                key
+            ))),
+            Some(default_val) => {
+                if !matches!(&default_val.value, UserSettingValue::UInt64(_)) {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "Set a integer({}) into {:?}.",
+                        val, key
+                    )));
+                }
+
+                self.changes.insert(key.to_string(), ChangeValue {
+                    level: ScopeLevel::Session,
+                    value: UserSettingValue::UInt64(val),
+                });
+
+                Ok(())
             }
-
-            entry.level = ScopeLevel::Session;
-            entry.value = UserSettingValue::UInt64(val);
         }
-
-        Ok(())
     }
 
     // Get max_block_size.
