@@ -13,14 +13,14 @@
 //  limitations under the License.
 
 pub enum AIModel {
-    CodeDavinci002,
+    TextDavinci003,
 }
 
 // https://platform.openai.com/examples
 impl ToString for AIModel {
     fn to_string(&self) -> String {
         match self {
-            AIModel::CodeDavinci002 => "code-davinci-002".to_string(),
+            AIModel::TextDavinci003 => "text-davinci-003".to_string(),
         }
     }
 }

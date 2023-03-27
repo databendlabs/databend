@@ -216,7 +216,7 @@ impl AsyncSource for GPT2SQLSource {
 
         // Response.
         let api_key = GlobalConfig::instance().query.openai_api_key.clone();
-        let openai = OpenAI::create(api_key, AIModel::CodeDavinci002);
+        let openai = OpenAI::create(api_key, AIModel::TextDavinci003);
         let (sql, _) = openai.completion_request(prompt)?;
 
         let sql = format!("SELECT{}", sql);
