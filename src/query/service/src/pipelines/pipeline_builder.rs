@@ -714,6 +714,59 @@ impl PipelineBuilder {
     fn build_window(&mut self, window: &Window) -> Result<()> {
         self.build_pipeline(&window.input)?;
 
+        let input_schema = window.input.output_schema()?;
+
+        if !window.order_by.is_empty() {
+            let sort_desc = window
+                .order_by
+                .iter()
+                .map(|desc| SortColumnDescription {
+                    offset: desc.order_by,
+                    asc: desc.asc,
+                    nulls_first: desc.nulls_first,
+                })
+                .collect::<Vec<_>>();
+
+            let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+            let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
+
+            // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
+            if self.main_pipeline.output_len() == 1 || max_threads == 1 {
+                self.main_pipeline.resize(max_threads)?;
+            }
+
+            // Sort
+            self.main_pipeline.add_transform(|input, output| {
+                let transform =
+                    TransformSortPartial::try_create(input, output, None, sort_desc.clone())?;
+
+                Ok(ProcessorPtr::create(transform))
+            })?;
+
+            // Merge
+            self.main_pipeline.add_transform(|input, output| {
+                let transform = try_create_transform_sort_merge(
+                    input,
+                    output,
+                    input_schema.clone(),
+                    block_size,
+                    None,
+                    sort_desc.clone(),
+                )?;
+
+                Ok(ProcessorPtr::create(transform))
+            })?;
+
+            // Concat merge in single thread
+            try_add_multi_sort_merge(
+                &mut self.main_pipeline,
+                input_schema,
+                block_size,
+                None,
+                sort_desc,
+            )?;
+        }
+
         // let input_schema = window.input.output_schema()?;
         let agg_func = AggregateFunctionFactory::instance().get(
             window.agg_func.sig.name.as_str(),
