@@ -39,21 +39,9 @@ impl<'a> WindowChecker<'a> {
 
     pub fn resolve(&mut self, scalar: &ScalarExpr, span: Span) -> Result<ScalarExpr> {
         match scalar {
-            ScalarExpr::BoundColumnRef(column) => {
-                // If this is a group item, then it should have been replaced with `group_items_map`
-                Err(ErrorCode::SemanticError(format!(
-                    "column \"{}\" must appear in the GROUP BY clause or be used in an aggregate function",
-                    &column.column.column_name
-                )).set_span(span))
-            }
-            ScalarExpr::BoundInternalColumnRef(column) => {
-                // If this is a group item, then it should have been replaced with `group_items_map`
-                Err(ErrorCode::SemanticError(format!(
-                    "column \"{}\" must appear in the GROUP BY clause or be used in an aggregate function",
-                    &column.column.internal_column.column_name()
-                )).set_span(span))
-            }
-            ScalarExpr::ConstantExpr(_) => Ok(scalar.clone()),
+            ScalarExpr::BoundColumnRef(_)
+            | ScalarExpr::BoundInternalColumnRef(_)
+            | ScalarExpr::ConstantExpr(_) => Ok(scalar.clone()),
             ScalarExpr::AndExpr(scalar) => Ok(AndExpr {
                 left: Box::new(self.resolve(&scalar.left, span)?),
                 right: Box::new(self.resolve(&scalar.right, span)?),
@@ -125,30 +113,7 @@ impl<'a> WindowChecker<'a> {
                 Err(ErrorCode::Internal("Invalid window function"))
             }
 
-            ScalarExpr::AggregateFunction(agg) => {
-                if let Some(column) = self
-                    .bind_context
-                    .aggregate_info
-                    .aggregate_functions_map
-                    .get(&agg.display_name)
-                {
-                    let agg_func = &self.bind_context.aggregate_info.aggregate_functions[*column];
-                    let column_binding = ColumnBinding {
-                        database_name: None,
-                        table_name: None,
-                        column_name: agg.display_name.clone(),
-                        index: agg_func.index,
-                        data_type: Box::new(agg_func.scalar.data_type()?),
-                        visibility: Visibility::Visible,
-                    };
-                    return Ok(BoundColumnRef {
-                        span: None,
-                        column: column_binding,
-                    }
-                    .into());
-                }
-                Err(ErrorCode::Internal("Invalid aggregate function"))
-            }
+            ScalarExpr::AggregateFunction(_) => unreachable!(),
         }
     }
 }

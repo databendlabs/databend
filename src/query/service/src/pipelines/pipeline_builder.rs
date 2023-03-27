@@ -717,54 +717,30 @@ impl PipelineBuilder {
         let input_schema = window.input.output_schema()?;
 
         if !window.order_by.is_empty() {
+            let old_output_len = self.main_pipeline.output_len();
             let sort_desc = window
                 .order_by
                 .iter()
-                .map(|desc| SortColumnDescription {
-                    offset: desc.order_by,
-                    asc: desc.asc,
-                    nulls_first: desc.nulls_first,
+                .map(|desc| {
+                    let offset = input_schema.index_of(&desc.order_by.to_string())?;
+                    Ok(SortColumnDescription {
+                        offset,
+                        asc: desc.asc,
+                        nulls_first: desc.nulls_first,
+                    })
                 })
-                .collect::<Vec<_>>();
+                .collect::<Result<Vec<_>>>()?;
 
             let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
-            let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
 
             // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
             if self.main_pipeline.output_len() == 1 || max_threads == 1 {
                 self.main_pipeline.resize(max_threads)?;
             }
 
-            // Sort
-            self.main_pipeline.add_transform(|input, output| {
-                let transform =
-                    TransformSortPartial::try_create(input, output, None, sort_desc.clone())?;
+            self.build_sort_pipeline(input_schema.clone(), sort_desc, window.plan_id, None)?;
 
-                Ok(ProcessorPtr::create(transform))
-            })?;
-
-            // Merge
-            self.main_pipeline.add_transform(|input, output| {
-                let transform = try_create_transform_sort_merge(
-                    input,
-                    output,
-                    input_schema.clone(),
-                    block_size,
-                    None,
-                    sort_desc.clone(),
-                )?;
-
-                Ok(ProcessorPtr::create(transform))
-            })?;
-
-            // Concat merge in single thread
-            try_add_multi_sort_merge(
-                &mut self.main_pipeline,
-                input_schema,
-                block_size,
-                None,
-                sort_desc,
-            )?;
+            self.main_pipeline.resize(old_output_len)?;
         }
 
         // let input_schema = window.input.output_schema()?;
@@ -776,6 +752,15 @@ impl PipelineBuilder {
 
         let arguments = window.agg_func.args.clone();
 
+        let partition_by = window
+            .partition_by
+            .iter()
+            .map(|p| {
+                let offset = input_schema.index_of(&p.to_string())?;
+                Ok(offset)
+            })
+            .collect::<Result<Vec<_>>>()?;
+
         // Window
         self.main_pipeline.add_transform(|input, output| {
             let transform = TransformWindow::try_create(
@@ -783,7 +768,7 @@ impl PipelineBuilder {
                 output,
                 agg_func.clone(),
                 arguments.clone(),
-                window.partition_by.clone(),
+                partition_by.clone(),
                 window.window_frame.clone(),
             )?;
             Ok(ProcessorPtr::create(transform))
@@ -809,22 +794,32 @@ impl PipelineBuilder {
             .collect::<Result<Vec<_>>>()?;
 
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
-        let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
 
         // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
         if self.main_pipeline.output_len() == 1 || max_threads == 1 {
             self.main_pipeline.resize(max_threads)?;
         }
 
+        self.build_sort_pipeline(input_schema.clone(), sort_desc, sort.plan_id, sort.limit)
+    }
+
+    fn build_sort_pipeline(
+        &mut self,
+        input_schema: DataSchemaRef,
+        sort_desc: Vec<SortColumnDescription>,
+        plan_id: u32,
+        limit: Option<usize>,
+    ) -> Result<()> {
+        let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
         // Sort
         self.main_pipeline.add_transform(|input, output| {
             let transform =
-                TransformSortPartial::try_create(input, output, sort.limit, sort_desc.clone())?;
+                TransformSortPartial::try_create(input, output, limit, sort_desc.clone())?;
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProfileWrapper::create(
                     transform,
-                    sort.plan_id,
+                    plan_id,
                     self.prof_span_set.clone(),
                 )))
             } else {
@@ -839,14 +834,14 @@ impl PipelineBuilder {
                 output,
                 input_schema.clone(),
                 block_size,
-                sort.limit,
+                limit,
                 sort_desc.clone(),
             )?;
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProfileWrapper::create(
                     transform,
-                    sort.plan_id,
+                    plan_id,
                     self.prof_span_set.clone(),
                 )))
             } else {
@@ -859,7 +854,7 @@ impl PipelineBuilder {
             &mut self.main_pipeline,
             input_schema,
             block_size,
-            sort.limit,
+            limit,
             sort_desc,
         )
     }

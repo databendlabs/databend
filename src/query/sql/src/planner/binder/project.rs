@@ -118,15 +118,13 @@ impl Binder {
                         scalar,
                         index: item.index,
                     })
-                } else if let ScalarExpr::WindowFunction(_) = &item.scalar {
+                } else {
                     let mut window_checker = WindowChecker::new(bind_context);
                     let scalar = window_checker.resolve(&item.scalar, None)?;
                     Ok(ScalarItem {
                         scalar,
                         index: item.index,
                     })
-                } else {
-                    Ok(item.clone())
                 }
             })
             .collect::<Result<Vec<_>>>()?;
