@@ -111,8 +111,9 @@ impl StageFilesInfo {
         &self,
         operator: &Operator,
         first_only: bool,
-        max_files: usize,
+        max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
+        let max_files = max_files.unwrap_or(usize::MAX);
         if let Some(files) = &self.files {
             let mut res = Vec::new();
             let mut limit: usize = 0;
@@ -149,7 +150,7 @@ impl StageFilesInfo {
     }
 
     pub async fn first_file(&self, operator: &Operator) -> Result<StageFileInfo> {
-        let mut files = self.list(operator, true, 0).await?;
+        let mut files = self.list(operator, true, None).await?;
         match files.pop() {
             None => Err(ErrorCode::BadArguments("no file found")),
             Some(f) => Ok(f),

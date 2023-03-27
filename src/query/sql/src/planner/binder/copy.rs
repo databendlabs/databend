@@ -542,7 +542,7 @@ impl<'a> Binder {
         let mut files = if operator.info().can_blocking() {
             files_info.blocking_list(&operator, false)
         } else {
-            files_info.list(&operator, false, 0).await
+            files_info.list(&operator, false, None).await
         }?;
 
         info!("end to list files: {}", files.len());

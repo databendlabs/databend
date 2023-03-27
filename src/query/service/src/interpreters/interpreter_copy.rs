@@ -248,15 +248,15 @@ impl CopyInterpreter {
         let mut stage_table_info = stage_table_info.clone();
         let max_files = stage_table_info.stage_info.copy_options.max_files;
         let max_files = if max_files == 0 {
-            usize::MAX
+            None
         } else {
-            max_files
+            Some(max_files)
         };
 
         let mut all_source_file_infos = if force {
             StageTable::list_files(&stage_table_info, max_files).await?
         } else {
-            StageTable::list_files(&stage_table_info, 0_usize).await?
+            StageTable::list_files(&stage_table_info, None).await?
         };
 
         info!("end to list files: {}", all_source_file_infos.len());

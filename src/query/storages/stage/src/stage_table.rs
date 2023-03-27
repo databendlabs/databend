@@ -74,7 +74,7 @@ impl StageTable {
 
     pub async fn list_files(
         stage_info: &StageTableInfo,
-        max_files: usize,
+        max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
         let op = Self::get_op(&stage_info.stage_info)?;
         let infos = stage_info
@@ -120,7 +120,7 @@ impl Table for StageTable {
         let files = if let Some(files) = &stage_info.files_to_copy {
             files.clone()
         } else {
-            StageTable::list_files(stage_info, 0_usize).await?
+            StageTable::list_files(stage_info, None).await?
         };
         let format =
             InputContext::get_input_format(&stage_info.stage_info.file_format_options.format)?;
