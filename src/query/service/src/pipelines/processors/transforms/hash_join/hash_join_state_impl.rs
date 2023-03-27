@@ -24,6 +24,7 @@ use common_expression::HashMethod;
 use common_hashtable::HashtableLike;
 
 use super::ProbeState;
+use crate::pipelines::processors::transforms::hash_join::desc::JoinState;
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::HashJoinState;
@@ -68,6 +69,10 @@ impl HashJoinState for JoinHashTable {
 
     fn interrupt(&self) {
         self.interrupt.store(true, Ordering::Release);
+    }
+
+    fn join_state(&self) -> &JoinState {
+        &self.hash_join_desc.join_state
     }
 
     fn attach(&self) -> Result<()> {

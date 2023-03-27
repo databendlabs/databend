@@ -47,7 +47,7 @@ impl Compactor for BlockCompactor {
         "BlockCompactTransform"
     }
 
-    fn use_partial_compact() -> bool {
+    fn use_partial_compact(&self) -> bool {
         true
     }
 
