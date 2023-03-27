@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
@@ -23,6 +24,7 @@ use common_config::GlobalConfig;
 use common_exception::Result;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
+use common_settings::ChangeValue;
 use common_settings::Settings;
 use parking_lot::RwLock;
 
@@ -88,12 +90,15 @@ impl SessionContext {
         self.settings.clone()
     }
 
-    pub fn get_changed_settings(&self) -> Arc<Settings> {
-        Arc::new(self.settings.get_changed_settings())
+    pub fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
+        self.settings.get_changes()
     }
 
-    pub fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
-        self.settings.apply_changed_settings(changed_settings)
+    pub fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
+        unsafe {
+            self.settings.unchecked_apply_changes(changes);
+        }
+        Ok(())
     }
 
     // Get current catalog name.
