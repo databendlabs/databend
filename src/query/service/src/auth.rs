@@ -84,7 +84,7 @@ impl AuthMgr {
                 let identity = UserIdentity::new(&user_name, "%");
                 let user = match user_api.get_user(&tenant, identity.clone()).await {
                     Ok(user_info) => match user_info.auth_info {
-                        AuthInfo::JWT => Ok(user_info),
+                        AuthInfo::JWT => user_info,
                         _ => return Err(ErrorCode::AuthenticateFailure("wrong auth type")),
                     },
                     Err(e) => {
@@ -102,14 +102,9 @@ impl AuthMgr {
                                 user_info.grants.grant_role(role);
                             }
                         }
-                        user_api.add_user(&tenant, user_info, true).await?;
-                        user_api.get_user(&tenant, identity).await
+                        user_api.add_user(&tenant, user_info.clone(), true).await?;
+                        user_info
                     }
-                }?;
-
-                let user = match &user.auth_info {
-                    AuthInfo::JWT => user,
-                    _ => return Err(ErrorCode::AuthenticateFailure("wrong auth type")),
                 };
 
                 session.set_authed_user(user, jwt.custom.role).await?;
