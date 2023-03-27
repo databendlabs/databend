@@ -44,8 +44,9 @@ use common_exception::Span;
 use common_expression::types::DataType;
 use common_expression::ColumnId;
 use common_expression::ConstantFolder;
+use common_expression::FunctionKind;
 use common_expression::Scalar;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
 use common_storage::DataOperator;
@@ -354,32 +355,67 @@ impl Binder {
                     return Ok((s_expr, bind_context));
                 }
 
-                // Table functions always reside is default catalog
-                let table_meta: Arc<dyn TableFunction> = self
-                    .catalogs
-                    .get_catalog(CATALOG_DEFAULT)?
-                    .get_table_function(&func_name.name, table_args)?;
-                let table = table_meta.as_table();
-                let table_alias_name = if let Some(table_alias) = alias {
-                    Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
+                if BUILTIN_FUNCTIONS
+                    .get_property(&func_name.name)
+                    .map(|p| p.kind == FunctionKind::SRF)
+                    .unwrap_or(false)
+                {
+                    // If it is a set-returning function, we bind it as a subquery.
+                    let mut bind_context = BindContext::new();
+                    let stmt = SelectStmt {
+                        span: *span,
+                        distinct: false,
+                        select_list: vec![SelectTarget::AliasedExpr {
+                            expr: Box::new(common_ast::ast::Expr::FunctionCall {
+                                span: *span,
+                                distinct: false,
+                                name: common_ast::ast::Identifier {
+                                    span: *span,
+                                    name: func_name.name.clone(),
+                                    quote: None,
+                                },
+                                params: vec![],
+                                args: params.clone(),
+                                window: None,
+                            }),
+                            alias: None,
+                        }],
+                        from: vec![],
+                        selection: None,
+                        group_by: None,
+                        having: None,
+                    };
+                    self.bind_select_stmt(&mut bind_context, &stmt, &[]).await
                 } else {
-                    None
-                };
-                let table_index = self.metadata.write().add_table(
-                    CATALOG_DEFAULT.to_string(),
-                    "system".to_string(),
-                    table.clone(),
-                    table_alias_name,
-                    false,
-                );
+                    // Other table functions always reside is default catalog
+                    let table_meta: Arc<dyn TableFunction> = self
+                        .catalogs
+                        .get_catalog(CATALOG_DEFAULT)?
+                        .get_table_function(&func_name.name, table_args)?;
+                    let table = table_meta.as_table();
+                    let table_alias_name = if let Some(table_alias) = alias {
+                        Some(
+                            normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name,
+                        )
+                    } else {
+                        None
+                    };
+                    let table_index = self.metadata.write().add_table(
+                        CATALOG_DEFAULT.to_string(),
+                        "system".to_string(),
+                        table.clone(),
+                        table_alias_name,
+                        false,
+                    );
 
-                let (s_expr, mut bind_context) = self
-                    .bind_base_table(bind_context, "system", table_index)
-                    .await?;
-                if let Some(alias) = alias {
-                    bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    let (s_expr, mut bind_context) = self
+                        .bind_base_table(bind_context, "system", table_index)
+                        .await?;
+                    if let Some(alias) = alias {
+                        bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    }
+                    Ok((s_expr, bind_context))
                 }
-                Ok((s_expr, bind_context))
             }
             TableReference::Subquery {
                 span: _,

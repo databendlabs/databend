@@ -16,7 +16,7 @@ ERROR 1105 (HY000) at line 1: Code: 1008, displayText = error:
   --> SQL:1:8
   |
 1 | select base64(1)
-  |        ^^^^^^^^^ no function matches the given name: base64
+  |        ^^^^^^^^^ no function matches the given name: 'base64', do you mean 'to_base64'?
 
 .
 ERROR 1105 (HY000) at line 1: Code: 1065, displayText = error: 

@@ -58,6 +58,7 @@ percent-encoding = "2"
 regex = "1.6.0"
 roaring = "0.10.1"
 serde = { workspace = true }
+simsearch = "0.2"
 time = "0.3.14"
 tracing = "0.1.36"
 url = { version = "2.3" }

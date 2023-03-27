@@ -97,8 +97,6 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/test_unit
         timeout-minutes: 30
-        with:
-          codecov_token: ${{ secrets.CODECOV_TOKEN }}
 
   test_metactl:
     runs-on: [self-hosted, X64, Linux, dev]
@@ -132,7 +130,7 @@ jobs:
       - uses: ./.github/actions/test_compat
         timeout-minutes: 10
 
-  fuse_compat:
+  test_compat_fuse:
     runs-on: [self-hosted, X64, Linux, dev]
     needs: build_gnu
     steps:
@@ -148,8 +146,8 @@ jobs:
       - uses: ./.github/actions/test_meta_cluster
         timeout-minutes: 10
 
-  test_sqllogic_standalone_linux:
-    name: test_sqllogic_${{ matrix.dirs }}_standalone_linux
+  test_sqllogic_standalone:
+    name: test_sqllogic_standalone_${{ matrix.dirs }}
     runs-on: [self-hosted, X64, Linux, dev]
     needs: build_gnu
     strategy:
@@ -176,9 +174,9 @@ jobs:
         with:
           name: test-sqllogic-standalone-${{ matrix.handlers }}-${{ matrix.dirs }}
 
-  test_sqllogic_management_mode_linux:
+  test_sqllogic_management_mode:
     timeout-minutes: 30
-    name: test_sqllogic_${{ matrix.dirs }}_linux
+    name: test_sqllogic_management
     runs-on: [self-hosted, X64, Linux, dev]
     needs: build_gnu
     strategy:
@@ -194,8 +192,8 @@ jobs:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handlers }}
 
-  test_sqllogic_cluster_linux:
-    name: test_sqllogic_${{ matrix.dirs }}_cluster_linux
+  test_sqllogic_cluster:
+    name: test_sqllogic_cluster_${{ matrix.dirs }}
     runs-on: [self-hosted, X64, Linux, dev]
     needs: build_gnu
     strategy:
@@ -222,7 +220,7 @@ jobs:
         with:
           name: test-sqllogic-cluster-${{ matrix.handlers }}-${{ matrix.dirs }}
 
-  test_stateless_standalone_linux:
+  test_stateless_standalone:
     timeout-minutes: 20
     runs-on: [self-hosted, X64, Linux, dev]
     needs: build_gnu
@@ -230,7 +228,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateless_standalone_linux
 
-  test_stateless_cluster_linux:
+  test_stateless_cluster:
     timeout-minutes: 30
     runs-on: [self-hosted, X64, Linux, dev]
     needs: build_gnu
@@ -238,7 +236,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateless_cluster_linux
 
-  test_stateful_standalone_linux:
+  test_stateful_standalone:
     timeout-minutes: 20
     runs-on: [self-hosted, X64, Linux, dev]
     needs: build_gnu
@@ -246,7 +244,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_standalone_linux
 
-  test_stateful_cluster_linux:
+  test_stateful_cluster:
     timeout-minutes: 20
     runs-on: [self-hosted, X64, Linux, dev]
     needs: build_gnu
@@ -263,7 +261,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_large_data
 
-  test_fuzz_standalone_linux:
+  test_fuzz_standalone:
     timeout-minutes: 10
     runs-on: [self-hosted, X64, Linux, dev]
     needs: build_gnu

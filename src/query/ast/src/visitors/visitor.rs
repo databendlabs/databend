@@ -404,6 +404,8 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_show_tables(&mut self, _stmt: &'ast ShowTablesStmt) {}
 
+    fn visit_show_columns(&mut self, _stmt: &'ast ShowColumnsStmt) {}
+
     fn visit_show_create_table(&mut self, _stmt: &'ast ShowCreateTableStmt) {}
 
     fn visit_describe_table(&mut self, _stmt: &'ast DescribeTableStmt) {}
@@ -504,6 +506,12 @@ pub trait Visitor<'ast>: Sized {
     fn visit_show_file_formats(&mut self) {}
 
     fn visit_presign(&mut self, _presign: &'ast PresignStmt) {}
+
+    fn visit_create_share_endpoint(&mut self, _stmt: &'ast CreateShareEndpointStmt) {}
+
+    fn visit_show_share_endpoint(&mut self, _stmt: &'ast ShowShareEndpointStmt) {}
+
+    fn visit_drop_share_endpoint(&mut self, _stmt: &'ast DropShareEndpointStmt) {}
 
     fn visit_create_share(&mut self, _stmt: &'ast CreateShareStmt) {}
 

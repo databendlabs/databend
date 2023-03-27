@@ -48,15 +48,16 @@ use common_expression::types::decimal::DecimalSize;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
+use common_expression::FunctionKind;
 use common_expression::RawExpr;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_functions::aggregates::AggregateCountFunction;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::is_builtin_function;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
-use common_functions::srfs::BUILTIN_SET_RETURNING_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_users::UserApiProvider;
+use simsearch::SimSearch;
 
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
@@ -141,21 +142,16 @@ impl<'a> TypeChecker<'a> {
 
     #[async_recursion::async_recursion]
     pub async fn resolve(&mut self, expr: &Expr) -> Result<Box<(ScalarExpr, DataType)>> {
-        if let Some(column_binding) = self.bind_context.srfs.get(&expr.to_string()) {
+        if let Some(scalar) = self.bind_context.srfs.get(&expr.to_string()) {
             if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
                 return Err(ErrorCode::SemanticError(
                     "set-returning functions are only allowed in SELECT clause",
-                ));
+                )
+                .set_span(expr.span()));
             }
             // Found a SRF, return it directly.
             // See `Binder::bind_project_set` for more details.
-            return Ok(Box::new((
-                ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    span: expr.span(),
-                    column: column_binding.clone(),
-                }),
-                *column_binding.data_type.clone(),
-            )));
+            return Ok(Box::new((scalar.clone(), scalar.data_type()?)));
         }
 
         let box (scalar, data_type): Box<(ScalarExpr, DataType)> = match expr {
@@ -589,12 +585,52 @@ impl<'a> TypeChecker<'a> {
                 if !is_builtin_function(func_name)
                     && !Self::all_rewritable_scalar_function().contains(&func_name)
                 {
-                    return self.resolve_udf(*span, func_name, args).await;
+                    if let Some(udf) = self.resolve_udf(*span, func_name, args).await? {
+                        return Ok(udf);
+                    } else {
+                        // Function not found, try to find and suggest similar function name.
+                        let all_funcs = BUILTIN_FUNCTIONS
+                            .all_function_names()
+                            .into_iter()
+                            .chain(AggregateFunctionFactory::instance().registered_names())
+                            .chain(
+                                Self::all_rewritable_scalar_function()
+                                    .iter()
+                                    .cloned()
+                                    .map(str::to_string),
+                            );
+                        let mut engine: SimSearch<String> = SimSearch::new();
+                        for func_name in all_funcs {
+                            engine.insert(func_name.clone(), &func_name);
+                        }
+                        let possible_funcs = engine
+                            .search(func_name)
+                            .iter()
+                            .map(|name| format!("'{name}'"))
+                            .collect::<Vec<_>>();
+                        if possible_funcs.is_empty() {
+                            return Err(ErrorCode::UnknownFunction(format!(
+                                "no function matches the given name: {func_name}"
+                            ))
+                            .set_span(*span));
+                        } else {
+                            return Err(ErrorCode::UnknownFunction(format!(
+                                "no function matches the given name: '{func_name}', do you mean {}?",
+                                possible_funcs.join(", ")
+                            ))
+                            .set_span(*span));
+                        }
+                    }
                 }
 
                 let args: Vec<&Expr> = args.iter().collect();
 
-                if BUILTIN_SET_RETURNING_FUNCTIONS.contains(func_name) {
+                // Check assumptions if it is a set returning function
+                if BUILTIN_FUNCTIONS
+                    .get_property(&name.name)
+                    .map(|property| property.kind == FunctionKind::SRF)
+                    .unwrap_or(false)
+                {
                     if matches!(
                         self.bind_context.expr_context,
                         ExprContext::InSetReturningFunction
@@ -602,14 +638,14 @@ impl<'a> TypeChecker<'a> {
                         return Err(ErrorCode::SemanticError(
                             "set-returning functions cannot be nested".to_string(),
                         )
-                        .set_span(expr.span()));
+                        .set_span(*span));
                     }
 
                     if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
                         return Err(ErrorCode::SemanticError(
                             "set-returning functions can only be used in SELECT".to_string(),
                         )
-                        .set_span(expr.span()));
+                        .set_span(*span));
                     }
 
                     // Should have been handled with `BindContext::srfs`
@@ -703,7 +739,7 @@ impl<'a> TypeChecker<'a> {
                         .map(|literal| match literal {
                             Literal::UInt64(n) => Ok(*n as usize),
                             lit => Err(ErrorCode::SemanticError(format!(
-                                "Invalid parameter {lit} for scalar function"
+                                "invalid parameter {lit} for scalar function"
                             ))
                             .set_span(*span)),
                         })
@@ -1055,7 +1091,7 @@ impl<'a> TypeChecker<'a> {
         let registry = &BUILTIN_FUNCTIONS;
         let expr = type_check::check(&raw_expr, registry)?;
 
-        if !expr.is_deterministic() {
+        if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
             self.ctx.set_cacheable(false);
         }
 
@@ -1437,7 +1473,6 @@ impl<'a> TypeChecker<'a> {
             "is_null",
             "coalesce",
             "last_query_id",
-            "unnest",
         ]
     }
 
@@ -1814,47 +1849,48 @@ impl<'a> TypeChecker<'a> {
         span: Span,
         func_name: &str,
         arguments: &[Expr],
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
+    ) -> Result<Option<Box<(ScalarExpr, DataType)>>> {
         let udf = UserApiProvider::instance()
             .get_udf(self.ctx.get_tenant().as_str(), func_name)
             .await;
-        if let Ok(udf) = udf {
-            let parameters = udf.parameters;
-            if parameters.len() != arguments.len() {
-                return Err(ErrorCode::SyntaxException(format!(
-                    "Require {} parameters, but got: {}",
-                    parameters.len(),
-                    arguments.len()
-                ))
-                .set_span(span));
-            }
-            let settings = self.ctx.get_settings();
-            let sql_dialect = settings.get_sql_dialect()?;
-            let sql_tokens = tokenize_sql(udf.definition.as_str())?;
-            let expr = parse_expr(&sql_tokens, sql_dialect)?;
-            let mut args_map = HashMap::new();
-            arguments.iter().enumerate().for_each(|(idx, argument)| {
-                if let Some(parameter) = parameters.get(idx) {
-                    args_map.insert(parameter, (*argument).clone());
-                }
-            });
-            let udf_expr = self
-                .clone_expr_with_replacement(&expr, &|nest_expr| {
-                    if let Expr::ColumnRef { column, .. } = nest_expr {
-                        if let Some(arg) = args_map.get(&column.name) {
-                            return Ok(Some(arg.clone()));
-                        }
-                    }
-                    Ok(None)
-                })
-                .map_err(|e| e.set_span(span))?;
-            self.resolve(&udf_expr).await
+
+        let udf = if let Ok(udf) = udf {
+            udf
         } else {
-            Err(ErrorCode::UnknownFunction(format!(
-                "no function matches the given name: {func_name}"
+            return Ok(None);
+        };
+
+        let parameters = udf.parameters;
+        if parameters.len() != arguments.len() {
+            return Err(ErrorCode::SyntaxException(format!(
+                "Require {} parameters, but got: {}",
+                parameters.len(),
+                arguments.len()
             ))
-            .set_span(span))
+            .set_span(span));
         }
+        let settings = self.ctx.get_settings();
+        let sql_dialect = settings.get_sql_dialect()?;
+        let sql_tokens = tokenize_sql(udf.definition.as_str())?;
+        let expr = parse_expr(&sql_tokens, sql_dialect)?;
+        let mut args_map = HashMap::new();
+        arguments.iter().enumerate().for_each(|(idx, argument)| {
+            if let Some(parameter) = parameters.get(idx) {
+                args_map.insert(parameter, (*argument).clone());
+            }
+        });
+        let udf_expr = self
+            .clone_expr_with_replacement(&expr, &|nest_expr| {
+                if let Expr::ColumnRef { column, .. } = nest_expr {
+                    if let Some(arg) = args_map.get(&column.name) {
+                        return Ok(Some(arg.clone()));
+                    }
+                }
+                Ok(None)
+            })
+            .map_err(|e| e.set_span(span))?;
+
+        Ok(Some(self.resolve(&udf_expr).await?))
     }
 
     #[async_recursion::async_recursion]

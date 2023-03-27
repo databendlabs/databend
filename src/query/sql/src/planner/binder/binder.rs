@@ -167,6 +167,8 @@ impl<'a> Binder {
                     database: database.name.clone(),
                 }))
             }
+            // Columns
+            Statement::ShowColumns(stmt) => self.bind_show_columns(bind_context, stmt).await?,
             // Tables
             Statement::ShowTables(stmt) => self.bind_show_tables(bind_context, stmt).await?,
             Statement::ShowCreateTable(stmt) => self.bind_show_create_table(stmt).await?,
@@ -354,6 +356,15 @@ impl<'a> Binder {
             }
 
             // share statements
+            Statement::CreateShareEndpoint(stmt) => {
+                self.bind_create_share_endpoint(stmt).await?
+            }
+                        Statement::ShowShareEndpoint(stmt) => {
+                self.bind_show_share_endpoint(stmt).await?
+            }
+                                    Statement::DropShareEndpoint(stmt) => {
+                self.bind_drop_share_endpoint(stmt).await?
+            }
             Statement::CreateShare(stmt) => {
                 self.bind_create_share(stmt).await?
             }

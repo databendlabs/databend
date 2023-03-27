@@ -52,7 +52,7 @@ use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::assert_unary_params;
 use crate::aggregates::assert_variadic_arguments;
 use crate::aggregates::AggregateFunction;
-use crate::scalars::BUILTIN_FUNCTIONS;
+use crate::BUILTIN_FUNCTIONS;
 
 #[derive(Serialize, Deserialize)]
 struct AggregateWindowFunnelState<T> {

@@ -114,6 +114,8 @@ pub enum Statement {
     OptimizeTable(OptimizeTableStmt),
     AnalyzeTable(AnalyzeTableStmt),
     ExistsTable(ExistsTableStmt),
+    // Columns
+    ShowColumns(ShowColumnsStmt),
 
     // Views
     CreateView(CreateViewStmt),
@@ -195,6 +197,9 @@ pub enum Statement {
     Presign(PresignStmt),
 
     // share
+    CreateShareEndpoint(CreateShareEndpointStmt),
+    ShowShareEndpoint(ShowShareEndpointStmt),
+    DropShareEndpoint(DropShareEndpointStmt),
     CreateShare(CreateShareStmt),
     DropShare(DropShareStmt),
     GrantShareObject(GrantShareObjectStmt),
@@ -343,6 +348,7 @@ impl Display for Statement {
             Statement::AlterDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::UseDatabase { database } => write!(f, "USE {database}")?,
             Statement::ShowTables(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowColumns(stmt) => write!(f, "{stmt}")?,
             Statement::ShowCreateTable(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeTable(stmt) => write!(f, "{stmt}")?,
             Statement::ShowTablesStatus(stmt) => write!(f, "{stmt}")?,
@@ -486,6 +492,9 @@ impl Display for Statement {
             Statement::ShowFileFormats => write!(f, "SHOW FILE FORMATS")?,
             Statement::Call(stmt) => write!(f, "{stmt}")?,
             Statement::Presign(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateShareEndpoint(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowShareEndpoint(stmt) => write!(f, "{stmt}")?,
+            Statement::DropShareEndpoint(stmt) => write!(f, "{stmt}")?,
             Statement::CreateShare(stmt) => write!(f, "{stmt}")?,
             Statement::DropShare(stmt) => write!(f, "{stmt}")?,
             Statement::GrantShareObject(stmt) => write!(f, "{stmt}")?,

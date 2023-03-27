@@ -1927,6 +1927,16 @@ impl ColumnBuilder {
     }
 
     pub fn with_capacity(ty: &DataType, capacity: usize) -> ColumnBuilder {
+        ColumnBuilder::with_capacity_hint(ty, capacity, true)
+    }
+
+    /// Create a new column builder with capacity and enable_datasize_hint
+    /// enable_datasize_hint is used in StringColumnBuilder to decide whether to pre-allocate values
+    pub fn with_capacity_hint(
+        ty: &DataType,
+        capacity: usize,
+        enable_datasize_hint: bool,
+    ) -> ColumnBuilder {
         match ty {
             DataType::Null => ColumnBuilder::Null { len: 0 },
             DataType::EmptyArray => ColumnBuilder::EmptyArray { len: 0 },
@@ -1939,19 +1949,20 @@ impl ColumnBuilder {
             }
             DataType::Boolean => ColumnBuilder::Boolean(MutableBitmap::with_capacity(capacity)),
             DataType::String => {
-                ColumnBuilder::String(StringColumnBuilder::with_capacity(capacity, 0))
+                let data_capacity = if enable_datasize_hint { 0 } else { capacity };
+                ColumnBuilder::String(StringColumnBuilder::with_capacity(capacity, data_capacity))
             }
             DataType::Timestamp => ColumnBuilder::Timestamp(Vec::with_capacity(capacity)),
             DataType::Date => ColumnBuilder::Date(Vec::with_capacity(capacity)),
             DataType::Nullable(ty) => ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
-                builder: Self::with_capacity(ty, capacity),
+                builder: Self::with_capacity_hint(ty, capacity, enable_datasize_hint),
                 validity: MutableBitmap::with_capacity(capacity),
             })),
             DataType::Array(ty) => {
                 let mut offsets = Vec::with_capacity(capacity + 1);
                 offsets.push(0);
                 ColumnBuilder::Array(Box::new(ArrayColumnBuilder {
-                    builder: Self::with_capacity(ty, 0),
+                    builder: Self::with_capacity_hint(ty, 0, enable_datasize_hint),
                     offsets,
                 }))
             }
@@ -1959,7 +1970,7 @@ impl ColumnBuilder {
                 let mut offsets = Vec::with_capacity(capacity + 1);
                 offsets.push(0);
                 ColumnBuilder::Map(Box::new(ArrayColumnBuilder {
-                    builder: Self::with_capacity(ty, 0),
+                    builder: Self::with_capacity_hint(ty, 0, enable_datasize_hint),
                     offsets,
                 }))
             }
@@ -1968,12 +1979,15 @@ impl ColumnBuilder {
                 ColumnBuilder::Tuple(
                     fields
                         .iter()
-                        .map(|field| Self::with_capacity(field, capacity))
+                        .map(|field| {
+                            Self::with_capacity_hint(field, capacity, enable_datasize_hint)
+                        })
                         .collect(),
                 )
             }
             DataType::Variant => {
-                ColumnBuilder::Variant(StringColumnBuilder::with_capacity(capacity, 0))
+                let data_capacity = if enable_datasize_hint { 0 } else { capacity };
+                ColumnBuilder::Variant(StringColumnBuilder::with_capacity(capacity, data_capacity))
             }
             DataType::Generic(_) => {
                 unreachable!("unable to initialize column builder for generic type")

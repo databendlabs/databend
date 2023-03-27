@@ -35,6 +35,7 @@ use databend_query::api::HttpService;
 use databend_query::api::RpcService;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::metrics::MetricService;
+use databend_query::servers::FlightSQLServer;
 use databend_query::servers::HttpHandler;
 use databend_query::servers::HttpHandlerKind;
 use databend_query::servers::MySQLHandler;
@@ -191,6 +192,18 @@ async fn main_entrypoint() -> Result<()> {
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
         info!("Listening for Admin HTTP API: {}", listening);
+    }
+
+    // FlightSQL API service.
+    {
+        let address = format!(
+            "{}:{}",
+            conf.query.flight_sql_handler_host, conf.query.flight_sql_handler_port
+        );
+        let mut srv = FlightSQLServer::create(conf.clone())?;
+        let listening = srv.start(address.parse()?).await?;
+        shutdown_handle.add_service(srv);
+        info!("Listening for FlightSQL API: {}", listening);
     }
 
     // RPC API service.
