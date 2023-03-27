@@ -1,3 +1,4 @@
+skipif http
 skipif clickhouse
 query TTTT
 SELECT name, value, default, level from system.settings where name in ('sql_dialect', 'timezone')
@@ -5,14 +6,17 @@ SELECT name, value, default, level from system.settings where name in ('sql_dial
 sql_dialect PostgreSQL PostgreSQL SESSION
 timezone UTC UTC SESSION
 
+skipif http
 skipif clickhouse
 statement ok
 SET GLOBAL sql_dialect='MySQL'
 
+skipif http
 skipif clickhouse
 statement ok
 SET GLOBAL timezone='Asia/Shanghai'
 
+skipif http
 skipif clickhouse
 query TTTT
 SELECT name, value, default, level from system.settings where name in ('sql_dialect', 'timezone')
@@ -20,18 +24,22 @@ SELECT name, value, default, level from system.settings where name in ('sql_dial
 sql_dialect  MySQL  PostgreSQL  GLOBAL
 timezone  Asia/Shanghai  UTC  GLOBAL
 
+skipif http
 skipif clickhouse
 statement ok
 UNSET (timezone)
 
+skipif http
 skipif clickhouse
 statement error 2801
 UNSET stl_dialect
 
+skipif http
 skipif clickhouse
 statement ok
 UNSET sql_dialect
 
+skipif http
 skipif clickhouse
 query TTTT
 SELECT name, value, default, level from system.settings where name in ('sql_dialect', 'timezone')

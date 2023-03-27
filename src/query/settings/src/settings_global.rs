@@ -90,9 +90,9 @@ impl Settings {
                             level: ScopeLevel::Global,
                             value: UserSettingValue::UInt64(val.parse::<u64>()?),
                         },
-                        UserSettingValue::String(v) => ChangeValue {
+                        UserSettingValue::String(_) => ChangeValue {
                             level: ScopeLevel::Global,
-                            value: UserSettingValue::String(v.clone()),
+                            value: UserSettingValue::String(val.clone()),
                         },
                     },
                 });

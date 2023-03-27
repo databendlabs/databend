@@ -38,40 +38,9 @@ pub struct DefaultSettings {
 impl DefaultSettings {
     pub fn instance() -> Result<Arc<DefaultSettings>> {
         Ok(Arc::clone(DEFAULT_SETTINGS.get_or_try_init(|| -> Result<Arc<DefaultSettings>> {
-            let conf = GlobalConfig::instance();
-            let memory_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
-            let mut num_cpus = num_cpus::get() as u64;
-
-            if conf.storage.params.is_fs() {
-                if let Ok(n) = std::thread::available_parallelism() {
-                    num_cpus = n.get() as u64;
-                }
-
-                // Most of x86_64 CPUs have 2-way Hyper-Threading
-                #[cfg(target_arch = "x86_64")]
-                {
-                    if num_cpus >= 32 {
-                        num_cpus /= 2;
-                    }
-                }
-                // Detect CGROUPS ?
-            }
-
-            if conf.query.num_cpus != 0 {
-                num_cpus = conf.query.num_cpus;
-            }
-            num_cpus = num_cpus.clamp(1, 96);
-
-            let mut default_max_memory_usage = 1024 * memory_info.total * 80 / 100;
-            if conf.query.max_server_memory_usage != 0 {
-                default_max_memory_usage = conf.query.max_server_memory_usage;
-            }
-
-            let default_max_storage_io_requests = if conf.storage.params.is_fs() {
-                48
-            } else {
-                std::cmp::min(num_cpus, 64)
-            };
+            let num_cpus = Self::num_cpus();
+            let max_memory_usage = Self::max_memory_usage()?;
+            let default_max_storage_io_requests = Self::storage_io_requests(num_cpus);
 
             let default_settings = HashMap::from([
                 ("max_block_size", DefaultSettingValue {
@@ -85,7 +54,7 @@ impl DefaultSettings {
                     possible_values: None,
                 }),
                 ("max_memory_usage", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(default_max_memory_usage),
+                    value: UserSettingValue::UInt64(max_memory_usage),
                     desc: "Sets the maximum memory usage in bytes for processing a single query.",
                     possible_values: None,
                 }),
@@ -266,6 +235,58 @@ impl DefaultSettings {
                     .collect()
             }))
         })?))
+    }
+
+    fn storage_io_requests(num_cpus: u64) -> u64 {
+        match GlobalConfig::try_get_instance() {
+            None => std::cmp::min(num_cpus, 64),
+            Some(conf) => match conf.storage.params.is_fs() {
+                true => 48,
+                false => std::cmp::min(num_cpus, 64),
+            },
+        }
+    }
+
+    fn num_cpus() -> u64 {
+        match GlobalConfig::try_get_instance() {
+            None => num_cpus::get() as u64,
+            Some(conf) => {
+                let mut num_cpus = num_cpus::get() as u64;
+
+                if conf.storage.params.is_fs() {
+                    if let Ok(n) = std::thread::available_parallelism() {
+                        num_cpus = n.get() as u64;
+                    }
+
+                    // Most of x86_64 CPUs have 2-way Hyper-Threading
+                    #[cfg(target_arch = "x86_64")]
+                    {
+                        if num_cpus >= 32 {
+                            num_cpus /= 2;
+                        }
+                    }
+                    // Detect CGROUPS ?
+                }
+
+                if conf.query.num_cpus != 0 {
+                    num_cpus = conf.query.num_cpus;
+                }
+
+                num_cpus.clamp(1, 96)
+            }
+        }
+    }
+
+    fn max_memory_usage() -> Result<u64> {
+        let memory_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
+
+        Ok(match GlobalConfig::try_get_instance() {
+            None => 1024 * memory_info.total * 80 / 100,
+            Some(conf) => match conf.query.max_server_memory_usage {
+                0 => 1024 * memory_info.total * 80 / 100,
+                max_server_memory_usage => max_server_memory_usage,
+            },
+        })
     }
 
     pub fn has_setting(key: &str) -> Result<bool> {
