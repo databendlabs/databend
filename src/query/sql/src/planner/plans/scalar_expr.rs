@@ -449,8 +449,8 @@ pub struct WindowOrderBy {
 #[derive(Default, Clone, PartialEq, Eq, Hash, Debug, serde::Serialize, serde::Deserialize)]
 pub struct WindowFuncFrame {
     pub units: WindowFuncFrameUnits,
-    pub start: WindowFuncFrameBound,
-    pub end: WindowFuncFrameBound,
+    pub start_bound: WindowFuncFrameBound,
+    pub end_bound: WindowFuncFrameBound,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]

@@ -1017,7 +1017,11 @@ impl<'a> TypeChecker<'a> {
             agg_func,
             partition_by: partitions,
             order_by: order_bys,
-            frame: WindowFuncFrame { units, start, end },
+            frame: WindowFuncFrame {
+                units,
+                start_bound: start,
+                end_bound: end,
+            },
         };
 
         Ok(Box::new((window_func.into(), return_type)))

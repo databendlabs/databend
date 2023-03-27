@@ -120,7 +120,7 @@ impl Binder {
                     })
                 } else {
                     let mut window_checker = WindowChecker::new(bind_context);
-                    let scalar = window_checker.resolve(&item.scalar, None)?;
+                    let scalar = window_checker.resolve(&item.scalar)?;
                     Ok(ScalarItem {
                         scalar,
                         index: item.index,

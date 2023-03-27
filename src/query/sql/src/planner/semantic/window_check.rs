@@ -14,7 +14,6 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_exception::Span;
 
 use crate::plans::AndExpr;
 use crate::plans::BoundColumnRef;
@@ -37,36 +36,36 @@ impl<'a> WindowChecker<'a> {
         Self { bind_context }
     }
 
-    pub fn resolve(&mut self, scalar: &ScalarExpr, span: Span) -> Result<ScalarExpr> {
+    pub fn resolve(&mut self, scalar: &ScalarExpr) -> Result<ScalarExpr> {
         match scalar {
             ScalarExpr::BoundColumnRef(_)
             | ScalarExpr::BoundInternalColumnRef(_)
             | ScalarExpr::ConstantExpr(_) => Ok(scalar.clone()),
             ScalarExpr::AndExpr(scalar) => Ok(AndExpr {
-                left: Box::new(self.resolve(&scalar.left, span)?),
-                right: Box::new(self.resolve(&scalar.right, span)?),
+                left: Box::new(self.resolve(&scalar.left)?),
+                right: Box::new(self.resolve(&scalar.right)?),
             }
             .into()),
             ScalarExpr::OrExpr(scalar) => Ok(OrExpr {
-                left: Box::new(self.resolve(&scalar.left, span)?),
-                right: Box::new(self.resolve(&scalar.right, span)?),
+                left: Box::new(self.resolve(&scalar.left)?),
+                right: Box::new(self.resolve(&scalar.right)?),
             }
             .into()),
             ScalarExpr::NotExpr(scalar) => Ok(NotExpr {
-                argument: Box::new(self.resolve(&scalar.argument, span)?),
+                argument: Box::new(self.resolve(&scalar.argument)?),
             }
             .into()),
             ScalarExpr::ComparisonExpr(scalar) => Ok(ComparisonExpr {
                 op: scalar.op.clone(),
-                left: Box::new(self.resolve(&scalar.left, span)?),
-                right: Box::new(self.resolve(&scalar.right, span)?),
+                left: Box::new(self.resolve(&scalar.left)?),
+                right: Box::new(self.resolve(&scalar.right)?),
             }
             .into()),
             ScalarExpr::FunctionCall(func) => {
                 let args = func
                     .arguments
                     .iter()
-                    .map(|arg| self.resolve(arg, span))
+                    .map(|arg| self.resolve(arg))
                     .collect::<Result<Vec<ScalarExpr>>>()?;
                 Ok(FunctionCall {
                     span: func.span,
@@ -79,7 +78,7 @@ impl<'a> WindowChecker<'a> {
             ScalarExpr::CastExpr(cast) => Ok(CastExpr {
                 span: cast.span,
                 is_try: cast.is_try,
-                argument: Box::new(self.resolve(&cast.argument, span)?),
+                argument: Box::new(self.resolve(&cast.argument)?),
                 target_type: cast.target_type.clone(),
             }
             .into()),

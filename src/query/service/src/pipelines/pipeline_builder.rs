@@ -800,7 +800,7 @@ impl PipelineBuilder {
             self.main_pipeline.resize(max_threads)?;
         }
 
-        self.build_sort_pipeline(input_schema.clone(), sort_desc, sort.plan_id, sort.limit)
+        self.build_sort_pipeline(input_schema, sort_desc, sort.plan_id, sort.limit)
     }
 
     fn build_sort_pipeline(
