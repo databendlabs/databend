@@ -86,6 +86,7 @@ use crate::plans::WindowFunc;
 use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncFrameUnits;
+use crate::plans::WindowOrderBy;
 use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnBinding;
@@ -722,10 +723,20 @@ impl<'a> TypeChecker<'a> {
                             let box (part, _part_type) = self.resolve(p).await?;
                             partitions.push(part);
                         }
+                        let mut order_bys = vec![];
+                        for o in window.order_by.iter() {
+                            let box (order, _) = self.resolve(&o.expr).await?;
+                            order_bys.push(WindowOrderBy {
+                                expr: order,
+                                asc: o.asc,
+                                nulls_first: o.nulls_first,
+                            })
+                        }
                         self.resolve_window(
                             *span,
                             new_agg_func.clone(),
                             partitions,
+                            order_bys,
                             window.window_frame.clone(),
                             data_type.clone(),
                         )
@@ -944,6 +955,7 @@ impl<'a> TypeChecker<'a> {
         _span: Span,
         agg_func: AggregateFunction,
         partitions: Vec<ScalarExpr>,
+        order_bys: Vec<WindowOrderBy>,
         window_frame: Option<WindowFrame>,
         return_type: DataType,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
@@ -1004,6 +1016,7 @@ impl<'a> TypeChecker<'a> {
         let window_func = WindowFunc {
             agg_func,
             partition_by: partitions,
+            order_by: order_bys,
             frame: WindowFuncFrame { units, start, end },
         };
 

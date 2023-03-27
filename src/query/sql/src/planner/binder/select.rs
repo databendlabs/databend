@@ -111,8 +111,6 @@ impl Binder {
             s_expr = self.bind_where(&mut from_context, expr, s_expr).await?;
         }
 
-        let window_order_by_exprs = self.fetch_window_order_by_expr(&stmt.select_list).await;
-
         // Collect set returning functions
         let set_returning_functions = {
             let mut collector = SrfCollector::new();
@@ -156,20 +154,6 @@ impl Binder {
             None
         };
 
-        let mut window_order_by_items = vec![];
-
-        for order_by_expr in window_order_by_exprs.iter() {
-            window_order_by_items.push(
-                self.fetch_window_order_items(
-                    &from_context,
-                    &mut scalar_items,
-                    &projections,
-                    order_by_expr,
-                )
-                .await?,
-            );
-        }
-
         let order_items = self
             .analyze_order_items(
                 &from_context,
@@ -189,19 +173,6 @@ impl Binder {
         if let Some((having, span)) = having {
             s_expr = self
                 .bind_having(&mut from_context, having, span, s_expr)
-                .await?;
-        }
-
-        // bind window order by
-        for window_order_items in window_order_by_items {
-            s_expr = self
-                .bind_window_order_by(
-                    &from_context,
-                    window_order_items,
-                    &select_list,
-                    &mut scalar_items,
-                    s_expr,
-                )
                 .await?;
         }
 

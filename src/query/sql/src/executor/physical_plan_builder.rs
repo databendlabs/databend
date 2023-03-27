@@ -681,6 +681,15 @@ impl PhysicalPlanBuilder {
             RelOperator::Window(w) => {
                 let input = self.build(s_expr.child(0)?).await?;
                 let partition_items = w.partition_by.iter().map(|v| v.index).collect::<Vec<_>>();
+                let order_by_items = w
+                    .order_by
+                    .iter()
+                    .map(|v| SortDesc {
+                        asc: v.asc.unwrap_or(true),
+                        nulls_first: v.nulls_first.unwrap_or(false),
+                        order_by: v.order_by_item.index,
+                    })
+                    .collect::<Vec<_>>();
                 let agg_func = if let ScalarExpr::AggregateFunction(agg) =
                     &w.aggregate_function.scalar
                 {
@@ -720,6 +729,7 @@ impl PhysicalPlanBuilder {
                     input: Box::new(input),
                     agg_func,
                     partition_by: partition_items,
+                    order_by: order_by_items,
                     window_frame: w.frame.clone(),
                 }))
             }

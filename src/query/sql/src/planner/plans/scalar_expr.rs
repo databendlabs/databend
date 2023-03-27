@@ -427,6 +427,7 @@ pub struct AggregateFunction {
 pub struct WindowFunc {
     pub agg_func: AggregateFunction,
     pub partition_by: Vec<ScalarExpr>,
+    pub order_by: Vec<WindowOrderBy>,
     pub frame: WindowFuncFrame,
 }
 
@@ -434,6 +435,15 @@ impl WindowFunc {
     pub fn display_name(&self) -> String {
         format!("{}_with_window", self.agg_func.func_name)
     }
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct WindowOrderBy {
+    pub expr: ScalarExpr,
+    // Optional `ASC` or `DESC`
+    pub asc: Option<bool>,
+    // Optional `NULLS FIRST` or `NULLS LAST`
+    pub nulls_first: Option<bool>,
 }
 
 #[derive(Default, Clone, PartialEq, Eq, Hash, Debug, serde::Serialize, serde::Deserialize)]

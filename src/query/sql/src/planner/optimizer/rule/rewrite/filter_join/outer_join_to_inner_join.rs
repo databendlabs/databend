@@ -360,6 +360,7 @@ fn remove_column_nullable(
                     return_type: expr.agg_func.return_type.clone(),
                 },
                 partition_by: expr.partition_by.clone(),
+                order_by: expr.order_by.clone(),
                 frame: expr.frame.clone(),
             })
         }

@@ -533,11 +533,29 @@ fn window_to_format_tree(
         .collect::<Result<Vec<_>>>()?
         .join(", ");
 
+    let order_by = plan
+        .order_by
+        .iter()
+        .map(|v| {
+            let column = metadata.read().column(v.order_by).clone();
+            let name = match column {
+                ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => column_name,
+                ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
+                ColumnEntry::InternalColumn(TableInternalColumn {
+                    internal_column, ..
+                }) => internal_column.column_name().to_string(),
+            };
+            Ok(name)
+        })
+        .collect::<Result<Vec<_>>>()?
+        .join(", ");
+
     let agg_func = pretty_display_agg_desc(&plan.agg_func, metadata);
 
     let mut children = vec![
-        FormatTreeNode::new(format!("partition by: [{partition_by}]")),
         FormatTreeNode::new(format!("aggregate function: [{agg_func}]")),
+        FormatTreeNode::new(format!("partition by: [{partition_by}]")),
+        FormatTreeNode::new(format!("order by: [{order_by}]")),
     ];
 
     if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
@@ -550,7 +568,7 @@ fn window_to_format_tree(
     children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
 
     Ok(FormatTreeNode::with_children(
-        "Window".to_string(),
+        "Window".to_string(), // todo(ariesdevil): show full window expression.
         children,
     ))
 }

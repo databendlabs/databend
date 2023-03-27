@@ -289,6 +289,7 @@ pub struct Window {
     pub input: Box<PhysicalPlan>,
     pub agg_func: AggregateFunctionDesc,
     pub partition_by: Vec<IndexType>,
+    pub order_by: Vec<SortDesc>,
     pub window_frame: WindowFuncFrame,
 }
 
