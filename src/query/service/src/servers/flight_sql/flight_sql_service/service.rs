@@ -180,8 +180,8 @@ impl FlightSqlService for FlightSqlServiceImpl {
             schema: schema_bytes,
             flight_descriptor: Some(flight_desc),
             endpoint: endpoints,
-            total_records: 0,
-            total_bytes: 0,
+            total_records: -1,
+            total_bytes: -1,
         };
         let resp = Response::new(info);
         Ok(resp)
