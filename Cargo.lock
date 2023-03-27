@@ -1669,6 +1669,7 @@ dependencies = [
  "common-expression",
  "common-hashtable",
  "common-io",
+ "common-openai",
  "common-vector",
  "crc32fast",
  "criterion",
