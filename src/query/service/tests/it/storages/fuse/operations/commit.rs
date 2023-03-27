@@ -514,6 +514,7 @@ impl TableContext for CtxDelegation {
         _database_name: &str,
         _table_name: &str,
         _files: Vec<StageFileInfo>,
+        _max_files: usize,
     ) -> Result<Vec<StageFileInfo>> {
         todo!()
     }
