@@ -29,12 +29,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_schema_type;
 use common_expression::type_check::check_number;
-use common_expression::types::DataType;
-use common_expression::types::DateType;
-use common_expression::types::Int64Type;
-use common_expression::types::NumberDataType;
-use common_expression::types::NumberScalar;
-use common_expression::types::TimestampType;
+use common_expression::types::*;
 use common_expression::DataBlock;
 use common_expression::Expr;
 use common_expression::FromData;
@@ -69,12 +64,11 @@ impl GenerateSeriesTable {
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        println!("args:{:?}", table_args.positioned);
         validate_args(&table_args.positioned, table_func_name)?;
 
         // The data types of start and end have been checked for consistency, and the input types are returned
         let schema = TableSchema::new(vec![TableField::new(
-            "generate_series",
+            table_func_name,
             infer_schema_type(&table_args.positioned[0].as_ref().infer_data_type())?,
         )]);
 
@@ -102,7 +96,6 @@ impl GenerateSeriesTable {
             },
             ..Default::default()
         };
-
         Ok(Arc::new(GenerateSeriesTable {
             table_info,
             start,
@@ -156,30 +149,78 @@ impl Table for GenerateSeriesTable {
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        pipeline.add_source(
-            |output| {
-                GenerateSeriesSource::create(
-                    ctx.clone(),
-                    output,
-                    self.start.clone(),
-                    self.end.clone(),
-                    self.step.clone(),
-                )
-            },
-            1,
-        )?;
+        match self.name() {
+            "generate_series" => {
+                pipeline.add_source(
+                    |output| {
+                        GenerateSeriesSource::<true>::create(
+                            ctx.clone(),
+                            output,
+                            self.start.clone(),
+                            self.end.clone(),
+                            self.step.clone(),
+                        )
+                    },
+                    1,
+                )?;
+            }
+
+            "range" => {
+                pipeline.add_source(
+                    |output| {
+                        GenerateSeriesSource::<false>::create(
+                            ctx.clone(),
+                            output,
+                            self.start.clone(),
+                            self.end.clone(),
+                            self.step.clone(),
+                        )
+                    },
+                    1,
+                )?;
+            }
+            _ => {
+                return Err(ErrorCode::BadDataValueType(format!(
+                    "Unknown function: {}",
+                    self.name(),
+                )));
+            }
+        }
         Ok(())
     }
 }
 
-struct GenerateSeriesSource {
+struct GenerateSeriesSource<const INCLUSIVE: bool> {
     finished: bool,
-    start: Scalar,
-    end: Scalar,
-    step: Scalar,
+
+    data_type: DataType,
+
+    // TODO: make it atomic thus we can use it in multiple threads
+    current_idx: i64,
+    start: i64,
+    end: i64,
+    step: i64,
 }
 
-impl GenerateSeriesSource {
+fn get_i64_number(scalar: &Scalar) -> Result<i64> {
+    check_number(
+        None,
+        FunctionContext::default(),
+        &Expr::<usize>::Cast {
+            span: None,
+            is_try: false,
+            expr: Box::new(Expr::Constant {
+                span: None,
+                scalar: scalar.clone(),
+                data_type: scalar.clone().as_ref().infer_data_type(),
+            }),
+            dest_type: Int64Type::data_type(),
+        },
+        &BUILTIN_FUNCTIONS,
+    )
+}
+
+impl<const INCLUSIVE: bool> GenerateSeriesSource<INCLUSIVE> {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
@@ -187,7 +228,40 @@ impl GenerateSeriesSource {
         end: Scalar,
         step: Scalar,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx.clone(), output, GenerateSeriesSource {
+        let data_type = match start {
+            Scalar::Number(_) => Int64Type::data_type(),
+            Scalar::Timestamp(_) => TimestampType::data_type(),
+            Scalar::Date(_) => DateType::data_type(),
+            _ => {
+                return Err(ErrorCode::BadArguments(format!(
+                    "Unsupported data type for generate_series: {:?}",
+                    start
+                )));
+            }
+        };
+
+        let start = get_i64_number(&start)?;
+        let mut end = get_i64_number(&end)?;
+        let step = get_i64_number(&step)?;
+
+        if INCLUSIVE {
+            if step > 0 {
+                end += 1;
+            } else {
+                end -= 1;
+            }
+        }
+
+        if (step == 0) || ((step > 0) ^ (start < end)) {
+            return Err(ErrorCode::BadArguments(
+                "start must be less than or equal to end when step is positive vice versa"
+                    .to_string(),
+            ));
+        }
+
+        AsyncSourcer::create(ctx.clone(), output, Self {
+            current_idx: 0,
+            data_type,
             start,
             end,
             step,
@@ -196,34 +270,8 @@ impl GenerateSeriesSource {
     }
 }
 
-fn range<T>(start: T, end: T, step: T) -> Vec<T>
-where T: std::ops::Add<Output = T> + std::ops::Sub<Output = T> + PartialOrd + Copy + Default {
-    let mut result = Vec::new();
-    if step == T::default() {
-        return result;
-    }
-    let increase_sign = end >= start;
-    let step_sign = step > T::default();
-    if increase_sign != step_sign {
-        return result;
-    }
-    let mut current = start;
-    if increase_sign {
-        while current <= end {
-            result.push(current);
-            current = current + step;
-        }
-    } else {
-        while current >= end {
-            result.push(current);
-            current = current + step;
-        }
-    }
-    result
-}
-
 #[async_trait::async_trait]
-impl AsyncSource for GenerateSeriesSource {
+impl<const INCLUSIVE: bool> AsyncSource for GenerateSeriesSource<INCLUSIVE> {
     const NAME: &'static str = "GenerateSeriesSourceTransform";
 
     #[async_trait::unboxed_simple]
@@ -231,68 +279,40 @@ impl AsyncSource for GenerateSeriesSource {
         if self.finished {
             return Ok(None);
         }
-        let dest_type = DataType::Number(NumberDataType::Int64);
-        let start: i64 = check_number(
-            None,
-            FunctionContext::default(),
-            &Expr::<usize>::Cast {
-                span: None,
-                is_try: false,
-                expr: Box::new(Expr::Constant {
-                    span: None,
-                    scalar: self.start.clone(),
-                    data_type: self.start.clone().as_ref().infer_data_type(),
-                }),
-                dest_type: dest_type.clone(),
-            },
-            &BUILTIN_FUNCTIONS,
-        )?;
-        let end: i64 = check_number(
-            None,
-            FunctionContext::default(),
-            &Expr::<usize>::Cast {
-                span: None,
-                is_try: false,
-                expr: Box::new(Expr::Constant {
-                    span: None,
-                    scalar: self.end.clone(),
-                    data_type: self.end.clone().as_ref().infer_data_type(),
-                }),
-                dest_type: dest_type.clone(),
-            },
-            &BUILTIN_FUNCTIONS,
-        )?;
-        let step: i64 = check_number(
-            None,
-            FunctionContext::default(),
-            &Expr::<usize>::Cast {
-                span: None,
-                is_try: false,
-                expr: Box::new(Expr::Constant {
-                    span: None,
-                    scalar: self.step.clone(),
-                    data_type: self.step.clone().as_ref().infer_data_type(),
-                }),
-                dest_type,
-            },
-            &BUILTIN_FUNCTIONS,
-        )?;
-        self.finished = true;
 
-        let columns = match self.start {
-            Scalar::Number(_) => Int64Type::from_data(range(start, end, step).into_iter()),
-            Scalar::Timestamp(_) => TimestampType::from_data(range(start, end, step).into_iter()),
-            Scalar::Date(_) => {
-                DateType::from_data(range(start as i32, end as i32, step as i32).into_iter())
+        let current_start = self.start + self.step * self.current_idx;
+        let offset = if self.step < 0 { 1 } else { -1 };
+
+        // check if we need to finish
+        if (self.step > 0 && current_start >= self.end)
+            || (self.step < 0 && current_start <= self.end)
+        {
+            self.finished = true;
+            return Ok(None);
+        }
+
+        static MAX_BLOCK_SIZE: i64 = 1024 * 1024;
+
+        let size =
+            ((self.end - current_start + (self.step + offset)) / self.step).min(MAX_BLOCK_SIZE);
+
+        let column = match self.data_type {
+            DataType::Number(_) => {
+                Int64Type::from_data((0..size).map(|idx| current_start + self.step * idx))
             }
-            _ => {
-                return Err(ErrorCode::BadDataValueType(format!(
-                    "No support Type, got start is {:?} and end is {:?}",
-                    self.start, self.end
-                )));
+            DataType::Timestamp => {
+                TimestampType::from_data((0..size).map(|idx| current_start + self.step * idx))
             }
+            DataType::Date => {
+                let current_start = current_start as i32;
+                let step = self.step as i32;
+                DateType::from_data((0..size as i32).map(|idx| current_start + step * idx))
+            }
+            _ => unreachable!(),
         };
-        Ok(Some(DataBlock::new_from_columns(vec![columns])))
+
+        self.current_idx += size;
+        Ok(Some(DataBlock::new_from_columns(vec![column])))
     }
 }
 

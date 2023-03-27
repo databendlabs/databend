@@ -334,7 +334,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let table_function = map(
         rule! {
-            #ident ~ "(" ~ #comma_separated_list0(table_function_param) ~ ")" ~ #table_alias?
+            #function_name ~ "(" ~ #comma_separated_list0(table_function_param) ~ ")" ~ #table_alias?
         },
         |(name, _, params, _, alias)| TableReferenceElement::TableFunction {
             name,

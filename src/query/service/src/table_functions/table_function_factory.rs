@@ -151,6 +151,11 @@ impl TableFunctionFactory {
         );
 
         creators.insert(
+            "range".to_string(),
+            (next_id(), Arc::new(GenerateSeriesTable::create)),
+        );
+
+        creators.insert(
             "ai_to_sql".to_string(),
             (next_id(), Arc::new(GPT2SQLTable::create)),
         );
