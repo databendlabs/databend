@@ -823,8 +823,8 @@ impl<'a> Evaluator<'a> {
             unreachable!()
         }
 
-        for cond_idx in 0..args.len() {
-            let cond = self.partial_run(&args[cond_idx], validity.clone())?;
+        for arg in args {
+            let cond = self.partial_run(&arg, validity.clone())?;
             match cond.try_downcast::<NullableType<BooleanType>>().unwrap() {
                 Value::Scalar(None | Some(false)) => {
                     return Ok(Value::Scalar(Scalar::Boolean(false)));
