@@ -870,17 +870,12 @@ impl PipelineBuilder {
         }
 
         if join.join_type == JoinType::Right || join.join_type == JoinType::Full {
-            if !join.non_equi_conditions.is_empty() || join.join_type != JoinType::Right {
-                self.main_pipeline.resize(1)?;
-            }
+            self.main_pipeline.resize(1)?;
             self.main_pipeline.add_transform(|input, output| {
                 let transform = TransformRightJoin::try_create(
                     input,
                     output,
-                    RightJoinCompactor::create(
-                        state.clone(),
-                        join.non_equi_conditions.is_empty() && join.join_type == JoinType::Right,
-                    ),
+                    RightJoinCompactor::create(state.clone(), join.non_equi_conditions.is_empty()),
                 )?;
 
                 if self.enable_profiling {
@@ -896,9 +891,7 @@ impl PipelineBuilder {
         }
 
         if join.join_type == JoinType::RightAnti || join.join_type == JoinType::RightSemi {
-            if !join.non_equi_conditions.is_empty() || join.join_type != JoinType::RightAnti {
-                self.main_pipeline.resize(1)?;
-            }
+            self.main_pipeline.resize(1)?;
             self.main_pipeline.add_transform(|input, output| {
                 let transform = TransformRightSemiAntiJoin::try_create(
                     input,

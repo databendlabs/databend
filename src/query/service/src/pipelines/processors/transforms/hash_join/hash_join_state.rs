@@ -16,6 +16,7 @@ use common_exception::Result;
 use common_expression::DataBlock;
 
 use super::ProbeState;
+use crate::pipelines::processors::transforms::hash_join::desc::JoinState;
 
 #[async_trait::async_trait]
 /// Concurrent hash table for hash join.
@@ -27,6 +28,8 @@ pub trait HashJoinState: Send + Sync {
     fn probe(&self, input: &DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>>;
 
     fn interrupt(&self);
+
+    fn join_state(&self) -> &JoinState;
 
     /// Attach to state
     fn attach(&self) -> Result<()>;
