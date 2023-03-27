@@ -132,13 +132,11 @@ impl StageFilesInfo {
                 if first_only {
                     break;
                 }
-                if max_files == 0 {
-                    continue;
-                } else if max_files != 0 && limit == max_files {
+
+                if limit == max_files {
                     break;
-                } else {
-                    limit += 1;
                 }
+                limit += 1;
             }
             Ok(res)
         } else {
@@ -233,13 +231,11 @@ impl StageFilesInfo {
                 if first_only {
                     return Ok(files);
                 }
-                if max_files == 0 {
-                    continue;
-                } else if max_files != 0 && limit == max_files {
+
+                if limit == max_files {
                     break;
-                } else {
-                    limit += 1;
                 }
+                limit += 1;
             }
         }
         Ok(files)

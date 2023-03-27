@@ -542,13 +542,11 @@ impl TableContext for QueryContext {
                 }
             }
             results.push(file);
-            if max_files == 0 {
-                continue;
-            } else if max_files != 0 && limit == max_files {
+
+            if limit == max_files {
                 break;
-            } else {
-                limit += 1;
             }
+            limit += 1;
         }
         Ok(results)
     }
