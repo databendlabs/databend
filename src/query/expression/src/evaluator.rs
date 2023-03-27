@@ -800,7 +800,8 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    /// Evaluate a set returning function. Return multiple chunks of results, and the repeat times of each of the result.
+    /// Evaluate a set-returning-function. Return multiple sets of results
+    /// for each input row, along with the number of rows in each set.
     pub fn run_srf(&self, expr: &Expr) -> Result<Vec<(Value<AnyType>, usize)>> {
         if let Expr::FunctionCall {
             function,
@@ -816,7 +817,9 @@ impl<'a> Evaluator<'a> {
                     .map(|expr| self.run(expr))
                     .collect::<Result<Vec<_>>>()?;
                 let cols_ref = args.iter().map(Value::as_ref).collect::<Vec<_>>();
-                return Ok((eval)(&cols_ref, self.input_columns.num_rows()));
+                let result = (eval)(&cols_ref, self.input_columns.num_rows());
+                assert_eq!(result.len(), self.input_columns.num_rows());
+                return Ok(result);
             }
         }
 
