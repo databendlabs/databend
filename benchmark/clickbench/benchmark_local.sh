@@ -12,7 +12,7 @@ echo "Checking script dependencies..."
 # OpenBSD netcat do not have a version arg
 # nc --version
 bc --version
-jq --version
+yq --version
 bendsql version
 
 function wait_for_port() {
@@ -85,7 +85,7 @@ echo "Data loaded in ${load_time}s."
 data_size=$(echo "select sum(data_compressed_size) from system.tables where database = '${BENCHMARK_DATASET}';" | bendsql query -f unaligned -t)
 
 echo '{}' >result.json
-jq ".load_time = ${load_time} | .data_size = ${data_size} | .result = []" <result.json >result.json.tmp && mv result.json.tmp result.json
+yq -i ".load_time = ${load_time} | .data_size = ${data_size} | .result = []" result.json
 
 echo "Running queries..."
 
@@ -94,9 +94,9 @@ function append_result() {
     local seq=$2
     local value=$3
     if [[ $seq -eq 1 ]]; then
-        jq ".result += [[${value}]]" <result.json >result.json.tmp && mv result.json.tmp result.json
+        yq -i ".result += [[${value}]]" result.json
     else
-        jq ".result[${query_num} - 1] += [${value}]" <result.json >result.json.tmp && mv result.json.tmp result.json
+        yq -i ".result[${query_num} - 1] += [${value}]" result.json
     fi
 }
 

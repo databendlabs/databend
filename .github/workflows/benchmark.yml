@@ -32,7 +32,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
           fetch-depth: 0
       - uses: ./.github/actions/build_linux
         with:
@@ -41,10 +40,10 @@ jobs:
       - name: Generate benchmark metadata
         run: |
           echo '{}' > metadata.json
-          jq ".sha = \"${{ github.sha }}\"" <metadata.json >metadata.json.tmp && mv metadata.json.tmp metadata.json
-          jq ".run_id = \"${{ github.run_id }}\"" <metadata.json >metadata.json.tmp && mv metadata.json.tmp metadata.json
-          jq ".pr_id = \"${{ github.event.pull_request.number }}\"" <metadata.json >metadata.json.tmp && mv metadata.json.tmp metadata.json
-          jq ".head_sha = \"${{ github.event.pull_request.head.sha }}\"" <metadata.json >metadata.json.tmp && mv metadata.json.tmp metadata.json
+          yq -i '.sha = "${{ github.sha }}"' metadata.json
+          yq -i '.run_id = "${{ github.run_id }}"' metadata.json
+          yq -i '.pr_id = "${{ github.event.pull_request.number }}"' metadata.json
+          yq -i '.head_sha = "${{ github.event.pull_request.head.sha }}"' metadata.json
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
