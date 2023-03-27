@@ -974,3 +974,21 @@ EvalScalar
         ├── partitions scanned: 0
         ├── push downs: [filters: [is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL) = "xx")], limit: NONE]
         └── estimated rows: 0.00
+
+query T
+explain select * from v4 where a > 100;
+----
+EvalScalar
+├── expressions: [TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL)]
+├── estimated rows: 0.00
+└── Filter
+    ├── filters: [v4.a (#0) > 100]
+    ├── estimated rows: 0.00
+    └── TableScan
+        ├── table: default.default.t4
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [t4.a (#0) > 100], limit: NONE]
+        └── estimated rows: 0.00
