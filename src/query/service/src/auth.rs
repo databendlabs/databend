@@ -88,23 +88,15 @@ impl AuthMgr {
                         _ => return Err(ErrorCode::AuthenticateFailure("wrong auth type")),
                     },
                     Err(e) => {
+                        if e.code() != ErrorCode::UNKNOWN_USER {
+                            return Err(ErrorCode::AuthenticateFailure(e.message()));
+                        }
                         let ensure_user = match jwt.custom.ensure_user {
-                            Some(ref ensure_user) => {
-                                if e.code() == ErrorCode::UNKNOWN_USER {
-                                    ensure_user
-                                } else {
-                                    return Err(ErrorCode::AuthenticateFailure(e.message()));
-                                }
-                            }
+                            Some(ref ensure_user) => ensure_user,
                             None => return Err(ErrorCode::AuthenticateFailure(e.message())),
                         };
                         // create a new user if not exists
                         let mut user_info = UserInfo::new(&user_name, "%", AuthInfo::JWT);
-                        if user_info.identity().is_root() {
-                            return Err(ErrorCode::AuthenticateFailure(
-                                "root user is not allowed in jwt auth.",
-                            ));
-                        }
                         if let Some(ref roles) = ensure_user.roles {
                             for role in roles.clone().into_iter() {
                                 user_info.grants.grant_role(role);
