@@ -61,15 +61,15 @@ query T
 explain select a.a_id, b.a_id, sum(b.b_val) from a join b on a.a_id = b.a_id group by a.a_id, b.a_id;
 ----
 EvalScalar
-├── expressions: [sum(b.b_val) (#7)]
+├── expressions: [sum(b.b_val) (#9) * CAST(CAST(_eager_final_count (#8) AS UInt64) AS UInt64 NULL)]
 ├── estimated rows: 0.00
 └── AggregateFinal
     ├── group by: [a_id, a_id]
-    ├── aggregate functions: [sum(sum(b.b_val))]
+    ├── aggregate functions: [sum(sum(b.b_val)), sum(count(*))]
     ├── estimated rows: 0.00
     └── AggregatePartial
         ├── group by: [a_id, a_id]
-        ├── aggregate functions: [sum(sum(b.b_val))]
+        ├── aggregate functions: [sum(sum(b.b_val)), sum(count(*))]
         ├── estimated rows: 0.00
         └── HashJoin
             ├── join type: INNER
@@ -94,12 +94,20 @@ EvalScalar
             │           ├── push downs: [filters: [], limit: NONE]
             │           ├── output columns: [b_val, a_id]
             │           └── estimated rows: 0.00
-            └── TableScan(Probe)
-                ├── table: default.default.a
-                ├── read rows: 0
-                ├── read bytes: 0
-                ├── partitions total: 0
-                ├── partitions scanned: 0
-                ├── push downs: [filters: [], limit: NONE]
-                ├── output columns: [a_id]
-                └── estimated rows: 0.00
+            └── AggregateFinal(Probe)
+                ├── group by: [a_id]
+                ├── aggregate functions: [count()]
+                ├── estimated rows: 0.00
+                └── AggregatePartial
+                    ├── group by: [a_id]
+                    ├── aggregate functions: [count()]
+                    ├── estimated rows: 0.00
+                    └── TableScan
+                        ├── table: default.default.a
+                        ├── read rows: 0
+                        ├── read bytes: 0
+                        ├── partitions total: 0
+                        ├── partitions scanned: 0
+                        ├── push downs: [filters: [], limit: NONE]
+                        ├── output columns: [a_id]
+                        └── estimated rows: 0.00
