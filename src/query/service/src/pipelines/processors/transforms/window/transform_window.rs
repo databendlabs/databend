@@ -94,6 +94,10 @@ pub struct TransformWindow {
     frame_started: bool,
     frame_ended: bool,
 
+    // Can be used to optimize window frame sliding.
+    prev_frame_start: RowPtr,
+    prev_frame_end: RowPtr,
+
     current_row: RowPtr,
 
     // Used for rank
@@ -134,6 +138,8 @@ impl TransformWindow {
             frame_end: RowPtr::default(),
             frame_started: false,
             frame_ended: false,
+            prev_frame_start: RowPtr::default(),
+            prev_frame_end: RowPtr::default(),
             current_row: RowPtr::default(),
             current_row_in_partition: 1,
             input_is_finished: false,
@@ -169,40 +175,23 @@ impl TransformWindow {
             .unwrap()
     }
 
-    fn current_row_sub_within_partition(&self, mut n: usize) -> RowPtr {
-        let mut row = self.current_row;
-        let start = &self.partition_start;
-        // Use '>' to avoid overflow.
-        while row.block > start.block {
-            if row.row >= n {
-                row.row -= n;
-                return row;
-            }
-            n -= row.row;
-            row.block -= 1;
-            row.row = self.block_rows(row);
-        }
-        // row = RowPtr::new(partition_start.block, block.num_rows())
-        row.row = row.row - (row.row - start.row).min(n);
-        row
-    }
+    fn add_rows_within_partition(&self, mut cur: RowPtr, mut n: usize) -> RowPtr {
+        debug_assert!(cur.ge(&self.partition_start) && cur.le(&self.partition_end));
 
-    fn current_row_add_within_partition(&self, mut n: usize) -> RowPtr {
-        let mut row = self.current_row;
         let end = &self.partition_end;
-        while row.block < end.block {
-            let rows = self.block_rows(row);
-            if row.row + n < rows {
-                row.row += n;
-                return row;
+        while cur.block < end.block {
+            let rows = self.block_rows(cur);
+            if cur.row + n < rows {
+                cur.row += n;
+                return cur;
             }
-            n -= rows - row.row;
-            row.block += 1;
-            row.row = 0;
+            n -= rows - cur.row;
+            cur.block += 1;
+            cur.row = 0;
         }
         // row = RowPtr::new(partition_end.block, 0)
-        row.row = end.row.min(row.row + n);
-        row
+        cur.row = end.row.min(cur.row + n);
+        cur
     }
 
     #[inline(always)]
@@ -285,15 +274,24 @@ impl TransformWindow {
             }
             WindowFrameBound::Preceding(Some(n)) => {
                 self.frame_started = true;
-                self.frame_start = self.current_row_sub_within_partition(*n);
+                if self.current_row_in_partition - 1 <= *n {
+                    self.frame_start = self.partition_start;
+                } else {
+                    self.frame_start = self.advance_row(self.prev_frame_start);
+                }
             }
             WindowFrameBound::Preceding(_) => {
                 self.frame_started = true;
                 self.frame_start = self.partition_start;
             }
             WindowFrameBound::Following(Some(n)) => {
-                self.frame_start = self.current_row_add_within_partition(*n);
-                self.frame_started = self.partition_ended || self.frame_start < self.partition_end
+                self.frame_start = if self.current_row_in_partition == 1 {
+                    self.add_rows_within_partition(self.current_row, *n)
+                } else {
+                    self.advance_row(self.prev_frame_start)
+                        .min(self.partition_end)
+                };
+                self.frame_started = self.partition_ended || self.frame_start < self.partition_end;
             }
             WindowFrameBound::Following(_) => {
                 unreachable!()
@@ -309,16 +307,27 @@ impl TransformWindow {
             }
             WindowFrameBound::Preceding(Some(n)) => {
                 self.frame_ended = true;
-                self.frame_end = self.current_row_sub_within_partition(*n);
+                if self.current_row_in_partition - 1 <= *n {
+                    self.frame_end = self.partition_start;
+                } else {
+                    self.frame_end = self.advance_row(self.prev_frame_end);
+                }
             }
             WindowFrameBound::Preceding(_) => {
                 unreachable!()
             }
             WindowFrameBound::Following(Some(n)) => {
-                self.frame_end = self.current_row_add_within_partition(*n);
-                self.frame_ended = self.partition_ended || self.frame_end < self.partition_end;
-                // Frame end is excluded.
-                self.frame_end = self.advance_row(self.frame_end).min(self.partition_end);
+                self.frame_end = if self.current_row_in_partition == 1 {
+                    let next_end = self.add_rows_within_partition(self.current_row, *n);
+                    self.frame_ended = self.partition_ended || next_end < self.partition_end;
+                    // Frame end is excluded.
+                    self.advance_row(next_end)
+                } else {
+                    self.frame_ended =
+                        self.partition_ended || self.prev_frame_end < self.partition_end;
+                    self.advance_row(self.prev_frame_end)
+                }
+                .min(self.partition_end);
             }
             WindowFrameBound::Following(_) => {
                 self.frame_ended = self.partition_ended;
@@ -386,6 +395,8 @@ impl TransformWindow {
                 self.current_row = self.advance_row(self.current_row);
 
                 self.current_row_in_partition += 1;
+                self.prev_frame_start = self.frame_start;
+                self.prev_frame_end = self.frame_end;
                 self.frame_started = false;
                 self.frame_ended = false;
             }
@@ -693,6 +704,8 @@ mod tests {
 
             transform.advance_partition();
             transform.current_row = RowPtr::new(0, 1);
+            transform.prev_frame_start = RowPtr::new(0, 0);
+            transform.prev_frame_end = RowPtr::new(0, 2);
 
             assert!(!transform.partition_ended);
             assert_eq!(transform.partition_end, RowPtr::new(1, 0));
@@ -717,6 +730,8 @@ mod tests {
 
             transform.advance_partition();
             transform.current_row = RowPtr::new(0, 1);
+            transform.prev_frame_start = RowPtr::new(0, 0);
+            transform.prev_frame_end = RowPtr::new(0, 3);
 
             assert!(transform.partition_ended);
             assert_eq!(transform.partition_end, RowPtr::new(0, 3));
