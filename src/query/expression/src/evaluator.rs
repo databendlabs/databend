@@ -1046,9 +1046,9 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 let mut has_true = true;
                 let mut has_false = true;
 
-                type DomanType = NullableType<BooleanType>;
+                type DomainType = NullableType<BooleanType>;
                 for domain in args_domain.iter().flatten() {
-                    let domain = DomanType::try_downcast_domain(domain).unwrap();
+                    let domain = DomainType::try_downcast_domain(domain).unwrap();
                     let (domain_hash_true, domain_hash_false) = match &domain {
                         NullableDomain {
                             has_null,
