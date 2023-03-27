@@ -26,7 +26,7 @@ fi
 
 echo "Checking script dependencies..."
 bc --version
-jq --version
+yq --version
 bendsql version
 
 echo "#######################################################"
@@ -47,21 +47,6 @@ bendsql cloud warehouse resume "${CLOUD_WAREHOUSE}" --wait
 
 bendsql cloud warehouse use "${CLOUD_WAREHOUSE}"
 
-# Data loaded before the benchmark starts
-# bendsql query <"${BENCHMARK_DATASET}/create.sql"
-
-# echo "Loading data..."
-# load_start=$(date +%s)
-# bendsql query <"${BENCHMARK_DATASET}/load.sql"
-# load_end=$(date +%s)
-# load_time=$(echo "$load_end - $load_start" | bc -l)
-# echo "Data loaded in ${load_time}s."
-
-# data_size=$(echo "select sum(data_compressed_size) from system.tables where database = '${BENCHMARK_DATASET}';" | bendsql query -f unaligned -t)
-
-# echo '{}' >result.json
-# jq ".load_time = ${load_time} | .data_size = ${data_size} | .result = []" <result.json >result.json.tmp && mv result.json.tmp result.json
-
 echo '{}' >result.json
 echo "Running queries..."
 
@@ -70,9 +55,9 @@ function append_result() {
     local seq=$2
     local value=$3
     if [[ $seq -eq 1 ]]; then
-        jq ".result += [[${value}]]" <result.json >result.json.tmp && mv result.json.tmp result.json
+        yq -i ".result += [[${value}]]" result.json
     else
-        jq ".result[${query_num} - 1] += [${value}]" <result.json >result.json.tmp && mv result.json.tmp result.json
+        yq -i ".result[${query_num} - 1] += [${value}]" result.json
     fi
 }
 
