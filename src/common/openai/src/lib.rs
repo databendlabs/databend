@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod completion;
+mod embedding;
 #[allow(clippy::module_inception)]
 mod openai;
 
