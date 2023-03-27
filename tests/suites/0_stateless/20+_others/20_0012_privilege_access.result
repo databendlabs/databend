@@ -1,3 +1,6 @@
+default
+information_schema
+system
 ERROR 1105 (HY000) at line 1: Code: 1063, displayText = Permission denied, user 'test-user'@'127.0.0.1' requires [Insert] privilege on 'default'.'default'.'t20_0012'.
 1
 2
