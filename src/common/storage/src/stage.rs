@@ -136,8 +136,9 @@ impl StageFilesInfo {
 
                 if limit == max_files {
                     break;
+                } else {
+                    limit += 1;
                 }
-                limit += 1;
             }
             Ok(res)
         } else {

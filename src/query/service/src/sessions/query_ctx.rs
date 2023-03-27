@@ -498,7 +498,7 @@ impl TableContext for QueryContext {
         database_name: &str,
         table_name: &str,
         files: Vec<StageFileInfo>,
-        max_files: usize,
+        max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
         let tenant = self.get_tenant();
         let catalog = self.get_catalog(catalog_name)?;
@@ -518,6 +518,7 @@ impl TableContext for QueryContext {
             copied_files.extend(resp.file_info);
         }
 
+        let max_files = max_files.unwrap_or(usize::MAX);
         // Colored.
         let mut results = Vec::with_capacity(files.len());
         for mut file in files {

@@ -562,7 +562,7 @@ impl<'a> Binder {
                     dst_database_name,
                     dst_table_name,
                     files,
-                    0,
+                    None,
                 )
                 .await?;
 
