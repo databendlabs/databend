@@ -8,27 +8,27 @@ statement ok
 USE db1
 
 statement ok
-CREATE TABLE IF NOT EXISTS t1(id Int, v Vector) Engine = Fuse
+CREATE TABLE IF NOT EXISTS tv1(id Int, v Vector) Engine = Fuse
 
 statement ok
-INSERT INTO t1 (id, v) VALUES(1, [1.1, 1.2, 1.3]),(2, [2.1, 2.2, 2.3]),(3, [3.1, 3.2, 3.3]);
+INSERT INTO tv1 (id, v) VALUES(1, [1.1, 1.2, 1.3]),(2, [2.1, 2.2, 2.3]),(3, [3.1, 3.2, 3.3])
 
 query IT
-select * from t1
+select * from tv1
 ----
 1 [1.1,1.2,1.3]
 2 [2.1,2.2,2.3]
 3 [3.1,3.2,3.3]
 
 query II
-select v[1], v[2] from t1
+select v[1], v[2] from tv1
 ----
 1.1 1.2
 2.1 2.2
 3.1 3.2
 
 query I
-select cosine_distance(v, [10.1,11.2,12.3]) from t1;
+select cosine_distance(v, [10.1,11.2,12.3]) from tv1
 ----
 0.99992687
 0.9990788
