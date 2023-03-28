@@ -18,23 +18,26 @@ services:
       - minio
     healthcheck:
       test: "curl -f localhost:8080/v1/health || exit 1"
+      interval: 2s
+      retries: 10
+      start_period: 2s
+      timeout: 1s
   test:
     image: rust
     command: cargo test --target-dir /target --test *
-    working_dir: /workdir
+    working_dir: /workspace
     environment:
       - RUST_BACKTRACE=1
       - TEST_DATABEND_DSN=databend://databend:databend@databend:8000/default?sslmode=disable
-      # - HTTPS_PROXY=http://172.24.0.1:7890
     volumes:
-      - ../:/workdir
-      - cargo_registry:/usr/local/cargo/registry
+      - ../:/workspace
       - rustup:/usr/local/rustup
+      - ${HOME}/.cargo/registry:/usr/local/cargo/registry
       - target:/target
     depends_on:
-      - databend
+      databend:
+        condition: service_healthy
 
 volumes:
-  cargo_registry:
   rustup:
   target:

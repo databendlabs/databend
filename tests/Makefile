@@ -6,10 +6,10 @@ prepare:
 	mkdir -p data/databend
 
 up: prepare
-	docker compose up -d databend
+	docker compose up --quiet-pull -d databend
 
 test: up
-	docker compose run test
+	docker compose run --quiet-pull test
 
 down:
 	docker compose down

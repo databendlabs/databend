@@ -16,6 +16,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup
+        with:
+          cache-key: check
       - uses: ./.github/actions/check
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -31,22 +33,24 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup
-      - name: Test
-        run: |
-          cargo build
+        with:
+          cache-key: build
+      - run: cargo build
 
   unit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup
-      - name: Test
-        run: |
-          cargo test --all-features --lib -- --show-output
+        with:
+          cache-key: unit
+      - run: cargo test --all-features --lib -- --show-output
 
   integration:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - run: |
-          make -C tests
+      - uses: ./.github/actions/setup
+        with:
+          cache-key: integration
+      - run: make -C tests
