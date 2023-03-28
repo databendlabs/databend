@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::min;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -502,6 +503,7 @@ impl TableContext for QueryContext {
         max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
         let tenant = self.get_tenant();
+        let files = files.clone();
         let catalog = self.get_catalog(catalog_name)?;
         let table = catalog
             .get_table(&tenant, database_name, table_name)
@@ -509,45 +511,50 @@ impl TableContext for QueryContext {
         let table_id = table.get_id();
 
         let mut limit: usize = 0;
+        let max_files = max_files.unwrap_or(MAX_QUERY_COPIED_FILES_NUM);
+        let max_copied_files = min(MAX_QUERY_COPIED_FILES_NUM, max_files);
         let mut copied_files = BTreeMap::new();
-        for chunk in files.chunks(MAX_QUERY_COPIED_FILES_NUM) {
+
+        let mut results = Vec::with_capacity(files.len());
+
+        for chunk in files.chunks(max_copied_files) {
             let files = chunk.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
             let req = GetTableCopiedFileReq { table_id, files };
             let resp = catalog
                 .get_table_copied_file_info(&tenant, database_name, req)
                 .await?;
             copied_files.extend(resp.file_info);
-        }
-
-        let max_files = max_files.unwrap_or(usize::MAX);
-        // Colored.
-        let mut results = Vec::with_capacity(files.len());
-        for mut file in files {
-            if limit == max_files {
-                break;
-            }
-            limit += 1;
-            if let Some(copied_file) = copied_files.get(&file.path) {
-                match &copied_file.etag {
-                    Some(copied_etag) => {
-                        if let Some(file_etag) = &file.etag {
-                            // Check the 7 bytes etag prefix.
-                            if file_etag.starts_with(copied_etag) {
+            // Colored
+            for file in chunk {
+                let mut file = file.clone();
+                if let Some(copied_file) = copied_files.get(&file.path) {
+                    match &copied_file.etag {
+                        Some(copied_etag) => {
+                            if let Some(file_etag) = &file.etag {
+                                // Check the 7 bytes etag prefix.
+                                if file_etag.starts_with(copied_etag) {
+                                    file.status = StageFileStatus::AlreadyCopied;
+                                }
+                            }
+                        }
+                        None => {
+                            // etag is none, compare with content_length and last_modified.
+                            if copied_file.content_length == file.size
+                                && copied_file.last_modified == Some(file.last_modified)
+                            {
                                 file.status = StageFileStatus::AlreadyCopied;
                             }
                         }
                     }
-                    None => {
-                        // etag is none, compare with content_length and last_modified.
-                        if copied_file.content_length == file.size
-                            && copied_file.last_modified == Some(file.last_modified)
-                        {
-                            file.status = StageFileStatus::AlreadyCopied;
-                        }
+                }
+                if file.status == StageFileStatus::NeedCopy {
+                    results.push(file);
+                    limit += 1;
+                    if limit == max_files {
+                        return Ok(results);
                     }
                 }
             }
-            results.push(file);
         }
         Ok(results)
     }
