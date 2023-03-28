@@ -78,7 +78,7 @@ docker-compose up
     - Host: `host.docker.internal`
     - Port: `8000`
     - Database: `default`
-    - Secure: Do NOT enable this option.
+    - Secure: Enable this option if you enabled HTTPS on your Databend server.
 
 ![Alt text](../../../public/img/integration/redash-cfg-local.png)
 
