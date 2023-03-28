@@ -68,7 +68,7 @@ fn test_derive_from_std_error() {
         rst1.map_err_to_code(ErrorCode::Ok, || "wrapper");
 
     assert_eq!(
-        "Code: 0, Text = wrapper, cause: Code: 1067, displayText = 123, cause: an error occurred when formatting an argument..",
+        "Code: 0, Text = wrapper, cause: Code: 1067, Text = 123, cause: an error occurred when formatting an argument..",
         rst2.as_ref().unwrap_err().to_string()
     );
 }
