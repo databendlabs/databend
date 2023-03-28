@@ -30,6 +30,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_client::MIN_METASRV_SEMVER;
 use common_metrics::init_default_metrics_recorder;
+use common_sharing::init_share_endpoint_config;
 use common_tracing::set_panic_hook;
 use databend_query::api::HttpService;
 use databend_query::api::RpcService;
@@ -225,6 +226,8 @@ async fn main_entrypoint() -> Result<()> {
             conf.query.cluster_id, conf.meta.endpoints
         );
     }
+
+    init_share_endpoint_config(&conf).await?;
 
     // Print information to users.
     println!("Databend Query");

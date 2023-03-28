@@ -56,7 +56,7 @@ impl Binder {
                 endpoint,
             },
             tenant: tenant.to_string(),
-            url: url.to_string(),
+            url: format!("{}://{}{}", url.protocol, url.name, url.path),
             args: args.clone(),
             comment: comment.as_ref().cloned(),
         };

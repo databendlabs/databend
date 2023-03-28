@@ -284,11 +284,28 @@ pub struct CreateShareEndpointReply {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct UpsertShareEndpointReq {
+    pub endpoint: ShareEndpointIdent,
+    pub url: String,
+    pub tenant: String,
+    pub args: BTreeMap<String, String>,
+    pub create_on: DateTime<Utc>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct UpsertShareEndpointReply {
+    pub share_endpoint_id: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GetShareEndpointReq {
     pub tenant: String,
     // If `endpoint` is not None, return the specified endpoint,
     // else return all share endpoints meta of tenant
     pub endpoint: Option<String>,
+
+    // If `to_tenant` is not None, return the specified endpoint to the tenant,
+    pub to_tenant: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -315,6 +332,10 @@ pub struct ShareEndpointMeta {
 }
 
 impl ShareEndpointMeta {
+    pub fn empty() -> Self {
+        Self::default()
+    }
+
     pub fn new(req: &CreateShareEndpointReq) -> Self {
         Self {
             url: req.url.clone(),
@@ -323,6 +344,22 @@ impl ShareEndpointMeta {
             comment: req.comment.clone(),
             create_on: req.create_on,
         }
+    }
+
+    pub fn if_need_to_upsert(&self, req: &UpsertShareEndpointReq) -> bool {
+        // upsert only when these fields not equal
+        self.url != req.url || self.args != req.args || self.tenant != req.tenant
+    }
+
+    pub fn upsert(&self, req: &UpsertShareEndpointReq) -> Self {
+        let mut meta = self.clone();
+
+        meta.url = req.url.clone();
+        meta.args = req.args.clone();
+        meta.tenant = req.tenant.clone();
+        meta.create_on = req.create_on;
+
+        meta
     }
 }
 

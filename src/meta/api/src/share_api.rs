@@ -63,6 +63,11 @@ pub trait ShareApi: Sync + Send {
         req: CreateShareEndpointReq,
     ) -> Result<CreateShareEndpointReply, KVAppError>;
 
+    async fn upsert_share_endpoint(
+        &self,
+        req: UpsertShareEndpointReq,
+    ) -> Result<UpsertShareEndpointReply, KVAppError>;
+
     async fn get_share_endpoint(
         &self,
         req: GetShareEndpointReq,
