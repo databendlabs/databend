@@ -31,6 +31,8 @@ use common_arrow::arrow_format::flight::data::Ticket;
 use common_arrow::arrow_format::flight::service::flight_service_server::FlightService;
 use common_base::match_join_handle;
 use common_base::runtime::TrySpawn;
+use common_config::GlobalConfig;
+use common_settings::Settings;
 use tokio_stream::Stream;
 use tonic::Request;
 use tonic::Response as RawResponse;
@@ -142,9 +144,21 @@ impl FlightService for DatabendQueryFlightService {
 
         let action_result = match flight_action {
             FlightAction::InitQueryFragmentsPlan(init_query_fragments_plan) => {
-                let session = SessionManager::instance()
-                    .create_session(SessionType::FlightRPC)
-                    .await?;
+                let config = GlobalConfig::instance();
+                let session_manager = SessionManager::instance();
+                let settings = Settings::create(config.query.tenant_id.clone());
+                unsafe {
+                    // Keep settings
+                    settings.unchecked_apply_changes(
+                        init_query_fragments_plan
+                            .executor_packet
+                            .changed_settings
+                            .clone(),
+                    );
+                }
+                let session =
+                    session_manager.create_with_settings(SessionType::FlightRPC, settings)?;
+
                 let ctx = session.create_query_context().await?;
                 // Keep query id
                 ctx.set_id(init_query_fragments_plan.executor_packet.query_id.clone());
