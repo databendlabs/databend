@@ -63,7 +63,7 @@ It also gives the user specific and precise information about the error.
 
 ```sql
 MySQL [(none)]> select number from numbers(10) as t inner join numbers(30) as t1 using(number);
-ERROR 1105 (HY000): Code: 1065, displayText = error:
+ERROR 1105 (HY000): Code: 1065, Text = error:
   --> SQL:1:8
   |
 1 | select number from numbers(10) as t inner join numbers(30) as t1 using(number)
@@ -143,7 +143,7 @@ select * from demo at (TIMESTAMP => '2022-06-22 08:58:54.509008'::TIMESTAMP);
 DROP TABLE test;
 
 SELECT * FROM test;
-ERROR 1105 (HY000): Code: 1025, displayText = Unknown table 'test'.
+ERROR 1105 (HY000): Code: 1025, Text = Unknown table 'test'.
 
 -- un-drop table
 UNDROP TABLE test;
