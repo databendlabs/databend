@@ -276,11 +276,13 @@ dependencies = [
 
 [[package]]
 name = "arrow2"
-version = "0.16.0"
-source = "git+https://github.com/jorgecarleitao/arrow2?rev=db87f71#db87f71f3f673b240de80d5a7592d45c0beae805"
+version = "0.17.0"
+source = "git+https://github.com/jorgecarleitao/arrow2?rev=73ed7c8#73ed7c83034ba5d13ffb643b3aec967074a331c3"
 dependencies = [
  "ahash 0.8.3",
+ "arrow-buffer",
  "arrow-format",
+ "arrow-schema",
  "base64 0.21.0",
  "bytemuck",
  "chrono",
@@ -294,7 +296,7 @@ dependencies = [
  "futures",
  "getrandom 0.2.8",
  "hash_hasher",
- "hashbrown 0.12.3",
+ "hashbrown 0.13.2",
  "indexmap",
  "itertools",
  "json-deserializer",
@@ -6565,22 +6567,24 @@ dependencies = [
 
 [[package]]
 name = "multiversion"
-version = "0.6.1"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "025c962a3dd3cc5e0e520aa9c612201d127dcdf28616974961a649dca64f5373"
+checksum = "e6a87eede2251ca235e5573086d01d2ab6b59dfaea54c2be10f9320980f7e8f7"
 dependencies = [
  "multiversion-macros",
+ "target-features",
 ]
 
 [[package]]
 name = "multiversion-macros"
-version = "0.6.1"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8a3e2bde382ebf960c1f3e79689fa5941625fe9bf694a1cb64af3e85faff3af"
+checksum = "1af1abf82261d780d114014eff4b555e47d823f3b84f893c4388572b40e089fb"
 dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+ "target-features",
 ]
 
 [[package]]
@@ -9589,7 +9593,7 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 [[package]]
 name = "strawboat"
 version = "0.2.0"
-source = "git+https://github.com/sundy-li/strawboat?rev=62a4664#62a466436bb1b5a7b2fbe6f5e4e04d4a87598ac6"
+source = "git+https://github.com/sundy-li/strawboat?rev=7e1edb6#7e1edb640e8c076879d44e9d7c9bba8c32c33144"
 dependencies = [
  "arrow2",
  "bytemuck",
@@ -9760,6 +9764,12 @@ name = "tap"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
+
+[[package]]
+name = "target-features"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24840de800c1707d75c800893dbd727a5e1501ce921944e602f0698167491e36"
 
 [[package]]
 name = "temp-env"
