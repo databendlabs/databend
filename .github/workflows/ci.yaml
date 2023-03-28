@@ -54,3 +54,4 @@ jobs:
         with:
           cache-key: integration
       - run: make -C tests
+      - run: sudo chown -R runner ~/.cargo/registry
