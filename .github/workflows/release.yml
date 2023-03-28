@@ -18,6 +18,7 @@ permissions:
   id-token: write
   pull-requests: write
   checks: write
+  statuses: write
   contents: write
 
 jobs:
