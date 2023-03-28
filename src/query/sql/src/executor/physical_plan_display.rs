@@ -36,6 +36,7 @@ use crate::executor::RuntimeFilterSource;
 use crate::executor::Sort;
 use crate::executor::TableScan;
 use crate::executor::UnionAll;
+use crate::executor::Window;
 use crate::plans::JoinType;
 
 impl PhysicalPlan {
@@ -61,6 +62,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::AggregateExpand(aggregate) => write!(f, "{}", aggregate)?,
             PhysicalPlan::AggregatePartial(aggregate) => write!(f, "{}", aggregate)?,
             PhysicalPlan::AggregateFinal(aggregate) => write!(f, "{}", aggregate)?,
+            PhysicalPlan::Window(window) => write!(f, "{}", window)?,
             PhysicalPlan::Sort(sort) => write!(f, "{}", sort)?,
             PhysicalPlan::Limit(limit) => write!(f, "{}", limit)?,
             PhysicalPlan::HashJoin(join) => write!(f, "{}", join)?,
@@ -229,6 +231,13 @@ impl Display for AggregatePartial {
             "Aggregate(Partial): group items: [{}], aggregate functions: [{}]",
             group_items, agg_funcs
         )
+    }
+}
+
+impl Display for Window {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let window_id = self.plan_id;
+        write!(f, "Window: [{}]", window_id)
     }
 }
 

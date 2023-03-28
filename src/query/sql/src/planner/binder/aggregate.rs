@@ -29,9 +29,11 @@ use itertools::Itertools;
 use super::prune_by_children;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::SelectList;
+use crate::binder::window::WindowFunctionInto;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
 use crate::binder::Visibility;
+use crate::binder::WindowOrderByInfo;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
@@ -46,6 +48,8 @@ use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
+use crate::plans::WindowFunc;
+use crate::plans::WindowOrderBy;
 use crate::BindContext;
 use crate::IndexType;
 use crate::MetadataRef;
@@ -149,9 +153,8 @@ impl<'a> AggregateRewriter<'a> {
 
             ScalarExpr::AggregateFunction(agg_func) => self.replace_aggregate_function(agg_func),
 
-            ScalarExpr::WindowFunction(_) => Err(ErrorCode::SemanticError(
-                "bind aggregate functions should not reach to window functions.",
-            )),
+            // already resolved in `analyze_window_select`
+            ScalarExpr::WindowFunction(window) => self.replace_window_function(window),
         }
     }
 
@@ -268,12 +271,194 @@ impl<'a> AggregateRewriter<'a> {
 
         Ok(replaced_func.into())
     }
+
+    fn replace_window_function(&mut self, window: &WindowFunc) -> Result<ScalarExpr> {
+        let window_infos = &mut self.bind_context.windows;
+        let mut replaced_args: Vec<ScalarExpr> = Vec::with_capacity(window.agg_func.args.len());
+        let mut replaced_partition_items: Vec<ScalarExpr> =
+            Vec::with_capacity(window.partition_by.len());
+        let mut replaced_order_by_items: Vec<WindowOrderBy> =
+            Vec::with_capacity(window.order_by.len());
+
+        // resolve aggregate function args in window function.
+        let mut agg_args = vec![];
+        for (i, arg) in window.agg_func.args.iter().enumerate() {
+            let name = format!("{}_arg_{}", &window.agg_func.func_name, i);
+            if let ScalarExpr::BoundColumnRef(column_ref) = arg {
+                replaced_args.push(column_ref.clone().into());
+                agg_args.push(ScalarItem {
+                    index: column_ref.column.index,
+                    scalar: arg.clone(),
+                });
+            } else {
+                let index = self
+                    .metadata
+                    .write()
+                    .add_derived_column(name.clone(), arg.data_type()?);
+
+                // Generate a ColumnBinding for each argument of aggregates
+                let column_binding = ColumnBinding {
+                    database_name: None,
+                    table_name: None,
+                    column_name: name,
+                    index,
+                    data_type: Box::new(arg.data_type()?),
+                    visibility: Visibility::Visible,
+                };
+                replaced_args.push(
+                    BoundColumnRef {
+                        span: arg.span(),
+                        column: column_binding.clone(),
+                    }
+                    .into(),
+                );
+                agg_args.push(ScalarItem {
+                    index,
+                    scalar: arg.clone(),
+                });
+            }
+        }
+
+        // resolve partition by
+        let mut partition_by_items = vec![];
+        for (i, part) in window.partition_by.iter().enumerate() {
+            let name = format!("{}_part_{}", &window.agg_func.func_name, i);
+            if let ScalarExpr::BoundColumnRef(column_ref) = part {
+                replaced_partition_items.push(column_ref.clone().into());
+                partition_by_items.push(ScalarItem {
+                    index: column_ref.column.index,
+                    scalar: part.clone(),
+                });
+            } else {
+                let index = self
+                    .metadata
+                    .write()
+                    .add_derived_column(name.clone(), part.data_type()?);
+
+                // Generate a ColumnBinding for each argument of aggregates
+                let column_binding = ColumnBinding {
+                    database_name: None,
+                    table_name: None,
+                    column_name: name,
+                    index,
+                    data_type: Box::new(part.data_type()?),
+                    visibility: Visibility::Visible,
+                };
+                replaced_partition_items.push(
+                    BoundColumnRef {
+                        span: part.span(),
+                        column: column_binding.clone(),
+                    }
+                    .into(),
+                );
+                partition_by_items.push(ScalarItem {
+                    index,
+                    scalar: part.clone(),
+                });
+            }
+        }
+
+        // resolve order by
+        let mut order_by_items = vec![];
+        for (i, order) in window.order_by.iter().enumerate() {
+            let name = format!("{}_order_{}", &window.agg_func.func_name, i);
+            if let ScalarExpr::BoundColumnRef(column_ref) = &order.expr {
+                replaced_order_by_items.push(WindowOrderBy {
+                    expr: column_ref.clone().into(),
+                    asc: order.asc,
+                    nulls_first: order.nulls_first,
+                });
+                order_by_items.push(WindowOrderByInfo {
+                    order_by_item: ScalarItem {
+                        index: column_ref.column.index,
+                        scalar: order.expr.clone(),
+                    },
+                    asc: order.asc,
+                    nulls_first: order.nulls_first,
+                })
+            } else {
+                let index = self
+                    .metadata
+                    .write()
+                    .add_derived_column(name.clone(), order.expr.data_type()?);
+
+                // Generate a ColumnBinding for each argument of aggregates
+                let column_binding = ColumnBinding {
+                    database_name: None,
+                    table_name: None,
+                    column_name: name,
+                    index,
+                    data_type: Box::new(order.expr.data_type()?),
+                    visibility: Visibility::Visible,
+                };
+                replaced_order_by_items.push(WindowOrderBy {
+                    expr: BoundColumnRef {
+                        span: order.expr.span(),
+                        column: column_binding,
+                    }
+                    .into(),
+                    asc: order.asc,
+                    nulls_first: order.nulls_first,
+                });
+                order_by_items.push(WindowOrderByInfo {
+                    order_by_item: ScalarItem {
+                        index,
+                        scalar: order.expr.clone(),
+                    },
+                    asc: order.asc,
+                    nulls_first: order.nulls_first,
+                })
+            }
+        }
+
+        let index = self
+            .metadata
+            .write()
+            .add_derived_column(window.display_name(), *window.agg_func.return_type.clone());
+
+        let replaced_agg = AggregateFunction {
+            display_name: window.agg_func.display_name.clone(),
+            func_name: window.agg_func.func_name.clone(),
+            distinct: window.agg_func.distinct,
+            params: window.agg_func.params.clone(),
+            args: replaced_args,
+            return_type: window.agg_func.return_type.clone(),
+        };
+
+        // create window info
+        let window_info = WindowFunctionInto {
+            aggregate_function: ScalarItem {
+                scalar: replaced_agg.clone().into(),
+                index,
+            },
+            aggregate_arguments: agg_args,
+            partition_by_items,
+            order_by_items,
+            frame: window.frame.clone(),
+        };
+
+        // push window info to BindContext
+        window_infos.window_functions.push(window_info);
+        window_infos.window_functions_map.insert(
+            replaced_agg.display_name.clone(),
+            window_infos.window_functions.len() - 1,
+        );
+
+        let replaced_window = WindowFunc {
+            agg_func: replaced_agg,
+            partition_by: replaced_partition_items,
+            order_by: replaced_order_by_items,
+            frame: window.frame.clone(),
+        };
+
+        Ok(replaced_window.into())
+    }
 }
 
 impl Binder {
-    /// Analyze aggregates in select clause, this will rewrite aggregate functions.
+    /// Analyze aggregates and windows in select clause, this will rewrite aggregate and window functions.
     /// See `AggregateRewriter` for more details.
-    pub(crate) fn analyze_aggregate_select(
+    pub(crate) fn analyze_aggregate_and_window_select(
         &mut self,
         bind_context: &mut BindContext,
         select_list: &mut SelectList,

@@ -56,6 +56,7 @@ use crate::executor::PhysicalPlan;
 use crate::executor::RuntimeFilterSource;
 use crate::executor::SortDesc;
 use crate::executor::UnionAll;
+use crate::executor::Window;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
@@ -170,6 +171,7 @@ impl PhysicalPlanBuilder {
                 let mut name_mapping = BTreeMap::new();
                 let mut project_internal_columns = BTreeMap::new();
                 let metadata = self.metadata.read().clone();
+
                 for index in scan.columns.iter() {
                     let column = metadata.column(*index);
                     if let ColumnEntry::BaseTableColumn(BaseTableColumn { path_indices, .. }) =
@@ -682,7 +684,61 @@ impl PhysicalPlanBuilder {
 
                 Ok(result)
             }
+            RelOperator::Window(w) => {
+                let input = self.build(s_expr.child(0)?).await?;
+                let partition_items = w.partition_by.iter().map(|v| v.index).collect::<Vec<_>>();
+                let order_by_items = w
+                    .order_by
+                    .iter()
+                    .map(|v| SortDesc {
+                        asc: v.asc.unwrap_or(true),
+                        nulls_first: v.nulls_first.unwrap_or(false),
+                        order_by: v.order_by_item.index,
+                    })
+                    .collect::<Vec<_>>();
+                let agg_func = if let ScalarExpr::AggregateFunction(agg) =
+                    &w.aggregate_function.scalar
+                {
+                    Ok(AggregateFunctionDesc {
+                        sig: AggregateFunctionSignature {
+                            name: agg.func_name.clone(),
+                            args: agg.args.iter().map(|s|{s.data_type()}).collect::<Result<_>>()?,
+                            params: agg.params.clone(),
+                            return_type: *agg.return_type.clone(),
+                        },
+                        output_column: w.aggregate_function.index,
+                        args: agg.args.iter().map(|arg| {
+                            if let ScalarExpr::BoundColumnRef(col) = arg {
+                                Ok(col.column.index)
+                            } else {
+                                Err(ErrorCode::Internal("Window's aggregate function argument must be a BoundColumnRef".to_string()))
+                            }
+                        }).collect::<Result<_>>()?,
+                        arg_indices: agg.args.iter().map(|arg| {
+                            if let ScalarExpr::BoundColumnRef(col) = arg {
+                                Ok(col.column.index)
+                            } else {
+                                Err(ErrorCode::Internal(
+                                    "Aggregate function argument must be a BoundColumnRef".to_string()
+                                ))
+                            }
+                        }).collect::<Result<_>>()?,
+                    })
+                } else {
+                    Err(ErrorCode::Internal(
+                        "Expected aggregate function".to_string(),
+                    ))
+                }?;
 
+                Ok(PhysicalPlan::Window(Window {
+                    plan_id: self.next_plan_id(),
+                    input: Box::new(input),
+                    agg_func,
+                    partition_by: partition_items,
+                    order_by: order_by_items,
+                    window_frame: w.frame.clone(),
+                }))
+            }
             RelOperator::Sort(sort) => Ok(PhysicalPlan::Sort(Sort {
                 plan_id: self.next_plan_id(),
                 input: Box::new(self.build(s_expr.child(0)?).await?),

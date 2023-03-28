@@ -31,6 +31,7 @@ use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::Scan;
 use crate::plans::WindowFunc;
+use crate::plans::WindowOrderBy;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::MetadataRef;
@@ -166,9 +167,24 @@ impl RulePushDownFilterScan {
                     .map(|arg| Self::replace_view_column(arg, table_entries, column_entries))
                     .collect::<Result<Vec<ScalarExpr>>>()?;
 
+                let order_by = window
+                    .order_by
+                    .iter()
+                    .map(|item| {
+                        let replaced_scalar =
+                            Self::replace_view_column(&item.expr, table_entries, column_entries)?;
+                        Ok(WindowOrderBy {
+                            expr: replaced_scalar,
+                            asc: item.asc,
+                            nulls_first: item.nulls_first,
+                        })
+                    })
+                    .collect::<Result<Vec<WindowOrderBy>>>()?;
+
                 Ok(ScalarExpr::WindowFunction(WindowFunc {
                     agg_func,
                     partition_by,
+                    order_by,
                     frame: window.frame.clone(),
                 }))
             }
