@@ -124,7 +124,12 @@ impl<'a> Debug for ScalarRef<'a> {
             },
             ScalarRef::Timestamp(t) => write!(f, "{t:?}"),
             ScalarRef::Date(d) => write!(f, "{d:?}"),
-            ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
+            ScalarRef::Array(col) => {
+                write!(f, "[{}]", col.iter().join(", "))
+            }
+            ScalarRef::Vector(col) => {
+                write!(f, "[{}]", col.iter().join(", "))
+            }
             ScalarRef::Map(col) => {
                 write!(f, "{{")?;
                 let kv_col = KvPair::<AnyType, AnyType>::try_downcast_column(col).unwrap();
@@ -169,6 +174,7 @@ impl Debug for Column {
             Column::Timestamp(col) => write!(f, "{col:?}"),
             Column::Date(col) => write!(f, "{col:?}"),
             Column::Array(col) => write!(f, "{col:?}"),
+            Column::Vector(col) => write!(f, "{col:?}"),
             Column::Map(col) => write!(f, "{col:?}"),
             Column::Nullable(col) => write!(f, "{col:?}"),
             Column::Tuple(fields) => f.debug_tuple("Tuple").field(fields).finish(),
@@ -198,7 +204,12 @@ impl<'a> Display for ScalarRef<'a> {
             },
             ScalarRef::Timestamp(t) => write!(f, "{}", timestamp_to_string(*t, Tz::UTC)),
             ScalarRef::Date(d) => write!(f, "{}", date_to_string(*d as i64, Tz::UTC)),
-            ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
+            ScalarRef::Array(col) => {
+                write!(f, "[{}]", col.iter().join(", "))
+            }
+            ScalarRef::Vector(col) => {
+                write!(f, "[{}]", col.iter().join(", "))
+            }
             ScalarRef::Map(col) => {
                 write!(f, "{{")?;
                 let kv_col = KvPair::<AnyType, AnyType>::try_downcast_column(col).unwrap();
@@ -437,6 +448,7 @@ impl Display for DataType {
             DataType::Nullable(inner) => write!(f, "{inner} NULL"),
             DataType::EmptyArray => write!(f, "Array(Nothing)"),
             DataType::Array(inner) => write!(f, "Array({inner})"),
+            DataType::Vector => write!(f, "Vector"),
             DataType::EmptyMap => write!(f, "Map(Nothing)"),
             DataType::Map(inner) => match *inner.clone() {
                 DataType::Tuple(fields) => {
@@ -476,6 +488,7 @@ impl Display for TableDataType {
             TableDataType::Nullable(inner) => write!(f, "{inner} NULL"),
             TableDataType::EmptyArray => write!(f, "Array(Nothing)"),
             TableDataType::Array(inner) => write!(f, "Array({inner})"),
+            TableDataType::Vector => write!(f, "Vector"),
             TableDataType::EmptyMap => write!(f, "Map(Nothing)"),
             TableDataType::Map(inner) => match *inner.clone() {
                 TableDataType::Tuple {

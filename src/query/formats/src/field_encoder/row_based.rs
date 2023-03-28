@@ -62,6 +62,7 @@ pub trait FieldEncoderRowBased {
             Column::String(c) => self.write_string(c, row_index, out_buf, raw),
             Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf, raw),
             Column::Array(box c) => self.write_array(c, row_index, out_buf, raw),
+            Column::Vector(box c) => self.write_array(c, row_index, out_buf, raw),
             Column::Map(box c) => self.write_map(c, row_index, out_buf, raw),
             Column::Tuple(fields) => self.write_tuple(fields, row_index, out_buf, raw),
             Column::Variant(c) => self.write_variant(c, row_index, out_buf, raw),

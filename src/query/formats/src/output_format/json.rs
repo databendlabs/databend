@@ -105,6 +105,13 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
                 .collect();
             JsonValue::Array(vals)
         }
+        ScalarRef::Vector(x) => {
+            let vals = x
+                .iter()
+                .map(|v| JsonValue::Number(serde_json::Number::from_f64(v.0 as f64).unwrap()))
+                .collect();
+            JsonValue::Array(vals)
+        }
         ScalarRef::Map(x) => {
             let vals = x
                 .iter()

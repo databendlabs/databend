@@ -541,6 +541,7 @@ fn transform_data_type(target_type: common_ast::ast::TypeName) -> DataType {
             DataType::Nullable(Box::new(transform_data_type(*inner_type)))
         }
         common_ast::ast::TypeName::Variant => DataType::Variant,
+        common_ast::ast::TypeName::Vector => DataType::Vector,
     }
 }
 

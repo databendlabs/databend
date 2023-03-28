@@ -33,6 +33,7 @@ use crate::types::BooleanType;
 use crate::types::MapType;
 use crate::types::ValueType;
 use crate::types::VariantType;
+use crate::types::VectorType;
 use crate::with_decimal_type;
 use crate::with_number_type;
 use crate::BlockEntry;
@@ -140,6 +141,13 @@ impl Column {
                 let builder = ColumnBuilder::with_capacity(&column.values.data_type(), length);
                 let builder = ArrayColumnBuilder { builder, offsets };
                 Self::filter_scalar_types::<ArrayType<AnyType>>(column, builder, filter)
+            }
+            Column::Vector(column) => {
+                let mut offsets = Vec::with_capacity(length + 1);
+                offsets.push(0);
+                let builder = Vec::with_capacity(length);
+                let builder = ArrayColumnBuilder { builder, offsets };
+                Self::filter_scalar_types::<VectorType>(column, builder, filter)
             }
             Column::Map(column) => {
                 let mut offsets = Vec::with_capacity(length + 1);

@@ -178,7 +178,7 @@ pub enum Expr {
         modifier: Option<SubqueryModifier>,
         subquery: Box<Query>,
     },
-    /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
+    /// Access elements of `Array`, `Map` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
     MapAccess {
         span: Span,
         expr: Box<Expr>,
@@ -429,6 +429,7 @@ pub enum TypeName {
     Timestamp,
     String,
     Array(Box<TypeName>),
+    Vector,
     Map {
         key_type: Box<TypeName>,
         val_type: Box<TypeName>,
@@ -821,6 +822,9 @@ impl Display for TypeName {
             }
             TypeName::Array(ty) => {
                 write!(f, "ARRAY({})", ty)?;
+            }
+            TypeName::Vector => {
+                write!(f, "VECTOR")?;
             }
             TypeName::Map { key_type, val_type } => {
                 write!(f, "MAP({}, {})", key_type, val_type)?;

@@ -210,6 +210,7 @@ impl FromToProto for ex::TableDataType {
                         ex::TableDataType::Decimal(ex::types::decimal::DecimalDataType::from_pb(x)?)
                     }
                     Dt24::EmptyMapT(_) => ex::TableDataType::EmptyMap,
+                    Dt24::VectorT(_) => ex::TableDataType::Vector,
                 };
                 Ok(x)
             }
@@ -269,6 +270,7 @@ impl FromToProto for ex::TableDataType {
                 new_pb_dt24(Dt24::TupleT(x))
             }
             TableDataType::Variant => new_pb_dt24(Dt24::VariantT(pb::Empty {})),
+            TableDataType::Vector => new_pb_dt24(Dt24::VectorT(pb::Empty {})),
         };
         Ok(x)
     }

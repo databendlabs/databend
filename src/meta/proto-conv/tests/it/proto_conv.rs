@@ -226,6 +226,7 @@ pub(crate) fn new_latest_schema() -> TableSchema {
             })),
         ),
         TableField::new("empty_map", TableDataType::EmptyMap),
+        TableField::new("vector", TableDataType::Vector),
     ];
     TableSchema::new(fields)
 }

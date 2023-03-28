@@ -28,6 +28,7 @@ use crate::types::decimal::DecimalSize;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
 use crate::types::Number;
+use crate::types::NumberDataType;
 use crate::AutoCastRules;
 use crate::ColumnIndex;
 use crate::ConstantFolder;
@@ -393,6 +394,7 @@ pub fn unify(
         }
         (DataType::Null, DataType::Nullable(_)) => Ok(Substitution::empty()),
         (DataType::EmptyArray, DataType::Array(_)) => Ok(Substitution::empty()),
+        (DataType::EmptyArray, DataType::Vector) => Ok(Substitution::empty()),
         (DataType::EmptyMap, DataType::Map(_)) => Ok(Substitution::empty()),
         (DataType::Nullable(src_ty), DataType::Nullable(dest_ty)) => {
             unify(src_ty, dest_ty, auto_cast_rules)
@@ -401,6 +403,11 @@ pub fn unify(
         (DataType::Array(src_ty), DataType::Array(dest_ty)) => {
             unify(src_ty, dest_ty, auto_cast_rules)
         }
+        (DataType::Array(src_ty), DataType::Vector) => unify(
+            src_ty,
+            &DataType::Number(NumberDataType::Float32),
+            auto_cast_rules,
+        ),
         (DataType::Map(box src_ty), DataType::Map(box dest_ty)) => match (src_ty, dest_ty) {
             (DataType::Tuple(_), DataType::Tuple(_)) => unify(src_ty, dest_ty, auto_cast_rules),
             (_, _) => unreachable!(),
@@ -442,6 +449,7 @@ pub fn can_auto_cast_to(
         }
         (DataType::Null, DataType::Nullable(_)) => true,
         (DataType::EmptyArray, DataType::Array(_)) => true,
+        (DataType::EmptyArray, DataType::Vector) => true,
         (DataType::EmptyMap, DataType::Map(_)) => true,
         (DataType::Nullable(src_ty), DataType::Nullable(dest_ty)) => {
             can_auto_cast_to(src_ty, dest_ty, auto_cast_rules)
@@ -450,6 +458,11 @@ pub fn can_auto_cast_to(
         (DataType::Array(src_ty), DataType::Array(dest_ty)) => {
             can_auto_cast_to(src_ty, dest_ty, auto_cast_rules)
         }
+        (DataType::Array(src_ty), DataType::Vector) => can_auto_cast_to(
+            src_ty,
+            &DataType::Number(NumberDataType::Float32),
+            auto_cast_rules,
+        ),
         (DataType::Map(box src_ty), DataType::Map(box dest_ty)) => match (src_ty, dest_ty) {
             (DataType::Tuple(_), DataType::Tuple(_)) => {
                 can_auto_cast_to(src_ty, dest_ty, auto_cast_rules)
@@ -493,6 +506,21 @@ pub fn common_super_type(
         (DataType::Array(box ty1), DataType::Array(box ty2)) => Some(DataType::Array(Box::new(
             common_super_type(ty1, ty2, auto_cast_rules)?,
         ))),
+        (DataType::EmptyArray, ty @ DataType::Vector)
+        | (ty @ DataType::Vector, DataType::EmptyArray) => Some(ty),
+        (DataType::Array(box ty), DataType::Vector)
+        | (DataType::Vector, DataType::Array(box ty)) => {
+            let ty = common_super_type(
+                ty,
+                DataType::Number(NumberDataType::Float32),
+                auto_cast_rules,
+            )?;
+            if ty == DataType::Number(NumberDataType::Float32) {
+                Some(DataType::Vector)
+            } else {
+                None
+            }
+        }
         (DataType::EmptyMap, ty @ DataType::Map(_))
         | (ty @ DataType::Map(_), DataType::EmptyMap) => Some(ty),
         (DataType::Map(box ty1), DataType::Map(box ty2)) => Some(DataType::Map(Box::new(

@@ -2560,22 +2560,32 @@ pub fn resolve_type_name(type_name: &TypeName) -> Result<TableDataType> {
         TypeName::Tuple {
             fields_type,
             fields_name,
-        } => TableDataType::Tuple {
-            fields_name: match fields_name {
-                None => (0..fields_type.len())
-                    .map(|i| (i + 1).to_string())
-                    .collect(),
-                Some(names) => names.clone(),
-            },
-            fields_type: fields_type
-                .iter()
-                .map(resolve_type_name)
-                .collect::<Result<Vec<_>>>()?,
-        },
+        } => {
+            if let Some(fields_name) = fields_name {
+                if fields_name.len() != fields_type.len() {
+                    return Err(ErrorCode::Internal(
+                        "tuple should be named or nameless".to_string(),
+                    ));
+                }
+            }
+            TableDataType::Tuple {
+                fields_name: match fields_name {
+                    None => (0..fields_type.len())
+                        .map(|i| (i + 1).to_string())
+                        .collect(),
+                    Some(names) => names.clone(),
+                },
+                fields_type: fields_type
+                    .iter()
+                    .map(resolve_type_name)
+                    .collect::<Result<Vec<_>>>()?,
+            }
+        }
         TypeName::Nullable(inner_type) => {
             TableDataType::Nullable(Box::new(resolve_type_name(inner_type)?))
         }
         TypeName::Variant => TableDataType::Variant,
+        TypeName::Vector => TableDataType::Vector,
     };
 
     Ok(data_type)

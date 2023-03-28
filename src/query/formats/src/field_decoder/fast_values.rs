@@ -34,6 +34,7 @@ use common_expression::types::number::Number;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::timestamp::check_timestamp;
 use common_expression::types::AnyType;
+use common_expression::types::Float32Type;
 use common_expression::types::NumberColumnBuilder;
 use common_expression::with_decimal_type;
 use common_expression::with_number_mapped_type;
@@ -131,6 +132,7 @@ impl FastFieldDecoderValues {
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, reader, positions),
             ColumnBuilder::String(c) => self.read_string(c, reader, positions),
             ColumnBuilder::Array(c) => self.read_array(c, reader, positions),
+            ColumnBuilder::Vector(c) => self.read_vector(c, reader),
             ColumnBuilder::Map(c) => self.read_map(c, reader, positions),
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, reader, positions),
             ColumnBuilder::Variant(c) => self.read_variant(c, reader, positions),
@@ -300,6 +302,43 @@ impl FastFieldDecoderValues {
             if let Err(err) = self.read_field(&mut column.builder, reader, positions) {
                 self.pop_inner_values(&mut column.builder, idx);
                 return Err(err);
+            }
+        }
+        column.commit_row();
+        Ok(())
+    }
+
+    fn read_vector<R: AsRef<[u8]>>(
+        &self,
+        column: &mut ArrayColumnBuilder<Float32Type>,
+        reader: &mut Cursor<R>,
+    ) -> Result<()> {
+        reader.must_ignore_byte(b'[')?;
+        for idx in 0.. {
+            let _ = reader.ignore_white_spaces();
+            if reader.ignore_byte(b']') {
+                break;
+            }
+            if idx != 0 {
+                if let Err(err) = reader.must_ignore_byte(b',') {
+                    for _ in 0..idx {
+                        column.builder.pop();
+                    }
+                    return Err(err.into());
+                }
+            }
+            let _ = reader.ignore_white_spaces();
+            let res: Result<f32> = reader.read_float_text();
+            match res {
+                Ok(v) => {
+                    column.builder.push(v.into());
+                }
+                Err(err) => {
+                    for _ in 0..idx {
+                        column.builder.pop();
+                    }
+                    return Err(err);
+                }
             }
         }
         column.commit_row();

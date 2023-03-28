@@ -37,6 +37,7 @@ use crate::Scalar;
 use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use crate::ARROW_EXT_TYPE_EMPTY_MAP;
 use crate::ARROW_EXT_TYPE_VARIANT;
+use crate::ARROW_EXT_TYPE_VECTOR;
 
 // Column id of TableField
 pub type ColumnId = u32;
@@ -93,6 +94,7 @@ pub enum TableDataType {
     Date,
     Nullable(Box<TableDataType>),
     Array(Box<TableDataType>),
+    Vector,
     Map(Box<TableDataType>),
     Tuple {
         fields_name: Vec<String>,
@@ -856,6 +858,13 @@ impl TableField {
             TableDataType::Array(a) => {
                 Self::build_column_ids_from_data_type(a.as_ref(), column_ids, next_column_id);
             }
+            TableDataType::Vector => {
+                Self::build_column_ids_from_data_type(
+                    &TableDataType::Number(NumberDataType::Float32),
+                    column_ids,
+                    next_column_id,
+                );
+            }
             TableDataType::Map(a) => {
                 Self::build_column_ids_from_data_type(a.as_ref(), column_ids, next_column_id);
             }
@@ -955,6 +964,7 @@ impl From<&TableDataType> for DataType {
             TableDataType::Date => DataType::Date,
             TableDataType::Nullable(ty) => DataType::Nullable(Box::new((&**ty).into())),
             TableDataType::Array(ty) => DataType::Array(Box::new((&**ty).into())),
+            TableDataType::Vector => DataType::Vector,
             TableDataType::Map(ty) => DataType::Map(Box::new((&**ty).into())),
             TableDataType::Tuple { fields_type, .. } => {
                 DataType::Tuple(fields_type.iter().map(Into::into).collect())
@@ -1210,6 +1220,7 @@ impl From<&ArrowField> for TableDataType {
             }
             ArrowDataType::Extension(custom_name, _, _) => match custom_name.as_str() {
                 ARROW_EXT_TYPE_VARIANT => TableDataType::Variant,
+                ARROW_EXT_TYPE_VECTOR => TableDataType::Vector,
                 ARROW_EXT_TYPE_EMPTY_ARRAY => TableDataType::EmptyArray,
                 ARROW_EXT_TYPE_EMPTY_MAP => TableDataType::EmptyMap,
                 _ => unimplemented!("data_type: {:?}", f.data_type()),
@@ -1307,6 +1318,15 @@ impl From<&DataType> for ArrowDataType {
                     ty.is_nullable(),
                 )))
             }
+            DataType::Vector => ArrowDataType::Extension(
+                ARROW_EXT_TYPE_VECTOR.to_string(),
+                Box::new(ArrowDataType::LargeList(Box::new(ArrowField::new(
+                    "_vector",
+                    ArrowDataType::Float32,
+                    false,
+                )))),
+                None,
+            ),
             DataType::Map(ty) => {
                 let inner_ty = match ty.as_ref() {
                     DataType::Tuple(tys) => {
@@ -1382,6 +1402,15 @@ impl From<&TableDataType> for ArrowDataType {
                     ty.is_nullable(),
                 )))
             }
+            TableDataType::Vector => ArrowDataType::Extension(
+                ARROW_EXT_TYPE_VECTOR.to_string(),
+                Box::new(ArrowDataType::LargeList(Box::new(ArrowField::new(
+                    "_vector",
+                    ArrowDataType::Float32,
+                    false,
+                )))),
+                None,
+            ),
             TableDataType::Map(ty) => {
                 let inner_ty = match ty.as_ref() {
                     TableDataType::Tuple {
@@ -1447,6 +1476,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
         DataType::Array(elem_type) => Ok(TableDataType::Array(Box::new(infer_schema_type(
             elem_type,
         )?))),
+        DataType::Vector => Ok(TableDataType::Vector),
         DataType::Map(inner_type) => {
             Ok(TableDataType::Map(Box::new(infer_schema_type(inner_type)?)))
         }

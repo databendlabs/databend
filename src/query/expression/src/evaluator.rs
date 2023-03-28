@@ -34,10 +34,13 @@ use crate::types::array::ArrayColumn;
 use crate::types::boolean::BooleanDomain;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
+use crate::types::number::Number;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::NullableType;
+use crate::types::NumberDataType;
 use crate::types::ValueType;
+use crate::types::F32;
 use crate::utils::arrow::constant_bitmap;
 use crate::values::Column;
 use crate::values::ColumnBuilder;
@@ -402,6 +405,60 @@ impl<'a> Evaluator<'a> {
                 }
                 other => unreachable!("source: {}", other),
             },
+
+            (DataType::EmptyArray, DataType::Vector) => match value {
+                Value::Scalar(Scalar::EmptyArray) => Ok(Value::Scalar(Scalar::Vector(vec![]))),
+                Value::Column(Column::EmptyArray { len }) => {
+                    let mut builder = ColumnBuilder::with_capacity(dest_type, len);
+                    for _ in 0..len {
+                        builder.push_default();
+                    }
+                    Ok(Value::Column(builder.build()))
+                }
+                other => unreachable!("source: {}", other),
+            },
+            (DataType::Array(inner_src_ty), DataType::Vector) => {
+                let inner_dest_ty = DataType::Number(NumberDataType::Float32);
+                match value {
+                    Value::Scalar(Scalar::Array(array)) => {
+                        let new_array = self
+                            .run_cast(
+                                span,
+                                inner_src_ty,
+                                &inner_dest_ty,
+                                Value::Column(array),
+                                validity,
+                            )?
+                            .into_column()
+                            .unwrap();
+                        let new_values = F32::try_downcast_column(new_array.as_number().unwrap())
+                            .unwrap()
+                            .as_slice()
+                            .to_vec();
+                        Ok(Value::Scalar(Scalar::Vector(new_values)))
+                    }
+                    Value::Column(Column::Array(col)) => {
+                        let new_col = self
+                            .run_cast(
+                                span,
+                                inner_src_ty,
+                                &inner_dest_ty,
+                                Value::Column(col.values),
+                                validity,
+                            )?
+                            .into_column()
+                            .unwrap();
+                        let values =
+                            F32::try_downcast_column(new_col.as_number().unwrap()).unwrap();
+                        Ok(Value::Column(Column::Vector(Box::new(ArrayColumn {
+                            values,
+                            offsets: col.offsets,
+                        }))))
+                    }
+                    other => unreachable!("source: {}", other),
+                }
+            }
+
             (DataType::EmptyMap, DataType::Map(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::EmptyMap) => {
                     let new_column = ColumnBuilder::with_capacity(inner_dest_ty, 0).build();
@@ -599,6 +656,57 @@ impl<'a> Evaluator<'a> {
                 }
                 _ => unreachable!(),
             },
+
+            (DataType::EmptyArray, DataType::Vector) => match value {
+                Value::Scalar(Scalar::EmptyArray) => Ok(Value::Scalar(Scalar::Vector(vec![]))),
+                Value::Column(Column::EmptyArray { len }) => {
+                    let mut builder = ColumnBuilder::with_capacity(dest_type, len);
+                    for _ in 0..len {
+                        builder.push_default();
+                    }
+                    Ok(Value::Column(builder.build()))
+                }
+                other => unreachable!("source: {}", other),
+            },
+            (DataType::Array(inner_src_ty), DataType::Vector) => {
+                let inner_dest_ty = DataType::Number(NumberDataType::Float32);
+                match value {
+                    Value::Scalar(Scalar::Array(array)) => {
+                        let new_array = self
+                            .run_try_cast(span, inner_src_ty, &inner_dest_ty, Value::Column(array))?
+                            .into_column()
+                            .unwrap();
+                        let new_values = F32::try_downcast_column(new_array.as_number().unwrap())
+                            .unwrap()
+                            .as_slice()
+                            .to_vec();
+                        Ok(Value::Scalar(Scalar::Vector(new_values)))
+                    }
+                    Value::Column(Column::Array(col)) => {
+                        let new_values = self
+                            .run_try_cast(
+                                span,
+                                inner_src_ty,
+                                &inner_dest_ty,
+                                Value::Column(col.values),
+                            )?
+                            .into_column()
+                            .unwrap();
+                        let values =
+                            F32::try_downcast_column(new_values.as_number().unwrap()).unwrap();
+                        let new_col = Column::Vector(Box::new(ArrayColumn {
+                            values,
+                            offsets: col.offsets,
+                        }));
+                        Ok(Value::Column(Column::Nullable(Box::new(NullableColumn {
+                            validity: constant_bitmap(true, new_col.len()).into(),
+                            column: new_col,
+                        }))))
+                    }
+                    _ => unreachable!(),
+                }
+            }
+
             (DataType::EmptyMap, DataType::Map(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::EmptyMap) => {
                     let new_column = ColumnBuilder::with_capacity(inner_dest_ty, 0).build();

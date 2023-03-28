@@ -545,6 +545,13 @@ pub fn serialize_column_binary(column: &Column, row: usize, vec: &mut Vec<u8>) {
                 serialize_column_binary(&data, i, vec);
             }
         }
+        Column::Vector(array) => {
+            let data = array.index(row).unwrap();
+            BinaryWrite::write_uvarint(vec, data.len() as u64).unwrap();
+            for i in 0..data.len() {
+                vec.extend_from_slice(data[i].to_le_bytes().as_ref());
+            }
+        }
         Column::Nullable(c) => {
             let valid = c.validity.get_bit(row);
             vec.push(valid as u8);

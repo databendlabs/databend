@@ -164,6 +164,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                 DataType::Date => Ok(ColumnType::MYSQL_TYPE_DATE),
                 DataType::Timestamp => Ok(ColumnType::MYSQL_TYPE_DATETIME),
                 DataType::Array(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
+                DataType::Vector => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 DataType::Map(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 DataType::Tuple(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 DataType::Variant => Ok(ColumnType::MYSQL_TYPE_VARCHAR),

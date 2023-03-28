@@ -32,6 +32,7 @@ use crate::types::StringType;
 use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::types::VariantType;
+use crate::types::VectorType;
 use crate::with_decimal_type;
 use crate::with_number_mapped_type;
 use crate::BlockEntry;
@@ -243,6 +244,13 @@ impl Column {
                 let builder = ColumnBuilder::with_capacity(&column.values.data_type(), result_size);
                 let builder = ArrayColumnBuilder { builder, offsets };
                 Self::take_block_value_types::<ArrayType<AnyType>>(columns, builder, indices)
+            }
+            Column::Vector(_) => {
+                let mut offsets = Vec::with_capacity(result_size + 1);
+                offsets.push(0);
+                let builder = Vec::with_capacity(result_size);
+                let builder = ArrayColumnBuilder { builder, offsets };
+                Self::take_block_value_types::<VectorType>(columns, builder, indices)
             }
             Column::Map(column) => {
                 let mut offsets = Vec::with_capacity(result_size + 1);

@@ -34,6 +34,7 @@ use crate::types::StringType;
 use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::types::VariantType;
+use crate::types::VectorType;
 use crate::with_decimal_type;
 use crate::with_number_mapped_type;
 use crate::BlockEntry;
@@ -203,6 +204,13 @@ impl Column {
                     indices,
                     scatter_size,
                 )
+            }
+            Column::Vector(column) => {
+                let mut offsets = Vec::with_capacity(length + 1);
+                offsets.push(0);
+                let builder = Vec::with_capacity(length);
+                let builder = ArrayColumnBuilder { builder, offsets };
+                Self::scatter_scalars::<VectorType, _>(column, builder, indices, scatter_size)
             }
             Column::Map(column) => {
                 let mut offsets = Vec::with_capacity(length + 1);

@@ -106,6 +106,7 @@ pub enum Scalar {
     Boolean(bool),
     String(Vec<u8>),
     Array(Column),
+    Vector(Vec<F32>),
     Map(Column),
     Tuple(Vec<Scalar>),
     Variant(Vec<u8>),
@@ -124,6 +125,7 @@ pub enum ScalarRef<'a> {
     Timestamp(i64),
     Date(i32),
     Array(Column),
+    Vector(Vec<F32>),
     Map(Column),
     Tuple(Vec<ScalarRef<'a>>),
     Variant(&'a [u8]),
@@ -141,6 +143,7 @@ pub enum Column {
     Timestamp(Buffer<i64>),
     Date(Buffer<i32>),
     Array(Box<ArrayColumn<AnyType>>),
+    Vector(Box<ArrayColumn<Float32Type>>),
     Map(Box<ArrayColumn<AnyType>>),
     Nullable(Box<NullableColumn<AnyType>>),
     Tuple(Vec<Column>),
@@ -159,6 +162,7 @@ pub enum ColumnBuilder {
     Timestamp(Vec<i64>),
     Date(Vec<i32>),
     Array(Box<ArrayColumnBuilder<AnyType>>),
+    Vector(Box<ArrayColumnBuilder<Float32Type>>),
     Map(Box<ArrayColumnBuilder<AnyType>>),
     Nullable(Box<NullableColumnBuilder<AnyType>>),
     Tuple(Vec<ColumnBuilder>),
@@ -303,6 +307,7 @@ impl Scalar {
             Scalar::Timestamp(t) => ScalarRef::Timestamp(*t),
             Scalar::Date(d) => ScalarRef::Date(*d),
             Scalar::Array(col) => ScalarRef::Array(col.clone()),
+            Scalar::Vector(v) => ScalarRef::Vector(v.clone()),
             Scalar::Map(col) => ScalarRef::Map(col.clone()),
             Scalar::Tuple(fields) => ScalarRef::Tuple(fields.iter().map(Scalar::as_ref).collect()),
             Scalar::Variant(s) => ScalarRef::Variant(s.as_slice()),
@@ -337,6 +342,7 @@ impl Scalar {
                 let col = builder.build();
                 Scalar::Array(col)
             }
+            DataType::Vector => Scalar::Vector(vec![]),
             DataType::Map(ty) => {
                 let builder = ColumnBuilder::with_capacity(ty, 0);
                 let col = builder.build();
@@ -363,6 +369,7 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Timestamp(t) => Scalar::Timestamp(*t),
             ScalarRef::Date(d) => Scalar::Date(*d),
             ScalarRef::Array(col) => Scalar::Array(col.clone()),
+            ScalarRef::Vector(v) => Scalar::Vector(v.clone()),
             ScalarRef::Map(col) => Scalar::Map(col.clone()),
             ScalarRef::Tuple(fields) => {
                 Scalar::Tuple(fields.iter().map(ScalarRef::to_owned).collect())
@@ -412,6 +419,9 @@ impl<'a> ScalarRef<'a> {
                     Domain::Array(Some(Box::new(array.domain())))
                 }
             }
+            ScalarRef::Vector(_) => Domain::Array(Some(Box::new(Domain::Number(
+                NumberDomain::Float32(Float32Type::full_domain()),
+            )))),
             ScalarRef::Map(map) => {
                 if map.len() == 0 {
                     Domain::Map(None)
@@ -460,6 +470,7 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Timestamp(_) => 8,
             ScalarRef::Date(_) => 4,
             ScalarRef::Array(col) => col.memory_size(),
+            ScalarRef::Vector(v) => v.len() * 4,
             ScalarRef::Map(col) => col.memory_size(),
             ScalarRef::Tuple(scalars) => scalars.iter().map(|s| s.memory_size()).sum(),
             ScalarRef::Variant(buf) => buf.len(),
@@ -486,6 +497,7 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Timestamp(_) => DataType::Timestamp,
             ScalarRef::Date(_) => DataType::Date,
             ScalarRef::Array(array) => DataType::Array(Box::new(array.data_type())),
+            ScalarRef::Vector(_) => DataType::Vector,
             ScalarRef::Map(col) => DataType::Map(Box::new(col.data_type())),
             ScalarRef::Tuple(fields) => {
                 let inner = fields
@@ -512,6 +524,7 @@ impl PartialOrd for Scalar {
             (Scalar::Timestamp(t1), Scalar::Timestamp(t2)) => t1.partial_cmp(t2),
             (Scalar::Date(d1), Scalar::Date(d2)) => d1.partial_cmp(d2),
             (Scalar::Array(a1), Scalar::Array(a2)) => a1.partial_cmp(a2),
+            (Scalar::Vector(v1), Scalar::Vector(v2)) => v1.partial_cmp(v2),
             (Scalar::Map(m1), Scalar::Map(m2)) => m1.partial_cmp(m2),
             (Scalar::Tuple(t1), Scalar::Tuple(t2)) => t1.partial_cmp(t2),
             (Scalar::Variant(v1), Scalar::Variant(v2)) => {
@@ -547,6 +560,7 @@ impl PartialOrd for ScalarRef<'_> {
             (ScalarRef::Timestamp(t1), ScalarRef::Timestamp(t2)) => t1.partial_cmp(t2),
             (ScalarRef::Date(d1), ScalarRef::Date(d2)) => d1.partial_cmp(d2),
             (ScalarRef::Array(a1), ScalarRef::Array(a2)) => a1.partial_cmp(a2),
+            (ScalarRef::Vector(v1), ScalarRef::Vector(v2)) => v1.partial_cmp(v2),
             (ScalarRef::Map(m1), ScalarRef::Map(m2)) => m1.partial_cmp(m2),
             (ScalarRef::Tuple(t1), ScalarRef::Tuple(t2)) => t1.partial_cmp(t2),
             (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => jsonb::compare(v1, v2).ok(),
@@ -589,6 +603,9 @@ impl Hash for ScalarRef<'_> {
                 let str = serialize_column(v);
                 str.hash(state);
             }
+            ScalarRef::Vector(v) => {
+                v.hash(state);
+            }
             ScalarRef::Map(v) => {
                 let str = serialize_column(v);
                 str.hash(state);
@@ -626,6 +643,11 @@ impl PartialOrd for Column {
             }
             (Column::Date(col1), Column::Date(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::Array(col1), Column::Array(col2)) => col1.iter().partial_cmp(col2.iter()),
+            (Column::Vector(box col1), Column::Vector(box col2)) => {
+                let col1 = col1.clone().upcast();
+                let col2 = col2.clone().upcast();
+                col1.iter().partial_cmp(col2.iter())
+            }
             (Column::Map(col1), Column::Map(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::Nullable(col1), Column::Nullable(col2)) => {
                 col1.iter().partial_cmp(col2.iter())
@@ -648,6 +670,7 @@ impl PartialEq for Column {
 pub const ARROW_EXT_TYPE_EMPTY_ARRAY: &str = "EmptyArray";
 pub const ARROW_EXT_TYPE_EMPTY_MAP: &str = "EmptyMap";
 pub const ARROW_EXT_TYPE_VARIANT: &str = "Variant";
+pub const ARROW_EXT_TYPE_VECTOR: &str = "Vector";
 
 impl Column {
     pub fn len(&self) -> usize {
@@ -662,6 +685,7 @@ impl Column {
             Column::Timestamp(col) => col.len(),
             Column::Date(col) => col.len(),
             Column::Array(col) => col.len(),
+            Column::Vector(col) => col.len(),
             Column::Map(col) => col.len(),
             Column::Nullable(col) => col.len(),
             Column::Tuple(fields) => fields[0].len(),
@@ -681,6 +705,7 @@ impl Column {
             Column::Timestamp(col) => Some(ScalarRef::Timestamp(col.get(index).cloned()?)),
             Column::Date(col) => Some(ScalarRef::Date(col.get(index).cloned()?)),
             Column::Array(col) => Some(ScalarRef::Array(col.index(index)?)),
+            Column::Vector(col) => Some(ScalarRef::Vector(col.index(index)?.as_slice().to_vec())),
             Column::Map(col) => Some(ScalarRef::Map(col.index(index)?)),
             Column::Nullable(col) => Some(col.index(index)?.unwrap_or(ScalarRef::Null)),
             Column::Tuple(fields) => Some(ScalarRef::Tuple(
@@ -708,6 +733,9 @@ impl Column {
             Column::Timestamp(col) => ScalarRef::Timestamp(*col.get_unchecked(index)),
             Column::Date(col) => ScalarRef::Date(*col.get_unchecked(index)),
             Column::Array(col) => ScalarRef::Array(col.index_unchecked(index)),
+            Column::Vector(col) => {
+                ScalarRef::Vector(col.index_unchecked(index).as_slice().to_vec())
+            }
             Column::Map(col) => ScalarRef::Map(col.index_unchecked(index)),
             Column::Nullable(col) => col.index_unchecked(index).unwrap_or(ScalarRef::Null),
             Column::Tuple(fields) => ScalarRef::Tuple(
@@ -756,6 +784,7 @@ impl Column {
                 Column::Date(col.clone().sliced(range.start, range.end - range.start))
             }
             Column::Array(col) => Column::Array(Box::new(col.slice(range))),
+            Column::Vector(col) => Column::Vector(Box::new(col.slice(range))),
             Column::Map(col) => Column::Map(Box::new(col.slice(range))),
             Column::Nullable(col) => Column::Nullable(Box::new(col.slice(range))),
             Column::Tuple(fields) => Column::Tuple(
@@ -820,6 +849,9 @@ impl Column {
                     Domain::Array(Some(Box::new(inner_domain)))
                 }
             }
+            Column::Vector(_) => Domain::Array(Some(Box::new(Domain::Number(
+                NumberDomain::Float32(Float32Type::full_domain()),
+            )))),
             Column::Map(col) => {
                 if col.len() == 0 {
                     Domain::Map(None)
@@ -869,6 +901,7 @@ impl Column {
                 let inner = array.values.data_type();
                 DataType::Array(Box::new(inner))
             }
+            Column::Vector(_) => DataType::Vector,
             Column::Map(col) => {
                 let inner = col.values.data_type();
                 DataType::Map(Box::new(inner))
@@ -889,6 +922,10 @@ impl Column {
     pub fn unnest(&self) -> Self {
         match self {
             Column::Array(array) => array.underlying_column().unnest(),
+            Column::Vector(vector) => {
+                let values = vector.underlying_column();
+                Column::Number(NumberColumn::Float32(values))
+            }
             col => col.clone(),
         }
     }
@@ -1058,6 +1095,29 @@ impl Column {
                         arrow_type,
                         unsafe { OffsetsBuffer::new_unchecked(offsets) },
                         col.values.as_arrow(),
+                        None,
+                    )
+                    .unwrap(),
+                )
+            }
+            Column::Vector(col) => {
+                let values =
+                    unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(col.values.clone()) };
+                let values = Box::new(
+                    common_arrow::arrow::array::PrimitiveArray::<f32>::try_new(
+                        ArrowType::Float32,
+                        values,
+                        None,
+                    )
+                    .unwrap(),
+                );
+                let offsets: Buffer<i64> =
+                    col.offsets.iter().map(|offset| *offset as i64).collect();
+                Box::new(
+                    common_arrow::arrow::array::ListArray::<i64>::try_new(
+                        arrow_type,
+                        unsafe { OffsetsBuffer::new_unchecked(offsets) },
+                        values,
                         None,
                     )
                     .unwrap(),
@@ -1386,6 +1446,31 @@ impl Column {
                     offsets: offsets.into(),
                 })
             }
+            ArrowDataType::Extension(name, _, None) if name == ARROW_EXT_TYPE_VECTOR => {
+                let values_col = arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::ListArray<i64>>()
+                    .expect("fail to read from arrow: array should be `ListArray<i64>`");
+                let values = values_col
+                    .values()
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::Float32Array>()
+                    .expect("fail to read from arrow: array should be `Float32Array`")
+                    .values()
+                    .clone();
+                let values = unsafe { std::mem::transmute::<Buffer<f32>, Buffer<F32>>(values) };
+
+                let offsets = values_col
+                    .offsets()
+                    .buffer()
+                    .iter()
+                    .map(|x| *x as u64)
+                    .collect::<Vec<_>>();
+                Column::Vector(Box::new(ArrayColumn {
+                    values,
+                    offsets: offsets.into(),
+                }))
+            }
             ArrowDataType::List(f) => {
                 let array_list = arrow_cast::cast(
                     arrow_col,
@@ -1581,6 +1666,23 @@ impl Column {
                     offsets: offsets.into(),
                 }))
             }
+            DataType::Vector => {
+                let mut inner_len = 0;
+                let mut offsets: Vec<u64> = Vec::with_capacity(len + 1);
+                offsets.push(0);
+                for _ in 0..len {
+                    inner_len += SmallRng::from_entropy().gen_range(0..=3);
+                    offsets.push(inner_len);
+                }
+                let values = Column::random(
+                    &DataType::Number(NumberDataType::Float32),
+                    inner_len as usize,
+                );
+                Column::Vector(Box::new(ArrayColumn {
+                    values: values.as_number().unwrap().as_float32().unwrap().clone(),
+                    offsets: offsets.into(),
+                }))
+            }
             DataType::Map(inner_ty) => {
                 let mut inner_len = 0;
                 let mut offsets: Vec<u64> = Vec::with_capacity(len + 1);
@@ -1690,6 +1792,7 @@ impl Column {
             Column::Timestamp(col) => col.len() * 8,
             Column::Date(col) => col.len() * 4,
             Column::Array(col) => col.values.memory_size() + col.offsets.len() * 8,
+            Column::Vector(col) => col.values.len() * 4 + col.offsets.len() * 8,
             Column::Map(col) => col.values.memory_size() + col.offsets.len() * 8,
             Column::Nullable(c) => c.column.memory_size() + c.validity.as_slice().0.len(),
             Column::Tuple(fields) => fields.iter().map(|f| f.memory_size()).sum(),
@@ -1766,6 +1869,9 @@ impl ColumnBuilder {
             Column::Array(box col) => {
                 ColumnBuilder::Array(Box::new(ArrayColumnBuilder::from_column(col)))
             }
+            Column::Vector(box col) => {
+                ColumnBuilder::Vector(Box::new(ArrayColumnBuilder::from_column(col)))
+            }
             Column::Map(box col) => {
                 ColumnBuilder::Map(Box::new(ArrayColumnBuilder::from_column(col)))
             }
@@ -1824,6 +1930,10 @@ impl ColumnBuilder {
             ScalarRef::Array(col) => {
                 ColumnBuilder::Array(Box::new(ArrayColumnBuilder::repeat(col, n)))
             }
+            ScalarRef::Vector(col) => {
+                let val = Buffer::<F32>::from(col.clone());
+                ColumnBuilder::Vector(Box::new(ArrayColumnBuilder::repeat(&val, n)))
+            }
             ScalarRef::Map(col) => ColumnBuilder::Map(Box::new(ArrayColumnBuilder::repeat(col, n))),
             ScalarRef::Tuple(fields) => {
                 let fields_ty = match data_type {
@@ -1854,6 +1964,7 @@ impl ColumnBuilder {
             ColumnBuilder::Timestamp(builder) => builder.len(),
             ColumnBuilder::Date(builder) => builder.len(),
             ColumnBuilder::Array(builder) => builder.len(),
+            ColumnBuilder::Vector(builder) => builder.len(),
             ColumnBuilder::Map(builder) => builder.len(),
             ColumnBuilder::Nullable(builder) => builder.len(),
             ColumnBuilder::Tuple(fields) => fields[0].len(),
@@ -1887,6 +1998,7 @@ impl ColumnBuilder {
             ColumnBuilder::Timestamp(col) => col.len() * 8,
             ColumnBuilder::Date(col) => col.len() * 4,
             ColumnBuilder::Array(col) => col.builder.memory_size() + col.offsets.len() * 8,
+            ColumnBuilder::Vector(col) => col.builder.len() * 4 + col.offsets.len() * 8,
             ColumnBuilder::Map(col) => col.builder.memory_size() + col.offsets.len() * 8,
             ColumnBuilder::Nullable(c) => c.builder.memory_size() + c.validity.as_slice().len(),
             ColumnBuilder::Tuple(fields) => fields.iter().map(|f| f.memory_size()).sum(),
@@ -1914,6 +2026,7 @@ impl ColumnBuilder {
                 let inner = col.builder.data_type();
                 DataType::Array(Box::new(inner))
             }
+            ColumnBuilder::Vector(_) => DataType::Vector,
             ColumnBuilder::Map(col) => {
                 let inner = col.builder.data_type();
                 DataType::Map(Box::new(inner))
@@ -1966,6 +2079,12 @@ impl ColumnBuilder {
                     offsets,
                 }))
             }
+            DataType::Vector => {
+                let mut offsets = Vec::with_capacity(capacity + 1);
+                offsets.push(0);
+                let builder = Vec::with_capacity(capacity);
+                ColumnBuilder::Vector(Box::new(ArrayColumnBuilder { builder, offsets }))
+            }
             DataType::Map(ty) => {
                 let mut offsets = Vec::with_capacity(capacity + 1);
                 offsets.push(0);
@@ -2014,6 +2133,10 @@ impl ColumnBuilder {
             (ColumnBuilder::Array(builder), ScalarRef::Array(value)) => {
                 builder.push(value);
             }
+            (ColumnBuilder::Vector(builder), ScalarRef::Vector(value)) => {
+                let value = Buffer::<F32>::from(value);
+                builder.push(value);
+            }
             (ColumnBuilder::Map(builder), ScalarRef::Map(value)) => {
                 builder.push(value);
             }
@@ -2049,6 +2172,7 @@ impl ColumnBuilder {
             ColumnBuilder::Timestamp(builder) => builder.push(0),
             ColumnBuilder::Date(builder) => builder.push(0),
             ColumnBuilder::Array(builder) => builder.push_default(),
+            ColumnBuilder::Vector(builder) => builder.push_default(),
             ColumnBuilder::Map(builder) => builder.push_default(),
             ColumnBuilder::Nullable(builder) => builder.push_null(),
             ColumnBuilder::Tuple(fields) => {
@@ -2104,6 +2228,14 @@ impl ColumnBuilder {
                 let len = reader.read_uvarint()?;
                 for _ in 0..len {
                     builder.builder.push_binary(reader)?;
+                }
+                builder.commit_row();
+            }
+            ColumnBuilder::Vector(builder) => {
+                let len = reader.read_uvarint()?;
+                for _ in 0..len {
+                    let value: F32 = reader.read_scalar()?;
+                    builder.builder.push(value);
                 }
                 builder.commit_row();
             }
@@ -2200,6 +2332,17 @@ impl ColumnBuilder {
                     builder.commit_row();
                 }
             }
+            ColumnBuilder::Vector(builder) => {
+                for row in 0..rows {
+                    let mut reader = &reader[step * row..];
+                    let len = reader.read_uvarint()?;
+                    for _ in 0..len {
+                        let value: F32 = reader.read_scalar()?;
+                        builder.builder.push(value);
+                    }
+                    builder.commit_row();
+                }
+            }
             ColumnBuilder::Map(builder) => {
                 const KEY: usize = 0;
                 const VALUE: usize = 1;
@@ -2263,6 +2406,16 @@ impl ColumnBuilder {
             ColumnBuilder::Timestamp(builder) => builder.pop().map(Scalar::Timestamp),
             ColumnBuilder::Date(builder) => builder.pop().map(Scalar::Date),
             ColumnBuilder::Array(builder) => builder.pop().map(Scalar::Array),
+            ColumnBuilder::Vector(builder) => {
+                if builder.len() > 1 {
+                    builder.offsets.pop();
+                    let idx = *builder.offsets.last().unwrap() as usize;
+                    let vals = builder.builder.drain(idx..).collect();
+                    Some(Scalar::Vector(vals))
+                } else {
+                    None
+                }
+            }
             ColumnBuilder::Map(builder) => builder.pop().map(Scalar::Map),
             ColumnBuilder::Nullable(builder) => Some(builder.pop()?.unwrap_or(Scalar::Null)),
             ColumnBuilder::Tuple(fields) => {
@@ -2316,6 +2469,9 @@ impl ColumnBuilder {
             (ColumnBuilder::Array(builder), Column::Array(other)) => {
                 builder.append_column(other.as_ref());
             }
+            (ColumnBuilder::Vector(builder), Column::Vector(other)) => {
+                builder.append_column(other.as_ref());
+            }
             (ColumnBuilder::Map(builder), Column::Map(other)) => {
                 builder.append_column(other.as_ref());
             }
@@ -2344,6 +2500,7 @@ impl ColumnBuilder {
             ColumnBuilder::Timestamp(builder) => Column::Timestamp(builder.into()),
             ColumnBuilder::Date(builder) => Column::Date(builder.into()),
             ColumnBuilder::Array(builder) => Column::Array(Box::new(builder.build())),
+            ColumnBuilder::Vector(builder) => Column::Vector(Box::new(builder.build())),
             ColumnBuilder::Map(builder) => Column::Map(Box::new(builder.build())),
             ColumnBuilder::Nullable(builder) => Column::Nullable(Box::new(builder.build())),
             ColumnBuilder::Tuple(fields) => {
@@ -2367,6 +2524,10 @@ impl ColumnBuilder {
             ColumnBuilder::Timestamp(builder) => Scalar::Timestamp(builder[0]),
             ColumnBuilder::Date(builder) => Scalar::Date(builder[0]),
             ColumnBuilder::Array(builder) => Scalar::Array(builder.build_scalar()),
+            ColumnBuilder::Vector(builder) => {
+                let col = builder.build_scalar();
+                Scalar::Vector(col.as_slice().to_vec())
+            }
             ColumnBuilder::Map(builder) => Scalar::Map(builder.build_scalar()),
             ColumnBuilder::Nullable(builder) => builder.build_scalar().unwrap_or(Scalar::Null),
             ColumnBuilder::Tuple(fields) => Scalar::Tuple(

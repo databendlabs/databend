@@ -189,6 +189,9 @@ impl Domain {
             }
             DataType::EmptyArray => Domain::Array(None),
             DataType::Array(ty) => Domain::Array(Some(Box::new(Domain::full(ty)))),
+            DataType::Vector => Domain::Array(Some(Box::new(Domain::full(&DataType::Number(
+                NumberDataType::Float32,
+            ))))),
             DataType::EmptyMap => Domain::Map(None),
             DataType::Map(box ty) => {
                 let inner_domain = match ty {

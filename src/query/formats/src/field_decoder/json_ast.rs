@@ -31,6 +31,7 @@ use common_expression::types::number::Number;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::timestamp::check_timestamp;
 use common_expression::types::AnyType;
+use common_expression::types::Float32Type;
 use common_expression::types::NumberColumnBuilder;
 use common_expression::with_decimal_type;
 use common_expression::with_number_mapped_type;
@@ -84,6 +85,7 @@ impl FieldJsonAstDecoder {
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, value),
             ColumnBuilder::String(c) => self.read_string(c, value),
             ColumnBuilder::Array(c) => self.read_array(c, value),
+            ColumnBuilder::Vector(c) => self.read_vector(c, value),
             ColumnBuilder::Map(c) => self.read_map(c, value),
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, value),
             ColumnBuilder::Variant(c) => self.read_variant(c, value),
@@ -246,6 +248,23 @@ impl FieldJsonAstDecoder {
             Value::Array(vals) => {
                 for val in vals {
                     self.read_field(&mut column.builder, val)?;
+                }
+                column.commit_row();
+                Ok(())
+            }
+            _ => Err(ErrorCode::BadBytes("Incorrect json value, must be array")),
+        }
+    }
+
+    fn read_vector(
+        &self,
+        column: &mut ArrayColumnBuilder<Float32Type>,
+        value: &Value,
+    ) -> Result<()> {
+        match value {
+            Value::Array(vals) => {
+                for val in vals {
+                    self.read_float(&mut column.builder, val)?;
                 }
                 column.commit_row();
                 Ok(())

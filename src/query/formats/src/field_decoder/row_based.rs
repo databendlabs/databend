@@ -33,6 +33,7 @@ use common_expression::types::number::Number;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::timestamp::check_timestamp;
 use common_expression::types::AnyType;
+use common_expression::types::Float32Type;
 use common_expression::types::NumberColumnBuilder;
 use common_expression::with_decimal_type;
 use common_expression::with_number_mapped_type;
@@ -88,6 +89,7 @@ pub trait FieldDecoderRowBased: FieldDecoder {
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, reader, raw),
             ColumnBuilder::String(c) => self.read_string(c, reader, raw),
             ColumnBuilder::Array(c) => self.read_array(c, reader, raw),
+            ColumnBuilder::Vector(c) => self.read_vector(c, reader),
             ColumnBuilder::Map(c) => self.read_map(c, reader, raw),
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, reader, raw),
             ColumnBuilder::Variant(c) => self.read_variant(c, reader, raw),
@@ -273,6 +275,28 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         reader: &mut Cursor<R>,
         raw: bool,
     ) -> Result<()>;
+
+    fn read_vector<R: AsRef<[u8]>>(
+        &self,
+        column: &mut ArrayColumnBuilder<Float32Type>,
+        reader: &mut Cursor<R>,
+    ) -> Result<()> {
+        reader.must_ignore_byte(b'[')?;
+        for idx in 0.. {
+            let _ = reader.ignore_white_spaces();
+            if reader.ignore_byte(b']') {
+                break;
+            }
+            if idx != 0 {
+                reader.must_ignore_byte(b',')?;
+            }
+            let _ = reader.ignore_white_spaces();
+            let v: f32 = reader.read_float_text()?;
+            column.builder.push(v.into());
+        }
+        column.commit_row();
+        Ok(())
+    }
 
     fn read_map<R: AsRef<[u8]>>(
         &self,

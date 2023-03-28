@@ -199,6 +199,17 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
             jsonb::build_array(items.iter(), buf).expect("failed to build jsonb array");
             return;
         }
+        ScalarRef::Vector(col) => {
+            let mut builder = StringColumnBuilder::with_capacity(col.len(), col.len() * 16);
+            for v in col.iter() {
+                let value: jsonb::Value = v.0.into();
+                value.write_to_vec(&mut builder.data);
+                builder.commit_row();
+            }
+            let items = builder.build();
+            jsonb::build_array(items.iter(), buf).expect("failed to build jsonb array");
+            return;
+        }
         ScalarRef::Map(col) => {
             let kv_col = KvPair::<AnyType, AnyType>::try_downcast_column(&col).unwrap();
             let kvs = kv_col
