@@ -44,7 +44,7 @@ pub async fn query_local(conf: &InnerConfig) -> Result<()> {
             .await?;
         let ctx = session.create_query_context().await?;
         let mut planner = Planner::new(ctx.clone());
-        let (plan, _, _) = planner.plan_sql(&sql).await?;
+        let (plan, _) = planner.plan_sql(&sql).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let stream = interpreter.execute(ctx.clone()).await?;
         let blocks = stream.map(|v| v).collect::<Vec<_>>().await;

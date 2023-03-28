@@ -69,14 +69,8 @@ fn gen_sample_block() -> (DataBlock, Vec<Column>, TableSchemaRef) {
     let col_g = Float64Type::from_data(vec![10.0f64, 11., 12.]);
 
     // inner/root nodes
-    let col_b = Column::Tuple {
-        fields: vec![col_c.clone(), col_d.clone()],
-        len: 3,
-    };
-    let col_a = Column::Tuple {
-        fields: vec![col_b, col_e.clone()],
-        len: 3,
-    };
+    let col_b = Column::Tuple(vec![col_c.clone(), col_d.clone()]);
+    let col_a = Column::Tuple(vec![col_b, col_e.clone()]);
 
     let columns = vec![col_a, col_f.clone(), col_g.clone()];
     (

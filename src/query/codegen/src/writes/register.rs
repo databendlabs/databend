@@ -31,16 +31,13 @@ pub fn codegen_register() {
             #![allow(unused_parens)]
             #![allow(unused_variables)]
             #![allow(clippy::redundant_closure)]
-
-            use std::sync::Arc;
-            
+                use crate::FunctionEval;
             use crate::Function;
             use crate::EvalContext;
             use crate::FunctionDomain;
             use crate::FunctionRegistry;
             use crate::FunctionSignature;
             use crate::property::Domain;
-            use crate::property::FunctionProperty;
             use crate::types::nullable::NullableColumn;
             use crate::types::nullable::NullableDomain;
             use crate::types::*;
@@ -77,7 +74,6 @@ pub fn codegen_register() {
                 pub fn register_{n_args}_arg<{arg_generics_bound} O: ArgType, F, G>(
                     &mut self,
                     name: &str,
-                    property: FunctionProperty,
                     calc_domain: F,
                     func: G,
                 ) where
@@ -86,7 +82,6 @@ pub fn codegen_register() {
                 {{
                     self.register_passthrough_nullable_{n_args}_arg::<{arg_generics} O, _, _>(
                         name,
-                        property,
                         calc_domain,
                         vectorize_{n_args}_arg(func),
                     )
@@ -149,7 +144,6 @@ pub fn codegen_register() {
                 pub fn register_passthrough_nullable_{n_args}_arg<{arg_generics_bound} O: ArgType, F, G>(
                     &mut self,
                     name: &str,
-                    property: FunctionProperty,
                     calc_domain: F,
                     func: G,
                 ) where
@@ -166,11 +160,10 @@ pub fn codegen_register() {
                         name
                     );
 
-                    self.register_{n_args}_arg_core::<{arg_generics} O, _, _>(name, property.clone(), calc_domain, func);
+                    self.register_{n_args}_arg_core::<{arg_generics} O, _, _>(name, calc_domain, func);
 
                     self.register_{n_args}_arg_core::<{arg_nullable_generics} NullableType<O>, _, _>(
                         name,
-                        property,
                         move |{closure_args}| {{
                             match ({closure_args_value}) {{
                                 ({some_values}) => {{
@@ -252,7 +245,6 @@ pub fn codegen_register() {
                 pub fn register_combine_nullable_{n_args}_arg<{arg_generics_bound} O: ArgType, F, G>(
                     &mut self,
                     name: &str,
-                    property: FunctionProperty,
                     calc_domain: F,
                     func: G,
                 ) where
@@ -271,14 +263,12 @@ pub fn codegen_register() {
 
                     self.register_{n_args}_arg_core::<{arg_generics} NullableType<O>, _, _>(
                         name,
-                        property.clone(),
                         calc_domain,
                         func
                     );
 
                     self.register_{n_args}_arg_core::<{arg_nullable_generics} NullableType<O>, _, _>(
                         name,
-                        property,
                         move |{closure_args}| {{
                             match ({closure_args_value}) {{
                                 ({some_values}) => {{
@@ -335,26 +325,24 @@ pub fn codegen_register() {
                 pub fn register_{n_args}_arg_core<{arg_generics_bound} O: ArgType, F, G>(
                     &mut self,
                     name: &str,
-                    property: FunctionProperty,
                     calc_domain: F,
                     func: G,
                 ) where
                     F: Fn({arg_f_closure_sig}) -> FunctionDomain<O> + 'static + Clone + Copy + Send + Sync,
                     G: for <'a> Fn({arg_g_closure_sig} &mut EvalContext) -> Value<O> + 'static + Clone + Copy + Send + Sync,
                 {{
-                    self.funcs
-                        .entry(name.to_string())
-                        .or_insert_with(Vec::new)
-                        .push(Arc::new(Function {{
-                            signature: FunctionSignature {{
-                                name: name.to_string(),
-                                args_type: vec![{arg_sig_type}],
-                                return_type: O::data_type(),
-                                property,
-                            }},
+                    let func = Function {{
+                        signature: FunctionSignature {{
+                            name: name.to_string(),
+                            args_type: vec![{arg_sig_type}],
+                            return_type: O::data_type(),
+                        }},
+                        eval: FunctionEval::Scalar {{
                             calc_domain: Box::new(erase_calc_domain_generic_{n_args}_arg::<{arg_generics} O>(calc_domain)),
                             eval: Box::new(erase_function_generic_{n_args}_arg(func)),
-                        }}));
+                        }},
+                    }};
+                    self.register_function(func);
                 }}
             "
         )
@@ -632,7 +620,8 @@ pub fn codegen_register() {
 
                 format!(
                     "({arm_pat}) => {{
-                        let validity = {and_validity};
+                        let and_validity = {and_validity};
+                        let validity = ctx.validity.as_ref().map(|valid| valid & (&and_validity)).unwrap_or(and_validity);
                         ctx.validity = Some(validity.clone());
                         let column = func({func_arg} ctx).into_column().unwrap();
                         Value::Column(NullableColumn {{ column, validity }})
@@ -739,11 +728,12 @@ pub fn codegen_register() {
 
                 format!(
                     "({arm_pat}) => {{
-                        let validity = {and_validity};
+                        let and_validity = {and_validity};
+                        let validity = ctx.validity.as_ref().map(|valid| valid & (&and_validity)).unwrap_or(and_validity);
                         ctx.validity = Some(validity.clone());
                         let nullable_column = func({func_arg} ctx).into_column().unwrap();
-                        let merge_validity = common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-                        Value::Column(NullableColumn {{ column: nullable_column.column, validity: merge_validity }})
+                        let combine_validity = common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
+                        Value::Column(NullableColumn {{ column: nullable_column.column, validity: combine_validity }})
                     }}"
                 )
             })

@@ -13,7 +13,11 @@
 //  limitations under the License.
 
 mod async_crash_me;
+mod infer_schema;
+mod list_stage;
 mod numbers;
+mod openai;
+mod srf;
 mod sync_crash_me;
 mod table_function;
 mod table_function_factory;
@@ -21,5 +25,6 @@ mod table_function_factory;
 pub use numbers::generate_numbers_parts;
 pub use numbers::NumbersPartInfo;
 pub use numbers::NumbersTable;
+pub use openai::GPT2SQLTable;
 pub use table_function::TableFunction;
 pub use table_function_factory::TableFunctionFactory;

@@ -24,28 +24,26 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
+use common_pipeline_transforms::processors::transforms::TransformDummy;
 
 use crate::api::rpc::exchange::serde::exchange_deserializer::ExchangeDeserializeMeta;
-use crate::api::rpc::flight_client::FlightExchangeRef;
+use crate::api::rpc::flight_client::FlightReceiver;
 use crate::api::DataPacket;
-use crate::pipelines::processors::TransformDummy;
 
 pub struct ExchangeSourceReader {
     finished: bool,
-    initialized: bool,
     output: Arc<OutputPort>,
     output_data: Option<DataPacket>,
-    flight_exchange: FlightExchangeRef,
+    flight_receiver: FlightReceiver,
 }
 
 impl ExchangeSourceReader {
-    pub fn create(output: Arc<OutputPort>, flight_exchange: FlightExchangeRef) -> ProcessorPtr {
+    pub fn create(output: Arc<OutputPort>, flight_receiver: FlightReceiver) -> ProcessorPtr {
         ProcessorPtr::create(Box::new(ExchangeSourceReader {
             output,
-            flight_exchange,
+            flight_receiver,
             finished: false,
             output_data: None,
-            initialized: false,
         }))
     }
 }
@@ -68,7 +66,8 @@ impl Processor for ExchangeSourceReader {
 
         if self.output.is_finished() {
             if !self.finished {
-                return Ok(Event::Async);
+                self.finished = true;
+                self.flight_receiver.close();
             }
 
             return Ok(Event::Finished);
@@ -88,13 +87,8 @@ impl Processor for ExchangeSourceReader {
     }
 
     async fn async_process(&mut self) -> common_exception::Result<()> {
-        if !self.initialized {
-            self.initialized = true;
-            self.flight_exchange.close_output().await;
-        }
-
         if self.output_data.is_none() {
-            if let Some(output_data) = self.flight_exchange.recv().await? {
+            if let Some(output_data) = self.flight_receiver.recv().await? {
                 self.output_data = Some(output_data);
                 return Ok(());
             }
@@ -102,15 +96,15 @@ impl Processor for ExchangeSourceReader {
 
         if !self.finished {
             self.finished = true;
-            self.flight_exchange.close_input().await;
+            self.flight_receiver.close();
         }
 
         Ok(())
     }
 }
 
-pub fn via_reader(prefix_size: usize, exchanges: Vec<FlightExchangeRef>, pipeline: &mut Pipeline) {
-    let mut items = Vec::with_capacity(prefix_size + exchanges.len());
+pub fn via_reader(prefix_size: usize, pipeline: &mut Pipeline, receivers: Vec<FlightReceiver>) {
+    let mut items = Vec::with_capacity(prefix_size + receivers.len());
 
     for _index in 0..prefix_size {
         let input = InputPort::create();
@@ -123,7 +117,7 @@ pub fn via_reader(prefix_size: usize, exchanges: Vec<FlightExchangeRef>, pipelin
         ));
     }
 
-    for flight_exchange in exchanges {
+    for flight_exchange in receivers {
         let output = OutputPort::create();
         items.push(PipeItem::create(
             ExchangeSourceReader::create(output.clone(), flight_exchange),
@@ -135,10 +129,10 @@ pub fn via_reader(prefix_size: usize, exchanges: Vec<FlightExchangeRef>, pipelin
     pipeline.add_pipe(Pipe::create(prefix_size, items.len(), items));
 }
 
-pub fn create_reader_item(exchange: FlightExchangeRef) -> PipeItem {
+pub fn create_reader_item(flight_receiver: FlightReceiver) -> PipeItem {
     let output = OutputPort::create();
     PipeItem::create(
-        ExchangeSourceReader::create(output.clone(), exchange),
+        ExchangeSourceReader::create(output.clone(), flight_receiver),
         vec![],
         vec![output],
     )

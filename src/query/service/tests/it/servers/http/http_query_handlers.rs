@@ -17,8 +17,8 @@ use std::fs::File;
 use std::io::Read;
 use std::time::Duration;
 
-use base64::encode_config;
-use base64::URL_SAFE_NO_PAD;
+use base64::engine::general_purpose;
+use base64::prelude::*;
 use common_base::base::get_free_tcp_port;
 use common_base::base::tokio;
 use common_exception::ErrorCode;
@@ -126,7 +126,7 @@ async fn test_simple_sql() -> Result<()> {
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     assert_eq!(result.next_uri, Some(final_uri.clone()), "{:?}", result);
     assert_eq!(result.data.len(), 10, "{:?}", result);
-    assert_eq!(result.schema.len(), 11, "{:?}", result);
+    assert_eq!(result.schema.len(), 12, "{:?}", result);
 
     // get state
     let uri = make_state_uri(query_id);
@@ -442,7 +442,7 @@ async fn test_result_timeout() -> Result<()> {
     let _guard = TestGlobalServices::setup(config.clone()).await?;
 
     let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(&config));
+        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
 
     let ep = Route::new()
         .nest("/v1/query", query_route())
@@ -466,7 +466,7 @@ async fn test_system_tables() -> Result<()> {
     let config = ConfigBuilder::create().build();
     let _guard = TestGlobalServices::setup(config.clone()).await?;
     let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(&config));
+        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
     let ep = Route::new()
         .nest("/v1/query", query_route())
         .with(session_middleware);
@@ -548,7 +548,7 @@ async fn test_query_log() -> Result<()> {
     let _guard = TestGlobalServices::setup(config.clone()).await?;
 
     let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(&config));
+        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
 
     let ep = Route::new()
         .nest("/v1/query", query_route())
@@ -603,7 +603,7 @@ async fn test_query_log() -> Result<()> {
     );
 
     let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(&config));
+        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
 
     let ep = Route::new()
         .nest("/v1/query", query_route())
@@ -682,9 +682,8 @@ async fn post_sql(sql: &str, wait_time_secs: u64) -> Result<(StatusCode, QueryRe
 }
 
 pub async fn create_endpoint() -> Result<EndpointType> {
-    let config = ConfigBuilder::create().build();
     let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(&config));
+        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
 
     Ok(Route::new()
         .nest("/v1/query", query_route())
@@ -738,13 +737,13 @@ async fn post_json_to_endpoint(
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_auth_jwt() -> Result<()> {
-    let user_name = "root";
+    let user_name = "test_user";
 
     let kid = "test_kid";
     let key_pair = RS256KeyPair::generate(2048)?.with_key_id(kid);
     let rsa_components = key_pair.public_key().to_components();
-    let e = encode_config(rsa_components.e, URL_SAFE_NO_PAD);
-    let n = encode_config(rsa_components.n, URL_SAFE_NO_PAD);
+    let e = general_purpose::URL_SAFE_NO_PAD.encode(rsa_components.e);
+    let n = general_purpose::URL_SAFE_NO_PAD.encode(rsa_components.n);
     let j =
         serde_json::json!({"keys": [ {"kty": "RSA", "kid": kid, "e": e, "n": n, } ] }).to_string();
 
@@ -767,7 +766,7 @@ async fn test_auth_jwt() -> Result<()> {
     let _guard = TestGlobalServices::setup(config.clone()).await?;
 
     let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(&config));
+        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
 
     let ep = Route::new()
         .nest("/v1/query", query_route())
@@ -788,8 +787,7 @@ async fn test_auth_jwt() -> Result<()> {
 
     let token = key_pair.sign(claims)?;
     let bear = headers::Authorization::bearer(&token).unwrap();
-    // root user can only login in localhost
-    assert_auth_current_user(&ep, user_name, bear, "127.0.0.1").await?;
+    assert_auth_current_user(&ep, user_name, bear, "%").await?;
     Ok(())
 }
 
@@ -872,8 +870,8 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
     let kid = "test_kid";
     let key_pair = RS256KeyPair::generate(2048)?.with_key_id(kid);
     let rsa_components = key_pair.public_key().to_components();
-    let e = encode_config(rsa_components.e, URL_SAFE_NO_PAD);
-    let n = encode_config(rsa_components.n, URL_SAFE_NO_PAD);
+    let e = general_purpose::URL_SAFE_NO_PAD.encode(rsa_components.e);
+    let n = general_purpose::URL_SAFE_NO_PAD.encode(rsa_components.n);
     let j =
         serde_json::json!({"keys": [ {"kty": "RSA", "kid": kid, "e": e, "n": n, } ] }).to_string();
 
@@ -896,7 +894,7 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
     let _guard = TestGlobalServices::setup(config.clone()).await?;
 
     let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(&config));
+        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
     let ep = Route::new()
         .nest("/v1/query", query_route())
         .with(session_middleware);
@@ -1116,18 +1114,23 @@ async fn test_multi_partition() -> Result<()> {
 
     let sqls = vec![
         ("create table tb2(id int, c1 varchar) Engine=Fuse;", 0),
-        ("insert into tb2 values(1, 'mysql'),(2,'databend')", 0),
-        ("insert into tb2 values(1, 'mysql'),(2,'databend')", 0),
-        ("insert into tb2 values(1, 'mysql'),(2,'databend')", 0),
+        ("insert into tb2 values(1, 'mysql'),(1, 'databend')", 0),
+        ("insert into tb2 values(2, 'mysql'),(2, 'databend')", 0),
+        ("insert into tb2 values(3, 'mysql'),(3, 'databend')", 0),
         ("select * from tb2;", 6),
     ];
 
+    let wait_time_secs = 5;
     for (sql, data_len) in sqls {
-        let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 2}});
+        let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}});
         let (status, result) = post_json_to_endpoint(&route, &json).await?;
         assert_eq!(status, StatusCode::OK);
         assert!(result.error.is_none(), "{:?}", result.error);
-        assert_eq!(result.state, ExecuteStateKind::Succeeded);
+        assert_eq!(
+            result.state,
+            ExecuteStateKind::Succeeded,
+            "SQL '{sql}' not finish after {wait_time_secs} secs"
+        );
         assert_eq!(result.data.len(), data_len);
     }
     Ok(())
@@ -1212,7 +1215,7 @@ async fn test_auth_configured_user() -> Result<()> {
     let _guard = TestGlobalServices::setup(config.clone()).await?;
 
     let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::create(&config));
+        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
 
     let ep = Route::new()
         .nest("/v1/query", query_route())

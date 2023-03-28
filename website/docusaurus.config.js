@@ -30,6 +30,10 @@ const config = {
         },
     },
 
+    customFields: {
+      blogTags: ['weekly','databend']
+    },
+
     presets: [
         [
             '@docusaurus/preset-classic',
@@ -54,8 +58,11 @@ const config = {
                         }
                         return `https://github.com/datafuselabs/databend/edit/main/website/blog/${blogPath}`;
                       },
-                    blogSidebarCount: 'ALL',
+                    blogSidebarCount: 5,
                     postsPerPage: 'ALL',
+                    blogListComponent: '@site/src/components/CustomBlog/CustomBlogListPage.js',
+                    blogPostComponent: '@site/src/components/CustomBlog/BlogPostDetails.js',
+                    blogTagsPostsComponent: '@site/src/components/CustomBlog/CustomBlogTagsPostsPage.js',
                 },
                 theme: {
                     customCss: require.resolve('./src/css/custom.scss'),
@@ -73,7 +80,8 @@ const config = {
     ],
     plugins: [
         'docusaurus-plugin-sass',
-        './src/plugins/globalSassVarInject',
+        './src/plugins/global-sass-var-inject',
+        './src/plugins/fetch-databend-releases',
         [
             '@docusaurus/plugin-content-docs',
             /** @type {import('@docusaurus/plugin-content-docs').Options} */
@@ -90,10 +98,12 @@ const config = {
                   },
             },
         ],
+        'plugin-image-zoom'
     ],
     themeConfig:
         /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
         ({
+            zoomSelector: 'article :not(a) > img',
             announcementBar: {
                 id: 'announcementBar-2', // Increment on change
                 content: `⭐️ If you like Databend, give it a star on <a target="_blank" rel="noopener noreferrer" href="https://github.com/datafuselabs/databend">GitHub</a> and follow us on <a target="_blank" rel="noopener noreferrer" href="https://twitter.com/DatabendLabs" >Twitter</a> ${TwitterSvg}`,
@@ -110,12 +120,12 @@ const config = {
                         label: 'Documentation',
                         position: 'right',
                     },
+                    { to: '/blog', label: 'Blog', position: 'right' }, // or position: 'right'
                     {
                         to: '/download',
                         label: 'Download',
                         position: 'right',
                     },
-                    { to: '/blog', label: 'Blog', position: 'right' }, // or position: 'right'
                 ],
             },
             footer: {
@@ -123,6 +133,10 @@ const config = {
                     {
                         title: 'RESOURCES',
                         items: [
+                            {
+                                label: 'Performance',
+                                to: 'https://databend.rs/blog/clickbench-databend-top'
+                            },
                             {
                                 label: 'Deployment',
                                 to: '/doc/deploy'

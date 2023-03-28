@@ -29,11 +29,12 @@ impl Session {
         self.to_process_info(&session_ctx)
     }
 
-    fn to_process_info(self: &Arc<Self>, status: &SessionContext) -> ProcessInfo {
+    fn to_process_info(self: &Arc<Self>, session_ctx: &SessionContext) -> ProcessInfo {
         let mut memory_usage = 0;
 
-        if let Some(shared) = status.get_query_context_shared() {
-            if let Ok(runtime) = shared.try_get_runtime() {
+        let shared_query_context = &session_ctx.get_query_context_shared();
+        if let Some(shared) = shared_query_context {
+            if let Some(runtime) = shared.get_runtime() {
                 let mem_stat = runtime.get_tracker();
                 memory_usage = mem_stat.get_memory_usage();
             }
@@ -42,17 +43,20 @@ impl Session {
         ProcessInfo {
             id: self.id.clone(),
             typ: self.get_type().to_string(),
-            state: self.process_state(status),
-            database: status.get_current_database(),
-            user: status.get_current_user(),
+            state: self.process_state(session_ctx),
+            database: session_ctx.get_current_database(),
+            user: session_ctx.get_current_user(),
             settings: self.get_settings(),
-            client_address: status.get_client_host(),
-            session_extra_info: self.process_extra_info(status),
+            client_address: session_ctx.get_client_host(),
+            session_extra_info: self.process_extra_info(session_ctx),
             memory_usage,
-            data_metrics: Self::query_data_metrics(status),
-            scan_progress_value: Self::query_scan_progress_value(status),
+            data_metrics: Self::query_data_metrics(session_ctx),
+            scan_progress_value: Self::query_scan_progress_value(session_ctx),
             mysql_connection_id: self.mysql_connection_id,
-            created_time: Self::query_created_time(status),
+            created_time: Self::query_created_time(session_ctx),
+            status_info: shared_query_context
+                .as_ref()
+                .map(|qry_ctx| qry_ctx.get_status_info()),
         }
     }
 

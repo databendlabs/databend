@@ -42,11 +42,11 @@ use common_meta_app::storage::StorageFsConfig;
 use common_meta_app::storage::StorageParams;
 use common_pipeline_sources::BlocksSource;
 use common_sql::plans::CreateDatabasePlan;
-use common_sql::plans::CreateTablePlanV2;
+use common_sql::plans::CreateTablePlan;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 use databend_query::interpreters::append2table;
-use databend_query::interpreters::CreateTableInterpreterV2;
+use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::pipelines::executor::ExecutorSettings;
@@ -156,8 +156,8 @@ impl TestFixture {
         infer_table_schema(&Self::default_schema()).unwrap()
     }
 
-    pub fn default_crate_table_plan(&self) -> CreateTablePlanV2 {
-        CreateTablePlanV2 {
+    pub fn default_crate_table_plan(&self) -> CreateTablePlan {
+        CreateTablePlan {
             if_not_exists: false,
             tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
@@ -180,8 +180,8 @@ impl TestFixture {
     }
 
     // create a normal table without cluster key.
-    pub fn normal_create_table_plan(&self) -> CreateTablePlanV2 {
-        CreateTablePlanV2 {
+    pub fn normal_create_table_plan(&self) -> CreateTablePlan {
+        CreateTablePlan {
             if_not_exists: false,
             tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
@@ -205,16 +205,14 @@ impl TestFixture {
 
     pub async fn create_default_table(&self) -> Result<()> {
         let create_table_plan = self.default_crate_table_plan();
-        let interpreter =
-            CreateTableInterpreterV2::try_create(self.ctx.clone(), create_table_plan)?;
+        let interpreter = CreateTableInterpreter::try_create(self.ctx.clone(), create_table_plan)?;
         interpreter.execute(self.ctx.clone()).await?;
         Ok(())
     }
 
     pub async fn create_normal_table(&self) -> Result<()> {
         let create_table_plan = self.normal_create_table_plan();
-        let interpreter =
-            CreateTableInterpreterV2::try_create(self.ctx.clone(), create_table_plan)?;
+        let interpreter = CreateTableInterpreter::try_create(self.ctx.clone(), create_table_plan)?;
         interpreter.execute(self.ctx.clone()).await?;
         Ok(())
     }
@@ -244,7 +242,6 @@ impl TestFixture {
         (
             schema,
             (0..num_of_block)
-                .into_iter()
                 .map(|idx| {
                     let column0 = Int32Type::from_data(
                         std::iter::repeat_with(|| idx as i32 + start)
@@ -262,10 +259,7 @@ impl TestFixture {
                             .collect::<Vec<i32>>(),
                     );
                     let tuple_inner_columns = vec![column1, column2];
-                    let tuple_column = Column::Tuple {
-                        fields: tuple_inner_columns,
-                        len: rows_per_block,
-                    };
+                    let tuple_column = Column::Tuple(tuple_inner_columns);
 
                     let columns = vec![column0, tuple_column];
 
@@ -375,7 +369,7 @@ pub async fn expects_ok(
 
 pub async fn execute_query(ctx: Arc<QueryContext>, query: &str) -> Result<SendableDataBlockStream> {
     let mut planner = Planner::new(ctx.clone());
-    let (plan, _, _) = planner.plan_sql(query).await?;
+    let (plan, _) = planner.plan_sql(query).await?;
     let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
     executor.execute(ctx.clone()).await
 }
@@ -467,8 +461,7 @@ pub async fn check_data_dir(
                     .ctx
                     .get_data_operator()?
                     .operator()
-                    .object(entry_path)
-                    .read()
+                    .read(entry_path)
                     .await?;
                 last_snapshot_loc = str::from_utf8(&content)?.to_string();
             }

@@ -27,7 +27,7 @@ use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_expression::TableSchemaRef;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use storages_common_table_meta::meta::ClusterStatistics;
 use storages_common_table_meta::meta::ColumnStatistics;
 
@@ -162,14 +162,14 @@ impl PageIndex {
             {
                 let f = &self.cluster_key_fields[idx];
 
-                let stats = ColumnStatistics {
+                let stat = ColumnStatistics {
                     min: min.clone(),
                     max: max.clone(),
                     null_count: 1,
                     in_memory_size: 0,
                     distinct_of_values: None,
                 };
-                let domain = statistics_to_domain(Some(&stats), f.data_type());
+                let domain = statistics_to_domain(vec![&stat], f.data_type());
                 input_domains.insert(f.name().clone(), domain);
             }
 

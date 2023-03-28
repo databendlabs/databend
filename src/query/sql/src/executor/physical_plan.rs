@@ -15,20 +15,24 @@
 use std::collections::BTreeMap;
 
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::InternalColumn;
 use common_exception::Result;
 use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
-use common_expression::Literal;
+use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_expression::Scalar;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::optimizer::ColumnSet;
 use crate::plans::JoinType;
+use crate::plans::RuntimeFilterId;
 use crate::ColumnBinding;
 use crate::IndexType;
 
@@ -46,6 +50,8 @@ pub struct TableScan {
     /// Only used for display
     pub table_index: IndexType,
     pub stat_info: Option<PlanStatsInfo>,
+
+    pub internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
 }
 
 impl TableScan {
@@ -130,6 +136,72 @@ impl EvalScalar {
             fields.push(DataField::new(&name, data_type));
         }
         Ok(DataSchemaRefExt::create(fields))
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct ProjectSet {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    /// Only used for display.
+    pub plan_id: u32,
+
+    pub input: Box<PhysicalPlan>,
+
+    pub srf_exprs: Vec<(RemoteExpr, IndexType)>,
+
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
+}
+
+impl ProjectSet {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        let input_schema = self.input.output_schema()?;
+        let mut fields = input_schema.fields().clone();
+        fields.extend(self.srf_exprs.iter().map(|(srf, index)| {
+            DataField::new(
+                &index.to_string(),
+                srf.as_expr(&BUILTIN_FUNCTIONS).data_type().clone(),
+            )
+        }));
+        Ok(DataSchemaRefExt::create(fields))
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct AggregateExpand {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    /// Only used for display.
+    pub plan_id: u32,
+
+    pub input: Box<PhysicalPlan>,
+    pub group_bys: Vec<IndexType>,
+    pub grouping_id_index: IndexType,
+    pub grouping_sets: Vec<Vec<IndexType>>,
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
+}
+
+impl AggregateExpand {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        let input_schema = self.input.output_schema()?;
+        let mut output_fields = input_schema.fields().clone();
+
+        for group_by in self
+            .group_bys
+            .iter()
+            .filter(|&index| *index != self.grouping_id_index)
+        {
+            // All group by columns will wrap nullable.
+            let i = input_schema.index_of(&group_by.to_string())?;
+            let f = &mut output_fields[i];
+            *f = DataField::new(f.name(), f.data_type().wrap_nullable())
+        }
+
+        output_fields.push(DataField::new(
+            &self.grouping_id_index.to_string(),
+            DataType::Number(NumberDataType::UInt32),
+        ));
+        Ok(DataSchemaRefExt::create(output_fields))
     }
 }
 
@@ -265,6 +337,9 @@ pub struct HashJoin {
     pub join_type: JoinType,
     pub marker_index: Option<IndexType>,
     pub from_correlated_subquery: bool,
+
+    // It means that join has a corresponding runtime filter
+    pub contain_runtime_filter: bool,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -453,12 +528,35 @@ impl DistributedInsertSelect {
     }
 }
 
+// Build runtime predicate data from join build side
+// Then pass it to runtime filter on join probe side
+// It's the children of join node
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct RuntimeFilterSource {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    /// Only used for display.
+    pub plan_id: u32,
+
+    pub left_side: Box<PhysicalPlan>,
+    pub right_side: Box<PhysicalPlan>,
+    pub left_runtime_filters: BTreeMap<RuntimeFilterId, RemoteExpr>,
+    pub right_runtime_filters: BTreeMap<RuntimeFilterId, RemoteExpr>,
+}
+
+impl RuntimeFilterSource {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        self.left_side.output_schema()
+    }
+}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum PhysicalPlan {
     TableScan(TableScan),
     Filter(Filter),
     Project(Project),
     EvalScalar(EvalScalar),
+    ProjectSet(ProjectSet),
+    AggregateExpand(AggregateExpand),
     AggregatePartial(AggregatePartial),
     AggregateFinal(AggregateFinal),
     Sort(Sort),
@@ -466,6 +564,7 @@ pub enum PhysicalPlan {
     HashJoin(HashJoin),
     Exchange(Exchange),
     UnionAll(UnionAll),
+    RuntimeFilterSource(RuntimeFilterSource),
 
     /// For insert into ... select ... in cluster
     DistributedInsertSelect(Box<DistributedInsertSelect>),
@@ -490,6 +589,7 @@ impl PhysicalPlan {
             PhysicalPlan::Filter(plan) => plan.output_schema(),
             PhysicalPlan::Project(plan) => plan.output_schema(),
             PhysicalPlan::EvalScalar(plan) => plan.output_schema(),
+            PhysicalPlan::AggregateExpand(plan) => plan.output_schema(),
             PhysicalPlan::AggregatePartial(plan) => plan.output_schema(),
             PhysicalPlan::AggregateFinal(plan) => plan.output_schema(),
             PhysicalPlan::Sort(plan) => plan.output_schema(),
@@ -500,6 +600,8 @@ impl PhysicalPlan {
             PhysicalPlan::ExchangeSink(plan) => plan.output_schema(),
             PhysicalPlan::UnionAll(plan) => plan.output_schema(),
             PhysicalPlan::DistributedInsertSelect(plan) => plan.output_schema(),
+            PhysicalPlan::ProjectSet(plan) => plan.output_schema(),
+            PhysicalPlan::RuntimeFilterSource(plan) => plan.output_schema(),
         }
     }
 
@@ -509,6 +611,7 @@ impl PhysicalPlan {
             PhysicalPlan::Filter(_) => "Filter".to_string(),
             PhysicalPlan::Project(_) => "Project".to_string(),
             PhysicalPlan::EvalScalar(_) => "EvalScalar".to_string(),
+            PhysicalPlan::AggregateExpand(_) => "AggregateExpand".to_string(),
             PhysicalPlan::AggregatePartial(_) => "AggregatePartial".to_string(),
             PhysicalPlan::AggregateFinal(_) => "AggregateFinal".to_string(),
             PhysicalPlan::Sort(_) => "Sort".to_string(),
@@ -519,6 +622,8 @@ impl PhysicalPlan {
             PhysicalPlan::DistributedInsertSelect(_) => "DistributedInsertSelect".to_string(),
             PhysicalPlan::ExchangeSource(_) => "Exchange Source".to_string(),
             PhysicalPlan::ExchangeSink(_) => "Exchange Sink".to_string(),
+            PhysicalPlan::ProjectSet(_) => "Unnest".to_string(),
+            PhysicalPlan::RuntimeFilterSource(_) => "RuntimeFilterSource".to_string(),
         }
     }
 
@@ -528,6 +633,7 @@ impl PhysicalPlan {
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Project(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::EvalScalar(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::AggregateExpand(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AggregatePartial(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AggregateFinal(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Sort(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -544,6 +650,11 @@ impl PhysicalPlan {
             PhysicalPlan::DistributedInsertSelect(plan) => {
                 Box::new(std::iter::once(plan.input.as_ref()))
             }
+            PhysicalPlan::ProjectSet(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::RuntimeFilterSource(plan) => Box::new(
+                std::iter::once(plan.left_side.as_ref())
+                    .chain(std::iter::once(plan.right_side.as_ref())),
+            ),
         }
     }
 }
@@ -560,7 +671,7 @@ pub struct AggregateFunctionDesc {
 pub struct AggregateFunctionSignature {
     pub name: String,
     pub args: Vec<DataType>,
-    pub params: Vec<Literal>,
+    pub params: Vec<Scalar>,
     pub return_type: DataType,
 }
 

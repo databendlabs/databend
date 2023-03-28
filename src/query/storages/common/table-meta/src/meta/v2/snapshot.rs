@@ -197,12 +197,17 @@ mod util {
 
     use super::*;
     pub fn trim_timestamp_to_micro_second(ts: DateTime<Utc>) -> DateTime<Utc> {
-        Utc.ymd(ts.year(), ts.month(), ts.day()).and_hms_micro(
+        Utc.with_ymd_and_hms(
+            ts.year(),
+            ts.month(),
+            ts.day(),
             ts.hour(),
             ts.minute(),
             ts.second(),
-            ts.timestamp_subsec_micros(),
         )
+        .unwrap()
+        .with_nanosecond(ts.timestamp_subsec_micros() * 1_000)
+        .unwrap()
     }
 
     pub fn monotonically_increased_timestamp(

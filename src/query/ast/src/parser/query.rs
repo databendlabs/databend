@@ -110,23 +110,26 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
         rule! {
             ( #ident ~ "." ~ ( #ident ~ "." )? )? ~ "*" ~ ( EXCLUDE ~ #exclude_col )?
         },
-        |(res, _, opt_exclude)| {
+        |(res, star, opt_exclude)| {
             let exclude = opt_exclude.map(|(_, exclude)| exclude);
             match res {
                 Some((fst, _, Some((snd, _)))) => SelectTarget::QualifiedName {
                     qualified: vec![
                         Indirection::Identifier(fst),
                         Indirection::Identifier(snd),
-                        Indirection::Star,
+                        Indirection::Star(Some(star.span)),
                     ],
                     exclude,
                 },
                 Some((fst, _, None)) => SelectTarget::QualifiedName {
-                    qualified: vec![Indirection::Identifier(fst), Indirection::Star],
+                    qualified: vec![
+                        Indirection::Identifier(fst),
+                        Indirection::Star(Some(star.span)),
+                    ],
                     exclude,
                 },
                 None => SelectTarget::QualifiedName {
-                    qualified: vec![Indirection::Star],
+                    qualified: vec![Indirection::Star(Some(star.span))],
                     exclude,
                 },
             }
@@ -261,6 +264,8 @@ pub enum TableReferenceElement {
         table: Identifier,
         alias: Option<TableAlias>,
         travel_point: Option<TimeTravelPoint>,
+        pivot: Option<Box<Pivot>>,
+        unpivot: Option<Box<Unpivot>>,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
@@ -289,37 +294,45 @@ pub enum TableReferenceElement {
 }
 
 pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceElement>> {
+    // PIVOT(expr FOR col IN (ident, ...))
+    let pivot = map(
+        rule! {
+           PIVOT ~ "(" ~ #expr ~ FOR ~ #ident ~ IN ~ "(" ~ #comma_separated_list1(expr) ~ ")" ~ ")"
+        },
+        |(_pivot, _, aggregate, _for, value_column, _in, _, values, _, _)| Pivot {
+            aggregate,
+            value_column,
+            values,
+        },
+    );
+    // UNPIVOT(ident for ident IN (ident, ...))
+    let unpivot = map(
+        rule! {
+            UNPIVOT ~ "(" ~ #ident ~ FOR ~ #ident ~ IN ~ "(" ~ #comma_separated_list1(ident) ~ ")" ~ ")"
+        },
+        |(_unpivot, _, value_column, _for, column_name, _in, _, names, _, _)| Unpivot {
+            value_column,
+            column_name,
+            names,
+        },
+    );
     let aliased_table = map(
         rule! {
-            #period_separated_idents_1_to_3 ~ (AT ~ #travel_point)? ~ #table_alias?
+            #period_separated_idents_1_to_3 ~ (AT ~ #travel_point)? ~ #table_alias? ~ #pivot? ~ #unpivot?
         },
-        |((catalog, database, table), travel_point_opt, alias)| TableReferenceElement::Table {
-            catalog,
-            database,
-            table,
-            alias,
-            travel_point: travel_point_opt.map(|p| p.1),
-        },
-    );
-    let table_function = map(
-        rule! {
-            #ident ~ "(" ~ #comma_separated_list0(table_function_param) ~ ")" ~ #table_alias?
-        },
-        |(name, _, params, _, alias)| TableReferenceElement::TableFunction {
-            name,
-            params,
-            alias,
+        |((catalog, database, table), travel_point_opt, alias, pivot, unpivot)| {
+            TableReferenceElement::Table {
+                catalog,
+                database,
+                table,
+                alias,
+                travel_point: travel_point_opt.map(|p| p.1),
+                pivot: pivot.map(Box::new),
+                unpivot: unpivot.map(Box::new),
+            }
         },
     );
-    let subquery = map(
-        rule! {
-            ( #parenthesized_query | #query ) ~ #table_alias?
-        },
-        |(subquery, alias)| TableReferenceElement::Subquery {
-            subquery: Box::new(subquery),
-            alias,
-        },
-    );
+
     let join = map(
         rule! {
             NATURAL? ~ #join_operator? ~ JOIN
@@ -341,6 +354,27 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         },
         |(_, _, idents, _)| TableReferenceElement::JoinCondition(JoinCondition::Using(idents)),
     );
+
+    let table_function = map(
+        rule! {
+            #function_name ~ "(" ~ #comma_separated_list0(table_function_param) ~ ")" ~ #table_alias?
+        },
+        |(name, _, params, _, alias)| TableReferenceElement::TableFunction {
+            name,
+            params,
+            alias,
+        },
+    );
+    let subquery = map(
+        rule! {
+            ( #parenthesized_query | #query ) ~ #table_alias?
+        },
+        |(subquery, alias)| TableReferenceElement::Subquery {
+            subquery: Box::new(subquery),
+            alias,
+        },
+    );
+
     let group = map(
         rule! {
            "(" ~ #table_reference ~ ^")"
@@ -386,12 +420,12 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     let (rest, (span, elem)) = consumed(rule! {
         #subquery
         | #aliased_stage
-        | #table_function
-        | #aliased_table
         | #group
         | #join
         | #join_condition_on
         | #join_condition_using
+        | #table_function
+        | #aliased_table
     })(i)?;
     Ok((rest, WithSpan { span, elem }))
 }
@@ -423,6 +457,8 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 table,
                 alias,
                 travel_point,
+                pivot,
+                unpivot,
             } => TableReference::Table {
                 span: transform_span(input.span.0),
                 catalog,
@@ -430,6 +466,8 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 table,
                 alias,
                 travel_point,
+                pivot,
+                unpivot,
             },
             TableReferenceElement::TableFunction {
                 name,
@@ -555,7 +593,7 @@ pub enum SetOperationElement {
         select_list: Box<Vec<SelectTarget>>,
         from: Box<Vec<TableReference>>,
         selection: Box<Option<Expr>>,
-        group_by: Box<Vec<Expr>>,
+        group_by: Option<GroupBy>,
         having: Box<Option<Expr>>,
     },
     SetOperation {
@@ -563,6 +601,33 @@ pub enum SetOperationElement {
         all: bool,
     },
     Group(SetExpr),
+}
+
+pub fn group_by_items(i: Input) -> IResult<GroupBy> {
+    let normal = map(rule! { ^#comma_separated_list1(expr) }, |groups| {
+        GroupBy::Normal(groups)
+    });
+    let cube = map(
+        rule! { CUBE ~ "(" ~ ^#comma_separated_list1(expr) ~ ")" },
+        |(_, _, groups, _)| GroupBy::Cube(groups),
+    );
+    let rollup = map(
+        rule! { ROLLUP ~ "(" ~ ^#comma_separated_list1(expr) ~ ")" },
+        |(_, _, groups, _)| GroupBy::Rollup(groups),
+    );
+    let group_set = alt((
+        map(rule! {"(" ~ ")"}, |(_, _)| vec![]), // empty grouping set
+        map(
+            rule! {"(" ~ #comma_separated_list1(expr) ~ ")"},
+            |(_, sets, _)| sets,
+        ),
+        map(rule! { #expr }, |e| vec![e]),
+    ));
+    let group_sets = map(
+        rule! { GROUPING ~ SETS ~ "(" ~ ^#comma_separated_list1(group_set) ~ ")"  },
+        |(_, _, _, sets, _)| GroupBy::GroupingSets(sets),
+    );
+    rule!(#group_sets | #cube | #rollup | #normal)(i)
 }
 
 pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>> {
@@ -588,7 +653,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
              SELECT ~ DISTINCT? ~ ^#comma_separated_list1(select_target)
                 ~ ( FROM ~ ^#comma_separated_list1(table_reference) )?
                 ~ ( WHERE ~ ^#expr )?
-                ~ ( GROUP ~ ^BY ~ ^#comma_separated_list1(expr) )?
+                ~ ( GROUP ~ ^BY ~ ^#group_by_items )?
                 ~ ( HAVING ~ ^#expr )?
         },
         |(
@@ -609,11 +674,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
                         .unwrap_or_default(),
                 ),
                 selection: Box::new(opt_where_block.map(|(_, selection)| selection)),
-                group_by: Box::new(
-                    opt_group_by_block
-                        .map(|(_, _, group_by)| group_by)
-                        .unwrap_or_default(),
-                ),
+                group_by: opt_group_by_block.map(|(_, _, group_by)| group_by),
                 having: Box::new(opt_having_block.map(|(_, having)| having)),
             }
         },
@@ -667,7 +728,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 select_list: *select_list,
                 from: *from,
                 selection: *selection,
-                group_by: *group_by,
+                group_by,
                 having: *having,
             })),
             _ => unreachable!(),

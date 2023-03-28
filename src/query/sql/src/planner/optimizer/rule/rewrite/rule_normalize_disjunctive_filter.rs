@@ -14,7 +14,7 @@
 
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::Literal;
+use common_expression::Scalar;
 
 use crate::binder::split_conjunctions;
 use crate::optimizer::rule::Rule;
@@ -71,7 +71,6 @@ fn normalize_predicate_scalar(
                     ScalarExpr::AndExpr(AndExpr {
                         left: Box::from(lhs),
                         right: Box::from(rhs),
-                        return_type: Box::new(return_type.clone()),
                     })
                 })
                 .expect("has at least two args")
@@ -84,7 +83,6 @@ fn normalize_predicate_scalar(
                     ScalarExpr::OrExpr(OrExpr {
                         left: Box::from(lhs),
                         right: Box::from(rhs),
-                        return_type: Box::new(return_type.clone()),
                     })
                 })
                 .expect("has at least two args")
@@ -143,7 +141,7 @@ impl Rule for RuleNormalizeDisjunctiveFilter {
             }
             rewritten_predicates.push(normalize_predicate_scalar(
                 rewritten_predicate_scalar,
-                predicate.data_type(),
+                predicate.data_type()?,
             ));
         }
         let mut split_predicates: Vec<ScalarExpr> = Vec::with_capacity(rewritten_predicates.len());
@@ -222,8 +220,8 @@ fn process_duplicate_or_exprs(or_args: &[PredicateScalar]) -> (PredicateScalar, 
         return (
             PredicateScalar::Other {
                 expr: Box::from(ScalarExpr::ConstantExpr(ConstantExpr {
-                    value: Literal::Boolean(false),
-                    data_type: Box::new(DataType::Boolean),
+                    span: None,
+                    value: Scalar::Boolean(false),
                 })),
             },
             false,

@@ -15,6 +15,8 @@
 #![allow(clippy::uninlined_format_args)]
 #![feature(box_patterns)]
 #![feature(let_chains)]
+#![feature(try_blocks)]
+#![feature(box_syntax)]
 
 pub mod evaluator;
 pub mod executor;

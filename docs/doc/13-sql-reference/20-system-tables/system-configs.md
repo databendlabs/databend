@@ -43,9 +43,6 @@ mysql> SELECT * FROM system.configs;
 | query   | management_mode                        | false                          |             |
 | query   | jwt_key_file                           |                                |             |
 | query   | jwt_key_files                          |                                |             |
-| query   | async_insert_max_data_size             | 10000                          |             |
-| query   | async_insert_busy_timeout              | 200                            |             |
-| query   | async_insert_stale_timeout             | 0                              |             |
 | query   | users                                  |                                |             |
 | query   | share_endpoint_address                 |                                |             |
 | query   | share_endpoint_auth_token_file         |                                |             |

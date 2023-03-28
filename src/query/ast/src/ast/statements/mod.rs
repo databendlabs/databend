@@ -14,12 +14,14 @@
 
 mod call;
 mod catalog;
+mod columns;
 mod copy;
 mod database;
 mod explain;
 mod insert;
 mod kill;
 mod presign;
+mod replace;
 mod share;
 mod show;
 mod stage;
@@ -32,12 +34,14 @@ mod view;
 
 pub use call::*;
 pub use catalog::*;
+pub use columns::*;
 pub use copy::*;
 pub use database::*;
 pub use explain::*;
 pub use insert::*;
 pub use kill::*;
 pub use presign::*;
+pub use replace::*;
 pub use share::*;
 pub use show::*;
 pub use stage::*;

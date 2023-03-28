@@ -26,19 +26,22 @@ fn test_control() {
     let mut mint = Mint::new("tests/it/scalars/testdata");
     let file = &mut mint.new_goldenfile("control.txt").unwrap();
 
-    test_multi_if(file);
+    test_if(file);
     test_is_not_null(file);
 }
 
-fn test_multi_if(file: &mut impl Write) {
-    run_ast(file, "multi_if(false, 1, false, 2, NULL)", &[]);
-    run_ast(file, "multi_if(true, 1, NULL, 2, NULL)", &[]);
-    run_ast(file, "multi_if(false, 1, true, 2, NULL)", &[]);
-    run_ast(file, "multi_if(true, 1, true, 2, NULL)", &[]);
-    run_ast(file, "multi_if(true, 1, true, NULL, 2)", &[]);
-    run_ast(file, "multi_if(true, 1, NULL)", &[]);
-    run_ast(file, "multi_if(false, 1, NULL)", &[]);
-    run_ast(file, "multi_if(cond_a, expr_true, expr_else)", &[
+fn test_if(file: &mut impl Write) {
+    run_ast(file, "if(false, 1, false, 2, NULL)", &[]);
+    run_ast(file, "if(true, 1, NULL, 2, NULL)", &[]);
+    run_ast(file, "if(false, 1, true, 2, NULL)", &[]);
+    run_ast(file, "if(true, 1, true, 2, NULL)", &[]);
+    run_ast(file, "if(true, 1, true, NULL, 2)", &[]);
+    run_ast(file, "if(true, 1, NULL)", &[]);
+    run_ast(file, "if(false, 1, NULL)", &[]);
+    run_ast(file, "if(true, 1, 1 / 0)", &[]);
+    run_ast(file, "if(false, 1 / 0, 1)", &[]);
+    run_ast(file, "if(false, 1, 1 / 0)", &[]);
+    run_ast(file, "if(cond_a, expr_true, expr_else)", &[
         (
             "cond_a",
             Column::Boolean(vec![true, true, false, false].into()),
@@ -49,7 +52,7 @@ fn test_multi_if(file: &mut impl Write) {
             Int64Type::from_data_with_validity(vec![5i64, 6, 7, 8], vec![true, false, true, false]),
         ),
     ]);
-    run_ast(file, "multi_if(cond_a, expr_true, expr_else)", &[
+    run_ast(file, "if(cond_a, expr_true, expr_else)", &[
         (
             "cond_a",
             BooleanType::from_data(vec![false, false, true, true]),
@@ -60,47 +63,58 @@ fn test_multi_if(file: &mut impl Write) {
             Int64Type::from_data_with_validity(vec![5i64, 6, 7, 8], vec![true, true, false, false]),
         ),
     ]);
-    run_ast(
-        file,
-        "multi_if(cond_a, expr_a, cond_b, expr_b, expr_else)",
-        &[
-            (
-                "cond_a",
-                Column::Boolean(vec![true, true, false, false].into()),
-            ),
-            ("expr_a", Int64Type::from_data(vec![1i64, 2, 3, 4])),
-            (
-                "cond_b",
-                BooleanType::from_data_with_validity(vec![true, true, true, true], vec![
-                    false, true, false, true,
-                ]),
-            ),
-            ("expr_b", Int64Type::from_data(vec![5i64, 6, 7, 8])),
-            (
-                "expr_else",
-                Int64Type::from_data_with_validity(vec![9i64, 10, 11, 12], vec![
-                    true, true, false, false,
-                ]),
-            ),
-        ],
-    );
-    run_ast(
-        file,
-        "multi_if(cond_a, expr_a, cond_b, expr_b, expr_else)",
-        &[
-            (
-                "cond_a",
-                BooleanType::from_data(vec![true, true, false, false]),
-            ),
-            ("expr_a", Int64Type::from_data(vec![1i64, 2, 3, 4])),
-            (
-                "cond_b",
-                BooleanType::from_data(vec![true, false, true, false]),
-            ),
-            ("expr_b", Int64Type::from_data(vec![5i64, 6, 7, 8])),
-            ("expr_else", Int64Type::from_data(vec![9i64, 10, 11, 12])),
-        ],
-    );
+    run_ast(file, "if(cond_a, expr_a, cond_b, expr_b, expr_else)", &[
+        (
+            "cond_a",
+            Column::Boolean(vec![true, true, false, false].into()),
+        ),
+        ("expr_a", Int64Type::from_data(vec![1i64, 2, 3, 4])),
+        (
+            "cond_b",
+            BooleanType::from_data_with_validity(vec![true, true, true, true], vec![
+                false, true, false, true,
+            ]),
+        ),
+        ("expr_b", Int64Type::from_data(vec![5i64, 6, 7, 8])),
+        (
+            "expr_else",
+            Int64Type::from_data_with_validity(vec![9i64, 10, 11, 12], vec![
+                true, true, false, false,
+            ]),
+        ),
+    ]);
+    run_ast(file, "if(cond_a, expr_a, cond_b, expr_b, expr_else)", &[
+        (
+            "cond_a",
+            BooleanType::from_data(vec![true, true, false, false]),
+        ),
+        ("expr_a", Int64Type::from_data(vec![1i64, 2, 3, 4])),
+        (
+            "cond_b",
+            BooleanType::from_data(vec![true, false, true, false]),
+        ),
+        ("expr_b", Int64Type::from_data(vec![5i64, 6, 7, 8])),
+        ("expr_else", Int64Type::from_data(vec![9i64, 10, 11, 12])),
+    ]);
+    run_ast(file, "if(cond_a, 1 / expr_a, expr_else)", &[
+        (
+            "cond_a",
+            BooleanType::from_data(vec![true, true, false, false]),
+        ),
+        (
+            "expr_a",
+            Int64Type::from_data_with_validity(vec![1i64, 0, 0, 4], vec![true, false, true, true]),
+        ),
+        ("expr_else", Int64Type::from_data(vec![9i64, 10, 11, 12])),
+    ]);
+    run_ast(file, "if(cond_a, 1 / expr_a, expr_else)", &[
+        (
+            "cond_a",
+            BooleanType::from_data(vec![true, true, true, false]),
+        ),
+        ("expr_a", Int64Type::from_data(vec![1i64, 2, 0, 4])),
+        ("expr_else", Int64Type::from_data(vec![9i64, 10, 11, 12])),
+    ]);
 }
 
 fn test_is_not_null(file: &mut impl Write) {

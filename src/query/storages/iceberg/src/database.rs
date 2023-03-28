@@ -26,9 +26,8 @@ use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_storage::DataOperator;
-use opendal::ObjectLister;
-use opendal::ObjectMetakey;
-use opendal::ObjectMode;
+use opendal::EntryMode;
+use opendal::Metakey;
 
 use crate::table::IcebergTable;
 
@@ -103,8 +102,7 @@ impl Database for IcebergDatabase {
         let path = format!("{table_name}/");
         let op = self.db_root.operator();
         // check existence first
-        let tbl_obj = op.object(&path);
-        if !tbl_obj.stat().await?.mode().is_dir() {
+        if !op.stat(&path).await?.mode().is_dir() {
             return Err(ErrorCode::UnknownTable(format!(
                 "table {table_name} does not exist or is not a valid table"
             )));
@@ -126,11 +124,11 @@ impl Database for IcebergDatabase {
     async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
         let mut tables = vec![];
         let op = self.db_root.operator();
-        let mut lister: ObjectLister = op.object("/").list().await?;
+        let mut lister = op.list("/").await?;
         while let Some(page) = lister.next_page().await? {
             for entry in page {
-                let meta = entry.metadata(ObjectMetakey::Mode).await?;
-                if meta.mode() != ObjectMode::DIR {
+                let meta = op.metadata(&entry, Metakey::Mode).await?;
+                if meta.mode() != EntryMode::DIR {
                     continue;
                 }
                 let tbl_name = entry.name().trim_end_matches('/');

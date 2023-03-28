@@ -65,6 +65,7 @@ use common_meta_sled_store::init_sled_db;
 use common_meta_types::txn_condition::Target;
 use common_meta_types::txn_op::Request;
 use common_meta_types::Cmd;
+use common_meta_types::Entry;
 use common_meta_types::LogEntry;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
@@ -284,15 +285,12 @@ where F: Fn(&str, Vec<u8>) -> Result<Vec<u8>, anyhow::Error>
         }
     }
 
-    fn proc_raft_entry(
-        &self,
-        ent: openraft::Entry<LogEntry>,
-    ) -> Result<Option<openraft::Entry<LogEntry>>, anyhow::Error> {
+    fn proc_raft_entry(&self, ent: Entry) -> Result<Option<Entry>, anyhow::Error> {
         match ent.payload {
             EntryPayload::Blank => Ok(None),
             EntryPayload::Membership(_) => Ok(None),
             EntryPayload::Normal(log_entry) => {
-                let x = openraft::Entry {
+                let x = Entry {
                     log_id: ent.log_id,
                     payload: EntryPayload::Normal(unwrap_or_return!(
                         self.proc_log_entry(log_entry)?

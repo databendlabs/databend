@@ -14,7 +14,8 @@
 
 use std::sync::Arc;
 
-pub use common_config::InnerConfig;
+use common_base::base::GlobalInstance;
+use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::AuthInfo;
@@ -31,7 +32,6 @@ pub struct AuthMgr {
 pub enum Credential {
     Jwt {
         token: String,
-        hostname: Option<String>,
     },
     Password {
         name: String,
@@ -41,7 +41,16 @@ pub enum Credential {
 }
 
 impl AuthMgr {
-    pub fn create(cfg: &InnerConfig) -> Arc<AuthMgr> {
+    pub fn init(cfg: &InnerConfig) -> Result<()> {
+        GlobalInstance::set(AuthMgr::create(cfg));
+        Ok(())
+    }
+
+    pub fn instance() -> Arc<AuthMgr> {
+        GlobalInstance::get()
+    }
+
+    fn create(cfg: &InnerConfig) -> Arc<AuthMgr> {
         Arc::new(AuthMgr {
             jwt_auth: JwtAuthenticator::create(
                 cfg.query.jwt_key_file.clone(),
@@ -52,10 +61,7 @@ impl AuthMgr {
 
     pub async fn auth(&self, session: Arc<Session>, credential: &Credential) -> Result<()> {
         match credential {
-            Credential::Jwt {
-                token: t,
-                hostname: h,
-            } => {
+            Credential::Jwt { token: t } => {
                 let jwt_auth = self
                     .jwt_auth
                     .as_ref()
@@ -71,32 +77,26 @@ impl AuthMgr {
                 if let Some(tenant) = jwt.custom.tenant_id {
                     session.set_current_tenant(tenant);
                 };
-                let tenant = session.get_current_tenant();
 
-                // create user if not exists when the JWT claims contains ensure_user
+                // create a virtual JWT user only available in current session
+                let auth_role = jwt.custom.role.clone();
+                let mut user_info = UserInfo::new(&user_name, "%", AuthInfo::JWT);
+                if user_info.identity().is_root() {
+                    return Err(ErrorCode::AuthenticateFailure(
+                        "root user is not allowed in jwt auth.",
+                    ));
+                }
+                if let Some(ref role) = auth_role {
+                    user_info.grants.grant_role(role.clone());
+                }
                 if let Some(ref ensure_user) = jwt.custom.ensure_user {
-                    let mut user_info = UserInfo::new(&user_name, "%", AuthInfo::JWT);
                     if let Some(ref roles) = ensure_user.roles {
                         for role in roles.clone().into_iter() {
                             user_info.grants.grant_role(role);
                         }
                     }
-                    UserApiProvider::instance()
-                        .ensure_builtin_roles(&tenant)
-                        .await?;
-                    UserApiProvider::instance()
-                        .add_user(&tenant, user_info.clone(), true)
-                        .await?;
                 }
 
-                let auth_role = jwt.custom.role.clone();
-                let user_info = UserApiProvider::instance()
-                    .get_user_with_client_ip(
-                        &tenant,
-                        &user_name,
-                        h.as_ref().unwrap_or(&"%".to_string()),
-                    )
-                    .await?;
                 session.set_authed_user(user_info, auth_role).await?;
             }
             Credential::Password {

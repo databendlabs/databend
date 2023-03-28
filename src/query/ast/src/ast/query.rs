@@ -82,9 +82,24 @@ pub struct SelectStmt {
     // `WHERE` clause
     pub selection: Option<Expr>,
     // `GROUP BY` clause
-    pub group_by: Vec<Expr>,
+    pub group_by: Option<GroupBy>,
     // `HAVING` clause
     pub having: Option<Expr>,
+}
+
+/// Group by Clause.
+#[derive(Debug, Clone, PartialEq)]
+pub enum GroupBy {
+    /// GROUP BY expr [, expr]*
+    Normal(Vec<Expr>),
+    /// GROUP BY GROUPING SETS ( GroupSet [, GroupSet]* )
+    ///
+    /// GroupSet := (expr [, expr]*) | expr
+    GroupingSets(Vec<Vec<Expr>>),
+    /// GROUP BY CUBE ( expr [, expr]* )
+    Cube(Vec<Expr>),
+    /// GROUP BY ROLLUP ( expr [, expr]* )
+    Rollup(Vec<Expr>),
 }
 
 /// A relational set expression, like `SELECT ... FROM ... {UNION|EXCEPT|INTERSECT} SELECT ... FROM ...`
@@ -130,6 +145,26 @@ pub enum SelectTarget {
     },
 }
 
+impl SelectTarget {
+    pub fn is_star(&self) -> bool {
+        match self {
+            SelectTarget::AliasedExpr { .. } => false,
+            SelectTarget::QualifiedName { qualified, .. } => {
+                matches!(qualified.last(), Some(Indirection::Star(_)))
+            }
+        }
+    }
+
+    pub fn exclude(&mut self, exclude: Vec<Identifier>) {
+        match self {
+            SelectTarget::AliasedExpr { .. } => unreachable!(),
+            SelectTarget::QualifiedName { exclude: e, .. } => {
+                *e = Some(exclude);
+            }
+        }
+    }
+}
+
 pub type QualifiedName = Vec<Indirection>;
 
 /// Indirection of a select result, like a part of `db.table.column`.
@@ -139,7 +174,7 @@ pub enum Indirection {
     // Field name
     Identifier(Identifier),
     // Wildcard star
-    Star,
+    Star(Span),
 }
 
 /// Time Travel specification
@@ -147,6 +182,20 @@ pub enum Indirection {
 pub enum TimeTravelPoint {
     Snapshot(String),
     Timestamp(Box<Expr>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Pivot {
+    pub aggregate: Expr,
+    pub value_column: Identifier,
+    pub values: Vec<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Unpivot {
+    pub value_column: Identifier,
+    pub column_name: Identifier,
+    pub names: Vec<Identifier>,
 }
 
 /// A table name or a parenthesized subquery with an optional alias
@@ -160,6 +209,8 @@ pub enum TableReference {
         table: Identifier,
         alias: Option<TableAlias>,
         travel_point: Option<TimeTravelPoint>,
+        pivot: Option<Box<Pivot>>,
+        unpivot: Option<Box<Unpivot>>,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
@@ -185,6 +236,22 @@ pub enum TableReference {
         options: SelectStageOptions,
         alias: Option<TableAlias>,
     },
+}
+
+impl TableReference {
+    pub fn pivot(&self) -> Option<&Pivot> {
+        match self {
+            TableReference::Table { pivot, .. } => pivot.as_ref().map(|b| b.as_ref()),
+            _ => None,
+        }
+    }
+
+    pub fn unpivot(&self) -> Option<&Unpivot> {
+        match self {
+            TableReference::Table { unpivot, .. } => unpivot.as_ref().map(|b| b.as_ref()),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -224,6 +291,16 @@ pub enum JoinCondition {
     None,
 }
 
+impl SetExpr {
+    pub fn span(&self) -> Span {
+        match self {
+            SetExpr::Select(stmt) => stmt.span,
+            SetExpr::Query(query) => query.span,
+            SetExpr::SetOperation(op) => op.span,
+        }
+    }
+}
+
 impl Display for OrderByExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.expr)?;
@@ -257,6 +334,28 @@ impl Display for TableAlias {
     }
 }
 
+impl Display for Pivot {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PIVOT({} FOR {} IN (", self.aggregate, self.value_column)?;
+        write_comma_separated_list(f, &self.values)?;
+        write!(f, "))")?;
+        Ok(())
+    }
+}
+
+impl Display for Unpivot {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "UNPIVOT({} FOR {} IN (",
+            self.value_column, self.column_name
+        )?;
+        write_comma_separated_list(f, &self.names)?;
+        write!(f, "))")?;
+        Ok(())
+    }
+}
+
 impl Display for TableReference {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -267,6 +366,8 @@ impl Display for TableReference {
                 table,
                 alias,
                 travel_point,
+                pivot,
+                unpivot,
             } => {
                 write_period_separated_list(
                     f,
@@ -283,6 +384,13 @@ impl Display for TableReference {
 
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
+                }
+                if let Some(pivot) = pivot {
+                    write!(f, " {pivot}")?;
+                }
+
+                if let Some(unpivot) = unpivot {
+                    write!(f, " {unpivot}")?;
                 }
             }
             TableReference::TableFunction {
@@ -388,7 +496,7 @@ impl Display for Indirection {
             Indirection::Identifier(ident) => {
                 write!(f, "{ident}")?;
             }
-            Indirection::Star => {
+            Indirection::Star(_) => {
                 write!(f, "*")?;
             }
         }
@@ -442,9 +550,35 @@ impl Display for SelectStmt {
         }
 
         // GROUP BY clause
-        if !self.group_by.is_empty() {
+        if self.group_by.is_some() {
             write!(f, " GROUP BY ")?;
-            write_comma_separated_list(f, &self.group_by)?;
+            match self.group_by.as_ref().unwrap() {
+                GroupBy::Normal(exprs) => {
+                    write_comma_separated_list(f, exprs)?;
+                }
+                GroupBy::GroupingSets(sets) => {
+                    write!(f, "GROUPING SETS (")?;
+                    for (i, set) in sets.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "(")?;
+                        write_comma_separated_list(f, set)?;
+                        write!(f, ")")?;
+                    }
+                    write!(f, ")")?;
+                }
+                GroupBy::Cube(exprs) => {
+                    write!(f, "CUBE (")?;
+                    write_comma_separated_list(f, exprs)?;
+                    write!(f, ")")?;
+                }
+                GroupBy::Rollup(exprs) => {
+                    write!(f, "ROLLUP (")?;
+                    write_comma_separated_list(f, exprs)?;
+                    write!(f, ")")?;
+                }
+            }
         }
 
         // HAVING clause
@@ -494,6 +628,7 @@ impl Display for CTE {
         Ok(())
     }
 }
+
 impl Display for With {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if self.recursive {

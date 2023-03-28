@@ -60,15 +60,14 @@ fn error_fields(log_type: LogType, err: Option<ErrorCode>) -> (LogType, i32, Str
 
 impl InterpreterQueryLog {
     fn write_log(event: QueryLogElement) -> Result<()> {
-        info!("{}", serde_json::to_string(&event)?);
-
+        let event_str = serde_json::to_string(&event)?;
         if let Some(logger) = QueryLogger::instance().get_subscriber() {
-            let event_str = serde_json::to_string(&event)?;
             subscriber::with_default(logger, || {
                 info!("{}", event_str);
             });
+        } else {
+            info!("{}", event_str);
         };
-
         QueryLogQueue::instance()?.append_data(event)
     }
 
@@ -122,14 +121,12 @@ impl InterpreterQueryLog {
 
         // Session settings
         let mut session_settings = String::new();
-        for (key, value) in ctx
-            .get_current_session()
-            .get_settings()
-            .get_setting_values_short()
-        {
-            write!(session_settings, "{}={:?}, ", key, value)
+        let current_session = ctx.get_current_session();
+        for item in current_session.get_settings().into_iter() {
+            write!(session_settings, "{}={:?}, ", item.name, item.user_value)
                 .expect("write to string must succeed");
         }
+
         session_settings.push_str("scope: SESSION");
 
         // Error
@@ -234,14 +231,13 @@ impl InterpreterQueryLog {
 
         // Session settings
         let mut session_settings = String::new();
-        for (key, value) in ctx
-            .get_current_session()
-            .get_settings()
-            .get_setting_values_short()
-        {
-            write!(session_settings, "{}={:?}, ", key, value)
+        let current_session = ctx.get_current_session();
+
+        for item in current_session.get_settings().into_iter() {
+            write!(session_settings, "{}={:?}, ", item.name, item.user_value)
                 .expect("write to string must succeed");
         }
+
         session_settings.push_str("scope: SESSION");
 
         // Error

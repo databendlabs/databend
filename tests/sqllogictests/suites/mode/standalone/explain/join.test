@@ -50,7 +50,7 @@ explain select t.number from t, t1 where t.number = t1.number and t.number = t1.
 HashJoin
 ├── join type: INNER
 ├── build keys: [t.number (#0), t.number (#0)]
-├── probe keys: [t1.number (#1), plus(t1.number (#1), 1)]
+├── probe keys: [t1.number (#1), t1.number (#1) + 1]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── TableScan(Build)
@@ -82,7 +82,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 1.11
 ├── Filter(Build)
-│   ├── filters: [gt(t.number (#0), 1)]
+│   ├── filters: [t.number (#0) > 1]
 │   ├── estimated rows: 0.33
 │   └── TableScan
 │       ├── table: default.default.t
@@ -91,10 +91,10 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 0
 │       ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
-│       ├── push downs: [filters: [gt(t.number (#0), 1)], limit: NONE]
+│       ├── push downs: [filters: [t.number (#0) > 1], limit: NONE]
 │       └── estimated rows: 1.00
 └── Filter(Probe)
-    ├── filters: [lt(1, t1.number (#1))]
+    ├── filters: [1 < t1.number (#1)]
     ├── estimated rows: 3.33
     └── TableScan
         ├── table: default.default.t1
@@ -103,14 +103,14 @@ HashJoin
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        ├── push downs: [filters: [lt(1, t1.number (#1))], limit: NONE]
+        ├── push downs: [filters: [1 < t1.number (#1)], limit: NONE]
         └── estimated rows: 10.00
 
 query T
 explain select t.number from t, t1 where t.number + t1.number = 1
 ----
 Filter
-├── filters: [eq(plus(t.number (#0), t1.number (#1)), 1)]
+├── filters: [t.number (#0) + t1.number (#1) = 1]
 ├── estimated rows: 3.33
 └── HashJoin
     ├── join type: CROSS
@@ -148,7 +148,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 0.00
 ├── Filter(Build)
-│   ├── filters: [eq(t.number (#0), 1)]
+│   ├── filters: [t.number (#0) = 1]
 │   ├── estimated rows: 0.33
 │   └── TableScan
 │       ├── table: default.default.t
@@ -157,7 +157,7 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 0
 │       ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
-│       ├── push downs: [filters: [eq(t.number (#0), 1)], limit: NONE]
+│       ├── push downs: [filters: [t.number (#0) = 1], limit: NONE]
 │       └── estimated rows: 1.00
 └── HashJoin(Probe)
     ├── join type: INNER
@@ -214,7 +214,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 1.00
 ├── Filter(Build)
-│   ├── filters: [is_true(gt(a.x (#0), 42))]
+│   ├── filters: [is_true(a.x (#0) > 42)]
 │   ├── estimated rows: 1.33
 │   └── TableScan
 │       ├── table: default.default.onecolumn
@@ -223,10 +223,10 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-│       ├── push downs: [filters: [is_true(gt(a.x (#0), 42))], limit: NONE]
+│       ├── push downs: [filters: [is_true(a.x (#0) > 42)], limit: NONE]
 │       └── estimated rows: 4.00
 └── Filter(Probe)
-    ├── filters: [is_true(gt(b.x (#1), 42))]
+    ├── filters: [is_true(b.x (#1) > 42)]
     ├── estimated rows: 2.67
     └── TableScan
         ├── table: default.default.twocolumn
@@ -235,7 +235,7 @@ HashJoin
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        ├── push downs: [filters: [is_true(gt(b.x (#1), 42))], limit: NONE]
+        ├── push downs: [filters: [is_true(b.x (#1) > 42)], limit: NONE]
         └── estimated rows: 4.00
 
 query T
@@ -248,7 +248,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 1.00
 ├── Filter(Build)
-│   ├── filters: [is_true(or(gt(b.x (#1), 44), lt(b.x (#1), 43)))]
+│   ├── filters: [is_true(b.x (#1) > 44 OR b.x (#1) < 43)]
 │   ├── estimated rows: 2.22
 │   └── TableScan
 │       ├── table: default.default.twocolumn
@@ -257,10 +257,10 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-│       ├── push downs: [filters: [is_true(or(gt(b.x (#1), 44), lt(b.x (#1), 43)))], limit: NONE]
+│       ├── push downs: [filters: [is_true(b.x (#1) > 44 OR b.x (#1) < 43)], limit: NONE]
 │       └── estimated rows: 4.00
 └── Filter(Probe)
-    ├── filters: [is_true(or(gt(a.x (#0), 44), lt(a.x (#0), 43)))]
+    ├── filters: [is_true(a.x (#0) > 44 OR a.x (#0) < 43)]
     ├── estimated rows: 2.67
     └── TableScan
         ├── table: default.default.onecolumn
@@ -269,7 +269,7 @@ HashJoin
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        ├── push downs: [filters: [is_true(or(gt(a.x (#0), 44), lt(a.x (#0), 43)))], limit: NONE]
+        ├── push downs: [filters: [is_true(a.x (#0) > 44 OR a.x (#0) < 43)], limit: NONE]
         └── estimated rows: 4.00
 
 query T
@@ -282,7 +282,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 1.00
 ├── Filter(Build)
-│   ├── filters: [is_true(gt(a.x (#0), 42)), is_true(lt(a.x (#0), 45))]
+│   ├── filters: [is_true(a.x (#0) > 42), is_true(a.x (#0) < 45)]
 │   ├── estimated rows: 1.33
 │   └── TableScan
 │       ├── table: default.default.onecolumn
@@ -291,10 +291,10 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-│       ├── push downs: [filters: [is_true(and(gt(a.x (#0), 42), lt(a.x (#0), 45)))], limit: NONE]
+│       ├── push downs: [filters: [is_true(a.x (#0) > 42 AND a.x (#0) < 45)], limit: NONE]
 │       └── estimated rows: 4.00
 └── Filter(Probe)
-    ├── filters: [is_true(gt(b.x (#1), 42)), is_true(lt(b.x (#1), 45))]
+    ├── filters: [is_true(b.x (#1) > 42), is_true(b.x (#1) < 45)]
     ├── estimated rows: 1.78
     └── TableScan
         ├── table: default.default.twocolumn
@@ -303,7 +303,7 @@ HashJoin
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        ├── push downs: [filters: [is_true(and(gt(b.x (#1), 42), lt(b.x (#1), 45)))], limit: NONE]
+        ├── push downs: [filters: [is_true(b.x (#1) > 42 AND b.x (#1) < 45)], limit: NONE]
         └── estimated rows: 4.00
 
 # the following cases won't be converted to inner join
@@ -312,7 +312,7 @@ query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 44 or a.x < 43
 ----
 Filter
-├── filters: [is_true(or(gt(b.x (#1), 44), lt(a.x (#0), 43)))]
+├── filters: [is_true(b.x (#1) > 44 OR a.x (#0) < 43)]
 ├── estimated rows: 3.11
 └── HashJoin
     ├── join type: LEFT OUTER
@@ -349,7 +349,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 1.78
 ├── Filter(Build)
-│   ├── filters: [is_true(gt(b.x (#1), 42)), is_true(lt(b.x (#1), 45))]
+│   ├── filters: [is_true(b.x (#1) > 42), is_true(b.x (#1) < 45)]
 │   ├── estimated rows: 1.78
 │   └── TableScan
 │       ├── table: default.default.twocolumn
@@ -358,7 +358,7 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-│       ├── push downs: [filters: [is_true(and(gt(b.x (#1), 42), lt(b.x (#1), 45)))], limit: NONE]
+│       ├── push downs: [filters: [is_true(b.x (#1) > 42 AND b.x (#1) < 45)], limit: NONE]
 │       └── estimated rows: 4.00
 └── TableScan(Probe)
     ├── table: default.default.onecolumn
@@ -395,7 +395,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 0.00
 ├── Filter(Build)
-│   ├── filters: [gt(t2.a (#2), 10)]
+│   ├── filters: [t2.a (#2) > 10]
 │   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.default.t2
@@ -403,10 +403,10 @@ HashJoin
 │       ├── read bytes: 0
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
-│       ├── push downs: [filters: [gt(t2.a (#2), 10)], limit: NONE]
+│       ├── push downs: [filters: [t2.a (#2) > 10], limit: NONE]
 │       └── estimated rows: 0.00
 └── Filter(Probe)
-    ├── filters: [gt(t1.a (#0), 10)]
+    ├── filters: [t1.a (#0) > 10]
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
@@ -414,7 +414,7 @@ HashJoin
         ├── read bytes: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [gt(t1.a (#0), 10)], limit: NONE]
+        ├── push downs: [filters: [t1.a (#0) > 10], limit: NONE]
         └── estimated rows: 0.00
 
 query T
@@ -435,7 +435,7 @@ HashJoin
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 0.00
 └── Filter(Probe)
-    ├── filters: [gt(plus(t1.a (#0), t1.b (#1)), 10)]
+    ├── filters: [t1.a (#0) + t1.b (#1) > 10]
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
@@ -443,7 +443,7 @@ HashJoin
         ├── read bytes: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [gt(plus(t1.a (#0), t1.b (#1)), 10)], limit: NONE]
+        ├── push downs: [filters: [t1.a (#0) + t1.b (#1) > 10], limit: NONE]
         └── estimated rows: 0.00
 
 query T
@@ -456,7 +456,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 0.00
 ├── Filter(Build)
-│   ├── filters: [gt(t2.a (#2), 10)]
+│   ├── filters: [t2.a (#2) > 10]
 │   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.default.t2
@@ -464,10 +464,10 @@ HashJoin
 │       ├── read bytes: 0
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
-│       ├── push downs: [filters: [gt(t2.a (#2), 10)], limit: NONE]
+│       ├── push downs: [filters: [t2.a (#2) > 10], limit: NONE]
 │       └── estimated rows: 0.00
 └── Filter(Probe)
-    ├── filters: [gt(t1.a (#0), 10)]
+    ├── filters: [t1.a (#0) > 10]
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
@@ -475,7 +475,7 @@ HashJoin
         ├── read bytes: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [gt(t1.a (#0), 10)], limit: NONE]
+        ├── push downs: [filters: [t1.a (#0) > 10], limit: NONE]
         └── estimated rows: 0.00
 
 query T
@@ -488,7 +488,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 0.00
 ├── Filter(Build)
-│   ├── filters: [gt(plus(t2.a (#2), t2.b (#3)), 10)]
+│   ├── filters: [t2.a (#2) + t2.b (#3) > 10]
 │   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.default.t2
@@ -496,10 +496,10 @@ HashJoin
 │       ├── read bytes: 0
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
-│       ├── push downs: [filters: [gt(plus(t2.a (#2), t2.b (#3)), 10)], limit: NONE]
+│       ├── push downs: [filters: [t2.a (#2) + t2.b (#3) > 10], limit: NONE]
 │       └── estimated rows: 0.00
 └── Filter(Probe)
-    ├── filters: [gt(plus(t1.a (#0), t1.b (#1)), 10)]
+    ├── filters: [t1.a (#0) + t1.b (#1) > 10]
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
@@ -507,7 +507,7 @@ HashJoin
         ├── read bytes: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [gt(plus(t1.a (#0), t1.b (#1)), 10)], limit: NONE]
+        ├── push downs: [filters: [t1.a (#0) + t1.b (#1) > 10], limit: NONE]
         └── estimated rows: 0.00
 
 query T
@@ -520,7 +520,7 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 0.00
 ├── Filter(Build)
-│   ├── filters: [gt(plus(t2.b (#3), t2.a (#2)), 10)]
+│   ├── filters: [t2.b (#3) + t2.a (#2) > 10]
 │   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.default.t2
@@ -528,10 +528,10 @@ HashJoin
 │       ├── read bytes: 0
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
-│       ├── push downs: [filters: [gt(plus(t2.b (#3), t2.a (#2)), 10)], limit: NONE]
+│       ├── push downs: [filters: [t2.b (#3) + t2.a (#2) > 10], limit: NONE]
 │       └── estimated rows: 0.00
 └── Filter(Probe)
-    ├── filters: [gt(plus(t1.b (#1), t1.a (#0)), 10)]
+    ├── filters: [t1.b (#1) + t1.a (#0) > 10]
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
@@ -539,7 +539,7 @@ HashJoin
         ├── read bytes: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [gt(plus(t1.b (#1), t1.a (#0)), 10)], limit: NONE]
+        ├── push downs: [filters: [t1.b (#1) + t1.a (#0) > 10], limit: NONE]
         └── estimated rows: 0.00
 
 statement ok
@@ -547,3 +547,70 @@ drop table t1
 
 statement ok
 drop table t2
+
+
+# https://github.com/datafuselabs/databend/issues/10523
+statement ok
+create table t1 as select * from numbers(1)
+
+statement ok
+set enable_cbo = 0
+
+query I
+select t1.number FROM
+t1
+CROSS JOIN
+t1 AS t2,
+t1 AS t3,
+t1 AS t4,
+t1 AS t5,
+t1 AS t6,
+t1 AS t7,
+t1 AS t8,
+t1 AS t9,
+t1 AS t10,
+t1 AS t11,
+t1 AS t12,
+t1 AS t13,
+t1 AS t14,
+t1 AS t15,
+t1 AS t16,
+t1 AS t17,
+t1 AS t18,
+t1 AS t19,
+t1 AS t20
+----
+0
+
+query I
+SELECT t20.number
+FROM
+((((((((((((((((((
+t1 AS t20
+CROSS JOIN t1 AS t19)
+CROSS JOIN t1 AS t18)
+CROSS JOIN t1 AS t17)
+CROSS JOIN t1 AS t16)
+CROSS JOIN t1 AS t15)
+CROSS JOIN t1 AS t14)
+CROSS JOIN t1 AS t13)
+CROSS JOIN t1 AS t12)
+CROSS JOIN t1 AS t11)
+CROSS JOIN t1 AS t10)
+CROSS JOIN t1 AS t9)
+CROSS JOIN t1 AS t8)
+CROSS JOIN t1 AS t7)
+CROSS JOIN t1 AS t6)
+CROSS JOIN t1 AS t5)
+CROSS JOIN t1 AS t4)
+CROSS JOIN t1 AS t3)
+CROSS JOIN t1 AS t2)
+CROSS JOIN t1
+----
+0
+
+statement ok
+set enable_cbo = 1
+
+statement ok
+drop table t1

@@ -17,6 +17,7 @@ use itertools::Itertools;
 
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::decimal::DecimalColumn;
+use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::AnyType;
@@ -25,6 +26,7 @@ use crate::types::ArrayType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
+use crate::types::MapType;
 use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::TimestampType;
@@ -37,7 +39,6 @@ use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
 use crate::Scalar;
-use crate::TypeDeserializer;
 use crate::Value;
 
 // Block idx, row idx in the block, repeat times
@@ -236,18 +237,29 @@ impl Column {
                 let builder = DateType::create_builder(result_size, &[]);
                 Self::take_block_value_types::<DateType>(columns, builder, indices)
             }
-            Column::Array(column) | Column::Map(column) => {
+            Column::Array(column) => {
+                let mut offsets = Vec::with_capacity(result_size + 1);
+                offsets.push(0);
+                let builder = ColumnBuilder::with_capacity(&column.values.data_type(), result_size);
+                let builder = ArrayColumnBuilder { builder, offsets };
+                Self::take_block_value_types::<ArrayType<AnyType>>(columns, builder, indices)
+            }
+            Column::Map(column) => {
                 let mut offsets = Vec::with_capacity(result_size + 1);
                 offsets.push(0);
                 let builder = ColumnBuilder::from_column(
-                    column
-                        .values
-                        .data_type()
-                        .create_deserializer(result_size)
-                        .finish_to_column(),
+                    ColumnBuilder::with_capacity(&column.values.data_type(), result_size).build(),
                 );
+                let (key_builder, val_builder) = match builder {
+                    ColumnBuilder::Tuple(fields) => (fields[0].clone(), fields[1].clone()),
+                    _ => unreachable!(),
+                };
+                let builder = KvColumnBuilder {
+                    keys: key_builder,
+                    values: val_builder,
+                };
                 let builder = ArrayColumnBuilder { builder, offsets };
-                Self::take_block_value_types::<ArrayType<AnyType>>(columns, builder, indices)
+                Self::take_block_value_types::<MapType<AnyType, AnyType>>(columns, builder, indices)
             }
             Column::Nullable(_) => {
                 let inner_ty = datatype.as_nullable().unwrap();
@@ -291,7 +303,7 @@ impl Column {
                 let inner_columns = columns
                     .iter()
                     .map(|c| match c {
-                        Column::Tuple { fields, .. } => fields.clone(),
+                        Column::Tuple(fields) => fields.clone(),
                         _ => unreachable!(),
                     })
                     .collect::<Vec<_>>();
@@ -308,10 +320,7 @@ impl Column {
                     })
                     .collect();
 
-                Column::Tuple {
-                    fields,
-                    len: result_size,
-                }
+                Column::Tuple(fields)
             }
             Column::Variant(_) => {
                 let builder = VariantType::create_builder(result_size, &[]);

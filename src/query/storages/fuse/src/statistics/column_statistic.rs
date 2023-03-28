@@ -15,15 +15,12 @@
 use std::collections::HashMap;
 
 use common_exception::Result;
-use common_expression::types::DataType;
 use common_expression::types::NumberType;
 use common_expression::types::ValueType;
 use common_expression::Column;
-use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::FieldIndex;
 use common_expression::Scalar;
-use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_functions::aggregates::eval_aggr;
 use storages_common_index::Index;
@@ -53,15 +50,10 @@ pub fn gen_columns_statistics(
     let leaves = get_traverse_columns_dfs(&data_block)?;
     let leaf_column_ids = schema.to_leaf_column_ids();
     for ((col_idx, col, data_type), column_id) in leaves.iter().zip(leaf_column_ids) {
-        if col.is_none() {
-            continue;
-        }
-
         // Ignore the range index does not supported type.
         if !RangeIndex::supported_type(data_type) {
             continue;
         }
-        let col = col.as_ref().unwrap();
 
         // later, during the evaluation of expressions, name of field does not matter
         let mut min = Scalar::Null;
@@ -132,101 +124,16 @@ pub fn gen_columns_statistics(
     Ok(statistics)
 }
 
-pub struct ColumnStatisticsLite {
-    pub default_val: Scalar,
-    pub null_count: u64,
-    pub in_memory_size: u64,
-    pub distinct_of_values: u64,
-}
-
-pub fn gen_col_stats_lite(
-    data_block: &DataBlock,
-    fields: &[TableField],
-    default_vals: &[Scalar],
-) -> Result<HashMap<ColumnId, ColumnStatisticsLite>> {
-    fn collect_col_stats(
-        col_scalar: Option<(&Column, &Scalar)>,
-        data_type: &DataType,
-        column_id: &mut ColumnId,
-        stats: &mut HashMap<ColumnId, ColumnStatisticsLite>,
-        rows: usize,
-    ) -> Result<()> {
-        match data_type {
-            DataType::Tuple(inner_types) => {
-                if let Some((col, val)) = col_scalar {
-                    let (inner_columns, _) = col.as_tuple().unwrap();
-                    let inner_scalars = val.as_tuple().unwrap();
-                    for ((inner_column, inner_type), inner_scalar) in
-                        inner_columns.iter().zip(inner_types).zip(inner_scalars)
-                    {
-                        collect_col_stats(
-                            Some((inner_column, inner_scalar)),
-                            inner_type,
-                            column_id,
-                            stats,
-                            rows,
-                        )?;
-                    }
-                } else {
-                    for inner_type in inner_types.iter() {
-                        collect_col_stats(None, inner_type, column_id, stats, rows)?;
-                    }
-                }
-            }
-            DataType::Array(inner_type) => {
-                collect_col_stats(None, inner_type, column_id, stats, rows)?
-            }
-            _ => {
-                if let Some((col, val)) = col_scalar {
-                    if RangeIndex::supported_type(data_type) {
-                        let (is_all_null, bitmap) = col.validity();
-                        let unset_bits = match (is_all_null, bitmap) {
-                            (true, _) => rows,
-                            (false, Some(bitmap)) => bitmap.unset_bits(),
-                            (false, None) => 0,
-                        };
-                        let in_memory_size = col.memory_size() as u64;
-                        let distinct_of_values = calc_column_distinct_of_values(col, rows)?;
-                        stats.insert(*column_id, ColumnStatisticsLite {
-                            default_val: val.clone(),
-                            null_count: unset_bits as u64,
-                            in_memory_size,
-                            distinct_of_values,
-                        });
-                    }
-                }
-
-                *column_id += 1;
-            }
-        }
-        Ok(())
-    }
-
-    let columns = data_block.columns();
-    let mut stats = HashMap::new();
-    for (idx, entry) in columns.iter().enumerate() {
-        let data_type = &entry.data_type;
-        let column = entry.value.as_column().unwrap();
-        let mut next_column_id = fields[idx].column_id();
-        collect_col_stats(
-            Some((column, &default_vals[idx])),
-            data_type,
-            &mut next_column_id,
-            &mut stats,
-            data_block.num_rows(),
-        )?;
-    }
-    Ok(stats)
-}
-
 pub mod traverse {
+    use common_expression::types::map::KvPair;
+    use common_expression::types::AnyType;
     use common_expression::types::DataType;
     use common_expression::BlockEntry;
     use common_expression::Column;
 
     use super::*;
 
-    pub type TraverseResult = Result<Vec<(Option<usize>, Option<Column>, DataType)>>;
+    pub type TraverseResult = Result<Vec<(Option<usize>, Column, DataType)>>;
 
     // traverses columns and collects the leaves in depth first manner
     pub fn traverse_columns_dfs(columns: &[BlockEntry]) -> TraverseResult {
@@ -234,7 +141,7 @@ pub mod traverse {
         for (idx, entry) in columns.iter().enumerate() {
             let data_type = &entry.data_type;
             let column = entry.value.as_column().unwrap();
-            traverse_recursive(Some(idx), Some(column), data_type, &mut leaves)?;
+            traverse_recursive(Some(idx), column, data_type, &mut leaves)?;
         }
         Ok(leaves)
     }
@@ -242,48 +149,52 @@ pub mod traverse {
     /// Traverse the columns in DFS order, convert them to a flatten columns array sorted by leaf_index.
     /// We must ensure that each leaf node is traversed, otherwise we may get an incorrect leaf_index.
     ///
-    /// For the `Tuple` type, we should expand its inner columns.
-    /// For the `Array` type, if there is a nested `Tuple` type inside, it also needs to be found and expanded.
+    /// For the `Array, `Map` and `Tuple` types, we should expand its inner columns.
     fn traverse_recursive(
         idx: Option<usize>,
-        column: Option<&Column>,
+        column: &Column,
         data_type: &DataType,
-        leaves: &mut Vec<(Option<usize>, Option<Column>, DataType)>,
+        leaves: &mut Vec<(Option<usize>, Column, DataType)>,
     ) -> Result<()> {
         match data_type.remove_nullable() {
-            DataType::Tuple(inner_types) => match (data_type.is_nullable(), column) {
-                (false, Some(column)) => {
-                    let (inner_columns, _) = column.as_tuple().unwrap();
-                    for (inner_column, inner_type) in inner_columns.iter().zip(inner_types.iter()) {
-                        traverse_recursive(None, Some(inner_column), inner_type, leaves)?;
-                    }
-                }
-                (_, _) => {
-                    for inner_type in inner_types.iter() {
-                        traverse_recursive(None, None, inner_type, leaves)?;
-                    }
-                }
-            },
-            DataType::Array(inner_type) => {
-                let mut inner_type = inner_type;
-                loop {
-                    match inner_type.remove_nullable() {
-                        DataType::Tuple(tuple_inner_types) => {
-                            for tuple_inner_type in tuple_inner_types.iter() {
-                                traverse_recursive(None, None, tuple_inner_type, leaves)?;
-                            }
-                        }
-                        DataType::Array(array_inner_type) => {
-                            inner_type = array_inner_type;
-                            continue;
-                        }
-                        _ => leaves.push((idx, column.cloned(), data_type.clone())),
-                    }
-                    break;
+            DataType::Tuple(inner_types) => {
+                let inner_columns = if data_type.is_nullable() {
+                    let nullable_column = column.as_nullable().unwrap();
+                    nullable_column.column.as_tuple().unwrap()
+                } else {
+                    column.as_tuple().unwrap()
+                };
+                for (inner_column, inner_type) in inner_columns.iter().zip(inner_types.iter()) {
+                    traverse_recursive(None, inner_column, inner_type, leaves)?;
                 }
             }
+            DataType::Array(inner_type) => {
+                let array_column = if data_type.is_nullable() {
+                    let nullable_column = column.as_nullable().unwrap();
+                    nullable_column.column.as_array().unwrap()
+                } else {
+                    column.as_array().unwrap()
+                };
+                traverse_recursive(None, &array_column.values, &inner_type, leaves)?;
+            }
+            DataType::Map(inner_type) => match *inner_type {
+                DataType::Tuple(inner_types) => {
+                    let map_column = if data_type.is_nullable() {
+                        let nullable_column = column.as_nullable().unwrap();
+                        nullable_column.column.as_map().unwrap()
+                    } else {
+                        column.as_map().unwrap()
+                    };
+                    let kv_column =
+                        KvPair::<AnyType, AnyType>::try_downcast_column(&map_column.values)
+                            .unwrap();
+                    traverse_recursive(None, &kv_column.keys, &inner_types[0], leaves)?;
+                    traverse_recursive(None, &kv_column.values, &inner_types[1], leaves)?;
+                }
+                _ => unreachable!(),
+            },
             _ => {
-                leaves.push((idx, column.cloned(), data_type.clone()));
+                leaves.push((idx, column.clone(), data_type.clone()));
             }
         }
         Ok(())

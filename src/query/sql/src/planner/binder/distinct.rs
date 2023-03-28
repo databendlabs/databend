@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 
 use common_exception::Result;
+use common_exception::Span;
 
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
@@ -32,6 +33,7 @@ use crate::IndexType;
 impl Binder {
     pub(super) fn bind_distinct(
         &self,
+        span: Span,
         bind_context: &BindContext,
         projections: &[ColumnBinding],
         scalar_items: &mut HashMap<IndexType, ScalarItem>,
@@ -65,7 +67,10 @@ impl Binder {
         let group_items: Vec<ScalarItem> = projections
             .iter()
             .map(|v| ScalarItem {
-                scalar: ScalarExpr::BoundColumnRef(BoundColumnRef { column: v.clone() }),
+                scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span,
+                    column: v.clone(),
+                }),
                 index: v.index,
             })
             .collect();
@@ -76,6 +81,8 @@ impl Binder {
             aggregate_functions: vec![],
             from_distinct: true,
             limit: None,
+            grouping_id_index: 0,
+            grouping_sets: vec![],
         };
 
         Ok(SExpr::create_unary(distinct_plan.into(), new_expr))

@@ -49,7 +49,7 @@ impl Compactor for BlockCompactorNoSplit {
         "BlockCompactTransform"
     }
 
-    fn use_partial_compact() -> bool {
+    fn use_partial_compact(&self) -> bool {
         true
     }
 

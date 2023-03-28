@@ -14,7 +14,7 @@
 3
 ---infer_schema use format my_parquet
 id	INT	0	0
-t	(A INT32, B STRING)	0	1
+t	TUPLE(A INT32, B STRING)	0	1
 ---infer_schema use format parquet
 id	INT	0	0
-t	(A INT32, B STRING)	0	1
+t	TUPLE(A INT32, B STRING)	0	1

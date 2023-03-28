@@ -4,13 +4,16 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 export TEST_USER_PASSWORD="password"
-export TEST_USER_CONNECT="mysql --defaults-extra-file=password.out --port ${QUERY_MYSQL_HANDLER_PORT} ${MYSQL_DATABASE} -s"
+export TEST_USER_CONNECT="mysql --defaults-extra-file=password.out --port ${QUERY_MYSQL_HANDLER_PORT} -s"
 echo -e "[mysql]\nhost=${QUERY_MYSQL_HANDLER_HOST}\nuser=test-user\npassword=${TEST_USER_PASSWORD}" >> password.out
 
 ## create user
 echo "create user 'test-user'@'$QUERY_MYSQL_HANDLER_HOST' IDENTIFIED BY '$TEST_USER_PASSWORD'" | $MYSQL_CLIENT_CONNECT
 ## create table
 echo "create table t20_0012(c int)" | $MYSQL_CLIENT_CONNECT
+
+## show tables
+echo "show databases" | $TEST_USER_CONNECT
 
 ## insert data
 echo "insert into t20_0012 values(1),(2)" | $TEST_USER_CONNECT
@@ -102,6 +105,9 @@ echo "drop table default.t20_0012 all" | $MYSQL_CLIENT_CONNECT
 echo "drop table default.t20_0012_a all" | $MYSQL_CLIENT_CONNECT
 echo "drop table default.t20_0012_b all" | $MYSQL_CLIENT_CONNECT
 echo "drop view default2.v_t20_0012" | $MYSQL_CLIENT_CONNECT
+
+## Drop database.
+echo "drop database default2" | $MYSQL_CLIENT_CONNECT
 
 ## Drop user
 echo "drop user 'test-user'@'$QUERY_MYSQL_HANDLER_HOST'" | $MYSQL_CLIENT_CONNECT

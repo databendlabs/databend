@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -29,8 +30,10 @@ use common_io::prelude::FormatSettings;
 use common_meta_app::principal::FileFormatOptions;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
+use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::DataOperator;
+use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
 
 use crate::catalog::Catalog;
@@ -56,6 +59,7 @@ pub struct ProcessInfo {
     pub scan_progress_value: Option<ProgressValues>,
     pub mysql_connection_id: Option<u32>,
     pub created_time: SystemTime,
+    pub status_info: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -80,14 +84,18 @@ pub trait TableContext: Send + Sync {
     fn get_write_progress_value(&self) -> ProgressValues;
     fn get_result_progress(&self) -> Arc<Progress>;
     fn get_result_progress_value(&self) -> ProgressValues;
+    fn get_status_info(&self) -> String;
+    fn set_status_info(&self, info: &str);
 
     fn get_partition(&self) -> Option<PartInfoPtr>;
     fn get_partitions(&self, num: usize) -> Vec<PartInfoPtr>;
     fn set_partitions(&self, partitions: Partitions) -> Result<()>;
     fn add_partitions_sha(&self, sha: String);
     fn get_partitions_shas(&self) -> Vec<String>;
+    fn get_cacheable(&self) -> bool;
+    fn set_cacheable(&self, cacheable: bool);
 
-    fn attach_query_str(&self, kind: String, query: &str);
+    fn attach_query_str(&self, kind: String, query: String);
     fn get_query_str(&self) -> String;
 
     fn get_fragment_id(&self) -> usize;
@@ -110,12 +118,13 @@ pub trait TableContext: Send + Sync {
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
     fn get_stage_attachment(&self) -> Option<StageAttachment>;
     fn get_last_query_id(&self, index: i32) -> String;
+    fn get_query_id_history(&self) -> HashSet<String>;
     fn get_result_cache_key(&self, query_id: &str) -> Option<String>;
     fn set_query_id_result_cache(&self, query_id: String, result_cache_key: String);
     fn set_on_error_map(&self, map: Option<HashMap<String, ErrorCode>>);
 
-    fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()>;
-    fn get_changed_settings(&self) -> Arc<Settings>;
+    fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()>;
+    fn get_changed_settings(&self) -> HashMap<String, ChangeValue>;
 
     // Get the storage data accessor operator from the session manager.
     fn get_data_operator(&self) -> Result<DataOperator>;
@@ -126,4 +135,12 @@ pub trait TableContext: Send + Sync {
 
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;
+
+    async fn color_copied_files(
+        &self,
+        catalog_name: &str,
+        database_name: &str,
+        table_name: &str,
+        files: Vec<StageFileInfo>,
+    ) -> Result<Vec<StageFileInfo>>;
 }

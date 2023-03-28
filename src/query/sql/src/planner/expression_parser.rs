@@ -16,14 +16,12 @@ use std::sync::Arc;
 
 use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
-use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_base::base::tokio::runtime::Handle;
 use common_base::base::tokio::task::block_in_place;
 use common_catalog::catalog::CATALOG_DEFAULT;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -34,7 +32,7 @@ use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::TableField;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 use common_settings::Settings;
 use parking_lot::RwLock;
@@ -51,10 +49,9 @@ use crate::Visibility;
 pub fn parse_exprs(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
-    unwrap_tuple: bool,
     sql: &str,
 ) -> Result<Vec<Expr>> {
-    let settings = Settings::default_settings("", GlobalConfig::instance())?;
+    let settings = Settings::try_create("".to_string());
     let mut bind_context = BindContext::new();
     let metadata = Arc::new(RwLock::new(Metadata::default()));
     let table_index = metadata.write().add_table(
@@ -86,7 +83,6 @@ pub fn parse_exprs(
                     Visibility::Visible
                 },
             },
-
             _ => {
                 return Err(ErrorCode::Internal("Invalid column entry"));
             }
@@ -97,22 +93,16 @@ pub fn parse_exprs(
 
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
     let mut type_checker =
-        TypeChecker::new(&bind_context, ctx, &name_resolution_ctx, metadata, &[]);
+        TypeChecker::new(&mut bind_context, ctx, &name_resolution_ctx, metadata, &[]);
 
     let sql_dialect = Dialect::MySQL;
     let tokens = tokenize_sql(sql)?;
-    let backtrace = Backtrace::new();
-    let tokens = if unwrap_tuple {
-        &tokens[1..tokens.len() - 1]
-    } else {
-        &tokens
-    };
-    let ast_exprs = parse_comma_separated_exprs(tokens, sql_dialect, &backtrace)?;
+    let ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
     let exprs = ast_exprs
         .iter()
         .map(|ast| {
             let (scalar, _) =
-                *block_in_place(|| Handle::current().block_on(type_checker.resolve(ast, None)))?;
+                *block_in_place(|| Handle::current().block_on(type_checker.resolve(ast)))?;
             let expr = scalar.as_expr_with_col_index()?;
             Ok(expr)
         })
@@ -124,11 +114,10 @@ pub fn parse_exprs(
 pub fn parse_to_remote_string_expr(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
-    unwrap_tuple: bool,
     sql: &str,
 ) -> Result<RemoteExpr<String>> {
     let schema = table_meta.schema();
-    let exprs = parse_exprs(ctx, table_meta, unwrap_tuple, sql)?;
+    let exprs = parse_exprs(ctx, table_meta, sql)?;
     let exprs: Vec<RemoteExpr<String>> = exprs
         .iter()
         .map(|expr| {
@@ -168,7 +157,7 @@ pub fn field_default_value(ctx: Arc<dyn TableContext>, field: &TableField) -> Re
     match field.default_expr() {
         Some(default_expr) => {
             let table: Arc<dyn Table> = Arc::new(DummyTable::default());
-            let mut expr = parse_exprs(ctx.clone(), table.clone(), false, default_expr)?;
+            let mut expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?;
             let mut expr = expr.remove(0);
 
             if expr.data_type() != &data_type {
@@ -191,15 +180,13 @@ pub fn field_default_value(ctx: Arc<dyn TableContext>, field: &TableField) -> Re
                     let value = unsafe { c.index_unchecked(0) };
                     Ok(value.to_owned())
                 }
-                _ => {
-                    return Err(ErrorCode::BadDataValueType(format!(
-                        "Invalid default value for column: {}, must be constant, actual: {}",
-                        field.name(),
-                        result
-                    )));
-                }
+                _ => Err(ErrorCode::BadDataValueType(format!(
+                    "Invalid default value for column: {}, must be constant, actual: {}",
+                    field.name(),
+                    result
+                ))),
             }
         }
-        None => Ok(data_type.default_value()),
+        None => Ok(Scalar::default_value(&data_type)),
     }
 }

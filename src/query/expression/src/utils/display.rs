@@ -15,12 +15,12 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::fmt::Write;
 
 use chrono_tz::Tz;
 use comfy_table::Cell;
 use comfy_table::Table;
-use ethnum::i256;
+use common_io::display_decimal_128;
+use common_io::display_decimal_256;
 use itertools::Itertools;
 use num_traits::FromPrimitive;
 use rust_decimal::Decimal;
@@ -28,7 +28,6 @@ use rust_decimal::RoundingStrategy;
 
 use crate::block::DataBlock;
 use crate::expression::Expr;
-use crate::expression::Literal;
 use crate::expression::RawExpr;
 use crate::function::Function;
 use crate::function::FunctionSignature;
@@ -60,6 +59,7 @@ use crate::values::ValueRef;
 use crate::with_integer_mapped_type;
 use crate::Column;
 use crate::ColumnIndex;
+use crate::FunctionEval;
 use crate::TableDataType;
 
 const FLOAT_NUM_FRAC_DIGITS: u32 = 10;
@@ -171,11 +171,7 @@ impl Debug for Column {
             Column::Array(col) => write!(f, "{col:?}"),
             Column::Map(col) => write!(f, "{col:?}"),
             Column::Nullable(col) => write!(f, "{col:?}"),
-            Column::Tuple { fields, len } => f
-                .debug_struct("Tuple")
-                .field("fields", fields)
-                .field("len", len)
-                .finish(),
+            Column::Tuple(fields) => f.debug_tuple("Tuple").field(fields).finish(),
             Column::Variant(col) => write!(f, "{col:?}"),
         }
     }
@@ -230,7 +226,7 @@ impl<'a> Display for ScalarRef<'a> {
                 write!(f, ")")
             }
             ScalarRef::Variant(s) => {
-                let value = common_jsonb::to_string(s);
+                let value = jsonb::to_string(s);
                 write!(f, "{value}")
             }
         }
@@ -281,10 +277,22 @@ impl Debug for DecimalScalar {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             DecimalScalar::Decimal128(val, size) => {
-                write!(f, "{}_d128", display_decimal_128(*val, size.scale))
+                write!(
+                    f,
+                    "{}_d128({},{})",
+                    display_decimal_128(*val, size.scale),
+                    size.precision,
+                    size.scale
+                )
             }
             DecimalScalar::Decimal256(val, size) => {
-                write!(f, "{}_d256", display_decimal_256(*val, size.scale))
+                write!(
+                    f,
+                    "{}_d256({},{})",
+                    display_decimal_256(*val, size.scale),
+                    size.precision,
+                    size.scale
+                )
             }
         }
     }
@@ -369,7 +377,7 @@ impl Debug for StringColumn {
 impl<Index: ColumnIndex> Display for RawExpr<Index> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RawExpr::Literal { lit, .. } => write!(f, "{lit}"),
+            RawExpr::Constant { scalar, .. } => write!(f, "{scalar}"),
             RawExpr::ColumnRef {
                 display_name,
                 data_type,
@@ -416,26 +424,6 @@ impl<Index: ColumnIndex> Display for RawExpr<Index> {
     }
 }
 
-impl Display for Literal {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        match self {
-            Literal::Null => write!(f, "NULL"),
-            Literal::Boolean(val) => write!(f, "{val}"),
-            Literal::Int8(val) => write!(f, "{val}_i8"),
-            Literal::Int16(val) => write!(f, "{val}_i16"),
-            Literal::Int32(val) => write!(f, "{val}_i32"),
-            Literal::Int64(val) => write!(f, "{val}_i64"),
-            Literal::UInt8(val) => write!(f, "{val}_u8"),
-            Literal::UInt16(val) => write!(f, "{val}_u16"),
-            Literal::UInt32(val) => write!(f, "{val}_u32"),
-            Literal::UInt64(val) => write!(f, "{val}_u64"),
-            Literal::Float32(val) => write!(f, "{val}_f32"),
-            Literal::Float64(val) => write!(f, "{val}_f64"),
-            Literal::String(val) => write!(f, "{:?}", String::from_utf8_lossy(val)),
-        }
-    }
-}
-
 impl Display for DataType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         match &self {
@@ -450,7 +438,12 @@ impl Display for DataType {
             DataType::EmptyArray => write!(f, "Array(Nothing)"),
             DataType::Array(inner) => write!(f, "Array({inner})"),
             DataType::EmptyMap => write!(f, "Map(Nothing)"),
-            DataType::Map(inner) => write!(f, "Map({inner})"),
+            DataType::Map(inner) => match *inner.clone() {
+                DataType::Tuple(fields) => {
+                    write!(f, "Map({}, {})", fields[0], fields[1])
+                }
+                _ => unreachable!(),
+            },
             DataType::Tuple(tys) => {
                 write!(f, "Tuple(")?;
                 for (i, ty) in tys.iter().enumerate() {
@@ -484,12 +477,20 @@ impl Display for TableDataType {
             TableDataType::EmptyArray => write!(f, "Array(Nothing)"),
             TableDataType::Array(inner) => write!(f, "Array({inner})"),
             TableDataType::EmptyMap => write!(f, "Map(Nothing)"),
-            TableDataType::Map(inner) => write!(f, "Map({inner})"),
+            TableDataType::Map(inner) => match *inner.clone() {
+                TableDataType::Tuple {
+                    fields_name: _fields_name,
+                    fields_type,
+                } => {
+                    write!(f, "Map({}, {})", fields_type[0], fields_type[1])
+                }
+                _ => unreachable!(),
+            },
             TableDataType::Tuple {
                 fields_name,
                 fields_type,
             } => {
-                write!(f, "(")?;
+                write!(f, "Tuple(")?;
                 for (i, (name, ty)) in fields_name.iter().zip(fields_type).enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
@@ -591,6 +592,128 @@ impl<Index: ColumnIndex> Display for Expr<Index> {
     }
 }
 
+impl<Index: ColumnIndex> Expr<Index> {
+    pub fn sql_display(&self) -> String {
+        fn write_unary_op<Index: ColumnIndex>(
+            op: &str,
+            expr: &Expr<Index>,
+            precedence: usize,
+            min_precedence: usize,
+        ) -> String {
+            if precedence < min_precedence {
+                format!("({op} {})", write_expr(expr, precedence))
+            } else {
+                format!("{op} {}", write_expr(expr, precedence))
+            }
+        }
+
+        fn write_binary_op<Index: ColumnIndex>(
+            op: &str,
+            lhs: &Expr<Index>,
+            rhs: &Expr<Index>,
+            precedence: usize,
+            min_precedence: usize,
+        ) -> String {
+            if precedence < min_precedence {
+                format!(
+                    "({} {op} {})",
+                    write_expr(lhs, precedence),
+                    write_expr(rhs, precedence)
+                )
+            } else {
+                format!(
+                    "{} {op} {}",
+                    write_expr(lhs, precedence),
+                    write_expr(rhs, precedence)
+                )
+            }
+        }
+
+        fn write_expr<Index: ColumnIndex>(expr: &Expr<Index>, min_precedence: usize) -> String {
+            match expr {
+                Expr::Constant { scalar, .. } => scalar.as_ref().to_string(),
+                Expr::ColumnRef { display_name, .. } => display_name.clone(),
+                Expr::Cast {
+                    is_try,
+                    expr,
+                    dest_type,
+                    ..
+                } => {
+                    if *is_try {
+                        format!("TRY_CAST({} AS {dest_type})", expr.sql_display())
+                    } else {
+                        format!("CAST({} AS {dest_type})", expr.sql_display())
+                    }
+                }
+                Expr::FunctionCall { function, args, .. } => {
+                    match (function.signature.name.as_str(), args.as_slice()) {
+                        ("and", [ref lhs, ref rhs]) => {
+                            write_binary_op("AND", lhs, rhs, 10, min_precedence)
+                        }
+                        ("or", [ref lhs, ref rhs]) => {
+                            write_binary_op("OR", lhs, rhs, 5, min_precedence)
+                        }
+                        ("not", [ref expr]) => write_unary_op("NOT", expr, 15, min_precedence),
+                        ("gte", [ref lhs, ref rhs]) => {
+                            write_binary_op(">=", lhs, rhs, 20, min_precedence)
+                        }
+                        ("gt", [ref lhs, ref rhs]) => {
+                            write_binary_op(">", lhs, rhs, 20, min_precedence)
+                        }
+                        ("lte", [ref lhs, ref rhs]) => {
+                            write_binary_op("<=", lhs, rhs, 20, min_precedence)
+                        }
+                        ("lt", [ref lhs, ref rhs]) => {
+                            write_binary_op("<", lhs, rhs, 20, min_precedence)
+                        }
+                        ("eq", [ref lhs, ref rhs]) => {
+                            write_binary_op("=", lhs, rhs, 20, min_precedence)
+                        }
+                        ("noteq", [ref lhs, ref rhs]) => {
+                            write_binary_op("<>", lhs, rhs, 20, min_precedence)
+                        }
+                        ("plus", [ref expr]) => write_unary_op("+", expr, 50, min_precedence),
+                        ("minus", [ref expr]) => write_unary_op("-", expr, 50, min_precedence),
+                        ("plus", [ref lhs, ref rhs]) => {
+                            write_binary_op("+", lhs, rhs, 30, min_precedence)
+                        }
+                        ("minus", [ref lhs, ref rhs]) => {
+                            write_binary_op("-", lhs, rhs, 30, min_precedence)
+                        }
+                        ("multiply", [ref lhs, ref rhs]) => {
+                            write_binary_op("*", lhs, rhs, 40, min_precedence)
+                        }
+                        ("divide", [ref lhs, ref rhs]) => {
+                            write_binary_op("/", lhs, rhs, 40, min_precedence)
+                        }
+                        ("div", [ref lhs, ref rhs]) => {
+                            write_binary_op("DIV", lhs, rhs, 40, min_precedence)
+                        }
+                        ("modulo", [ref lhs, ref rhs]) => {
+                            write_binary_op("%", lhs, rhs, 40, min_precedence)
+                        }
+                        _ => {
+                            let mut s = String::new();
+                            s += &function.signature.name;
+                            s += "(";
+                            for (i, arg) in args.iter().enumerate() {
+                                if i > 0 {
+                                    s += ", ";
+                                }
+                                s += &arg.sql_display();
+                            }
+                            s += ")";
+                            s
+                        }
+                    }
+                }
+            }
+        }
+
+        write_expr(self, 0)
+    }
+}
+
 impl<T: ValueType> Display for Value<T> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
@@ -612,6 +735,15 @@ impl<'a, T: ValueType> Display for ValueRef<'a, T> {
 impl Debug for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.signature)
+    }
+}
+
+impl Debug for FunctionEval {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FunctionEval::Scalar { .. } => write!(f, "FunctionEval::Scalar"),
+            FunctionEval::SRF { .. } => write!(f, "FunctionEval::SRF"),
+        }
     }
 }
 
@@ -744,6 +876,10 @@ impl Display for Domain {
                 }
                 write!(f, ")")
             }
+            Domain::Map(None) => write!(f, "{{}}"),
+            Domain::Map(Some((key_domain, val_domain))) => {
+                write!(f, "{{[{key_domain}], [{val_domain}]}}")
+            }
             Domain::Undefined => write!(f, "Undefined"),
         }
     }
@@ -771,63 +907,4 @@ fn display_f64(num: f64) -> String {
             .to_string(),
         None => num.to_string(),
     }
-}
-
-fn display_decimal_128(num: i128, scale: u8) -> String {
-    let mut buf = String::new();
-    if scale == 0 {
-        write!(buf, "{}", num).unwrap();
-    } else {
-        let pow_scale = 10_i128.pow(scale as u32);
-        if num >= 0 {
-            write!(
-                buf,
-                "{}.{:0>width$}",
-                num / pow_scale,
-                (num % pow_scale).abs(),
-                width = scale as usize
-            )
-            .unwrap();
-        } else {
-            write!(
-                buf,
-                "-{}.{:0>width$}",
-                -num / pow_scale,
-                (num % pow_scale).abs(),
-                width = scale as usize
-            )
-            .unwrap();
-        }
-    }
-    buf
-}
-
-fn display_decimal_256(num: i256, scale: u8) -> String {
-    let mut buf = String::new();
-    if scale == 0 {
-        write!(buf, "{}", num).unwrap();
-    } else {
-        let pow_scale = i256::from(10).pow(scale as u32);
-        // -1/10 = 0
-        if num >= 0 {
-            write!(
-                buf,
-                "{}.{:0>width$}",
-                num / pow_scale,
-                num % pow_scale.abs(),
-                width = scale as usize
-            )
-            .unwrap();
-        } else {
-            write!(
-                buf,
-                "-{}.{:0>width$}",
-                -num / pow_scale,
-                num % pow_scale,
-                width = scale as usize
-            )
-            .unwrap();
-        }
-    }
-    buf
 }

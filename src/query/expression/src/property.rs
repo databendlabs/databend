@@ -13,9 +13,10 @@
 // limitations under the License.
 
 use enum_as_inner::EnumAsInner;
-use ethnum::i256;
 
 use crate::types::boolean::BooleanDomain;
+use crate::types::decimal::Decimal128Type;
+use crate::types::decimal::Decimal256Type;
 use crate::types::decimal::DecimalDomain;
 use crate::types::nullable::NullableDomain;
 use crate::types::number::NumberDomain;
@@ -34,12 +35,14 @@ use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::TimestampType;
 use crate::types::ValueType;
+use crate::with_decimal_type;
 use crate::with_number_type;
 use crate::Scalar;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy)]
 pub struct FunctionProperty {
     pub non_deterministic: bool,
+    pub kind: FunctionKind,
 }
 
 impl FunctionProperty {
@@ -47,6 +50,26 @@ impl FunctionProperty {
         self.non_deterministic = true;
         self
     }
+
+    pub fn kind(mut self, kind: FunctionKind) -> Self {
+        self.kind = kind;
+        self
+    }
+}
+
+impl Default for FunctionProperty {
+    fn default() -> Self {
+        FunctionProperty {
+            non_deterministic: false,
+            kind: FunctionKind::Scalar,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FunctionKind {
+    Scalar,
+    SRF,
 }
 
 /// Describe the behavior of a function to eliminate the runtime
@@ -77,6 +100,8 @@ pub enum Domain {
     Nullable(NullableDomain<AnyType>),
     /// `Array(None)` means that the array is empty, thus there is no inner domain information.
     Array(Option<Box<Domain>>),
+    /// `Map(None)` means that the map is empty, thus there is no inner domain information.
+    Map(Option<(Box<Domain>, Box<Domain>)>),
     Tuple(Vec<Domain>),
     /// For certain types, like `Variant`, the domain is useless therefore is not defined.
     Undefined,
@@ -143,22 +168,10 @@ impl Domain {
             // useless domain, we don't support min/max index for decimal type
             DataType::Decimal(x) => match x {
                 crate::types::DecimalDataType::Decimal128(x) => {
-                    Domain::Decimal(DecimalDomain::Decimal128(
-                        SimpleDomain {
-                            min: i128::MIN,
-                            max: i128::MAX,
-                        },
-                        *x,
-                    ))
+                    Domain::Decimal(DecimalDomain::Decimal128(Decimal128Type::full_domain(), *x))
                 }
                 crate::types::DecimalDataType::Decimal256(x) => {
-                    Domain::Decimal(DecimalDomain::Decimal256(
-                        SimpleDomain {
-                            min: i256::MIN,
-                            max: i256::MAX,
-                        },
-                        *x,
-                    ))
+                    Domain::Decimal(DecimalDomain::Decimal256(Decimal256Type::full_domain(), *x))
                 }
             },
             DataType::Timestamp => Domain::Timestamp(TimestampType::full_domain()),
@@ -176,7 +189,19 @@ impl Domain {
             }
             DataType::EmptyArray => Domain::Array(None),
             DataType::Array(ty) => Domain::Array(Some(Box::new(Domain::full(ty)))),
-            DataType::EmptyMap | DataType::Map(_) | DataType::Variant => Domain::Undefined,
+            DataType::EmptyMap => Domain::Map(None),
+            DataType::Map(box ty) => {
+                let inner_domain = match ty {
+                    DataType::Tuple(inner_tys) => {
+                        let key_domain = Box::new(Domain::full(&inner_tys[0]));
+                        let val_domain = Box::new(Domain::full(&inner_tys[1]));
+                        (key_domain, val_domain)
+                    }
+                    _ => unreachable!(),
+                };
+                Domain::Map(Some(inner_domain))
+            }
+            DataType::Variant => Domain::Undefined,
             DataType::Generic(_) => unreachable!(),
         }
     }
@@ -190,6 +215,19 @@ impl Domain {
                             min: this.min.min(other.min),
                             max: this.max.max(other.max),
                         })),
+                    _ => unreachable!("unable to merge {this:?} with {other:?}"),
+                })
+            }
+            (Domain::Decimal(this), Domain::Decimal(other)) => {
+                with_decimal_type!(|TYPE| match (this, other) {
+                    (DecimalDomain::TYPE(x, size), DecimalDomain::TYPE(y, _)) =>
+                        Domain::Decimal(DecimalDomain::TYPE(
+                            SimpleDomain {
+                                min: x.min.min(y.min),
+                                max: x.max.max(y.max),
+                            },
+                            *size
+                        ),),
                     _ => unreachable!("unable to merge {this:?} with {other:?}"),
                 })
             }
@@ -273,6 +311,16 @@ impl Domain {
             (Domain::Array(Some(self_arr)), Domain::Array(Some(other_arr))) => {
                 Domain::Array(Some(Box::new(self_arr.merge(other_arr))))
             }
+            (Domain::Map(None), Domain::Map(None)) => Domain::Map(None),
+            (Domain::Map(Some(_)), Domain::Map(None)) => self.clone(),
+            (Domain::Map(None), Domain::Map(Some(_))) => other.clone(),
+            (
+                Domain::Map(Some((self_key, self_val))),
+                Domain::Map(Some((other_key, other_val))),
+            ) => Domain::Map(Some((
+                Box::new(self_key.merge(other_key)),
+                Box::new(self_val.merge(other_val)),
+            ))),
             (Domain::Tuple(self_tup), Domain::Tuple(other_tup)) => Domain::Tuple(
                 self_tup
                     .iter()
@@ -352,5 +400,114 @@ impl Domain {
             )),
             _ => None,
         }
+    }
+}
+
+pub trait SimpleDomainCmp {
+    fn domain_eq(&self, other: &Self) -> FunctionDomain<BooleanType>;
+    fn domain_noteq(&self, other: &Self) -> FunctionDomain<BooleanType>;
+    fn domain_gt(&self, other: &Self) -> FunctionDomain<BooleanType>;
+    fn domain_gte(&self, other: &Self) -> FunctionDomain<BooleanType>;
+    fn domain_lt(&self, other: &Self) -> FunctionDomain<BooleanType>;
+    fn domain_lte(&self, other: &Self) -> FunctionDomain<BooleanType>;
+}
+
+const ALL_TRUE_DOMAIN: BooleanDomain = BooleanDomain {
+    has_true: true,
+    has_false: false,
+};
+
+const ALL_FALSE_DOMAIN: BooleanDomain = BooleanDomain {
+    has_true: false,
+    has_false: true,
+};
+
+impl<T: Ord + PartialOrd> SimpleDomainCmp for SimpleDomain<T> {
+    fn domain_eq(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        if self.min > other.max || self.max < other.min {
+            FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+        } else {
+            FunctionDomain::Full
+        }
+    }
+
+    fn domain_noteq(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        if self.min > other.max || self.max < other.min {
+            FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+        } else {
+            FunctionDomain::Full
+        }
+    }
+
+    fn domain_gt(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        if self.min > other.max {
+            FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+        } else if self.max <= other.min {
+            FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+        } else {
+            FunctionDomain::Full
+        }
+    }
+
+    fn domain_gte(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        if self.min >= other.max {
+            FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+        } else if self.max < other.min {
+            FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+        } else {
+            FunctionDomain::Full
+        }
+    }
+
+    fn domain_lt(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        if self.max < other.min {
+            FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+        } else if self.min >= other.max {
+            FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+        } else {
+            FunctionDomain::Full
+        }
+    }
+
+    fn domain_lte(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        if self.max <= other.min {
+            FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+        } else if self.min > other.max {
+            FunctionDomain::Domain(ALL_FALSE_DOMAIN)
+        } else {
+            FunctionDomain::Full
+        }
+    }
+}
+
+impl SimpleDomainCmp for StringDomain {
+    fn domain_eq(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        let (d1, d2) = self.unify(other);
+        d1.domain_eq(&d2)
+    }
+
+    fn domain_noteq(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        let (d1, d2) = self.unify(other);
+        d1.domain_noteq(&d2)
+    }
+
+    fn domain_gt(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        let (d1, d2) = self.unify(other);
+        d1.domain_gt(&d2)
+    }
+
+    fn domain_gte(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        let (d1, d2) = self.unify(other);
+        d1.domain_gte(&d2)
+    }
+
+    fn domain_lt(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        let (d1, d2) = self.unify(other);
+        d1.domain_lt(&d2)
+    }
+
+    fn domain_lte(&self, other: &Self) -> FunctionDomain<BooleanType> {
+        let (d1, d2) = self.unify(other);
+        d1.domain_lte(&d2)
     }
 }

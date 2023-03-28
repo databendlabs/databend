@@ -47,20 +47,9 @@ fn connection_opt(sep: &'static str) -> impl FnMut(Input) -> IResult<(String, St
         let sep2 = match_text(sep);
         let string_options = map(
             rule! {
-                (AWS_KEY_ID
-                    | AWS_SECRET_KEY
-                    | ACCESS_KEY_ID
-                    | ACCESS_KEY_SECRET
-                    | ENDPOINT_URL
-                    | SECRET_ACCESS_KEY
-                    | SESSION_TOKEN
-                    | REGION
-                    | HTTPS
-                    | DELEGATION
-                    | ENABLE_VIRTUAL_HOST_STYLE)
-                ~ #sep1 ~ #literal_string
+                ( #ident ) ~ #sep1 ~ #literal_string
             },
-            |(k, _, v)| (k.text().to_string().to_lowercase(), v),
+            |(k, _, v)| (k.to_string().to_lowercase(), v),
         );
 
         let bool_options = map(
@@ -142,7 +131,7 @@ pub fn file_format_clause(i: Input) -> IResult<BTreeMap<String, String>> {
 pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
     map(
         rule! {
-            "(" ~ ( #ident_to_string ~ "=" ~ #parameter_to_string )* ~ ")"
+        "(" ~ ( #ident_to_string ~ "=" ~ #parameter_to_string )* ~ ")"
         },
         |(_, opts, _)| {
             BTreeMap::from_iter(opts.iter().map(|(k, _, v)| (k.to_lowercase(), v.clone())))

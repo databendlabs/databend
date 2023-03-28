@@ -21,33 +21,16 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::FileFormatOptions;
 use common_meta_app::principal::OnErrorMode;
-use common_meta_app::principal::UserStageInfo;
+use common_meta_app::principal::StageInfo;
 
 use super::super::copy::parse_stage_location;
 use crate::binder::location::parse_uri_location;
 use crate::binder::Binder;
 use crate::plans::CreateStagePlan;
-use crate::plans::ListPlan;
 use crate::plans::Plan;
 use crate::plans::RemoveStagePlan;
 
 impl Binder {
-    pub(in crate::planner::binder) async fn bind_list_stage(
-        &mut self,
-        location: &str,
-        pattern: &str,
-    ) -> Result<Plan> {
-        let stage_name = format!("@{location}");
-        let (stage, path) = parse_stage_location(&self.ctx, stage_name.as_str()).await?;
-        let plan_node = ListPlan {
-            path,
-            stage,
-            pattern: pattern.to_string(),
-        };
-
-        Ok(Plan::ListStage(Box::new(plan_node)))
-    }
-
     pub(in crate::planner::binder) async fn bind_remove_stage(
         &mut self,
         location: &str,
@@ -82,9 +65,9 @@ impl Binder {
         let mut stage_info = match location {
             None => {
                 if stage_name == "~" {
-                    UserStageInfo::new_user_stage(&self.ctx.get_current_user()?.name)
+                    StageInfo::new_user_stage(&self.ctx.get_current_user()?.name)
                 } else {
-                    UserStageInfo::new_internal_stage(stage_name)
+                    StageInfo::new_internal_stage(stage_name)
                 }
             }
             Some(uri) => {
@@ -104,7 +87,7 @@ impl Binder {
                     ));
                 }
 
-                UserStageInfo::new_external_stage(stage_storage, &path).with_stage_name(stage_name)
+                StageInfo::new_external_stage(stage_storage, &path).with_stage_name(stage_name)
             }
         };
 
@@ -126,7 +109,7 @@ impl Binder {
         Ok(Plan::CreateStage(Box::new(CreateStagePlan {
             if_not_exists: *if_not_exists,
             tenant: self.ctx.get_tenant(),
-            user_stage_info: stage_info,
+            stage_info,
         })))
     }
 

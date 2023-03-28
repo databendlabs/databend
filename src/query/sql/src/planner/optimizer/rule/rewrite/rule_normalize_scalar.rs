@@ -13,8 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::Literal;
+use common_expression::Scalar;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::RuleID;
@@ -35,7 +34,7 @@ fn is_true(predicate: &ScalarExpr) -> bool {
     matches!(
         predicate,
         ScalarExpr::ConstantExpr(ConstantExpr {
-            value: Literal::Boolean(true),
+            value: Scalar::Boolean(true),
             ..
         })
     )
@@ -47,7 +46,7 @@ fn is_falsy(predicate: &ScalarExpr) -> bool {
         ScalarExpr::ConstantExpr(ConstantExpr {
             value,
             ..
-        }) if value == &Literal::Boolean(false) || value == &Literal::Null
+        }) if value == &Scalar::Boolean(false) || value == &Scalar::Null
     )
 }
 
@@ -59,8 +58,8 @@ fn normalize_falsy_predicate(predicates: Vec<ScalarExpr>) -> Vec<ScalarExpr> {
     if predicates.iter().any(is_falsy) {
         vec![
             ConstantExpr {
-                value: Literal::Boolean(false),
-                data_type: Box::new(DataType::Boolean),
+                span: None,
+                value: Scalar::Boolean(false),
             }
             .into(),
         ]

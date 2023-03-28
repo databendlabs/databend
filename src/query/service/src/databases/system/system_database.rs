@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_config::InnerConfig;
@@ -40,6 +41,7 @@ use common_storages_system::QueryLogTable;
 use common_storages_system::RolesTable;
 use common_storages_system::SettingsTable;
 use common_storages_system::StagesTable;
+use common_storages_system::TableFunctionsTable;
 use common_storages_system::TablesTableWithHistory;
 use common_storages_system::TablesTableWithoutHistory;
 use common_storages_system::TracingTable;
@@ -55,6 +57,14 @@ pub struct SystemDatabase {
 }
 
 impl SystemDatabase {
+    /// These tables may disabled to the sql users.
+    fn disable_system_tables() -> HashMap<String, bool> {
+        let mut map = HashMap::new();
+        map.insert("configs".to_string(), true);
+        map.insert("clusters".to_string(), true);
+        map
+    }
+
     pub fn create(sys_db_meta: &mut InMemoryMetas, config: &InnerConfig) -> Self {
         let table_list: Vec<Arc<dyn Table>> = vec![
             OneTable::create(sys_db_meta.next_table_id()),
@@ -88,10 +98,20 @@ impl SystemDatabase {
             BuildOptionsTable::create(sys_db_meta.next_table_id()),
             CatalogsTable::create(sys_db_meta.next_table_id()),
             QueryCacheTable::create(sys_db_meta.next_table_id()),
+            TableFunctionsTable::create(sys_db_meta.next_table_id()),
         ];
 
+        let disable_tables = Self::disable_system_tables();
         for tbl in table_list.into_iter() {
-            sys_db_meta.insert("system", tbl);
+            // Not load the disable system tables.
+            if config.query.disable_system_table_load {
+                let name = tbl.name();
+                if disable_tables.get(name).is_none() {
+                    sys_db_meta.insert("system", tbl);
+                }
+            } else {
+                sys_db_meta.insert("system", tbl);
+            }
         }
 
         let db_info = DatabaseInfo {

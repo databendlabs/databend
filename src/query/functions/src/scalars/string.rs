@@ -15,6 +15,8 @@
 use std::cmp::Ordering;
 use std::io::Write;
 
+use base64::engine::general_purpose;
+use base64::prelude::*;
 use bstr::ByteSlice;
 use common_expression::types::number::SimpleDomain;
 use common_expression::types::number::UInt64Type;
@@ -29,7 +31,6 @@ use common_expression::vectorize_with_builder_3_arg;
 use common_expression::vectorize_with_builder_4_arg;
 use common_expression::EvalContext;
 use common_expression::FunctionDomain;
-use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::Value;
 use common_expression::ValueRef;
@@ -47,7 +48,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "upper",
-        FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_string_to_string(
             |col| col.data.len(),
@@ -71,7 +71,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "lower",
-        FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_string_to_string(
             |col| col.data.len(),
@@ -95,14 +94,12 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
         "bit_length",
-        FunctionProperty::default(),
         |_| FunctionDomain::Full,
         |val, _| 8 * val.len() as u64,
     );
 
     registry.register_passthrough_nullable_1_arg::<StringType, NumberType<u64>, _, _>(
         "length",
-        FunctionProperty::default(),
         |_| FunctionDomain::Full,
         |val, _| match val {
             ValueRef::Scalar(s) => Value::Scalar(s.len() as u64),
@@ -121,7 +118,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<StringType, NumberType<u64>, _, _>(
         "char_length",
-        FunctionProperty::default(),
         |_| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, NumberType<u64>>(|s, output, ctx| {
             match std::str::from_utf8(s) {
@@ -138,7 +134,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_3_arg::<StringType, NumberType<u64>, StringType, StringType, _, _>(
         "lpad",
-        FunctionProperty::default(),
         |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_3_arg::<StringType, NumberType<u64>, StringType, StringType>(
             |s, pad_len, pad, output, _| {
@@ -165,7 +160,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_4_arg::<StringType, NumberType<i64>, NumberType<i64>, StringType, StringType, _, _>(
         "insert",
-        FunctionProperty::default(),
         |_, _, _, _| FunctionDomain::Full,
         vectorize_with_builder_4_arg::<StringType, NumberType<i64>, NumberType<i64>, StringType, StringType>(
             |srcstr, pos, len, substr, output, _| {
@@ -187,7 +181,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_3_arg::<StringType, NumberType<u64>, StringType, StringType, _, _>(
         "rpad",
-        FunctionProperty::default(),
         |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_3_arg::<StringType, NumberType<u64>, StringType, StringType>(
         |s: &[u8], pad_len: u64, pad: &[u8], output, _| {
@@ -213,7 +206,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_3_arg::<StringType, StringType, StringType, StringType, _, _>(
         "replace",
-        FunctionProperty::default(),
         |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_3_arg::<StringType, StringType, StringType, StringType>(
             |str, from, to, output, _| {
@@ -241,7 +233,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_2_arg::<StringType, StringType, NumberType<i8>, _, _>(
         "strcmp",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         |s1, s2, _| {
             let res = match s1.len().cmp(&s2.len()) {
@@ -285,40 +276,35 @@ pub fn register(registry: &mut FunctionRegistry) {
     };
     registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
         "instr",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         move |str: &[u8], substr: &[u8], _| find_at(str, substr, 1),
     );
 
     registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
         "position",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         move |substr: &[u8], str: &[u8], _| find_at(str, substr, 1),
     );
 
     registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
         "locate",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         move |substr: &[u8], str: &[u8], _| find_at(str, substr, 1),
     );
 
     registry.register_3_arg::<StringType, StringType, NumberType<u64>, NumberType<u64>, _, _>(
         "locate",
-        FunctionProperty::default(),
         |_, _, _| FunctionDomain::Full,
         move |substr: &[u8], str: &[u8], pos: u64, _| find_at(str, substr, pos),
     );
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "to_base64",
-        FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_string_to_string(
             |col| col.data.len() * 4 / 3 + col.len() * 4,
             |val, output, _| {
-                base64::write::EncoderWriter::new(&mut output.data, base64::STANDARD)
+                base64::write::EncoderWriter::new(&mut output.data, &general_purpose::STANDARD)
                     .write_all(val)
                     .unwrap();
                 output.commit_row();
@@ -328,13 +314,11 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "from_base64",
-        FunctionProperty::default(),
         |_| FunctionDomain::MayThrow,
         vectorize_string_to_string(
             |col| col.data.len() * 4 / 3 + col.len() * 4,
             |val, output, ctx| {
-                if let Err(err) = base64::decode_config_buf(val, base64::STANDARD, &mut output.data)
-                {
+                if let Err(err) = general_purpose::STANDARD.decode_vec(val, &mut output.data) {
                     ctx.set_error(output.len(), err.to_string());
                 }
                 output.commit_row();
@@ -344,7 +328,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "quote",
-        FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_string_to_string(
             |col| col.data.len() * 2,
@@ -369,7 +352,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "reverse",
-        FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_string_to_string(
             |col| col.data.len(),
@@ -385,7 +367,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_1_arg::<StringType, NumberType<u8>, _, _>(
         "ascii",
-        FunctionProperty::default(),
         |domain| {
             FunctionDomain::Domain(SimpleDomain {
                 min: domain.min.first().cloned().unwrap_or(0),
@@ -401,7 +382,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     // Trim functions
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "ltrim",
-        FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_string_to_string(
             |col| col.data.len(),
@@ -417,7 +397,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "rtrim",
-        FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_string_to_string(
             |col| col.data.len(),
@@ -433,7 +412,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "trim",
-        FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_string_to_string(
             |col| col.data.len(),
@@ -450,7 +428,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, StringType, _, _>(
         "trim_leading",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         vectorize_string_to_string_2_arg(
             |col, _| col.data.len(),
@@ -467,7 +444,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, StringType, _, _>(
         "trim_trailing",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         vectorize_string_to_string_2_arg(
             |col, _| col.data.len(),
@@ -484,7 +460,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, StringType, _, _>(
         "trim_both",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         vectorize_string_to_string_2_arg(
             |col, _| col.data.len(),
@@ -513,7 +488,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "hex",
-        FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_string_to_string(
             |col| col.data.len() * 2,
@@ -531,7 +505,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     // Tracking issue: https://github.com/datafuselabs/databend/issues/7242
     registry.register_passthrough_nullable_1_arg::<NumberType<i64>, StringType, _, _>(
         "bin",
-        FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
             write!(output.data, "{val:b}").unwrap();
@@ -540,7 +513,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
     registry.register_passthrough_nullable_1_arg::<NumberType<i64>, StringType, _, _>(
         "oct",
-        FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
             write!(output.data, "{val:o}").unwrap();
@@ -549,7 +521,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
     registry.register_passthrough_nullable_1_arg::<NumberType<i64>, StringType, _, _>(
         "hex",
-        FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
             write!(output.data, "{val:x}").unwrap();
@@ -560,7 +531,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     const MAX_REPEAT_TIMES: u64 = 1000000;
     registry.register_passthrough_nullable_2_arg::<StringType, NumberType<u64>, StringType, _, _>(
         "repeat",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, NumberType<u64>, StringType>(
             |a, times, output, ctx| {
@@ -582,7 +552,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "unhex",
-        FunctionProperty::default(),
         |_| FunctionDomain::MayThrow,
         vectorize_string_to_string(
             |col| col.data.len() / 2,
@@ -600,7 +569,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_1_arg::<StringType, UInt64Type, _, _>(
         "ord",
-        FunctionProperty::default(),
         |_| FunctionDomain::Full,
         |str: &[u8], _| {
             let mut res: u64 = 0;
@@ -625,7 +593,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "soundex",
-        FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_string_to_string(
             |col| usize::max(col.data.len(), 4 * col.len()),
@@ -668,7 +635,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     const SPACE: u8 = 0x20;
     registry.register_passthrough_nullable_1_arg::<NumberType<u64>, StringType, _, _>(
         "space",
-        FunctionProperty::default(),
         |domain| {
             FunctionDomain::Domain(StringDomain {
                 min: vec![SPACE; domain.min as usize],
@@ -698,7 +664,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<StringType, NumberType<u64>, StringType, _, _>(
         "left",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<StringType, NumberType<u64>, StringType>(
             |s, n, output, _| {
@@ -715,7 +680,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<StringType, NumberType<u64>, StringType, _, _>(
         "right",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<StringType, NumberType<u64>, StringType>(
             |s, n, output, _| {
@@ -732,7 +696,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<StringType, NumberType<i64>, StringType, _, _>(
         "substr",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<StringType, NumberType<i64>, StringType>(
             |s, pos, output, _| {
@@ -744,7 +707,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType, _, _>(
         "substr",
-        FunctionProperty::default(),
         |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType>(|s, pos, len, output, _| {
             output.put_slice(substr(s, pos, len));
@@ -754,7 +716,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<StringType, NumberType<i64>, StringType, _, _>(
         "substr_utf8",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, NumberType<i64>, StringType>(
             |s, pos, output, ctx| match std::str::from_utf8(s) {
@@ -769,7 +730,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType, _, _>(
         "substr_utf8",
-        FunctionProperty::default(),
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType>(|s, pos, len, output, ctx| {
             match std::str::from_utf8(s)  {
@@ -808,7 +768,7 @@ mod soundex {
     // https://github.com/mysql/mysql-server/blob/3290a66c89eb1625a7058e0ef732432b6952b435/sql/item_strfunc.cc#L1919
     #[inline(always)]
     pub fn is_uni_alphabetic(c: char) -> bool {
-        ('a'..='z').contains(&c) || ('A'..='Z').contains(&c) || c as i32 >= 0xC0
+        c.is_ascii_lowercase() || c.is_ascii_uppercase() || c as i32 >= 0xC0
     }
 }
 

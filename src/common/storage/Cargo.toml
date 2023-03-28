@@ -20,18 +20,10 @@ common-meta-app = { path = "../../meta/app" }
 anyhow = { workspace = true }
 async-trait = "0.1"
 bytes = "1"
+chrono = { workspace = true }
+flagset = "0.4"
 futures = "0.3"
-opendal = { workspace = true, features = [
-    "layers-tracing",
-    "layers-metrics",
-    "services-ipfs",
-    # Disable ftp support until https://github.com/datafuselabs/opendal/pull/1102 has been released
-    # "services-ftp",
-    "services-moka",
-    "services-redis",
-    "trust-dns",
-] }
-parking_lot = "0.12.1"
+opendal = { workspace = true }
 regex = "1.6.0"
 serde = { workspace = true }
 

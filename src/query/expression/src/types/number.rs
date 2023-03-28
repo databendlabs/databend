@@ -436,7 +436,8 @@ impl NumberColumn {
     }
 
     /// # Safety
-    /// Assumes that the `index` is not out of range.
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     pub unsafe fn index_unchecked(&self, index: usize) -> NumberScalar {
         crate::with_number_type!(|NUM_TYPE| match self {
             NumberColumn::NUM_TYPE(col) => NumberScalar::NUM_TYPE(*col.get_unchecked(index)),
@@ -601,6 +602,18 @@ macro_rules! with_integer_mapped_type {
             $t = [
                 UInt8 => u8, UInt16 => u16, UInt32 => u32, UInt64 => u64,
                 Int8 => i8, Int16 => i16, Int32 => i32, Int64 => i64,
+            ],
+            $($tail)*
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! with_float_mapped_type {
+    (| $t:tt | $($tail:tt)*) => {
+        match_template::match_template! {
+            $t = [
+                Float32 => $crate::types::number::F32, Float64 => $crate::types::number::F64
             ],
             $($tail)*
         }

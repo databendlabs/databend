@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-#[cfg(debug_assertions)]
-use std::sync::Mutex;
+use std::ops::Not;
 
 use common_arrow::arrow::bitmap;
+use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
@@ -33,7 +33,9 @@ use crate::types::any::AnyType;
 use crate::types::array::ArrayColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
+use crate::types::BooleanType;
 use crate::types::DataType;
+use crate::types::NullableType;
 use crate::utils::arrow::constant_bitmap;
 use crate::values::Column;
 use crate::values::ColumnBuilder;
@@ -43,6 +45,7 @@ use crate::BlockEntry;
 use crate::ColumnIndex;
 use crate::FunctionContext;
 use crate::FunctionDomain;
+use crate::FunctionEval;
 use crate::FunctionRegistry;
 
 pub struct Evaluator<'a> {
@@ -116,12 +119,41 @@ impl<'a> Evaluator<'a> {
     }
 
     pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
+        self.partial_run(expr, None)
+    }
+
+    /// Run an expression partially, only the rows that are valid in the validity bitmap
+    /// will be evaluated, the rest will be default values and should not throw any error.
+    fn partial_run(&self, expr: &Expr, validity: Option<Bitmap>) -> Result<Value<AnyType>> {
+        debug_assert!(
+            validity.is_none() || validity.as_ref().unwrap().len() == self.input_columns.num_rows()
+        );
+
         #[cfg(debug_assertions)]
         self.check_expr(expr);
 
         let result = match expr {
             Expr::Constant { scalar, .. } => Ok(Value::Scalar(scalar.clone())),
             Expr::ColumnRef { id, .. } => Ok(self.input_columns.get_by_offset(*id).value.clone()),
+            Expr::Cast {
+                span,
+                is_try,
+                expr,
+                dest_type,
+            } => {
+                let value = self.partial_run(expr, validity.clone())?;
+                if *is_try {
+                    self.run_try_cast(*span, expr.data_type(), dest_type, value)
+                } else {
+                    self.run_cast(*span, expr.data_type(), dest_type, value, validity)
+                }
+            }
+            Expr::FunctionCall {
+                function,
+                args,
+                generics,
+                ..
+            } if function.signature.name == "if" => self.eval_if(args, generics, validity),
             Expr::FunctionCall {
                 span,
                 function,
@@ -129,50 +161,43 @@ impl<'a> Evaluator<'a> {
                 generics,
                 ..
             } => {
-                let cols = args
+                let args = args
                     .iter()
-                    .map(|expr| self.run(expr))
+                    .map(|expr| self.partial_run(expr, validity.clone()))
                     .collect::<Result<Vec<_>>>()?;
                 assert!(
-                    cols.iter()
+                    args.iter()
                         .filter_map(|val| match val {
                             Value::Column(col) => Some(col.len()),
                             Value::Scalar(_) => None,
                         })
                         .all_equal()
                 );
-                let cols_ref = cols.iter().map(Value::as_ref).collect::<Vec<_>>();
+                let cols_ref = args.iter().map(Value::as_ref).collect::<Vec<_>>();
                 let mut ctx = EvalContext {
                     generics,
                     num_rows: self.input_columns.num_rows(),
-                    validity: None,
+                    validity,
                     errors: None,
                     tz: self.func_ctx.tz,
                 };
-                let result = (function.eval)(cols_ref.as_slice(), &mut ctx);
-                ctx.render_error(*span, &cols, &function.signature.name)?;
+                let (_, eval) = function.eval.as_scalar().unwrap();
+                let result = (eval)(cols_ref.as_slice(), &mut ctx);
+                ctx.render_error(*span, &args, &function.signature.name)?;
                 Ok(result)
-            }
-            Expr::Cast {
-                span,
-                is_try,
-                expr,
-                dest_type,
-            } => {
-                let value = self.run(expr)?;
-                if *is_try {
-                    self.run_try_cast(*span, expr.data_type(), dest_type, value)
-                } else {
-                    self.run_cast(*span, expr.data_type(), dest_type, value)
-                }
             }
         };
 
         #[cfg(debug_assertions)]
         if result.is_err() {
-            static RECURSING: Mutex<bool> = Mutex::new(false);
-            if !*RECURSING.lock().unwrap() {
-                *RECURSING.lock().unwrap() = true;
+            use std::sync::atomic::AtomicBool;
+            use std::sync::atomic::Ordering;
+
+            static RECURSING: AtomicBool = AtomicBool::new(false);
+            if RECURSING
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+            {
                 assert_eq!(
                     ConstantFolder::fold_with_domain(
                         expr,
@@ -188,10 +213,9 @@ impl<'a> Evaluator<'a> {
                     None,
                     "domain calculation should not return any domain for expressions that are possible to fail"
                 );
-                *RECURSING.lock().unwrap() = false;
+                RECURSING.store(false, Ordering::SeqCst);
             }
         }
-
         result
     }
 
@@ -201,15 +225,21 @@ impl<'a> Evaluator<'a> {
         src_type: &DataType,
         dest_type: &DataType,
         value: Value<AnyType>,
+        validity: Option<Bitmap>,
     ) -> Result<Value<AnyType>> {
         if src_type == dest_type {
             return Ok(value);
         }
 
         if let Some(cast_fn) = get_simple_cast_function(false, dest_type) {
-            if let Some(new_value) =
-                self.run_simple_cast(span, src_type, dest_type, value.clone(), &cast_fn)?
-            {
+            if let Some(new_value) = self.run_simple_cast(
+                span,
+                src_type,
+                dest_type,
+                value.clone(),
+                &cast_fn,
+                validity.clone(),
+            )? {
                 return Ok(new_value);
             }
         }
@@ -228,34 +258,66 @@ impl<'a> Evaluator<'a> {
             },
             (DataType::Nullable(inner_src_ty), DataType::Nullable(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Null) => Ok(Value::Scalar(Scalar::Null)),
-                Value::Scalar(_) => self.run_cast(span, inner_src_ty, inner_dest_ty, value),
+                Value::Scalar(_) => {
+                    self.run_cast(span, inner_src_ty, inner_dest_ty, value, validity)
+                }
                 Value::Column(Column::Nullable(col)) => {
+                    let validity = validity
+                        .map(|validity| (&validity) & (&col.validity))
+                        .unwrap_or_else(|| col.validity.clone());
                     let column = self
-                        .run_cast(span, inner_src_ty, inner_dest_ty, Value::Column(col.column))?
+                        .run_cast(
+                            span,
+                            inner_src_ty,
+                            inner_dest_ty,
+                            Value::Column(col.column),
+                            Some(validity.clone()),
+                        )?
                         .into_column()
                         .unwrap();
                     Ok(Value::Column(Column::Nullable(Box::new(NullableColumn {
                         column,
-                        validity: col.validity,
+                        validity,
                     }))))
                 }
                 other => unreachable!("source: {}", other),
             },
             (DataType::Nullable(inner_src_ty), _) => match value {
-                Value::Scalar(Scalar::Null) => Err(ErrorCode::Internal(format!(
-                    "unable to cast type `{src_type}` to type `{dest_type}`"
-                ))
-                .set_span(span)),
-                Value::Scalar(_) => self.run_cast(span, inner_src_ty, dest_type, value),
+                Value::Scalar(Scalar::Null) => {
+                    let has_valid = validity
+                        .map(|validity| validity.unset_bits() < validity.len())
+                        .unwrap_or(true);
+                    if has_valid {
+                        Err(ErrorCode::Internal(format!(
+                            "unable to cast type `NULL` to type `{dest_type}`"
+                        ))
+                        .set_span(span))
+                    } else {
+                        Ok(Value::Scalar(Scalar::default_value(dest_type)))
+                    }
+                }
+                Value::Scalar(_) => self.run_cast(span, inner_src_ty, dest_type, value, validity),
                 Value::Column(Column::Nullable(col)) => {
-                    if col.validity.unset_bits() > 0 {
+                    let has_valid_nulls = validity
+                        .as_ref()
+                        .map(|validity| {
+                            (validity & (&col.validity)).unset_bits() > validity.unset_bits()
+                        })
+                        .unwrap_or_else(|| col.validity.unset_bits() > 0);
+                    if has_valid_nulls {
                         return Err(ErrorCode::Internal(format!(
                             "unable to cast `NULL` to type `{dest_type}`"
                         ))
                         .set_span(span));
                     }
                     let column = self
-                        .run_cast(span, inner_src_ty, dest_type, Value::Column(col.column))?
+                        .run_cast(
+                            span,
+                            inner_src_ty,
+                            dest_type,
+                            Value::Column(col.column),
+                            validity,
+                        )?
                         .into_column()
                         .unwrap();
                     Ok(Value::Column(column))
@@ -263,12 +325,16 @@ impl<'a> Evaluator<'a> {
                 other => unreachable!("source: {}", other),
             },
             (_, DataType::Nullable(inner_dest_ty)) => match value {
-                Value::Scalar(scalar) => {
-                    self.run_cast(span, src_type, inner_dest_ty, Value::Scalar(scalar))
-                }
+                Value::Scalar(scalar) => self.run_cast(
+                    span,
+                    src_type,
+                    inner_dest_ty,
+                    Value::Scalar(scalar),
+                    validity,
+                ),
                 Value::Column(col) => {
                     let column = self
-                        .run_cast(span, src_type, inner_dest_ty, Value::Column(col))?
+                        .run_cast(span, src_type, inner_dest_ty, Value::Column(col), validity)?
                         .into_column()
                         .unwrap();
                     Ok(Value::Column(Column::Nullable(Box::new(NullableColumn {
@@ -295,14 +361,26 @@ impl<'a> Evaluator<'a> {
             (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Array(array)) => {
                     let new_array = self
-                        .run_cast(span, inner_src_ty, inner_dest_ty, Value::Column(array))?
+                        .run_cast(
+                            span,
+                            inner_src_ty,
+                            inner_dest_ty,
+                            Value::Column(array),
+                            validity,
+                        )?
                         .into_column()
                         .unwrap();
                     Ok(Value::Scalar(Scalar::Array(new_array)))
                 }
                 Value::Column(Column::Array(col)) => {
                     let new_col = self
-                        .run_cast(span, inner_src_ty, inner_dest_ty, Value::Column(col.values))?
+                        .run_cast(
+                            span,
+                            inner_src_ty,
+                            inner_dest_ty,
+                            Value::Column(col.values),
+                            validity,
+                        )?
                         .into_column()
                         .unwrap();
                     Ok(Value::Column(Column::Array(Box::new(ArrayColumn {
@@ -329,14 +407,26 @@ impl<'a> Evaluator<'a> {
             (DataType::Map(inner_src_ty), DataType::Map(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Map(array)) => {
                     let new_array = self
-                        .run_cast(span, inner_src_ty, inner_dest_ty, Value::Column(array))?
+                        .run_cast(
+                            span,
+                            inner_src_ty,
+                            inner_dest_ty,
+                            Value::Column(array),
+                            validity,
+                        )?
                         .into_column()
                         .unwrap();
                     Ok(Value::Scalar(Scalar::Map(new_array)))
                 }
                 Value::Column(Column::Map(col)) => {
                     let new_col = self
-                        .run_cast(span, inner_src_ty, inner_dest_ty, Value::Column(col.values))?
+                        .run_cast(
+                            span,
+                            inner_src_ty,
+                            inner_dest_ty,
+                            Value::Column(col.values),
+                            validity,
+                        )?
                         .into_column()
                         .unwrap();
                     Ok(Value::Column(Column::Map(Box::new(ArrayColumn {
@@ -356,26 +446,35 @@ impl<'a> Evaluator<'a> {
                             .zip(fields_src_ty.iter())
                             .zip(fields_dest_ty.iter())
                             .map(|((field, src_ty), dest_ty)| {
-                                self.run_cast(span, src_ty, dest_ty, Value::Scalar(field))
-                                    .map(|val| val.into_scalar().unwrap())
+                                self.run_cast(
+                                    span,
+                                    src_ty,
+                                    dest_ty,
+                                    Value::Scalar(field),
+                                    validity.clone(),
+                                )
+                                .map(|val| val.into_scalar().unwrap())
                             })
                             .collect::<Result<Vec<_>>>()?;
                         Ok(Value::Scalar(Scalar::Tuple(new_fields)))
                     }
-                    Value::Column(Column::Tuple { fields, len }) => {
+                    Value::Column(Column::Tuple(fields)) => {
                         let new_fields = fields
                             .into_iter()
                             .zip(fields_src_ty.iter())
                             .zip(fields_dest_ty.iter())
                             .map(|((field, src_ty), dest_ty)| {
-                                self.run_cast(span, src_ty, dest_ty, Value::Column(field))
-                                    .map(|val| val.into_column().unwrap())
+                                self.run_cast(
+                                    span,
+                                    src_ty,
+                                    dest_ty,
+                                    Value::Column(field),
+                                    validity.clone(),
+                                )
+                                .map(|val| val.into_column().unwrap())
                             })
                             .collect::<Result<_>>()?;
-                        Ok(Value::Column(Column::Tuple {
-                            fields: new_fields,
-                            len,
-                        }))
+                        Ok(Value::Column(Column::Tuple(new_fields)))
                     }
                     other => unreachable!("source: {}", other),
                 }
@@ -403,8 +502,9 @@ impl<'a> Evaluator<'a> {
         let inner_dest_type = &**dest_type.as_nullable().unwrap();
 
         if let Some(cast_fn) = get_simple_cast_function(true, inner_dest_type) {
+            // `try_to_xxx` functions must not return errors, so we can safely call them without concerning validity.
             if let Ok(Some(new_value)) =
-                self.run_simple_cast(span, src_type, dest_type, value.clone(), &cast_fn)
+                self.run_simple_cast(span, src_type, dest_type, value.clone(), &cast_fn, None)
             {
                 return Ok(new_value);
             }
@@ -543,7 +643,7 @@ impl<'a> Evaluator<'a> {
                             .collect::<Result<_>>()?;
                         Ok(Value::Scalar(Scalar::Tuple(new_fields)))
                     }
-                    Value::Column(Column::Tuple { fields, len }) => {
+                    Value::Column(Column::Tuple(fields)) => {
                         let new_fields = fields
                             .into_iter()
                             .zip(fields_src_ty.iter())
@@ -555,10 +655,7 @@ impl<'a> Evaluator<'a> {
                                     .unwrap())
                             })
                             .collect::<Result<_>>()?;
-                        let new_col = Column::Tuple {
-                            fields: new_fields,
-                            len,
-                        };
+                        let new_col = Column::Tuple(new_fields);
                         Ok(Value::Column(new_col))
                     }
                     other => unreachable!("source: {}", other),
@@ -579,6 +676,7 @@ impl<'a> Evaluator<'a> {
         dest_type: &DataType,
         value: Value<AnyType>,
         cast_fn: &str,
+        validity: Option<Bitmap>,
     ) -> Result<Option<Value<AnyType>>> {
         let expr = Expr::ColumnRef {
             span,
@@ -614,7 +712,115 @@ impl<'a> Evaluator<'a> {
             num_rows,
         );
         let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-        Ok(Some(evaluator.run(&cast_expr)?))
+        Ok(Some(evaluator.partial_run(&cast_expr, validity)?))
+    }
+
+    // `if` is a special builtin function that could partially evaluate its arguments
+    // depending on the truthess of the condition. `if` should register it's signature
+    // as other functions do in `FunctionRegistry`, but it's does not necessarily implement
+    // the eval function because it will be evaluated here.
+    fn eval_if(
+        &self,
+        args: &[Expr],
+        generics: &[DataType],
+        validity: Option<Bitmap>,
+    ) -> Result<Value<AnyType>> {
+        if args.len() < 3 && args.len() % 2 == 0 {
+            unreachable!()
+        }
+
+        let num_rows = self.input_columns.num_rows();
+        let len = self
+            .input_columns
+            .columns()
+            .iter()
+            .find_map(|col| match &col.value {
+                Value::Column(col) => Some(col.len()),
+                _ => None,
+            });
+
+        // Evaluate the condition first and then partially evaluate the result branches.
+        let mut validity = validity.unwrap_or_else(|| constant_bitmap(true, num_rows).into());
+        let mut conds = Vec::new();
+        let mut flags = Vec::new();
+        let mut results = Vec::new();
+        for cond_idx in (0..args.len() - 1).step_by(2) {
+            let cond = self.partial_run(&args[cond_idx], Some(validity.clone()))?;
+            match cond.try_downcast::<NullableType<BooleanType>>().unwrap() {
+                Value::Scalar(None | Some(false)) => {
+                    results.push(Value::Scalar(Scalar::default_value(&generics[0])));
+                    flags.push(constant_bitmap(false, len.unwrap_or(1)).into());
+                }
+                Value::Scalar(Some(true)) => {
+                    results.push(self.partial_run(&args[cond_idx + 1], Some(validity.clone()))?);
+                    validity = constant_bitmap(false, num_rows).into();
+                    flags.push(constant_bitmap(true, len.unwrap_or(1)).into());
+                    break;
+                }
+                Value::Column(cond) => {
+                    let flag = (&cond.column) & (&cond.validity);
+                    results
+                        .push(self.partial_run(&args[cond_idx + 1], Some((&validity) & (&flag)))?);
+                    validity = (&validity) & (&flag.not());
+                    flags.push(flag);
+                }
+            };
+            conds.push(cond);
+        }
+        let else_result = self.partial_run(&args[args.len() - 1], Some(validity))?;
+
+        // Assert that all the arguments have the same length.
+        assert!(
+            conds
+                .iter()
+                .chain(results.iter())
+                .chain([&else_result])
+                .filter_map(|val| match val {
+                    Value::Column(col) => Some(col.len()),
+                    Value::Scalar(_) => None,
+                })
+                .all_equal()
+        );
+
+        // Pick the results from the result branches depending on the condition.
+        let mut output_builder = ColumnBuilder::with_capacity(&generics[0], len.unwrap_or(1));
+        for row_idx in 0..(len.unwrap_or(1)) {
+            unsafe {
+                let result = flags
+                    .iter()
+                    .position(|flag| flag.get_bit(row_idx))
+                    .map(|idx| results[idx].index_unchecked(row_idx))
+                    .unwrap_or(else_result.index_unchecked(row_idx));
+                output_builder.push(result);
+            }
+        }
+        match len {
+            Some(_) => Ok(Value::Column(output_builder.build())),
+            None => Ok(Value::Scalar(output_builder.build_scalar())),
+        }
+    }
+
+    /// Evaluate a set returning function. Return multiple chunks of results, and the repeat times of each of the result.
+    pub fn run_srf(&self, expr: &Expr) -> Result<Vec<(Value<AnyType>, usize)>> {
+        if let Expr::FunctionCall {
+            function,
+            args,
+            return_type,
+            ..
+        } = expr
+        {
+            if let FunctionEval::SRF { eval } = &function.eval {
+                assert!(return_type.as_tuple().is_some());
+                let args = args
+                    .iter()
+                    .map(|expr| self.run(expr))
+                    .collect::<Result<Vec<_>>>()?;
+                let cols_ref = args.iter().map(Value::as_ref).collect::<Vec<_>>();
+                return Ok((eval)(&cols_ref, self.input_columns.num_rows()));
+            }
+        }
+
+        unreachable!("expr is not a set returning function: {expr}")
     }
 }
 
@@ -674,13 +880,13 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         let mut old_expr = expr.clone();
         let mut old_domain = None;
         for _ in 0..MAX_ITERATIONS {
-            let (new_expr, domain) = self.fold_once(&old_expr);
+            let (new_expr, new_domain) = self.fold_once(&old_expr);
 
             if new_expr == old_expr {
-                return (new_expr, domain);
+                return (new_expr, new_domain);
             }
             old_expr = new_expr;
-            old_domain = domain;
+            old_domain = new_domain;
         }
 
         error!("maximum iterations reached while folding expression");
@@ -784,14 +990,29 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                         domains
                     });
                 }
-
-                let func_domain =
-                    args_domain.and_then(|domains| match (function.calc_domain)(&domains) {
-                        FunctionDomain::MayThrow => None,
-                        FunctionDomain::Full => Some(Domain::full(return_type)),
-                        FunctionDomain::Domain(domain) => Some(domain),
-                    });
                 let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());
+
+                let func_expr = Expr::FunctionCall {
+                    span: *span,
+                    id: id.clone(),
+                    function: function.clone(),
+                    generics: generics.clone(),
+                    args: args_expr,
+                    return_type: return_type.clone(),
+                };
+
+                let calc_domain = match &function.eval {
+                    FunctionEval::Scalar { calc_domain, .. } => calc_domain,
+                    FunctionEval::SRF { .. } => {
+                        return (func_expr, None);
+                    }
+                };
+
+                let func_domain = args_domain.and_then(|domains| match (calc_domain)(&domains) {
+                    FunctionDomain::MayThrow => None,
+                    FunctionDomain::Full => Some(Domain::full(return_type)),
+                    FunctionDomain::Domain(domain) => Some(domain),
+                });
 
                 if let Some(scalar) = func_domain.as_ref().and_then(Domain::as_singleton) {
                     return (
@@ -803,15 +1024,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                         func_domain,
                     );
                 }
-
-                let func_expr = Expr::FunctionCall {
-                    span: *span,
-                    id: id.clone(),
-                    function: function.clone(),
-                    generics: generics.clone(),
-                    args: args_expr,
-                    return_type: return_type.clone(),
-                };
 
                 if all_args_is_scalar {
                     let block = DataBlock::empty();

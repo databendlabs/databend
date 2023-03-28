@@ -18,6 +18,7 @@ use common_ast::ast::Expr;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::DataType;
+use common_expression::FunctionContext;
 
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
@@ -27,7 +28,7 @@ use crate::MetadataRef;
 
 /// Helper for binding scalar expression with `BindContext`.
 pub struct ScalarBinder<'a> {
-    bind_context: &'a BindContext,
+    bind_context: &'a mut BindContext,
     ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
@@ -36,7 +37,7 @@ pub struct ScalarBinder<'a> {
 
 impl<'a> ScalarBinder<'a> {
     pub fn new(
-        bind_context: &'a BindContext,
+        bind_context: &'a mut BindContext,
         ctx: Arc<dyn TableContext>,
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
@@ -59,6 +60,10 @@ impl<'a> ScalarBinder<'a> {
             self.metadata.clone(),
             self.aliases,
         );
-        Ok(*type_checker.resolve(expr, None).await?)
+        Ok(*type_checker.resolve(expr).await?)
+    }
+
+    pub fn get_func_ctx(&self) -> Result<FunctionContext> {
+        self.ctx.get_function_context()
     }
 }

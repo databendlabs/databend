@@ -25,15 +25,16 @@ use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
 use crate::interpreters::access::Accessor;
 use crate::interpreters::interpreter_catalog_drop::DropCatalogInterpreter;
-use crate::interpreters::interpreter_copy_v2::CopyInterpreterV2;
+use crate::interpreters::interpreter_copy::CopyInterpreter;
 use crate::interpreters::interpreter_file_format_create::CreateFileFormatInterpreter;
 use crate::interpreters::interpreter_file_format_drop::DropFileFormatInterpreter;
 use crate::interpreters::interpreter_file_format_show::ShowFileFormatsInterpreter;
 use crate::interpreters::interpreter_presign::PresignInterpreter;
 use crate::interpreters::interpreter_role_show::ShowRolesInterpreter;
-use crate::interpreters::interpreter_table_create_v2::CreateTableInterpreterV2;
+use crate::interpreters::interpreter_table_create::CreateTableInterpreter;
 use crate::interpreters::interpreter_table_revert::RevertTableInterpreter;
 use crate::interpreters::AlterUserInterpreter;
+use crate::interpreters::CreateShareEndpointInterpreter;
 use crate::interpreters::CreateShareInterpreter;
 use crate::interpreters::DropShareInterpreter;
 use crate::interpreters::DropUserInterpreter;
@@ -80,7 +81,7 @@ impl InterpreterFactory {
                 ignore_result,
                 formatted_ast,
                 ..
-            } => Ok(Arc::new(SelectInterpreterV2::try_create(
+            } => Ok(Arc::new(SelectInterpreter::try_create(
                 ctx,
                 *bind_context.clone(),
                 *s_expr.clone(),
@@ -111,7 +112,7 @@ impl InterpreterFactory {
 
             Plan::Call(plan) => Ok(Arc::new(CallInterpreter::try_create(ctx, *plan.clone())?)),
 
-            Plan::Copy(copy_plan) => Ok(Arc::new(CopyInterpreterV2::try_create(
+            Plan::Copy(copy_plan) => Ok(Arc::new(CopyInterpreter::try_create(
                 ctx,
                 *copy_plan.clone(),
             )?)),
@@ -152,7 +153,7 @@ impl InterpreterFactory {
             Plan::DescribeTable(describe_table) => Ok(Arc::new(
                 DescribeTableInterpreter::try_create(ctx, *describe_table.clone())?,
             )),
-            Plan::CreateTable(create_table) => Ok(Arc::new(CreateTableInterpreterV2::try_create(
+            Plan::CreateTable(create_table) => Ok(Arc::new(CreateTableInterpreter::try_create(
                 ctx,
                 *create_table.clone(),
             )?)),
@@ -226,7 +227,9 @@ impl InterpreterFactory {
                 *alter_user.clone(),
             )?)),
 
-            Plan::Insert(insert) => InsertInterpreterV2::try_create(ctx, *insert.clone(), false),
+            Plan::Insert(insert) => InsertInterpreter::try_create(ctx, *insert.clone()),
+
+            Plan::Replace(replace) => ReplaceInterpreter::try_create(ctx, *replace.clone()),
 
             Plan::Delete(delete) => Ok(Arc::new(DeleteInterpreter::try_create(
                 ctx,
@@ -257,7 +260,6 @@ impl InterpreterFactory {
             )?)),
 
             // Stages
-            Plan::ListStage(s) => Ok(Arc::new(ListInterpreter::try_create(ctx, *s.clone())?)),
             Plan::CreateStage(create_stage) => Ok(Arc::new(
                 CreateUserStageInterpreter::try_create(ctx, *create_stage.clone())?,
             )),
@@ -335,6 +337,17 @@ impl InterpreterFactory {
             Plan::Kill(p) => Ok(Arc::new(KillInterpreter::try_create(ctx, *p.clone())?)),
 
             // share plans
+            Plan::CreateShareEndpoint(p) => Ok(Arc::new(
+                CreateShareEndpointInterpreter::try_create(ctx, *p.clone())?,
+            )),
+            Plan::ShowShareEndpoint(p) => Ok(Arc::new(ShowShareEndpointInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropShareEndpoint(p) => Ok(Arc::new(DropShareEndpointInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
             Plan::CreateShare(p) => Ok(Arc::new(CreateShareInterpreter::try_create(
                 ctx,
                 *p.clone(),

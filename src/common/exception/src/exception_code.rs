@@ -135,6 +135,9 @@ build_exceptions! {
     ReadTableDataError(1107),
     AddColumnExistError(1108),
     DropColumnEmptyError(1109),
+    // create table or alter table add column with internal column name
+    TableWithInternalColumnName(1110),
+    EmptyShareEndpointConfig(1111),
 
     // Data Related Errors
 
@@ -172,6 +175,7 @@ build_exceptions! {
     OCCRetryFailure(2011),
     TableNotWritable(2012),
     TableHistoricalDataNotFound(2013),
+    DuplicatedUpsertFiles(2014),
 
     // User api error codes.
     UnknownUser(2201),
@@ -206,6 +210,7 @@ build_exceptions! {
     /// - not exists.
     /// - and without `IF EXISTS`
     CatalogNotFound(2320),
+
 
     // Cluster error codes.
     ClusterUnknownNode(2401),
@@ -244,6 +249,9 @@ build_exceptions! {
     WrongShare(2711),
     ShareHasNoGrantedDatabase(2712),
     ShareHasNoGrantedPrivilege(2713),
+    ShareEndpointAlreadyExists(2714),
+    UnknownShareEndpoint(2715),
+    UnknownShareEndpointId(2716),
 
     // Variable error codes.
     UnknownVariable(2801),

@@ -95,6 +95,11 @@ impl InnerConfig {
             && !self.meta.rpc_tls_meta_service_domain_name.is_empty()
     }
 
+    pub fn flight_sql_tls_server_enabled(&self) -> bool {
+        !self.query.flight_sql_tls_server_key.is_empty()
+            && !self.query.flight_sql_tls_server_cert.is_empty()
+    }
+
     pub fn tls_rpc_server_enabled(&self) -> bool {
         !self.query.rpc_tls_server_key.is_empty() && !self.query.rpc_tls_server_cert.is_empty()
     }
@@ -132,6 +137,8 @@ pub struct QueryConfig {
     pub http_handler_port: u16,
     pub http_handler_result_timeout_secs: u64,
     pub flight_api_address: String,
+    pub flight_sql_handler_host: String,
+    pub flight_sql_handler_port: u16,
     pub admin_api_address: String,
     pub metric_api_address: String,
     pub http_handler_tls_server_cert: String,
@@ -140,6 +147,8 @@ pub struct QueryConfig {
     pub api_tls_server_cert: String,
     pub api_tls_server_key: String,
     pub api_tls_server_root_ca_cert: String,
+    pub flight_sql_tls_server_cert: String,
+    pub flight_sql_tls_server_key: String,
     /// rpc server cert
     pub rpc_tls_server_cert: String,
     /// key for rpc server cert
@@ -155,9 +164,6 @@ pub struct QueryConfig {
     pub management_mode: bool,
     pub jwt_key_file: String,
     pub jwt_key_files: Vec<String>,
-    pub async_insert_max_data_size: u64,
-    pub async_insert_busy_timeout: u64,
-    pub async_insert_stale_timeout: u64,
     pub default_storage_format: String,
     pub default_compression: String,
     pub idm: IDMConfig,
@@ -166,6 +172,9 @@ pub struct QueryConfig {
     pub tenant_quota: Option<TenantQuota>,
     pub internal_enable_sandbox_tenant: bool,
     pub internal_merge_on_read_mutation: bool,
+    /// Disable some system load(For example system.configs) for cloud security.
+    pub disable_system_table_load: bool,
+    pub openai_api_key: String,
 }
 
 impl Default for QueryConfig {
@@ -186,11 +195,14 @@ impl Default for QueryConfig {
             http_handler_port: 8000,
             http_handler_result_timeout_secs: 60,
             flight_api_address: "127.0.0.1:9090".to_string(),
+            flight_sql_handler_host: "127.0.0.1".to_string(),
+            flight_sql_handler_port: 8900,
             admin_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),
             api_tls_server_cert: "".to_string(),
             api_tls_server_key: "".to_string(),
             api_tls_server_root_ca_cert: "".to_string(),
+            flight_sql_tls_server_cert: "".to_string(),
             http_handler_tls_server_cert: "".to_string(),
             http_handler_tls_server_key: "".to_string(),
             http_handler_tls_server_root_ca_cert: "".to_string(),
@@ -204,9 +216,6 @@ impl Default for QueryConfig {
             management_mode: false,
             jwt_key_file: "".to_string(),
             jwt_key_files: Vec::new(),
-            async_insert_max_data_size: 10000,
-            async_insert_busy_timeout: 200,
-            async_insert_stale_timeout: 0,
             default_storage_format: "auto".to_string(),
             default_compression: "auto".to_string(),
             idm: IDMConfig::default(),
@@ -215,6 +224,9 @@ impl Default for QueryConfig {
             tenant_quota: None,
             internal_enable_sandbox_tenant: false,
             internal_merge_on_read_mutation: false,
+            disable_system_table_load: false,
+            openai_api_key: "".to_string(),
+            flight_sql_tls_server_key: "".to_string(),
         }
     }
 }

@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::TableInfo;
 use poem::async_trait;
 use poem::error::Result as PoemResult;
 use poem::http;
@@ -116,6 +119,54 @@ pub struct RequestFile {
     pub method: String,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct TableMetaResponse {
+    pub table_info_map: BTreeMap<String, TableInfo>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct TableMetaLambdaInput {
+    pub authorization: String,
+    pub share_name: String,
+    pub tenant_id: String,
+    pub request_tables: HashSet<String>,
+    pub request_id: String,
+}
+
+// AsRef implement
+impl AsRef<TableMetaLambdaInput> for TableMetaLambdaInput {
+    fn as_ref(&self) -> &TableMetaLambdaInput {
+        self
+    }
+}
+
+impl TableMetaLambdaInput {
+    pub fn new(
+        authorization: String,
+        share_name: String,
+        tenant_id: String,
+        request_tables: Vec<String>,
+        request_id: Option<String>,
+    ) -> Self {
+        let request_id = match request_id {
+            Some(id) => id,
+            None => uuid::Uuid::new_v4().to_string(),
+        };
+        TableMetaLambdaInput {
+            authorization,
+            share_name,
+            tenant_id,
+            request_tables: HashSet::from_iter(request_tables.into_iter()),
+            request_id,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct TableMetaLambdaOutput {
+    table_meta_resp: TableMetaResponse,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Credentials {
     pub(crate) token: String,
@@ -150,7 +201,7 @@ impl SharingConfig {
         if share_spec.is_none() {
             return Ok(None);
         }
-        return match share_spec {
+        match share_spec {
             None => Ok(None),
             Some(share) => {
                 if !share.tenants.contains(&tenant_id) {
@@ -169,7 +220,7 @@ impl SharingConfig {
                 }
                 Ok(target)
             }
-        };
+        }
     }
 }
 

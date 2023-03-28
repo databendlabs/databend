@@ -42,6 +42,13 @@ pub struct SegmentInfo {
     pub summary: Statistics,
 }
 
+impl SegmentInfo {
+    #[inline]
+    pub fn version(&self) -> FormatVersion {
+        self.format_version
+    }
+}
+
 /// Meta information of a block
 /// Part of and kept inside the [SegmentInfo]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -116,7 +123,7 @@ impl ColumnMeta {
         }
     }
 
-    pub fn read_rows(&self, range: &Option<Range<usize>>) -> u64 {
+    pub fn read_rows(&self, range: Option<&Range<usize>>) -> u64 {
         match self {
             ColumnMeta::Parquet(v) => v.num_values,
             ColumnMeta::Native(v) => match range {

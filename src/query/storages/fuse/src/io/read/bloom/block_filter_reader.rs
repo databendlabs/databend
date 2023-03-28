@@ -16,7 +16,6 @@ use std::collections::HashSet;
 use std::future::Future;
 use std::sync::Arc;
 
-use common_arrow::parquet::metadata::ColumnChunkMetaData;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::Runtime;
 use common_base::runtime::TrySpawn;
@@ -29,9 +28,10 @@ use common_expression::TableSchema;
 use futures_util::future::try_join_all;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
-use storages_common_cache_manager::BloomIndexMeta;
 use storages_common_index::filters::Xor8Filter;
+use storages_common_index::BloomIndexMeta;
 use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::SingleColumnMeta;
 
 use crate::index::filters::BlockBloomFilterIndexVersion;
 use crate::index::filters::BlockFilter;
@@ -82,24 +82,17 @@ async fn load_bloom_filter_by_columns<'a>(
 ) -> Result<BlockFilter> {
     // 1. load index meta
     let bloom_index_meta = load_index_meta(dal.clone(), index_path, index_length).await?;
-    let file_meta = &bloom_index_meta.0;
-    if file_meta.row_groups.len() != 1 {
-        return Err(ErrorCode::StorageOther(format!(
-            "invalid bloom filter index, number of row group should be 1, but found {} row groups",
-            file_meta.row_groups.len()
-        )));
-    }
 
     // 2. filter out columns that needed and exist in the index
     // 2.1 dedup the columns
     let column_needed: HashSet<&String> = HashSet::from_iter(column_needed);
     // 2.2 collects the column metas and their column ids
-    let index_column_chunk_metas = file_meta.row_groups[0].columns();
+    let index_column_chunk_metas = &bloom_index_meta.columns;
     let mut col_metas = Vec::with_capacity(column_needed.len());
     for column_name in column_needed {
-        for (idx, column_chunk_meta) in index_column_chunk_metas.iter().enumerate() {
-            if &column_chunk_meta.descriptor().path_in_schema[0] == column_name {
-                col_metas.push((idx as ColumnId, column_chunk_meta))
+        for (idx, (name, column_meta)) in index_column_chunk_metas.iter().enumerate() {
+            if name == column_name {
+                col_metas.push((idx as ColumnId, (name, column_meta)))
             }
         }
     }
@@ -107,8 +100,8 @@ async fn load_bloom_filter_by_columns<'a>(
     // 3. load filters
     let futs = col_metas
         .iter()
-        .map(|(idx, col_chunk_meta)| {
-            load_column_xor8_filter(*idx, col_chunk_meta, index_path, &dal)
+        .map(|(idx, (name, col_chunk_meta))| {
+            load_column_xor8_filter(*idx, (*name).to_owned(), col_chunk_meta, index_path, &dal)
         })
         .collect::<Vec<_>>();
 
@@ -117,12 +110,7 @@ async fn load_bloom_filter_by_columns<'a>(
     // 4. build index schema
     let fields = col_metas
         .iter()
-        .map(|(_, col_chunk_mea)| {
-            TableField::new(
-                &col_chunk_mea.descriptor().path_in_schema[0],
-                TableDataType::String,
-            )
-        })
+        .map(|(_, (name, _col_chunk_mea))| TableField::new(name, TableDataType::String))
         .collect();
 
     let filter_schema = TableSchema::new(fields);
@@ -138,14 +126,20 @@ async fn load_bloom_filter_by_columns<'a>(
 #[tracing::instrument(level = "debug", skip_all)]
 async fn load_column_xor8_filter<'a>(
     idx: ColumnId,
-    col_chunk_meta: &'a ColumnChunkMetaData,
+    column_name: String,
+    col_chunk_meta: &'a SingleColumnMeta,
     index_path: &'a str,
     dal: &'a Operator,
 ) -> Result<Arc<Xor8Filter>> {
     let storage_runtime = GlobalIORuntime::instance();
     let bytes = {
-        let column_data_reader =
-            BloomColumnFilterReader::new(index_path.to_owned(), idx, col_chunk_meta, dal.clone());
+        let column_data_reader = BloomColumnFilterReader::new(
+            index_path.to_owned(),
+            idx,
+            column_name,
+            col_chunk_meta,
+            dal.clone(),
+        );
         async move { column_data_reader.read().await }
     }
     .execute_in_runtime(&storage_runtime)
@@ -168,6 +162,7 @@ async fn load_index_meta(dal: Operator, path: &str, length: u64) -> Result<Arc<B
             location: path_owned,
             len_hint: Some(length),
             ver: version,
+            put_cache: true,
         };
 
         reader.read(&load_params).await

@@ -37,6 +37,7 @@ use common_meta_app::storage::StorageOssConfig as InnerStorageOssConfig;
 use common_meta_app::storage::StorageParams;
 use common_meta_app::storage::StorageRedisConfig as InnerStorageRedisConfig;
 use common_meta_app::storage::StorageS3Config as InnerStorageS3Config;
+use common_meta_app::storage::StorageWebhdfsConfig as InnerStorageWebhdfsConfig;
 use common_meta_app::tenant::TenantQuota;
 use common_storage::StorageConfig as InnerStorageConfig;
 use common_tracing::Config as InnerLogConfig;
@@ -248,6 +249,10 @@ pub struct StorageConfig {
     // OSS storage backend config
     #[clap(flatten)]
     pub oss: OssStorageConfig,
+
+    // WebHDFS storage backend config
+    #[clap(flatten)]
+    pub webhdfs: WebhdfsStorageConfig,
 }
 
 impl Default for StorageConfig {
@@ -273,6 +278,7 @@ impl From<InnerStorageConfig> for StorageConfig {
             azblob: Default::default(),
             hdfs: Default::default(),
             obs: Default::default(),
+            webhdfs: Default::default(),
         };
 
         match inner.params {
@@ -308,6 +314,10 @@ impl From<InnerStorageConfig> for StorageConfig {
                 cfg.storage_type = "oss".to_string();
                 cfg.oss = v.into()
             }
+            StorageParams::Webhdfs(v) => {
+                cfg.storage_type = "webhdfs".to_string();
+                cfg.webhdfs = v.into()
+            }
             v => unreachable!("{v:?} should not be used as storage backend"),
         }
 
@@ -333,6 +343,7 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
                     "s3" => StorageParams::S3(self.s3.try_into()?),
                     "obs" => StorageParams::Obs(self.obs.try_into()?),
                     "oss" => StorageParams::Oss(self.oss.try_into()?),
+                    "webhdfs" => StorageParams::Webhdfs(self.webhdfs.try_into()?),
                     _ => return Err(ErrorCode::StorageOther("not supported storage type")),
                 }
             },
@@ -1028,6 +1039,61 @@ impl TryInto<InnerStorageRedisConfig> for RedisStorageConfig {
     }
 }
 
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct WebhdfsStorageConfig {
+    /// delegation token for webhdfs storage
+    #[clap(long = "storage-webhdfs-delegation", default_value_t)]
+    #[serde(rename = "delegation")]
+    pub webhdfs_delegation: String,
+    /// endpoint url for webhdfs storage
+    #[clap(long = "storage-webhdfs-endpoint", default_value_t)]
+    #[serde(rename = "endpoint_url")]
+    pub webhdfs_endpoint_url: String,
+    /// working directory root for webhdfs storage
+    #[clap(long = "storage-webhdfs-root", default_value_t)]
+    #[serde(rename = "root")]
+    pub webhdfs_root: String,
+}
+
+impl Default for WebhdfsStorageConfig {
+    fn default() -> Self {
+        InnerStorageWebhdfsConfig::default().into()
+    }
+}
+
+impl Debug for WebhdfsStorageConfig {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("WebhdfsStorageConfig")
+            .field("endpoint_url", &self.webhdfs_endpoint_url)
+            .field("webhdfs_root", &self.webhdfs_root)
+            .field("delegation", &mask_string(&self.webhdfs_delegation, 3))
+            .finish()
+    }
+}
+
+impl From<InnerStorageWebhdfsConfig> for WebhdfsStorageConfig {
+    fn from(v: InnerStorageWebhdfsConfig) -> Self {
+        Self {
+            webhdfs_delegation: v.delegation,
+            webhdfs_endpoint_url: v.endpoint_url,
+            webhdfs_root: v.root,
+        }
+    }
+}
+
+impl TryFrom<WebhdfsStorageConfig> for InnerStorageWebhdfsConfig {
+    type Error = ErrorCode;
+
+    fn try_from(value: WebhdfsStorageConfig) -> Result<Self, Self::Error> {
+        Ok(InnerStorageWebhdfsConfig {
+            delegation: value.webhdfs_delegation,
+            endpoint_url: value.webhdfs_endpoint_url,
+            root: value.webhdfs_root,
+        })
+    }
+}
+
 /// Query config group.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default, deny_unknown_fields)]
@@ -1085,6 +1151,12 @@ pub struct QueryConfig {
     #[clap(long, default_value = "60")]
     pub http_handler_result_timeout_secs: u64,
 
+    #[clap(long, default_value = "127.0.0.1")]
+    pub flight_sql_handler_host: String,
+
+    #[clap(long, default_value = "8900")]
+    pub flight_sql_handler_port: u16,
+
     #[clap(long, default_value = "127.0.0.1:9090")]
     pub flight_api_address: String,
 
@@ -1102,6 +1174,12 @@ pub struct QueryConfig {
 
     #[clap(long, default_value_t)]
     pub http_handler_tls_server_root_ca_cert: String,
+
+    #[clap(long, default_value_t)]
+    pub flight_sql_tls_server_cert: String,
+
+    #[clap(long, default_value_t)]
+    pub flight_sql_tls_server_key: String,
 
     #[clap(long, default_value_t)]
     pub api_tls_server_cert: String,
@@ -1148,18 +1226,6 @@ pub struct QueryConfig {
     /// If there are multiple trusted jwt provider put it into additional_jwt_key_files configuration
     #[clap(skip)]
     pub jwt_key_files: Vec<String>,
-
-    /// The maximum memory size of the buffered data collected per insert before being inserted.
-    #[clap(long, default_value = "10000")]
-    pub async_insert_max_data_size: u64,
-
-    /// The maximum timeout in milliseconds since the first insert before inserting collected data.
-    #[clap(long, default_value = "200")]
-    pub async_insert_busy_timeout: u64,
-
-    /// The maximum timeout in milliseconds since the last insert before inserting collected data.
-    #[clap(long, default_value = "0")]
-    pub async_insert_stale_timeout: u64,
 
     #[clap(long, default_value = "auto")]
     pub default_storage_format: String,
@@ -1237,6 +1303,14 @@ pub struct QueryConfig {
     /// Max bytes of cached bloom filter bytes.
     #[clap(long)]
     pub(crate) table_cache_bloom_index_data_bytes: Option<u64>,
+
+    /// Disable some system load(For example system.configs) for cloud security.
+    #[clap(long)]
+    pub disable_system_table_load: bool,
+
+    // This will not show in system.configs, put it to mask.rs.
+    #[clap(long, default_value = "")]
+    pub openai_api_key: String,
 }
 
 impl Default for QueryConfig {
@@ -1265,6 +1339,8 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             http_handler_port: self.http_handler_port,
             http_handler_result_timeout_secs: self.http_handler_result_timeout_secs,
             flight_api_address: self.flight_api_address,
+            flight_sql_handler_host: self.flight_sql_handler_host,
+            flight_sql_handler_port: self.flight_sql_handler_port,
             admin_api_address: self.admin_api_address,
             metric_api_address: self.metric_api_address,
             http_handler_tls_server_cert: self.http_handler_tls_server_cert,
@@ -1273,6 +1349,8 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             api_tls_server_cert: self.api_tls_server_cert,
             api_tls_server_key: self.api_tls_server_key,
             api_tls_server_root_ca_cert: self.api_tls_server_root_ca_cert,
+            flight_sql_tls_server_cert: self.flight_sql_tls_server_cert,
+            flight_sql_tls_server_key: self.flight_sql_tls_server_key,
             rpc_tls_server_cert: self.rpc_tls_server_cert,
             rpc_tls_server_key: self.rpc_tls_server_key,
             rpc_tls_query_server_root_ca_cert: self.rpc_tls_query_server_root_ca_cert,
@@ -1283,9 +1361,6 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             management_mode: self.management_mode,
             jwt_key_file: self.jwt_key_file,
             jwt_key_files: self.jwt_key_files,
-            async_insert_max_data_size: self.async_insert_max_data_size,
-            async_insert_busy_timeout: self.async_insert_busy_timeout,
-            async_insert_stale_timeout: self.async_insert_stale_timeout,
             default_storage_format: self.default_storage_format,
             default_compression: self.default_compression,
             idm: InnerIDMConfig {
@@ -1296,6 +1371,8 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             tenant_quota: self.quota,
             internal_enable_sandbox_tenant: self.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: self.internal_merge_on_read_mutation,
+            disable_system_table_load: self.disable_system_table_load,
+            openai_api_key: self.openai_api_key,
         })
     }
 }
@@ -1325,6 +1402,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             http_handler_port: inner.http_handler_port,
             http_handler_result_timeout_secs: inner.http_handler_result_timeout_secs,
             flight_api_address: inner.flight_api_address,
+            flight_sql_handler_host: inner.flight_sql_handler_host,
+            flight_sql_handler_port: inner.flight_sql_handler_port,
             admin_api_address: inner.admin_api_address,
             metric_api_address: inner.metric_api_address,
             http_handler_tls_server_cert: inner.http_handler_tls_server_cert,
@@ -1333,6 +1412,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             api_tls_server_cert: inner.api_tls_server_cert,
             api_tls_server_key: inner.api_tls_server_key,
             api_tls_server_root_ca_cert: inner.api_tls_server_root_ca_cert,
+            flight_sql_tls_server_cert: inner.flight_sql_tls_server_cert,
+            flight_sql_tls_server_key: inner.flight_sql_tls_server_key,
             rpc_tls_server_cert: inner.rpc_tls_server_cert,
             rpc_tls_server_key: inner.rpc_tls_server_key,
             rpc_tls_query_server_root_ca_cert: inner.rpc_tls_query_server_root_ca_cert,
@@ -1343,9 +1424,6 @@ impl From<InnerQueryConfig> for QueryConfig {
             management_mode: inner.management_mode,
             jwt_key_file: inner.jwt_key_file,
             jwt_key_files: inner.jwt_key_files,
-            async_insert_max_data_size: inner.async_insert_max_data_size,
-            async_insert_busy_timeout: inner.async_insert_busy_timeout,
-            async_insert_stale_timeout: inner.async_insert_stale_timeout,
             default_storage_format: inner.default_storage_format,
             default_compression: inner.default_compression,
 
@@ -1367,6 +1445,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_cache_bloom_index_meta_count: None,
             table_cache_bloom_index_filter_count: None,
             table_cache_bloom_index_data_bytes: None,
+            disable_system_table_load: inner.disable_system_table_load,
+            openai_api_key: inner.openai_api_key,
         }
     }
 }

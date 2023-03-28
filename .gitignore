@@ -62,3 +62,6 @@ __pycache__/
 benchmark/tpch/data
 # clickbench results
 benchmark/clickbench/results
+
+# direnv test files
+.envrc

@@ -19,7 +19,6 @@ use std::time::Instant;
 
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoffBuilder;
-use backon::Retryable;
 use common_base::base::ProgressValues;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
@@ -31,6 +30,7 @@ use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_types::MatchSeq;
 use common_sql::field_default_value;
 use opendal::Operator;
@@ -75,9 +75,10 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         operation_log: TableOperationLog,
+        copied_files: Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
     ) -> Result<()> {
-        self.commit_with_max_retry_elapsed(ctx, operation_log, None, overwrite)
+        self.commit_with_max_retry_elapsed(ctx, operation_log, copied_files, None, overwrite)
             .await
     }
 
@@ -85,6 +86,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         operation_log: TableOperationLog,
+        copied_files: Option<UpsertTableCopiedFileReq>,
         max_retry_elapsed: Option<Duration>,
         overwrite: bool,
     ) -> Result<()> {
@@ -117,7 +119,10 @@ impl FuseTable {
 
         let transient = self.transient();
         loop {
-            match tbl.try_commit(ctx.clone(), &operation_log, overwrite).await {
+            match tbl
+                .try_commit(ctx.clone(), &operation_log, &copied_files, overwrite)
+                .await
+            {
                 Ok(_) => {
                     break {
                         if transient {
@@ -197,6 +202,7 @@ impl FuseTable {
         &'a self,
         ctx: Arc<dyn TableContext>,
         operation_log: &'a TableOperationLog,
+        copied_files: &Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
     ) -> Result<()> {
         let prev = self.read_table_snapshot().await?;
@@ -257,6 +263,7 @@ impl FuseTable {
             &self.meta_location_generator,
             new_snapshot,
             None,
+            copied_files,
             &self.operator,
         )
         .await
@@ -344,6 +351,7 @@ impl FuseTable {
         location_generator: &TableMetaLocationGenerator,
         snapshot: TableSnapshot,
         table_statistics: Option<TableSnapshotStatistics>,
+        copied_files: &Option<UpsertTableCopiedFileReq>,
         operator: &Operator,
     ) -> Result<()> {
         let snapshot_location = location_generator
@@ -393,6 +401,7 @@ impl FuseTable {
             table_id,
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
+            copied_files: copied_files.clone(),
         };
 
         // 3. let's roll
@@ -422,11 +431,10 @@ impl FuseTable {
                         "removing uncommitted table snapshot at location {}, of table {}, {}",
                         snapshot_location, table_info.desc, table_info.ident
                     );
-                    let _ = operator.object(&snapshot_location).delete().await;
+                    let _ = operator.delete(&snapshot_location).await;
                     if need_to_save_statistics {
                         let _ = operator
-                            .object(&snapshot.table_statistics_location.unwrap())
-                            .delete()
+                            .delete(&snapshot.table_statistics_location.unwrap())
                             .await;
                     }
                 }
@@ -464,7 +472,7 @@ impl FuseTable {
                 acc.col_stats = if acc.col_stats.is_empty() {
                     stats.col_stats.clone()
                 } else {
-                    statistics::reduce_block_statistics(&[&acc.col_stats, &stats.col_stats], None)?
+                    statistics::reduce_block_statistics(&[&acc.col_stats, &stats.col_stats])?
                 };
                 seg_acc.push(location.clone());
                 Ok::<_, ErrorCode>((acc, seg_acc))
@@ -491,28 +499,20 @@ impl FuseTable {
 
         let hint_path = location_generator.gen_last_snapshot_hint_location();
         let last_snapshot_path = {
-            let operator_meta_data = operator.metadata();
+            let operator_meta_data = operator.info();
             let storage_prefix = operator_meta_data.root();
             format!("{}{}", storage_prefix, last_snapshot_path)
         };
 
-        let object = operator.object(&hint_path);
-        { || object.write(last_snapshot_path.as_bytes()) }
-            .retry(&backon::ExponentialBuilder::default().with_jitter())
-            .when(|err| err.is_temporary())
-            .notify(|err, dur| {
-                warn!(
-                    "fuse table write_last_snapshot_hint retry after {}s for error {:?}",
-                    dur.as_secs(),
-                    err
-                )
-            })
+        operator
+            .write(&hint_path, last_snapshot_path)
             .await
             .unwrap_or_else(|e| {
                 warn!("write last snapshot hint failure. {}", e);
-            })
+            });
     }
 
+    // TODO refactor, it is called by segment compaction and re-cluster now
     pub async fn commit_mutation(
         &self,
         ctx: &Arc<dyn TableContext>,
@@ -531,6 +531,13 @@ impl FuseTable {
 
         // potentially concurrently appended segments, init it to empty
         let mut concurrently_appended_segment_locations: &[Location] = &[];
+
+        // Status
+        {
+            let status = "mutation: begin try to commit";
+            ctx.set_status_info(status);
+            info!(status);
+        }
 
         while retries < MAX_RETRIES {
             let mut snapshot_tobe_committed =
@@ -555,6 +562,7 @@ impl FuseTable {
                 &self.meta_location_generator,
                 snapshot_tobe_committed,
                 None,
+                &None,
                 &self.operator,
             )
             .await
@@ -645,7 +653,7 @@ impl FuseTable {
 
             let fuse_segment_io = SegmentsIO::create(ctx, operator, schema);
             let concurrent_appended_segment_infos = fuse_segment_io
-                .read_segments(concurrently_appended_segment_locations)
+                .read_segments(concurrently_appended_segment_locations, true)
                 .await?;
 
             let mut new_statistics = base_summary.clone();
@@ -708,12 +716,12 @@ mod utils {
                 let block_location = &block.location.0;
                 // if deletion operation failed (after DAL retried)
                 // we just left them there, and let the "major GC" collect them
-                let _ = operator.object(block_location).delete().await;
+                let _ = operator.delete(block_location).await;
                 if let Some(index) = &block.bloom_filter_index_location {
-                    let _ = operator.object(&index.0).delete().await;
+                    let _ = operator.delete(&index.0).await;
                 }
             }
-            let _ = operator.object(&entry.segment_location).delete().await;
+            let _ = operator.delete(&entry.segment_location).await;
         }
         Ok(())
     }

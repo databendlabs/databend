@@ -20,6 +20,7 @@ mod auth;
 mod catalogs;
 mod clusters;
 mod configs;
+mod databases;
 mod metrics;
 mod pipelines;
 mod servers;

@@ -93,7 +93,8 @@ pub fn walk_expr_mut<V: VisitorMut>(visitor: &mut V, expr: &mut Expr) {
             name,
             args,
             params,
-        } => visitor.visit_function_call(*span, *distinct, name, args, params),
+            window,
+        } => visitor.visit_function_call(*span, *distinct, name, args, params, window),
         Expr::Case {
             span,
             operand,
@@ -123,6 +124,7 @@ pub fn walk_expr_mut<V: VisitorMut>(visitor: &mut V, expr: &mut Expr) {
             asc,
             null_first,
         } => visitor.visit_array_sort(*span, expr, *asc, *null_first),
+        Expr::Map { span, kvs } => visitor.visit_map(*span, kvs),
         Expr::Interval { span, expr, unit } => visitor.visit_interval(*span, expr, unit),
         Expr::DateAdd {
             span,
@@ -200,7 +202,7 @@ pub fn walk_select_target_mut<V: VisitorMut>(visitor: &mut V, target: &mut Selec
                     Indirection::Identifier(ident) => {
                         visitor.visit_identifier(ident);
                     }
-                    Indirection::Star => {}
+                    Indirection::Star(_) => {}
                 }
             }
             if let Some(cols) = exclude {
@@ -302,6 +304,7 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::ExplainAnalyze { query } => visitor.visit_statement(&mut *query),
         Statement::Query(query) => visitor.visit_query(&mut *query),
         Statement::Insert(insert) => visitor.visit_insert(insert),
+        Statement::Replace(replace) => visitor.visit_replace(replace),
         Statement::Delete {
             table_reference,
             selection,
@@ -314,6 +317,7 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::ShowMetrics => visitor.visit_show_metrics(),
         Statement::ShowEngines => visitor.visit_show_engines(),
         Statement::ShowFunctions { limit } => visitor.visit_show_functions(limit),
+        Statement::ShowTableFunctions { limit } => visitor.visit_show_table_functions(limit),
         Statement::KillStmt {
             kill_target,
             object_id,
@@ -340,6 +344,7 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::AlterDatabase(stmt) => visitor.visit_alter_database(stmt),
         Statement::UseDatabase { database } => visitor.visit_use_database(database),
         Statement::ShowTables(stmt) => visitor.visit_show_tables(stmt),
+        Statement::ShowColumns(stmt) => visitor.visit_show_columns(stmt),
         Statement::ShowCreateTable(stmt) => visitor.visit_show_create_table(stmt),
         Statement::DescribeTable(stmt) => visitor.visit_describe_table(stmt),
         Statement::ShowTablesStatus(stmt) => visitor.visit_show_tables_status(stmt),
@@ -416,6 +421,9 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::ShowFileFormats => visitor.visit_show_file_formats(),
         Statement::Call(stmt) => visitor.visit_call(stmt),
         Statement::Presign(stmt) => visitor.visit_presign(stmt),
+        Statement::CreateShareEndpoint(stmt) => visitor.visit_create_share_endpoint(stmt),
+        Statement::ShowShareEndpoint(stmt) => visitor.visit_show_share_endpoint(stmt),
+        Statement::DropShareEndpoint(stmt) => visitor.visit_drop_share_endpoint(stmt),
         Statement::CreateShare(stmt) => visitor.visit_create_share(stmt),
         Statement::DropShare(stmt) => visitor.visit_drop_share(stmt),
         Statement::GrantShareObject(stmt) => visitor.visit_grant_share_object(stmt),

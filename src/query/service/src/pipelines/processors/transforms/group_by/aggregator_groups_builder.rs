@@ -18,9 +18,8 @@ use common_exception::Result;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::DataType;
 use common_expression::Column;
+use common_expression::ColumnBuilder;
 use common_expression::HashMethodFixedKeys;
-use common_expression::TypeDeserializer;
-use common_io::prelude::FormatSettings;
 
 use crate::pipelines::processors::AggregatorParams;
 
@@ -82,15 +81,16 @@ pub struct SerializedKeysGroupColumnsBuilder<'a> {
 
 impl<'a> SerializedKeysGroupColumnsBuilder<'a> {
     pub fn create(capacity: usize, data_capacity: usize, params: &AggregatorParams) -> Self {
-        let (single_builder, data) =
-            if params.group_data_types.len() == 1 && params.group_data_types[0].is_string() {
-                (
-                    Some(StringColumnBuilder::with_capacity(capacity, data_capacity)),
-                    vec![],
-                )
-            } else {
-                (None, Vec::with_capacity(capacity))
-            };
+        let (single_builder, data) = if params.group_data_types.len() == 1
+            && (params.group_data_types[0].is_string() || params.group_data_types[0].is_variant())
+        {
+            (
+                Some(StringColumnBuilder::with_capacity(capacity, data_capacity)),
+                vec![],
+            )
+        } else {
+            (None, Vec::with_capacity(capacity))
+        };
 
         Self {
             data,
@@ -114,23 +114,26 @@ impl<'a> GroupColumnsBuilder for SerializedKeysGroupColumnsBuilder<'a> {
     }
 
     fn finish(mut self) -> Result<Vec<Column>> {
-        if let Some(mut builder) = self.single_builder.take() {
-            let col = builder.finish_to_column();
-            return Ok(vec![col]);
+        if let Some(builder) = self.single_builder.take() {
+            let col = builder.build();
+            match self.group_data_types[0] {
+                DataType::String => return Ok(vec![Column::String(col)]),
+                DataType::Variant => return Ok(vec![Column::Variant(col)]),
+                _ => {}
+            }
         }
 
         let rows = self.data.len();
         let keys = self.data.as_mut_slice();
 
         let mut res = Vec::with_capacity(self.group_data_types.len());
-        let format = FormatSettings::default();
         for data_type in self.group_data_types.iter() {
-            let mut deserializer = data_type.create_deserializer(rows);
+            let mut column = ColumnBuilder::with_capacity(data_type, rows);
 
             for (_, key) in keys.iter_mut().enumerate() {
-                deserializer.de_binary(key, &format)?;
+                column.push_binary(key)?;
             }
-            res.push(deserializer.finish_to_column());
+            res.push(column.build());
         }
 
         Ok(res)

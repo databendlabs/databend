@@ -34,7 +34,7 @@ use crate::BindContext;
 impl Binder {
     pub(in crate::planner::binder) async fn bind_insert(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &InsertStmt,
     ) -> Result<Plan> {
         let InsertStmt {
@@ -45,15 +45,8 @@ impl Binder {
             source,
             overwrite,
         } = stmt;
-        let catalog_name = catalog.as_ref().map_or_else(
-            || self.ctx.get_current_catalog(),
-            |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
-        );
-        let database_name = database.as_ref().map_or_else(
-            || self.ctx.get_current_database(),
-            |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
-        );
-        let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
+        let (catalog_name, database_name, table_name) =
+            self.normalize_object_identifier_triple(catalog, database, table);
         let table = self
             .ctx
             .get_table(&catalog_name, &database_name, &table_name)

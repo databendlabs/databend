@@ -23,12 +23,12 @@ use std::time::SystemTime;
 use common_base::base::Progress;
 use common_base::runtime::Runtime;
 use common_catalog::table_context::StageAttachment;
-use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
+use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
@@ -36,7 +36,6 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
 
-use crate::auth::AuthMgr;
 use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
@@ -71,7 +70,6 @@ pub struct QueryContextShared {
     pub(in crate::sessions) running_query_kind: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) aborting: Arc<AtomicBool>,
     pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
-    pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
     pub(in crate::sessions) affect: Arc<Mutex<Option<QueryAffect>>>,
     pub(in crate::sessions) catalog_manager: Arc<CatalogManager>,
     pub(in crate::sessions) data_operator: DataOperator,
@@ -82,11 +80,13 @@ pub struct QueryContextShared {
     pub(in crate::sessions) on_error_map: Arc<RwLock<Option<HashMap<String, ErrorCode>>>>,
     /// partitions_sha for each table in the query. Not empty only when enabling query result cache.
     pub(in crate::sessions) partitions_shas: Arc<RwLock<Vec<String>>>,
+    pub(in crate::sessions) cacheable: Arc<AtomicBool>,
+    // Status info.
+    pub(in crate::sessions) status: Arc<RwLock<String>>,
 }
 
 impl QueryContextShared {
     pub fn try_create(
-        config: &InnerConfig,
         session: Arc<Session>,
         cluster_cache: Arc<Cluster>,
     ) -> Result<Arc<QueryContextShared>> {
@@ -105,7 +105,6 @@ impl QueryContextShared {
             running_query_kind: Arc::new(RwLock::new(None)),
             aborting: Arc::new(AtomicBool::new(false)),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
-            auth_manager: AuthMgr::create(config),
             affect: Arc::new(Mutex::new(None)),
             executor: Arc::new(RwLock::new(Weak::new())),
             precommit_blocks: Arc::new(RwLock::new(vec![])),
@@ -113,6 +112,8 @@ impl QueryContextShared {
             created_time: SystemTime::now(),
             on_error_map: Arc::new(RwLock::new(None)),
             partitions_shas: Arc::new(RwLock::new(vec![])),
+            cacheable: Arc::new(AtomicBool::new(true)),
+            status: Arc::new(RwLock::new("null".to_string())),
         }))
     }
 
@@ -190,20 +191,16 @@ impl QueryContextShared {
         self.session.get_current_tenant()
     }
 
-    pub fn get_auth_manager(&self) -> Arc<AuthMgr> {
-        self.auth_manager.clone()
-    }
-
     pub fn get_settings(&self) -> Arc<Settings> {
         self.session.get_settings()
     }
 
-    pub fn get_changed_settings(&self) -> Arc<Settings> {
+    pub fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
         self.session.get_changed_settings()
     }
 
-    pub fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
-        self.session.apply_changed_settings(changed_settings)
+    pub fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
+        self.session.apply_changed_settings(changes)
     }
 
     pub async fn get_table(
@@ -265,7 +262,12 @@ impl QueryContextShared {
         }
     }
 
-    pub fn attach_query_str(&self, kind: String, query: &str) {
+    pub fn get_runtime(&self) -> Option<Arc<Runtime>> {
+        let query_runtime = self.runtime.read();
+        (*query_runtime).clone()
+    }
+
+    pub fn attach_query_str(&self, kind: String, query: String) {
         {
             let mut running_query = self.running_query.write();
             *running_query = Some(short_sql(query));
@@ -334,6 +336,11 @@ impl QueryContextShared {
     pub fn get_created_time(&self) -> SystemTime {
         self.created_time
     }
+
+    pub fn get_status_info(&self) -> String {
+        let status = self.status.read();
+        status.clone()
+    }
 }
 
 impl Drop for QueryContextShared {
@@ -347,9 +354,9 @@ impl Drop for QueryContextShared {
     }
 }
 
-pub fn short_sql(query: &str) -> String {
+pub fn short_sql(sql: String) -> String {
     use unicode_segmentation::UnicodeSegmentation;
-    let query = query.trim_start();
+    let query = sql.trim_start();
     if query.len() >= 64 && query[..6].eq_ignore_ascii_case("INSERT") {
         // keep first 64 graphemes
         String::from_utf8(
@@ -363,6 +370,6 @@ pub fn short_sql(query: &str) -> String {
         )
         .unwrap() // by construction, this cannot panic as we extracted unicode grapheme
     } else {
-        query.to_string()
+        sql
     }
 }

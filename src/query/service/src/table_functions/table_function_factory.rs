@@ -19,7 +19,7 @@ use common_catalog::table_args::TableArgs;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::MetaId;
-use common_storages_fuse::table_functions::InferSchemaTable;
+use itertools::Itertools;
 use parking_lot::RwLock;
 
 use crate::catalogs::SYS_TBL_FUC_ID_END;
@@ -30,8 +30,12 @@ use crate::storages::fuse::table_functions::FuseSegmentTable;
 use crate::storages::fuse::table_functions::FuseSnapshotTable;
 use crate::storages::fuse::table_functions::FuseStatisticTable;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
+use crate::table_functions::infer_schema::InferSchemaTable;
+use crate::table_functions::list_stage::ListStageTable;
 use crate::table_functions::numbers::NumbersTable;
+use crate::table_functions::srf::GenerateSeriesTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
+use crate::table_functions::GPT2SQLTable;
 use crate::table_functions::TableFunction;
 
 type TableFunctionCreators = RwLock<HashMap<String, (MetaId, Arc<dyn TableFunctionCreator>)>>;
@@ -136,10 +140,25 @@ impl TableFunctionFactory {
             (next_id(), Arc::new(InferSchemaTable::create)),
         );
 
-        // creators.insert(
-        //     "read_parquet".to_string(),
-        //     (next_id(), Arc::new(create_disabled_table_function)),
-        // );
+        creators.insert(
+            "list_stage".to_string(),
+            (next_id(), Arc::new(ListStageTable::create)),
+        );
+
+        creators.insert(
+            "generate_series".to_string(),
+            (next_id(), Arc::new(GenerateSeriesTable::create)),
+        );
+
+        creators.insert(
+            "range".to_string(),
+            (next_id(), Arc::new(GenerateSeriesTable::create)),
+        );
+
+        creators.insert(
+            "ai_to_sql".to_string(),
+            (next_id(), Arc::new(GPT2SQLTable::create)),
+        );
 
         TableFunctionFactory {
             creators: RwLock::new(creators),
@@ -154,5 +173,15 @@ impl TableFunctionFactory {
         })?;
         let func = factory.try_create("", &func_name, *id, tbl_args)?;
         Ok(func)
+    }
+
+    pub fn list(&self) -> Vec<String> {
+        self.creators
+            .read()
+            .iter()
+            .map(|(name, (id, _))| (name, id))
+            .sorted_by(|a, b| Ord::cmp(a.1, b.1))
+            .map(|(name, _)| name.clone())
+            .collect()
     }
 }

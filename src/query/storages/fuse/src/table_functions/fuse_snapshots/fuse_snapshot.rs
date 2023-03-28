@@ -70,7 +70,7 @@ impl<'a> FuseSnapshot<'a> {
                     .read_snapshot_lites_ext(
                         snapshot_location,
                         None,
-                        ListSnapshotLiteOption::NeedNotSegments,
+                        &ListSnapshotLiteOption::NeedNotSegments,
                         snapshot.and_then(|s| s.timestamp),
                         &|_| {},
                     )

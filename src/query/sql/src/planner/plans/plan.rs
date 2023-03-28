@@ -22,8 +22,10 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 
+use super::CreateShareEndpointPlan;
+use super::DropShareEndpointPlan;
 use crate::optimizer::SExpr;
-use crate::plans::copy_v2::CopyPlanV2;
+use crate::plans::copy::CopyPlan;
 use crate::plans::insert::Insert;
 use crate::plans::presign::PresignPlan;
 use crate::plans::recluster_table::ReclusterTablePlan;
@@ -48,7 +50,7 @@ use crate::plans::CreateDatabasePlan;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::CreateStagePlan;
-use crate::plans::CreateTablePlanV2;
+use crate::plans::CreateTablePlan;
 use crate::plans::CreateUDFPlan;
 use crate::plans::CreateUserPlan;
 use crate::plans::CreateViewPlan;
@@ -69,11 +71,11 @@ use crate::plans::ExistsTablePlan;
 use crate::plans::GrantPrivilegePlan;
 use crate::plans::GrantRolePlan;
 use crate::plans::KillPlan;
-use crate::plans::ListPlan;
 use crate::plans::OptimizeTablePlan;
 use crate::plans::RemoveStagePlan;
 use crate::plans::RenameDatabasePlan;
 use crate::plans::RenameTablePlan;
+use crate::plans::Replace;
 use crate::plans::RevertTablePlan;
 use crate::plans::RevokePrivilegePlan;
 use crate::plans::RevokeRolePlan;
@@ -85,6 +87,7 @@ use crate::plans::ShowCreateTablePlan;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowGrantsPlan;
 use crate::plans::ShowRolesPlan;
+use crate::plans::ShowShareEndpointPlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UnSettingPlan;
 use crate::plans::UndropDatabasePlan;
@@ -122,7 +125,7 @@ pub enum Plan {
     },
 
     // Copy
-    Copy(Box<CopyPlanV2>),
+    Copy(Box<CopyPlan>),
 
     // Call
     Call(Box<CallPlan>),
@@ -143,7 +146,7 @@ pub enum Plan {
     // Tables
     ShowCreateTable(Box<ShowCreateTablePlan>),
     DescribeTable(Box<DescribeTablePlan>),
-    CreateTable(Box<CreateTablePlanV2>),
+    CreateTable(Box<CreateTablePlan>),
     DropTable(Box<DropTablePlan>),
     UndropTable(Box<UndropTablePlan>),
     RenameTable(Box<RenameTablePlan>),
@@ -160,6 +163,7 @@ pub enum Plan {
 
     // Insert
     Insert(Box<Insert>),
+    Replace(Box<Replace>),
     Delete(Box<DeletePlan>),
     Update(Box<UpdatePlan>),
 
@@ -195,7 +199,6 @@ pub enum Plan {
     ShowFileFormats(Box<ShowFileFormatsPlan>),
 
     // Stages
-    ListStage(Box<ListPlan>),
     CreateStage(Box<CreateStagePlan>),
     DropStage(Box<DropStagePlan>),
     RemoveStage(Box<RemoveStagePlan>),
@@ -209,6 +212,9 @@ pub enum Plan {
     Kill(Box<KillPlan>),
 
     // Share
+    CreateShareEndpoint(Box<CreateShareEndpointPlan>),
+    ShowShareEndpoint(Box<ShowShareEndpointPlan>),
+    DropShareEndpoint(Box<DropShareEndpointPlan>),
     CreateShare(Box<CreateSharePlan>),
     DropShare(Box<DropSharePlan>),
     GrantShareObject(Box<GrantShareObjectPlan>),
@@ -230,13 +236,16 @@ pub enum RewriteKind {
     ShowCatalogs,
     ShowDatabases,
     ShowTables,
+    ShowColumns,
     ShowTablesStatus,
 
     ShowFunctions,
+    ShowTableFunctions,
 
     ShowUsers,
     ShowStages,
     DescribeStage,
+    ListStage,
     ShowRoles,
 }
 
@@ -279,7 +288,6 @@ impl Display for Plan {
             Plan::DropUser(_) => write!(f, "DropUser"),
             Plan::CreateRole(_) => write!(f, "CreateRole"),
             Plan::DropRole(_) => write!(f, "DropRole"),
-            Plan::ListStage(_) => write!(f, "ListStage"),
             Plan::CreateStage(_) => write!(f, "CreateStage"),
             Plan::DropStage(_) => write!(f, "DropStage"),
             Plan::CreateFileFormat(_) => write!(f, "CreateFileFormat"),
@@ -296,6 +304,7 @@ impl Display for Plan {
             Plan::AlterUDF(_) => write!(f, "AlterUDF"),
             Plan::DropUDF(_) => write!(f, "DropUDF"),
             Plan::Insert(_) => write!(f, "Insert"),
+            Plan::Replace(_) => write!(f, "Replace"),
             Plan::Delete(_) => write!(f, "Delete"),
             Plan::Update(_) => write!(f, "Update"),
             Plan::Call(_) => write!(f, "Call"),
@@ -304,6 +313,9 @@ impl Display for Plan {
             Plan::UnSetVariable(_) => write!(f, "UnSetVariable"),
             Plan::SetRole(_) => write!(f, "SetRole"),
             Plan::Kill(_) => write!(f, "Kill"),
+            Plan::CreateShareEndpoint(_) => write!(f, "CreateShareEndpoint"),
+            Plan::ShowShareEndpoint(_) => write!(f, "ShowShareEndpoint"),
+            Plan::DropShareEndpoint(_) => write!(f, "DropShareEndpoint"),
             Plan::CreateShare(_) => write!(f, "CreateShare"),
             Plan::DropShare(_) => write!(f, "DropShare"),
             Plan::GrantShareObject(_) => write!(f, "GrantShareObject"),
@@ -374,7 +386,6 @@ impl Plan {
             Plan::GrantRole(plan) => plan.schema(),
             Plan::GrantPriv(plan) => plan.schema(),
             Plan::ShowGrants(plan) => plan.schema(),
-            Plan::ListStage(plan) => plan.schema(),
             Plan::CreateStage(plan) => plan.schema(),
             Plan::DropStage(plan) => plan.schema(),
             Plan::RemoveStage(plan) => plan.schema(),
@@ -387,6 +398,7 @@ impl Plan {
             Plan::AlterUDF(_) => Arc::new(DataSchema::empty()),
             Plan::DropUDF(_) => Arc::new(DataSchema::empty()),
             Plan::Insert(plan) => plan.schema(),
+            Plan::Replace(plan) => plan.schema(),
             Plan::Delete(_) => Arc::new(DataSchema::empty()),
             Plan::Update(_) => Arc::new(DataSchema::empty()),
             Plan::Call(_) => Arc::new(DataSchema::empty()),
@@ -395,6 +407,9 @@ impl Plan {
             Plan::UnSetVariable(plan) => plan.schema(),
             Plan::SetRole(plan) => plan.schema(),
             Plan::Kill(_) => Arc::new(DataSchema::empty()),
+            Plan::CreateShareEndpoint(plan) => plan.schema(),
+            Plan::ShowShareEndpoint(plan) => plan.schema(),
+            Plan::DropShareEndpoint(plan) => plan.schema(),
             Plan::CreateShare(plan) => plan.schema(),
             Plan::DropShare(plan) => plan.schema(),
             Plan::GrantShareObject(plan) => plan.schema(),
@@ -406,5 +421,29 @@ impl Plan {
             Plan::ShowGrantTenantsOfShare(plan) => plan.schema(),
             Plan::RevertTable(plan) => plan.schema(),
         }
+    }
+
+    pub fn has_result_set(&self) -> bool {
+        matches!(
+            self,
+            Plan::Query { .. }
+                | Plan::Explain { .. }
+                | Plan::ExplainAst { .. }
+                | Plan::ExplainSyntax { .. }
+                | Plan::ExplainAnalyze { .. }
+                | Plan::Call(_)
+                | Plan::ShowCreateDatabase(_)
+                | Plan::ShowCreateTable(_)
+                | Plan::ShowFileFormats(_)
+                | Plan::ShowRoles(_)
+                | Plan::DescShare(_)
+                | Plan::ShowShares(_)
+                | Plan::ShowShareEndpoint(_)
+                | Plan::ShowObjectGrantPrivileges(_)
+                | Plan::ShowGrantTenantsOfShare(_)
+                | Plan::DescribeTable(_)
+                | Plan::ShowGrants(_)
+                | Plan::Presign(_)
+        )
     }
 }

@@ -29,14 +29,13 @@ use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::FromData;
 use common_expression::FunctionContext;
-use common_expression::Literal;
 use common_expression::RawExpr;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_functions::aggregates::eval_aggr;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
 use common_storages_fuse::statistics::reducers::reduce_block_metas;
 use common_storages_fuse::statistics::Trim;
@@ -127,10 +126,7 @@ fn test_ft_tuple_stats_block_stats() -> common_exception::Result<()> {
         Int32Type::from_data(vec![1, 2, 3]),
         Int32Type::from_data(vec![4, 5, 6]),
     ];
-    let column = Column::Tuple {
-        fields: inner_columns,
-        len: 3,
-    };
+    let column = Column::Tuple(inner_columns);
 
     let block = DataBlock::new_from_columns(vec![column]);
 
@@ -158,7 +154,7 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
         .iter()
         .map(|b| gen_columns_statistics(&b.clone().unwrap(), None, &schema))
         .collect::<common_exception::Result<Vec<_>>>()?;
-    let r = reducers::reduce_block_statistics(&col_stats, None);
+    let r = reducers::reduce_block_statistics(&col_stats);
     assert!(r.is_ok());
     let r = r.unwrap();
     assert_eq!(3, r.len());
@@ -213,7 +209,7 @@ fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()>
     // combine two statistics
     let col_stats_left = HashMap::from_iter(iter(0).take(num_of_cols));
     let col_stats_right = HashMap::from_iter(iter(0).take(num_of_cols));
-    let r = reducers::reduce_block_statistics(&[col_stats_left, col_stats_right], None)?;
+    let r = reducers::reduce_block_statistics(&[col_stats_left, col_stats_right])?;
     assert_eq!(num_of_cols, r.len());
     // there should be 100 columns in the result
     for idx in 1..=100 {
@@ -233,13 +229,13 @@ async fn test_accumulator() -> common_exception::Result<()> {
     let (schema, blocks) = TestFixture::gen_sample_blocks(10, 1);
     let mut stats_acc = StatisticsAccumulator::default();
 
-    let operator = Operator::create(opendal::services::Memory::default())?.finish();
+    let operator = Operator::new(opendal::services::Memory::default())?.finish();
     let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
     for item in blocks {
         let block = item?;
         let col_stats = gen_columns_statistics(&block, None, &schema)?;
         let block_writer = BlockWriter::new(&operator, &loc_generator);
-        let block_meta = block_writer
+        let (block_meta, _index_meta) = block_writer
             .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
             .await?;
         stats_acc.add_with_block_meta(block_meta);
@@ -298,9 +294,9 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
                 data_type: schema.field(0).data_type().clone(),
                 display_name: schema.field(0).name().clone(),
             },
-            RawExpr::Literal {
+            RawExpr::Constant {
                 span: None,
-                lit: Literal::UInt64(1),
+                scalar: Scalar::Number(NumberScalar::UInt64(1)),
             },
         ],
     };

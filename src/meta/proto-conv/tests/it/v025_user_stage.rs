@@ -31,7 +31,7 @@ use crate::common;
 // The message bytes are built from the output of `test_user_stage_fs_latest()`
 #[test]
 fn test_decode_v25_user_stage() -> anyhow::Result<()> {
-    let user_stage_info_v25 = vec![
+    let stage_info_v25 = vec![
         10, 17, 102, 115, 58, 47, 47, 100, 105, 114, 47, 116, 111, 47, 102, 105, 108, 101, 115, 26,
         25, 10, 23, 18, 21, 10, 13, 47, 100, 105, 114, 47, 116, 111, 47, 102, 105, 108, 101, 115,
         160, 6, 25, 168, 6, 24, 34, 37, 8, 1, 16, 128, 8, 26, 1, 124, 34, 2, 47, 47, 40, 2, 50, 1,
@@ -41,7 +41,7 @@ fn test_decode_v25_user_stage() -> anyhow::Result<()> {
         160, 6, 25, 168, 6, 24, 160, 6, 25, 168, 6, 24,
     ];
 
-    let want = || mt::principal::UserStageInfo {
+    let want = || mt::principal::StageInfo {
         stage_name: "fs://dir/to/files".to_string(),
         stage_type: mt::principal::StageType::LegacyInternal,
         stage_params: mt::principal::StageParams {
@@ -76,7 +76,7 @@ fn test_decode_v25_user_stage() -> anyhow::Result<()> {
             hostname: "databend.rs".to_string(),
         }),
     };
-    common::test_load_old(func_name!(), user_stage_info_v25.as_slice(), 25, want())?;
+    common::test_load_old(func_name!(), stage_info_v25.as_slice(), 25, want())?;
     common::test_pb_from_to(func_name!(), want())?;
 
     Ok(())

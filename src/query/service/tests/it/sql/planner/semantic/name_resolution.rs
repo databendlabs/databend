@@ -16,7 +16,6 @@ use common_ast::ast::Identifier;
 use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
 use common_ast::walk_expr_mut;
-use common_ast::Backtrace;
 use common_ast::Dialect;
 use databend_query::sql::normalize_identifier;
 use databend_query::sql::IdentifierNormalizer;
@@ -106,8 +105,7 @@ fn test_normalize_identifier_unquoted_case_sensitive() {
 #[test]
 fn test_normalize_identifiers_in_expr() {
     let tokens = tokenize_sql("exists(select func(\"T\".A+1) as B)").unwrap();
-    let backtrace = Backtrace::new();
-    let mut expr = parse_expr(&tokens, Dialect::PostgreSQL, &backtrace).unwrap();
+    let mut expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
 
     let ctx = NameResolutionContext::default();
     let mut normalizer = IdentifierNormalizer { ctx: &ctx };

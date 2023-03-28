@@ -30,10 +30,10 @@ use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
 use common_sql::parse_to_remote_string_expr;
-use common_sql::plans::CreateTablePlanV2;
+use common_sql::plans::CreateTablePlan;
 use common_storages_fuse::pruning::FusePruner;
 use common_storages_fuse::FuseTable;
-use databend_query::interpreters::CreateTableInterpreterV2;
+use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
@@ -60,7 +60,7 @@ async fn apply_block_pruning(
     let ctx: Arc<dyn TableContext> = ctx;
     let segment_locs = table_snapshot.segments.clone();
     FusePruner::create(&ctx, op, schema, push_down)?
-        .pruning(segment_locs)
+        .pruning(segment_locs, None, None)
         .await
         .map(|v| v.into_iter().map(|(_, v)| v).collect())
 }
@@ -81,7 +81,7 @@ async fn test_block_pruner() -> Result<()> {
     let num_blocks_opt = row_per_block.to_string();
 
     // create test table
-    let create_table_plan = CreateTablePlanV2 {
+    let create_table_plan = CreateTablePlan {
         catalog: "default".to_owned(),
         if_not_exists: false,
         tenant: fixture.default_tenant(),
@@ -103,7 +103,7 @@ async fn test_block_pruner() -> Result<()> {
         cluster_key: None,
     };
 
-    let interpreter = CreateTableInterpreterV2::try_create(ctx.clone(), create_table_plan)?;
+    let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
     let _ = interpreter.execute(ctx.clone()).await?;
 
     // get table
@@ -124,7 +124,6 @@ async fn test_block_pruner() -> Result<()> {
     // - there will be `num_blocks` blocks, for each block, it comprises of `row_per_block` rows,
     //    in our case, there will be 10 blocks, and 10 rows for each block
     let blocks = (0..num_blocks)
-        .into_iter()
         .map(|idx| {
             DataBlock::new_from_columns(vec![
                 // value of column a always equals  1
@@ -164,6 +163,7 @@ async fn test_block_pruner() -> Result<()> {
         location: snapshot_loc.clone(),
         len_hint: None,
         ver: TableSnapshot::VERSION,
+        put_cache: false,
     };
 
     let snapshot = reader.read(&load_params).await?;
@@ -173,7 +173,6 @@ async fn test_block_pruner() -> Result<()> {
         filter: Some(parse_to_remote_string_expr(
             ctx.clone(),
             table.clone(),
-            false,
             "a > 3",
         )?),
         ..Default::default()
@@ -186,7 +185,6 @@ async fn test_block_pruner() -> Result<()> {
     e2.filter = Some(parse_to_remote_string_expr(
         ctx.clone(),
         table.clone(),
-        false,
         "a > 0 and b > 6",
     )?);
     let b2 = num_blocks - max_val_of_b as usize - 1;

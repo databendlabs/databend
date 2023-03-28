@@ -39,8 +39,9 @@ use common_expression::DataSchemaRefExt;
 use common_expression::Expr;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
@@ -50,8 +51,8 @@ use common_pipeline_sources::SyncSourcer;
 use common_storage::init_operator;
 use common_storage::DataOperator;
 use futures::TryStreamExt;
-use opendal::ObjectMetakey;
-use opendal::ObjectMode;
+use opendal::EntryMode;
+use opendal::Metakey;
 use opendal::Operator;
 use storages_common_index::RangeIndex;
 
@@ -281,9 +282,7 @@ impl HiveTable {
                 )),
             }
         } else {
-            let col_ids = (0..self.table_info.schema().fields().len())
-                .into_iter()
-                .collect::<Vec<usize>>();
+            let col_ids = (0..self.table_info.schema().fields().len()).collect::<Vec<usize>>();
             Ok(col_ids)
         }
     }
@@ -585,6 +584,7 @@ impl Table for HiveTable {
         &self,
         _ctx: Arc<dyn TableContext>,
         _operations: Vec<DataBlock>,
+        _copied_files: Option<UpsertTableCopiedFileReq>,
         _overwrite: bool,
     ) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(
@@ -767,14 +767,13 @@ async fn do_list_files_from_dir(
     sem: Arc<Semaphore>,
 ) -> Result<(Vec<HiveFileInfo>, Vec<String>)> {
     let _a = sem.acquire().await.unwrap();
-    let object = operator.object(&location);
-    let mut m = object.list().await?;
+    let mut m = operator.list(&location).await?;
 
     let mut all_files = vec![];
     let mut all_dirs = vec![];
     while let Some(de) = m.try_next().await? {
-        let meta = de
-            .metadata(ObjectMetakey::Mode | ObjectMetakey::ContentLength)
+        let meta = operator
+            .metadata(&de, Metakey::Mode | Metakey::ContentLength)
             .await?;
 
         let path = de.path();
@@ -784,12 +783,12 @@ async fn do_list_files_from_dir(
         }
 
         match meta.mode() {
-            ObjectMode::FILE => {
+            EntryMode::FILE => {
                 let filename = path.to_string();
                 let length = meta.content_length();
                 all_files.push(HiveFileInfo::create(filename, length));
             }
-            ObjectMode::DIR => {
+            EntryMode::DIR => {
                 all_dirs.push(path.to_string());
             }
             _ => {

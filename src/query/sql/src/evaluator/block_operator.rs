@@ -15,15 +15,20 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::types::nullable::NullableColumnBuilder;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
+use common_expression::Column;
+use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FieldIndex;
 use common_expression::FunctionContext;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_expression::ScalarRef;
+use common_expression::Value;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::Processor;
@@ -36,12 +41,14 @@ pub enum BlockOperator {
     /// Batch mode of map which merges map operators into one.
     Map { exprs: Vec<Expr> },
 
-    /// Filter the input `DataBlock` with the predicate `eval`.
+    /// Filter the input [`DataBlock`] with the predicate `eval`.
     Filter { expr: Expr },
 
-    /// Reorganize the input `DataBlock` with `projection`.
+    /// Reorganize the input [`DataBlock`] with `projection`.
     Project { projection: Vec<FieldIndex> },
-    // Remap { indices: Vec<(IndexType, IndexType)> },
+
+    /// Expand the input [`DataBlock`] with set-returning functions.
+    FlatMap { srf_exprs: Vec<Expr> },
 }
 
 impl BlockOperator {
@@ -73,6 +80,103 @@ impl BlockOperator {
                 for index in projection {
                     result.add_column(input.get_by_offset(*index).clone());
                 }
+                Ok(result)
+            }
+
+            BlockOperator::FlatMap { srf_exprs } => {
+                let eval = Evaluator::new(&input, *func_ctx, &BUILTIN_FUNCTIONS);
+
+                // [
+                //   srf1: [
+                //     result_set1: [
+                //       col1, col2, ...
+                //     ],
+                //     ...
+                //   ],
+                //   ...
+                // ]
+                let result = srf_exprs
+                    .iter()
+                    .map(|srf_expr| eval.run_srf(srf_expr))
+                    .collect::<Result<Vec<_>>>()?;
+
+                let mut result_data_blocks = Vec::with_capacity(input.num_rows());
+                for i in 0..input.num_rows() {
+                    let mut row = Vec::with_capacity(input.num_rows());
+
+                    // Get the max number of rows of all result sets.
+                    let mut max_num_rows = 0;
+                    result.iter().for_each(|srf_results| {
+                        let (_, result_set_rows) = &srf_results[i];
+                        if *result_set_rows > max_num_rows {
+                            max_num_rows = *result_set_rows;
+                        }
+                    });
+
+                    if max_num_rows == 0 && !result_data_blocks.is_empty() {
+                        // Skip current row
+                        continue;
+                    }
+
+                    for entry in input.columns() {
+                        // Take the i-th row of input data block and add it to the row.
+                        let mut builder =
+                            ColumnBuilder::with_capacity(&entry.data_type, max_num_rows);
+                        let scalar_ref = entry.value.index(i).unwrap();
+                        (0..max_num_rows).for_each(|_| {
+                            builder.push(scalar_ref.clone());
+                        });
+                        row.push(BlockEntry {
+                            value: Value::Column(builder.build()),
+                            data_type: entry.data_type.clone(),
+                        });
+                    }
+
+                    for (srf_expr, srf_results) in srf_exprs.iter().zip(&result) {
+                        let (mut row_result, repeat_times) = srf_results[i].clone();
+
+                        if let Value::Column(Column::Tuple(fields)) = &mut row_result {
+                            // If the current result set has less rows than the max number of rows,
+                            // we need to pad the result set with null values.
+                            // TODO(leiysky): this can be optimized by using a `zip` array function
+                            if repeat_times < max_num_rows {
+                                for field in fields {
+                                    match field {
+                                        Column::Null { .. } => {
+                                            *field = ColumnBuilder::repeat(
+                                                &ScalarRef::Null,
+                                                max_num_rows,
+                                                &DataType::Null,
+                                            )
+                                            .build();
+                                        }
+                                        Column::Nullable(box nullable_column) => {
+                                            let mut column_builder =
+                                                NullableColumnBuilder::from_column(
+                                                    (*nullable_column).clone(),
+                                                );
+                                            (0..(max_num_rows - repeat_times)).for_each(|_| {
+                                                column_builder.push_null();
+                                            });
+                                            *field =
+                                                Column::Nullable(Box::new(column_builder.build()));
+                                        }
+                                        _ => unreachable!(),
+                                    }
+                                }
+                            }
+                        }
+
+                        row.push(BlockEntry {
+                            data_type: srf_expr.data_type().clone(),
+                            value: row_result,
+                        })
+                    }
+
+                    result_data_blocks.push(DataBlock::new(row, max_num_rows));
+                }
+
+                let result = DataBlock::concat(&result_data_blocks)?;
                 Ok(result)
             }
         }
@@ -147,6 +251,7 @@ impl Transform for CompoundBlockOperator {
                         BlockOperator::Map { .. } => "Map",
                         BlockOperator::Filter { .. } => "Filter",
                         BlockOperator::Project { .. } => "Project",
+                        BlockOperator::FlatMap { .. } => "FlatMap",
                     }
                     .to_string()
                 })

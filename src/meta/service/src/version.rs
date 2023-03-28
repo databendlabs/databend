@@ -18,8 +18,8 @@ use semver::Prerelease;
 use semver::Version;
 
 pub static METASRV_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
-    let build_semver = option_env!("VERGEN_GIT_SEMVER");
-    let git_sha = option_env!("VERGEN_GIT_SHA_SHORT");
+    let build_semver = option_env!("DATABEND_GIT_SEMVER");
+    let git_sha = option_env!("VERGEN_GIT_SHA");
     let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
     let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
 
@@ -35,8 +35,8 @@ pub static METASRV_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
 });
 
 pub static METASRV_SEMVER: Lazy<Version> = Lazy::new(|| {
-    let build_semver = option_env!("VERGEN_GIT_SEMVER");
-    let semver = build_semver.expect("VERGEN_GIT_SEMVER can not be None");
+    let build_semver = option_env!("DATABEND_GIT_SEMVER");
+    let semver = build_semver.expect("DATABEND_GIT_SEMVER can not be None");
 
     let semver = semver.strip_prefix('v').unwrap_or(semver);
 

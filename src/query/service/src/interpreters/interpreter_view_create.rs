@@ -21,6 +21,7 @@ use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_sql::plans::CreateViewPlan;
+use common_sql::plans::Plan;
 use common_sql::Planner;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
@@ -55,11 +56,11 @@ impl Interpreter for CreateViewInterpreter {
             .list_tables(&self.plan.tenant, &self.plan.database)
             .await?
             .iter()
-            .any(|table| table.name() == self.plan.viewname.as_str())
+            .any(|table| table.name() == self.plan.view_name.as_str())
         {
             return Err(ErrorCode::ViewAlreadyExists(format!(
                 "{}.{} as view Already Exists",
-                self.plan.database, self.plan.viewname
+                self.plan.database, self.plan.view_name
             )));
         }
 
@@ -70,13 +71,38 @@ impl Interpreter for CreateViewInterpreter {
 impl CreateViewInterpreter {
     async fn create_view(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
+        let tenant = self.ctx.get_tenant();
+        let table_function = catalog.list_table_functions();
         let mut options = BTreeMap::new();
+        let mut planner = Planner::new(self.ctx.clone());
+        let (plan, _) = planner.plan_sql(&self.plan.subquery.clone()).await?;
+        match plan.clone() {
+            Plan::Query { metadata, .. } => {
+                let metadata = metadata.read().clone();
+                for table in metadata.tables() {
+                    let database_name = table.database();
+                    let table_name = table.name();
+                    if !catalog
+                        .exists_table(tenant.as_str(), database_name, table_name)
+                        .await?
+                        && !table_function.contains(&table_name.to_string())
+                    {
+                        return Err(common_exception::ErrorCode::UnknownTable(format!(
+                            "VIEW QUERY: {}.{} not exists",
+                            database_name, table_name,
+                        )));
+                    }
+                }
+            }
+            _ => {
+                // This logic will never be used, because of QUERY parse as query
+                return Err(ErrorCode::Unimplemented("create view only support Query"));
+            }
+        }
 
         let subquery = if self.plan.column_names.is_empty() {
             self.plan.subquery.clone()
         } else {
-            let mut planner = Planner::new(self.ctx.clone());
-            let (plan, _, _) = planner.plan_sql(&self.plan.subquery.clone()).await?;
             if plan.schema().fields().len() != self.plan.column_names.len() {
                 return Err(ErrorCode::BadDataArrayLength(format!(
                     "column name length mismatch, expect {}, got {}",
@@ -87,7 +113,7 @@ impl CreateViewInterpreter {
             format!(
                 "select * from ({}) {}({})",
                 self.plan.subquery,
-                self.plan.viewname,
+                self.plan.view_name,
                 self.plan.column_names.join(", ")
             )
         };
@@ -98,7 +124,7 @@ impl CreateViewInterpreter {
             name_ident: TableNameIdent {
                 tenant: self.plan.tenant.clone(),
                 db_name: self.plan.database.clone(),
-                table_name: self.plan.viewname.clone(),
+                table_name: self.plan.view_name.clone(),
             },
             table_meta: TableMeta {
                 engine: VIEW_ENGINE.to_string(),

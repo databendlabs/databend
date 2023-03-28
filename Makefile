@@ -9,9 +9,6 @@ CLUSTER_ID ?= "test"
 
 CARGO_TARGET_DIR ?= $(CURDIR)/target
 
-# Remove this env after rust 1.68 has been released.
-export CARGO_UNSTABLE_SPARSE_REGISTRY = true
-
 # Setup dev toolchain
 setup:
 	bash ./scripts/setup/dev_setup.sh
@@ -21,6 +18,8 @@ fmt:
 
 lint:
 	cargo fmt --all
+
+	cargo clippy --workspace --all-targets -- -D warnings
 
 	# Check unused deps(make setup to install)
 	cargo machete
@@ -32,8 +31,6 @@ lint:
 	black tests/
 	# Bash file formatter(make setup to install)
 	shfmt -l -w scripts/*
-
-	cargo clippy --workspace --all-targets -- -D warnings
 
 lint-yaml:
 	yamllint -f auto .
@@ -72,14 +69,10 @@ miri:
 	cargo miri setup
 	MIRIFLAGS="-Zmiri-disable-isolation" cargo miri test --no-default-features
 
-embedded-meta-test: build
-	rm -rf ./_meta_embedded*
-	bash ./scripts/ci/ci-run-tests-embedded-meta.sh
-
 stateless-test: build
 	rm -rf ./_meta*/
 	rm -rf .databend
-	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-tests-embedded-meta.sh
+	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
 
 sqllogic-test: build
 	rm -rf ./_meta*/

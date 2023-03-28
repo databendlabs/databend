@@ -34,7 +34,7 @@ use common_expression::RawExpr;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::scalars::parser;
@@ -196,7 +196,6 @@ pub fn simulate_two_groups_group_by(
     func.init_state(addr2.into());
 
     let places = (0..rows)
-        .into_iter()
         .map(|i| {
             if i % 2 == 0 {
                 addr1.into()

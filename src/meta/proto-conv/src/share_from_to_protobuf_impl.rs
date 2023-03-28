@@ -254,3 +254,61 @@ impl FromToProto for mt::ShareAccountMeta {
         })
     }
 }
+
+impl FromToProto for mt::ShareEndpointMeta {
+    type PB = pb::ShareEndpointMeta;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+    fn from_pb(p: pb::ShareEndpointMeta) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        Ok(mt::ShareEndpointMeta {
+            url: p.url.clone(),
+            tenant: p.tenant.clone(),
+            args: p.args.clone(),
+            comment: p.comment.clone(),
+            create_on: DateTime::<Utc>::from_pb(p.create_on)?,
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::ShareEndpointMeta, Incompatible> {
+        Ok(pb::ShareEndpointMeta {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            url: self.url.clone(),
+            tenant: self.tenant.clone(),
+            args: self.args.clone(),
+            comment: self.comment.clone(),
+            create_on: self.create_on.to_pb()?,
+        })
+    }
+}
+
+impl FromToProto for mt::ShareEndpointIdent {
+    type PB = pb::ShareEndpointIdent;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: pb::ShareEndpointIdent) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        Ok(mt::ShareEndpointIdent {
+            tenant: p.tenant.clone(),
+            endpoint: p.endpoint,
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::ShareEndpointIdent, Incompatible> {
+        Ok(pb::ShareEndpointIdent {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            tenant: self.tenant.clone(),
+            endpoint: self.endpoint.clone(),
+        })
+    }
+}

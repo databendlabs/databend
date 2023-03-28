@@ -37,7 +37,7 @@ use common_expression::Column;
 use common_expression::EvalContext;
 use common_expression::Function;
 use common_expression::FunctionDomain;
-use common_expression::FunctionProperty;
+use common_expression::FunctionEval;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::Scalar;
@@ -96,11 +96,10 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_3_arg::<NumberType<F64>, NumberType<F64>, NumberType<u8>, NumberType<u64>,_, _>(
         "geo_to_h3",
-        FunctionProperty::default(),
         |_,_,_|FunctionDomain::Full,
         vectorize_with_builder_3_arg::<NumberType<F64>, NumberType<F64>, NumberType<u8>, NumberType<u64>>(
             |lon, lat, r, builder, ctx| {
-                match LatLng::from_degrees(lat.into(), lon.into()) {
+                match LatLng::new(lat.into(), lon.into()) {
                     Ok(coord) => {
                         let h3_cell =  coord.to_cell(Resolution::try_from(r).unwrap());
                         builder.push(h3_cell.into())
@@ -117,7 +116,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     // geo distance
     registry.register_4_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, NumberType<F64>,NumberType<F32>,_, _>(
         "geo_distance",
-        FunctionProperty::default(),
         |_,_,_,_|FunctionDomain::Full,
         |lon1:F64,lat1:F64,lon2:F64,lat2:F64,_| {
             F32::from(distance(lon1.0 as f32, lat1.0 as f32, lon2.0 as f32, lat2.0 as f32, GeoMethod::Wgs84Meters))
@@ -127,7 +125,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     // great circle angle
     registry.register_4_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, NumberType<F64>,NumberType<F32>,_, _>(
         "great_circle_angle",
-        FunctionProperty::default(),
         |_,_,_,_|FunctionDomain::Full,
         |lon1:F64,lat1:F64,lon2:F64,lat2:F64,_| {
             F32::from(distance(lon1.0 as f32, lat1.0 as f32, lon2.0 as f32, lat2.0 as f32, GeoMethod::SphereDegrees))
@@ -137,7 +134,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     // great circle distance
     registry.register_4_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, NumberType<F64>,NumberType<F32>,_, _>(
         "great_circle_distance",
-        FunctionProperty::default(),
         |_,_,_,_|FunctionDomain::Full,
         |lon1:F64,lat1:F64,lon2:F64,lat2:F64,_| {
             F32::from(distance(lon1.0 as f32, lat1.0 as f32, lon2.0 as f32, lat2.0 as f32, GeoMethod::SphereMeters))
@@ -146,7 +142,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<Float64Type, Float64Type, StringType, _, _>(
         "geohash_encode",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<Float64Type, Float64Type, StringType>(
             |lon, lat, builder, ctx| {
@@ -165,7 +160,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_3_arg::<Float64Type, Float64Type, UInt8Type,StringType, _, _>(
         "geohash_encode",
-        FunctionProperty::default(),
         |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_3_arg::<Float64Type, Float64Type, UInt8Type,StringType>(
             |lon, lat, precision, builder, ctx| {
@@ -186,7 +180,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry
         .register_passthrough_nullable_1_arg::<StringType, KvPair<Float64Type, Float64Type>, _, _>(
             "geohash_decode",
-            FunctionProperty::default(),
             |_| FunctionDomain::Full,
             vectorize_with_builder_1_arg::<StringType, KvPair<Float64Type, Float64Type>>(
                 |encoded, builder, ctx| match std::str::from_utf8(encoded)
@@ -212,10 +205,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "point_in_ellipses".to_string(),
                 args_type: vec![DataType::Number(NumberDataType::Float64); args_type.len()],
                 return_type: DataType::Number(NumberDataType::UInt8),
-                property: Default::default(),
             },
-            calc_domain: Box::new(|_| FunctionDomain::Full),
-            eval: Box::new(point_in_ellipses_fn),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_| FunctionDomain::Full),
+                eval: Box::new(point_in_ellipses_fn),
+            },
         }))
     });
 
@@ -228,14 +222,13 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         let (arg1, arg2) = if args_type.len() == 2 {
             let arg1 = match args_type.get(0)? {
-                DataType::Tuple(tys) => tys.clone(),
+                DataType::Tuple(tys) => vec![DataType::Number(NumberDataType::Float64); tys.len()],
                 _ => return None,
             };
             let arg2 = match args_type.get(1)? {
-                DataType::Array(box DataType::Tuple(tys)) => (0..tys.len())
-                    .map(|_| DataType::Number(NumberDataType::Float64))
-                    .collect(),
-
+                DataType::Array(box DataType::Tuple(tys)) => {
+                    vec![DataType::Number(NumberDataType::Float64); tys.len()]
+                }
                 _ => return None,
             };
             (arg1, arg2)
@@ -251,10 +244,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                     DataType::Array(Box::new(DataType::Tuple(arg2))),
                 ],
                 return_type: DataType::Number(NumberDataType::UInt8),
-                property: Default::default(),
             },
-            calc_domain: Box::new(|_| FunctionDomain::Full),
-            eval: Box::new(point_in_polygon_fn),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_| FunctionDomain::Full),
+                eval: Box::new(point_in_polygon_fn),
+            },
         }))
     });
 
@@ -267,13 +261,13 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         let (arg1, arg2) = if args_type.len() == 2 {
             let arg1 = match args_type.get(0)? {
-                DataType::Tuple(tys) => tys.clone(),
+                DataType::Tuple(tys) => vec![DataType::Number(NumberDataType::Float64); tys.len()],
                 _ => return None,
             };
             let arg2 = match args_type.get(1)? {
-                DataType::Array(box DataType::Array(box DataType::Tuple(tys))) => (0..tys.len())
-                    .map(|_| DataType::Number(NumberDataType::Float64))
-                    .collect(),
+                DataType::Array(box DataType::Array(box DataType::Tuple(tys))) => {
+                    vec![DataType::Number(NumberDataType::Float64); tys.len()]
+                }
                 _ => return None,
             };
             (arg1, arg2)
@@ -289,10 +283,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                     DataType::Array(Box::new(DataType::Array(Box::new(DataType::Tuple(arg2))))),
                 ],
                 return_type: DataType::Number(NumberDataType::UInt8),
-                property: Default::default(),
             },
-            calc_domain: Box::new(|_| FunctionDomain::Full),
-            eval: Box::new(point_in_polygon_fn),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_| FunctionDomain::Full),
+                eval: Box::new(point_in_polygon_fn),
+            },
         }))
     });
 
@@ -306,15 +301,15 @@ pub fn register(registry: &mut FunctionRegistry) {
         let mut args = vec![];
 
         let arg1 = match args_type.get(0)? {
-            DataType::Tuple(tys) => tys.clone(),
+            DataType::Tuple(tys) => vec![DataType::Number(NumberDataType::Float64); tys.len()],
             _ => return None,
         };
         args.push(DataType::Tuple(arg1));
 
         let arg2: Vec<DataType> = match args_type.get(1)? {
-            DataType::Array(box DataType::Tuple(tys)) => (0..tys.len())
-                .map(|_| DataType::Number(NumberDataType::Float64))
-                .collect(),
+            DataType::Array(box DataType::Tuple(tys)) => {
+                vec![DataType::Number(NumberDataType::Float64); tys.len()]
+            }
 
             _ => return None,
         };
@@ -327,10 +322,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "point_in_polygon".to_string(),
                 args_type: args,
                 return_type: DataType::Number(NumberDataType::UInt8),
-                property: Default::default(),
             },
-            calc_domain: Box::new(|_| FunctionDomain::Full),
-            eval: Box::new(point_in_polygon_fn),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_| FunctionDomain::Full),
+                eval: Box::new(point_in_polygon_fn),
+            },
         }))
     });
 }
@@ -366,7 +362,7 @@ fn point_in_polygon_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value
                     _ => unreachable!(),
                 })
                 .collect(),
-            ValueRef::Column(Column::Tuple { fields, .. }) => fields
+            ValueRef::Column(Column::Tuple(fields)) => fields
                 .iter()
                 .cloned()
                 .map(|c| ValueRef::Column(Float64Type::try_downcast_column(&c).unwrap()))

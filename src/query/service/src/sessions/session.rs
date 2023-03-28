@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -24,10 +25,10 @@ use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserPrivilegeType;
+use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_users::RoleCacheManager;
 use common_users::BUILTIN_ROLE_PUBLIC;
-use futures::channel::*;
 use parking_lot::RwLock;
 
 use crate::clusters::ClusterDiscovery;
@@ -89,12 +90,8 @@ impl Session {
     pub fn quit(self: &Arc<Self>) {
         let session_ctx = self.session_ctx.clone();
         if session_ctx.get_current_query_id().is_some() {
-            if let Some(io_shutdown) = session_ctx.take_io_shutdown_tx() {
-                let (tx, rx) = oneshot::channel();
-                if io_shutdown.send(tx).is_ok() {
-                    // We ignore this error because the receiver is return cancelled error.
-                    let _ = futures::executor::block_on(rx);
-                }
+            if let Some(shutdown_fun) = session_ctx.take_io_shutdown_tx() {
+                shutdown_fun();
             }
         }
 
@@ -129,7 +126,7 @@ impl Session {
         let config = GlobalConfig::instance();
         let session = self.clone();
         let cluster = ClusterDiscovery::instance().discover(&config).await?;
-        let shared = QueryContextShared::try_create(&config, session, cluster)?;
+        let shared = QueryContextShared::try_create(session, cluster)?;
 
         self.session_ctx
             .set_query_context_shared(Arc::downgrade(&shared));
@@ -138,7 +135,7 @@ impl Session {
 
     // only used for values and mysql output
     pub fn get_format_settings(&self) -> Result<FormatSettings> {
-        let settings = &self.session_ctx.get_settings();
+        let settings = self.session_ctx.get_settings();
         let tz = settings.get_timezone()?;
         let timezone = tz.parse::<Tz>().map_err(|_| {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
@@ -152,17 +149,9 @@ impl Session {
     }
 
     pub fn attach<F>(self: &Arc<Self>, host: Option<SocketAddr>, io_shutdown: F)
-    where F: FnOnce() + Send + 'static {
-        let (tx, rx) = oneshot::channel();
+    where F: FnOnce() + Send + Sync + 'static {
         self.session_ctx.set_client_host(host);
-        self.session_ctx.set_io_shutdown_tx(Some(tx));
-
-        common_base::base::tokio::spawn(async move {
-            if let Ok(tx) = rx.await {
-                (io_shutdown)();
-                tx.send(()).ok();
-            }
-        });
+        self.session_ctx.set_io_shutdown_tx(io_shutdown);
     }
 
     pub fn set_current_database(self: &Arc<Self>, database_name: String) {
@@ -305,11 +294,13 @@ impl Session {
     pub async fn validate_privilege(
         self: &Arc<Self>,
         object: &GrantObject,
-        privilege: UserPrivilegeType,
+        privilege: Vec<UserPrivilegeType>,
     ) -> Result<()> {
         // 1. check user's privilege set
         let current_user = self.get_current_user()?;
-        let user_verified = current_user.grants.verify_privilege(object, privilege);
+        let user_verified = current_user
+            .grants
+            .verify_privilege(object, privilege.clone());
         if user_verified {
             return Ok(());
         }
@@ -318,16 +309,16 @@ impl Session {
         self.ensure_current_role().await?;
         let current_role = self.get_current_role();
         let role_verified = current_role
-            .map(|r| r.grants.verify_privilege(object, privilege))
+            .map(|r| r.grants.verify_privilege(object, privilege.clone()))
             .unwrap_or(false);
         if role_verified {
             return Ok(());
         }
 
         Err(ErrorCode::PermissionDenied(format!(
-            "Permission denied, user {} requires {} privilege on {}",
+            "Permission denied, user {} requires {:?} privilege on {}",
             &current_user.identity(),
-            privilege,
+            privilege.clone(),
             object
         )))
     }
@@ -336,12 +327,12 @@ impl Session {
         self.session_ctx.get_settings()
     }
 
-    pub fn get_changed_settings(self: &Arc<Self>) -> Arc<Settings> {
+    pub fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
         self.session_ctx.get_changed_settings()
     }
 
-    pub fn apply_changed_settings(self: &Arc<Self>, changed_settings: Arc<Settings>) -> Result<()> {
-        self.session_ctx.apply_changed_settings(changed_settings)
+    pub fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
+        self.session_ctx.apply_changed_settings(changes)
     }
 
     pub fn get_memory_usage(self: &Arc<Self>) -> usize {

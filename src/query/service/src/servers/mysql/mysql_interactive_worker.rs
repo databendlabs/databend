@@ -27,7 +27,6 @@ use common_exception::ToErrorCode;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::SendableDataBlockStream;
-use common_sql::plans::Plan;
 use common_sql::Planner;
 use common_users::CertifiedInfo;
 use common_users::UserApiProvider;
@@ -57,30 +56,6 @@ use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
 use crate::stream::DataBlockStream;
-
-fn has_result_set_by_plan(plan: &Plan) -> bool {
-    matches!(
-        plan,
-        Plan::Query { .. }
-            | Plan::Explain { .. }
-            | Plan::ExplainAst { .. }
-            | Plan::ExplainSyntax { .. }
-            | Plan::ExplainAnalyze { .. }
-            | Plan::Call(_)
-            | Plan::ShowCreateDatabase(_)
-            | Plan::ShowCreateTable(_)
-            | Plan::ShowFileFormats(_)
-            | Plan::ShowRoles(_)
-            | Plan::DescShare(_)
-            | Plan::ShowShares(_)
-            | Plan::ShowObjectGrantPrivileges(_)
-            | Plan::ShowGrantTenantsOfShare(_)
-            | Plan::DescribeTable(_)
-            | Plan::ShowGrants(_)
-            | Plan::ListStage(_)
-            | Plan::Presign(_)
-    )
-}
 
 struct InteractiveWorkerBase<W: AsyncWrite + Send + Unpin> {
     session: Arc<Session>,
@@ -336,6 +311,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                     None,
                     has_result,
                     schema,
+                    query.to_string(),
                 ))
             }
             None => {
@@ -343,11 +319,11 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                 let context = self.session.create_query_context().await?;
 
                 let mut planner = Planner::new(context.clone());
-                let (plan, _, _) = planner.plan_sql(query).await?;
+                let (plan, extras) = planner.plan_sql(query).await?;
 
-                context.attach_query_str(plan.to_string(), query);
+                context.attach_query_str(plan.to_string(), extras.stament.to_mask_sql());
                 let interpreter = InterpreterFactory::get(context.clone(), &plan).await;
-                let has_result_set = has_result_set_by_plan(&plan);
+                let has_result_set = plan.has_result_set();
 
                 match interpreter {
                     Ok(interpreter) => {
@@ -359,6 +335,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                             extra_info,
                             has_result_set,
                             schema,
+                            query.to_string(),
                         ))
                     }
                     Err(e) => {

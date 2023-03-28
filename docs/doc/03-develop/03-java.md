@@ -1,40 +1,36 @@
 ---
-title: How to Work With Databend in Java
+title: Developing with Databend using Java
 sidebar_label: Java
 description:
-    How to work with Databend in Java.
+    Develop with Databend using Java.
 ---
 
-## Before You Begin
+Databend offers a driver (databend-jdbc) written in Java, which facilitates the development of applications using the Java programming language and establishes connectivity with Databend.
 
-* **Databend :** Make sure Databend is running and accessible, see [How to deploy Databend](/doc/deploy).
-* [How to Create User](../14-sql-commands/00-ddl/30-user/01-user-create-user.md)
-* [How to Grant Privileges to User](../14-sql-commands/00-ddl/30-user/10-grant-privileges.md)
+For installation instructions, examples, and the source code, see the GitHub [databend-jdbc](https://github.com/databendcloud/databend-jdbc) repo.
 
-## Create Databend User
+In the following tutorial, you'll learn how to utilize the driver `databend-jdbc` to develop your applications. The tutorial will walk you through creating a SQL user in Databend and then writing Java code to create a table, insert data, and perform data queries.
 
-```shell
-mysql -h127.0.0.1 -uroot -P3307
-```
+## Tutorial: Developing with Databend using Java
 
-### Create a User
+Before you start, make sure you have successfully installed Databend. For how to install Databend, see [How to deploy Databend](/doc/deploy).
+
+### Step 1. Prepare a SQL User Account
+
+To connect your program to Databend and execute SQL operations, you must provide a SQL user account with appropriate privileges in your code. Create one in Databend if needed, and ensure that the SQL user has only the necessary privileges for security.
+
+This tutorial uses a SQL user named 'user1' with password 'abc123' as an example. As the program will write data into Databend, the user needs ALL privileges. For how to manage SQL users and their privileges, see https://databend.rs/doc/reference/sql/ddl/user.
 
 ```sql
 CREATE USER user1 IDENTIFIED BY 'abc123';
-```
-
-### Grants Privileges
-
-Grants `ALL` privileges to the user `user1`:
-```sql
 GRANT ALL on *.* TO user1;
 ```
 
-## Java
+### Step 2. Write a Java Program
 
-This topic shows how to connect and query Databend using JDBC. We will create a table named books, insert a row, and then query data from the table.
+In this step, you'll create a simple Java program that communicates with Databend. The program will involve tasks such as creating a table, inserting data, and executing data queries.
 
-### Maven Dependency
+1. Declare a Maven dependency.
 
 ```xml
 <dependency>
@@ -44,9 +40,9 @@ This topic shows how to connect and query Databend using JDBC. We will create a 
 </dependency>
 ```
 
-### demo.java
+2. Copy and paste the following code to a file named `demo.java`:
 
-```java title='demo.java'
+```java
 package com.example;
 
 import java.sql.*;
@@ -101,7 +97,7 @@ public class demo {
 }
 ```
 
-### Run demo
+3. Compile and run the program:
 
 ```shell
 $ mvn compile

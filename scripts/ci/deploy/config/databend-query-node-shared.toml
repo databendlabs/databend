@@ -27,6 +27,9 @@ clickhouse_http_handler_port = 58124
 http_handler_host = "0.0.0.0"
 http_handler_port = 58000
 
+flight_sql_handler_host = "0.0.0.0"
+flight_sql_handler_port = 58900
+
 tenant_id = "shared_tenant"
 cluster_id = "test_cluster"
 
@@ -142,6 +145,6 @@ table_data_cache_population_queue_size = 65535
 
 [cache.disk]
 # cache path
-path = "./databend/_cache"
+path = "./.databend/_cache"
 # max bytes of cached data 20G
 max_bytes = 21474836480

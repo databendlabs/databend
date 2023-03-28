@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+#![feature(box_patterns)]
 
 mod bloom_index;
 pub mod filters;
@@ -21,6 +22,7 @@ mod page_index;
 mod range_index;
 
 pub use bloom_index::BloomIndex;
+pub use bloom_index::BloomIndexMeta;
 pub use bloom_index::FilterEvalResult;
 pub use index::Index;
 pub use page_index::PageIndex;

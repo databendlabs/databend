@@ -1,0 +1,155 @@
+query I
+select (number % 2) as a from numbers(5) group by grouping sets (a) order by a;
+----
+0
+1
+
+query TT
+select number % 2 as a, number % 3 as b from numbers(24) group by grouping sets ((a,b), (a), (b)) order by a,b;
+----
+0 0
+0 1
+0 2
+0 NULL
+1 0
+1 1
+1 2
+1 NULL
+NULL 0
+NULL 1
+NULL 2
+
+query TT
+select number % 2 as a, number % 3 as b from numbers(24) group by grouping sets ((1,2), (1), (2)) order by a,b;
+----
+0 0
+0 1
+0 2
+0 NULL
+1 0
+1 1
+1 2
+1 NULL
+NULL 0
+NULL 1
+NULL 2
+
+statement ok
+create database if not exists grouping_sets;
+
+statement ok
+use grouping_sets;
+
+statement ok
+drop table if exists t;
+
+statement ok
+create table t (a string, b string, c int);
+
+statement ok
+insert into t values ('a','A',1),('a','A',2),('a','B',1),('a','B',3),('b','A',1),('b','A',4),('b','B',1),('b','B',5);
+
+query TTI
+select a, b, sum(c) as sc from t group by grouping sets ((a,b),(),(b),(a)) order by sc;
+----
+a A 3
+a B 4
+b A 5
+b B 6
+a NULL 7
+NULL A 8
+NULL B 10
+b NULL 11
+NULL NULL 18
+
+query TTIIIII
+select a, b, sum(c) as sc, grouping(b), grouping(a), grouping(a,b), grouping(b,a) from t group by grouping sets ((a,b),(),(b),(a)) order by sc;
+----
+a A 3 0 0 0 0
+a B 4 0 0 0 0
+b A 5 0 0 0 0
+b B 6 0 0 0 0
+a NULL 7 1 0 1 2
+NULL A 8 0 1 2 1
+NULL B 10 0 1 2 1
+b NULL 11 1 0 1 2
+NULL NULL 18 1 1 3 3
+
+query TTIIIII
+select a, b, sum(c) as sc, grouping(b), grouping(a), grouping(a,b), grouping(b,a) from t group by grouping sets ((1,2),(),(2),(1)) order by sc;
+----
+a A 3 0 0 0 0
+a B 4 0 0 0 0
+b A 5 0 0 0 0
+b B 6 0 0 0 0
+a NULL 7 1 0 1 2
+NULL A 8 0 1 2 1
+NULL B 10 0 1 2 1
+b NULL 11 1 0 1 2
+NULL NULL 18 1 1 3 3
+
+query TTIIIII
+select a, b, sum(c) as sc, grouping(b), grouping(a), grouping(a,b), grouping(b,a) from t group by grouping sets ((a,b),(a),()) order by sc;
+----
+a A 3 0 0 0 0
+a B 4 0 0 0 0
+b A 5 0 0 0 0
+b B 6 0 0 0 0
+a NULL 7 1 0 1 2
+b NULL 11 1 0 1 2
+NULL NULL 18 1 1 3 3
+
+
+query TTIIIII
+select a, b, sum(c) as sc, grouping(b), grouping(a), grouping(a,b), grouping(b,a) from t group by cube (a,b) order by sc;
+----
+a A 3 0 0 0 0
+a B 4 0 0 0 0
+b A 5 0 0 0 0
+b B 6 0 0 0 0
+a NULL 7 1 0 1 2
+NULL A 8 0 1 2 1
+NULL B 10 0 1 2 1
+b NULL 11 1 0 1 2
+NULL NULL 18 1 1 3 3
+
+query TTIIIII
+select a, b, sum(c) as sc, grouping(b), grouping(a), grouping(a,b), grouping(b,a) from t group by cube (1,2) order by sc;
+----
+a A 3 0 0 0 0
+a B 4 0 0 0 0
+b A 5 0 0 0 0
+b B 6 0 0 0 0
+a NULL 7 1 0 1 2
+NULL A 8 0 1 2 1
+NULL B 10 0 1 2 1
+b NULL 11 1 0 1 2
+NULL NULL 18 1 1 3 3
+
+query TTIIIII
+select a, b, sum(c) as sc, grouping(b), grouping(a), grouping(a,b), grouping(b,a) from t group by rollup (a,b) order by sc;
+----
+a A 3 0 0 0 0
+a B 4 0 0 0 0
+b A 5 0 0 0 0
+b B 6 0 0 0 0
+a NULL 7 1 0 1 2
+b NULL 11 1 0 1 2
+NULL NULL 18 1 1 3 3
+
+query TTIIIII
+select a, b, sum(c) as sc, grouping(b), grouping(a), grouping(a,b), grouping(b,a) from t group by rollup (1,2) order by sc;
+----
+a A 3 0 0 0 0
+a B 4 0 0 0 0
+b A 5 0 0 0 0
+b B 6 0 0 0 0
+a NULL 7 1 0 1 2
+b NULL 11 1 0 1 2
+NULL NULL 18 1 1 3 3
+
+statement ok
+drop table t all;
+
+statement ok
+drop database grouping_sets;

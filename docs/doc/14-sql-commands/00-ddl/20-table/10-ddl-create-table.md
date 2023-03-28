@@ -48,7 +48,10 @@ Data type reference:
 * [Numeric Data Types](../../../13-sql-reference/10-data-types/10-data-type-numeric-types.md)
 * [Date & Time Data Types](../../../13-sql-reference/10-data-types/20-data-type-time-date-types.md)
 * [String Data Types](../../../13-sql-reference/10-data-types/30-data-type-string-types.md)
-* [Semi-structured Data Types](../../../13-sql-reference/10-data-types/42-data-type-semi-structured-types.md)
+* [Array Data Types](../../../13-sql-reference/10-data-types/40-data-type-array-types.md)
+* [Tuple Data Types](../../../13-sql-reference/10-data-types/41-data-type-tuple-types.md)
+* [Map Data Types](../../../13-sql-reference/10-data-types/42-data-type-map.md)
+* [Semi-structured Data Types](../../../13-sql-reference/10-data-types/43-data-type-variant.md)
 :::
 
 For detailed information about the CLUSTER BY clause, see [SET CLUSTER KEY](../70-clusterkey/dml-set-cluster-key.md).
@@ -77,7 +80,7 @@ AS SELECT query
 
 Creates a transient table. 
 
-Transient tables are used to hold transitory data that does not require a data protection or recovery mechanism. Dataebend does not hold historical data for a transient table so you will not be able to query from a previous version of the transient table with the Time Travel feature, for example, the [AT](./../../20-query-syntax/dml-at.md) clause in the SELECT statement will not work for transient tables. Please note that you can still [drop](./20-ddl-drop-table.md) and [undrop](./21-ddl-undrop-table.md) a transient table.
+Transient tables are used to hold transitory data that does not require a data protection or recovery mechanism. Dataebend does not hold historical data for a transient table so you will not be able to query from a previous version of the transient table with the Time Travel feature, for example, the [AT](./../../20-query-syntax/03-query-at.md) clause in the SELECT statement will not work for transient tables. Please note that you can still [drop](./20-ddl-drop-table.md) and [undrop](./21-ddl-undrop-table.md) a transient table.
 
 Transient tables help save your storage expenses because they do not need extra space for historical data compared to non-transient tables. See [example](#create-transient-table-1) for detailed explanations.
 

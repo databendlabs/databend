@@ -20,14 +20,13 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::ConstantFolder;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 
+use super::wrap_cast;
 use super::BindContext;
 use super::Binder;
 use crate::planner::semantic::TypeChecker;
-use crate::plans::CastExpr;
 use crate::plans::Plan;
-use crate::plans::ScalarExpr;
 use crate::plans::SettingPlan;
 use crate::plans::UnSettingPlan;
 use crate::plans::VarValue;
@@ -35,7 +34,7 @@ use crate::plans::VarValue;
 impl Binder {
     pub(in crate::planner::binder) async fn bind_set_variable(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         is_global: bool,
         variable: &Identifier,
         value: &Expr,
@@ -49,13 +48,8 @@ impl Binder {
         );
         let variable = variable.name.clone();
 
-        let (scalar, data_type) = *type_checker.resolve(value, None).await?;
-        let scalar = ScalarExpr::CastExpr(CastExpr {
-            is_try: false,
-            argument: Box::new(scalar),
-            from_type: Box::new(data_type),
-            target_type: Box::new(DataType::String),
-        });
+        let (scalar, _) = *type_checker.resolve(value).await?;
+        let scalar = wrap_cast(&scalar, &DataType::String);
         let expr = scalar.as_expr_with_col_index()?;
 
         let (new_expr, _) =

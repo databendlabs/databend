@@ -26,6 +26,12 @@ io-uring = [
     "common-meta-raft-store/io-uring",
 ]
 
+enable-histogram-metrics = [
+    "default",
+    "common-metrics/enable-histogram",
+    "databend-query/enable-histogram-metrics",
+]
+
 [dependencies]
 # Workspace dependencies
 common-base = { path = "../common/base" }
@@ -36,7 +42,6 @@ common-grpc = { path = "../common/grpc" }
 common-meta-api = { path = "../meta/api" }
 common-meta-app = { path = "../meta/app" }
 common-meta-client = { path = "../meta/client" }
-common-meta-embedded = { path = "../meta/embedded" }
 common-meta-kvapi = { path = "../meta/kvapi" }
 common-meta-raft-store = { path = "../meta/raft-store" }
 common-meta-sled-store = { path = "../meta/sled-store" }
@@ -54,10 +59,15 @@ anyerror = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 comfy-table = "6.1.3"
-limits-rs = "0.1.0"
-openraft = { workspace = true }
+limits-rs = "0.2.0"
 poem = { version = "1", features = ["rustls", "multipart", "compression"] }
-sentry = { version = "0.27.0", default-features = false, features = ["backtrace", "contexts", "panic", "rustls"] }
+sentry = { version = "0.30", default-features = false, features = [
+    "backtrace",
+    "contexts",
+    "panic",
+    "reqwest",
+    "rustls",
+] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio-stream = "0.1.10"

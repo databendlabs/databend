@@ -31,7 +31,6 @@ use common_exception::Result;
 use common_metrics::label_counter;
 use common_metrics::label_gauge;
 use common_settings::Settings;
-use common_users::UserApiProvider;
 use futures::future::Either;
 use futures::StreamExt;
 use parking_lot::RwLock;
@@ -105,9 +104,10 @@ impl SessionManager {
         }
 
         let tenant = config.query.tenant_id.clone();
-        let user_api = UserApiProvider::instance();
-        let session_settings = Settings::try_create(user_api, tenant).await?;
-        let session_ctx = SessionContext::try_create(session_settings)?;
+        let settings = Settings::try_create(tenant.clone());
+        settings.load_global_changes().await?;
+
+        let session_ctx = SessionContext::try_create(settings)?;
         let session = Session::try_create(id.clone(), typ.clone(), session_ctx, mysql_conn_id)?;
 
         let mut sessions = self.active_sessions.write();
@@ -213,16 +213,27 @@ impl SessionManager {
     }
 
     pub fn processes_info(&self) -> Vec<ProcessInfo> {
-        let sessions = self.active_sessions.read();
+        let active_sessions = {
+            // Here the situation is the same of method `graceful_shutdown`:
+            //
+            // We should drop the read lock before
+            // - acquiring upgraded session reference: the Arc<Session>,
+            // - extracting the ProcessInfo from it
+            // - and then drop the Arc<Session>
+            // Since there are chances that we are the last one that holding the reference, and the
+            // destruction of session need to acquire the write lock of `active_sessions`, which leads
+            // to dead lock.
+            //
+            // Although online expression can also do this, to make this clearer, we wrap it in a block
 
-        let mut processes_info = Vec::with_capacity(sessions.len());
-        for weak_ptr in sessions.values() {
-            if let Some(active_session) = weak_ptr.upgrade() {
-                processes_info.push(active_session.process_info());
-            }
-        }
+            let active_sessions_guard = self.active_sessions.read();
+            active_sessions_guard.values().cloned().collect::<Vec<_>>()
+        };
 
-        processes_info
+        active_sessions
+            .into_iter()
+            .filter_map(|weak_ptr| weak_ptr.upgrade().map(|session| session.process_info()))
+            .collect::<Vec<_>>()
     }
 
     fn destroy_idle_sessions(sessions: &Arc<RwLock<HashMap<String, Weak<Session>>>>) -> bool {

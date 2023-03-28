@@ -21,6 +21,7 @@ use crate::ast::format::syntax::interweave_comma;
 use crate::ast::format::syntax::parenthenized;
 use crate::ast::format::syntax::NEST_FACTOR;
 use crate::ast::Expr;
+use crate::ast::GroupBy;
 use crate::ast::JoinCondition;
 use crate::ast::JoinOperator;
 use crate::ast::OrderByExpr;
@@ -194,24 +195,62 @@ fn pretty_selection(selection: Option<Expr>) -> RcDoc<'static> {
     }
 }
 
-fn pretty_group_by(group_by: Vec<Expr>) -> RcDoc<'static> {
-    if !group_by.is_empty() {
-        RcDoc::line()
-            .append(
-                RcDoc::text("GROUP BY").append(
-                    if group_by.len() > 1 {
-                        RcDoc::line()
-                    } else {
-                        RcDoc::space()
-                    }
-                    .nest(NEST_FACTOR),
+fn pretty_group_set(set: Vec<Expr>) -> RcDoc<'static> {
+    RcDoc::nil()
+        .append(RcDoc::text("("))
+        .append(inline_comma(set.into_iter().map(pretty_expr)))
+        .append(RcDoc::text(")"))
+}
+
+fn pretty_group_by(group_by: Option<GroupBy>) -> RcDoc<'static> {
+    if let Some(group_by) = group_by {
+        match group_by {
+            GroupBy::Normal(exprs) => RcDoc::line()
+                .append(
+                    RcDoc::text("GROUP BY").append(
+                        if exprs.len() > 1 {
+                            RcDoc::line()
+                        } else {
+                            RcDoc::space()
+                        }
+                        .nest(NEST_FACTOR),
+                    ),
+                )
+                .append(
+                    interweave_comma(exprs.into_iter().map(pretty_expr))
+                        .nest(NEST_FACTOR)
+                        .group(),
                 ),
-            )
-            .append(
-                interweave_comma(group_by.into_iter().map(pretty_expr))
-                    .nest(NEST_FACTOR)
-                    .group(),
-            )
+            GroupBy::GroupingSets(sets) => RcDoc::line()
+                .append(
+                    RcDoc::text("GROUP BY GROUPING SETS (").append(RcDoc::line().nest(NEST_FACTOR)),
+                )
+                .append(
+                    interweave_comma(sets.into_iter().map(pretty_group_set))
+                        .nest(NEST_FACTOR)
+                        .group(),
+                )
+                .append(RcDoc::line())
+                .append(RcDoc::text(")")),
+            GroupBy::Rollup(exprs) => RcDoc::line()
+                .append(RcDoc::text("GROUP BY ROLLUP (").append(RcDoc::line().nest(NEST_FACTOR)))
+                .append(
+                    interweave_comma(exprs.into_iter().map(pretty_expr))
+                        .nest(NEST_FACTOR)
+                        .group(),
+                )
+                .append(RcDoc::line())
+                .append(RcDoc::text(")")),
+            GroupBy::Cube(exprs) => RcDoc::line()
+                .append(RcDoc::text("GROUP BY CUBE (").append(RcDoc::line().nest(NEST_FACTOR)))
+                .append(
+                    interweave_comma(exprs.into_iter().map(pretty_expr))
+                        .nest(NEST_FACTOR)
+                        .group(),
+                )
+                .append(RcDoc::line())
+                .append(RcDoc::text(")")),
+        }
     } else {
         RcDoc::nil()
     }
@@ -236,6 +275,8 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             table,
             alias,
             travel_point,
+            pivot,
+            unpivot,
         } => if let Some(catalog) = catalog {
             RcDoc::text(catalog.to_string()).append(RcDoc::text("."))
         } else {
@@ -247,6 +288,16 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             RcDoc::nil()
         })
         .append(RcDoc::text(table.to_string()))
+        .append(if let Some(pivot) = pivot {
+            RcDoc::text(format!(" {pivot}"))
+        } else {
+            RcDoc::nil()
+        })
+        .append(if let Some(unpivot) = unpivot {
+            RcDoc::text(format!(" {unpivot}"))
+        } else {
+            RcDoc::nil()
+        })
         .append(if let Some(TimeTravelPoint::Snapshot(sid)) = travel_point {
             RcDoc::text(format!(" AT (SNAPSHOT => {sid})"))
         } else if let Some(TimeTravelPoint::Timestamp(ts)) = travel_point {

@@ -102,17 +102,16 @@ where
         column_iter.zip(places.iter()).for_each(|(v, place)| {
             let addr = place.next(offset);
             let state = addr.get::<State>();
-            state.add(v.clone())
+            state.add(Some(v.clone()))
         });
         Ok(())
     }
+
     fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
         let column = T::try_downcast_column(&columns[0]).unwrap();
         let v = T::index_column(&column, row);
-        if let Some(v) = v {
-            let state = place.get::<State>();
-            state.add(v)
-        }
+        let state = place.get::<State>();
+        state.add(v);
         Ok(())
     }
 

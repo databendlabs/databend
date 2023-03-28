@@ -202,6 +202,49 @@ select number % 3,   sum(number), avg(number),  count() from numbers(100) group 
 1 1617 49.0 33
 2 1650 50.0 33
 
+query I
+SELECT median(number) from numbers_mt(10000)
+----
+4999.5
+
+query I
+SELECT quantile_cont(0.6)(number) from numbers_mt(10000)
+----
+5999.4
+
+query F
+SELECT quantile_cont(0)(number) from numbers_mt(10000)
+----
+0.0
+
+query F
+SELECT quantile_cont(1)(number) from numbers_mt(10000)
+----
+9999.0
+
+query T
+SELECT quantile_cont(0, 0.5, 0.6, 1)(number) from numbers_mt(10000);
+----
+[0.0,4999.5,5999.4,9999.0]
+
+statement error 1010
+SELECT quantile_cont(5)(number) from numbers_mt(10000)
+
+query T
+SELECT list(number) from numbers_mt(10)
+----
+[0,1,2,3,4,5,6,7,8,9]
+
+query TT
+SELECT array_sort(list(id), 'asc'), array_sort(list(var), 'asc') FROM t1;
+----
+[1,2,3,4,5,6] ['true','10','"abcd"','{"k":"v"}','[1,2,3]','null']
+
+query TT
+SELECT array_sort(list(id), 'asc'), array_sort(list(arr), 'asc') FROM t2;
+----
+[1,2,3] [[1,2,3],[1,2,4],[3,4,5]]
+
 statement ok
 DROP DATABASE db1
 

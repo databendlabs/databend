@@ -41,5 +41,6 @@ mod db;
 mod sled_iter;
 mod sled_key_space;
 mod sled_serde;
+mod sled_serde_impl;
 mod sled_tree;
 mod store;

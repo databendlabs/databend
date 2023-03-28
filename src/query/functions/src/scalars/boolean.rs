@@ -31,7 +31,6 @@ use common_expression::vectorize_with_builder_1_arg;
 use common_expression::with_integer_mapped_type;
 use common_expression::EvalContext;
 use common_expression::FunctionDomain;
-use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::Value;
 use common_expression::ValueRef;
@@ -39,7 +38,6 @@ use common_expression::ValueRef;
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<BooleanType, BooleanType, _, _>(
         "not",
-        FunctionProperty::default(),
         |arg| {
             FunctionDomain::Domain(BooleanDomain {
                 has_false: arg.has_true,
@@ -55,7 +53,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     // special function to combine the filter efficiently
     registry.register_passthrough_nullable_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "and_filters",
-        FunctionProperty::default(),
         |lhs, rhs| {
             FunctionDomain::Domain(BooleanDomain {
                 has_false: lhs.has_false || rhs.has_false,
@@ -71,7 +68,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_2_arg_core::<BooleanType, BooleanType, BooleanType, _, _>(
         "and",
-        FunctionProperty::default(),
         |lhs, rhs| {
             FunctionDomain::Domain(BooleanDomain {
                 has_false: lhs.has_false || rhs.has_false,
@@ -87,7 +83,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_2_arg_core::<BooleanType, BooleanType, BooleanType, _, _>(
         "or",
-        FunctionProperty::default(),
         |lhs, rhs| {
             FunctionDomain::Domain(BooleanDomain {
                 has_false: lhs.has_false && rhs.has_false,
@@ -104,7 +99,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     // https://en.wikibooks.org/wiki/Structured_Query_Language/NULLs_and_the_Three_Valued_Logic
     registry.register_2_arg_core::<NullableType<BooleanType>, NullableType<BooleanType>, NullableType<BooleanType>, _, _>(
         "and",
-        FunctionProperty::default(),
         |lhs, rhs| {
             let lhs_has_null = lhs.has_null;
             let lhs_has_true = lhs.value.as_ref().map(|v| v.has_true).unwrap_or(false);
@@ -151,7 +145,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_2_arg_core::<NullableType<BooleanType>, NullableType<BooleanType>, NullableType<BooleanType>, _, _>(
         "or",
-        FunctionProperty::default(),
         |lhs, rhs| {
             let lhs_has_null = lhs.has_null;
             let lhs_has_true = lhs.value.as_ref().map(|v| v.has_true).unwrap_or(false);
@@ -198,7 +191,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "xor",
-        FunctionProperty::default(),
         |lhs, rhs| {
             FunctionDomain::Domain(BooleanDomain {
                 has_false: (lhs.has_false && rhs.has_false) || (lhs.has_true && rhs.has_true),
@@ -219,42 +211,36 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<BooleanType, StringType, _, _>(
         "to_string",
-        FunctionProperty::default(),
         |_| FunctionDomain::Full,
         eval_boolean_to_string,
     );
 
     registry.register_combine_nullable_1_arg::<BooleanType, StringType, _, _>(
         "try_to_string",
-        FunctionProperty::default(),
         |_| FunctionDomain::Full,
         error_to_null(eval_boolean_to_string),
     );
 
     registry.register_passthrough_nullable_1_arg::<StringType, BooleanType, _, _>(
         "to_boolean",
-        FunctionProperty::default(),
         |_| FunctionDomain::MayThrow,
         eval_string_to_boolean,
     );
 
     registry.register_combine_nullable_1_arg::<StringType, BooleanType, _, _>(
         "try_to_boolean",
-        FunctionProperty::default(),
         |_| FunctionDomain::Full,
         error_to_null(eval_string_to_boolean),
     );
 
     registry.register_1_arg_core::<BooleanType, BooleanType, _, _>(
         "is_true",
-        FunctionProperty::default(),
         |domain| FunctionDomain::Domain(*domain),
         |val, _| val.to_owned(),
     );
 
     registry.register_1_arg_core::<NullableType<BooleanType>, BooleanType, _, _>(
         "is_true",
-        FunctionProperty::default(),
         |domain| {
             FunctionDomain::Domain(BooleanDomain {
                 has_false: domain.has_null
@@ -276,7 +262,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             NumberDataType::NUM_TYPE => {
                 registry.register_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
                     "to_boolean",
-                    FunctionProperty::default(),
                     |domain| {
                         FunctionDomain::Domain(BooleanDomain {
                             has_false: domain.min <= 0 && domain.max >= 0,
@@ -289,7 +274,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 registry
                     .register_combine_nullable_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
                         "try_to_boolean",
-                        FunctionProperty::default(),
                         |domain| {
                             FunctionDomain::Domain(NullableDomain {
                                 has_null: false,
@@ -311,7 +295,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 let name = format!("to_{src_type}").to_lowercase();
                 registry.register_1_arg::<BooleanType, NumberType<NUM_TYPE>, _, _>(
                     &name,
-                    FunctionProperty::default(),
                     |domain| {
                         FunctionDomain::Domain(SimpleDomain {
                             min: if domain.has_false { 0 } else { 1 },
@@ -325,7 +308,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 registry
                     .register_combine_nullable_1_arg::<BooleanType, NumberType<NUM_TYPE>, _, _>(
                         &name,
-                        FunctionProperty::default(),
                         |domain| {
                             FunctionDomain::Domain(NullableDomain {
                                 has_null: false,
@@ -362,7 +344,7 @@ fn eval_string_to_boolean(val: ValueRef<StringType>, ctx: &mut EvalContext) -> V
         } else if val.eq_ignore_ascii_case(b"false") {
             output.push(false);
         } else {
-            ctx.set_error(output.len(), "unable to parse string to type `BOOLEAN`");
+            ctx.set_error(output.len(), "cannot parse to type `BOOLEAN`");
             output.push(false);
         }
     })(val, ctx)

@@ -157,6 +157,12 @@ impl AggregateFunctionFactory {
     ) -> Result<AggregateFunctionRef> {
         let name = name.as_ref();
         let mut features = AggregateFunctionFeatures::default();
+        // The NULL value in the list function needs to be added to the returned array column,
+        // so handled separately.
+        if name == "list" {
+            let agg = self.get_impl(name, params, arguments, &mut features)?;
+            return Ok(agg);
+        }
 
         if !arguments.is_empty() && arguments.iter().any(|f| f.is_nullable_or_null()) {
             let new_params = AggregateFunctionCombinatorNull::transform_params(&params)?;
@@ -254,7 +260,6 @@ impl AggregateFunctionFactory {
     pub fn registered_features(&self) -> Vec<AggregateFunctionFeatures> {
         self.case_insensitive_desc
             .values()
-            .into_iter()
             .map(|v| &v.features)
             .cloned()
             .collect::<Vec<_>>()

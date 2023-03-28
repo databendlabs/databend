@@ -26,7 +26,7 @@ use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_expression::TableSchemaRef;
 use common_expression::TopKSorter;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
 use storages_common_index::Index;
 use storages_common_index::RangeIndex;
@@ -143,7 +143,7 @@ impl ParquetTable {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
 
         // Add source pipe.
-        if self.operator.metadata().can_blocking() {
+        if self.operator.info().can_blocking() {
             pipeline.add_source(
                 |output| SyncParquetSource::create(ctx.clone(), output, source_reader.clone()),
                 max_threads,

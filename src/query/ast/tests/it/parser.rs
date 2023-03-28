@@ -70,6 +70,9 @@ fn test_statement() {
         r#"show full tables"#,
         r#"show full tables from db"#,
         r#"show full tables from ctl.db"#,
+        r#"show full columns in t in db"#,
+        r#"show columns in t from ctl.db"#,
+        r#"show full columns from t from db like 'id%'"#,
         r#"show processlist;"#,
         r#"show create table a.b;"#,
         r#"show create table a.b format TabSeparatedWithNamesAndTypes;"#,
@@ -149,6 +152,7 @@ fn test_statement() {
         r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
         r#"CREATE STAGE ~"#,
         r#"CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')"#,
+        r#"CREATE STAGE IF NOT EXISTS test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')"#,
         r#"DROP STAGE abc"#,
         r#"DROP STAGE ~"#,
         r#"list @stage_a;"#,
@@ -167,6 +171,7 @@ fn test_statement() {
         r#"ALTER DATABASE c RENAME TO a;"#,
         r#"ALTER DATABASE ctl.c RENAME TO a;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
+        r#"GRANT CREATE, CREATE USER ON * TO 'test-grant'@'localhost';"#,
         r#"GRANT SELECT, CREATE ON * TO 'test-grant'@'localhost';"#,
         r#"GRANT SELECT, CREATE ON *.* TO 'test-grant'@'localhost';"#,
         r#"GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost';"#,
@@ -335,6 +340,7 @@ fn test_statement() {
         r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200"#,
         r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200 CONTENT_TYPE='application/octet-stream'"#,
         r#"PRESIGN UPLOAD @my_stage/path/to/file CONTENT_TYPE='application/octet-stream' EXPIRE=7200"#,
+        r#"CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';"#,
         r#"CREATE SHARE t COMMENT='share comment';"#,
         r#"CREATE SHARE IF NOT EXISTS t;"#,
         r#"DROP SHARE a;"#,
@@ -357,12 +363,27 @@ fn test_statement() {
         r#"SET max_threads = 10*2;"#,
         r#"UNSET max_threads;"#,
         r#"UNSET (max_threads, sql_dialect);"#,
+        r#"SELECT t.c1 FROM @stage1/dir/file
+        ( file_format => 'PARQUET', FILES => ('file1', 'file2')) t;"#,
+        r#"select table0.c1, table1.c2 from
+            @stage1/dir/file ( FILE_FORMAT => 'parquet', FILES => ('file1', 'file2')) table0
+            left join table1;"#,
+        r#"SELECT c1 FROM 's3://test/bucket' (ENDPOINT_URL => 'xxx', PATTERN => '*.parquet') t;"#,
+        r#"CREATE FILE FORMAT my_csv
+            type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;"#,
+        r#"SHOW FILE FORMATS"#,
+        r#"DROP FILE FORMAT my_csv"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS (a, b, c, d)"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS (a, b, (c, d))"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (c), (d, e))"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (), (d, e))"#,
+        r#"SELECT * FROM t GROUP BY CUBE (a, b, c)"#,
+        r#"SELECT * FROM t GROUP BY ROLLUP (a, b, c)"#,
     ];
 
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();
-        let backtrace = Backtrace::new();
-        let (stmt, fmt) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace).unwrap();
+        let (stmt, fmt) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
@@ -388,6 +409,7 @@ fn test_statement_error() {
         r#"create table a (c varch)"#,
         r#"create table a (c tuple())"#,
         r#"create table a (c decimal)"#,
+        r#"create table a (b tuple(c int, uint64));"#,
         r#"drop table if a.b"#,
         r#"truncate table a.b.c.d"#,
         r#"truncate a"#,
@@ -414,12 +436,13 @@ fn test_statement_error() {
         r#"CALL system$test(a"#,
         r#"show settings ilike 'enable%'"#,
         r#"PRESIGN INVALID @my_stage/path/to/file"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS a, b"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS ()"#,
     ];
 
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();
-        let backtrace = Backtrace::new();
-        let err = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace).unwrap_err();
+        let err = parse_sql(&tokens, Dialect::PostgreSQL).unwrap_err();
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
@@ -466,6 +489,8 @@ fn test_query() {
         r#"select * from t1 union select * from t2 intersect select * from t3"#,
         r#"(select * from t1 union select * from t2) union select * from t3"#,
         r#"select * from t1 union (select * from t2 union select * from t3)"#,
+        r#"select * from monthly_sales pivot(sum(amount) for month in ('JAN', 'FEB', 'MAR', 'APR')) order by empid"#,
+        r#"select * from monthly_sales_1 unpivot(sales for month in (jan, feb, mar, april)) order by empid"#,
     ];
 
     for case in cases {
@@ -565,6 +590,17 @@ fn test_expr() {
         r#"1 is distinct from 2"#,
         r#"a is distinct from b"#,
         r#"1 is not distinct from null"#,
+        r#"{'k1':1,'k2':2}"#,
+        // window expr
+        r#"ROW_NUMBER() OVER (ORDER BY salary DESC)"#,
+        r#"SUM(salary) OVER ()"#,
+        r#"AVG(salary) OVER (PARTITION BY department)"#,
+        r#"SUM(salary) OVER (PARTITION BY department ORDER BY salary DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)"#,
+        r#"AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) "#,
+        r#"COUNT() OVER (ORDER BY hire_date RANGE BETWEEN INTERVAL '7' DAY PRECEDING AND CURRENT ROW)"#,
+        r#"COUNT() OVER (ORDER BY hire_date ROWS UNBOUNDED PRECEDING)"#,
+        r#"COUNT() OVER (ORDER BY hire_date ROWS CURRENT ROW)"#,
+        r#"COUNT() OVER (ORDER BY hire_date ROWS 3 PRECEDING)"#,
     ];
 
     for case in cases {

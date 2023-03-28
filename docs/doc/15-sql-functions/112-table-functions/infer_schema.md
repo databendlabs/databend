@@ -59,7 +59,7 @@ LIST @infer_parquet;
 ### `infer_schema`
 
 
-```shell
+```sql
 SELECT * FROM INFER_SCHEMA(location => '@infer_parquet/data_e0fd9cba-f45c-4c43-aa07-d6d87d134378_0_0.parquet');
 +-------------+-----------------+----------+----------+
 | column_name | type            | nullable | order_id |
@@ -70,7 +70,7 @@ SELECT * FROM INFER_SCHEMA(location => '@infer_parquet/data_e0fd9cba-f45c-4c43-a
 
 ### `infer_schema` with Pattern Matching
 
-```shell
+```sql
 SELECT * FROM infer_schema(location => '@infer_parquet/', pattern => '.*parquet');
 +-------------+-----------------+----------+----------+
 | column_name | type            | nullable | order_id |
@@ -79,3 +79,19 @@ SELECT * FROM infer_schema(location => '@infer_parquet/', pattern => '.*parquet'
 +-------------+-----------------+----------+----------+
 ```
 
+### Create a Table From Parquet File
+
+The `infer_schema` can only display the schema of a parquet file and cannot create a table from it. 
+
+To create a table from a parquet file, use the [Stage Table Function](./stage_table_function.md) as following:
+
+```sql
+CREATE TABLE mytable AS SELECT * FROM @infer_parquet/ (pattern=>'.*parquet') LIMIT 0;
+
+DESC mytable;
++--------+-----------------+------+---------+-------+
+| Field  | Type            | Null | Default | Extra |
++--------+-----------------+------+---------+-------+
+| number | BIGINT UNSIGNED | NO   | 0       |       |
++--------+-----------------+------+---------+-------+
+```

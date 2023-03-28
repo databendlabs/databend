@@ -23,9 +23,11 @@ members = [
     "src/common/http",
     "src/common/io",
     "src/common/metrics",
+    "src/common/openai",
     "src/common/tracing",
     "src/common/storage",
     "src/common/profile",
+    "src/common/vector",
     # Query
     "src/query/ast",
     "src/query/codegen",
@@ -89,10 +91,21 @@ members = [
 
 [workspace.dependencies]
 # databend maintains:
-openraft = { git = "https://github.com/datafuselabs/openraft", tag = "v0.7.4" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
-opendal = { version = "0.28.0" }
+opendal = { version = "0.30", features = [
+    "layers-tracing",
+    "layers-metrics",
+    "services-ipfs",
+    "services-moka",
+    "services-redis",
+    "trust-dns",
+] }
 ordered-float = { version = "3.4.0", default-features = false }
+jsonb = { version = "0.1.1" }
+
+# openraft = { version = "0.8.2", features = ["compat-07"] }
+# For debugging
+openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.8.3-alpha.2", features = ["compat-07"] }
 
 # type helper
 derive_more = "0.99.17"
@@ -107,11 +120,14 @@ clap = { version = "3.2.22", features = ["derive", "env"] }
 
 # serialization
 prost = { version = "0.11.0" }
-serde = { version = "1.0.145", features = ["derive", "rc"] }
+# 1.0.153 adds a new feature which will allow `serde(alias = "…")` inside a flattened struct.
+# This feature seems cool but will break our config parse.
+# @xuanwo will address this issue upon his return from Mars.
+serde = { version = "=1.0.152", features = ["derive", "rc"] }
 serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order"] }
 
 # chrono
-chrono = { version = "0.4.22", features = ["serde"] }
+chrono = { version = "0.4.24", features = ["serde"] }
 chrono-tz = "0.6.3"
 
 # memory
@@ -127,7 +143,7 @@ reqwest = { version = "0.11", default-features = false, features = [
 ] }
 
 # runtime
-tokio = { version = "1.24.2", features = ["full"] }
+tokio = { version = "1.26.0", features = ["full"] }
 
 [profile.release]
 debug = 1
@@ -173,7 +189,6 @@ rpath = false
 # For example:
 # arrow-format = { git = "https://github.com/datafuse-extras/arrow-format", rev = "78dacc1" }
 
-arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "615300b" }
+arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "db87f71" }
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "ed0e1ff" }
-limits-rs = { git = "https://github.com/datafuse-extras/limits-rs", rev = "abfcf7b" }
-metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "bc49d03" }
+metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }

@@ -21,15 +21,16 @@ use std::sync::Arc;
 
 use async_channel::Receiver;
 use async_channel::Sender;
-use async_channel::WeakSender;
 use common_arrow::arrow_format::flight::data::Action;
 use common_arrow::arrow_format::flight::data::FlightData;
+use common_arrow::arrow_format::flight::data::Ticket;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::base::tokio::time::Duration;
+use common_base::runtime::GlobalIORuntime;
+use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use futures_util::StreamExt;
-use parking_lot::Mutex;
+use futures::StreamExt;
 use tonic::transport::channel::Channel;
 use tonic::Request;
 use tonic::Status;
@@ -57,46 +58,72 @@ impl FlightClient {
         Ok(())
     }
 
-    pub async fn request_server_exchange(&mut self, query_id: &str) -> Result<FlightExchange> {
-        let (tx, rx) = async_channel::bounded(8);
-        Ok(FlightExchange::from_client(
-            tx,
-            self.exchange_streaming(
-                RequestBuilder::create(Box::pin(rx))
-                    .with_metadata("x-type", "request_server_exchange")?
-                    .with_metadata("x-query-id", query_id)?
-                    .build(),
-            )
-            .await?,
-        ))
-    }
-
-    pub async fn do_exchange(
+    pub async fn request_server_exchange(
         &mut self,
         query_id: &str,
-        source: &str,
-        fragment_id: usize,
+        target: &str,
     ) -> Result<FlightExchange> {
-        let (tx, rx) = async_channel::bounded(8);
-        Ok(FlightExchange::from_client(
-            tx,
-            self.exchange_streaming(
-                RequestBuilder::create(Box::pin(rx))
-                    .with_metadata("x-type", "exchange_fragment")?
-                    .with_metadata("x-source", source)?
+        let mut streaming = self
+            .get_streaming(
+                RequestBuilder::create(Ticket::default())
+                    .with_metadata("x-type", "request_server_exchange")?
+                    .with_metadata("x-target", target)?
                     .with_metadata("x-query-id", query_id)?
-                    .with_metadata("x-fragment-id", &fragment_id.to_string())?
                     .build(),
             )
-            .await?,
-        ))
+            .await?;
+
+        let (tx, rx) = async_channel::bounded(1);
+        GlobalIORuntime::instance().spawn({
+            async move {
+                while let Some(message) = streaming.next().await {
+                    if tx.send(message.map_err(ErrorCode::from)).await.is_err() {
+                        break;
+                    }
+                }
+
+                tx.close();
+            }
+        });
+
+        Ok(FlightExchange::create_receiver(rx))
     }
 
-    async fn exchange_streaming(
+    pub async fn do_get(
         &mut self,
-        request: impl tonic::IntoStreamingRequest<Message = FlightData>,
-    ) -> Result<Streaming<FlightData>> {
-        match self.inner.do_exchange(request).await {
+        query_id: &str,
+        target: &str,
+        fragment: usize,
+    ) -> Result<FlightExchange> {
+        let mut streaming = self
+            .get_streaming(
+                RequestBuilder::create(Ticket::default())
+                    .with_metadata("x-type", "exchange_fragment")?
+                    .with_metadata("x-target", target)?
+                    .with_metadata("x-query-id", query_id)?
+                    .with_metadata("x-fragment-id", &fragment.to_string())?
+                    .build(),
+            )
+            .await?;
+
+        let (tx, rx) = async_channel::bounded(1);
+        GlobalIORuntime::instance().spawn({
+            async move {
+                while let Some(message) = streaming.next().await {
+                    if tx.send(message.map_err(ErrorCode::from)).await.is_err() {
+                        break;
+                    }
+                }
+
+                tx.close();
+            }
+        });
+
+        Ok(FlightExchange::create_receiver(rx))
+    }
+
+    async fn get_streaming(&mut self, request: Request<Ticket>) -> Result<Streaming<FlightData>> {
+        match self.inner.do_get(request).await {
             Ok(res) => Ok(res.into_inner()),
             Err(status) => Err(ErrorCode::from(status).add_message_back("(while in query flight)")),
         }
@@ -123,321 +150,80 @@ impl FlightClient {
     }
 }
 
-#[derive(Clone)]
-pub enum FlightExchange {
-    // dummy if localhost
-    Dummy,
-    Client(ClientFlightExchange),
-    Server(ServerFlightExchange),
+pub struct FlightReceiver {
+    state: Arc<State>,
+    dropped: AtomicBool,
+    rx: Receiver<Result<FlightData>>,
 }
 
-impl FlightExchange {
-    pub fn from_server(
-        streaming: Request<Streaming<FlightData>>,
-        response_tx: Sender<Result<FlightData, Status>>,
-    ) -> FlightExchange {
-        let streaming = streaming.into_inner();
-        let state = Arc::new(ChannelState::create());
-        let f = |x| Ok(FlightData::from(x));
-        let (tx, rx) =
-            Self::listen_request::<true, _>(state.clone(), response_tx.clone(), streaming, f);
-
-        FlightExchange::Server(ServerFlightExchange {
-            state,
-            request_rx: rx,
-            response_tx: tx,
-            network_tx: response_tx.downgrade(),
-        })
-    }
-
-    pub fn from_client(
-        response_tx: Sender<FlightData>,
-        streaming: Streaming<FlightData>,
-    ) -> FlightExchange {
-        let state = Arc::new(ChannelState::create());
-        let f = FlightData::from;
-        let (tx, rx) =
-            Self::listen_request::<false, _>(state.clone(), response_tx.clone(), streaming, f);
-
-        FlightExchange::Client(ClientFlightExchange {
-            state,
-            request_rx: rx,
-            response_tx: tx,
-            network_tx: response_tx.downgrade(),
-        })
-    }
-
-    fn listen_request<const CLOSE_CONN: bool, ResponseT: Send + 'static>(
-        state: Arc<ChannelState>,
-        network_tx: Sender<ResponseT>,
-        mut streaming: Streaming<FlightData>,
-        f: impl Fn(DataPacket) -> ResponseT + Sync + Send + 'static,
-    ) -> (Sender<ResponseT>, Receiver<Result<FlightData, Status>>) {
-        let (tx, rx) = async_channel::bounded(1);
-        let (response_tx, response_rx) = async_channel::bounded(1);
-
-        Self::start_push_worker(network_tx.clone(), response_rx.clone());
-
-        let f = Arc::new(f);
-        common_base::base::tokio::spawn(async move {
-            while let Some(message) = streaming.next().await {
-                match message {
-                    Ok(message) if DataPacket::is_closing_input(&message) => {
-                        if !response_rx.is_closed() {
-                            response_rx.close();
-
-                            let f = f.clone();
-                            let network_tx = network_tx.clone();
-                            let response_rx = response_rx.clone();
-                            // create new future send packet to remote for avoid blocking recv data
-                            common_base::base::tokio::spawn(async move {
-                                // Send ClosingOutput response after other response.
-                                while let Ok(response) = response_rx.recv().await {
-                                    let _ = network_tx.send(response).await;
-                                }
-
-                                let _ = network_tx.send(f(DataPacket::ClosingOutput)).await;
-                            });
-                        }
-                    }
-                    Ok(message) if DataPacket::is_closing_output(&message) => {
-                        if !tx.is_closed() {
-                            tx.close();
-
-                            let f = f.clone();
-                            let network_tx = network_tx.clone();
-                            // create new future send packet to remote for avoid blocking recv data
-                            common_base::base::tokio::spawn(async move {
-                                let _ = network_tx.send(f(DataPacket::ClosingInput)).await;
-                            });
-                        }
-                    }
-                    other => {
-                        if let Err(status) = &other {
-                            if let Some(error) = match_for_io_error(status) {
-                                {
-                                    let mut may_recv_error = state.may_recv_error.lock();
-                                    *may_recv_error = Some(std::io::Error::new(error.kind(), ""));
-                                }
-
-                                break;
-                            }
-                        }
-
-                        // We need to continue consume stream for avoid stream die message blocking io buffer.
-                        let _ = tx.send(other).await;
-                    }
-                };
-
-                if CLOSE_CONN && tx.is_closed() && response_rx.is_closed() {
-                    // We cannot stop the loop immediately. Because the connection will be reset when destroy streaming and network_tx.
-                    // the remote may still be receiving data.
-
-                    // Close network channel after all responses is sent.
-                    while let Ok(resp) = response_rx.recv().await {
-                        let _ = network_tx.send(resp).await;
-                    }
-
-                    network_tx.close();
-                }
-            }
-
-            tx.close();
-            response_rx.close();
-            drop(network_tx);
-        });
-
-        (response_tx, rx)
-    }
-
-    fn start_push_worker<ResponseT: Send + 'static>(
-        network_tx: Sender<ResponseT>,
-        response_rx: Receiver<ResponseT>,
-    ) {
-        common_base::base::tokio::spawn(async move {
-            while let Ok(response) = response_rx.recv().await {
-                if network_tx.send(response).await.is_err() {
-                    break;
-                }
-            }
-
-            response_rx.close();
-            drop(network_tx);
-        });
-    }
-}
-
-impl FlightExchange {
-    pub fn get_ref(&self) -> FlightExchangeRef {
-        let state = match self {
-            FlightExchange::Dummy => Arc::new(ChannelState::create()),
-            FlightExchange::Client(exchange) => exchange.state.clone(),
-            FlightExchange::Server(exchange) => exchange.state.clone(),
-        };
-
-        state.request_count.fetch_add(1, Ordering::Relaxed);
-        state.response_count.fetch_add(1, Ordering::Relaxed);
-
-        FlightExchangeRef {
-            state,
-            inner: self.clone(),
-            is_closed_request: AtomicBool::new(false),
-            is_closed_response: AtomicBool::new(false),
-        }
-    }
-
-    pub async fn send(&self, data: DataPacket) -> Result<()> {
-        match self {
-            FlightExchange::Dummy => Err(ErrorCode::Unimplemented(
-                "Unimplemented send in dummy exchange.",
-            )),
-            FlightExchange::Client(exchange) => exchange.send(data).await,
-            FlightExchange::Server(exchange) => exchange.send(data).await,
-        }
-    }
-
-    pub async fn recv(&self) -> Result<Option<DataPacket>> {
-        match self {
-            FlightExchange::Client(exchange) => exchange.recv().await,
-            FlightExchange::Server(exchange) => exchange.recv().await,
-            FlightExchange::Dummy => Ok(None),
-        }
-    }
-
-    pub fn is_closed_input(&self) -> bool {
-        match self {
-            FlightExchange::Dummy => true,
-            FlightExchange::Client(exchange) => exchange.request_rx.is_closed(),
-            FlightExchange::Server(exchange) => exchange.request_rx.is_closed(),
-        }
-    }
-
-    pub fn is_closed_output(&self) -> bool {
-        match self {
-            FlightExchange::Dummy => true,
-            FlightExchange::Client(exchange) => exchange.response_tx.is_closed(),
-            FlightExchange::Server(exchange) => exchange.response_tx.is_closed(),
-        }
-    }
-
-    pub async fn close_input(&self) {
-        match self {
-            FlightExchange::Dummy => { /* do nothing*/ }
-            FlightExchange::Client(exchange) => exchange.close_input().await,
-            FlightExchange::Server(exchange) => exchange.close_input().await,
-        }
-    }
-
-    pub async fn close_output(&self) {
-        match self {
-            FlightExchange::Dummy => { /* do nothing*/ }
-            FlightExchange::Client(exchange) => exchange.close_output().await,
-            FlightExchange::Server(exchange) => exchange.close_output().await,
-        }
-    }
-}
-
-pub struct FlightExchangeRef {
-    inner: FlightExchange,
-    state: Arc<ChannelState>,
-    is_closed_request: AtomicBool,
-    is_closed_response: AtomicBool,
-}
-
-impl Drop for FlightExchangeRef {
+impl Drop for FlightReceiver {
     fn drop(&mut self) {
-        // Blocking is ok, because the channel may not be closed when has error in query execution.
-        if !(self.is_closed_request.load(Ordering::Relaxed)
-            && self.is_closed_response.load(Ordering::Relaxed))
-        {
-            futures::executor::block_on(async move {
-                self.close_input().await;
-                self.close_output().await;
-            });
+        self.close();
+    }
+}
+
+impl FlightReceiver {
+    pub fn create(rx: Receiver<Result<FlightData>>) -> FlightReceiver {
+        FlightReceiver {
+            rx,
+            state: State::create(),
+            dropped: AtomicBool::new(false),
+        }
+    }
+
+    pub async fn recv(&self) -> Result<Option<DataPacket>> {
+        match self.rx.recv().await {
+            Err(_) => Ok(None),
+            Ok(Err(error)) => Err(error),
+            Ok(Ok(message)) => Ok(Some(DataPacket::try_from(message)?)),
+        }
+    }
+
+    pub fn close(&self) {
+        #[allow(clippy::collapsible_if)]
+        if !self.dropped.fetch_or(true, Ordering::SeqCst) {
+            if self.state.strong_count.fetch_sub(1, Ordering::SeqCst) == 1 {
+                self.rx.close();
+            }
         }
     }
 }
 
-impl Clone for FlightExchangeRef {
+pub struct FlightSender {
+    state: Arc<State>,
+    dropped: AtomicBool,
+    tx: Sender<Result<FlightData, Status>>,
+}
+
+impl Clone for FlightSender {
     fn clone(&self) -> Self {
-        self.state.request_count.fetch_add(1, Ordering::Relaxed);
-        self.state.response_count.fetch_add(1, Ordering::Relaxed);
+        self.state.strong_count.fetch_add(1, Ordering::SeqCst);
 
-        FlightExchangeRef {
+        FlightSender {
+            tx: self.tx.clone(),
             state: self.state.clone(),
-            inner: self.inner.clone(),
-            is_closed_request: AtomicBool::new(false),
-            is_closed_response: AtomicBool::new(false),
+            dropped: AtomicBool::new(false),
         }
     }
 }
 
-impl FlightExchangeRef {
+impl Drop for FlightSender {
+    fn drop(&mut self) {
+        self.close();
+    }
+}
+
+impl FlightSender {
+    pub fn create(tx: Sender<Result<FlightData, Status>>) -> FlightSender {
+        FlightSender {
+            state: State::create(),
+            dropped: AtomicBool::new(false),
+            tx,
+        }
+    }
+
     pub async fn send(&self, data: DataPacket) -> Result<()> {
-        self.inner.send(data).await
-    }
-
-    pub async fn recv(&self) -> Result<Option<DataPacket>> {
-        self.inner.recv().await
-    }
-
-    pub async fn close_input(&self) {
-        if self.is_closed_request.fetch_or(true, Ordering::SeqCst) {
-            return;
-        }
-
-        if self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1 {
-            self.inner.close_input().await;
-        }
-    }
-
-    pub async fn close_output(&self) {
-        if self.is_closed_response.fetch_or(true, Ordering::SeqCst) {
-            return;
-        }
-
-        if self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1 {
-            self.inner.close_output().await;
-        }
-    }
-}
-
-struct ChannelState {
-    request_count: AtomicUsize,
-    response_count: AtomicUsize,
-    may_recv_error: Mutex<Option<std::io::Error>>,
-}
-
-impl ChannelState {
-    pub fn create() -> ChannelState {
-        ChannelState {
-            may_recv_error: Mutex::new(None),
-            request_count: AtomicUsize::new(0),
-            response_count: AtomicUsize::new(0),
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct ClientFlightExchange {
-    state: Arc<ChannelState>,
-    response_tx: Sender<FlightData>,
-    network_tx: WeakSender<FlightData>,
-    request_rx: Receiver<Result<FlightData, Status>>,
-}
-
-impl ClientFlightExchange {
-    pub async fn send(&self, data: DataPacket) -> Result<()> {
-        if let Err(_cause) = self.response_tx.send(FlightData::from(data)).await {
-            let may_recv_error = self.state.may_recv_error.lock();
-
-            // we need to return the error when io error occurs
-            if let Some(recv_error) = &*may_recv_error {
-                let kind = recv_error.kind();
-                let error = std::io::Error::new(kind, "Flight connection failure");
-                return Err(ErrorCode::from(error));
-            }
-
+        if let Err(_cause) = self.tx.send(Ok(FlightData::from(data))).await {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the remote flight channel is closed.",
             ));
@@ -446,120 +232,87 @@ impl ClientFlightExchange {
         Ok(())
     }
 
-    pub async fn recv(&self) -> Result<Option<DataPacket>> {
-        match self.request_rx.recv().await {
-            Err(_) => {
-                let may_recv_error = self.state.may_recv_error.lock();
+    pub fn close(&self) {
+        #[allow(clippy::collapsible_if)]
+        if !self.dropped.fetch_or(true, Ordering::SeqCst) {
+            if self.state.strong_count.fetch_sub(1, Ordering::SeqCst) == 1 {
+                self.tx.close();
+            }
+        }
+    }
+}
 
-                // we need to return the error when io error occurs
-                if let Some(recv_error) = &*may_recv_error {
-                    let kind = recv_error.kind();
-                    let error = std::io::Error::new(kind, "Flight connection failure");
-                    return Err(ErrorCode::from(error));
+pub struct State {
+    strong_count: AtomicUsize,
+}
+
+impl State {
+    pub fn create() -> Arc<State> {
+        Arc::new(State {
+            strong_count: AtomicUsize::new(0),
+        })
+    }
+}
+
+pub enum FlightExchange {
+    Dummy,
+    Receiver {
+        state: Arc<State>,
+        receiver: Receiver<Result<FlightData>>,
+    },
+    Sender {
+        state: Arc<State>,
+        sender: Sender<Result<FlightData, Status>>,
+    },
+}
+
+impl FlightExchange {
+    pub fn create_sender(sender: Sender<Result<FlightData, Status>>) -> FlightExchange {
+        FlightExchange::Sender {
+            sender,
+            state: State::create(),
+        }
+    }
+
+    pub fn create_receiver(receiver: Receiver<Result<FlightData>>) -> FlightExchange {
+        FlightExchange::Receiver {
+            receiver,
+            state: State::create(),
+        }
+    }
+
+    pub fn as_sender(&self) -> FlightSender {
+        match self {
+            FlightExchange::Sender { state, sender } => {
+                state.strong_count.fetch_add(1, Ordering::SeqCst);
+
+                FlightSender {
+                    tx: sender.clone(),
+                    state: state.clone(),
+                    dropped: AtomicBool::new(false),
                 }
-
-                Ok(None)
             }
-            Ok(message) => match message {
-                Ok(data) => Ok(Some(DataPacket::try_from(data)?)),
-                Err(status) => Err(ErrorCode::from(status)),
-            },
+            _ => unreachable!(),
         }
     }
 
-    pub async fn close_input(&self) {
-        // Close local channel first.
-        // NOTE: this is very important. When we open the local channel while pushing closing input, it may cause distributed deadlock.
-        self.request_rx.close();
+    pub fn as_receiver(&self) -> FlightReceiver {
+        match self {
+            FlightExchange::Receiver { state, receiver } => {
+                state.strong_count.fetch_add(1, Ordering::SeqCst);
 
-        // Notify remote not to send messages.
-        // We send it directly to the network channel avoid response channel is closed
-        if let Some(network_tx) = self.network_tx.upgrade() {
-            let packet = FlightData::from(DataPacket::ClosingInput);
-            let _ = network_tx.send(packet).await;
-        }
-    }
-
-    pub async fn close_output(&self) {
-        // Notify remote that no message will be sent.
-        if !self.response_tx.is_closed() {
-            let packet = FlightData::from(DataPacket::ClosingOutput);
-            let _ = self.response_tx.send(packet).await;
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct ServerFlightExchange {
-    state: Arc<ChannelState>,
-    network_tx: WeakSender<Result<FlightData, Status>>,
-    request_rx: Receiver<Result<FlightData, Status>>,
-    response_tx: Sender<Result<FlightData, Status>>,
-}
-
-impl ServerFlightExchange {
-    pub async fn send(&self, data: DataPacket) -> Result<()> {
-        if let Err(_cause) = self.response_tx.send(Ok(FlightData::from(data))).await {
-            let may_recv_error = self.state.may_recv_error.lock();
-
-            // we need to return the error when io error occurs
-            if let Some(recv_error) = &*may_recv_error {
-                let kind = recv_error.kind();
-                let error = std::io::Error::new(kind, "Flight connection failure");
-                return Err(ErrorCode::from(error));
-            }
-
-            return Err(ErrorCode::AbortedQuery(
-                "Aborted query, because the remote flight channel is closed.",
-            ));
-        }
-
-        Ok(())
-    }
-
-    pub async fn recv(&self) -> Result<Option<DataPacket>> {
-        match self.request_rx.recv().await {
-            Err(_) => {
-                let may_recv_error = self.state.may_recv_error.lock();
-
-                // we need to return the error when io error occurs
-                if let Some(recv_error) = &*may_recv_error {
-                    let kind = recv_error.kind();
-                    let error = std::io::Error::new(kind, "Flight connection failure");
-                    return Err(ErrorCode::from(error));
+                FlightReceiver {
+                    rx: receiver.clone(),
+                    state: state.clone(),
+                    dropped: AtomicBool::new(false),
                 }
-
-                Ok(None)
             }
-            Ok(message) => match message {
-                Ok(data) => Ok(Some(DataPacket::try_from(data)?)),
-                Err(status) => Err(ErrorCode::from(status)),
-            },
-        }
-    }
-
-    pub async fn close_input(&self) {
-        // Close local channel first.
-        // NOTE: this is very important. When we open the local channel while pushing closing input, it may cause distributed deadlock.
-        self.request_rx.close();
-
-        // Notify remote not to send messages.
-        // We send it directly to the network channel avoid response channel is closed
-        if let Some(network_tx) = self.network_tx.upgrade() {
-            let packet = FlightData::from(DataPacket::ClosingInput);
-            let _ = network_tx.send(Ok(packet)).await;
-        }
-    }
-
-    pub async fn close_output(&self) {
-        // Notify remote that no message will be sent.
-        if !self.response_tx.is_closed() {
-            let packet = FlightData::from(DataPacket::ClosingOutput);
-            let _ = self.response_tx.send(Ok(packet)).await;
+            _ => unreachable!(),
         }
     }
 }
 
+#[allow(dead_code)]
 fn match_for_io_error(err_status: &Status) -> Option<&std::io::Error> {
     let mut err: &(dyn Error + 'static) = err_status;
 

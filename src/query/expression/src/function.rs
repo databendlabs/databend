@@ -14,6 +14,8 @@
 
 use std::collections::HashMap;
 use std::ops::BitAnd;
+use std::ops::BitOr;
+use std::ops::Not;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
@@ -21,6 +23,7 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
+use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use serde::Deserialize;
 use serde::Serialize;
@@ -28,7 +31,7 @@ use serde::Serialize;
 use crate::date_helper::TzLUT;
 use crate::property::Domain;
 use crate::property::FunctionProperty;
-use crate::type_check::can_auto_cast_to;
+use crate::type_check::try_unify_signature;
 use crate::types::nullable::NullableColumn;
 use crate::types::*;
 use crate::utils::arrow::constant_bitmap;
@@ -40,15 +43,43 @@ use crate::Expr;
 use crate::FunctionDomain;
 use crate::Scalar;
 
+pub type AutoCastRules<'a> = &'a [(DataType, DataType)];
+/// A function to build function depending on the const parameters and the type of arguments (before coercion).
+///
+/// The first argument is the const parameters and the second argument is the types of arguments.
+pub type FunctionFactory =
+    Box<dyn Fn(&[usize], &[DataType]) -> Option<Arc<Function>> + Send + Sync + 'static>;
+
+pub struct Function {
+    pub signature: FunctionSignature,
+    pub eval: FunctionEval,
+}
+
 #[derive(Debug, Clone)]
 pub struct FunctionSignature {
     pub name: String,
     pub args_type: Vec<DataType>,
     pub return_type: DataType,
-    pub property: FunctionProperty,
 }
 
-pub type AutoCastRules<'a> = &'a [(DataType, DataType)];
+#[derive(EnumAsInner)]
+#[allow(clippy::type_complexity)]
+pub enum FunctionEval {
+    /// Scalar function that returns a single value.
+    Scalar {
+        /// Given the domains of the arguments, return the domain of the output value.
+        calc_domain: Box<dyn Fn(&[Domain]) -> FunctionDomain<AnyType> + Send + Sync>,
+        /// Given a set of arguments, return a single value.
+        /// The result must be in the same length as the input arguments if its a column.
+        eval: Box<dyn Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> + Send + Sync>,
+    },
+    /// Set returning function that returns a series of values.
+    SRF {
+        /// Given a set of arguments, return a series of chunks of result and the repeat time of each chunk.
+        eval:
+            Box<dyn Fn(&[ValueRef<AnyType>], usize) -> Vec<(Value<AnyType>, usize)> + Send + Sync>,
+    },
+}
 
 #[derive(Clone, Copy, Default)]
 pub struct FunctionContext {
@@ -68,62 +99,8 @@ pub struct EvalContext<'a> {
     pub errors: Option<(MutableBitmap, String)>,
 }
 
-impl<'a> EvalContext<'a> {
-    #[inline]
-    pub fn set_error(&mut self, row: usize, error_msg: impl AsRef<str>) {
-        // If the row is NULL, we don't need to set error.
-        if self
-            .validity
-            .as_ref()
-            .map(|b| !b.get_bit(row))
-            .unwrap_or(false)
-        {
-            return;
-        }
-
-        match self.errors.as_mut() {
-            Some((valids, _)) => {
-                valids.set(row, false);
-            }
-            None => {
-                let mut valids = constant_bitmap(true, self.num_rows.max(1));
-                valids.set(row, false);
-                self.errors = Some((valids, error_msg.as_ref().to_string()));
-            }
-        }
-    }
-
-    pub fn render_error(&self, span: Span, args: &[Value<AnyType>], func_name: &str) -> Result<()> {
-        match &self.errors {
-            Some((valids, error)) => {
-                let first_error_row = valids
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, valid)| !valid)
-                    .take(1)
-                    .next()
-                    .unwrap()
-                    .0;
-                let args = args
-                    .iter()
-                    .map(|arg| {
-                        let arg_ref = arg.as_ref();
-                        arg_ref.index(first_error_row).unwrap().to_string()
-                    })
-                    .join(", ");
-
-                Err(ErrorCode::Internal(format!(
-                    "{error} while evaluating function `{func_name}({args})`"
-                ))
-                .set_span(span))
-            }
-            None => Ok(()),
-        }
-    }
-}
-
-/// `FunctionID` is a unique identifier for a function. It's used to construct
-/// the exactly same function from the remote execution nodes.
+/// `FunctionID` is a unique identifier for a function in the registry. It's used to
+/// construct the exactly same function in the remote execution nodes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FunctionID {
     Builtin {
@@ -138,16 +115,27 @@ pub enum FunctionID {
     },
 }
 
-pub struct Function {
-    pub signature: FunctionSignature,
-    #[allow(clippy::type_complexity)]
-    pub calc_domain: Box<dyn Fn(&[Domain]) -> FunctionDomain<AnyType> + Send + Sync>,
-    #[allow(clippy::type_complexity)]
-    pub eval: Box<dyn Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> + Send + Sync>,
+#[derive(Default)]
+pub struct FunctionRegistry {
+    pub funcs: HashMap<String, Vec<(Arc<Function>, usize)>>,
+    pub factories: HashMap<String, Vec<(FunctionFactory, usize)>>,
+
+    /// Aliases map from alias function name to original function name.
+    pub aliases: HashMap<String, String>,
+
+    /// Default cast rules for all functions.
+    pub default_cast_rules: Vec<(DataType, DataType)>,
+    /// Cast rules for specific functions, excluding the default cast rules.
+    pub additional_cast_rules: HashMap<String, Vec<(DataType, DataType)>>,
+    /// The auto rules that should use TRY_CAST instead of CAST.
+    pub auto_try_cast_rules: Vec<(DataType, DataType)>,
+
+    pub properties: HashMap<String, FunctionProperty>,
 }
 
 impl Function {
     pub fn wrap_nullable(self) -> Self {
+        let (_, eval) = self.eval.into_scalar().unwrap();
         Self {
             signature: FunctionSignature {
                 name: self.signature.name.clone(),
@@ -158,34 +146,13 @@ impl Function {
                     .map(|ty| ty.wrap_nullable())
                     .collect(),
                 return_type: self.signature.return_type.wrap_nullable(),
-                property: self.signature.property.clone(),
             },
-            calc_domain: Box::new(|_| FunctionDomain::Full),
-            eval: Box::new(wrap_nullable(self.eval)),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_| FunctionDomain::Full),
+                eval: Box::new(wrap_nullable(eval)),
+            },
         }
     }
-}
-
-#[derive(Default)]
-pub struct FunctionRegistry {
-    pub funcs: HashMap<String, Vec<Arc<Function>>>,
-    /// A function to build function depending on the const parameters and the type of arguments (before coercion).
-    ///
-    /// The first argument is the const parameters and the second argument is the number of arguments.
-    #[allow(clippy::type_complexity)]
-    pub factories: HashMap<
-        String,
-        Vec<Box<dyn Fn(&[usize], &[DataType]) -> Option<Arc<Function>> + Send + Sync + 'static>>,
-    >,
-    /// Aliases map from alias function name to original function name.
-    pub aliases: HashMap<String, String>,
-
-    /// Default cast rules for all functions.
-    pub default_cast_rules: Vec<(DataType, DataType)>,
-    /// Cast rules for specific functions, excluding the default cast rules.
-    pub additional_cast_rules: HashMap<String, Vec<(DataType, DataType)>>,
-    /// The auto rules that should use TRY_CAST instead of CAST.
-    pub auto_try_cast_rules: Vec<(DataType, DataType)>,
 }
 
 impl FunctionRegistry {
@@ -211,14 +178,24 @@ impl FunctionRegistry {
 
     pub fn get(&self, id: &FunctionID) -> Option<Arc<Function>> {
         match id {
-            FunctionID::Builtin { name, id } => self.funcs.get(name.as_str())?.get(*id).cloned(),
+            FunctionID::Builtin { name, id } => self
+                .funcs
+                .get(name.as_str())?
+                .iter()
+                .find(|(_, func_id)| func_id == id)
+                .map(|(func, _)| func.clone()),
             FunctionID::Factory {
                 name,
                 id,
                 params,
                 args_type,
             } => {
-                let factory = self.factories.get(name.as_str())?.get(*id)?;
+                let factory = self
+                    .factories
+                    .get(name.as_str())?
+                    .iter()
+                    .find(|(_, func_id)| func_id == id)
+                    .map(|(func, _)| func)?;
                 factory(params, args_type)
             }
         }
@@ -235,12 +212,12 @@ impl FunctionRegistry {
         let mut candidates = Vec::new();
 
         if let Some(funcs) = self.funcs.get(&name) {
-            candidates.extend(funcs.iter().enumerate().filter_map(|(id, func)| {
+            candidates.extend(funcs.iter().filter_map(|(func, id)| {
                 if func.signature.name == name && func.signature.args_type.len() == args.len() {
                     Some((
                         FunctionID::Builtin {
                             name: name.to_string(),
-                            id,
+                            id: *id,
                         },
                         func.clone(),
                     ))
@@ -256,12 +233,12 @@ impl FunctionRegistry {
                 .map(Expr::data_type)
                 .cloned()
                 .collect::<Vec<_>>();
-            candidates.extend(factories.iter().enumerate().filter_map(|(id, factory)| {
+            candidates.extend(factories.iter().filter_map(|(factory, id)| {
                 factory(params, &args_type).map(|func| {
                     (
                         FunctionID::Factory {
                             name: name.to_string(),
-                            id,
+                            id: *id,
                             params: params.to_vec(),
                             args_type: args_type.clone(),
                         },
@@ -270,6 +247,8 @@ impl FunctionRegistry {
                 })
             }));
         }
+
+        candidates.sort_by_key(|(id, _)| id.id());
 
         candidates
     }
@@ -286,15 +265,39 @@ impl FunctionRegistry {
             .any(|(src_ty, dest_ty)| arg_type == src_ty && sig_type == dest_ty)
     }
 
+    pub fn get_property(&self, func_name: &str) -> Option<FunctionProperty> {
+        let func_name = func_name.to_lowercase();
+        if self.contains(&func_name) {
+            Some(
+                self.properties
+                    .get(&func_name.to_lowercase())
+                    .cloned()
+                    .unwrap_or_default(),
+            )
+        } else {
+            None
+        }
+    }
+
+    pub fn register_function(&mut self, func: Function) {
+        let name = func.signature.name.clone();
+        let id = self.next_function_id(&name);
+        self.funcs
+            .entry(name)
+            .or_insert_with(Vec::new)
+            .push((Arc::new(func), id));
+    }
+
     pub fn register_function_factory(
         &mut self,
         name: &str,
         factory: impl Fn(&[usize], &[DataType]) -> Option<Arc<Function>> + 'static + Send + Sync,
     ) {
+        let id = self.next_function_id(name);
         self.factories
             .entry(name.to_string())
             .or_insert_with(Vec::new)
-            .push(Box::new(factory));
+            .push((Box::new(factory), id));
     }
 
     pub fn register_aliases(&mut self, fn_name: &str, aliases: &[&str]) {
@@ -329,29 +332,133 @@ impl FunctionRegistry {
         self.auto_try_cast_rules.extend(auto_try_cast_rules);
     }
 
+    pub fn next_function_id(&self, name: &str) -> usize {
+        self.funcs.get(name).map(|funcs| funcs.len()).unwrap_or(0)
+            + self.factories.get(name).map(|f| f.len()).unwrap_or(0)
+    }
+
+    pub fn all_function_names(&self) -> Vec<String> {
+        self.aliases
+            .keys()
+            .chain(self.funcs.keys())
+            .chain(self.factories.keys())
+            .map(|s| s.to_string())
+            .sorted()
+            .dedup()
+            .collect()
+    }
+
     pub fn check_ambiguity(&self) {
         for (name, funcs) in &self.funcs {
             let auto_cast_rules = self.get_auto_cast_rules(name);
-            for (i, former) in funcs.iter().enumerate() {
-                for latter in funcs.iter().skip(i + 1) {
-                    if former.signature.args_type.len() == latter.signature.args_type.len()
-                        && former
-                            .signature
-                            .args_type
+            for (former, former_id) in funcs {
+                for latter in funcs
+                    .iter()
+                    .filter(|(_, id)| id > former_id)
+                    .map(|(func, _)| func.clone())
+                    .chain(
+                        self.factories
+                            .get(name)
+                            .map(Vec::as_slice)
+                            .unwrap_or(&[])
                             .iter()
-                            .zip(latter.signature.args_type.iter())
-                            .all(|(former_arg, latter_arg)| {
-                                can_auto_cast_to(latter_arg, former_arg, auto_cast_rules)
-                            })
-                    {
-                        panic!(
-                            "Ambiguous signatures for function:\n- {}\n- {}\n\
-                                    Suggestion: swap the order of the overloads.",
-                            former.signature, latter.signature
-                        );
+                            .filter(|(_, id)| id > former_id)
+                            .filter_map(|(factory, _)| factory(&[], &former.signature.args_type)),
+                    )
+                {
+                    if former.signature.args_type.len() == latter.signature.args_type.len() {
+                        if let Ok(subst) = try_unify_signature(
+                            latter.signature.args_type.iter(),
+                            former.signature.args_type.iter(),
+                            auto_cast_rules,
+                        ) {
+                            if subst.apply(&former.signature.return_type).is_ok()
+                                && former
+                                    .signature
+                                    .args_type
+                                    .iter()
+                                    .all(|sig_ty| subst.apply(sig_ty).is_ok())
+                            {
+                                panic!(
+                                    "Ambiguous signatures for function:\n- {}\n- {}\n\
+                                        Suggestion: swap the order of the overloads.",
+                                    former.signature, latter.signature
+                                );
+                            }
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+impl FunctionID {
+    pub fn id(&self) -> usize {
+        match self {
+            FunctionID::Builtin { id, .. } => *id,
+            FunctionID::Factory { id, .. } => *id,
+        }
+    }
+
+    pub fn name(&self) -> &String {
+        match self {
+            FunctionID::Builtin { name, .. } => name,
+            FunctionID::Factory { name, .. } => name,
+        }
+    }
+}
+
+impl<'a> EvalContext<'a> {
+    #[inline]
+    pub fn set_error(&mut self, row: usize, error_msg: impl Into<String>) {
+        // If the row is NULL, we don't need to set error.
+        if self
+            .validity
+            .as_ref()
+            .map(|b| !b.get_bit(row))
+            .unwrap_or(false)
+        {
+            return;
+        }
+
+        match self.errors.as_mut() {
+            Some((valids, _)) => {
+                valids.set(row, false);
+            }
+            None => {
+                let mut valids = constant_bitmap(true, self.num_rows.max(1));
+                valids.set(row, false);
+                self.errors = Some((valids, error_msg.into()));
+            }
+        }
+    }
+
+    pub fn render_error(&self, span: Span, args: &[Value<AnyType>], func_name: &str) -> Result<()> {
+        match &self.errors {
+            Some((valids, error)) => {
+                let first_error_row = valids
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, valid)| !valid)
+                    .take(1)
+                    .next()
+                    .unwrap()
+                    .0;
+                let args = args
+                    .iter()
+                    .map(|arg| {
+                        let arg_ref = arg.as_ref();
+                        arg_ref.index(first_error_row).unwrap().to_string()
+                    })
+                    .join(", ");
+
+                Err(ErrorCode::Internal(format!(
+                    "{error} while evaluating function `{func_name}({args})`"
+                ))
+                .set_span(span))
+            }
+            None => Ok(()),
         }
     }
 }
@@ -385,6 +492,17 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
         }
         let results = f(&nonull_args, ctx);
         let bitmap = bitmap.unwrap_or_else(|| constant_bitmap(true, len));
+        if let Some((error_bitmap, _)) = ctx.errors.as_mut() {
+            // If the original value is NULL, we can ignore the error.
+            let rhs: Bitmap = bitmap.clone().not().into();
+            let res = error_bitmap.clone().bitor(&rhs);
+            if res.unset_bits() == 0 {
+                ctx.errors = None;
+            } else {
+                *error_bitmap = res;
+            }
+        }
+
         match results {
             Value::Scalar(s) => {
                 if bitmap.get(0) {

@@ -17,12 +17,11 @@ use common_exception::Result;
 use common_meta_app::storage::StorageParams;
 use common_storage::init_operator;
 use opendal::Operator;
-use time::Duration;
 
 use crate::configs::Config;
-use crate::models;
-use crate::models::PresignFileResponse;
-use crate::models::SharedTableResponse;
+
+mod share_table_accessor;
+mod share_table_meta_accessor;
 
 #[derive(Clone)]
 pub struct SharingAccessor {
@@ -76,72 +75,12 @@ impl SharingAccessor {
             config: cfg.clone(),
         })
     }
+
     fn get_root(&self) -> String {
         match self.config.storage.params {
             StorageParams::S3(ref s3) => s3.root.trim_matches('/').to_string(),
             StorageParams::Oss(ref oss) => oss.root.trim_matches('/').to_string(),
             _ => "".to_string(),
         }
-    }
-
-    fn get_share_location(&self) -> String {
-        format!("{}/_share_config/share_specs.json", self.config.tenant)
-    }
-
-    // read share table spec from S3 and check whether requester has permission on the table
-    pub async fn get_shared_table(
-        &self,
-        input: &models::LambdaInput,
-    ) -> Result<Option<SharedTableResponse>> {
-        let sharing_accessor = Self::instance();
-        let path = sharing_accessor.get_share_location();
-        let data = sharing_accessor.op.object(&path).read().await?;
-        let share_specs: models::SharingConfig = serde_json::from_slice(data.as_slice())?;
-        share_specs.get_tables(input)
-    }
-
-    // presign_file would be separated into two steps:
-    // 1. fetch the table location
-    // 2. form the final path and presign it
-    pub async fn presign_file(
-        &self,
-        table: &SharedTableResponse,
-        input: &models::RequestFile,
-    ) -> Result<PresignFileResponse> {
-        let loc_prefix = table.location.trim_matches('/');
-        let loc_prefix = loc_prefix.strip_prefix(self.get_root().as_str()).unwrap();
-
-        let file_path = truncate_root(self.get_root(), input.file_name.clone());
-        let obj_path = format!("{}/{}", loc_prefix, file_path);
-        let op = self.op.clone();
-        if input.method == "HEAD" {
-            let s = op
-                .object(obj_path.as_str())
-                .presign_stat(Duration::hours(1))?;
-            return Ok(PresignFileResponse::new(&s, input.file_name.clone()));
-        }
-
-        let s = op
-            .object(obj_path.as_str())
-            .presign_read(Duration::hours(1))?;
-        Ok(PresignFileResponse::new(&s, input.file_name.clone()))
-    }
-
-    pub async fn get_presigned_files(
-        input: &models::LambdaInput,
-    ) -> Result<Vec<PresignFileResponse>> {
-        let accessor = Self::instance();
-        let table = accessor.get_shared_table(input).await?;
-        return match table {
-            Some(t) => {
-                let mut presigned_files = vec![];
-                for f in input.request_files.iter() {
-                    let presigned_file = accessor.presign_file(&t, f).await?;
-                    presigned_files.push(presigned_file);
-                }
-                Ok(presigned_files)
-            }
-            None => Ok(vec![]),
-        };
     }
 }

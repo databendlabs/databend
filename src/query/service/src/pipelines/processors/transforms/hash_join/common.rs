@@ -29,7 +29,7 @@ use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::Scalar;
 use common_expression::Value;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::HashtableLike;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
@@ -309,20 +309,22 @@ impl JoinHashTable {
     }
 
     pub(crate) fn rest_block(&self) -> Result<DataBlock> {
-        let rest_probe_blocks = self.hash_join_desc.join_state.rest_probe_blocks.read();
-        if rest_probe_blocks.is_empty() {
+        let mut rest_pairs = self.hash_join_desc.join_state.rest_pairs.write();
+        if rest_pairs.0.is_empty() {
             return Ok(DataBlock::empty());
         }
-        let probe_block = DataBlock::concat(&rest_probe_blocks)?;
-        let rest_build_indexes = self.hash_join_desc.join_state.rest_build_indexes.read();
-        let mut build_block = self.row_space.gather(&rest_build_indexes)?;
+        let probe_block = DataBlock::concat(&rest_pairs.0)?;
+        rest_pairs.0.clear();
+        let mut build_block = self.row_space.gather(&rest_pairs.1)?;
+        rest_pairs.1.clear();
         // For left join, wrap nullable for build block
         if matches!(
             self.hash_join_desc.join_type,
             JoinType::Left | JoinType::Single | JoinType::Full
         ) {
-            let validity = self.hash_join_desc.join_state.validity.read();
-            let validity: Bitmap = (*validity).clone().into();
+            let mut validity_state = self.hash_join_desc.join_state.validity.write();
+            let validity: Bitmap = (*validity_state).clone().into();
+            validity_state.clear();
             let num_rows = validity.len();
             let nullable_columns = if self.row_space.datablocks().is_empty() {
                 build_block
@@ -342,7 +344,6 @@ impl JoinHashTable {
             };
             build_block = DataBlock::new(nullable_columns, num_rows);
         }
-
         self.merge_eq_block(&build_block, &probe_block)
     }
 

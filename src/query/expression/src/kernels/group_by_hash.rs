@@ -23,7 +23,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hashtable::FastHash;
 use common_io::prelude::BinaryWrite;
-use common_io::prelude::FormatSettings;
 use ethnum::i256;
 use ethnum::u256;
 use ethnum::U256;
@@ -46,7 +45,7 @@ use crate::with_decimal_mapped_type;
 use crate::with_integer_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
-use crate::TypeDeserializer;
+use crate::ColumnBuilder;
 
 #[derive(Debug)]
 pub enum KeysState {
@@ -171,6 +170,7 @@ impl HashMethod for HashMethodSingleString {
     fn build_keys_iter<'a>(&self, key_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {
         match key_state {
             KeysState::Column(Column::String(col)) => Ok(col.iter()),
+            KeysState::Column(Column::Variant(col)) => Ok(col.iter()),
             _ => unreachable!(),
         }
     }
@@ -337,34 +337,28 @@ where T: Clone
 
         for (_, data_type) in sorted_group_items.iter() {
             let non_null_type = data_type.remove_nullable();
-            let mut deserializer = non_null_type.create_deserializer(rows);
+            let mut column = ColumnBuilder::with_capacity(&non_null_type, rows);
             let reader = vec8.as_slice();
 
-            let format = FormatSettings::default();
             let col = match data_type.is_nullable() {
                 false => {
-                    deserializer.de_fixed_binary_batch(&reader[offsize..], step, rows, &format)?;
-                    deserializer.finish_to_column()
+                    column.push_fix_len_binaries(&reader[offsize..], step, rows)?;
+                    column.build()
                 }
 
                 true => {
-                    let mut bitmap_deserializer = DataType::Boolean.create_deserializer(rows);
-                    bitmap_deserializer.de_fixed_binary_batch(
-                        &reader[null_offsize..],
-                        step,
-                        rows,
-                        &format,
-                    )?;
+                    let mut bitmap_column = ColumnBuilder::with_capacity(&DataType::Boolean, rows);
+                    bitmap_column.push_fix_len_binaries(&reader[null_offsize..], step, rows)?;
 
                     null_offsize += 1;
 
-                    let col = bitmap_deserializer.finish_to_column();
+                    let col = bitmap_column.build();
                     let col = BooleanType::try_downcast_column(&col).unwrap();
 
                     // we store 1 for nulls in fixed_hash
                     let bitmap = col.not();
-                    deserializer.de_fixed_binary_batch(&reader[offsize..], step, rows, &format)?;
-                    let inner = deserializer.finish_to_column();
+                    column.push_fix_len_binaries(&reader[offsize..], step, rows)?;
+                    let inner = column.build();
                     Column::Nullable(Box::new(NullableColumn {
                         column: inner,
                         validity: bitmap,
@@ -558,7 +552,7 @@ pub fn serialize_column_binary(column: &Column, row: usize, vec: &mut Vec<u8>) {
                 serialize_column_binary(&c.column, row, vec);
             }
         }
-        Column::Tuple { fields, .. } => {
+        Column::Tuple(fields) => {
             for inner_col in fields.iter() {
                 serialize_column_binary(inner_col, row, vec);
             }

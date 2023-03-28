@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::future::Future;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -20,21 +21,25 @@ use common_meta_raft_store::state_machine::testing::pretty_snapshot;
 use common_meta_raft_store::state_machine::testing::snapshot_logs;
 use common_meta_raft_store::state_machine::SerializableSnapshot;
 use common_meta_sled_store::openraft::async_trait::async_trait;
-use common_meta_sled_store::openraft::raft::Entry;
-use common_meta_sled_store::openraft::raft::EntryPayload;
-use common_meta_sled_store::openraft::storage::HardState;
 use common_meta_sled_store::openraft::testing::StoreBuilder;
-use common_meta_sled_store::openraft::EffectiveMembership;
-use common_meta_sled_store::openraft::LogId;
-use common_meta_sled_store::openraft::Membership;
+use common_meta_sled_store::openraft::RaftSnapshotBuilder;
 use common_meta_sled_store::openraft::RaftStorage;
 use common_meta_sled_store::openraft::StorageHelper;
-use common_meta_types::AppliedState;
-use common_meta_types::LogEntry;
+use common_meta_types::new_log_id;
+use common_meta_types::CommittedLeaderId;
+use common_meta_types::Entry;
+use common_meta_types::EntryPayload;
+use common_meta_types::LogId;
+use common_meta_types::Membership;
+use common_meta_types::StorageError;
+use common_meta_types::StoredMembership;
+use common_meta_types::TypeConfig;
+use common_meta_types::Vote;
 use databend_meta::init_meta_ut;
 use databend_meta::store::RaftStoreBare;
 use databend_meta::Opened;
 use maplit::btreeset;
+use pretty_assertions::assert_eq;
 use tracing::debug;
 use tracing::info;
 
@@ -45,10 +50,14 @@ struct MetaStoreBuilder {
 }
 
 #[async_trait]
-impl StoreBuilder<LogEntry, AppliedState, RaftStoreBare> for MetaStoreBuilder {
-    async fn build(&self) -> RaftStoreBare {
+impl StoreBuilder<TypeConfig, RaftStoreBare> for MetaStoreBuilder {
+    async fn run_test<Fun, Ret, Res>(&self, t: Fun) -> Result<Ret, StorageError>
+    where
+        Res: Future<Output = Result<Ret, StorageError>> + Send,
+        Fun: Fn(RaftStoreBare) -> Res + Sync + Send,
+    {
         let tc = MetaSrvTestContext::new(555);
-        let ms = RaftStoreBare::open_create(&tc.config.raft_config, None, Some(()))
+        let sto = RaftStoreBare::open_create(&tc.config.raft_config, None, Some(()))
             .await
             .expect("fail to create store");
 
@@ -56,7 +65,8 @@ impl StoreBuilder<LogEntry, AppliedState, RaftStoreBare> for MetaStoreBuilder {
             let mut tcs = self.test_contexts.lock().unwrap();
             tcs.push(tc);
         }
-        ms
+
+        t(sto).await
     }
 }
 
@@ -84,27 +94,23 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
 
     info!("--- new meta store");
     {
-        let sto = RaftStoreBare::open_create(&tc.config.raft_config, None, Some(())).await?;
+        let mut sto = RaftStoreBare::open_create(&tc.config.raft_config, None, Some(())).await?;
         assert_eq!(id, sto.id);
         assert!(!sto.is_opened());
-        assert_eq!(None, sto.read_hard_state().await?);
+        assert_eq!(None, sto.read_vote().await?);
 
         info!("--- update metasrv");
 
-        sto.save_hard_state(&HardState {
-            current_term: 10,
-            voted_for: Some(5),
-        })
-        .await?;
+        sto.save_vote(&Vote::new(10, 5)).await?;
 
         sto.append_to_log(&[&Entry {
-            log_id: LogId::new(1, 1),
+            log_id: LogId::new(CommittedLeaderId::new(1, 2), 1),
             payload: EntryPayload::Blank,
         }])
         .await?;
 
         sto.apply_to_state_machine(&[&Entry {
-            log_id: LogId::new(1, 2),
+            log_id: LogId::new(CommittedLeaderId::new(1, 2), 2),
             payload: EntryPayload::Blank,
         }])
         .await?;
@@ -112,22 +118,19 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
 
     info!("--- reopen meta store");
     {
-        let sto = RaftStoreBare::open_create(&tc.config.raft_config, Some(()), None).await?;
+        let mut sto = RaftStoreBare::open_create(&tc.config.raft_config, Some(()), None).await?;
         assert_eq!(id, sto.id);
         assert!(sto.is_opened());
-        assert_eq!(
-            Some(HardState {
-                current_term: 10,
-                voted_for: Some(5),
-            }),
-            sto.read_hard_state().await?
-        );
+        assert_eq!(Some(Vote::new(10, 5)), sto.read_vote().await?);
 
         assert_eq!(
-            LogId::new(1, 1),
-            StorageHelper::new(&sto).get_log_id(1).await?
+            LogId::new(CommittedLeaderId::new(1, 2), 1),
+            StorageHelper::new(&mut sto).get_log_id(1).await?
         );
-        assert_eq!(Some(LogId::new(1, 2)), sto.last_applied_state().await?.0);
+        assert_eq!(
+            Some(LogId::new(CommittedLeaderId::new(1, 2), 2)),
+            sto.last_applied_state().await?.0
+        );
     }
     Ok(())
 }
@@ -141,7 +144,7 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
     let id = 3;
     let tc = MetaSrvTestContext::new(id);
 
-    let sto = RaftStoreBare::open_create(&tc.config.raft_config, None, Some(())).await?;
+    let mut sto = RaftStoreBare::open_create(&tc.config.raft_config, None, Some(())).await?;
 
     info!("--- feed logs and state machine");
 
@@ -153,10 +156,7 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
     }
 
     let curr_snap = sto.build_snapshot().await?;
-    assert_eq!(
-        Some(LogId { term: 1, index: 9 }),
-        curr_snap.meta.last_log_id
-    );
+    assert_eq!(Some(new_log_id(1, 0, 9)), curr_snap.meta.last_log_id);
 
     info!("--- check snapshot");
     {
@@ -181,7 +181,7 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
     let id = 3;
     let tc = MetaSrvTestContext::new(id);
 
-    let sto = RaftStoreBare::open_create(&tc.config.raft_config, None, Some(())).await?;
+    let mut sto = RaftStoreBare::open_create(&tc.config.raft_config, None, Some(())).await?;
 
     info!("--- feed logs and state machine");
 
@@ -197,10 +197,7 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
     info!("--- check get_current_snapshot");
 
     let curr_snap = sto.get_current_snapshot().await?.unwrap();
-    assert_eq!(
-        Some(LogId { term: 1, index: 9 }),
-        curr_snap.meta.last_log_id
-    );
+    assert_eq!(Some(new_log_id(1, 0, 9)), curr_snap.meta.last_log_id);
 
     info!("--- check snapshot");
     {
@@ -230,7 +227,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
     {
         let tc = MetaSrvTestContext::new(id);
 
-        let sto = RaftStoreBare::open_create(&tc.config.raft_config, None, Some(())).await?;
+        let mut sto = RaftStoreBare::open_create(&tc.config.raft_config, None, Some(())).await?;
 
         info!("--- feed logs and state machine");
 
@@ -247,12 +244,12 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
     {
         let tc = MetaSrvTestContext::new(id);
 
-        let sto = RaftStoreBare::open_create(&tc.config.raft_config, None, Some(())).await?;
+        let mut sto = RaftStoreBare::open_create(&tc.config.raft_config, None, Some(())).await?;
 
         info!("--- rejected because old sm is not cleaned");
         {
             sto.raft_state.write_state_machine_id(&(1, 2)).await?;
-            let res = sto.install_snapshot(&data).await;
+            let res = sto.do_install_snapshot(&data).await;
             assert!(res.is_err(), "different ids disallow installing snapshot");
             assert!(
                 res.unwrap_err()
@@ -264,7 +261,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
         info!("--- install snapshot");
         {
             sto.raft_state.write_state_machine_id(&(0, 0)).await?;
-            sto.install_snapshot(&data).await?;
+            sto.do_install_snapshot(&data).await?;
         }
 
         info!("--- check installed meta");
@@ -273,15 +270,18 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
 
             let mem = sto.state_machine.write().await.get_membership()?;
             assert_eq!(
-                Some(EffectiveMembership {
-                    log_id: LogId::new(1, 5),
-                    membership: Membership::new_single(btreeset! {4,5,6})
-                }),
+                Some(StoredMembership::new(
+                    Some(LogId::new(CommittedLeaderId::new(1, 0), 5)),
+                    Membership::new(vec![btreeset! {4,5,6}], ())
+                )),
                 mem
             );
 
             let last_applied = sto.state_machine.write().await.get_last_applied()?;
-            assert_eq!(Some(LogId::new(1, 9)), last_applied);
+            assert_eq!(
+                Some(LogId::new(CommittedLeaderId::new(1, 0), 9)),
+                last_applied
+            );
         }
 
         info!("--- check snapshot");

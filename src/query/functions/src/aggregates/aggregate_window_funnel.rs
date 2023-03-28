@@ -22,6 +22,7 @@ use std::sync::Arc;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check::check_number;
 use common_expression::types::number::Number;
 use common_expression::types::number::UInt8Type;
 use common_expression::types::ArgType;
@@ -35,6 +36,8 @@ use common_expression::types::ValueType;
 use common_expression::with_integer_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
+use common_expression::Expr;
+use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_io::prelude::*;
 use num_traits::AsPrimitive;
@@ -49,6 +52,7 @@ use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::assert_unary_params;
 use crate::aggregates::assert_variadic_arguments;
 use crate::aggregates::AggregateFunction;
+use crate::BUILTIN_FUNCTIONS;
 
 #[derive(Serialize, Deserialize)]
 struct AggregateWindowFunnelState<T> {
@@ -352,10 +356,21 @@ where
         arguments: Vec<DataType>,
     ) -> Result<AggregateFunctionRef> {
         let event_size = arguments.len() - 1;
-        let window = params[0]
-            .as_ref()
-            .cast_to_u64()
-            .ok_or_else(|| ErrorCode::InvalidArgument("Must be positive window"))?;
+        let window = check_number(
+            None,
+            FunctionContext::default(),
+            &Expr::<usize>::Cast {
+                span: None,
+                is_try: false,
+                expr: Box::new(Expr::Constant {
+                    span: None,
+                    scalar: params[0].clone(),
+                    data_type: params[0].as_ref().infer_data_type(),
+                }),
+                dest_type: DataType::Number(NumberDataType::UInt64),
+            },
+            &BUILTIN_FUNCTIONS,
+        )?;
 
         Ok(Arc::new(Self {
             display_name: display_name.to_owned(),

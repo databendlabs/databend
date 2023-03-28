@@ -74,7 +74,7 @@ impl WorkersCondvar {
     pub fn wait(&self, worker_id: usize, finished: Arc<AtomicBool>) {
         let mut wait_guard = self.workers_condvar[worker_id].mutex.lock();
 
-        while !*wait_guard && !finished.load(Ordering::Relaxed) {
+        while !*wait_guard && !finished.load(Ordering::SeqCst) {
             self.workers_condvar[worker_id]
                 .condvar
                 .wait(&mut wait_guard);
@@ -109,6 +109,10 @@ impl WorkersWaitingStatus {
 
     pub fn waiting_size(&self) -> usize {
         self.stack_size
+    }
+
+    pub fn total_size(&self) -> usize {
+        self.worker_pos_in_stack.len()
     }
 
     pub fn is_waiting(&self, thread: usize) -> bool {

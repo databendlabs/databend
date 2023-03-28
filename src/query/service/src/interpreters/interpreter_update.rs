@@ -79,6 +79,7 @@ impl Interpreter for UpdateInterpreter {
         };
 
         let predicate = ScalarExpr::BoundColumnRef(BoundColumnRef {
+            span: None,
             column: ColumnBinding {
                 database_name: None,
                 table_name: None,
@@ -95,9 +96,9 @@ impl Interpreter for UpdateInterpreter {
             |mut acc, (index, scalar)| {
                 let field = schema.field(*index);
                 let left = ScalarExpr::CastExpr(CastExpr {
+                    span: scalar.span(),
                     is_try: false,
                     argument: Box::new(scalar.clone()),
-                    from_type: Box::new(scalar.data_type()),
                     target_type: Box::new(field.data_type().clone()),
                 });
                 let scalar = if col_indices.is_empty() {
@@ -117,18 +118,18 @@ impl Interpreter for UpdateInterpreter {
                             column_binding,
                         ) {
                             right = Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
+                                span: None,
                                 column: column_binding.clone(),
                             }));
                             break;
                         }
                     }
                     let right = right.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
-                    let return_type = right.data_type();
                     ScalarExpr::FunctionCall(FunctionCall {
+                        span: None,
+                        func_name: "if".to_string(),
                         params: vec![],
                         arguments: vec![predicate.clone(), left, right],
-                        func_name: "if".to_string(),
-                        return_type: Box::new(return_type),
                     })
                 };
                 acc.push((*index, scalar.as_expr_with_col_name()?.as_remote_expr()));

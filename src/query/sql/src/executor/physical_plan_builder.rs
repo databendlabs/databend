@@ -28,14 +28,15 @@ use common_expression::type_check::check_function;
 use common_expression::types::DataType;
 use common_expression::ConstantFolder;
 use common_expression::DataBlock;
+use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
-use itertools::Itertools;
+use common_functions::BUILTIN_FUNCTIONS;
 
 use super::cast_expr_to_non_null_boolean;
+use super::AggregateExpand;
 use super::AggregateFinal;
 use super::AggregateFunctionDesc;
 use super::AggregateFunctionSignature;
@@ -44,6 +45,7 @@ use super::Exchange as PhysicalExchange;
 use super::Filter;
 use super::HashJoin;
 use super::Limit;
+use super::ProjectSet;
 use super::Sort;
 use super::TableScan;
 use crate::executor::explain::PlanStatsInfo;
@@ -51,6 +53,7 @@ use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::EvalScalar;
 use crate::executor::FragmentKind;
 use crate::executor::PhysicalPlan;
+use crate::executor::RuntimeFilterSource;
 use crate::executor::SortDesc;
 use crate::executor::UnionAll;
 use crate::optimizer::ColumnSet;
@@ -59,15 +62,17 @@ use crate::optimizer::SExpr;
 use crate::plans::AggregateMode;
 use crate::plans::AndExpr;
 use crate::plans::Exchange;
+use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::Scan;
 use crate::BaseTableColumn;
 use crate::ColumnEntry;
 use crate::DerivedColumn;
-use crate::IndexType;
 use crate::Metadata;
 use crate::MetadataRef;
+use crate::TableInternalColumn;
+use crate::TypeCheck;
 use crate::DUMMY_COLUMN_INDEX;
 use crate::DUMMY_TABLE_INDEX;
 
@@ -97,47 +102,59 @@ impl PhysicalPlanBuilder {
         schema: &TableSchema,
         columns: &ColumnSet,
         has_inner_column: bool,
+        ignore_internal_column: bool,
     ) -> Projection {
         if !has_inner_column {
-            let col_indices = columns
-                .iter()
-                .map(|index| {
-                    let name = match metadata.column(*index) {
-                        ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => {
-                            column_name
+            let mut col_indices = Vec::new();
+            for index in columns.iter() {
+                let name = match metadata.column(*index) {
+                    ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => {
+                        column_name
+                    }
+                    ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
+                    ColumnEntry::InternalColumn(TableInternalColumn {
+                        internal_column, ..
+                    }) => {
+                        if ignore_internal_column {
+                            continue;
                         }
-                        ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
-                    };
-                    schema.index_of(name).unwrap()
-                })
-                .sorted()
-                .collect::<Vec<_>>();
+                        internal_column.column_name()
+                    }
+                };
+                col_indices.push(schema.index_of(name).unwrap());
+            }
+
+            col_indices.sort();
             Projection::Columns(col_indices)
         } else {
-            let col_indices = columns
-                .iter()
-                .map(|index| {
-                    let column = metadata.column(*index);
-                    match column {
-                        ColumnEntry::BaseTableColumn(BaseTableColumn {
-                            column_name,
-                            path_indices,
-                            ..
-                        }) => match path_indices {
-                            Some(path_indices) => (column.index(), path_indices.to_vec()),
-                            None => {
-                                let idx = schema.index_of(column_name).unwrap();
-                                (column.index(), vec![idx])
-                            }
-                        },
-                        ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => {
-                            let idx = schema.index_of(alias).unwrap();
-                            (column.index(), vec![idx])
+            let mut col_indices = BTreeMap::new();
+            for index in columns.iter() {
+                let column = metadata.column(*index);
+                match column {
+                    ColumnEntry::BaseTableColumn(BaseTableColumn {
+                        column_name,
+                        path_indices,
+                        ..
+                    }) => match path_indices {
+                        Some(path_indices) => {
+                            col_indices.insert(column.index(), path_indices.to_vec());
+                        }
+                        None => {
+                            let idx = schema.index_of(column_name).unwrap();
+                            col_indices.insert(column.index(), vec![idx]);
+                        }
+                    },
+                    ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => {
+                        let idx = schema.index_of(alias).unwrap();
+                        col_indices.insert(column.index(), vec![idx]);
+                    }
+                    ColumnEntry::InternalColumn(TableInternalColumn { column_index, .. }) => {
+                        if !ignore_internal_column {
+                            col_indices.insert(*column_index, vec![*column_index]);
                         }
                     }
-                })
-                .sorted()
-                .collect::<BTreeMap<_, Vec<IndexType>>>();
+                }
+            }
             Projection::InnerColumns(col_indices)
         }
     }
@@ -151,6 +168,7 @@ impl PhysicalPlanBuilder {
             RelOperator::Scan(scan) => {
                 let mut has_inner_column = false;
                 let mut name_mapping = BTreeMap::new();
+                let mut project_internal_columns = BTreeMap::new();
                 let metadata = self.metadata.read().clone();
                 for index in scan.columns.iter() {
                     let column = metadata.column(*index);
@@ -160,6 +178,12 @@ impl PhysicalPlanBuilder {
                         if path_indices.is_some() {
                             has_inner_column = true;
                         }
+                    } else if let ColumnEntry::InternalColumn(TableInternalColumn {
+                        internal_column,
+                        ..
+                    }) = column
+                    {
+                        project_internal_columns.insert(*index, internal_column.to_owned());
                     }
 
                     let name = match column {
@@ -167,6 +191,10 @@ impl PhysicalPlanBuilder {
                             column_name
                         }
                         ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
+                        ColumnEntry::InternalColumn(TableInternalColumn {
+                            internal_column,
+                            ..
+                        }) => internal_column.column_name(),
                     };
                     if let Some(prewhere) = &scan.prewhere {
                         // if there is a prewhere optimization,
@@ -181,7 +209,18 @@ impl PhysicalPlanBuilder {
 
                 let table_entry = metadata.table(scan.table_index);
                 let table = table_entry.table();
-                let table_schema = table.schema();
+                let mut table_schema = table.schema();
+                if !project_internal_columns.is_empty() {
+                    let mut schema = table_schema.as_ref().clone();
+                    for internal_column in project_internal_columns.values() {
+                        schema.add_internal_column(
+                            internal_column.column_name(),
+                            internal_column.table_data_type(),
+                            internal_column.column_id(),
+                        );
+                    }
+                    table_schema = Arc::new(schema);
+                }
 
                 let push_downs = self.push_downs(scan, &table_schema, has_inner_column)?;
 
@@ -190,16 +229,26 @@ impl PhysicalPlanBuilder {
                         self.ctx.clone(),
                         table_entry.catalog().to_string(),
                         Some(push_downs),
+                        if project_internal_columns.is_empty() {
+                            None
+                        } else {
+                            Some(project_internal_columns.clone())
+                        },
                     )
                     .await?;
 
+                let internal_column = if project_internal_columns.is_empty() {
+                    None
+                } else {
+                    Some(project_internal_columns)
+                };
                 Ok(PhysicalPlan::TableScan(TableScan {
                     plan_id: self.next_plan_id(),
                     name_mapping,
                     source: Box::new(source),
                     table_index: scan.table_index,
-
                     stat_info: Some(stat_info),
+                    internal_column,
                 }))
             }
             RelOperator::DummyTableScan(_) => {
@@ -209,24 +258,66 @@ impl PhysicalPlanBuilder {
                     .get_table(self.ctx.get_tenant().as_str(), "system", "one")
                     .await?;
                 let source = table
-                    .read_plan_with_catalog(self.ctx.clone(), CATALOG_DEFAULT.to_string(), None)
+                    .read_plan_with_catalog(
+                        self.ctx.clone(),
+                        CATALOG_DEFAULT.to_string(),
+                        None,
+                        None,
+                    )
                     .await?;
                 Ok(PhysicalPlan::TableScan(TableScan {
                     plan_id: self.next_plan_id(),
                     name_mapping: BTreeMap::from([("dummy".to_string(), DUMMY_COLUMN_INDEX)]),
                     source: Box::new(source),
                     table_index: DUMMY_TABLE_INDEX,
-
                     stat_info: Some(PlanStatsInfo {
                         estimated_rows: 1.0,
                     }),
+                    internal_column: None,
                 }))
             }
             RelOperator::Join(join) => {
                 let build_side = self.build(s_expr.child(1)?).await?;
                 let probe_side = self.build(s_expr.child(0)?).await?;
-                let build_schema = build_side.output_schema()?;
-                let probe_schema = probe_side.output_schema()?;
+
+                let build_schema = match join.join_type {
+                    JoinType::Left | JoinType::Full => {
+                        let build_schema = build_side.output_schema()?;
+                        // Wrap nullable type for columns in build side.
+                        let build_schema = DataSchemaRefExt::create(
+                            build_schema
+                                .fields()
+                                .iter()
+                                .map(|field| {
+                                    DataField::new(field.name(), field.data_type().wrap_nullable())
+                                })
+                                .collect::<Vec<_>>(),
+                        );
+                        build_schema
+                    }
+
+                    _ => build_side.output_schema()?,
+                };
+
+                let probe_schema = match join.join_type {
+                    JoinType::Right | JoinType::Full => {
+                        let probe_schema = probe_side.output_schema()?;
+                        // Wrap nullable type for columns in probe side.
+                        let probe_schema = DataSchemaRefExt::create(
+                            probe_schema
+                                .fields()
+                                .iter()
+                                .map(|field| {
+                                    DataField::new(field.name(), field.data_type().wrap_nullable())
+                                })
+                                .collect::<Vec<_>>(),
+                        );
+                        probe_schema
+                    }
+
+                    _ => probe_side.output_schema()?,
+                };
+
                 let merged_schema = DataSchemaRefExt::create(
                     probe_schema
                         .fields()
@@ -244,12 +335,11 @@ impl PhysicalPlanBuilder {
                         .right_conditions
                         .iter()
                         .map(|scalar| {
-                            let expr =
-                                scalar
-                                    .as_expr_with_col_index()?
-                                    .project_column_ref(|index| {
-                                        build_schema.index_of(&index.to_string()).unwrap()
-                                    });
+                            let expr = scalar
+                                .resolve_and_check(build_schema.as_ref())?
+                                .project_column_ref(|index| {
+                                    build_schema.index_of(&index.to_string()).unwrap()
+                                });
                             let (expr, _) = ConstantFolder::fold(
                                 &expr,
                                 self.ctx.get_function_context()?,
@@ -262,12 +352,11 @@ impl PhysicalPlanBuilder {
                         .left_conditions
                         .iter()
                         .map(|scalar| {
-                            let expr =
-                                scalar
-                                    .as_expr_with_col_index()?
-                                    .project_column_ref(|index| {
-                                        probe_schema.index_of(&index.to_string()).unwrap()
-                                    });
+                            let expr = scalar
+                                .resolve_and_check(probe_schema.as_ref())?
+                                .project_column_ref(|index| {
+                                    probe_schema.index_of(&index.to_string()).unwrap()
+                                });
                             let (expr, _) = ConstantFolder::fold(
                                 &expr,
                                 self.ctx.get_function_context()?,
@@ -280,12 +369,11 @@ impl PhysicalPlanBuilder {
                         .non_equi_conditions
                         .iter()
                         .map(|scalar| {
-                            let expr =
-                                scalar
-                                    .as_expr_with_col_index()?
-                                    .project_column_ref(|index| {
-                                        merged_schema.index_of(&index.to_string()).unwrap()
-                                    });
+                            let expr = scalar
+                                .resolve_and_check(merged_schema.as_ref())?
+                                .project_column_ref(|index| {
+                                    merged_schema.index_of(&index.to_string()).unwrap()
+                                });
                             let (expr, _) = ConstantFolder::fold(
                                 &expr,
                                 self.ctx.get_function_context()?,
@@ -297,36 +385,36 @@ impl PhysicalPlanBuilder {
                     marker_index: join.marker_index,
                     from_correlated_subquery: join.from_correlated_subquery,
 
+                    contain_runtime_filter: join.contain_runtime_filter,
                     stat_info: Some(stat_info),
                 }))
             }
 
             RelOperator::EvalScalar(eval_scalar) => {
-                let input = Box::new(self.build(s_expr.child(0)?).await?);
+                let input = self.build(s_expr.child(0)?).await?;
                 let input_schema = input.output_schema()?;
+                let exprs = eval_scalar
+                    .items
+                    .iter()
+                    .map(|item| {
+                        let expr = item
+                            .scalar
+                            .resolve_and_check(input_schema.as_ref())?
+                            .project_column_ref(|index| {
+                                input_schema.index_of(&index.to_string()).unwrap()
+                            });
+                        let (expr, _) = ConstantFolder::fold(
+                            &expr,
+                            self.ctx.get_function_context()?,
+                            &BUILTIN_FUNCTIONS,
+                        );
+                        Ok((expr.as_remote_expr(), item.index))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
                 Ok(PhysicalPlan::EvalScalar(EvalScalar {
                     plan_id: self.next_plan_id(),
-                    input,
-                    exprs: eval_scalar
-                        .items
-                        .iter()
-                        .map(|item| {
-                            let expr =
-                                item.scalar
-                                    .as_expr_with_col_index()?
-                                    .project_column_ref(|index| {
-                                        input_schema.index_of(&index.to_string()).unwrap()
-                                    });
-
-                            let (expr, _) = ConstantFolder::fold(
-                                &expr,
-                                self.ctx.get_function_context()?,
-                                &BUILTIN_FUNCTIONS,
-                            );
-                            Ok((expr.as_remote_expr(), item.index))
-                        })
-                        .collect::<Result<_>>()?,
-
+                    input: Box::new(input),
+                    exprs,
                     stat_info: Some(stat_info),
                 }))
             }
@@ -341,12 +429,11 @@ impl PhysicalPlanBuilder {
                         .predicates
                         .iter()
                         .map(|scalar| {
-                            let expr =
-                                scalar
-                                    .as_expr_with_col_index()?
-                                    .project_column_ref(|index| {
-                                        input_schema.index_of(&index.to_string()).unwrap()
-                                    });
+                            let expr = scalar
+                                .resolve_and_check(input_schema.as_ref())?
+                                .project_column_ref(|index| {
+                                    input_schema.index_of(&index.to_string()).unwrap()
+                                });
                             let expr = cast_expr_to_non_null_boolean(expr)?;
                             let (expr, _) = ConstantFolder::fold(
                                 &expr,
@@ -360,6 +447,7 @@ impl PhysicalPlanBuilder {
                     stat_info: Some(stat_info),
                 }))
             }
+
             RelOperator::Aggregate(agg) => {
                 let input = self.build(s_expr.child(0)?).await?;
                 let input_schema = input.output_schema()?;
@@ -374,15 +462,14 @@ impl PhysicalPlanBuilder {
                                         name: agg.func_name.clone(),
                                         args: agg.args.iter().map(|s| {
                                             s.data_type()
-                                        }).collect(),
+                                        }).collect::<Result<_>>()?,
                                         params: agg.params.clone(),
                                         return_type: *agg.return_type.clone(),
                                     },
                                     output_column: v.index,
                                     args: agg.args.iter().map(|arg| {
                                         if let ScalarExpr::BoundColumnRef(col) = arg {
-                                            let col_index = input_schema.index_of(&col.column.index.to_string())?;
-                                            Ok(col_index)
+                                            input_schema.index_of(&col.column.index.to_string())
                                         } else {
                                             Err(ErrorCode::Internal(
                                                 "Aggregate function argument must be a BoundColumnRef".to_string()
@@ -406,12 +493,30 @@ impl PhysicalPlanBuilder {
 
                         match input {
                             PhysicalPlan::Exchange(PhysicalExchange { input, kind, .. }) => {
-                                let aggregate_partial = AggregatePartial {
-                                    plan_id: self.next_plan_id(),
-                                    input,
-                                    agg_funcs,
-                                    group_by: group_items,
-                                    stat_info: Some(stat_info),
+                                let aggregate_partial = if !agg.grouping_sets.is_empty() {
+                                    let expand = AggregateExpand {
+                                        plan_id: self.next_plan_id(),
+                                        input,
+                                        group_bys: group_items.clone(),
+                                        grouping_id_index: agg.grouping_id_index,
+                                        grouping_sets: agg.grouping_sets.clone(),
+                                        stat_info: Some(stat_info.clone()),
+                                    };
+                                    AggregatePartial {
+                                        plan_id: self.next_plan_id(),
+                                        input: Box::new(PhysicalPlan::AggregateExpand(expand)),
+                                        agg_funcs,
+                                        group_by: group_items,
+                                        stat_info: Some(stat_info),
+                                    }
+                                } else {
+                                    AggregatePartial {
+                                        plan_id: self.next_plan_id(),
+                                        input,
+                                        agg_funcs,
+                                        group_by: group_items,
+                                        stat_info: Some(stat_info),
+                                    }
                                 };
 
                                 let group_by_key_index =
@@ -421,7 +526,7 @@ impl PhysicalPlanBuilder {
                                         &agg.group_items
                                             .iter()
                                             .map(|v| v.scalar.data_type())
-                                            .collect::<Vec<_>>(),
+                                            .collect::<Result<Vec<_>>>()?,
                                     )?
                                     .data_type();
 
@@ -438,14 +543,33 @@ impl PhysicalPlanBuilder {
                                     }],
                                 })
                             }
-                            _ => PhysicalPlan::AggregatePartial(AggregatePartial {
-                                plan_id: self.next_plan_id(),
-                                agg_funcs,
-                                group_by: group_items,
-                                input: Box::new(input),
-
-                                stat_info: Some(stat_info),
-                            }),
+                            _ => {
+                                if !agg.grouping_sets.is_empty() {
+                                    let expand = AggregateExpand {
+                                        plan_id: self.next_plan_id(),
+                                        input: Box::new(input),
+                                        group_bys: group_items.clone(),
+                                        grouping_id_index: agg.grouping_id_index,
+                                        grouping_sets: agg.grouping_sets.clone(),
+                                        stat_info: Some(stat_info.clone()),
+                                    };
+                                    PhysicalPlan::AggregatePartial(AggregatePartial {
+                                        plan_id: self.next_plan_id(),
+                                        agg_funcs,
+                                        group_by: group_items,
+                                        input: Box::new(PhysicalPlan::AggregateExpand(expand)),
+                                        stat_info: Some(stat_info),
+                                    })
+                                } else {
+                                    PhysicalPlan::AggregatePartial(AggregatePartial {
+                                        plan_id: self.next_plan_id(),
+                                        agg_funcs,
+                                        group_by: group_items,
+                                        input: Box::new(input),
+                                        stat_info: Some(stat_info),
+                                    })
+                                }
+                            }
                         }
                     }
 
@@ -474,7 +598,7 @@ impl PhysicalPlanBuilder {
                                         name: agg.func_name.clone(),
                                         args: agg.args.iter().map(|s| {
                                             s.data_type()
-                                        }).collect(),
+                                        }).collect::<Result<_>>()?,
                                         params: agg.params.clone(),
                                         return_type: *agg.return_type.clone(),
                                     },
@@ -553,6 +677,7 @@ impl PhysicalPlanBuilder {
 
                 Ok(result)
             }
+
             RelOperator::Sort(sort) => Ok(PhysicalPlan::Sort(Sort {
                 plan_id: self.next_plan_id(),
                 input: Box::new(self.build(s_expr.child(0)?).await?),
@@ -569,6 +694,7 @@ impl PhysicalPlanBuilder {
 
                 stat_info: Some(stat_info),
             })),
+
             RelOperator::Limit(limit) => Ok(PhysicalPlan::Limit(Limit {
                 plan_id: self.next_plan_id(),
                 input: Box::new(self.build(s_expr.child(0)?).await?),
@@ -577,6 +703,7 @@ impl PhysicalPlanBuilder {
 
                 stat_info: Some(stat_info),
             })),
+
             RelOperator::Exchange(exchange) => {
                 let input = Box::new(self.build(s_expr.child(0)?).await?);
                 let input_schema = input.output_schema()?;
@@ -585,12 +712,11 @@ impl PhysicalPlanBuilder {
                     Exchange::Random => FragmentKind::Init,
                     Exchange::Hash(scalars) => {
                         for scalar in scalars {
-                            let expr =
-                                scalar
-                                    .as_expr_with_col_index()?
-                                    .project_column_ref(|index| {
-                                        input_schema.index_of(&index.to_string()).unwrap()
-                                    });
+                            let expr = scalar
+                                .resolve_and_check(input_schema.as_ref())?
+                                .project_column_ref(|index| {
+                                    input_schema.index_of(&index.to_string()).unwrap()
+                                });
                             let (expr, _) = ConstantFolder::fold(
                                 &expr,
                                 self.ctx.get_function_context()?,
@@ -609,6 +735,7 @@ impl PhysicalPlanBuilder {
                     keys,
                 }))
             }
+
             RelOperator::UnionAll(op) => {
                 let left = self.build(s_expr.child(0)?).await?;
                 let left_schema = left.output_schema()?;
@@ -631,6 +758,77 @@ impl PhysicalPlanBuilder {
                     stat_info: Some(stat_info),
                 }))
             }
+
+            RelOperator::RuntimeFilterSource(op) => {
+                let left_side = Box::new(self.build(s_expr.child(0)?).await?);
+                let left_schema = left_side.output_schema()?;
+                let right_side = Box::new(self.build(s_expr.child(1)?).await?);
+                let right_schema = right_side.output_schema()?;
+                let mut left_runtime_filters = BTreeMap::new();
+                let mut right_runtime_filters = BTreeMap::new();
+                for (left, right) in op
+                    .left_runtime_filters
+                    .iter()
+                    .zip(op.right_runtime_filters.iter())
+                {
+                    left_runtime_filters.insert(
+                        left.0.clone(),
+                        left.1
+                            .resolve_and_check(left_schema.as_ref())?
+                            .project_column_ref(|index| {
+                                left_schema.index_of(&index.to_string()).unwrap()
+                            })
+                            .as_remote_expr(),
+                    );
+                    right_runtime_filters.insert(
+                        right.0.clone(),
+                        right
+                            .1
+                            .resolve_and_check(right_schema.as_ref())?
+                            .project_column_ref(|index| {
+                                right_schema.index_of(&index.to_string()).unwrap()
+                            })
+                            .as_remote_expr(),
+                    );
+                }
+                Ok(PhysicalPlan::RuntimeFilterSource(RuntimeFilterSource {
+                    plan_id: self.next_plan_id(),
+                    left_side,
+                    right_side,
+                    left_runtime_filters,
+                    right_runtime_filters,
+                }))
+            }
+
+            RelOperator::ProjectSet(project_set) => {
+                let input = self.build(s_expr.child(0)?).await?;
+                let input_schema = input.output_schema()?;
+                let srf_exprs = project_set
+                    .srfs
+                    .iter()
+                    .map(|item| {
+                        let expr = item
+                            .scalar
+                            .resolve_and_check(input_schema.as_ref())?
+                            .project_column_ref(|index| {
+                                input_schema.index_of(&index.to_string()).unwrap()
+                            });
+                        let (expr, _) = ConstantFolder::fold(
+                            &expr,
+                            self.ctx.get_function_context()?,
+                            &BUILTIN_FUNCTIONS,
+                        );
+                        Ok((expr.as_remote_expr(), item.index))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(PhysicalPlan::ProjectSet(ProjectSet {
+                    plan_id: self.next_plan_id(),
+                    input: Box::new(input),
+                    srf_exprs,
+                    stat_info: Some(stat_info),
+                }))
+            }
+
             _ => Err(ErrorCode::Internal(format!(
                 "Unsupported physical plan: {:?}",
                 s_expr.plan()
@@ -645,9 +843,15 @@ impl PhysicalPlanBuilder {
         has_inner_column: bool,
     ) -> Result<PushDownInfo> {
         let metadata = self.metadata.read().clone();
-        let projection =
-            Self::build_projection(&metadata, table_schema, &scan.columns, has_inner_column);
-        let _project_schema = projection.project_schema(table_schema);
+        let projection = Self::build_projection(
+            &metadata,
+            table_schema,
+            &scan.columns,
+            has_inner_column,
+            // for projection, we need to ignore read data from internal column,
+            // or else in read_partition when search internal column from table schema will core.
+            true,
+        );
 
         let push_down_filter = scan
             .push_down_predicates
@@ -693,18 +897,21 @@ impl PhysicalPlanBuilder {
                     table_schema,
                     &prewhere.output_columns,
                     has_inner_column,
+                    false,
                 );
                 let prewhere_columns = Self::build_projection(
                     &metadata,
                     table_schema,
                     &prewhere.prewhere_columns,
                     has_inner_column,
+                    false,
                 );
                 let remain_columns = Self::build_projection(
                     &metadata,
                     table_schema,
                     &remain_columns,
                     has_inner_column,
+                    false,
                 );
 
                 let predicate = prewhere
@@ -715,7 +922,6 @@ impl PhysicalPlanBuilder {
                         ScalarExpr::AndExpr(AndExpr {
                             left: Box::new(lhs),
                             right: Box::new(rhs),
-                            return_type: Box::new(DataType::Boolean),
                         })
                     })
                     .expect("there should be at least one predicate in prewhere");
@@ -754,6 +960,13 @@ impl PhysicalPlanBuilder {
                             ColumnEntry::DerivedColumn(DerivedColumn {
                                 alias, data_type, ..
                             }) => (alias.clone(), data_type.clone()),
+                            ColumnEntry::InternalColumn(TableInternalColumn {
+                                internal_column,
+                                ..
+                            }) => (
+                                internal_column.column_name().to_owned(),
+                                internal_column.data_type(),
+                            ),
                         };
 
                         // sort item is already a column

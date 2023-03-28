@@ -151,7 +151,7 @@ impl<'a> JoinPredicate<'a> {
 
 pub fn contain_subquery(scalar: &ScalarExpr) -> bool {
     match scalar {
-        ScalarExpr::BoundColumnRef(BoundColumnRef { column }) => {
+        ScalarExpr::BoundColumnRef(BoundColumnRef { column, .. }) => {
             // For example: SELECT * FROM c WHERE c_id=(SELECT c_id FROM o WHERE ship='WA' AND bill='FL');
             // predicate `c_id = scalar_subquery_{}` can't be pushed down to the join condition.
             // TODO(xudong963): need a better way to handle this, such as add a field to predicate to indicate if it derives from subquery.
@@ -183,6 +183,7 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
 
     match scalar {
         ScalarExpr::BoundColumnRef(_) => false,
+        ScalarExpr::BoundInternalColumnRef(_) => false,
         ScalarExpr::ConstantExpr(_) => true,
         ScalarExpr::AndExpr(scalar) => {
             prune_by_children(&scalar.left, columns) && prune_by_children(&scalar.right, columns)
@@ -194,6 +195,11 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
         ScalarExpr::ComparisonExpr(scalar) => {
             prune_by_children(&scalar.left, columns) && prune_by_children(&scalar.right, columns)
         }
+        ScalarExpr::WindowFunction(scalar) => scalar
+            .agg_func
+            .args
+            .iter()
+            .all(|arg| prune_by_children(arg, columns)),
         ScalarExpr::AggregateFunction(scalar) => scalar
             .args
             .iter()
@@ -210,18 +216,9 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
 /// Wrap a cast expression with given target type
 pub fn wrap_cast(scalar: &ScalarExpr, target_type: &DataType) -> ScalarExpr {
     ScalarExpr::CastExpr(CastExpr {
+        span: scalar.span(),
         is_try: false,
         argument: Box::new(scalar.clone()),
-        from_type: Box::new(scalar.data_type()),
         target_type: Box::new(target_type.clone()),
     })
-}
-
-/// Wrap a cast expression with given target type if the scalar is not of the target type
-pub fn wrap_cast_if_needed(scalar: &ScalarExpr, target_type: &DataType) -> ScalarExpr {
-    if &scalar.data_type() == target_type {
-        scalar.clone()
-    } else {
-        wrap_cast(scalar, target_type)
-    }
 }

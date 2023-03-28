@@ -15,6 +15,7 @@ test = false
 ignored = ["xorfilter-rs", "match-template"]
 
 [dependencies]
+common-arrow = { path = "../../../../common/arrow" }
 common-exception = { path = "../../../../common/exception" }
 common-expression = { path = "../../../expression" }
 common-functions = { path = "../../../functions" }
@@ -32,6 +33,7 @@ xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features 
 ], tag = "databend-alpha.4" }
 
 [dev-dependencies]
+common-arrow = { path = "../../../../common/arrow" }
 criterion = "0.4"
 rand = "0.8.5"
 

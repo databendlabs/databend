@@ -93,8 +93,7 @@ impl PushDownInfo {
             if let RemoteExpr::<String>::ColumnRef { id, .. } = &order.0 {
                 // TODO: support sub column of nested type.
                 let field = schema.field_with_name(id).unwrap();
-                let data_type: DataType = field.data_type().into();
-                if !support(&data_type) {
+                if !support(&field.data_type().into()) {
                     return None;
                 }
 
@@ -147,9 +146,7 @@ impl PushDownInfo {
         {
             prj.clone()
         } else {
-            let indices = (0..schema.fields().len())
-                .into_iter()
-                .collect::<Vec<usize>>();
+            let indices = (0..schema.fields().len()).collect::<Vec<usize>>();
             Projection::Columns(indices)
         }
     }

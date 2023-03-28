@@ -24,7 +24,7 @@ use common_expression::RemoteExpr;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::TableSnapshot;
 
@@ -145,8 +145,11 @@ impl FuseTable {
                     pos += 1;
                 });
 
-                let reader =
-                    self.create_block_reader(Projection::Columns(remain_col_indices), ctx.clone())?;
+                let reader = self.create_block_reader(
+                    Projection::Columns(remain_col_indices),
+                    false,
+                    ctx.clone(),
+                )?;
                 fields.extend_from_slice(reader.schema().fields());
                 remain_reader = Some((*reader).clone());
             }
@@ -179,7 +182,7 @@ impl FuseTable {
             projection: offset_map.values().cloned().collect(),
         });
 
-        let block_reader = self.create_block_reader(projection.clone(), ctx.clone())?;
+        let block_reader = self.create_block_reader(projection.clone(), false, ctx.clone())?;
         let remain_reader = Arc::new(remain_reader);
         let (filter_expr, filter) = if let Some(remote_expr) = filter {
             let schema = block_reader.schema();

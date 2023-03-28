@@ -110,7 +110,7 @@ impl<'a> FuseBlock<'a> {
             self.table.operator.clone(),
             self.table.schema(),
         );
-        let segments = segments_io.read_segments(&snapshot.segments).await?;
+        let segments = segments_io.read_segments(&snapshot.segments, true).await?;
         for segment in segments {
             let segment = segment?;
             segment.blocks.iter().for_each(|block| {

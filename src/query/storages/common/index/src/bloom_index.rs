@@ -16,12 +16,15 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
 use common_expression::converts::scalar_to_datavalue;
 use common_expression::eval_function;
+use common_expression::types::AnyType;
 use common_expression::types::DataType;
+use common_expression::types::MapType;
 use common_expression::types::NullableType;
 use common_expression::types::Number;
 use common_expression::types::NumberDataType;
@@ -40,7 +43,8 @@ use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_expression::Value;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
+use storages_common_table_meta::meta::SingleColumnMeta;
 use storages_common_table_meta::meta::Versioned;
 
 use crate::filters::BlockBloomFilterIndexVersion;
@@ -50,6 +54,52 @@ use crate::filters::V2BloomBlock;
 use crate::filters::Xor8Builder;
 use crate::filters::Xor8Filter;
 use crate::Index;
+
+#[derive(Clone)]
+pub struct BloomIndexMeta {
+    pub columns: Vec<(String, SingleColumnMeta)>,
+}
+
+impl TryFrom<ThriftFileMetaData> for BloomIndexMeta {
+    type Error = common_exception::ErrorCode;
+
+    fn try_from(mut meta: ThriftFileMetaData) -> std::result::Result<Self, Self::Error> {
+        let rg = meta.row_groups.remove(0);
+        let mut col_metas = Vec::with_capacity(rg.columns.len());
+        for x in &rg.columns {
+            match &x.meta_data {
+                Some(chunk_meta) => {
+                    let col_start =
+                        if let Some(dict_page_offset) = chunk_meta.dictionary_page_offset {
+                            dict_page_offset
+                        } else {
+                            chunk_meta.data_page_offset
+                        };
+                    let col_len = chunk_meta.total_compressed_size;
+                    assert!(
+                        col_start >= 0 && col_len >= 0,
+                        "column start and length should not be negative"
+                    );
+                    let num_values = chunk_meta.num_values as u64;
+                    let res = SingleColumnMeta {
+                        offset: col_start as u64,
+                        len: col_len as u64,
+                        num_values,
+                    };
+                    let column_name = chunk_meta.path_in_schema[0].to_owned();
+                    col_metas.push((column_name, res));
+                }
+                None => {
+                    panic!(
+                        "expecting chunk meta data while converting ThriftFileMetaData to BloomIndexMeta"
+                    )
+                }
+            }
+        }
+        // col_metas.shrink_to_fit();
+        Ok(Self { columns: col_metas })
+    }
+}
 
 /// BlockFilter represents multiple per-column filters(bloom filter or xor filter etc) for data block.
 ///
@@ -144,19 +194,48 @@ impl BloomIndex {
         let mut columns = Vec::new();
         for i in 0..num_columns {
             let data_type = &data_blocks_tobe_indexed[0].get_by_offset(i).data_type;
-            if Xor8Filter::supported_type(data_type) {
-                fields.push(source_schema.field(i));
+            match data_type {
+                DataType::Map(box inner_ty) => {
+                    // Add bloom filter for the value of map type
+                    let val_type = match inner_ty {
+                        DataType::Tuple(kv_tys) => kv_tys[1].clone(),
+                        _ => unreachable!(),
+                    };
+                    if Xor8Filter::supported_type(&val_type) {
+                        fields.push(source_schema.field(i));
 
-                let source_columns = data_blocks_tobe_indexed
-                    .iter()
-                    .map(|block| {
-                        let value = &block.get_by_offset(i).value;
-                        value.convert_to_full_column(data_type, block.num_rows())
-                    })
-                    .collect::<Vec<_>>();
-                let column = Column::concat(&source_columns);
-                columns.push((column, data_type.clone()));
-            }
+                        let source_columns = data_blocks_tobe_indexed
+                            .iter()
+                            .map(|block| {
+                                let value = &block.get_by_offset(i).value;
+                                let column =
+                                    value.convert_to_full_column(data_type, block.num_rows());
+                                let map_column =
+                                    MapType::<AnyType, AnyType>::try_downcast_column(&column)
+                                        .unwrap();
+                                map_column.values.values
+                            })
+                            .collect::<Vec<_>>();
+                        let column = Column::concat(&source_columns);
+                        columns.push((column, val_type));
+                    }
+                }
+                _ => {
+                    if Xor8Filter::supported_type(data_type) {
+                        fields.push(source_schema.field(i));
+
+                        let source_columns = data_blocks_tobe_indexed
+                            .iter()
+                            .map(|block| {
+                                let value = &block.get_by_offset(i).value;
+                                value.convert_to_full_column(data_type, block.num_rows())
+                            })
+                            .collect::<Vec<_>>();
+                        let column = Column::concat(&source_columns);
+                        columns.push((column, data_type.clone()));
+                    }
+                }
+            };
         }
         if columns.is_empty() {
             return Ok(None);
@@ -203,8 +282,13 @@ impl BloomIndex {
             let filter = filter_builder.build()?;
 
             if let Some(len) = filter.len() {
-                let idx = source_schema.index_of(field.name().as_str()).unwrap();
-                column_distinct_count.insert(idx, len);
+                match field.data_type() {
+                    TableDataType::Map(_) => {}
+                    _ => {
+                        let idx = source_schema.index_of(field.name().as_str()).unwrap();
+                        column_distinct_count.insert(idx, len);
+                    }
+                }
             }
 
             let filter_name = Self::build_filter_column_name(version, field)?;
@@ -386,7 +470,8 @@ fn visit_expr_column_eq_constant(
     expr: &mut Expr<String>,
     visitor: &mut impl FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<String>>>,
 ) -> Result<()> {
-    // Find patterns like `Column = <constant>` or `<constant> = Column`.
+    // Find patterns like `Column = <constant>`, `<constant> = Column`,
+    // or `MapColumn[<key>] = <constant>`, `<constant> = MapColumn[<key>]`
     match expr {
         Expr::FunctionCall {
             span,
@@ -409,6 +494,48 @@ fn visit_expr_column_eq_constant(
                     return Ok(());
                 }
             }
+            [
+                Expr::FunctionCall { id, args, .. },
+                Expr::Constant { scalar, .. },
+            ]
+            | [
+                Expr::Constant { scalar, .. },
+                Expr::FunctionCall { id, args, .. },
+            ] => {
+                if id.name() == "get" {
+                    if let Some(new_expr) =
+                        visit_map_column(*span, args, scalar, return_type, visitor)?
+                    {
+                        *expr = new_expr;
+                        return Ok(());
+                    }
+                }
+            }
+            [
+                Expr::FunctionCall { id, args, .. },
+                Expr::Cast {
+                    expr: box cast_expr,
+                    ..
+                },
+            ]
+            | [
+                Expr::Cast {
+                    expr: box cast_expr,
+                    ..
+                },
+                Expr::FunctionCall { id, args, .. },
+            ] => {
+                if let Expr::Constant { scalar, .. } = cast_expr {
+                    if id.name() == "get" {
+                        if let Some(new_expr) =
+                            visit_map_column(*span, args, scalar, return_type, visitor)?
+                        {
+                            *expr = new_expr;
+                            return Ok(());
+                        }
+                    }
+                }
+            }
             _ => (),
         },
         _ => (),
@@ -428,4 +555,23 @@ fn visit_expr_column_eq_constant(
     }
 
     Ok(())
+}
+
+fn visit_map_column(
+    span: Span,
+    args: &[Expr<String>],
+    scalar: &Scalar,
+    return_type: &DataType,
+    visitor: &mut impl FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<String>>>,
+) -> Result<Option<Expr<String>>> {
+    if let Expr::ColumnRef { id, data_type, .. } = &args[0] {
+        if let DataType::Map(box inner_ty) = data_type.remove_nullable() {
+            let val_type = match inner_ty {
+                DataType::Tuple(kv_tys) => kv_tys[1].clone(),
+                _ => unreachable!(),
+            };
+            return visitor(span, id, scalar, &val_type, return_type);
+        }
+    }
+    Ok(None)
 }

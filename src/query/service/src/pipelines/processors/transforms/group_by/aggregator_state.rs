@@ -28,6 +28,10 @@ impl Area {
         Area { bump: Bump::new() }
     }
 
+    pub fn allocated_bytes(&self) -> usize {
+        self.bump.allocated_bytes()
+    }
+
     pub fn alloc_layout(&mut self, layout: Layout) -> NonNull<u8> {
         self.bump.alloc_layout(layout)
     }
@@ -42,9 +46,15 @@ pub struct ArenaHolder {
 
 impl ArenaHolder {
     pub fn create(area: Option<Area>) -> ArenaHolder {
-        tracing::info!("Putting one arena into holder");
         ArenaHolder {
             _data: Arc::new(area),
+        }
+    }
+
+    pub fn allocated_bytes(&self) -> usize {
+        match self._data.as_ref() {
+            None => 0,
+            Some(arena) => arena.allocated_bytes(),
         }
     }
 }
@@ -56,4 +66,5 @@ impl Debug for ArenaHolder {
 }
 
 unsafe impl Send for ArenaHolder {}
+
 unsafe impl Sync for ArenaHolder {}

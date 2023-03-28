@@ -30,4 +30,8 @@ impl GlobalConfig {
     pub fn instance() -> Arc<InnerConfig> {
         GlobalInstance::get()
     }
+
+    pub fn try_get_instance() -> Option<Arc<InnerConfig>> {
+        GlobalInstance::try_get()
+    }
 }

@@ -17,7 +17,11 @@ Query {
             select_list: [
                 QualifiedName {
                     qualified: [
-                        Star,
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
                     ],
                     exclude: Some(
                         [
@@ -42,7 +46,11 @@ Query {
                                 ),
                             },
                         ),
-                        Star,
+                        Star(
+                            Some(
+                                23..24,
+                            ),
+                        ),
                     ],
                     exclude: Some(
                         [
@@ -129,6 +137,8 @@ Query {
                             },
                             alias: None,
                             travel_point: None,
+                            pivot: None,
+                            unpivot: None,
                         },
                         right: Table {
                             span: Some(
@@ -145,12 +155,14 @@ Query {
                             },
                             alias: None,
                             travel_point: None,
+                            pivot: None,
+                            unpivot: None,
                         },
                     },
                 },
             ],
             selection: None,
-            group_by: [],
+            group_by: None,
             having: None,
         },
     ),
@@ -160,7 +172,7 @@ Query {
             span: Some(
                 93..94,
             ),
-            lit: Integer(
+            lit: UInt64(
                 1,
             ),
         },
@@ -189,7 +201,11 @@ Query {
             select_list: [
                 QualifiedName {
                     qualified: [
-                        Star,
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
                     ],
                     exclude: None,
                 },
@@ -217,6 +233,8 @@ Query {
                             },
                             alias: None,
                             travel_point: None,
+                            pivot: None,
+                            unpivot: None,
                         },
                         right: Table {
                             span: Some(
@@ -233,12 +251,14 @@ Query {
                             },
                             alias: None,
                             travel_point: None,
+                            pivot: None,
+                            unpivot: None,
                         },
                     },
                 },
             ],
             selection: None,
-            group_by: [],
+            group_by: None,
             having: None,
         },
     ),
@@ -268,7 +288,11 @@ Query {
             select_list: [
                 QualifiedName {
                     qualified: [
-                        Star,
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
                     ],
                     exclude: None,
                 },
@@ -296,6 +320,8 @@ Query {
                             },
                             alias: None,
                             travel_point: None,
+                            pivot: None,
+                            unpivot: None,
                         },
                         right: Table {
                             span: Some(
@@ -312,12 +338,14 @@ Query {
                             },
                             alias: None,
                             travel_point: None,
+                            pivot: None,
+                            unpivot: None,
                         },
                     },
                 },
             ],
             selection: None,
-            group_by: [],
+            group_by: None,
             having: None,
         },
     ),
@@ -347,7 +375,11 @@ Query {
             select_list: [
                 QualifiedName {
                     qualified: [
-                        Star,
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
                     ],
                     exclude: None,
                 },
@@ -410,6 +442,8 @@ Query {
                             },
                             alias: None,
                             travel_point: None,
+                            pivot: None,
+                            unpivot: None,
                         },
                         right: Table {
                             span: Some(
@@ -426,12 +460,14 @@ Query {
                             },
                             alias: None,
                             travel_point: None,
+                            pivot: None,
+                            unpivot: None,
                         },
                     },
                 },
             ],
             selection: None,
-            group_by: [],
+            group_by: None,
             having: None,
         },
     ),
@@ -441,7 +477,7 @@ Query {
             span: Some(
                 56..57,
             ),
-            lit: Integer(
+            lit: UInt64(
                 1,
             ),
         },
@@ -470,7 +506,11 @@ Query {
             select_list: [
                 QualifiedName {
                     qualified: [
-                        Star,
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
                     ],
                     exclude: None,
                 },
@@ -533,6 +573,8 @@ Query {
                             },
                             alias: None,
                             travel_point: None,
+                            pivot: None,
+                            unpivot: None,
                         },
                         right: Table {
                             span: Some(
@@ -549,12 +591,14 @@ Query {
                             },
                             alias: None,
                             travel_point: None,
+                            pivot: None,
+                            unpivot: None,
                         },
                     },
                 },
             ],
             selection: None,
-            group_by: [],
+            group_by: None,
             having: None,
         },
     ),
@@ -564,7 +608,7 @@ Query {
             span: Some(
                 56..57,
             ),
-            lit: Integer(
+            lit: UInt64(
                 2,
             ),
         },
@@ -574,7 +618,7 @@ Query {
             span: Some(
                 65..66,
             ),
-            lit: Integer(
+            lit: UInt64(
                 3,
             ),
         },
@@ -602,7 +646,11 @@ Query {
             select_list: [
                 QualifiedName {
                     qualified: [
-                        Star,
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
                     ],
                     exclude: None,
                 },
@@ -630,6 +678,8 @@ Query {
                             },
                             alias: None,
                             travel_point: None,
+                            pivot: None,
+                            unpivot: None,
                         },
                         right: Table {
                             span: Some(
@@ -646,12 +696,14 @@ Query {
                             },
                             alias: None,
                             travel_point: None,
+                            pivot: None,
+                            unpivot: None,
                         },
                     },
                 },
             ],
             selection: None,
-            group_by: [],
+            group_by: None,
             having: None,
         },
     ),
@@ -681,7 +733,11 @@ Query {
             select_list: [
                 QualifiedName {
                     qualified: [
-                        Star,
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
                     ],
                     exclude: None,
                 },
@@ -726,6 +782,8 @@ Query {
                                     },
                                     alias: None,
                                     travel_point: None,
+                                    pivot: None,
+                                    unpivot: None,
                                 },
                                 right: Table {
                                     span: Some(
@@ -742,6 +800,8 @@ Query {
                                     },
                                     alias: None,
                                     travel_point: None,
+                                    pivot: None,
+                                    unpivot: None,
                                 },
                             },
                         },
@@ -760,12 +820,14 @@ Query {
                             },
                             alias: None,
                             travel_point: None,
+                            pivot: None,
+                            unpivot: None,
                         },
                     },
                 },
             ],
             selection: None,
-            group_by: [],
+            group_by: None,
             having: None,
         },
     ),
@@ -860,10 +922,12 @@ Query {
                                         },
                                         alias: None,
                                         travel_point: None,
+                                        pivot: None,
+                                        unpivot: None,
                                     },
                                 ],
                                 selection: None,
-                                group_by: [],
+                                group_by: None,
                                 having: None,
                             },
                         ),
@@ -925,6 +989,8 @@ Query {
                     },
                     alias: None,
                     travel_point: None,
+                    pivot: None,
+                    unpivot: None,
                 },
             ],
             selection: Some(
@@ -959,13 +1025,13 @@ Query {
                         span: Some(
                             69..70,
                         ),
-                        lit: Integer(
+                        lit: UInt64(
                             1,
                         ),
                     },
                 },
             ),
-            group_by: [],
+            group_by: None,
             having: None,
         },
     ),
@@ -1052,10 +1118,12 @@ Query {
                                         },
                                         alias: None,
                                         travel_point: None,
+                                        pivot: None,
+                                        unpivot: None,
                                     },
                                 ],
                                 selection: None,
-                                group_by: [],
+                                group_by: None,
                                 having: None,
                             },
                         ),
@@ -1117,6 +1185,8 @@ Query {
                     },
                     alias: None,
                     travel_point: None,
+                    pivot: None,
+                    unpivot: None,
                 },
             ],
             selection: Some(
@@ -1151,13 +1221,13 @@ Query {
                         span: Some(
                             63..64,
                         ),
-                        lit: Integer(
+                        lit: UInt64(
                             1,
                         ),
                     },
                 },
             ),
-            group_by: [],
+            group_by: None,
             having: None,
         },
     ),
@@ -1252,10 +1322,12 @@ Query {
                                         },
                                         alias: None,
                                         travel_point: None,
+                                        pivot: None,
+                                        unpivot: None,
                                     },
                                 ],
                                 selection: None,
-                                group_by: [],
+                                group_by: None,
                                 having: None,
                             },
                         ),
@@ -1293,7 +1365,11 @@ Query {
                                 select_list: [
                                     QualifiedName {
                                         qualified: [
-                                            Star,
+                                            Star(
+                                                Some(
+                                                    48..49,
+                                                ),
+                                            ),
                                         ],
                                         exclude: None,
                                     },
@@ -1314,10 +1390,12 @@ Query {
                                         },
                                         alias: None,
                                         travel_point: None,
+                                        pivot: None,
+                                        unpivot: None,
                                     },
                                 ],
                                 selection: None,
-                                group_by: [],
+                                group_by: None,
                                 having: None,
                             },
                         ),
@@ -1387,6 +1465,8 @@ Query {
                                         },
                                         alias: None,
                                         travel_point: None,
+                                        pivot: None,
+                                        unpivot: None,
                                     },
                                 ],
                                 selection: Some(
@@ -1413,13 +1493,13 @@ Query {
                                             span: Some(
                                                 92..93,
                                             ),
-                                            lit: Integer(
+                                            lit: UInt64(
                                                 1,
                                             ),
                                         },
                                     },
                                 ),
-                                group_by: [],
+                                group_by: None,
                                 having: None,
                             },
                         ),
@@ -1531,6 +1611,8 @@ Query {
                     },
                     alias: None,
                     travel_point: None,
+                    pivot: None,
+                    unpivot: None,
                 },
                 Table {
                     span: Some(
@@ -1547,6 +1629,8 @@ Query {
                     },
                     alias: None,
                     travel_point: None,
+                    pivot: None,
+                    unpivot: None,
                 },
                 Table {
                     span: Some(
@@ -1563,6 +1647,8 @@ Query {
                     },
                     alias: None,
                     travel_point: None,
+                    pivot: None,
+                    unpivot: None,
                 },
             ],
             selection: Some(
@@ -1597,13 +1683,13 @@ Query {
                         span: Some(
                             150..151,
                         ),
-                        lit: Integer(
+                        lit: UInt64(
                             1,
                         ),
                     },
                 },
             ),
-            group_by: [],
+            group_by: None,
             having: None,
         },
     ),
@@ -1705,10 +1791,12 @@ Query {
                                                 },
                                                 alias: None,
                                                 travel_point: None,
+                                                pivot: None,
+                                                unpivot: None,
                                             },
                                         ],
                                         selection: None,
-                                        group_by: [],
+                                        group_by: None,
                                         having: None,
                                     },
                                 ),
@@ -1753,10 +1841,12 @@ Query {
                                                 },
                                                 alias: None,
                                                 travel_point: None,
+                                                pivot: None,
+                                                unpivot: None,
                                             },
                                         ],
                                         selection: None,
-                                        group_by: [],
+                                        group_by: None,
                                         having: None,
                                     },
                                 ),
@@ -1820,10 +1910,12 @@ Query {
                     },
                     alias: None,
                     travel_point: None,
+                    pivot: None,
+                    unpivot: None,
                 },
             ],
             selection: None,
-            group_by: [],
+            group_by: None,
             having: None,
         },
     ),
@@ -1937,6 +2029,7 @@ Query {
                             },
                         ],
                         params: [],
+                        window: None,
                     },
                     alias: Some(
                         Identifier {
@@ -1965,6 +2058,8 @@ Query {
                     },
                     alias: None,
                     travel_point: None,
+                    pivot: None,
+                    unpivot: None,
                 },
                 Table {
                     span: Some(
@@ -1992,6 +2087,8 @@ Query {
                         },
                     ),
                     travel_point: None,
+                    pivot: None,
+                    unpivot: None,
                 },
                 Subquery {
                     span: Some(
@@ -2056,6 +2153,7 @@ Query {
                                                 },
                                             ],
                                             params: [],
+                                            window: None,
                                         },
                                         alias: None,
                                     },
@@ -2152,6 +2250,8 @@ Query {
                                                 },
                                                 alias: None,
                                                 travel_point: None,
+                                                pivot: None,
+                                                unpivot: None,
                                             },
                                             right: Table {
                                                 span: Some(
@@ -2168,27 +2268,33 @@ Query {
                                                 },
                                                 alias: None,
                                                 travel_point: None,
+                                                pivot: None,
+                                                unpivot: None,
                                             },
                                         },
                                     },
                                 ],
                                 selection: None,
-                                group_by: [
-                                    ColumnRef {
-                                        span: Some(
-                                            479..488,
-                                        ),
-                                        database: None,
-                                        table: None,
-                                        column: Identifier {
-                                            name: "c_custkey",
-                                            quote: None,
-                                            span: Some(
-                                                479..488,
-                                            ),
-                                        },
-                                    },
-                                ],
+                                group_by: Some(
+                                    Normal(
+                                        [
+                                            ColumnRef {
+                                                span: Some(
+                                                    479..488,
+                                                ),
+                                                database: None,
+                                                table: None,
+                                                column: Identifier {
+                                                    name: "c_custkey",
+                                                    quote: None,
+                                                    span: Some(
+                                                        479..488,
+                                                    ),
+                                                },
+                                            },
+                                        ],
+                                    ),
+                                ),
                                 having: None,
                             },
                         ),
@@ -2212,22 +2318,26 @@ Query {
                 },
             ],
             selection: None,
-            group_by: [
-                ColumnRef {
-                    span: Some(
-                        540..547,
-                    ),
-                    database: None,
-                    table: None,
-                    column: Identifier {
-                        name: "c_count",
-                        quote: None,
-                        span: Some(
-                            540..547,
-                        ),
-                    },
-                },
-            ],
+            group_by: Some(
+                Normal(
+                    [
+                        ColumnRef {
+                            span: Some(
+                                540..547,
+                            ),
+                            database: None,
+                            table: None,
+                            column: Identifier {
+                                name: "c_count",
+                                quote: None,
+                                span: Some(
+                                    540..547,
+                                ),
+                            },
+                        },
+                    ],
+                ),
+            ),
             having: None,
         },
     ),
@@ -2300,7 +2410,7 @@ Query {
             span: Some(
                 649..651,
             ),
-            lit: Integer(
+            lit: UInt64(
                 10,
             ),
         },
@@ -2350,7 +2460,11 @@ Query {
                     select_list: [
                         QualifiedName {
                             qualified: [
-                                Star,
+                                Star(
+                                    Some(
+                                        7..8,
+                                    ),
+                                ),
                             ],
                             exclude: None,
                         },
@@ -2371,10 +2485,12 @@ Query {
                             },
                             alias: None,
                             travel_point: None,
+                            pivot: None,
+                            unpivot: None,
                         },
                     ],
                     selection: None,
-                    group_by: [],
+                    group_by: None,
                     having: None,
                 },
             ),
@@ -2387,7 +2503,11 @@ Query {
                     select_list: [
                         QualifiedName {
                             qualified: [
-                                Star,
+                                Star(
+                                    Some(
+                                        30..31,
+                                    ),
+                                ),
                             ],
                             exclude: None,
                         },
@@ -2408,10 +2528,12 @@ Query {
                             },
                             alias: None,
                             travel_point: None,
+                            pivot: None,
+                            unpivot: None,
                         },
                     ],
                     selection: None,
-                    group_by: [],
+                    group_by: None,
                     having: None,
                 },
             ),
@@ -2450,7 +2572,11 @@ Query {
                     select_list: [
                         QualifiedName {
                             qualified: [
-                                Star,
+                                Star(
+                                    Some(
+                                        7..8,
+                                    ),
+                                ),
                             ],
                             exclude: None,
                         },
@@ -2471,10 +2597,12 @@ Query {
                             },
                             alias: None,
                             travel_point: None,
+                            pivot: None,
+                            unpivot: None,
                         },
                     ],
                     selection: None,
-                    group_by: [],
+                    group_by: None,
                     having: None,
                 },
             ),
@@ -2487,7 +2615,11 @@ Query {
                     select_list: [
                         QualifiedName {
                             qualified: [
-                                Star,
+                                Star(
+                                    Some(
+                                        31..32,
+                                    ),
+                                ),
                             ],
                             exclude: None,
                         },
@@ -2508,10 +2640,12 @@ Query {
                             },
                             alias: None,
                             travel_point: None,
+                            pivot: None,
+                            unpivot: None,
                         },
                     ],
                     selection: None,
-                    group_by: [],
+                    group_by: None,
                     having: None,
                 },
             ),
@@ -2557,7 +2691,11 @@ Query {
                             select_list: [
                                 QualifiedName {
                                     qualified: [
-                                        Star,
+                                        Star(
+                                            Some(
+                                                7..8,
+                                            ),
+                                        ),
                                     ],
                                     exclude: None,
                                 },
@@ -2578,10 +2716,12 @@ Query {
                                     },
                                     alias: None,
                                     travel_point: None,
+                                    pivot: None,
+                                    unpivot: None,
                                 },
                             ],
                             selection: None,
-                            group_by: [],
+                            group_by: None,
                             having: None,
                         },
                     ),
@@ -2594,7 +2734,11 @@ Query {
                             select_list: [
                                 QualifiedName {
                                     qualified: [
-                                        Star,
+                                        Star(
+                                            Some(
+                                                30..31,
+                                            ),
+                                        ),
                                     ],
                                     exclude: None,
                                 },
@@ -2615,10 +2759,12 @@ Query {
                                     },
                                     alias: None,
                                     travel_point: None,
+                                    pivot: None,
+                                    unpivot: None,
                                 },
                             ],
                             selection: None,
-                            group_by: [],
+                            group_by: None,
                             having: None,
                         },
                     ),
@@ -2633,7 +2779,11 @@ Query {
                     select_list: [
                         QualifiedName {
                             qualified: [
-                                Star,
+                                Star(
+                                    Some(
+                                        53..54,
+                                    ),
+                                ),
                             ],
                             exclude: None,
                         },
@@ -2654,10 +2804,12 @@ Query {
                             },
                             alias: None,
                             travel_point: None,
+                            pivot: None,
+                            unpivot: None,
                         },
                     ],
                     selection: None,
-                    group_by: [],
+                    group_by: None,
                     having: None,
                 },
             ),
@@ -2703,7 +2855,11 @@ Query {
                             select_list: [
                                 QualifiedName {
                                     qualified: [
-                                        Star,
+                                        Star(
+                                            Some(
+                                                7..8,
+                                            ),
+                                        ),
                                     ],
                                     exclude: None,
                                 },
@@ -2724,10 +2880,12 @@ Query {
                                     },
                                     alias: None,
                                     travel_point: None,
+                                    pivot: None,
+                                    unpivot: None,
                                 },
                             ],
                             selection: None,
-                            group_by: [],
+                            group_by: None,
                             having: None,
                         },
                     ),
@@ -2740,7 +2898,11 @@ Query {
                             select_list: [
                                 QualifiedName {
                                     qualified: [
-                                        Star,
+                                        Star(
+                                            Some(
+                                                30..31,
+                                            ),
+                                        ),
                                     ],
                                     exclude: None,
                                 },
@@ -2761,10 +2923,12 @@ Query {
                                     },
                                     alias: None,
                                     travel_point: None,
+                                    pivot: None,
+                                    unpivot: None,
                                 },
                             ],
                             selection: None,
-                            group_by: [],
+                            group_by: None,
                             having: None,
                         },
                     ),
@@ -2779,7 +2943,11 @@ Query {
                     select_list: [
                         QualifiedName {
                             qualified: [
-                                Star,
+                                Star(
+                                    Some(
+                                        57..58,
+                                    ),
+                                ),
                             ],
                             exclude: None,
                         },
@@ -2800,10 +2968,12 @@ Query {
                             },
                             alias: None,
                             travel_point: None,
+                            pivot: None,
+                            unpivot: None,
                         },
                     ],
                     selection: None,
-                    group_by: [],
+                    group_by: None,
                     having: None,
                 },
             ),
@@ -2842,7 +3012,11 @@ Query {
                     select_list: [
                         QualifiedName {
                             qualified: [
-                                Star,
+                                Star(
+                                    Some(
+                                        7..8,
+                                    ),
+                                ),
                             ],
                             exclude: None,
                         },
@@ -2863,10 +3037,12 @@ Query {
                             },
                             alias: None,
                             travel_point: None,
+                            pivot: None,
+                            unpivot: None,
                         },
                     ],
                     selection: None,
-                    group_by: [],
+                    group_by: None,
                     having: None,
                 },
             ),
@@ -2886,7 +3062,11 @@ Query {
                             select_list: [
                                 QualifiedName {
                                     qualified: [
-                                        Star,
+                                        Star(
+                                            Some(
+                                                30..31,
+                                            ),
+                                        ),
                                     ],
                                     exclude: None,
                                 },
@@ -2907,10 +3087,12 @@ Query {
                                     },
                                     alias: None,
                                     travel_point: None,
+                                    pivot: None,
+                                    unpivot: None,
                                 },
                             ],
                             selection: None,
-                            group_by: [],
+                            group_by: None,
                             having: None,
                         },
                     ),
@@ -2923,7 +3105,11 @@ Query {
                             select_list: [
                                 QualifiedName {
                                     qualified: [
-                                        Star,
+                                        Star(
+                                            Some(
+                                                57..58,
+                                            ),
+                                        ),
                                     ],
                                     exclude: None,
                                 },
@@ -2944,10 +3130,12 @@ Query {
                                     },
                                     alias: None,
                                     travel_point: None,
+                                    pivot: None,
+                                    unpivot: None,
                                 },
                             ],
                             selection: None,
-                            group_by: [],
+                            group_by: None,
                             having: None,
                         },
                     ),
@@ -2995,7 +3183,11 @@ Query {
                             select_list: [
                                 QualifiedName {
                                     qualified: [
-                                        Star,
+                                        Star(
+                                            Some(
+                                                8..9,
+                                            ),
+                                        ),
                                     ],
                                     exclude: None,
                                 },
@@ -3016,10 +3208,12 @@ Query {
                                     },
                                     alias: None,
                                     travel_point: None,
+                                    pivot: None,
+                                    unpivot: None,
                                 },
                             ],
                             selection: None,
-                            group_by: [],
+                            group_by: None,
                             having: None,
                         },
                     ),
@@ -3032,7 +3226,11 @@ Query {
                             select_list: [
                                 QualifiedName {
                                     qualified: [
-                                        Star,
+                                        Star(
+                                            Some(
+                                                31..32,
+                                            ),
+                                        ),
                                     ],
                                     exclude: None,
                                 },
@@ -3053,10 +3251,12 @@ Query {
                                     },
                                     alias: None,
                                     travel_point: None,
+                                    pivot: None,
+                                    unpivot: None,
                                 },
                             ],
                             selection: None,
-                            group_by: [],
+                            group_by: None,
                             having: None,
                         },
                     ),
@@ -3071,7 +3271,11 @@ Query {
                     select_list: [
                         QualifiedName {
                             qualified: [
-                                Star,
+                                Star(
+                                    Some(
+                                        55..56,
+                                    ),
+                                ),
                             ],
                             exclude: None,
                         },
@@ -3092,10 +3296,12 @@ Query {
                             },
                             alias: None,
                             travel_point: None,
+                            pivot: None,
+                            unpivot: None,
                         },
                     ],
                     selection: None,
-                    group_by: [],
+                    group_by: None,
                     having: None,
                 },
             ),
@@ -3134,7 +3340,11 @@ Query {
                     select_list: [
                         QualifiedName {
                             qualified: [
-                                Star,
+                                Star(
+                                    Some(
+                                        7..8,
+                                    ),
+                                ),
                             ],
                             exclude: None,
                         },
@@ -3155,10 +3365,12 @@ Query {
                             },
                             alias: None,
                             travel_point: None,
+                            pivot: None,
+                            unpivot: None,
                         },
                     ],
                     selection: None,
-                    group_by: [],
+                    group_by: None,
                     having: None,
                 },
             ),
@@ -3178,7 +3390,11 @@ Query {
                             select_list: [
                                 QualifiedName {
                                     qualified: [
-                                        Star,
+                                        Star(
+                                            Some(
+                                                31..32,
+                                            ),
+                                        ),
                                     ],
                                     exclude: None,
                                 },
@@ -3199,10 +3415,12 @@ Query {
                                     },
                                     alias: None,
                                     travel_point: None,
+                                    pivot: None,
+                                    unpivot: None,
                                 },
                             ],
                             selection: None,
-                            group_by: [],
+                            group_by: None,
                             having: None,
                         },
                     ),
@@ -3215,7 +3433,11 @@ Query {
                             select_list: [
                                 QualifiedName {
                                     qualified: [
-                                        Star,
+                                        Star(
+                                            Some(
+                                                54..55,
+                                            ),
+                                        ),
                                     ],
                                     exclude: None,
                                 },
@@ -3236,10 +3458,12 @@ Query {
                                     },
                                     alias: None,
                                     travel_point: None,
+                                    pivot: None,
+                                    unpivot: None,
                                 },
                             ],
                             selection: None,
-                            group_by: [],
+                            group_by: None,
                             having: None,
                         },
                     ),
@@ -3248,6 +3472,286 @@ Query {
         },
     ),
     order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+select * from monthly_sales pivot(sum(amount) for month in ('JAN', 'FEB', 'MAR', 'APR')) order by empid
+---------- Output ---------
+SELECT * FROM monthly_sales PIVOT(sum(amount) FOR month IN ('JAN', 'FEB', 'MAR', 'APR')) ORDER BY empid
+---------- AST ------------
+Query {
+    span: Some(
+        0..103,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..88,
+            ),
+            distinct: false,
+            select_list: [
+                QualifiedName {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    exclude: None,
+                },
+            ],
+            from: [
+                Table {
+                    span: Some(
+                        14..88,
+                    ),
+                    catalog: None,
+                    database: None,
+                    table: Identifier {
+                        name: "monthly_sales",
+                        quote: None,
+                        span: Some(
+                            14..27,
+                        ),
+                    },
+                    alias: None,
+                    travel_point: None,
+                    pivot: Some(
+                        Pivot {
+                            aggregate: FunctionCall {
+                                span: Some(
+                                    34..45,
+                                ),
+                                distinct: false,
+                                name: Identifier {
+                                    name: "sum",
+                                    quote: None,
+                                    span: Some(
+                                        34..37,
+                                    ),
+                                },
+                                args: [
+                                    ColumnRef {
+                                        span: Some(
+                                            38..44,
+                                        ),
+                                        database: None,
+                                        table: None,
+                                        column: Identifier {
+                                            name: "amount",
+                                            quote: None,
+                                            span: Some(
+                                                38..44,
+                                            ),
+                                        },
+                                    },
+                                ],
+                                params: [],
+                                window: None,
+                            },
+                            value_column: Identifier {
+                                name: "month",
+                                quote: None,
+                                span: Some(
+                                    50..55,
+                                ),
+                            },
+                            values: [
+                                Literal {
+                                    span: Some(
+                                        60..65,
+                                    ),
+                                    lit: String(
+                                        "JAN",
+                                    ),
+                                },
+                                Literal {
+                                    span: Some(
+                                        67..72,
+                                    ),
+                                    lit: String(
+                                        "FEB",
+                                    ),
+                                },
+                                Literal {
+                                    span: Some(
+                                        74..79,
+                                    ),
+                                    lit: String(
+                                        "MAR",
+                                    ),
+                                },
+                                Literal {
+                                    span: Some(
+                                        81..86,
+                                    ),
+                                    lit: String(
+                                        "APR",
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                    unpivot: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+        },
+    ),
+    order_by: [
+        OrderByExpr {
+            expr: ColumnRef {
+                span: Some(
+                    98..103,
+                ),
+                database: None,
+                table: None,
+                column: Identifier {
+                    name: "empid",
+                    quote: None,
+                    span: Some(
+                        98..103,
+                    ),
+                },
+            },
+            asc: None,
+            nulls_first: None,
+        },
+    ],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+select * from monthly_sales_1 unpivot(sales for month in (jan, feb, mar, april)) order by empid
+---------- Output ---------
+SELECT * FROM monthly_sales_1 UNPIVOT(sales FOR month IN (jan, feb, mar, april)) ORDER BY empid
+---------- AST ------------
+Query {
+    span: Some(
+        0..95,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..80,
+            ),
+            distinct: false,
+            select_list: [
+                QualifiedName {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    exclude: None,
+                },
+            ],
+            from: [
+                Table {
+                    span: Some(
+                        14..80,
+                    ),
+                    catalog: None,
+                    database: None,
+                    table: Identifier {
+                        name: "monthly_sales_1",
+                        quote: None,
+                        span: Some(
+                            14..29,
+                        ),
+                    },
+                    alias: None,
+                    travel_point: None,
+                    pivot: None,
+                    unpivot: Some(
+                        Unpivot {
+                            value_column: Identifier {
+                                name: "sales",
+                                quote: None,
+                                span: Some(
+                                    38..43,
+                                ),
+                            },
+                            column_name: Identifier {
+                                name: "month",
+                                quote: None,
+                                span: Some(
+                                    48..53,
+                                ),
+                            },
+                            names: [
+                                Identifier {
+                                    name: "jan",
+                                    quote: None,
+                                    span: Some(
+                                        58..61,
+                                    ),
+                                },
+                                Identifier {
+                                    name: "feb",
+                                    quote: None,
+                                    span: Some(
+                                        63..66,
+                                    ),
+                                },
+                                Identifier {
+                                    name: "mar",
+                                    quote: None,
+                                    span: Some(
+                                        68..71,
+                                    ),
+                                },
+                                Identifier {
+                                    name: "april",
+                                    quote: None,
+                                    span: Some(
+                                        73..78,
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+        },
+    ),
+    order_by: [
+        OrderByExpr {
+            expr: ColumnRef {
+                span: Some(
+                    90..95,
+                ),
+                database: None,
+                table: None,
+                column: Identifier {
+                    name: "empid",
+                    quote: None,
+                    span: Some(
+                        90..95,
+                    ),
+                },
+            },
+            asc: None,
+            nulls_first: None,
+        },
+    ],
     limit: [],
     offset: None,
     ignore_result: false,

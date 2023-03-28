@@ -139,6 +139,108 @@ ShowTables(
 
 
 ---------- Input ----------
+show full columns in t in db
+---------- Output ---------
+SHOW FULL COLUMNS FROM t FROM db
+---------- AST ------------
+ShowColumns(
+    ShowColumnsStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "db",
+                quote: None,
+                span: Some(
+                    26..28,
+                ),
+            },
+        ),
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                21..22,
+            ),
+        },
+        full: true,
+        limit: None,
+    },
+)
+
+
+---------- Input ----------
+show columns in t from ctl.db
+---------- Output ---------
+SHOW COLUMNS FROM t FROM ctl.db
+---------- AST ------------
+ShowColumns(
+    ShowColumnsStmt {
+        catalog: Some(
+            Identifier {
+                name: "ctl",
+                quote: None,
+                span: Some(
+                    23..26,
+                ),
+            },
+        ),
+        database: Some(
+            Identifier {
+                name: "db",
+                quote: None,
+                span: Some(
+                    27..29,
+                ),
+            },
+        ),
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                16..17,
+            ),
+        },
+        full: false,
+        limit: None,
+    },
+)
+
+
+---------- Input ----------
+show full columns from t from db like 'id%'
+---------- Output ---------
+SHOW FULL COLUMNS FROM t FROM db LIKE 'id%'
+---------- AST ------------
+ShowColumns(
+    ShowColumnsStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "db",
+                quote: None,
+                span: Some(
+                    30..32,
+                ),
+            },
+        ),
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                23..24,
+            ),
+        },
+        full: true,
+        limit: Some(
+            Like {
+                pattern: "id%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
 show processlist;
 ---------- Output ---------
 SHOW PROCESSLIST
@@ -260,10 +362,12 @@ Explain {
                             },
                             alias: None,
                             travel_point: None,
+                            pivot: None,
+                            unpivot: None,
                         },
                     ],
                     selection: None,
-                    group_by: [],
+                    group_by: None,
                     having: None,
                 },
             ),
@@ -410,7 +514,7 @@ CreateTable(
                                 span: Some(
                                     59..60,
                                 ),
-                                lit: Integer(
+                                lit: UInt64(
                                     1,
                                 ),
                             },
@@ -484,7 +588,7 @@ CreateTable(
                                 span: Some(
                                     50..51,
                                 ),
-                                lit: Integer(
+                                lit: UInt64(
                                     1,
                                 ),
                             },
@@ -525,7 +629,11 @@ CreateTable(
                         select_list: [
                             QualifiedName {
                                 qualified: [
-                                    Star,
+                                    Star(
+                                        Some(
+                                            83..84,
+                                        ),
+                                    ),
                                 ],
                                 exclude: None,
                             },
@@ -546,10 +654,12 @@ CreateTable(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         ],
                         selection: None,
-                        group_by: [],
+                        group_by: None,
                         having: None,
                     },
                 ),
@@ -1294,7 +1404,7 @@ CreateView(
                                     span: Some(
                                         33..34,
                                     ),
-                                    lit: Integer(
+                                    lit: UInt64(
                                         3,
                                     ),
                                 },
@@ -1327,7 +1437,7 @@ CreateView(
                                     span: Some(
                                         53..57,
                                     ),
-                                    lit: Integer(
+                                    lit: UInt64(
                                         1000,
                                     ),
                                 },
@@ -1337,7 +1447,7 @@ CreateView(
                         },
                     ],
                     selection: None,
-                    group_by: [],
+                    group_by: None,
                     having: None,
                 },
             ),
@@ -1403,7 +1513,7 @@ AlterView(
                                     span: Some(
                                         32..33,
                                     ),
-                                    lit: Integer(
+                                    lit: UInt64(
                                         3,
                                     ),
                                 },
@@ -1436,7 +1546,7 @@ AlterView(
                                     span: Some(
                                         52..56,
                                     ),
-                                    lit: Integer(
+                                    lit: UInt64(
                                         1000,
                                     ),
                                 },
@@ -1446,7 +1556,7 @@ AlterView(
                         },
                     ],
                     selection: None,
-                    group_by: [],
+                    group_by: None,
                     having: None,
                 },
             ),
@@ -1542,7 +1652,7 @@ CreateView(
                                     span: Some(
                                         38..39,
                                     ),
-                                    lit: Integer(
+                                    lit: UInt64(
                                         3,
                                     ),
                                 },
@@ -1575,7 +1685,7 @@ CreateView(
                                     span: Some(
                                         58..62,
                                     ),
-                                    lit: Integer(
+                                    lit: UInt64(
                                         1000,
                                     ),
                                 },
@@ -1585,7 +1695,7 @@ CreateView(
                         },
                     ],
                     selection: None,
-                    group_by: [],
+                    group_by: None,
                     having: None,
                 },
             ),
@@ -1659,7 +1769,7 @@ AlterView(
                                     span: Some(
                                         37..38,
                                     ),
-                                    lit: Integer(
+                                    lit: UInt64(
                                         3,
                                     ),
                                 },
@@ -1692,7 +1802,7 @@ AlterView(
                                     span: Some(
                                         57..61,
                                     ),
-                                    lit: Integer(
+                                    lit: UInt64(
                                         1000,
                                     ),
                                 },
@@ -1702,7 +1812,7 @@ AlterView(
                         },
                     ],
                     selection: None,
-                    group_by: [],
+                    group_by: None,
                     having: None,
                 },
             ),
@@ -2033,7 +2143,7 @@ CreateTable(
                                 span: Some(
                                     30..31,
                                 ),
-                                lit: Integer(
+                                lit: UInt64(
                                     1,
                                 ),
                             },
@@ -2238,6 +2348,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                 ],
                 selection: Some(
@@ -2269,7 +2381,7 @@ Query(
                                 span: Some(
                                     45..46,
                                 ),
-                                lit: Integer(
+                                lit: UInt64(
                                     1,
                                 ),
                             },
@@ -2302,7 +2414,7 @@ Query(
                                     span: Some(
                                         55..56,
                                     ),
-                                    lit: Integer(
+                                    lit: UInt64(
                                         1,
                                     ),
                                 },
@@ -2324,22 +2436,26 @@ Query(
                         },
                     },
                 ),
-                group_by: [
-                    ColumnRef {
-                        span: Some(
-                            70..71,
-                        ),
-                        database: None,
-                        table: None,
-                        column: Identifier {
-                            name: "a",
-                            quote: None,
-                            span: Some(
-                                70..71,
-                            ),
-                        },
-                    },
-                ],
+                group_by: Some(
+                    Normal(
+                        [
+                            ColumnRef {
+                                span: Some(
+                                    70..71,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Some(
+                                        70..71,
+                                    ),
+                                },
+                            },
+                        ],
+                    ),
+                ),
                 having: Some(
                     BinaryOp {
                         span: Some(
@@ -2364,7 +2480,7 @@ Query(
                             span: Some(
                                 83..84,
                             ),
-                            lit: Integer(
+                            lit: UInt64(
                                 1,
                             ),
                         },
@@ -2400,7 +2516,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -2421,10 +2541,12 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -2456,7 +2578,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -2485,10 +2611,12 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -2520,7 +2648,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -2541,6 +2673,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                     Table {
                         span: Some(
@@ -2557,6 +2691,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                     Table {
                         span: Some(
@@ -2573,10 +2709,12 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -2608,7 +2746,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -2629,6 +2771,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                     Table {
                         span: Some(
@@ -2645,6 +2789,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                     Table {
                         span: Some(
@@ -2661,10 +2807,12 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -2737,7 +2885,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -2816,6 +2968,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -2832,12 +2986,14 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -2869,7 +3025,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -2948,6 +3108,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -2964,12 +3126,14 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -3001,7 +3165,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -3080,6 +3248,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -3096,12 +3266,14 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -3133,7 +3305,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -3212,6 +3388,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -3228,12 +3406,14 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -3265,7 +3445,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -3344,6 +3528,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -3360,12 +3546,14 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -3397,7 +3585,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -3476,6 +3668,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -3492,12 +3686,14 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -3529,7 +3725,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -3608,6 +3808,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -3624,12 +3826,14 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -3661,7 +3865,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -3740,6 +3948,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -3756,12 +3966,14 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -3793,7 +4005,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -3872,6 +4088,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -3888,12 +4106,14 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -3925,7 +4145,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -4004,6 +4228,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -4020,12 +4246,14 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -4057,7 +4285,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -4136,6 +4368,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -4152,12 +4386,14 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -4189,7 +4425,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -4227,6 +4467,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -4243,12 +4485,14 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -4280,7 +4524,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -4318,6 +4566,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -4334,12 +4584,14 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -4371,7 +4623,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -4409,6 +4665,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -4425,12 +4683,14 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -4462,7 +4722,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -4500,6 +4764,8 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                             right: Table {
                                 span: Some(
@@ -4516,12 +4782,14 @@ Query(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         },
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -4553,7 +4821,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -4574,6 +4846,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                 ],
                 selection: Some(
@@ -4665,10 +4939,12 @@ Query(
                                                 },
                                                 alias: None,
                                                 travel_point: None,
+                                                pivot: None,
+                                                unpivot: None,
                                             },
                                         ],
                                         selection: None,
-                                        group_by: [],
+                                        group_by: None,
                                         having: None,
                                     },
                                 ),
@@ -4680,7 +4956,7 @@ Query(
                         },
                     },
                 ),
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -4712,7 +4988,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -4733,6 +5013,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                 ],
                 selection: Some(
@@ -4824,10 +5106,12 @@ Query(
                                                 },
                                                 alias: None,
                                                 travel_point: None,
+                                                pivot: None,
+                                                unpivot: None,
                                             },
                                         ],
                                         selection: None,
-                                        group_by: [],
+                                        group_by: None,
                                         having: None,
                                     },
                                 ),
@@ -4839,7 +5123,7 @@ Query(
                         },
                     },
                 ),
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -4871,7 +5155,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -4892,6 +5180,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                 ],
                 selection: Some(
@@ -4983,10 +5273,12 @@ Query(
                                                 },
                                                 alias: None,
                                                 travel_point: None,
+                                                pivot: None,
+                                                unpivot: None,
                                             },
                                         ],
                                         selection: None,
-                                        group_by: [],
+                                        group_by: None,
                                         having: None,
                                     },
                                 ),
@@ -4998,7 +5290,7 @@ Query(
                         },
                     },
                 ),
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -5030,7 +5322,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -5051,6 +5347,8 @@ Query(
                         },
                         alias: None,
                         travel_point: None,
+                        pivot: None,
+                        unpivot: None,
                     },
                 ],
                 selection: Some(
@@ -5140,10 +5438,12 @@ Query(
                                                 },
                                                 alias: None,
                                                 travel_point: None,
+                                                pivot: None,
+                                                unpivot: None,
                                             },
                                         ],
                                         selection: None,
-                                        group_by: [],
+                                        group_by: None,
                                         having: None,
                                     },
                                 ),
@@ -5155,7 +5455,7 @@ Query(
                         },
                     },
                 ),
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -5190,7 +5490,7 @@ Query(
                             span: Some(
                                 7..8,
                             ),
-                            lit: Integer(
+                            lit: UInt64(
                                 1,
                             ),
                         },
@@ -5214,7 +5514,7 @@ Query(
                                 span: Some(
                                     22..23,
                                 ),
-                                lit: Integer(
+                                lit: UInt64(
                                     1,
                                 ),
                             },
@@ -5238,7 +5538,7 @@ Query(
                                 span: Some(
                                     33..34,
                                 ),
-                                lit: Integer(
+                                lit: UInt64(
                                     1,
                                 ),
                             },
@@ -5246,7 +5546,7 @@ Query(
                                 span: Some(
                                     37..38,
                                 ),
-                                lit: Integer(
+                                lit: UInt64(
                                     1,
                                 ),
                             },
@@ -5255,13 +5555,13 @@ Query(
                             span: Some(
                                 43..44,
                             ),
-                            lit: Integer(
+                            lit: UInt64(
                                 1,
                             ),
                         },
                     },
                 ),
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -5293,7 +5593,11 @@ Query(
                 select_list: [
                     QualifiedName {
                         qualified: [
-                            Star,
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
                         ],
                         exclude: None,
                     },
@@ -5364,7 +5668,7 @@ Query(
                     },
                 ],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -5475,7 +5779,11 @@ Insert(
                         select_list: [
                             QualifiedName {
                                 qualified: [
-                                    Star,
+                                    Star(
+                                        Some(
+                                            27..28,
+                                        ),
+                                    ),
                                 ],
                                 exclude: None,
                             },
@@ -5496,10 +5804,12 @@ Insert(
                                 },
                                 alias: None,
                                 travel_point: None,
+                                pivot: None,
+                                unpivot: None,
                             },
                         ],
                         selection: None,
-                        group_by: [],
+                        group_by: None,
                         having: None,
                     },
                 ),
@@ -5564,6 +5874,7 @@ Query(
                                         },
                                     ],
                                     params: [],
+                                    window: None,
                                 },
                                 accessor: Period {
                                     key: Identifier {
@@ -5580,7 +5891,7 @@ Query(
                                     span: Some(
                                         42..43,
                                     ),
-                                    lit: Integer(
+                                    lit: UInt64(
                                         0,
                                     ),
                                 },
@@ -5591,7 +5902,7 @@ Query(
                 ],
                 from: [],
                 selection: None,
-                group_by: [],
+                group_by: None,
                 having: None,
             },
         ),
@@ -5642,6 +5953,43 @@ CreateStage(
                     conns: {
                         "aws_key_id": "1a2b3c",
                         "aws_secret_key": "4x5y6z",
+                    },
+                },
+            },
+        ),
+        file_format_options: {
+            "compression": "GZIP",
+            "record_delimiter": ",",
+            "type": "CSV",
+        },
+        on_error: "",
+        size_limit: 0,
+        validation_mode: "",
+        comments: "",
+    },
+)
+
+
+---------- Input ----------
+CREATE STAGE IF NOT EXISTS test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')
+---------- Output ---------
+CREATE STAGE IF NOT EXISTS test_stage URL = 'azblob://load/files/' CONNECTION = ( account_key='4x5y6z' account_name='1a2b3c' ) FILE_FORMAT = ( compression = 'GZIP' record_delimiter = ',' type = 'CSV' )
+---------- AST ------------
+CreateStage(
+    CreateStageStmt {
+        if_not_exists: true,
+        stage_name: "test_stage",
+        location: Some(
+            UriLocation {
+                protocol: "azblob",
+                name: "load",
+                path: "/files/",
+                part_prefix: "",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {
+                        "account_key": "4x5y6z",
+                        "account_name": "1a2b3c",
                     },
                 },
             },
@@ -5811,6 +6159,8 @@ AlterTable(
             },
             alias: None,
             travel_point: None,
+            pivot: None,
+            unpivot: None,
         },
         action: AlterTableClusterKey {
             cluster_by: [
@@ -5857,6 +6207,8 @@ AlterTable(
             },
             alias: None,
             travel_point: None,
+            pivot: None,
+            unpivot: None,
         },
         action: DropTableClusterKey,
     },
@@ -5886,6 +6238,8 @@ AlterTable(
             },
             alias: None,
             travel_point: None,
+            pivot: None,
+            unpivot: None,
         },
         action: ReclusterTable {
             is_final: true,
@@ -5913,7 +6267,7 @@ AlterTable(
                         span: Some(
                             41..42,
                         ),
-                        lit: Integer(
+                        lit: UInt64(
                             0,
                         ),
                     },
@@ -5947,6 +6301,8 @@ AlterTable(
             },
             alias: None,
             travel_point: None,
+            pivot: None,
+            unpivot: None,
         },
         action: AddColumn {
             column: ColumnDefinition {
@@ -5963,7 +6319,7 @@ AlterTable(
                         span: Some(
                             41..44,
                         ),
-                        lit: Integer(
+                        lit: UInt64(
                             101,
                         ),
                     },
@@ -6000,6 +6356,8 @@ AlterTable(
             },
             alias: None,
             travel_point: None,
+            pivot: None,
+            unpivot: None,
         },
         action: DropColumn {
             column: Identifier {
@@ -6162,6 +6520,32 @@ CreateTable(
         },
         as_query: None,
         transient: false,
+    },
+)
+
+
+---------- Input ----------
+GRANT CREATE, CREATE USER ON * TO 'test-grant'@'localhost';
+---------- Output ---------
+GRANT CREATE, CREATE USER ON * TO USER 'test-grant'@'localhost'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Create,
+                CreateUser,
+            ],
+            level: Database(
+                None,
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "localhost",
+            },
+        ),
     },
 )
 
@@ -6768,8 +7152,8 @@ Copy(
                 ),
             },
         },
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
@@ -6827,8 +7211,8 @@ Copy(
                 ),
             },
         },
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
@@ -6891,8 +7275,8 @@ Copy(
                 ),
             },
         },
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
@@ -6955,8 +7339,8 @@ Copy(
                 ),
             },
         },
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
@@ -7006,8 +7390,8 @@ Copy(
                 ),
             },
         },
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {},
         validation_mode: "",
         size_limit: 0,
@@ -7052,8 +7436,8 @@ Copy(
                 ),
             },
         },
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {},
         validation_mode: "",
         size_limit: 0,
@@ -7100,8 +7484,8 @@ Copy(
                 ),
             },
         },
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
@@ -7159,8 +7543,8 @@ Copy(
                 },
             },
         ),
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
@@ -7212,8 +7596,8 @@ Copy(
                 path: "/",
             },
         ),
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
@@ -7278,8 +7662,8 @@ Copy(
                 ),
             },
         },
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
@@ -7331,8 +7715,8 @@ Copy(
                 ),
             },
         },
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
@@ -7384,8 +7768,8 @@ Copy(
                 ),
             },
         },
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
@@ -7437,8 +7821,8 @@ Copy(
                 ),
             },
         },
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
@@ -7496,8 +7880,8 @@ Copy(
                 ),
             },
         },
-        files: [],
-        pattern: "",
+        files: None,
+        pattern: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
@@ -7697,6 +8081,49 @@ Presign(
         expire: 7200s,
         content_type: Some(
             "application/octet-stream",
+        ),
+    },
+)
+
+
+---------- Input ----------
+CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';
+---------- Output ---------
+CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1/' TENANT=x ARGS=(jwks_key_file=https://eks.public/keys,ssl_cert=cert.pem,) COMMENT = 'share endpoint comment'
+---------- AST ------------
+CreateShareEndpoint(
+    CreateShareEndpointStmt {
+        if_not_exists: true,
+        endpoint: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                36..37,
+            ),
+        },
+        url: UriLocation {
+            protocol: "http",
+            name: "127.0.0.1",
+            path: "/",
+            part_prefix: "",
+            connection: Connection {
+                visited_keys: {},
+                conns: {},
+            },
+        },
+        tenant: Identifier {
+            name: "x",
+            quote: None,
+            span: Some(
+                68..69,
+            ),
+        },
+        args: {
+            "jwks_key_file": "https://eks.public/keys",
+            "ssl_cert": "cert.pem",
+        },
+        comment: Some(
+            "share endpoint comment",
         ),
     },
 )
@@ -8097,6 +8524,8 @@ Update(
             },
             alias: None,
             travel_point: None,
+            pivot: None,
+            unpivot: None,
         },
         update_list: [
             UpdateExpr {
@@ -8130,7 +8559,7 @@ Update(
                         span: Some(
                             27..28,
                         ),
-                        lit: Integer(
+                        lit: UInt64(
                             1,
                         ),
                     },
@@ -8148,7 +8577,7 @@ Update(
                     span: Some(
                         34..35,
                     ),
-                    lit: Integer(
+                    lit: UInt64(
                         2,
                     ),
                 },
@@ -8178,7 +8607,7 @@ Update(
                     span: Some(
                         46..47,
                     ),
-                    lit: Integer(
+                    lit: UInt64(
                         3,
                     ),
                 },
@@ -8206,7 +8635,7 @@ SetVariable {
         span: Some(
             18..20,
         ),
-        lit: Integer(
+        lit: UInt64(
             10,
         ),
     },
@@ -8236,7 +8665,7 @@ SetVariable {
             span: Some(
                 18..20,
             ),
-            lit: Integer(
+            lit: UInt64(
                 10,
             ),
         },
@@ -8244,7 +8673,7 @@ SetVariable {
             span: Some(
                 21..22,
             ),
-            lit: Integer(
+            lit: UInt64(
                 2,
             ),
         },
@@ -8297,6 +8726,1124 @@ UnSetVariable(
                 },
             ],
         },
+    },
+)
+
+
+---------- Input ----------
+SELECT t.c1 FROM @stage1/dir/file
+        ( file_format => 'PARQUET', FILES => ('file1', 'file2')) t;
+---------- Output ---------
+SELECT t.c1 FROM @stage1/dir/file (FILES => ('file1','file2'),FILE_FORMAT => 'PARQUET') AS t
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..100,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..100,
+                ),
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: ColumnRef {
+                            span: Some(
+                                7..11,
+                            ),
+                            database: None,
+                            table: Some(
+                                Identifier {
+                                    name: "t",
+                                    quote: None,
+                                    span: Some(
+                                        7..8,
+                                    ),
+                                },
+                            ),
+                            column: Identifier {
+                                name: "c1",
+                                quote: None,
+                                span: Some(
+                                    9..11,
+                                ),
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [
+                    Stage {
+                        span: Some(
+                            17..100,
+                        ),
+                        location: Stage(
+                            StageLocation {
+                                name: "stage1",
+                                path: "/dir/file",
+                            },
+                        ),
+                        options: SelectStageOptions {
+                            files: Some(
+                                [
+                                    "file1",
+                                    "file2",
+                                ],
+                            ),
+                            pattern: None,
+                            file_format: Some(
+                                "PARQUET",
+                            ),
+                            connection: {},
+                        },
+                        alias: Some(
+                            TableAlias {
+                                name: Identifier {
+                                    name: "t",
+                                    quote: None,
+                                    span: Some(
+                                        99..100,
+                                    ),
+                                },
+                                columns: [],
+                            },
+                        ),
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select table0.c1, table1.c2 from
+            @stage1/dir/file ( FILE_FORMAT => 'parquet', FILES => ('file1', 'file2')) table0
+            left join table1;
+---------- Output ---------
+SELECT table0.c1, table1.c2 FROM @stage1/dir/file (FILES => ('file1','file2'),FILE_FORMAT => 'parquet') AS table0 LEFT OUTER JOIN table1
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..154,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..154,
+                ),
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: ColumnRef {
+                            span: Some(
+                                7..16,
+                            ),
+                            database: None,
+                            table: Some(
+                                Identifier {
+                                    name: "table0",
+                                    quote: None,
+                                    span: Some(
+                                        7..13,
+                                    ),
+                                },
+                            ),
+                            column: Identifier {
+                                name: "c1",
+                                quote: None,
+                                span: Some(
+                                    14..16,
+                                ),
+                            },
+                        },
+                        alias: None,
+                    },
+                    AliasedExpr {
+                        expr: ColumnRef {
+                            span: Some(
+                                18..27,
+                            ),
+                            database: None,
+                            table: Some(
+                                Identifier {
+                                    name: "table1",
+                                    quote: None,
+                                    span: Some(
+                                        18..24,
+                                    ),
+                                },
+                            ),
+                            column: Identifier {
+                                name: "c2",
+                                quote: None,
+                                span: Some(
+                                    25..27,
+                                ),
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [
+                    Join {
+                        span: Some(
+                            138..147,
+                        ),
+                        join: Join {
+                            op: LeftOuter,
+                            condition: None,
+                            left: Stage {
+                                span: Some(
+                                    45..125,
+                                ),
+                                location: Stage(
+                                    StageLocation {
+                                        name: "stage1",
+                                        path: "/dir/file",
+                                    },
+                                ),
+                                options: SelectStageOptions {
+                                    files: Some(
+                                        [
+                                            "file1",
+                                            "file2",
+                                        ],
+                                    ),
+                                    pattern: None,
+                                    file_format: Some(
+                                        "parquet",
+                                    ),
+                                    connection: {},
+                                },
+                                alias: Some(
+                                    TableAlias {
+                                        name: Identifier {
+                                            name: "table0",
+                                            quote: None,
+                                            span: Some(
+                                                119..125,
+                                            ),
+                                        },
+                                        columns: [],
+                                    },
+                                ),
+                            },
+                            right: Table {
+                                span: Some(
+                                    148..154,
+                                ),
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "table1",
+                                    quote: None,
+                                    span: Some(
+                                        148..154,
+                                    ),
+                                },
+                                alias: None,
+                                travel_point: None,
+                                pivot: None,
+                                unpivot: None,
+                            },
+                        },
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+SELECT c1 FROM 's3://test/bucket' (ENDPOINT_URL => 'xxx', PATTERN => '*.parquet') t;
+---------- Output ---------
+SELECT c1 FROM 's3://test/bucket' (PATTERN => '*.parquet', endpoint_url => 'xxx') AS t
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..83,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..83,
+                ),
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: ColumnRef {
+                            span: Some(
+                                7..9,
+                            ),
+                            database: None,
+                            table: None,
+                            column: Identifier {
+                                name: "c1",
+                                quote: None,
+                                span: Some(
+                                    7..9,
+                                ),
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [
+                    Stage {
+                        span: Some(
+                            15..83,
+                        ),
+                        location: Uri(
+                            "s3://test/bucket",
+                        ),
+                        options: SelectStageOptions {
+                            files: None,
+                            pattern: Some(
+                                "*.parquet",
+                            ),
+                            file_format: None,
+                            connection: {
+                                "endpoint_url": "xxx",
+                            },
+                        },
+                        alias: Some(
+                            TableAlias {
+                                name: Identifier {
+                                    name: "t",
+                                    quote: None,
+                                    span: Some(
+                                        82..83,
+                                    ),
+                                },
+                                columns: [],
+                            },
+                        ),
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+CREATE FILE FORMAT my_csv
+            type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;
+---------- Output ---------
+CREATE FILE_FORMAT my_csv TYPE = CSV FIELD_DELIMITER = ',' RECORD_DELIMITER = '\n' QUOTE = '' ESCAPE = '' SKIP_HEADER = 1 NAN_DISPLAY = ''
+---------- AST ------------
+CreateFileFormat {
+    if_not_exists: false,
+    name: "my_csv",
+    file_format_options: FileFormatOptions {
+        format: Csv,
+        skip_header: 1,
+        field_delimiter: ",",
+        record_delimiter: "\n",
+        nan_display: "",
+        escape: "",
+        compression: None,
+        row_tag: "",
+        quote: "",
+        name: None,
+    },
+}
+
+
+---------- Input ----------
+SHOW FILE FORMATS
+---------- Output ---------
+SHOW FILE FORMATS
+---------- AST ------------
+ShowFileFormats
+
+
+---------- Input ----------
+DROP FILE FORMAT my_csv
+---------- Output ---------
+DROP FILE_FORMAT my_csv
+---------- AST ------------
+DropFileFormat {
+    if_exists: false,
+    name: "my_csv",
+}
+
+
+---------- Input ----------
+SELECT * FROM t GROUP BY GROUPING SETS (a, b, c, d)
+---------- Output ---------
+SELECT * FROM t GROUP BY GROUPING SETS ((a), (b), (c), (d))
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..51,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..51,
+                ),
+                distinct: false,
+                select_list: [
+                    QualifiedName {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        exclude: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "t",
+                            quote: None,
+                            span: Some(
+                                14..15,
+                            ),
+                        },
+                        alias: None,
+                        travel_point: None,
+                        pivot: None,
+                        unpivot: None,
+                    },
+                ],
+                selection: None,
+                group_by: Some(
+                    GroupingSets(
+                        [
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        40..41,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                        span: Some(
+                                            40..41,
+                                        ),
+                                    },
+                                },
+                            ],
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        43..44,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "b",
+                                        quote: None,
+                                        span: Some(
+                                            43..44,
+                                        ),
+                                    },
+                                },
+                            ],
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        46..47,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "c",
+                                        quote: None,
+                                        span: Some(
+                                            46..47,
+                                        ),
+                                    },
+                                },
+                            ],
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        49..50,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "d",
+                                        quote: None,
+                                        span: Some(
+                                            49..50,
+                                        ),
+                                    },
+                                },
+                            ],
+                        ],
+                    ),
+                ),
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+SELECT * FROM t GROUP BY GROUPING SETS (a, b, (c, d))
+---------- Output ---------
+SELECT * FROM t GROUP BY GROUPING SETS ((a), (b), (c, d))
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..53,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..53,
+                ),
+                distinct: false,
+                select_list: [
+                    QualifiedName {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        exclude: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "t",
+                            quote: None,
+                            span: Some(
+                                14..15,
+                            ),
+                        },
+                        alias: None,
+                        travel_point: None,
+                        pivot: None,
+                        unpivot: None,
+                    },
+                ],
+                selection: None,
+                group_by: Some(
+                    GroupingSets(
+                        [
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        40..41,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                        span: Some(
+                                            40..41,
+                                        ),
+                                    },
+                                },
+                            ],
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        43..44,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "b",
+                                        quote: None,
+                                        span: Some(
+                                            43..44,
+                                        ),
+                                    },
+                                },
+                            ],
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        47..48,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "c",
+                                        quote: None,
+                                        span: Some(
+                                            47..48,
+                                        ),
+                                    },
+                                },
+                                ColumnRef {
+                                    span: Some(
+                                        50..51,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "d",
+                                        quote: None,
+                                        span: Some(
+                                            50..51,
+                                        ),
+                                    },
+                                },
+                            ],
+                        ],
+                    ),
+                ),
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (c), (d, e))
+---------- Output ---------
+SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (c), (d, e))
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..60,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..60,
+                ),
+                distinct: false,
+                select_list: [
+                    QualifiedName {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        exclude: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "t",
+                            quote: None,
+                            span: Some(
+                                14..15,
+                            ),
+                        },
+                        alias: None,
+                        travel_point: None,
+                        pivot: None,
+                        unpivot: None,
+                    },
+                ],
+                selection: None,
+                group_by: Some(
+                    GroupingSets(
+                        [
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        41..42,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                        span: Some(
+                                            41..42,
+                                        ),
+                                    },
+                                },
+                                ColumnRef {
+                                    span: Some(
+                                        44..45,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "b",
+                                        quote: None,
+                                        span: Some(
+                                            44..45,
+                                        ),
+                                    },
+                                },
+                            ],
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        49..50,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "c",
+                                        quote: None,
+                                        span: Some(
+                                            49..50,
+                                        ),
+                                    },
+                                },
+                            ],
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        54..55,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "d",
+                                        quote: None,
+                                        span: Some(
+                                            54..55,
+                                        ),
+                                    },
+                                },
+                                ColumnRef {
+                                    span: Some(
+                                        57..58,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "e",
+                                        quote: None,
+                                        span: Some(
+                                            57..58,
+                                        ),
+                                    },
+                                },
+                            ],
+                        ],
+                    ),
+                ),
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (), (d, e))
+---------- Output ---------
+SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (), (d, e))
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..59,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..59,
+                ),
+                distinct: false,
+                select_list: [
+                    QualifiedName {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        exclude: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "t",
+                            quote: None,
+                            span: Some(
+                                14..15,
+                            ),
+                        },
+                        alias: None,
+                        travel_point: None,
+                        pivot: None,
+                        unpivot: None,
+                    },
+                ],
+                selection: None,
+                group_by: Some(
+                    GroupingSets(
+                        [
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        41..42,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                        span: Some(
+                                            41..42,
+                                        ),
+                                    },
+                                },
+                                ColumnRef {
+                                    span: Some(
+                                        44..45,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "b",
+                                        quote: None,
+                                        span: Some(
+                                            44..45,
+                                        ),
+                                    },
+                                },
+                            ],
+                            [],
+                            [
+                                ColumnRef {
+                                    span: Some(
+                                        53..54,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "d",
+                                        quote: None,
+                                        span: Some(
+                                            53..54,
+                                        ),
+                                    },
+                                },
+                                ColumnRef {
+                                    span: Some(
+                                        56..57,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "e",
+                                        quote: None,
+                                        span: Some(
+                                            56..57,
+                                        ),
+                                    },
+                                },
+                            ],
+                        ],
+                    ),
+                ),
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+SELECT * FROM t GROUP BY CUBE (a, b, c)
+---------- Output ---------
+SELECT * FROM t GROUP BY CUBE (a, b, c)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..39,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..39,
+                ),
+                distinct: false,
+                select_list: [
+                    QualifiedName {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        exclude: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "t",
+                            quote: None,
+                            span: Some(
+                                14..15,
+                            ),
+                        },
+                        alias: None,
+                        travel_point: None,
+                        pivot: None,
+                        unpivot: None,
+                    },
+                ],
+                selection: None,
+                group_by: Some(
+                    Cube(
+                        [
+                            ColumnRef {
+                                span: Some(
+                                    31..32,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Some(
+                                        31..32,
+                                    ),
+                                },
+                            },
+                            ColumnRef {
+                                span: Some(
+                                    34..35,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                    span: Some(
+                                        34..35,
+                                    ),
+                                },
+                            },
+                            ColumnRef {
+                                span: Some(
+                                    37..38,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "c",
+                                    quote: None,
+                                    span: Some(
+                                        37..38,
+                                    ),
+                                },
+                            },
+                        ],
+                    ),
+                ),
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+SELECT * FROM t GROUP BY ROLLUP (a, b, c)
+---------- Output ---------
+SELECT * FROM t GROUP BY ROLLUP (a, b, c)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..41,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..41,
+                ),
+                distinct: false,
+                select_list: [
+                    QualifiedName {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        exclude: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            name: "t",
+                            quote: None,
+                            span: Some(
+                                14..15,
+                            ),
+                        },
+                        alias: None,
+                        travel_point: None,
+                        pivot: None,
+                        unpivot: None,
+                    },
+                ],
+                selection: None,
+                group_by: Some(
+                    Rollup(
+                        [
+                            ColumnRef {
+                                span: Some(
+                                    33..34,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Some(
+                                        33..34,
+                                    ),
+                                },
+                            },
+                            ColumnRef {
+                                span: Some(
+                                    36..37,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                    span: Some(
+                                        36..37,
+                                    ),
+                                },
+                            },
+                            ColumnRef {
+                                span: Some(
+                                    39..40,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "c",
+                                    quote: None,
+                                    span: Some(
+                                        39..40,
+                                    ),
+                                },
+                            },
+                        ],
+                    ),
+                ),
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
     },
 )
 

@@ -28,10 +28,7 @@ use crate::api::rpc::exchange::exchange_sink_writer::ExchangeWriterSink;
 use crate::api::rpc::exchange::exchange_sorting::ExchangeSorting;
 use crate::api::rpc::exchange::exchange_sorting::TransformExchangeSorting;
 use crate::api::rpc::exchange::exchange_transform_shuffle::exchange_shuffle;
-use crate::api::rpc::exchange::serde::exchange_serializer::create_serializer_items;
 use crate::api::rpc::exchange::serde::exchange_serializer::ExchangeSerializeMeta;
-use crate::api::rpc::exchange::serde::exchange_serializer::TransformExchangeSerializer;
-use crate::api::rpc::exchange::serde::exchange_serializer_with_sorting::TransformExchangeSerializerWithSorting;
 use crate::clusters::ClusterHelper;
 use crate::pipelines::Pipeline;
 use crate::sessions::QueryContext;
@@ -46,7 +43,7 @@ impl ExchangeSink {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let exchange_manager = ctx.get_exchange_manager();
-        let mut flight_exchanges = exchange_manager.get_flight_exchanges(params)?;
+        let mut flight_senders = exchange_manager.get_flight_sender(params)?;
 
         match params {
             ExchangeParams::MergeExchange(params) => {
@@ -59,19 +56,12 @@ impl ExchangeSink {
                     )));
                 }
 
-                if let Some(sorting) = &params.exchange_sorting {
-                    pipeline.add_transform(|input, output| {
-                        Ok(TransformExchangeSerializerWithSorting::create(
-                            input,
-                            output,
-                            &params.schema,
-                            sorting.clone(),
-                        ))
-                    })?;
+                let exchange_injector = &params.exchange_injector;
+                exchange_injector.apply_merge_serializer(params, pipeline)?;
 
+                if exchange_injector.exchange_sorting().is_some() {
                     let output_len = pipeline.output_len();
                     let sorting = SinkExchangeSorting::create();
-
                     let transform = TransformExchangeSorting::create(output_len, sorting);
 
                     let output = transform.get_output();
@@ -81,35 +71,23 @@ impl ExchangeSink {
                         inputs,
                         vec![output],
                     )]));
-                } else {
-                    pipeline.add_transform(|input, output| {
-                        Ok(TransformExchangeSerializer::create(
-                            input,
-                            output,
-                            &params.schema,
-                        ))
-                    })?;
                 }
 
-                assert_eq!(flight_exchanges.len(), 1);
-                let flight_exchange = flight_exchanges.remove(0);
+                assert_eq!(flight_senders.len(), 1);
+                let flight_sender = flight_senders.remove(0);
                 pipeline.add_sink(|input| {
                     Ok(ProcessorPtr::create(ExchangeWriterSink::create(
                         input,
-                        flight_exchange.clone(),
+                        flight_sender.clone(),
                     )))
                 })
             }
             ExchangeParams::ShuffleExchange(params) => {
                 exchange_shuffle(params, pipeline)?;
 
-                // exchange serialize transform
-                let len = flight_exchanges.len();
-                let items = create_serializer_items(len, &params.schema);
-                pipeline.add_pipe(Pipe::create(len, len, items));
-
                 // exchange writer sink
-                let items = create_writer_items(flight_exchanges);
+                let len = pipeline.output_len();
+                let items = create_writer_items(flight_senders);
                 pipeline.add_pipe(Pipe::create(len, 0, items));
                 Ok(())
             }
@@ -117,7 +95,7 @@ impl ExchangeSink {
     }
 }
 
-struct SinkExchangeSorting {}
+struct SinkExchangeSorting;
 
 impl SinkExchangeSorting {
     pub fn create() -> Arc<dyn ExchangeSorting> {

@@ -14,15 +14,13 @@
 
 use std::ops::RangeBounds;
 
-use common_meta_sled_store::openraft;
 use common_meta_sled_store::sled;
 use common_meta_sled_store::AsKeySpace;
 use common_meta_sled_store::SledTree;
 use common_meta_stoerr::MetaStorageError;
-use common_meta_types::LogEntry;
+use common_meta_types::Entry;
 use common_meta_types::LogId;
 use common_meta_types::LogIndex;
-use openraft::raft::Entry;
 use tracing::info;
 
 use crate::config::RaftConfig;
@@ -88,7 +86,7 @@ impl RaftLog {
         self.logs().range_remove(range, true).await
     }
 
-    pub fn range_values<R>(&self, range: R) -> Result<Vec<Entry<LogEntry>>, MetaStorageError>
+    pub fn range_values<R>(&self, range: R) -> Result<Vec<Entry>, MetaStorageError>
     where R: RangeBounds<LogIndex> {
         self.logs().range_values(range)
     }
@@ -98,7 +96,7 @@ impl RaftLog {
     /// There is no overriding check either. It always overrides the existent ones.
     ///
     /// When this function returns the logs are guaranteed to be fsync-ed.
-    pub async fn append(&self, logs: &[Entry<LogEntry>]) -> Result<(), MetaStorageError> {
+    pub async fn append(&self, logs: &[Entry]) -> Result<(), MetaStorageError> {
         self.logs().append(logs).await
     }
 

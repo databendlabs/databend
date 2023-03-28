@@ -70,12 +70,6 @@ pub fn ident_after_as(i: Input) -> IResult<Identifier> {
 }
 
 pub fn function_name(i: Input) -> IResult<Identifier> {
-    non_reserved_identifier(|token| token.is_reserved_function_name(false))(i)
-}
-
-/// TODO(xuanwo): Do we need to remove this function?
-#[allow(dead_code)]
-pub fn function_name_after_as(i: Input) -> IResult<Identifier> {
     non_reserved_identifier(|token| token.is_reserved_function_name(true))(i)
 }
 
@@ -89,7 +83,7 @@ pub fn stage_name(i: Input) -> IResult<Identifier> {
     alt((
         map(
             alt((
-                rule! { (Ident | Tilde) },
+                rule! { (Ident | BitWiseNot) },
                 non_reserved_keyword(|token| token.is_reserved_ident(false)),
             )),
             |token| Identifier {
@@ -363,7 +357,7 @@ pub fn transform_span(tokens: &[Token]) -> Span {
 
 pub fn run_pratt_parser<'a, I, P, E>(
     mut parser: P,
-    iter: &mut I,
+    iter: &I,
     rest: Input<'a>,
     input: Input<'a>,
 ) -> IResult<'a, P::Output>
@@ -373,7 +367,7 @@ where
     I: Iterator<Item = P::Input> + ExactSizeIterator + Clone,
 {
     let mut iter_cloned = iter.clone();
-    let mut iter = iter.peekable();
+    let mut iter = iter.clone().peekable();
     let len = iter.len();
     let expr = parser
         .parse_input(&mut iter, Precedence(0))

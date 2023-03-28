@@ -1,46 +1,50 @@
 ---
-title: How to Work With Databend in Python
+title: Developing with Databend using Python
 sidebar_label: Python
 description:
-   How to work with Databend in Python.
+   Develop with Databend using Python.
 ---
 
-## Before You Begin
+Databend offers the following options enabling you to develop applications using the Python programming language and establish connectivity with Databend:
 
-* **Databend :** Make sure Databend is running and accessible, see [How to deploy Databend](/doc/deploy).
-* [How to Create User](../14-sql-commands/00-ddl/30-user/01-user-create-user.md)
-* [How to Grant Privileges to User](../14-sql-commands/00-ddl/30-user/10-grant-privileges.md)
+- [databend-py](https://github.com/databendcloud/databend-py): Python driver, including support for native HTTP interfaces.
+- [databend-sqlalchemy](https://github.com/databendcloud/databend-sqlalchemy): Databend SQLAlchemy dialect.
 
-## Create Databend User
+Click the links above for their installation instructions, examples, and the source code on GitHub.
 
-```shell
-mysql -h127.0.0.1 -uroot -P3307
-```
+In the following tutorial, you'll learn how to utilize the available options above to develop your applications. The tutorial will walk you through creating a SQL user in Databend and then writing Python code to create a table, insert data, and perform data queries.
 
-### Create a User
+## Tutorial: Developing with Databend using Python
+
+Before you start, make sure you have successfully installed Databend. For how to install Databend, see [How to deploy Databend](/doc/deploy).
+
+### Step 1. Prepare a SQL User Account
+
+To connect your program to Databend and execute SQL operations, you must provide a SQL user account with appropriate privileges in your code. Create one in Databend if needed, and ensure that the SQL user has only the necessary privileges for security.
+
+This tutorial uses a SQL user named 'user1' with password 'abc123' as an example. As the program will write data into Databend, the user needs ALL privileges. For how to manage SQL users and their privileges, see https://databend.rs/doc/reference/sql/ddl/user.
 
 ```sql
 CREATE USER user1 IDENTIFIED BY 'abc123';
+GRANT ALL on *.* TO user1;
 ```
 
-### Grants Privileges
+### Step 2. Write a Python Program
 
-Grants `ALL` privileges to the user `user1`:
-```sql
-GRANT ALL ON *.* TO user1;
-```
+In this step, you'll create a simple Python program that communicates with Databend. The program will involve tasks such as creating a table, inserting data, and executing data queries.
 
-## Python
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
 
-This guideline show how to connect and query to Databend using Python.
+<Tabs groupId="python">
+<TabItem value="databend-py" label="databend-py">
 
-We will be creating a table named `books` and insert a row, then query it.
-
-### Using databend-py
+1. Install databend-py.
 
 ```shell
 pip install databend-py
 ```
+2. Copy and paste the following code to the file `main.py`:
 
 ```python title='main.py'
 #!/usr/bin/env python3
@@ -65,16 +69,22 @@ client.execute('drop table books')
 client.execute('drop database book_db')
 ```
 
-Run `python main.py`:
+3. Run `python main.py`:
+
 ```text
 mybook author 2022
 ```
+</TabItem>
 
-### Using databend-sqlalchemy
+<TabItem value="databend-sqlalchemy" label="databend-sqlalchemy">
+
+1. Install databend-sqlalchemy.
 
 ```shell
 pip install databend-sqlalchemy
 ```
+
+2. Copy and paste the following code to the file `main.py`:
 
 ```python title='main.py'
 #!/usr/bin/env python3
@@ -94,8 +104,11 @@ conn.execute('drop table books')
 conn.execute('drop database book_db')
 ```
 
-Run `python main.py`:
+3. Run `python main.py`:
 
 ```text
 ('mybook', 'author', '2022')
 ```
+
+</TabItem>
+</Tabs>

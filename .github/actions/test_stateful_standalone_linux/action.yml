@@ -39,10 +39,10 @@ runs:
         aws --endpoint-url http://127.0.0.1:9900/ s3 cp tests/data/ontime_200.parquet s3://testbucket/admin/data/ontime_200_v1.parquet
         aws --endpoint-url http://127.0.0.1:9900/ s3 cp tests/data/iceberg s3://testbucket/iceberg_data --recursive
 
-    - name: Run Stateful Tests with Standalone mode (ubuntu-latest only)
+    - name: Run Stateful Tests with Standalone mode
       shell: bash
       run: |
-        ./scripts/ci/ci-run-stateful-tests-standalone-s3.sh
+        ./scripts/ci/ci-run-stateful-tests-standalone-minio.sh
 
     - name: Upload failure
       if: failure() || cancelled()

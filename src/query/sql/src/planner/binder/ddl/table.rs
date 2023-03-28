@@ -45,7 +45,6 @@ use common_ast::ast::UriLocation;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::walk_expr_mut;
-use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
@@ -59,7 +58,7 @@ use common_expression::DataSchemaRefExt;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::storage::StorageParams;
 use common_storage::DataOperator;
 use common_storages_view::view_table::QUERY;
@@ -78,13 +77,13 @@ use crate::optimizer::optimize;
 use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
 use crate::planner::semantic::normalize_identifier;
+use crate::planner::semantic::resolve_type_name;
 use crate::planner::semantic::IdentifierNormalizer;
-use crate::planner::semantic::TypeChecker;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CastExpr;
-use crate::plans::CreateTablePlanV2;
+use crate::plans::CreateTablePlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
@@ -94,7 +93,6 @@ use crate::plans::OptimizeTableAction;
 use crate::plans::OptimizeTablePlan;
 use crate::plans::Plan;
 use crate::plans::ReclusterTablePlan;
-use crate::plans::RenameTableEntity;
 use crate::plans::RenameTablePlan;
 use crate::plans::RevertTablePlan;
 use crate::plans::RewriteKind;
@@ -110,7 +108,7 @@ use crate::SelectBuilder;
 impl Binder {
     pub(in crate::planner::binder) async fn bind_show_tables(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &ShowTablesStmt,
     ) -> Result<Plan> {
         let ShowTablesStmt {
@@ -191,15 +189,8 @@ impl Binder {
             table,
         } = stmt;
 
-        let catalog = catalog
-            .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
 
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("Table", DataType::String),
@@ -223,15 +214,8 @@ impl Binder {
             table,
         } = stmt;
 
-        let catalog = catalog
-            .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("Field", DataType::String),
             DataField::new("Type", DataType::String),
@@ -250,7 +234,7 @@ impl Binder {
 
     pub(in crate::planner::binder) async fn bind_show_tables_status(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &ShowTablesStatusStmt,
     ) -> Result<Plan> {
         let ShowTablesStatusStmt { database, limit } = stmt;
@@ -288,8 +272,7 @@ impl Binder {
             ),
         };
         let tokens = tokenize_sql(query.as_str())?;
-        let backtrace = Backtrace::new();
-        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace)?;
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
         self.bind_statement(bind_context, &stmt).await
     }
 
@@ -333,15 +316,8 @@ impl Binder {
             uri_location,
         } = stmt;
 
-        let catalog = catalog
-            .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
 
         // Take FUSE engine AS default engine
         let engine = engine.unwrap_or(Engine::Fuse);
@@ -393,8 +369,8 @@ impl Binder {
             }
             (None, Some(query)) => {
                 // `CREATE TABLE AS SELECT ...` without column definitions
-                let init_bind_context = BindContext::new();
-                let (_s_expr, bind_context) = self.bind_query(&init_bind_context, query).await?;
+                let mut init_bind_context = BindContext::new();
+                let (_, bind_context) = self.bind_query(&mut init_bind_context, query).await?;
                 let fields = bind_context
                     .columns
                     .iter()
@@ -413,8 +389,8 @@ impl Binder {
                 // e.g. `CREATE TABLE t (i INT) AS SELECT * from old_t` with columns specified
                 let (source_schema, source_default_exprs, source_comments) =
                     self.analyze_create_table_schema(source).await?;
-                let init_bind_context = BindContext::new();
-                let (_, bind_context) = self.bind_query(&init_bind_context, query).await?;
+                let mut init_bind_context = BindContext::new();
+                let (_, bind_context) = self.bind_query(&mut init_bind_context, query).await?;
                 let query_fields: Vec<TableField> = bind_context
                     .columns
                     .iter()
@@ -505,7 +481,7 @@ impl Binder {
             }
         };
 
-        let plan = CreateTablePlanV2 {
+        let plan = CreateTablePlan {
             if_not_exists: *if_not_exists,
             tenant: self.ctx.get_tenant(),
             catalog: catalog.clone(),
@@ -520,9 +496,9 @@ impl Binder {
             field_comments,
             cluster_key,
             as_select: if let Some(query) = as_query {
-                let bind_context = BindContext::new();
+                let mut bind_context = BindContext::new();
                 let stmt = Statement::Query(Box::new(*query.clone()));
-                let select_plan = self.bind_statement(&bind_context, &stmt).await?;
+                let select_plan = self.bind_statement(&mut bind_context, &stmt).await?;
                 // Don't enable distributed optimization for `CREATE TABLE ... AS SELECT ...` for now
                 let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig::default()));
                 let optimized_plan = optimize(self.ctx.clone(), opt_ctx, select_plan)?;
@@ -547,15 +523,8 @@ impl Binder {
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
-        let catalog = catalog
-            .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
 
         Ok(Plan::DropTable(Box::new(DropTablePlan {
             if_exists: *if_exists,
@@ -578,15 +547,8 @@ impl Binder {
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
-        let catalog = catalog
-            .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
 
         Ok(Plan::UndropTable(Box::new(UndropTablePlan {
             tenant,
@@ -598,7 +560,7 @@ impl Binder {
 
     pub(in crate::planner::binder) async fn bind_alter_table(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &AlterTableStmt,
     ) -> Result<Plan> {
         let AlterTableStmt {
@@ -616,17 +578,7 @@ impl Binder {
             ..
         } = table_reference
         {
-            (
-                catalog.as_ref().map_or_else(
-                    || self.ctx.get_current_catalog(),
-                    |i| normalize_identifier(i, &self.name_resolution_ctx).name,
-                ),
-                database.as_ref().map_or_else(
-                    || self.ctx.get_current_database(),
-                    |i| normalize_identifier(i, &self.name_resolution_ctx).name,
-                ),
-                normalize_identifier(table, &self.name_resolution_ctx).name,
-            )
+            self.normalize_object_identifier_triple(catalog, database, table)
         } else {
             return Err(ErrorCode::Internal(
                 "should not happen, parser should have report error already",
@@ -635,18 +587,14 @@ impl Binder {
 
         match action {
             AlterTableAction::RenameTable { new_table } => {
-                let entities = vec![RenameTableEntity {
+                Ok(Plan::RenameTable(Box::new(RenameTablePlan {
+                    tenant,
                     if_exists: *if_exists,
                     new_database: database.clone(),
                     new_table: normalize_identifier(new_table, &self.name_resolution_ctx).name,
                     catalog,
                     database,
                     table,
-                }];
-
-                Ok(Plan::RenameTable(Box::new(RenameTablePlan {
-                    tenant,
-                    entities,
                 })))
             }
             AlterTableAction::AddColumn { column } => {
@@ -700,12 +648,12 @@ impl Binder {
                 is_final,
                 selection,
             } => {
-                let (_, context) = self
+                let (_, mut context) = self
                     .bind_table_reference(bind_context, table_reference)
                     .await?;
 
                 let mut scalar_binder = ScalarBinder::new(
-                    &context,
+                    &mut context,
                     self.ctx.clone(),
                     &self.name_resolution_ctx,
                     self.metadata.clone(),
@@ -757,24 +705,11 @@ impl Binder {
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
-        let catalog = catalog
-            .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
-        let new_catalog = new_catalog
-            .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let new_database = new_database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let new_table = normalize_identifier(new_table, &self.name_resolution_ctx).name;
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
+
+        let (new_catalog, new_database, new_table) =
+            self.normalize_object_identifier_triple(new_catalog, new_database, new_table);
 
         if new_catalog != catalog {
             return Err(ErrorCode::BadArguments(
@@ -782,18 +717,14 @@ impl Binder {
             ));
         }
 
-        let entities = vec![RenameTableEntity {
+        Ok(Plan::RenameTable(Box::new(RenameTablePlan {
+            tenant,
             if_exists: *if_exists,
             catalog,
             database,
             table,
             new_database,
             new_table,
-        }];
-
-        Ok(Plan::RenameTable(Box::new(RenameTablePlan {
-            tenant,
-            entities,
         })))
     }
 
@@ -808,15 +739,8 @@ impl Binder {
             purge,
         } = stmt;
 
-        let catalog = catalog
-            .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
 
         Ok(Plan::TruncateTable(Box::new(TruncateTablePlan {
             catalog,
@@ -828,7 +752,7 @@ impl Binder {
 
     pub(in crate::planner::binder) async fn bind_optimize_table(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &OptimizeTableStmt,
     ) -> Result<Plan> {
         let OptimizeTableStmt {
@@ -838,15 +762,8 @@ impl Binder {
             action: ast_action,
         } = stmt;
 
-        let catalog = catalog
-            .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
         let action = match ast_action {
             AstOptimizeTableAction::All => OptimizeTableAction::All,
             AstOptimizeTableAction::Purge { before } => {
@@ -861,7 +778,7 @@ impl Binder {
             AstOptimizeTableAction::Compact { target, limit } => {
                 let limit_cnt = match limit {
                     Some(Expr::Literal {
-                        lit: Literal::Integer(uint),
+                        lit: Literal::UInt64(uint),
                         ..
                     }) => Some(*uint as usize),
                     Some(_) => {
@@ -894,15 +811,8 @@ impl Binder {
             table,
         } = stmt;
 
-        let catalog = catalog
-            .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
 
         Ok(Plan::AnalyzeTable(Box::new(AnalyzeTablePlan {
             catalog,
@@ -921,15 +831,8 @@ impl Binder {
             table,
         } = stmt;
 
-        let catalog = catalog
-            .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
-        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
 
         Ok(Plan::ExistsTable(Box::new(ExistsTablePlan {
             catalog,
@@ -942,9 +845,9 @@ impl Binder {
         &self,
         columns: &[ColumnDefinition],
     ) -> Result<(TableSchemaRef, Vec<Option<String>>, Vec<String>)> {
-        let bind_context = BindContext::new();
+        let mut bind_context = BindContext::new();
         let mut scalar_binder = ScalarBinder::new(
-            &bind_context,
+            &mut bind_context,
             self.ctx.clone(),
             &self.name_resolution_ctx,
             self.metadata.clone(),
@@ -955,7 +858,7 @@ impl Binder {
         let mut fields_comments = Vec::with_capacity(columns.len());
         for column in columns.iter() {
             let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
-            let schema_data_type = TypeChecker::resolve_type_name(&column.data_type)?;
+            let schema_data_type = resolve_type_name(&column.data_type)?;
 
             fields.push(TableField::new(&name, schema_data_type.clone()));
             fields_default_expr.push({
@@ -963,8 +866,8 @@ impl Binder {
                     let (expr, _) = scalar_binder.bind(default_expr).await?;
                     let is_try = schema_data_type.is_nullable();
                     let cast_expr_to_field_type = ScalarExpr::CastExpr(CastExpr {
+                        span: expr.span(),
                         is_try,
-                        from_type: Box::new(expr.data_type()),
                         target_type: Box::new(DataType::from(&schema_data_type)),
                         argument: Box::new(expr),
                     })
@@ -1005,21 +908,14 @@ impl Binder {
                 database,
                 table,
             } => {
-                let catalog = catalog
-                    .as_ref()
-                    .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
-                    .unwrap_or_else(|| self.ctx.get_current_catalog());
-                let database = database.as_ref().map_or_else(
-                    || self.ctx.get_current_database(),
-                    |ident| normalize_identifier(ident, &self.name_resolution_ctx).name,
-                );
-                let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
-                let table = self.ctx.get_table(&catalog, &database, &table_name).await?;
+                let (catalog, database, table) =
+                    self.normalize_object_identifier_triple(catalog, database, table);
+                let table = self.ctx.get_table(&catalog, &database, &table).await?;
 
                 if table.engine() == VIEW_ENGINE {
                     let query = table.get_table_info().options().get(QUERY).unwrap();
                     let mut planner = Planner::new(self.ctx.clone());
-                    let (plan, _, _) = planner.plan_sql(query).await?;
+                    let (plan, _) = planner.plan_sql(query).await?;
                     Ok((infer_table_schema(&plan.schema())?, vec![], vec![]))
                 } else {
                     Ok((table.schema(), vec![], table.field_comments().clone()))
@@ -1082,7 +978,7 @@ impl Binder {
             bind_context.columns.push(column);
         }
         let mut scalar_binder = ScalarBinder::new(
-            &bind_context,
+            &mut bind_context,
             self.ctx.clone(),
             &self.name_resolution_ctx,
             self.metadata.clone(),
@@ -1093,7 +989,7 @@ impl Binder {
         for cluster_by in cluster_by.iter() {
             let (cluster_key, _) = scalar_binder.bind(cluster_by).await?;
             let expr = cluster_key.as_expr_with_col_index()?;
-            if !expr.is_deterministic() {
+            if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Cluster by expression `{:#}` is not deterministic",
                     cluster_by

@@ -22,10 +22,10 @@ runs:
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
 
-    - name: Run Stateless Tests with Standalone mode, with embedded meta-store
+    - name: Run Stateless Tests with Standalone mode
       shell: bash
       run: |
-        build-tool bash ./scripts/ci/ci-run-tests-embedded-meta.sh
+        build-tool bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
 
     - name: Upload failure
       if: failure() || cancelled()

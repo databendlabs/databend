@@ -20,6 +20,7 @@ pub use crate::message::ForwardRequestBody;
 pub use crate::message::JoinRequest;
 pub use crate::message::LeaveRequest;
 
+mod errors;
 pub mod meta_leader;
 mod meta_node_kv_api_impl;
 pub mod meta_service_impl;

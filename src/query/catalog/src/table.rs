@@ -25,12 +25,14 @@ use common_expression::ColumnId;
 use common_expression::DataBlock;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
+use common_expression::TableField;
 use common_expression::TableSchema;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use common_io::constants::DEFAULT_BLOCK_MIN_ROWS;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_types::MetaId;
 use common_pipeline_core::Pipeline;
 use common_storage::StorageMetrics;
@@ -181,13 +183,29 @@ pub trait Table: Sync + Send {
         )))
     }
 
+    async fn replace_into(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        on_conflict_fields: Vec<TableField>,
+    ) -> Result<()> {
+        let (_, _, _) = (ctx, pipeline, on_conflict_fields);
+
+        Err(ErrorCode::Unimplemented(format!(
+            "replace_into operation for table {} is not implemented. table engine : {}",
+            self.name(),
+            self.get_table_info().meta.engine
+        )))
+    }
+
     async fn commit_insertion(
         &self,
         ctx: Arc<dyn TableContext>,
         operations: Vec<DataBlock>,
+        copied_files: Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
     ) -> Result<()> {
-        let (_, _, _) = (ctx, operations, overwrite);
+        let (_, _, _, _) = (ctx, operations, copied_files, overwrite);
 
         Ok(())
     }

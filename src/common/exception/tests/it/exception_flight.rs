@@ -27,11 +27,13 @@ fn test_serialize() -> Result<()> {
         String::from("test_message"),
         None,
         Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
-    );
+    )
+    .set_span(Some((0..1).into()));
     let backtrace_str = error_code.backtrace_str();
     let error_code = ErrorCode::try_from(FlightData::from(error_code))?;
     assert_eq!(1, error_code.code());
     assert_eq!(String::from("test_message"), error_code.message());
     assert_eq!(backtrace_str, error_code.backtrace_str());
+    assert_eq!(error_code.span(), Some((0..1).into()));
     Ok(())
 }

@@ -23,8 +23,9 @@ use common_ast::ast::JoinOperator;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::Span;
 use common_expression::type_check::common_super_type;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
@@ -56,13 +57,12 @@ impl Binder {
     pub(super) async fn bind_join(
         &mut self,
         bind_context: &BindContext,
+        left_context: BindContext,
+        right_context: BindContext,
+        left_child: SExpr,
+        right_child: SExpr,
         join: &common_ast::ast::Join,
     ) -> Result<(SExpr, BindContext)> {
-        let (left_child, left_context) =
-            self.bind_table_reference(bind_context, &join.left).await?;
-        let (right_child, right_context) =
-            self.bind_table_reference(bind_context, &join.right).await?;
-
         check_duplicate_join_tables(&left_context, &right_context)?;
 
         let mut bind_context = bind_context.replace();
@@ -200,6 +200,7 @@ impl Binder {
             join_type,
             marker_index: None,
             from_correlated_subquery: false,
+            contain_runtime_filter: false,
         };
         Ok(SExpr::create_binary(
             logical_join.into(),
@@ -413,8 +414,13 @@ impl<'a> JoinConditionResolver<'a> {
             JoinCondition::Using(identifiers) => {
                 let using_columns = identifiers
                     .iter()
-                    .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name)
-                    .collect::<Vec<String>>();
+                    .map(|ident| {
+                        (
+                            ident.span,
+                            normalize_identifier(ident, self.name_resolution_ctx).name,
+                        )
+                    })
+                    .collect();
                 self.resolve_using(
                     using_columns,
                     left_join_conditions,
@@ -494,7 +500,7 @@ impl<'a> JoinConditionResolver<'a> {
             &mut join_context,
         );
         let mut scalar_binder = ScalarBinder::new(
-            &join_context,
+            &mut join_context,
             self.ctx.clone(),
             self.name_resolution_ctx,
             self.metadata.clone(),
@@ -530,7 +536,7 @@ impl<'a> JoinConditionResolver<'a> {
 
     async fn resolve_using(
         &mut self,
-        using_columns: Vec<String>,
+        using_columns: Vec<(Span, String)>,
         left_join_conditions: &mut Vec<ScalarExpr>,
         right_join_conditions: &mut Vec<ScalarExpr>,
         join_op: &JoinOperator,
@@ -542,7 +548,7 @@ impl<'a> JoinConditionResolver<'a> {
             self.join_context,
         );
         let left_columns_len = self.left_context.columns.len();
-        for join_key in using_columns.iter() {
+        for (span, join_key) in using_columns.iter() {
             let join_key_name = join_key.as_str();
             let left_scalar = if let Some(col_binding) = self.join_context.columns
                 [0..left_columns_len]
@@ -550,13 +556,15 @@ impl<'a> JoinConditionResolver<'a> {
                 .find(|col_binding| col_binding.column_name == join_key_name)
             {
                 ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: *span,
                     column: col_binding.clone(),
                 })
             } else {
                 return Err(ErrorCode::SemanticError(format!(
                     "column {} specified in USING clause does not exist in left table",
                     join_key_name
-                )));
+                ))
+                .set_span(*span));
             };
 
             let right_scalar = if let Some(col_binding) = self.join_context.columns
@@ -565,13 +573,15 @@ impl<'a> JoinConditionResolver<'a> {
                 .find(|col_binding| col_binding.column_name == join_key_name)
             {
                 ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: *span,
                     column: col_binding.clone(),
                 })
             } else {
                 return Err(ErrorCode::SemanticError(format!(
                     "column {} specified in USING clause does not exist in right table",
                     join_key_name
-                )));
+                ))
+                .set_span(*span));
             };
             let idx = !matches!(join_op, JoinOperator::RightOuter) as usize;
             if let Some(col_binding) = self
@@ -607,8 +617,8 @@ impl<'a> JoinConditionResolver<'a> {
         let (left_columns, right_columns) = self.left_right_columns()?;
 
         // Bump types of left conditions and right conditions
-        let left_type = left.data_type();
-        let right_type = right.data_type();
+        let left_type = left.data_type()?;
+        let right_type = right.data_type()?;
         if left_type.ne(&right_type) {
             let least_super_type = common_super_type(
                 left_type.clone(),
@@ -655,7 +665,7 @@ impl<'a> JoinConditionResolver<'a> {
             &mut join_context,
         );
         let mut scalar_binder = ScalarBinder::new(
-            &join_context,
+            &mut join_context,
             self.ctx.clone(),
             self.name_resolution_ctx,
             self.metadata.clone(),
@@ -712,11 +722,11 @@ impl<'a> JoinConditionResolver<'a> {
         Ok((left_columns, right_columns))
     }
 
-    fn find_using_columns(&self, using_columns: &mut Vec<String>) -> Result<()> {
+    fn find_using_columns(&self, using_columns: &mut Vec<(Span, String)>) -> Result<()> {
         for left_column in self.left_context.all_column_bindings().iter() {
             for right_column in self.right_context.all_column_bindings().iter() {
                 if left_column.column_name == right_column.column_name {
-                    using_columns.push(left_column.column_name.clone());
+                    using_columns.push((None, left_column.column_name.clone()));
                 }
             }
         }

@@ -11,6 +11,7 @@
   p{
     min-width: 360px;
     width: fit-content;
+    font-size: 14px;
   }
   .footerItems{
     display: flex;
@@ -28,6 +29,19 @@
       width: fit-content;
       &:hover{
         color: var(--color-primary);
+      }
+    }
+  }
+  @include media{
+    gap: 20px;
+    flex-direction: column-reverse;
+    p{
+      text-align: center;
+    }
+    .footerItems{
+      justify-content: center;
+      span{
+        display: none;
       }
     }
   }

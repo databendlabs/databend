@@ -17,6 +17,7 @@ use common_meta_kvapi::kvapi;
 use crate::schema_api_keys::ID_GEN_DATABASE;
 use crate::schema_api_keys::ID_GEN_TABLE;
 use crate::share_api_keys::ID_GEN_SHARE;
+use crate::share_api_keys::ID_GEN_SHARE_ENDPOINT;
 
 pub(crate) const PREFIX_ID_GEN: &str = "__fd_id_gen";
 
@@ -49,6 +50,12 @@ impl IdGenerator {
     pub fn share_id() -> Self {
         Self {
             resource: ID_GEN_SHARE.to_string(),
+        }
+    }
+
+    pub fn share_endpoint_id() -> Self {
+        Self {
+            resource: ID_GEN_SHARE_ENDPOINT.to_string(),
         }
     }
 }
@@ -107,6 +114,16 @@ mod t {
             let g = IdGenerator::share_id();
             let k = g.to_string_key();
             assert_eq!("__fd_id_gen/share_id", k);
+
+            let t2 = IdGenerator::from_str_key(&k)?;
+            assert_eq!(g, t2);
+        }
+
+        // Share endpoint id generator
+        {
+            let g = IdGenerator::share_endpoint_id();
+            let k = g.to_string_key();
+            assert_eq!("__fd_id_gen/share_endpoint_id", k);
 
             let t2 = IdGenerator::from_str_key(&k)?;
             assert_eq!(g, t2);

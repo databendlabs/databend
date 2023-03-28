@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_sled_store::openraft;
-use openraft::SnapshotMeta;
+use common_meta_types::SnapshotMeta;
 use serde::Deserialize;
 use serde::Serialize;
 
 /// The application snapshot type which the `MetaStore` works with.
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Snapshot {
+pub struct StoredSnapshot {
     pub meta: SnapshotMeta,
 
     /// The data of the state machine at the time of this snapshot.

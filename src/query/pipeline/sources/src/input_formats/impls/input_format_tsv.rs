@@ -18,9 +18,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ColumnBuilder;
 use common_expression::TableSchemaRef;
-use common_expression::TypeDeserializer;
-use common_expression::TypeDeserializerImpl;
 use common_formats::FieldDecoder;
 use common_formats::FieldDecoderRowBased;
 use common_formats::FieldDecoderTSV;
@@ -46,10 +45,10 @@ impl InputFormatTSV {
         field_delimiter: u8,
         field_decoder: &FieldDecoderTSV,
         buf: &[u8],
-        deserializers: &mut Vec<TypeDeserializerImpl>,
+        columns: &mut Vec<ColumnBuilder>,
         schema: &TableSchemaRef,
     ) -> Result<()> {
-        let num_columns = deserializers.len();
+        let num_columns = columns.len();
         let mut column_index = 0;
         let mut field_start = 0;
         let mut pos = 0;
@@ -59,14 +58,12 @@ impl InputFormatTSV {
             if pos == buf_len || buf[pos] == field_delimiter {
                 let col_data = &buf[field_start..pos];
                 if col_data.is_empty() {
-                    deserializers[column_index].de_default();
+                    columns[column_index].push_default();
                 } else {
                     let mut reader = Cursor::new(col_data);
-                    if let Err(e) = field_decoder.read_field(
-                        &mut deserializers[column_index],
-                        &mut reader,
-                        true,
-                    ) {
+                    if let Err(e) =
+                        field_decoder.read_field(&mut columns[column_index], &mut reader, true)
+                    {
                         err_msg = Some(format_column_error(
                             schema,
                             column_index,

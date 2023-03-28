@@ -150,6 +150,8 @@ impl UnusedColumnPruner {
                         from_distinct: p.from_distinct,
                         mode: p.mode,
                         limit: p.limit,
+                        grouping_id_index: p.grouping_id_index,
+                        grouping_sets: p.grouping_sets.clone(),
                     }),
                     Self::keep_required_columns(expr.child(0)?, required)?,
                 ))
@@ -181,6 +183,25 @@ impl UnusedColumnPruner {
                     RelOperator::UnionAll(p.clone()),
                     Self::keep_required_columns(expr.child(0)?, left_used)?,
                     Self::keep_required_columns(expr.child(1)?, right_used)?,
+                ))
+            }
+
+            RelOperator::ProjectSet(op) => {
+                let mut used = vec![];
+                // Only keep columns needed by parent plan.
+                for s in op.srfs.iter() {
+                    if !required.contains(&s.index) {
+                        continue;
+                    }
+                    used.push(s.clone());
+                    s.scalar.used_columns().iter().for_each(|c| {
+                        required.insert(*c);
+                    })
+                }
+
+                Ok(SExpr::create_unary(
+                    RelOperator::ProjectSet(op.clone()),
+                    Self::keep_required_columns(expr.child(0)?, required)?,
                 ))
             }
 

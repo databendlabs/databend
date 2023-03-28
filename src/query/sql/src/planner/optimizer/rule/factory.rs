@@ -18,10 +18,12 @@ use super::rewrite::RuleEliminateEvalScalar;
 use super::rewrite::RuleFoldCountAggregate;
 use super::rewrite::RuleNormalizeDisjunctiveFilter;
 use super::rewrite::RuleNormalizeScalarFilter;
+use super::rewrite::RulePushDownFilterAggregate;
 use super::rewrite::RulePushDownFilterEvalScalar;
 use super::rewrite::RulePushDownFilterJoin;
 use super::rewrite::RulePushDownLimitAggregate;
 use super::rewrite::RulePushDownLimitExpression;
+use super::rewrite::RulePushDownPrewhere;
 use super::transform::RuleCommuteJoin;
 use super::transform::RuleLeftAssociateJoin;
 use super::transform::RuleRightAssociateJoin;
@@ -29,6 +31,7 @@ use crate::optimizer::rule::rewrite::RuleEliminateFilter;
 use crate::optimizer::rule::rewrite::RuleMergeEvalScalar;
 use crate::optimizer::rule::rewrite::RuleMergeFilter;
 use crate::optimizer::rule::rewrite::RulePushDownFilterScan;
+use crate::optimizer::rule::rewrite::RulePushDownFilterSort;
 use crate::optimizer::rule::rewrite::RulePushDownFilterUnion;
 use crate::optimizer::rule::rewrite::RulePushDownLimitOuterJoin;
 use crate::optimizer::rule::rewrite::RulePushDownLimitScan;
@@ -47,21 +50,14 @@ use crate::MetadataRef;
 pub struct RuleFactory;
 
 impl RuleFactory {
-    pub fn create() -> Self {
-        RuleFactory {}
-    }
-
-    pub fn create_rule(&self, id: RuleID, metadata: Option<MetadataRef>) -> Result<RulePtr> {
+    pub fn create_rule(id: RuleID, metadata: MetadataRef) -> Result<RulePtr> {
         match id {
             RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new())),
             RuleID::PushDownFilterUnion => Ok(Box::new(RulePushDownFilterUnion::new())),
             RuleID::PushDownFilterEvalScalar => Ok(Box::new(RulePushDownFilterEvalScalar::new())),
-            RuleID::PushDownFilterJoin => {
-                Ok(Box::new(RulePushDownFilterJoin::new(metadata.unwrap())))
-            }
-            RuleID::PushDownFilterScan => {
-                Ok(Box::new(RulePushDownFilterScan::new(metadata.unwrap())))
-            }
+            RuleID::PushDownFilterJoin => Ok(Box::new(RulePushDownFilterJoin::new(metadata))),
+            RuleID::PushDownFilterScan => Ok(Box::new(RulePushDownFilterScan::new(metadata))),
+            RuleID::PushDownFilterSort => Ok(Box::new(RulePushDownFilterSort::new())),
             RuleID::PushDownLimitUnion => Ok(Box::new(RulePushDownLimitUnion::new())),
             RuleID::PushDownLimitScan => Ok(Box::new(RulePushDownLimitScan::new())),
             RuleID::PushDownSortScan => Ok(Box::new(RulePushDownSortScan::new())),
@@ -69,6 +65,7 @@ impl RuleFactory {
             RuleID::RulePushDownLimitExpression => Ok(Box::new(RulePushDownLimitExpression::new())),
             RuleID::PushDownLimitSort => Ok(Box::new(RulePushDownLimitSort::new())),
             RuleID::PushDownLimitAggregate => Ok(Box::new(RulePushDownLimitAggregate::new())),
+            RuleID::PushDownFilterAggregate => Ok(Box::new(RulePushDownFilterAggregate::new())),
             RuleID::EliminateFilter => Ok(Box::new(RuleEliminateFilter::new())),
             RuleID::MergeEvalScalar => Ok(Box::new(RuleMergeEvalScalar::new())),
             RuleID::MergeFilter => Ok(Box::new(RuleMergeFilter::new())),
@@ -85,6 +82,7 @@ impl RuleFactory {
             RuleID::LeftExchangeJoin => Ok(Box::new(RuleLeftExchangeJoin::new())),
             RuleID::RightExchangeJoin => Ok(Box::new(RuleRightExchangeJoin::new())),
             RuleID::ExchangeJoin => Ok(Box::new(RuleExchangeJoin::new())),
+            RuleID::PushDownPrewhere => Ok(Box::new(RulePushDownPrewhere::new(metadata))),
         }
     }
 }

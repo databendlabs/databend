@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_sled_store::openraft;
 use common_meta_sled_store::sled;
 use common_meta_sled_store::AsKeySpace;
 use common_meta_sled_store::SledTree;
 use common_meta_stoerr::MetaStorageError;
 use common_meta_types::MetaStartupError;
 use common_meta_types::NodeId;
-use openraft::storage::HardState;
+use common_meta_types::Vote;
 use tracing::debug;
 use tracing::info;
 
@@ -30,9 +29,9 @@ use crate::state::RaftStateValue;
 
 /// Raft state stores everything else other than log and state machine, which includes:
 /// id: NodeId,
-/// hard_state:
-///      current_term,
-///      voted_for,
+/// vote:
+///      term,
+///      node_id,
 #[derive(Debug)]
 pub struct RaftState {
     pub id: NodeId,
@@ -119,21 +118,18 @@ impl RaftState {
         self.set_node_id(self.id).await
     }
 
-    pub async fn write_hard_state(&self, hs: &HardState) -> Result<(), MetaStorageError> {
+    pub async fn save_vote(&self, vote: &Vote) -> Result<(), MetaStorageError> {
         let state = self.state();
         state
-            .insert(
-                &RaftStateKey::HardState,
-                &RaftStateValue::HardState(hs.clone()),
-            )
+            .insert(&RaftStateKey::HardState, &RaftStateValue::HardState(*vote))
             .await?;
         Ok(())
     }
 
-    pub fn read_hard_state(&self) -> Result<Option<HardState>, MetaStorageError> {
+    pub fn read_vote(&self) -> Result<Option<Vote>, MetaStorageError> {
         let state = self.state();
         let hs = state.get(&RaftStateKey::HardState)?;
-        let hs = hs.map(HardState::from);
+        let hs = hs.map(Vote::from);
         Ok(hs)
     }
 

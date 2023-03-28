@@ -103,24 +103,27 @@ pub async fn streaming_load(
     let settings = context.get_settings();
 
     for (key, value) in req.headers().iter() {
-        if settings.has_setting(key.as_str()) {
+        if settings
+            .has_setting(key.as_str())
+            .map_err(InternalServerError)?
+        {
             let value = value.to_str().map_err(InternalServerError)?;
             let unquote =
                 std::str::from_utf8(remove_quote(value.as_bytes())).map_err(InternalServerError)?;
             let value = unescape_string(unquote).map_err(InternalServerError)?;
             settings
-                .set_settings(key.to_string(), value.to_string(), false)
+                .set_setting(key.to_string(), value.to_string())
                 .map_err(InternalServerError)?
         }
     }
 
     let mut planner = Planner::new(context.clone());
-    let (mut plan, _, _) = planner
+    let (mut plan, extras) = planner
         .plan_sql(insert_sql)
         .await
         .map_err(|err| err.display_with_sql(insert_sql))
         .map_err(InternalServerError)?;
-    context.attach_query_str(plan.to_string(), insert_sql);
+    context.attach_query_str(plan.to_string(), extras.stament.to_mask_sql());
 
     let schema = plan.schema();
     match &mut plan {

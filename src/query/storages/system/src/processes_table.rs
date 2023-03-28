@@ -100,12 +100,19 @@ impl SyncSystemTable for ProcessesTable {
             if let Some(data_metrics) = data_metrics {
                 processes_data_read_bytes.push(data_metrics.get_read_bytes() as u64);
                 processes_data_write_bytes.push(data_metrics.get_write_bytes() as u64);
-                processes_status.push(data_metrics.get_status().clone().into_bytes());
             } else {
                 processes_data_read_bytes.push(0);
                 processes_data_write_bytes.push(0);
-                processes_status.push("".to_string().into_bytes());
             }
+
+            // Status info.
+            processes_status.push(
+                process_info
+                    .status_info
+                    .clone()
+                    .unwrap_or("".to_owned())
+                    .into_bytes(),
+            );
         }
 
         Ok(DataBlock::new_from_columns(vec![

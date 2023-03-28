@@ -14,14 +14,14 @@
 
 use common_base::base::tokio;
 use common_meta_sled_store::SledTree;
+use common_meta_types::new_log_id;
 use common_meta_types::Cmd;
+use common_meta_types::Entry;
+use common_meta_types::EntryPayload;
 use common_meta_types::LogEntry;
-use common_meta_types::LogId;
 use common_meta_types::LogIndex;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKV;
-use openraft::raft::Entry;
-use openraft::raft::EntryPayload;
 use testing::new_sled_test_context;
 use tracing::Instrument;
 
@@ -62,13 +62,13 @@ async fn test_as_range() -> anyhow::Result<()> {
     let log_tree = tree.key_space::<Logs>();
     let meta_tree = tree.key_space::<StateMachineMeta>();
 
-    let logs: Vec<Entry<LogEntry>> = vec![
+    let logs: Vec<Entry> = vec![
         Entry {
-            log_id: LogId { term: 1, index: 2 },
+            log_id: new_log_id(1, 0, 2),
             payload: EntryPayload::Blank,
         },
         Entry {
-            log_id: LogId { term: 3, index: 4 },
+            log_id: new_log_id(3, 0, 4),
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
                 time_ms: None,
@@ -83,7 +83,7 @@ async fn test_as_range() -> anyhow::Result<()> {
     let metas = vec![
         (
             LastApplied,
-            StateMachineMetaValue::LogId(LogId { term: 1, index: 2 }),
+            StateMachineMetaValue::LogId(new_log_id(1, 0, 2)),
         ),
         (Initialized, StateMachineMetaValue::Bool(true)),
     ];
@@ -136,13 +136,13 @@ async fn test_key_space_last() -> anyhow::Result<()> {
 
     assert_eq!(None, log_tree.last()?);
 
-    let logs: Vec<Entry<LogEntry>> = vec![
+    let logs: Vec<Entry> = vec![
         Entry {
-            log_id: LogId { term: 1, index: 2 },
+            log_id: new_log_id(1, 0, 2),
             payload: EntryPayload::Blank,
         },
         Entry {
-            log_id: LogId { term: 3, index: 4 },
+            log_id: new_log_id(3, 0, 4),
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
                 time_ms: None,
@@ -159,7 +159,7 @@ async fn test_key_space_last() -> anyhow::Result<()> {
     let metas = vec![
         (
             LastApplied,
-            StateMachineMetaValue::LogId(LogId { term: 1, index: 2 }),
+            StateMachineMetaValue::LogId(new_log_id(1, 0, 2)),
         ),
         (Initialized, StateMachineMetaValue::Bool(true)),
     ];
@@ -187,13 +187,13 @@ async fn test_key_space_append() -> anyhow::Result<()> {
     let tree = SledTree::open(db, tc.tree_name, true)?;
     let log_tree = tree.key_space::<Logs>();
 
-    let logs: Vec<(LogIndex, Entry<LogEntry>)> = vec![
+    let logs: Vec<(LogIndex, Entry)> = vec![
         (8, Entry {
-            log_id: LogId { term: 1, index: 2 },
+            log_id: new_log_id(1, 0, 2),
             payload: EntryPayload::Blank,
         }),
         (5, Entry {
-            log_id: LogId { term: 3, index: 4 },
+            log_id: new_log_id(3, 0, 4),
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
                 time_ms: None,
@@ -205,9 +205,9 @@ async fn test_key_space_append() -> anyhow::Result<()> {
 
     log_tree.append(&logs).await?;
 
-    let want: Vec<Entry<LogEntry>> = vec![
+    let want: Vec<Entry> = vec![
         Entry {
-            log_id: LogId { term: 3, index: 4 },
+            log_id: new_log_id(3, 0, 4),
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
                 time_ms: None,
@@ -216,7 +216,7 @@ async fn test_key_space_append() -> anyhow::Result<()> {
             }),
         },
         Entry {
-            log_id: LogId { term: 1, index: 2 },
+            log_id: new_log_id(1, 0, 2),
             payload: EntryPayload::Blank,
         },
     ];
@@ -243,13 +243,13 @@ async fn test_key_space_append_and_range_get() -> anyhow::Result<()> {
     let tree = SledTree::open(db, tc.tree_name, true)?;
     let log_tree = tree.key_space::<Logs>();
 
-    let logs: Vec<Entry<LogEntry>> = vec![
+    let logs: Vec<Entry> = vec![
         Entry {
-            log_id: LogId { term: 1, index: 2 },
+            log_id: new_log_id(1, 0, 2),
             payload: EntryPayload::Blank,
         },
         Entry {
-            log_id: LogId { term: 3, index: 4 },
+            log_id: new_log_id(3, 0, 4),
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
                 time_ms: None,
@@ -258,18 +258,15 @@ async fn test_key_space_append_and_range_get() -> anyhow::Result<()> {
             }),
         },
         Entry {
-            log_id: LogId { term: 1, index: 9 },
+            log_id: new_log_id(1, 0, 9),
             payload: EntryPayload::Blank,
         },
         Entry {
-            log_id: LogId { term: 1, index: 10 },
+            log_id: new_log_id(1, 0, 10),
             payload: EntryPayload::Blank,
         },
         Entry {
-            log_id: LogId {
-                term: 1,
-                index: 256,
-            },
+            log_id: new_log_id(1, 0, 256),
             payload: EntryPayload::Blank,
         },
     ];
@@ -318,17 +315,17 @@ async fn test_key_space_range_kvs() -> anyhow::Result<()> {
     let tree = SledTree::open(db, tc.tree_name, true)?;
     let log_tree = tree.key_space::<Logs>();
 
-    let logs: Vec<Entry<LogEntry>> = vec![
+    let logs: Vec<Entry> = vec![
         Entry {
-            log_id: LogId { term: 1, index: 2 },
+            log_id: new_log_id(1, 0, 2),
             payload: EntryPayload::Blank,
         },
         Entry {
-            log_id: LogId { term: 1, index: 9 },
+            log_id: new_log_id(1, 0, 9),
             payload: EntryPayload::Blank,
         },
         Entry {
-            log_id: LogId { term: 1, index: 10 },
+            log_id: new_log_id(1, 0, 10),
             payload: EntryPayload::Blank,
         },
     ];
@@ -401,13 +398,13 @@ async fn test_key_space_insert() -> anyhow::Result<()> {
 
     assert_eq!(None, log_tree.get(&5)?);
 
-    let logs: Vec<Entry<LogEntry>> = vec![
+    let logs: Vec<Entry> = vec![
         Entry {
-            log_id: LogId { term: 1, index: 2 },
+            log_id: new_log_id(1, 0, 2),
             payload: EntryPayload::Blank,
         },
         Entry {
-            log_id: LogId { term: 3, index: 4 },
+            log_id: new_log_id(3, 0, 4),
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
                 time_ms: None,
@@ -424,7 +421,7 @@ async fn test_key_space_insert() -> anyhow::Result<()> {
     // insert and override
 
     let override_2 = Entry {
-        log_id: LogId { term: 10, index: 2 },
+        log_id: new_log_id(10, 0, 2),
         payload: EntryPayload::Blank,
     };
 
@@ -436,10 +433,7 @@ async fn test_key_space_insert() -> anyhow::Result<()> {
     // insert and override nothing
 
     let override_nothing = Entry {
-        log_id: LogId {
-            term: 10,
-            index: 100,
-        },
+        log_id: new_log_id(10, 0, 100),
         payload: EntryPayload::Blank,
     };
 
@@ -463,13 +457,13 @@ async fn test_key_space_get() -> anyhow::Result<()> {
 
     assert_eq!(None, log_tree.get(&5)?);
 
-    let logs: Vec<Entry<LogEntry>> = vec![
+    let logs: Vec<Entry> = vec![
         Entry {
-            log_id: LogId { term: 1, index: 2 },
+            log_id: new_log_id(1, 0, 2),
             payload: EntryPayload::Blank,
         },
         Entry {
-            log_id: LogId { term: 3, index: 4 },
+            log_id: new_log_id(3, 0, 4),
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
                 time_ms: None,
@@ -500,13 +494,13 @@ async fn test_key_space_range_remove() -> anyhow::Result<()> {
     let tree = SledTree::open(db, tc.tree_name, true)?;
     let log_tree = tree.key_space::<Logs>();
 
-    let logs: Vec<Entry<LogEntry>> = vec![
+    let logs: Vec<Entry> = vec![
         Entry {
-            log_id: LogId { term: 1, index: 2 },
+            log_id: new_log_id(1, 0, 2),
             payload: EntryPayload::Blank,
         },
         Entry {
-            log_id: LogId { term: 3, index: 4 },
+            log_id: new_log_id(3, 0, 4),
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
                 time_ms: None,
@@ -515,18 +509,15 @@ async fn test_key_space_range_remove() -> anyhow::Result<()> {
             }),
         },
         Entry {
-            log_id: LogId { term: 1, index: 9 },
+            log_id: new_log_id(1, 0, 9),
             payload: EntryPayload::Blank,
         },
         Entry {
-            log_id: LogId { term: 1, index: 10 },
+            log_id: new_log_id(1, 0, 10),
             payload: EntryPayload::Blank,
         },
         Entry {
-            log_id: LogId {
-                term: 1,
-                index: 256,
-            },
+            log_id: new_log_id(1, 0, 256),
             payload: EntryPayload::Blank,
         },
     ];
@@ -562,13 +553,13 @@ async fn test_key_space_multi_types() -> anyhow::Result<()> {
     let log_tree = tree.key_space::<Logs>();
     let sm_meta = tree.key_space::<StateMachineMeta>();
 
-    let logs: Vec<Entry<LogEntry>> = vec![
+    let logs: Vec<Entry> = vec![
         Entry {
-            log_id: LogId { term: 1, index: 2 },
+            log_id: new_log_id(1, 0, 2),
             payload: EntryPayload::Blank,
         },
         Entry {
-            log_id: LogId { term: 3, index: 4 },
+            log_id: new_log_id(3, 0, 4),
             payload: EntryPayload::Normal(LogEntry {
                 txid: None,
                 time_ms: None,
@@ -583,7 +574,7 @@ async fn test_key_space_multi_types() -> anyhow::Result<()> {
     let metas = vec![
         (
             LastApplied,
-            StateMachineMetaValue::LogId(LogId { term: 1, index: 2 }),
+            StateMachineMetaValue::LogId(new_log_id(1, 0, 2)),
         ),
         (Initialized, StateMachineMetaValue::Bool(true)),
     ];
@@ -595,10 +586,7 @@ async fn test_key_space_multi_types() -> anyhow::Result<()> {
         assert_eq!(logs, got);
 
         let got = sm_meta.range_values(..=LastApplied)?;
-        assert_eq!(
-            vec![StateMachineMetaValue::LogId(LogId { term: 1, index: 2 })],
-            got
-        );
+        assert_eq!(vec![StateMachineMetaValue::LogId(new_log_id(1, 0, 2))], got);
 
         let got = sm_meta.range_values(Initialized..)?;
         assert_eq!(vec![StateMachineMetaValue::Bool(true)], got);
@@ -631,13 +619,13 @@ async fn test_export() -> anyhow::Result<()> {
         let tree = SledTree::open(db, tc.tree_name, true)?;
         let log_tree = tree.key_space::<Logs>();
 
-        let logs: Vec<Entry<LogEntry>> = vec![
+        let logs: Vec<Entry> = vec![
             Entry {
-                log_id: LogId { term: 1, index: 2 },
+                log_id: new_log_id(1, 0, 2),
                 payload: EntryPayload::Blank,
             },
             Entry {
-                log_id: LogId { term: 3, index: 4 },
+                log_id: new_log_id(3, 0, 4),
                 payload: EntryPayload::Normal(LogEntry {
                     txid: None,
                     time_ms: None,

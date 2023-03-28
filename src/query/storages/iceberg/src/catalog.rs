@@ -49,14 +49,12 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableCopiedFileReply;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
 use common_storage::DataOperator;
 use futures::TryStreamExt;
-use opendal::ObjectMetakey;
+use opendal::Metakey;
 
 use crate::database::IcebergDatabase;
 
@@ -110,13 +108,12 @@ impl IcebergCatalog {
                 IcebergDatabase::create_database_omitted_default(&self.name, self.operator.clone()),
             )]);
         }
-        let operator = self.operator.operator();
-        let root = operator.object("/");
+        let op = self.operator.operator();
         let mut dbs = vec![];
-        let mut ls = root.list().await?;
+        let mut ls = op.list("/").await?;
         while let Some(dir) = ls.try_next().await? {
-            let meta = dir.metadata(ObjectMetakey::Mode).await?;
-            if !meta.mode().is_dir() {
+            let meta = op.metadata(&dir, Metakey::Mode).await?;
+            if !meta.is_dir() {
                 continue;
             }
             let db_name = dir.name().strip_suffix('/').unwrap_or_default();
@@ -152,8 +149,7 @@ impl Catalog for IcebergCatalog {
         let rel_path = format!("{db_name}/");
 
         let operator = self.operator.operator();
-        let obj = operator.object(&rel_path);
-        if !obj.is_exist().await? {
+        if !operator.is_exist(&rel_path).await? {
             return Err(ErrorCode::UnknownDatabase(format!(
                 "Database {db_name} does not exist"
             )));
@@ -283,15 +279,6 @@ impl Catalog for IcebergCatalog {
         unimplemented!()
     }
 
-    async fn upsert_table_copied_file_info(
-        &self,
-        _tenant: &str,
-        _db_name: &str,
-        _req: UpsertTableCopiedFileReq,
-    ) -> Result<UpsertTableCopiedFileReply> {
-        unimplemented!()
-    }
-
     async fn truncate_table(
         &self,
         _table_info: &TableInfo,
@@ -309,6 +296,11 @@ impl Catalog for IcebergCatalog {
         _tbl_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         unimplemented!()
+    }
+
+    // List all table functions' names.
+    fn list_table_functions(&self) -> Vec<String> {
+        vec![]
     }
 
     fn as_any(&self) -> &dyn Any {

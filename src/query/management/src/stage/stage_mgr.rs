@@ -23,7 +23,7 @@ use common_meta_api::txn_op_del;
 use common_meta_api::txn_op_put;
 use common_meta_app::app_error::TxnRetryMaxTimes;
 use common_meta_app::principal::StageFile;
-use common_meta_app::principal::UserStageInfo;
+use common_meta_app::principal::StageInfo;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::ConditionResult::Eq;
@@ -67,7 +67,7 @@ impl StageMgr {
 
 #[async_trait::async_trait]
 impl StageApi for StageMgr {
-    async fn add_stage(&self, info: UserStageInfo) -> Result<u64> {
+    async fn add_stage(&self, info: StageInfo) -> Result<u64> {
         let seq = MatchSeq::Exact(0);
         let val = Operation::Update(serialize_struct(
             &info,
@@ -90,7 +90,7 @@ impl StageApi for StageMgr {
         Ok(res.seq)
     }
 
-    async fn get_stage(&self, name: &str, seq: MatchSeq) -> Result<SeqV<UserStageInfo>> {
+    async fn get_stage(&self, name: &str, seq: MatchSeq) -> Result<SeqV<StageInfo>> {
         let key = format!("{}/{}", self.stage_prefix, escape_for_key(name)?);
         let kv_api = self.kv_api.clone();
         let get_kv = async move { kv_api.get_kv(&key).await };
@@ -107,7 +107,7 @@ impl StageApi for StageMgr {
         }
     }
 
-    async fn get_stages(&self) -> Result<Vec<UserStageInfo>> {
+    async fn get_stages(&self) -> Result<Vec<StageInfo>> {
         let values = self.kv_api.prefix_list_kv(&self.stage_prefix).await?;
 
         let mut stage_infos = Vec::with_capacity(values.len());
@@ -177,7 +177,7 @@ impl StageApi for StageMgr {
                     seq_v.seq
                 )));
             }
-            let (stage_seq, mut old_stage): (_, UserStageInfo) =
+            let (stage_seq, mut old_stage): (_, StageInfo) =
                 if let Some(seq_v) = self.kv_api.get_kv(&stage_key).await? {
                     (
                         seq_v.seq,
@@ -239,7 +239,7 @@ impl StageApi for StageMgr {
         while retry < TXN_MAX_RETRY_TIMES {
             retry += 1;
 
-            let (stage_seq, mut old_stage): (_, UserStageInfo) =
+            let (stage_seq, mut old_stage): (_, StageInfo) =
                 if let Some(seq_v) = self.kv_api.get_kv(&stage_key).await? {
                     (
                         seq_v.seq,

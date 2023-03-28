@@ -24,6 +24,7 @@ pub mod map;
 pub mod null;
 pub mod nullable;
 pub mod number;
+pub mod number_class;
 pub mod string;
 pub mod timestamp;
 pub mod variant;
@@ -31,11 +32,8 @@ pub mod variant;
 use std::fmt::Debug;
 use std::ops::Range;
 
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::trusted_len::TrustedLen;
 use enum_as_inner::EnumAsInner;
-use ethnum::i256;
-use ordered_float::OrderedFloat;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -50,26 +48,16 @@ pub use self::generic::GenericType;
 pub use self::map::MapType;
 pub use self::null::NullType;
 pub use self::nullable::NullableType;
-use self::number::NumberScalar;
 pub use self::number::*;
-use self::string::StringColumnBuilder;
+pub use self::number_class::*;
 pub use self::string::StringType;
 pub use self::timestamp::TimestampType;
 pub use self::variant::VariantType;
-use crate::deserializations::ArrayDeserializer;
-use crate::deserializations::DateDeserializer;
-use crate::deserializations::DecimalDeserializer;
-use crate::deserializations::NullableDeserializer;
-use crate::deserializations::NumberDeserializer;
-use crate::deserializations::TimestampDeserializer;
-use crate::deserializations::TupleDeserializer;
-use crate::deserializations::VariantDeserializer;
 use crate::property::Domain;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
-use crate::TypeDeserializerImpl;
 
 pub type GenericMap = [DataType];
 
@@ -116,6 +104,34 @@ impl DataType {
         match self {
             DataType::Nullable(ty) => (**ty).clone(),
             _ => self.clone(),
+        }
+    }
+
+    pub fn unnest(&self) -> Self {
+        match self {
+            DataType::Array(ty) => ty.unnest(),
+            _ => self.clone(),
+        }
+    }
+
+    pub fn has_generic(&self) -> bool {
+        match self {
+            DataType::Generic(_) => true,
+            DataType::Nullable(ty) => ty.has_generic(),
+            DataType::Array(ty) => ty.has_generic(),
+            DataType::Map(ty) => ty.has_generic(),
+            DataType::Tuple(tys) => tys.iter().any(|ty| ty.has_generic()),
+            _ => false,
+        }
+    }
+
+    pub fn has_nested_nullable(&self) -> bool {
+        match self {
+            DataType::Nullable(box DataType::Nullable(_) | box DataType::Null) => true,
+            DataType::Array(ty) => ty.has_nested_nullable(),
+            DataType::Map(ty) => ty.has_nested_nullable(),
+            DataType::Tuple(tys) => tys.iter().any(|ty| ty.has_nested_nullable()),
+            _ => false,
         }
     }
 
@@ -192,63 +208,6 @@ impl DataType {
             )),
         }
     }
-    pub fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
-        match self {
-            DataType::Null => 0.into(),
-            DataType::Boolean => MutableBitmap::with_capacity(capacity).into(),
-            DataType::String => StringColumnBuilder::with_capacity(capacity, capacity * 4).into(),
-            DataType::Number(num_ty) => match num_ty {
-                NumberDataType::UInt8 => {
-                    NumberDeserializer::<u8, u8>::with_capacity(capacity).into()
-                }
-                NumberDataType::UInt16 => {
-                    NumberDeserializer::<u16, u16>::with_capacity(capacity).into()
-                }
-                NumberDataType::UInt32 => {
-                    NumberDeserializer::<u32, u32>::with_capacity(capacity).into()
-                }
-                NumberDataType::UInt64 => {
-                    NumberDeserializer::<u64, u64>::with_capacity(capacity).into()
-                }
-                NumberDataType::Int8 => {
-                    NumberDeserializer::<i8, i8>::with_capacity(capacity).into()
-                }
-                NumberDataType::Int16 => {
-                    NumberDeserializer::<i16, i16>::with_capacity(capacity).into()
-                }
-                NumberDataType::Int32 => {
-                    NumberDeserializer::<i32, i32>::with_capacity(capacity).into()
-                }
-                NumberDataType::Int64 => {
-                    NumberDeserializer::<i64, i64>::with_capacity(capacity).into()
-                }
-                NumberDataType::Float32 => {
-                    NumberDeserializer::<F32, f32>::with_capacity(capacity).into()
-                }
-                NumberDataType::Float64 => {
-                    NumberDeserializer::<F64, f64>::with_capacity(capacity).into()
-                }
-            },
-            DataType::Date => DateDeserializer::with_capacity(capacity).into(),
-            DataType::Timestamp => TimestampDeserializer::with_capacity(capacity).into(),
-            DataType::Nullable(inner_ty) => {
-                NullableDeserializer::with_capacity(capacity, inner_ty.as_ref()).into()
-            }
-            DataType::Variant => VariantDeserializer::with_capacity(capacity).into(),
-            DataType::Array(ty) => ArrayDeserializer::with_capacity(capacity, ty).into(),
-            DataType::Map(_ty) => todo!(),
-            DataType::Tuple(types) => TupleDeserializer::with_capacity(capacity, types).into(),
-            DataType::Decimal(types) => match types {
-                DecimalDataType::Decimal128(_) => {
-                    DecimalDeserializer::<i128>::with_capacity(types, capacity).into()
-                }
-                DecimalDataType::Decimal256(_) => {
-                    DecimalDeserializer::<i256>::with_capacity(types, capacity).into()
-                }
-            },
-            _ => unimplemented!(),
-        }
-    }
 
     // Nullable will be displayed as Nullable(T)
     pub fn wrapped_display(&self) -> String {
@@ -278,45 +237,17 @@ impl DataType {
         }
     }
 
-    pub fn default_value(&self) -> Scalar {
+    // Returns the number of leaf columns of the DataType
+    pub fn num_leaf_columns(&self) -> usize {
         match self {
-            DataType::Null => Scalar::Null,
-            DataType::EmptyArray => Scalar::EmptyArray,
-            DataType::EmptyMap => Scalar::EmptyMap,
-            DataType::Boolean => Scalar::Boolean(false),
-            DataType::String => Scalar::String(vec![]),
-            DataType::Number(num_ty) => Scalar::Number(match num_ty {
-                NumberDataType::UInt8 => NumberScalar::UInt8(0),
-                NumberDataType::UInt16 => NumberScalar::UInt16(0),
-                NumberDataType::UInt32 => NumberScalar::UInt32(0),
-                NumberDataType::UInt64 => NumberScalar::UInt64(0),
-                NumberDataType::Int8 => NumberScalar::Int8(0),
-                NumberDataType::Int16 => NumberScalar::Int16(0),
-                NumberDataType::Int32 => NumberScalar::Int32(0),
-                NumberDataType::Int64 => NumberScalar::Int64(0),
-                NumberDataType::Float32 => NumberScalar::Float32(OrderedFloat(0.0)),
-                NumberDataType::Float64 => NumberScalar::Float64(OrderedFloat(0.0)),
-            }),
-            DataType::Decimal(ty) => Scalar::Decimal(ty.default_scalar()),
-            DataType::Timestamp => Scalar::Timestamp(0),
-            DataType::Date => Scalar::Date(0),
-            DataType::Nullable(_) => Scalar::Null,
-            DataType::Array(ty) => {
-                let builder = ColumnBuilder::with_capacity(ty, 0);
-                let col = builder.build();
-                Scalar::Array(col)
-            }
-            DataType::Map(ty) => {
-                let builder = ColumnBuilder::with_capacity(ty, 0);
-                let col = builder.build();
-                Scalar::Map(col)
-            }
-            DataType::Tuple(tys) => {
-                Scalar::Tuple(tys.iter().map(|ty| ty.default_value()).collect())
-            }
-            DataType::Variant => Scalar::Variant(vec![]),
-
-            _ => unimplemented!(),
+            DataType::Nullable(box inner_ty)
+            | DataType::Array(box inner_ty)
+            | DataType::Map(box inner_ty) => inner_ty.num_leaf_columns(),
+            DataType::Tuple(inner_tys) => inner_tys
+                .iter()
+                .map(|inner_ty| inner_ty.num_leaf_columns())
+                .sum(),
+            _ => 1,
         }
     }
 }

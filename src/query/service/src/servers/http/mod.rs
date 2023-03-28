@@ -22,3 +22,5 @@ pub mod v1;
 pub use clickhouse_federated::ClickHouseFederated;
 pub use http_services::HttpHandler;
 pub use http_services::HttpHandlerKind;
+
+pub const CLICKHOUSE_VERSION: &str = "8.12.14";

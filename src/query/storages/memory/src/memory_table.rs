@@ -35,6 +35,7 @@ use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::Value;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
@@ -178,7 +179,6 @@ impl Table for MemoryTable {
                     .fold(PartStatistics::default(), |mut stats, block| {
                         stats.read_rows += block.num_rows();
                         stats.read_bytes += (0..block.num_columns())
-                            .into_iter()
                             .collect::<Vec<usize>>()
                             .iter()
                             .filter(|cid| projection_filter(**cid))
@@ -245,6 +245,7 @@ impl Table for MemoryTable {
         &self,
         _: Arc<dyn TableContext>,
         operations: Vec<DataBlock>,
+        _copied_files: Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
     ) -> Result<()> {
         let written_bytes: usize = operations.iter().map(|b| b.memory_size()).sum();
@@ -328,7 +329,7 @@ impl MemoryTableSource {
         match &entry.data_type {
             DataType::Tuple(inner_tys) => {
                 let col = entry.value.clone().into_column().unwrap();
-                let (inner_columns, _) = col.into_tuple().unwrap();
+                let inner_columns = col.into_tuple().unwrap();
                 let mut values = Vec::with_capacity(inner_tys.len());
                 for (col, ty) in inner_columns.iter().zip(inner_tys.iter()) {
                     values.push(BlockEntry {

@@ -26,15 +26,16 @@ use common_base::set_alloc_error_hook;
 use common_config::InnerConfig;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_config::QUERY_SEMVER;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_client::MIN_METASRV_SEMVER;
-use common_meta_embedded::MetaEmbedded;
 use common_metrics::init_default_metrics_recorder;
 use common_tracing::set_panic_hook;
 use databend_query::api::HttpService;
 use databend_query::api::RpcService;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::metrics::MetricService;
+use databend_query::servers::FlightSQLServer;
 use databend_query::servers::HttpHandler;
 use databend_query::servers::HttpHandlerKind;
 use databend_query::servers::MySQLHandler;
@@ -83,7 +84,9 @@ async fn main_entrypoint() -> Result<()> {
     }
 
     if conf.meta.is_embedded_meta()? {
-        MetaEmbedded::init_global_meta_store(conf.meta.embedded_dir.clone()).await?;
+        return Err(ErrorCode::Unimplemented(
+            "Embedded meta is an deployment method and will not be supported since March 2023.",
+        ));
     }
     // Make sure global services have been inited.
     GlobalServices::init(conf.clone()).await?;
@@ -189,6 +192,18 @@ async fn main_entrypoint() -> Result<()> {
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
         info!("Listening for Admin HTTP API: {}", listening);
+    }
+
+    // FlightSQL API service.
+    {
+        let address = format!(
+            "{}:{}",
+            conf.query.flight_sql_handler_host, conf.query.flight_sql_handler_port
+        );
+        let mut srv = FlightSQLServer::create(conf.clone())?;
+        let listening = srv.start(address.parse()?).await?;
+        shutdown_handle.add_service(srv);
+        info!("Listening for FlightSQL API: {}", listening);
     }
 
     // RPC API service.

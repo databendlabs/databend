@@ -22,7 +22,7 @@ use databend_query::sessions::SessionContext;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_session_context() -> Result<()> {
-    let settings = Settings::default_test_settings()?;
+    let settings = Settings::try_create("default".to_string());
     let session_ctx = SessionContext::try_create(settings)?;
 
     // Abort status.
@@ -60,8 +60,7 @@ async fn test_session_context() -> Result<()> {
 
     // io shutdown tx.
     {
-        let (tx, _) = futures::channel::oneshot::channel();
-        session_ctx.set_io_shutdown_tx(Some(tx));
+        session_ctx.set_io_shutdown_tx(|| {});
 
         let val = session_ctx.take_io_shutdown_tx();
         assert!(val.is_some());

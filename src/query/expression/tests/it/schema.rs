@@ -268,12 +268,8 @@ fn test_schema_from_struct() -> Result<()> {
                 TableDataType::Number(NumberDataType::UInt64),
             )))),
         ),
-        (
-            "maparray",
-            TableDataType::Map(Box::new(TableDataType::Array(Box::new(
-                TableDataType::Number(NumberDataType::UInt64),
-            )))),
-        ),
+        ("key", TableDataType::Number(NumberDataType::UInt64)),
+        ("value", TableDataType::String),
         (
             "nullu64",
             TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
@@ -295,10 +291,10 @@ fn test_schema_from_struct() -> Result<()> {
         ("tuplearray", vec![1, 1, 1, 2, 3, 3]),
         ("arraytuple", vec![4, 4, 4, 5]),
         ("nullarray", vec![6]),
-        ("maparray", vec![7]),
-        ("nullu64", vec![8]),
-        ("u64array", vec![9, 9]),
-        ("tuplesimple", vec![10, 10, 11]),
+        ("maparray", vec![7,8]),
+        ("nullu64", vec![9]),
+        ("u64array", vec![10, 10]),
+        ("tuplesimple", vec![11, 11, 12]),
     ];
 
     for (i, column_id) in schema.field_column_ids().iter().enumerate() {
@@ -315,10 +311,10 @@ fn test_schema_from_struct() -> Result<()> {
         ("tuplearray", vec![1, 2, 3]),
         ("arraytuple", vec![4, 5]),
         ("nullarray", vec![6]),
-        ("maparray", vec![7]),
-        ("nullu64", vec![8]),
-        ("u64array", vec![9]),
-        ("tuplesimple", vec![10, 11]),
+        ("maparray", vec![7, 8]),
+        ("nullu64", vec![9]),
+        ("u64array", vec![10]),
+        ("tuplesimple", vec![11, 12]),
     ];
 
     for (i, field) in schema.fields().iter().enumerate() {
@@ -327,7 +323,7 @@ fn test_schema_from_struct() -> Result<()> {
         assert_eq!(expeted_column_id.1, field.leaf_column_ids());
     }
 
-    assert_eq!(schema.next_column_id(), 12);
+    assert_eq!(schema.next_column_id(), 13);
 
     // make sure column ids is adjacent integers(in case there is no add or drop column operations)
     assert_eq!(flat_column_ids.len(), schema.next_column_id() as usize);
@@ -345,11 +341,12 @@ fn test_schema_from_struct() -> Result<()> {
             (4, "0"),
             (5, "1"),
             (6, "nullarray"),
-            (7, "maparray"),
-            (8, "nullu64"),
-            (9, "u64array:0"),
-            (10, "a"),
-            (11, "b"),
+            (7, "key"),
+            (8, "value"),
+            (9, "nullu64"),
+            (10, "u64array:0"),
+            (11, "a"),
+            (12, "b"),
         ];
         let leaf_fields = schema.leaf_fields();
         for (i, leaf_field) in leaf_fields.iter().enumerate() {
@@ -528,4 +525,44 @@ fn test_schema_modify_field() -> Result<()> {
     assert!(schema.column_id_of("s").is_err());
 
     Ok(())
+}
+
+#[test]
+fn test_leaf_columns_of() -> Result<()> {
+    let fields = vec![
+        TableField::new("a", TableDataType::Number(NumberDataType::UInt64)),
+        TableField::new("b", TableDataType::Tuple {
+            fields_name: vec!["b1".to_string(), "b2".to_string()],
+            fields_type: vec![
+                TableDataType::Tuple {
+                    fields_name: vec!["b11".to_string(), "b12".to_string()],
+                    fields_type: vec![TableDataType::Boolean, TableDataType::String],
+                }
+                TableDataType::Number(NumberDataType::UInt64),
+            ],
+        }
+        TableField::new("c", TableDataType::Array(Box::new(TableDataType::Number(NumberDataType::UInt64)))),
+        TableField::new("d", TableDataType::Map(Box::new(
+            TableDataType::Tuple {
+                fields_name: vec!["key".to_string(), "value".to_string()],
+                fields_type: vec![TableDataType::String, TableDataType::String],
+            }
+        )),
+        TableField::new("e", TableDataType::String),
+    ];
+    let mut schema = TableSchema::new(fields);
+
+    assert_eq!(schema.leaf_columns_of("a"), vec![0]);
+    assert_eq!(schema.leaf_columns_of("b"), vec![1,2,3]);
+    assert_eq!(schema.leaf_columns_of("b:b1"), vec![1,2]);
+    assert_eq!(schema.leaf_columns_of("b:1"), vec![1,2]);
+    assert_eq!(schema.leaf_columns_of("b:b1:b11"), vec![1]);
+    assert_eq!(schema.leaf_columns_of("b:1:1"), vec![1]);
+    assert_eq!(schema.leaf_columns_of("b:b1:b12"), vec![2]);
+    assert_eq!(schema.leaf_columns_of("b:1:2"), vec![2]);
+    assert_eq!(schema.leaf_columns_of("b:b2"), vec![3]);
+    assert_eq!(schema.leaf_columns_of("b:2"), vec![3]);
+    assert_eq!(schema.leaf_columns_of("c"), vec![4]);
+    assert_eq!(schema.leaf_columns_of("d"), vec![5,6]);
+    assert_eq!(schema.leaf_columns_of("e"), vec![7]);
 }

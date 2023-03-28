@@ -36,8 +36,8 @@
 #[allow(dead_code)]
 mod block;
 
+mod convert_arrow_rs;
 pub mod converts;
-mod deserializations;
 mod evaluator;
 mod expression;
 mod function;
@@ -53,7 +53,6 @@ pub mod values;
 pub use crate::block::BlockMetaInfo;
 pub use crate::block::BlockMetaInfoPtr;
 pub use crate::block::*;
-pub use crate::deserializations::*;
 pub use crate::evaluator::*;
 pub use crate::expression::*;
 pub use crate::function::*;

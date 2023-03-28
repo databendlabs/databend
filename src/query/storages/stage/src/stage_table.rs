@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::ops::Deref;
-use std::path::Path;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
@@ -26,7 +25,6 @@ use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::StageFileInfo;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
@@ -35,19 +33,18 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::DataBlock;
-use common_meta_app::principal::UserStageInfo;
+use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::input_formats::InputContext;
 use common_pipeline_sources::input_formats::SplitInfo;
 use common_storage::init_stage_operator;
+use common_storage::StageFileInfo;
 use opendal::Operator;
 use parking_lot::Mutex;
-use regex::Regex;
 
-use crate::list_file;
 use crate::stage_table_sink::StageTableSink;
-use crate::stat_file;
 
 /// TODO: we need to track the data metrics in stage table.
 pub struct StageTable {
@@ -71,45 +68,19 @@ impl StageTable {
     }
 
     /// Get operator with correctly prefix.
-    pub fn get_op(stage: &UserStageInfo) -> Result<Operator> {
+    pub fn get_op(stage: &StageInfo) -> Result<Operator> {
         init_stage_operator(stage)
     }
 
     pub async fn list_files(stage_info: &StageTableInfo) -> Result<Vec<StageFileInfo>> {
-        // 1. List all files.
-        let path = &stage_info.path;
-        let files = &stage_info.files;
-        let op = Self::get_op(&stage_info.user_stage_info)?;
-        let mut all_files = if !files.is_empty() {
-            let mut res = vec![];
-            for file in files {
-                // Here we add the path to the file: /path/to/path/file1.
-                let new_path = Path::new(path).join(file).to_string_lossy().to_string();
-
-                if let Some(info) = stat_file(op.object(&new_path)).await? {
-                    res.push(info);
-                }
-            }
-            res
-        } else {
-            list_file(&op, path).await?
-        };
-
-        // 2. Retain pattern match files.
-        {
-            let pattern = &stage_info.pattern;
-            if !pattern.is_empty() {
-                let regex = Regex::new(pattern).map_err(|e| {
-                    ErrorCode::SyntaxException(format!(
-                        "Pattern format invalid, got:{}, error:{:?}",
-                        pattern, e
-                    ))
-                })?;
-                all_files.retain(|v| regex.is_match(&v.path));
-            }
-        }
-
-        Ok(all_files)
+        let op = Self::get_op(&stage_info.stage_info)?;
+        let infos = stage_info
+            .files_info
+            .list(&op, false)
+            .await?
+            .into_iter()
+            .collect::<Vec<_>>();
+        Ok(infos)
     }
 
     fn get_block_compact_thresholds_with_default(&self) -> BlockThresholds {
@@ -148,14 +119,13 @@ impl Table for StageTable {
         } else {
             StageTable::list_files(stage_info).await?
         };
-        let files = files.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
         let format =
-            InputContext::get_input_format(&stage_info.user_stage_info.file_format_options.format)?;
-        let operator = StageTable::get_op(&stage_info.user_stage_info)?;
+            InputContext::get_input_format(&stage_info.stage_info.file_format_options.format)?;
+        let operator = StageTable::get_op(&stage_info.stage_info)?;
         let splits = format
             .get_splits(
-                &files,
-                &stage_info.user_stage_info,
+                files,
+                &stage_info.stage_info,
                 &operator,
                 &ctx.get_settings(),
             )
@@ -197,8 +167,8 @@ impl Table for StageTable {
         //  Build copy pipeline.
         let settings = ctx.get_settings();
         let schema = stage_table_info.schema.clone();
-        let stage_info = stage_table_info.user_stage_info.clone();
-        let operator = StageTable::get_op(&stage_table_info.user_stage_info)?;
+        let stage_info = stage_table_info.stage_info.clone();
+        let operator = StageTable::get_op(&stage_table_info.stage_info)?;
         let compact_threshold = self.get_block_compact_thresholds_with_default();
         let input_ctx = Arc::new(InputContext::try_create_from_copy(
             operator,
@@ -209,6 +179,7 @@ impl Table for StageTable {
             ctx.get_scan_progress(),
             compact_threshold,
         )?);
+
         input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;
         ctx.set_on_error_map(input_ctx.get_maximum_error_per_file());
         Ok(())
@@ -221,8 +192,8 @@ impl Table for StageTable {
         _: AppendMode,
         _: bool,
     ) -> Result<()> {
-        let single = self.table_info.user_stage_info.copy_options.single;
-        let op = StageTable::get_op(&self.table_info.user_stage_info)?;
+        let single = self.table_info.stage_info.copy_options.single;
+        let op = StageTable::get_op(&self.table_info.stage_info)?;
 
         let uuid = uuid::Uuid::new_v4().to_string();
         let group_id = AtomicUsize::new(0);
@@ -266,6 +237,7 @@ impl Table for StageTable {
         &self,
         _ctx: Arc<dyn TableContext>,
         _operations: Vec<DataBlock>,
+        _copied_files: Option<UpsertTableCopiedFileReq>,
         _overwrite: bool,
     ) -> Result<()> {
         Ok(())

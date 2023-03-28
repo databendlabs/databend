@@ -8,7 +8,7 @@ query T
 explain select count(*) from t
 ----
 EvalScalar
-├── expressions: [COUNT(*) (#2)]
+├── expressions: [COUNT(*) (#1)]
 ├── estimated rows: 1.00
 └── EvalScalar
     ├── expressions: [1000]
@@ -22,7 +22,7 @@ query T
 explain select count(*) from t
 ----
 EvalScalar
-├── expressions: [COUNT(*) (#2)]
+├── expressions: [COUNT(*) (#1)]
 ├── estimated rows: 1.00
 └── EvalScalar
     ├── expressions: [1001]
@@ -33,7 +33,7 @@ query T
 explain select count(*) from t where number > 10
 ----
 EvalScalar
-├── expressions: [COUNT(*) (#2)]
+├── expressions: [COUNT(*) (#1)]
 ├── estimated rows: 1.00
 └── AggregateFinal
     ├── group by: []
@@ -44,7 +44,7 @@ EvalScalar
         ├── aggregate functions: [count()]
         ├── estimated rows: 1.00
         └── Filter
-            ├── filters: [gt(t.number (#0), 10)]
+            ├── filters: [t.number (#0) > 10]
             ├── estimated rows: 989.89
             └── TableScan
                 ├── table: default.default.t
@@ -53,7 +53,7 @@ EvalScalar
                 ├── partitions total: 2
                 ├── partitions scanned: 1
                 ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                ├── push downs: [filters: [gt(t.number (#0), 10)], limit: NONE]
+                ├── push downs: [filters: [t.number (#0) > 10], limit: NONE]
                 └── estimated rows: 1001.00
 
 statement ok
