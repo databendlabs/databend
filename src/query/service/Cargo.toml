@@ -100,6 +100,7 @@ storages-common-table-meta = { path = "../storages/common/table-meta" }
 
 # Crates.io dependencies
 aho-corasick = { version = "0.7.20" }
+arrow-array = { version = "35.0.0" }
 arrow-flight = { version = "35.0.0", features = ["flight-sql-experimental"] }
 arrow-ipc = { version = "35.0.0" }
 arrow-schema = { version = "35.0.0" }
