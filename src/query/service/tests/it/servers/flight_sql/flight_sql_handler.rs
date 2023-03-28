@@ -38,6 +38,7 @@ use tokio_stream::wrappers::UnixListenerStream;
 use tonic::transport::Endpoint;
 use tonic::transport::Server;
 use tower::service_fn;
+use tracing::debug;
 
 use crate::tests::ConfigBuilder;
 use crate::tests::TestGlobalServices;
@@ -111,7 +112,7 @@ async fn test_query() -> Result<()> {
         let mut file = mint.new_goldenfile("query.txt").unwrap();
         let mut client = client_with_uds(path).await;
         let token = client.handshake(TEST_USER, TEST_PASSWORD).await.unwrap();
-        println!("Auth succeeded with token: {:?}", token);
+        debug!("Auth succeeded with token: {:?}", token);
         let cases = [
             "select 1, 'abc', 1.1, 1.1::float32, 1::nullable(int)",
             // "drop table if exists test1",
@@ -135,12 +136,12 @@ async fn test_query() -> Result<()> {
     tokio::select! {
         _ = &mut serve_future => panic!("server returned first"),
         _ = request_future => {
-            println!("Client finished!");
+            debug!("Client finished!");
         }
     }
     shutdown_tx.send(()).unwrap();
     serve_future.await.unwrap();
-    println!("Server shutdown!");
+    debug!("Server shutdown!");
 
     Ok(())
 }
