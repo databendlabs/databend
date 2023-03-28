@@ -72,8 +72,7 @@ Functions overloads:
 3 add_years(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 0 and(Boolean, Boolean) :: Boolean
 1 and(Boolean NULL, Boolean NULL) :: Boolean NULL
-0 and_filters(Boolean, Boolean) :: Boolean
-1 and_filters(Boolean NULL, Boolean NULL) :: Boolean NULL
+0 and_filters FACTORY
 0 array() :: Array(Nothing)
 1 array FACTORY
 0 array_any FACTORY

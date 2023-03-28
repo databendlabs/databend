@@ -31,11 +31,13 @@ use crate::type_check::check_function;
 use crate::type_check::get_simple_cast_function;
 use crate::types::any::AnyType;
 use crate::types::array::ArrayColumn;
+use crate::types::boolean::BooleanDomain;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::NullableType;
+use crate::types::ValueType;
 use crate::utils::arrow::constant_bitmap;
 use crate::values::Column;
 use crate::values::ColumnBuilder;
@@ -154,6 +156,16 @@ impl<'a> Evaluator<'a> {
                 generics,
                 ..
             } if function.signature.name == "if" => self.eval_if(args, generics, validity),
+
+            Expr::FunctionCall {
+                function,
+                args,
+                generics,
+                ..
+            } if function.signature.name == "and_filters" => {
+                self.eval_and_filters(args, generics, validity)
+            }
+
             Expr::FunctionCall {
                 span,
                 function,
@@ -800,6 +812,44 @@ impl<'a> Evaluator<'a> {
         }
     }
 
+    // `and_filters` is a special builtin function similar to `if` that could partially
+    fn eval_and_filters(
+        &self,
+        args: &[Expr],
+        _: &[DataType],
+        mut validity: Option<Bitmap>,
+    ) -> Result<Value<AnyType>> {
+        assert!(args.len() >= 2);
+
+        for arg in args {
+            let cond = self.partial_run(arg, validity.clone())?;
+            match cond.try_downcast::<NullableType<BooleanType>>().unwrap() {
+                Value::Scalar(None | Some(false)) => {
+                    return Ok(Value::Scalar(Scalar::Boolean(false)));
+                }
+                Value::Scalar(Some(true)) => {
+                    continue;
+                }
+                Value::Column(cond) => {
+                    let flag = (&cond.column) & (&cond.validity);
+                    match &validity {
+                        Some(v) => {
+                            validity = Some(v & (&flag));
+                        }
+                        None => {
+                            validity = Some(flag);
+                        }
+                    }
+                }
+            };
+        }
+
+        match validity {
+            Some(bitmap) => Ok(Value::Column(Column::Boolean(bitmap))),
+            None => Ok(Value::Scalar(Scalar::Boolean(true))),
+        }
+    }
+
     /// Evaluate a set returning function. Return multiple chunks of results, and the repeat times of each of the result.
     pub fn run_srf(&self, expr: &Expr) -> Result<Vec<(Value<AnyType>, usize)>> {
         if let Expr::FunctionCall {
@@ -972,6 +1022,78 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                         .unwrap_or(cast_expr),
                     new_domain,
                 )
+            }
+            Expr::FunctionCall {
+                span,
+                id,
+                function,
+                generics,
+                args,
+                return_type,
+            } if function.signature.name == "and_filters" => {
+                let mut args_expr = Vec::new();
+                let mut has_true = true;
+                let mut has_false = true;
+
+                type DomainType = NullableType<BooleanType>;
+                for arg in args {
+                    let (expr, domain) = self.fold_once(arg);
+                    args_expr.push(expr);
+
+                    match domain {
+                        Some(domain) => {
+                            let domain = DomainType::try_downcast_domain(&domain).unwrap();
+                            let (domain_hash_true, domain_hash_false) = match &domain {
+                                NullableDomain {
+                                    has_null,
+                                    value:
+                                        Some(box BooleanDomain {
+                                            has_true,
+                                            has_false,
+                                        }),
+                                } => (*has_true, *has_null || *has_false),
+                                NullableDomain { value: None, .. } => (false, true),
+                            };
+
+                            has_true = has_true && domain_hash_true;
+                            has_false = has_false || domain_hash_false;
+                        }
+                        None => {
+                            continue;
+                        }
+                    }
+                }
+
+                if !has_true && has_false {
+                    (
+                        Expr::Constant {
+                            span: *span,
+                            scalar: Scalar::Boolean(false),
+                            data_type: DataType::Boolean,
+                        },
+                        Some(Domain::Boolean(BooleanDomain {
+                            has_true: false,
+                            has_false: true,
+                        })),
+                    )
+                } else {
+                    let func_expr = Expr::FunctionCall {
+                        span: *span,
+                        id: id.clone(),
+                        function: function.clone(),
+                        generics: generics.clone(),
+                        args: args_expr,
+                        return_type: return_type.clone(),
+                    };
+
+                    (
+                        func_expr,
+                        Some(Domain::Boolean(BooleanDomain {
+                            has_true,
+                            has_false,
+                        })),
+                    )
+                }
             }
             Expr::FunctionCall {
                 span,
