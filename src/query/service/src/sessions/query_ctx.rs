@@ -503,7 +503,7 @@ impl TableContext for QueryContext {
         max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
         let tenant = self.get_tenant();
-        let mut files = files.clone();
+        let files = files.clone();
         let catalog = self.get_catalog(catalog_name)?;
         let table = catalog
             .get_table(&tenant, database_name, table_name)
@@ -517,7 +517,7 @@ impl TableContext for QueryContext {
 
         let mut results = Vec::with_capacity(files.len());
 
-        for chunk in files.chunks_mut(max_copied_files) {
+        for chunk in files.chunks(max_copied_files) {
             let files = chunk.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
             let req = GetTableCopiedFileReq { table_id, files };
             let resp = catalog
@@ -525,7 +525,8 @@ impl TableContext for QueryContext {
                 .await?;
             copied_files.extend(resp.file_info);
             // Colored
-            for mut file in chunk {
+            for file in chunk {
+                let mut file = file.clone();
                 if let Some(copied_file) = copied_files.get(&file.path) {
                     match &copied_file.etag {
                         Some(copied_etag) => {
@@ -547,15 +548,6 @@ impl TableContext for QueryContext {
                     }
                 }
                 if file.status == StageFileStatus::NeedCopy {
-                    let file = StageFileInfo {
-                        path: file.path.clone(),
-                        size: file.size,
-                        md5: file.md5.clone(),
-                        last_modified: file.last_modified,
-                        etag: file.etag.clone(),
-                        status: StageFileStatus::NeedCopy,
-                        creator: file.creator.clone(),
-                    };
                     results.push(file);
                     limit += 1;
                     if limit == max_files {
