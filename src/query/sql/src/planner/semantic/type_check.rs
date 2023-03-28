@@ -35,6 +35,7 @@ use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
@@ -1473,6 +1474,7 @@ impl<'a> TypeChecker<'a> {
             "is_null",
             "coalesce",
             "last_query_id",
+            "ai_embedding_vector",
         ]
     }
 
@@ -1669,6 +1671,28 @@ impl<'a> TypeChecker<'a> {
                     }
                     Err(e) => Err(e),
                 })
+            }
+            ("ai_embedding_vector", args) => {
+                // ai_embedding_vector(prompt) -> embedding_vector(prompt, api_key)
+                if args.len() != 1 {
+                    return Some(Err(ErrorCode::BadArguments(
+                        "ai_embedding_vector(STRING) only accepts one STRING argument",
+                    )
+                    .set_span(span)));
+                }
+
+                // Prompt.
+                let arg1 = args[0];
+                // API key.
+                let arg2 = &Expr::Literal {
+                    span,
+                    lit: Literal::String(GlobalConfig::instance().query.openai_api_key.clone()),
+                };
+
+                Some(
+                    self.resolve_function(span, "embedding_vector", vec![], &[arg1, arg2])
+                        .await,
+                )
             }
             _ => None,
         }
