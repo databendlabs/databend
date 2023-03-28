@@ -318,7 +318,7 @@ jobs:
         working-directory: benchmark/clickbench
         run: |
           aws s3 sync ./results/hits/ ${REPORT_S3_PREFIX}/ --include "*.json"
-          aws s3 sync ./results/tpch/ ${REPORT_S3_PREFIX }/ --include "*.json"
+          aws s3 sync ./results/tpch/ ${REPORT_S3_PREFIX}/ --include "*.json"
       - name: Get latest release clickbench result
         working-directory: benchmark/clickbench
         run: |
