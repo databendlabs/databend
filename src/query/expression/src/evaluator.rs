@@ -1038,6 +1038,23 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
                 type DomainType = NullableType<BooleanType>;
                 for arg in args {
+                    // A temporary hack to make `and_filters` shortcut on false.
+                    // TODO(andylokandy): make it a rule in the optimizer.
+                    if let Expr::Constant {
+                        scalar: Scalar::Boolean(false),
+                        ..
+                    } = arg
+                    {
+                        return (
+                            Expr::Constant {
+                                span: *span,
+                                scalar: Scalar::Boolean(false),
+                                data_type: DataType::Boolean,
+                            },
+                            None,
+                        );
+                    }
+
                     let (expr, domain) = self.fold_once(arg);
                     args_expr.push(expr);
 
