@@ -11,20 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
 
-#[derive(Clone)]
-pub enum WindowFrameBound {
-    /// `CURRENT ROW`
-    CurrentRow,
-    /// `<N> PRECEDING` or `UNBOUNDED PRECEDING`.
-    Preceding(Option<usize>),
-    /// `<N> FOLLOWING` or `UNBOUNDED FOLLOWING`.
-    Following(Option<usize>),
+use metrics::increment_gauge;
+
+pub fn metrics_completion_count(c: u32) {
+    increment_gauge!("openai_completion_count", c as f64);
 }
 
-#[derive(Clone)]
-pub struct WindowFrame {
-    // TODO: support RANGE frame, only support Rows frame now.
-    pub start_bound: WindowFrameBound,
-    pub end_bound: WindowFrameBound,
+pub fn metrics_completion_token(c: u32) {
+    increment_gauge!("openai_completion_token", c as f64);
+}
+
+pub fn metrics_embedding_count(c: u32) {
+    increment_gauge!("openai_embedding_count", c as f64);
+}
+
+pub fn metrics_embedding_token(c: u32) {
+    increment_gauge!("openai_embedding_token", c as f64);
 }

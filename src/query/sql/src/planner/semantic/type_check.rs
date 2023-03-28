@@ -35,6 +35,7 @@ use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
@@ -85,6 +86,7 @@ use crate::plans::WindowFunc;
 use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncFrameUnits;
+use crate::plans::WindowOrderBy;
 use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnBinding;
@@ -721,10 +723,20 @@ impl<'a> TypeChecker<'a> {
                             let box (part, _part_type) = self.resolve(p).await?;
                             partitions.push(part);
                         }
+                        let mut order_bys = vec![];
+                        for o in window.order_by.iter() {
+                            let box (order, _) = self.resolve(&o.expr).await?;
+                            order_bys.push(WindowOrderBy {
+                                expr: order,
+                                asc: o.asc,
+                                nulls_first: o.nulls_first,
+                            })
+                        }
                         self.resolve_window(
                             *span,
                             new_agg_func.clone(),
                             partitions,
+                            order_bys,
                             window.window_frame.clone(),
                             data_type.clone(),
                         )
@@ -943,61 +955,129 @@ impl<'a> TypeChecker<'a> {
         _span: Span,
         agg_func: AggregateFunction,
         partitions: Vec<ScalarExpr>,
+        order_bys: Vec<WindowOrderBy>,
         window_frame: Option<WindowFrame>,
         return_type: DataType,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let frame = window_frame.unwrap();
-        let units = match frame.units.clone() {
-            WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,
-            WindowFrameUnits::Range => WindowFuncFrameUnits::Range,
-        };
-        let start = match frame.start_bound {
-            WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
-            WindowFrameBound::Preceding(f) => {
-                if let Some(box expr) = f {
-                    let box (result_expr, _) = self.resolve(&expr).await?;
-                    WindowFuncFrameBound::Preceding(Some(Box::new(result_expr)))
-                } else {
-                    WindowFuncFrameBound::Preceding(None)
+        let (units, start, end) = if let Some(frame) = window_frame {
+            let units = match frame.units {
+                WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,
+                WindowFrameUnits::Range => WindowFuncFrameUnits::Range,
+            };
+            let start = match frame.start_bound {
+                WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
+                WindowFrameBound::Preceding(f) => {
+                    if let Some(box expr) = f {
+                        let result = Self::resolve_window_frame(&expr);
+                        WindowFuncFrameBound::Preceding(result)
+                    } else {
+                        WindowFuncFrameBound::Preceding(None)
+                    }
                 }
-            }
-            WindowFrameBound::Following(f) => {
-                if let Some(box expr) = f {
-                    let box (result_expr, _) = self.resolve(&expr).await?;
-                    WindowFuncFrameBound::Following(Some(Box::new(result_expr)))
-                } else {
-                    WindowFuncFrameBound::Following(None)
+                WindowFrameBound::Following(f) => {
+                    if let Some(box expr) = f {
+                        let result = Self::resolve_window_frame(&expr);
+                        WindowFuncFrameBound::Following(result)
+                    } else {
+                        WindowFuncFrameBound::Following(None)
+                    }
                 }
-            }
+            };
+
+            let end = match frame.end_bound {
+                WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
+                WindowFrameBound::Preceding(f) => {
+                    if let Some(box expr) = f {
+                        let result = Self::resolve_window_frame(&expr);
+                        WindowFuncFrameBound::Preceding(result)
+                    } else {
+                        WindowFuncFrameBound::Preceding(None)
+                    }
+                }
+                WindowFrameBound::Following(f) => {
+                    if let Some(box expr) = f {
+                        let result = Self::resolve_window_frame(&expr);
+                        WindowFuncFrameBound::Following(result)
+                    } else {
+                        WindowFuncFrameBound::Following(None)
+                    }
+                }
+            };
+            (units, start, end)
+        } else {
+            let units = WindowFuncFrameUnits::Rows;
+            let start = WindowFuncFrameBound::Preceding(None);
+            let end = WindowFuncFrameBound::CurrentRow;
+            (units, start, end)
         };
 
-        let end = match frame.end_bound {
-            WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
-            WindowFrameBound::Preceding(f) => {
-                if let Some(box expr) = f {
-                    let box (result_expr, _) = self.resolve(&expr).await?;
-                    WindowFuncFrameBound::Preceding(Some(Box::new(result_expr)))
-                } else {
-                    WindowFuncFrameBound::Preceding(None)
-                }
-            }
-            WindowFrameBound::Following(f) => {
-                if let Some(box expr) = f {
-                    let box (result_expr, _) = self.resolve(&expr).await?;
-                    WindowFuncFrameBound::Following(Some(Box::new(result_expr)))
-                } else {
-                    WindowFuncFrameBound::Following(None)
-                }
-            }
-        };
+        Self::check_frame_bound(start.clone(), end.clone())?;
 
         let window_func = WindowFunc {
             agg_func,
             partition_by: partitions,
-            frame: WindowFuncFrame { units, start, end },
+            order_by: order_bys,
+            frame: WindowFuncFrame {
+                units,
+                start_bound: start,
+                end_bound: end,
+            },
         };
 
         Ok(Box::new((window_func.into(), return_type)))
+    }
+
+    // just support integer
+    pub fn resolve_window_frame(expr: &Expr) -> Option<usize> {
+        match expr {
+            Expr::Literal {
+                lit: Literal::UInt64(value),
+                ..
+            } => Some(*value as usize),
+            _ => None,
+        }
+    }
+
+    fn check_frame_bound(start: WindowFuncFrameBound, end: WindowFuncFrameBound) -> Result<()> {
+        match start {
+            WindowFuncFrameBound::CurrentRow => {
+                if start > end {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "frame semantic error, start:{:?}, end:{:?}",
+                        start, end
+                    )));
+                }
+            }
+            _ => {
+                if start >= end {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "frame semantic error, start:{:?}, end:{:?}",
+                        start, end
+                    )));
+                }
+            }
+        }
+
+        match end {
+            WindowFuncFrameBound::CurrentRow => {
+                if start > end {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "frame semantic error, start:{:?}, end:{:?}",
+                        start, end
+                    )));
+                }
+            }
+            _ => {
+                if start >= end {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "frame semantic error, start:{:?}, end:{:?}",
+                        start, end
+                    )));
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Resolve function call.
@@ -1473,6 +1553,7 @@ impl<'a> TypeChecker<'a> {
             "is_null",
             "coalesce",
             "last_query_id",
+            "ai_embedding_vector",
         ]
     }
 
@@ -1669,6 +1750,28 @@ impl<'a> TypeChecker<'a> {
                     }
                     Err(e) => Err(e),
                 })
+            }
+            ("ai_embedding_vector", args) => {
+                // ai_embedding_vector(prompt) -> embedding_vector(prompt, api_key)
+                if args.len() != 1 {
+                    return Some(Err(ErrorCode::BadArguments(
+                        "ai_embedding_vector(STRING) only accepts one STRING argument",
+                    )
+                    .set_span(span)));
+                }
+
+                // Prompt.
+                let arg1 = args[0];
+                // API key.
+                let arg2 = &Expr::Literal {
+                    span,
+                    lit: Literal::String(GlobalConfig::instance().query.openai_api_key.clone()),
+                };
+
+                Some(
+                    self.resolve_function(span, "embedding_vector", vec![], &[arg1, arg2])
+                        .await,
+                )
             }
             _ => None,
         }

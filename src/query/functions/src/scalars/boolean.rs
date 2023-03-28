@@ -15,11 +15,14 @@
 #![allow(unused_comparisons)]
 #![allow(clippy::absurd_extreme_comparisons)]
 
+use std::sync::Arc;
+
 use common_expression::error_to_null;
 use common_expression::types::boolean::BooleanDomain;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::nullable::NullableDomain;
 use common_expression::types::BooleanType;
+use common_expression::types::DataType;
 use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
@@ -30,12 +33,37 @@ use common_expression::vectorize_2_arg;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::with_integer_mapped_type;
 use common_expression::EvalContext;
+use common_expression::Function;
 use common_expression::FunctionDomain;
+use common_expression::FunctionEval;
 use common_expression::FunctionRegistry;
+use common_expression::FunctionSignature;
 use common_expression::Value;
 use common_expression::ValueRef;
 
 pub fn register(registry: &mut FunctionRegistry) {
+    registry.register_function_factory("and_filters", |_, args_type| {
+        if args_type.len() < 2 {
+            return None;
+        }
+
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "and_filters".to_string(),
+                args_type: vec![DataType::Nullable(Box::new(DataType::Boolean)); args_type.len()],
+                return_type: DataType::Boolean,
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_| {
+                    unreachable!("cal_domain of `and_filters` should be handled by the `Evaluator`")
+                }),
+                eval: Box::new(|_, _| {
+                    unreachable!("`and_filters` should be handled by the `Evaluator`")
+                }),
+            },
+        }))
+    });
+
     registry.register_passthrough_nullable_1_arg::<BooleanType, BooleanType, _, _>(
         "not",
         |arg| {
@@ -47,22 +75,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         |val, _| match val {
             ValueRef::Scalar(scalar) => Value::Scalar(!scalar),
             ValueRef::Column(column) => Value::Column(!&column),
-        },
-    );
-
-    // special function to combine the filter efficiently
-    registry.register_passthrough_nullable_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
-        "and_filters",
-        |lhs, rhs| {
-            FunctionDomain::Domain(BooleanDomain {
-                has_false: lhs.has_false || rhs.has_false,
-                has_true: lhs.has_true && rhs.has_true,
-            })
-        },
-        |lhs, rhs, _| match (lhs, rhs) {
-            (ValueRef::Scalar(true), other) | (other, ValueRef::Scalar(true)) => other.to_owned(),
-            (ValueRef::Scalar(false), _) | (_, ValueRef::Scalar(false)) => Value::Scalar(false),
-            (ValueRef::Column(a), ValueRef::Column(b)) => Value::Column(&a & &b),
         },
     );
 

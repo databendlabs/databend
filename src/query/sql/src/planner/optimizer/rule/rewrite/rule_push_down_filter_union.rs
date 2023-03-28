@@ -185,6 +185,7 @@ fn replace_column_binding(
                 return_type: expr.agg_func.return_type,
             },
             partition_by: expr.partition_by,
+            order_by: expr.order_by,
             frame: expr.frame,
         })),
         ScalarExpr::AggregateFunction(expr) => {

@@ -156,6 +156,26 @@ impl UnusedColumnPruner {
                     Self::keep_required_columns(expr.child(0)?, required)?,
                 ))
             }
+            RelOperator::Window(p) => {
+                if required.contains(&p.aggregate_function.index) {
+                    for c in p.aggregate_function.scalar.used_columns() {
+                        required.insert(c);
+                    }
+                }
+
+                p.partition_by.iter().for_each(|item| {
+                    required.insert(item.index);
+                });
+
+                p.order_by.iter().for_each(|item| {
+                    required.insert(item.order_by_item.index);
+                });
+
+                Ok(SExpr::create_unary(
+                    RelOperator::Window(p.clone()),
+                    Self::keep_required_columns(expr.child(0)?, required)?,
+                ))
+            }
             RelOperator::Sort(p) => {
                 p.items.iter().for_each(|s| {
                     required.insert(s.index);

@@ -143,7 +143,7 @@ pub struct BindContext {
 
     pub aggregate_info: AggregateInfo,
 
-    pub windows: Vec<WindowInfo>,
+    pub windows: WindowInfo,
 
     /// True if there is aggregation in current context, which means
     /// non-grouping columns cannot be referenced outside aggregation
@@ -177,7 +177,7 @@ impl BindContext {
             columns: Vec::new(),
             bound_internal_columns: BTreeMap::new(),
             aggregate_info: AggregateInfo::default(),
-            windows: Vec::new(),
+            windows: WindowInfo::default(),
             in_grouping: false,
             ctes_map: Box::new(DashMap::new()),
             view_info: None,
@@ -192,7 +192,7 @@ impl BindContext {
             columns: vec![],
             bound_internal_columns: BTreeMap::new(),
             aggregate_info: Default::default(),
-            windows: vec![],
+            windows: Default::default(),
             in_grouping: false,
             ctes_map: parent.ctes_map.clone(),
             view_info: None,

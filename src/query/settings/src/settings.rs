@@ -26,7 +26,7 @@ use itertools::Itertools;
 use crate::settings_default::DefaultSettingValue;
 use crate::settings_default::DefaultSettings;
 
-#[derive(Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub enum ScopeLevel {
     Global,
     Session,
@@ -45,7 +45,7 @@ impl Debug for ScopeLevel {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ChangeValue {
     pub level: ScopeLevel,
     pub value: UserSettingValue,
@@ -58,7 +58,7 @@ pub struct Settings {
 }
 
 impl Settings {
-    pub fn try_create(tenant: String) -> Arc<Settings> {
+    pub fn create(tenant: String) -> Arc<Settings> {
         Arc::new(Settings {
             tenant,
             changes: DashMap::new(),

@@ -33,6 +33,7 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::Scan;
 use crate::plans::Sort;
+use crate::plans::Window;
 use crate::BaseTableColumn;
 use crate::ColumnEntry;
 use crate::DerivedColumn;
@@ -221,6 +222,7 @@ fn to_format_tree(
         RelOperator::EvalScalar(op) => eval_scalar_to_format_tree(op, metadata, children),
         RelOperator::Filter(op) => filter_to_format_tree(op, metadata, children),
         RelOperator::Aggregate(op) => aggregate_to_format_tree(op, metadata, children),
+        RelOperator::Window(op) => window_to_format_tree(op, metadata, children),
         RelOperator::Sort(op) => sort_to_format_tree(op, metadata, children),
         RelOperator::Limit(op) => limit_to_format_tree(op, metadata, children),
         RelOperator::Exchange(op) => exchange_to_format_tree(op, metadata, children),
@@ -491,7 +493,10 @@ fn aggregate_to_format_tree(
     let agg_funcs = op
         .aggregate_functions
         .iter()
-        .map(|item| format_scalar(&metadata, &item.scalar))
+        .map(|item| {
+            println!("agg format scalar: {:?}", &item.scalar);
+            format_scalar(&metadata, &item.scalar)
+        })
         .collect::<Vec<String>>()
         .join(", ");
     FormatTreeNode::with_children(
@@ -509,6 +514,56 @@ fn aggregate_to_format_tree(
                     "aggregate functions: [{}]",
                     agg_funcs
                 ))),
+            ],
+            children,
+        ]
+        .concat(),
+    )
+}
+
+fn window_to_format_tree(
+    op: &Window,
+    metadata: MetadataRef,
+    children: Vec<FormatTreeNode<FormatContext>>,
+) -> FormatTreeNode<FormatContext> {
+    let partition_by_items = op
+        .partition_by
+        .iter()
+        .map(|item| format_scalar(&metadata, &item.scalar))
+        .collect::<Vec<String>>()
+        .join(", ");
+
+    let order_by_items = op
+        .order_by
+        .iter()
+        .map(|item| format_scalar(&metadata, &item.order_by_item.scalar))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let frame = op.frame.to_string();
+
+    let agg_func = format_scalar(&metadata, &op.aggregate_function.scalar);
+
+    FormatTreeNode::with_children(
+        FormatContext::RelOp {
+            metadata,
+            rel_operator: Box::new(op.clone().into()),
+        },
+        vec![
+            vec![
+                FormatTreeNode::new(FormatContext::Text(format!(
+                    "aggregate function: {}",
+                    agg_func
+                ))),
+                FormatTreeNode::new(FormatContext::Text(format!(
+                    "partition items: [{}]",
+                    partition_by_items
+                ))),
+                FormatTreeNode::new(FormatContext::Text(format!(
+                    "order by items: [{}]",
+                    order_by_items
+                ))),
+                FormatTreeNode::new(FormatContext::Text(format!("frame: [{}]", frame))),
             ],
             children,
         ]

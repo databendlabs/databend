@@ -32,6 +32,7 @@ use super::Sort;
 use super::TableScan;
 use crate::executor::RuntimeFilterSource;
 use crate::executor::UnionAll;
+use crate::executor::Window;
 
 pub trait PhysicalPlanReplacer {
     fn replace(&mut self, plan: &PhysicalPlan) -> Result<PhysicalPlan> {
@@ -43,6 +44,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::AggregateExpand(plan) => self.replace_aggregate_expand(plan),
             PhysicalPlan::AggregatePartial(plan) => self.replace_aggregate_partial(plan),
             PhysicalPlan::AggregateFinal(plan) => self.replace_aggregate_final(plan),
+            PhysicalPlan::Window(plan) => self.replace_window(plan),
             PhysicalPlan::Sort(plan) => self.replace_sort(plan),
             PhysicalPlan::Limit(plan) => self.replace_limit(plan),
             PhysicalPlan::HashJoin(plan) => self.replace_hash_join(plan),
@@ -130,6 +132,19 @@ pub trait PhysicalPlanReplacer {
             agg_funcs: plan.agg_funcs.clone(),
             stat_info: plan.stat_info.clone(),
             limit: plan.limit,
+        }))
+    }
+
+    fn replace_window(&mut self, plan: &Window) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+
+        Ok(PhysicalPlan::Window(Window {
+            plan_id: plan.plan_id,
+            input: Box::new(input),
+            agg_func: plan.agg_func.clone(),
+            partition_by: plan.partition_by.clone(),
+            order_by: plan.order_by.clone(),
+            window_frame: plan.window_frame.clone(),
         }))
     }
 
@@ -286,6 +301,9 @@ impl PhysicalPlan {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::AggregateFinal(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::Window(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::Sort(plan) => {

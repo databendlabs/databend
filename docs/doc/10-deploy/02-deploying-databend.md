@@ -657,7 +657,7 @@ In case you encounter the subsequent error messages while attempting to start Da
 ==> query.log <==
 : No getcpu support: percpu_arena:percpu
 : option background_thread currently supports pthread only
-Databend Query start failure, cause: Code: 1104, displayText = failed to create appender: Os { code: 13, kind: PermissionDenied, message: "Permission denied" }.
+Databend Query start failure, cause: Code: 1104, Text = failed to create appender: Os { code: 13, kind: PermissionDenied, message: "Permission denied" }.
 ```
 Run the following commands and try starting Databend again:
 

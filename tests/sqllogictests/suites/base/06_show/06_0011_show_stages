@@ -13,7 +13,7 @@ skipif clickhouse
 query TTTTTITT
 DESC STAGE test_stage
 ----
-test_stage Internal StageParams { storage: Fs(StorageFsConfig { root: "_data" }) } CopyOptions { on_error: AbortNum(1), size_limit: 0, split_size: 0, purge: false, single: false, max_file_size: 0 } FileFormatOptions { format: Parquet, skip_header: 0, field_delimiter: ",", record_delimiter: "\n", nan_display: "NaN", escape: "", compression: None, row_tag: "row", quote: "", name: None } 0 'root'@'127.0.0.1' (empty)
+test_stage Internal StageParams { storage: Fs(StorageFsConfig { root: "_data" }) } CopyOptions { on_error: AbortNum(1), size_limit: 0, max_files: 0, split_size: 0, purge: false, single: false, max_file_size: 0 } FileFormatOptions { format: Parquet, skip_header: 0, field_delimiter: ",", record_delimiter: "\n", nan_display: "NaN", escape: "", compression: None, row_tag: "row", quote: "", name: None } 0 'root'@'127.0.0.1' (empty)
 
 statement ok
 DROP STAGE test_stage

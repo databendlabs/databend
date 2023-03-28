@@ -15,10 +15,13 @@
 use common_arrow::arrow::buffer::Buffer;
 use common_expression::types::ArrayType;
 use common_expression::types::Float32Type;
+use common_expression::types::StringType;
 use common_expression::types::F32;
 use common_expression::vectorize_with_builder_2_arg;
 use common_expression::FunctionDomain;
 use common_expression::FunctionRegistry;
+use common_openai::AIModel;
+use common_openai::OpenAI;
 use common_vector::cosine_distance;
 
 pub fn register(registry: &mut FunctionRegistry) {
@@ -42,6 +45,29 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
             }
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<StringType, StringType, ArrayType<Float32Type>, _, _>(
+        "embedding_vector",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<StringType, StringType, ArrayType<Float32Type>>(
+            |data, api_key, output, ctx| {
+                let data = std::str::from_utf8(data).unwrap();
+                let api_key = std::str::from_utf8(api_key).unwrap();
+                let openai = OpenAI::create(api_key.to_string(), AIModel::TextEmbeddingAda003);
+                let result = openai.embedding_request(&[data.to_string()]);
+                match result {
+                    Ok((embeddings, _)) => {
+                        let result = embeddings[0].iter().map(|x| F32::from(*x)).collect::<Vec<F32>>();
+                        output.push(result.into());
+                    }
+                    Err(e) => {
+                        ctx.set_error(output.len(), format!("openai request error:{:?}", e));
+                        output.push(vec![F32::from(0.0)].into());
+                    }
+                }
+            },
         ),
     );
 }

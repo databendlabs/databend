@@ -185,22 +185,10 @@ impl RulePushDownFilterEvalScalar {
                         display_name: window.agg_func.display_name.clone(),
                     };
 
-                    let partition_by = window
-                        .partition_by
-                        .iter()
-                        .map(|arg| {
-                            Self::replace_predicate(
-                                arg,
-                                items,
-                                eval_scalar_columns,
-                                eval_scalar_child_columns,
-                            )
-                        })
-                        .collect::<Result<Vec<ScalarExpr>>>()?;
-
                     Ok(ScalarExpr::WindowFunction(WindowFunc {
                         agg_func,
-                        partition_by,
+                        partition_by: window.partition_by.clone(),
+                        order_by: window.order_by.clone(),
                         frame: window.frame.clone(),
                     }))
                 }
