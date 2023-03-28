@@ -1,36 +1,28 @@
 --- force = false, purge = false
 4
-f1.csv
-f2.csv
-f3.csv
+remain 3 files
 6
-f1.csv
-f2.csv
-f3.csv
+remain 3 files
 6
-f1.csv
-f2.csv
-f3.csv
+remain 3 files
 --- force = false, purge = true
 4
-f1.csv
+remain 1 files
 6
+remain 0 files
 6
+remain 0 files
 --- force = true, purge = false
 4
-f1.csv
-f2.csv
-f3.csv
+remain 3 files
 8
-f1.csv
-f2.csv
-f3.csv
+remain 3 files
 12
-f1.csv
-f2.csv
-f3.csv
+remain 3 files
 --- force = true, purge = true
 4
-f1.csv
+remain 1 files
 6
+remain 0 files
 6
+remain 0 files

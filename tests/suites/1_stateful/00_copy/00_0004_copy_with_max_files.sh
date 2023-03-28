@@ -50,7 +50,8 @@ do
 			table="test_max_files_force_${force}_purge_${purge}"
 			echo "copy into ${table} from 'fs:///tmp/00_0004/' FILE_FORMAT = (type = CSV) max_files=2 force=${force} purge=${purge}" | $MYSQL_CLIENT_CONNECT
 			echo "select count(*) from ${table}" | $MYSQL_CLIENT_CONNECT
-		  ls /tmp/00_0004
+		  remain=$(ls -1 /tmp/00_0004/ | wc -l |  sed 's/ //g')
+			echo "remain ${remain} files"
 		done
 	done
 done
