@@ -12,6 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod generate_series;
+mod range;
 
-pub use generate_series::GenerateSeriesTable;
+pub use range::RangeTable;
