@@ -7162,6 +7162,7 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7181,10 +7182,11 @@ COPY INTO mytable
                     record_delimiter = '\n'
                     skip_header = 1
                 )
-                size_limit=10;
+                size_limit=10
+                max_files=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 MAX_FILES = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7221,6 +7223,7 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_files: 10,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7285,6 +7288,7 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7349,6 +7353,7 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7395,6 +7400,7 @@ Copy(
         file_format: {},
         validation_mode: "",
         size_limit: 0,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7441,6 +7447,7 @@ Copy(
         file_format: {},
         validation_mode: "",
         size_limit: 0,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7494,6 +7501,7 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7553,6 +7561,7 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7606,6 +7615,7 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7672,6 +7682,7 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7725,6 +7736,7 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7778,6 +7790,7 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7831,6 +7844,7 @@ Copy(
         },
         validation_mode: "",
         size_limit: 0,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7890,6 +7904,7 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,

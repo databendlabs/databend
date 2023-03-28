@@ -930,6 +930,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 file_format: Default::default(),
                 validation_mode: Default::default(),
                 size_limit: Default::default(),
+                max_files: Default::default(),
                 max_file_size: Default::default(),
                 split_size: Default::default(),
                 single: Default::default(),
@@ -1906,6 +1907,10 @@ pub fn copy_option(i: Input) -> IResult<CopyOption> {
         map(
             rule! { SIZE_LIMIT ~ "=" ~ #literal_u64 },
             |(_, _, size_limit)| CopyOption::SizeLimit(size_limit as usize),
+        ),
+        map(
+            rule! { MAX_FILES ~ "=" ~ #literal_u64 },
+            |(_, _, max_files)| CopyOption::MaxFiles(max_files as usize),
         ),
         map(
             rule! { MAX_FILE_SIZE ~ "=" ~ #literal_u64 },

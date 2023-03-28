@@ -232,7 +232,7 @@ impl InsertInterpreter {
             files_to_copy: None,
         };
 
-        let all_source_files = StageTable::list_files(&stage_table_info).await?;
+        let all_source_files = StageTable::list_files(&stage_table_info, None).await?;
 
         info!(
             "insert: read all stage attachment files finished: {}, elapsed:{}",

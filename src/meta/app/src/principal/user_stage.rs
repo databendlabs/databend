@@ -445,6 +445,7 @@ impl FromStr for OnErrorMode {
 pub struct CopyOptions {
     pub on_error: OnErrorMode,
     pub size_limit: usize,
+    pub max_files: usize,
     pub split_size: usize,
     pub purge: bool,
     pub single: bool,
@@ -465,6 +466,10 @@ impl CopyOptions {
                 "size_limit" => {
                     let size_limit = usize::from_str(v)?;
                     self.size_limit = size_limit;
+                }
+                "max_files" => {
+                    let max_files = usize::from_str(v)?;
+                    self.max_files = max_files;
                 }
                 "split_size" => {
                     let split_size = usize::from_str(v)?;

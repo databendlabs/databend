@@ -69,6 +69,7 @@ fn test_decode_v30_user_stage() -> anyhow::Result<()> {
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(3141),
             size_limit: 1038,
+            max_files: 0,
             split_size: 0,
             purge: true,
             single: false,
