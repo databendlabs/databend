@@ -549,9 +549,9 @@ impl TableContext for QueryContext {
                 if file.status == StageFileStatus::NeedCopy {
                     let file = StageFileInfo {
                         path: file.path.clone(),
-                        size: file.size.clone(),
+                        size: file.size,
                         md5: file.md5.clone(),
-                        last_modified: file.last_modified.clone(),
+                        last_modified: file.last_modified,
                         etag: file.etag.clone(),
                         status: StageFileStatus::NeedCopy,
                         creator: file.creator.clone(),
