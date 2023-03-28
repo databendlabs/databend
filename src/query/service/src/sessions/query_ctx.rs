@@ -547,10 +547,6 @@ impl TableContext for QueryContext {
                     }
                 }
                 if file.status == StageFileStatus::NeedCopy {
-                    if limit == max_files {
-                        return Ok(results);
-                    }
-                    limit += 1;
                     let file = StageFileInfo {
                         path: file.path.clone(),
                         size: file.size.clone(),
@@ -561,6 +557,10 @@ impl TableContext for QueryContext {
                         creator: file.creator.clone(),
                     };
                     results.push(file);
+                    limit += 1;
+                    if limit == max_files {
+                        return Ok(results);
+                    }
                 }
             }
         }
