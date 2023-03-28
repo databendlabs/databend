@@ -715,6 +715,7 @@ impl PipelineBuilder {
         self.build_pipeline(&window.input)?;
 
         let input_schema = window.input.output_schema()?;
+        // dbg!("build window:", input_schema.clone());
 
         if !window.order_by.is_empty() {
             let old_output_len = self.main_pipeline.output_len();

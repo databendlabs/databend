@@ -138,9 +138,7 @@ impl Binder {
                 .await?;
         }
 
-        self.analyze_window_select(&mut from_context, &mut select_list)?;
-
-        self.analyze_aggregate_select(&mut from_context, &mut select_list)?;
+        self.analyze_aggregate_and_window_select(&mut from_context, &mut select_list)?;
 
         // `analyze_projection` should behind `analyze_aggregate_select` because `analyze_aggregate_select` will rewrite `grouping`.
         let (mut scalar_items, projections) = self.analyze_projection(&select_list)?;

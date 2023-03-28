@@ -64,6 +64,7 @@ impl TableScan {
             let data_type = DataType::from(orig_field.data_type());
             fields.push(DataField::new(&id.to_string(), data_type));
         }
+        // dbg!("table scan output schema:", fields.clone());
         Ok(DataSchemaRefExt::create(fields))
     }
 }
@@ -130,12 +131,14 @@ pub struct EvalScalar {
 impl EvalScalar {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
+        // dbg!("eval input schema:", input_schema.clone());
         let mut fields = input_schema.fields().clone();
         for (expr, index) in self.exprs.iter() {
             let name = index.to_string();
             let data_type = expr.as_expr(&BUILTIN_FUNCTIONS).data_type().clone();
             fields.push(DataField::new(&name, data_type));
         }
+        // dbg!("eval output schema:", fields.clone());
         Ok(DataSchemaRefExt::create(fields))
     }
 }
@@ -296,6 +299,7 @@ pub struct Window {
 impl Window {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
+        // dbg!(input_schema.clone());
         let mut fields = Vec::with_capacity(input_schema.fields().len() + 1);
         fields.extend_from_slice(input_schema.fields());
         fields.push(DataField::new(
