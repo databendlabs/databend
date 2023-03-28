@@ -356,6 +356,15 @@ impl<'a> Binder {
             }
 
             // share statements
+            Statement::CreateShareEndpoint(stmt) => {
+                self.bind_create_share_endpoint(stmt).await?
+            }
+                        Statement::ShowShareEndpoint(stmt) => {
+                self.bind_show_share_endpoint(stmt).await?
+            }
+                                    Statement::DropShareEndpoint(stmt) => {
+                self.bind_drop_share_endpoint(stmt).await?
+            }
             Statement::CreateShare(stmt) => {
                 self.bind_create_share(stmt).await?
             }

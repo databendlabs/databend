@@ -44,7 +44,7 @@ impl SyncSystemTable for SettingsTable {
     }
 
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let settings = ctx.get_settings().get_setting_values();
+        let settings = ctx.get_settings();
 
         let mut names: Vec<String> = vec![];
         let mut values: Vec<String> = vec![];
@@ -52,19 +52,19 @@ impl SyncSystemTable for SettingsTable {
         let mut levels: Vec<String> = vec![];
         let mut descs: Vec<String> = vec![];
         let mut types: Vec<String> = vec![];
-        for vals in settings {
+        for item in settings.into_iter() {
             // Name.
-            names.push(vals.0);
+            names.push(item.name);
             // Value.
-            values.push(escape(format!("{:?}", vals.1).as_str()).to_string());
+            values.push(escape(format!("{:?}", item.user_value).as_str()).to_string());
             // Default Value.
-            defaults.push(escape(format!("{:?}", vals.2).as_str()).to_string());
+            defaults.push(escape(format!("{:?}", item.default_value).as_str()).to_string());
             // Scope level.
-            levels.push(vals.3);
+            levels.push(format!("{:?}", item.level));
             // Desc.
-            descs.push(vals.4);
+            descs.push(item.desc.to_string());
 
-            let typename = match vals.2 {
+            let typename = match item.user_value {
                 UserSettingValue::UInt64(_) => "UInt64",
                 UserSettingValue::String(_) => "String",
             };

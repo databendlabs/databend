@@ -36,12 +36,12 @@ pub struct JwtAuthenticator {
     key_stores: Vec<jwk::JwkKeyStore>,
 }
 
-#[derive(Default, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct EnsureUser {
     pub roles: Option<Vec<String>>,
 }
 
-#[derive(Default, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct CustomClaims {
     pub tenant_id: Option<String>,
     pub role: Option<String>,

@@ -62,27 +62,18 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ steps.metadata.outputs.head_sha }}
           run_id: ${{ steps.metadata.outputs.run_id }}
-          name: 'Benchmark Local / hits'
+          name: 'Local / hits'
           status: queued
           title: "Benchmark Local for hits"
           summary: "status: **queued**"
+      # TODO: enable tpch benchmark for local
       - uses: ./.github/actions/create_check_status
         if: steps.metadata.outputs.source == 'pr'
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ steps.metadata.outputs.head_sha }}
           run_id: ${{ steps.metadata.outputs.run_id }}
-          name: 'Benchmark Local / tpch'
-          status: queued
-          title: "Benchmark Local for tpch"
-          summary: "status: **queued**"
-      - uses: ./.github/actions/create_check_status
-        if: steps.metadata.outputs.source == 'pr'
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          sha: ${{ steps.metadata.outputs.head_sha }}
-          run_id: ${{ steps.metadata.outputs.run_id }}
-          name: 'Benchmark Cloud / hits(Medium)'
+          name: 'Cloud / hits(Medium)'
           status: queued
           title: "Benchmark Cloud for hits with Medium warehouse"
           summary: "status: **queued**"
@@ -92,7 +83,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ steps.metadata.outputs.head_sha }}
           run_id: ${{ steps.metadata.outputs.run_id }}
-          name: 'Benchmark Cloud / tpch(Medium)'
+          name: 'Cloud / tpch(Medium)'
           status: queued
           title: "Benchmark Cloud for tpch with Medium warehouse"
           summary: "status: **queued**"
@@ -102,7 +93,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ steps.metadata.outputs.head_sha }}
           run_id: ${{ steps.metadata.outputs.run_id }}
-          name: 'Benchmark Cloud / hits(Large)'
+          name: 'Cloud / hits(Large)'
           status: queued
           title: "Benchmark Cloud for hits with Large warehouse"
           summary: "status: **queued**"
@@ -112,20 +103,22 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ steps.metadata.outputs.head_sha }}
           run_id: ${{ steps.metadata.outputs.run_id }}
-          name: 'Benchmark Cloud / tpch(Large)'
+          name: 'Cloud / tpch(Large)'
           status: queued
           title: "Benchmark Cloud for tpch with Large warehouse"
           summary: "status: **queued**"
 
   local:
     needs: metadata
-    timeout-minutes: 30
+    timeout-minutes: 60
     runs-on: [self-hosted, X64, Linux, perf]
     strategy:
       matrix:
         dataset:
           - hits
           # - tpch
+      fail-fast: true
+      max-parallel: 1
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup_bendsql
@@ -161,12 +154,13 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ needs.metadata.outputs.head_sha }}
-          run_id: ${{ steps.metadata.outputs.run_id }}
-          name: 'Benchmark Local / ${{ matrix.dataset }}'
+          run_id: ${{ needs.metadata.outputs.run_id }}
+          name: 'Local / ${{ matrix.dataset }}'
           status: in_progress
           title: "Benchmark Local for ${{ matrix.dataset }}"
           summary: "status: **running**"
       - uses: ./.github/actions/benchmark_local
+        timeout-minutes: 30
         id: benchmark
         with:
           sha: ${{ needs.metadata.outputs.sha }}
@@ -180,8 +174,8 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ needs.metadata.outputs.head_sha }}
-          run_id: ${{ steps.metadata.outputs.run_id }}
-          name: 'Benchmark Local / ${{ matrix.dataset }}'
+          run_id: ${{ needs.metadata.outputs.run_id }}
+          name: 'Local / ${{ matrix.dataset }}'
           status: completed
           conclusion: ${{ job.status }}
           title: "Benchmark Local for ${{ matrix.dataset }}"
@@ -241,7 +235,7 @@ jobs:
 
   cloud:
     needs: [metadata, docker]
-    timeout-minutes: 60
+    timeout-minutes: 90
     runs-on: [self-hosted, X64, Linux, dev]
     strategy:
       matrix:
@@ -262,13 +256,14 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ needs.metadata.outputs.head_sha }}
-          run_id: ${{ steps.metadata.outputs.run_id }}
-          name: 'Benchmark Cloud / ${{ matrix.dataset }}(${{ matrix.size }})'
+          run_id: ${{ needs.metadata.outputs.run_id }}
+          name: 'Cloud / ${{ matrix.dataset }}(${{ matrix.size }})'
           status: in_progress
           title: "Benchmark Cloud for ${{ matrix.dataset }} with ${{ matrix.size }} warehouse"
           summary: "status: **running**"
       - uses: ./.github/actions/benchmark_cloud
         continue-on-error: true
+        timeout-minutes: 60
         id: benchmark
         with:
           sha: ${{ needs.metadata.outputs.sha }}
@@ -288,14 +283,15 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ needs.metadata.outputs.head_sha }}
-          run_id: ${{ steps.metadata.outputs.run_id }}
-          name: 'Benchmark Cloud / ${{ matrix.dataset }}(${{ matrix.size }})'
+          run_id: ${{ needs.metadata.outputs.run_id }}
+          name: 'Cloud / ${{ matrix.dataset }}(${{ matrix.size }})'
           status: completed
           conclusion: ${{ job.status }}
           title: "Benchmark Cloud for ${{ matrix.dataset }} with ${{ matrix.size }} warehouse"
           summary: "status: **running**"
 
   comment_on_pr:
+    name: comment
     runs-on: [self-hosted, X64, Linux, dev]
     needs: [metadata, local, cloud]
     if: needs.metadata.outputs.source == 'pr'
@@ -318,17 +314,16 @@ jobs:
       - name: Get Report Prefix
         run: |
           echo "REPORT_S3_PREFIX=${{ env.BENCHMARK_S3_PREFIX }}/pr/${{ needs.metadata.outputs.source_id }}/${{ needs.metadata.outputs.run_id }}" >> $GITHUB_ENV
-          echo "REPORT_URL_PREFIX=https://repo.databend.rs/benchmark/clickbench/pr/${{ needs.metadata.outputs.source_id }}/${{ needs.metadata.outputs.run_id }}" >> $GITHUB_ENV
       - name: Upload PR clickbench result to repo.databend.rs
         working-directory: benchmark/clickbench
         run: |
-          aws s3 sync ./results/hits/ ${{ env.REPORT_S3_PREFIX }}/ --include "*.json"
-          aws s3 sync ./results/tpch/ ${{ env.REPORT_S3_PREFIX }}/ --include "*.json"
+          aws s3 sync ./results/hits/ ${REPORT_S3_PREFIX}/ --include "*.json"
+          aws s3 sync ./results/tpch/ ${REPORT_S3_PREFIX }/ --include "*.json"
       - name: Get latest release clickbench result
         working-directory: benchmark/clickbench
         run: |
-          aws s3 sync "${{ env.BENCHMARK_S3_PREFIX }}/release/hits/latest/" ./results/hits/
-          aws s3 sync "${{ env.BENCHMARK_S3_PREFIX }}/release/tpch/latest/" ./results/tpch/
+          aws s3 sync "${BENCHMARK_S3_PREFIX}/release/hits/latest/" ./results/hits/
+          aws s3 sync "${BENCHMARK_S3_PREFIX}/release/tpch/latest/" ./results/tpch/
       - name: Generate clickbench report
         working-directory: benchmark/clickbench
         run: |
@@ -337,22 +332,21 @@ jobs:
       - name: Upload PR clickbench report to repo.databend.rs
         working-directory: benchmark/clickbench
         run: |
-          aws s3 cp ./results/hits.html ${{ env.REPORT_S3_PREFIX }}/hits.html
-          aws s3 cp ./results/tpch.html ${{ env.REPORT_S3_PREFIX }}/tpch.html
+          aws s3 cp ./results/hits.html ${REPORT_S3_PREFIX}/hits.html
+          aws s3 cp ./results/tpch.html ${REPORT_S3_PREFIX}/tpch.html
       - name: Comment on PR
         uses: everpcpc/comment-on-pr-action@v1
         with:
           number: ${{ needs.metadata.outputs.source_id }}
           token: ${{ github.token }}
           body: |
-            ![local](https://img.shields.io/static/v1?label=AWS%20EC2&message=c5.4xlarge&color=orange&logo=amazonec2)
-            ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Medium&color=blue&logo=icloud)
-            ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Large&color=blue&logo=icloud)
+            ![local](https://img.shields.io/static/v1?label=AWS%20EC2&message=c5.4xlarge&color=orange&logo=amazonec2)![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Medium&color=blue&logo=icloud)![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Large&color=blue&logo=icloud)
             ## ClickBench Report
-            * **hits**: ${{ env.REPORT_URL_PREFIX }}/hits.html
-            * **tpch**: ${{ env.REPORT_URL_PREFIX }}/tpch.html
+            * **hits**: https://repo.databend.rs/benchmark/clickbench/pr/${{ needs.metadata.outputs.source_id }}/${{ needs.metadata.outputs.run_id }}/hits.html
+            * **tpch**: https://repo.databend.rs/benchmark/clickbench/pr/${{ needs.metadata.outputs.source_id }}/${{ needs.metadata.outputs.run_id }}/tpch.html
 
   archive_for_release:
+    name: archive
     runs-on: [self-hosted, X64, Linux, dev]
     needs: [metadata, local, cloud]
     if: needs.metadata.outputs.source == 'release'

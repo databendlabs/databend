@@ -39,5 +39,5 @@ echo "Starting databend-test"
 
 # only expected to get adopted in stateful tests
 if [[ "$ALLOW_SHARING" == "true" ]]; then
-  ./databend-test $1 --mode 'standalone' --run-dir 3_stateful_sharing
+	./databend-test $1 --mode 'standalone' --run-dir 3_stateful_sharing
 fi

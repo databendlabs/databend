@@ -875,7 +875,7 @@ impl PipelineBuilder {
                 let transform = TransformRightJoin::try_create(
                     input,
                     output,
-                    RightJoinCompactor::create(state.clone()),
+                    RightJoinCompactor::create(state.clone(), join.non_equi_conditions.is_empty()),
                 )?;
 
                 if self.enable_profiling {
@@ -896,7 +896,11 @@ impl PipelineBuilder {
                 let transform = TransformRightSemiAntiJoin::try_create(
                     input,
                     output,
-                    RightSemiAntiJoinCompactor::create(state.clone()),
+                    RightSemiAntiJoinCompactor::create(
+                        state.clone(),
+                        join.non_equi_conditions.is_empty()
+                            && join.join_type == JoinType::RightAnti,
+                    ),
                 )?;
 
                 if self.enable_profiling {

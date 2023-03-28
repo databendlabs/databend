@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -24,6 +25,7 @@ use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserPrivilegeType;
+use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_users::RoleCacheManager;
 use common_users::BUILTIN_ROLE_PUBLIC;
@@ -124,7 +126,7 @@ impl Session {
         let config = GlobalConfig::instance();
         let session = self.clone();
         let cluster = ClusterDiscovery::instance().discover(&config).await?;
-        let shared = QueryContextShared::try_create(&config, session, cluster)?;
+        let shared = QueryContextShared::try_create(session, cluster)?;
 
         self.session_ctx
             .set_query_context_shared(Arc::downgrade(&shared));
@@ -133,7 +135,7 @@ impl Session {
 
     // only used for values and mysql output
     pub fn get_format_settings(&self) -> Result<FormatSettings> {
-        let settings = &self.session_ctx.get_settings();
+        let settings = self.session_ctx.get_settings();
         let tz = settings.get_timezone()?;
         let timezone = tz.parse::<Tz>().map_err(|_| {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
@@ -325,12 +327,12 @@ impl Session {
         self.session_ctx.get_settings()
     }
 
-    pub fn get_changed_settings(self: &Arc<Self>) -> Arc<Settings> {
+    pub fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
         self.session_ctx.get_changed_settings()
     }
 
-    pub fn apply_changed_settings(self: &Arc<Self>, changed_settings: Arc<Settings>) -> Result<()> {
-        self.session_ctx.apply_changed_settings(changed_settings)
+    pub fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
+        self.session_ctx.apply_changed_settings(changes)
     }
 
     pub fn get_memory_usage(self: &Arc<Self>) -> usize {

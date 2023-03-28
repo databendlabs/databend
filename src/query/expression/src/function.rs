@@ -43,6 +43,18 @@ use crate::Expr;
 use crate::FunctionDomain;
 use crate::Scalar;
 
+pub type AutoCastRules<'a> = &'a [(DataType, DataType)];
+/// A function to build function depending on the const parameters and the type of arguments (before coercion).
+///
+/// The first argument is the const parameters and the second argument is the types of arguments.
+pub type FunctionFactory =
+    Box<dyn Fn(&[usize], &[DataType]) -> Option<Arc<Function>> + Send + Sync + 'static>;
+
+pub struct Function {
+    pub signature: FunctionSignature,
+    pub eval: FunctionEval,
+}
+
 #[derive(Debug, Clone)]
 pub struct FunctionSignature {
     pub name: String,
@@ -50,7 +62,24 @@ pub struct FunctionSignature {
     pub return_type: DataType,
 }
 
-pub type AutoCastRules<'a> = &'a [(DataType, DataType)];
+#[derive(EnumAsInner)]
+#[allow(clippy::type_complexity)]
+pub enum FunctionEval {
+    /// Scalar function that returns a single value.
+    Scalar {
+        /// Given the domains of the arguments, return the domain of the output value.
+        calc_domain: Box<dyn Fn(&[Domain]) -> FunctionDomain<AnyType> + Send + Sync>,
+        /// Given a set of arguments, return a single value.
+        /// The result must be in the same length as the input arguments if its a column.
+        eval: Box<dyn Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> + Send + Sync>,
+    },
+    /// Set returning function that returns a series of values.
+    SRF {
+        /// Given a set of arguments, return a series of chunks of result and the repeat time of each chunk.
+        eval:
+            Box<dyn Fn(&[ValueRef<AnyType>], usize) -> Vec<(Value<AnyType>, usize)> + Send + Sync>,
+    },
+}
 
 #[derive(Clone, Copy, Default)]
 pub struct FunctionContext {
@@ -70,62 +99,8 @@ pub struct EvalContext<'a> {
     pub errors: Option<(MutableBitmap, String)>,
 }
 
-impl<'a> EvalContext<'a> {
-    #[inline]
-    pub fn set_error(&mut self, row: usize, error_msg: impl Into<String>) {
-        // If the row is NULL, we don't need to set error.
-        if self
-            .validity
-            .as_ref()
-            .map(|b| !b.get_bit(row))
-            .unwrap_or(false)
-        {
-            return;
-        }
-
-        match self.errors.as_mut() {
-            Some((valids, _)) => {
-                valids.set(row, false);
-            }
-            None => {
-                let mut valids = constant_bitmap(true, self.num_rows.max(1));
-                valids.set(row, false);
-                self.errors = Some((valids, error_msg.into()));
-            }
-        }
-    }
-
-    pub fn render_error(&self, span: Span, args: &[Value<AnyType>], func_name: &str) -> Result<()> {
-        match &self.errors {
-            Some((valids, error)) => {
-                let first_error_row = valids
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, valid)| !valid)
-                    .take(1)
-                    .next()
-                    .unwrap()
-                    .0;
-                let args = args
-                    .iter()
-                    .map(|arg| {
-                        let arg_ref = arg.as_ref();
-                        arg_ref.index(first_error_row).unwrap().to_string()
-                    })
-                    .join(", ");
-
-                Err(ErrorCode::Internal(format!(
-                    "{error} while evaluating function `{func_name}({args})`"
-                ))
-                .set_span(span))
-            }
-            None => Ok(()),
-        }
-    }
-}
-
-/// `FunctionID` is a unique identifier for a function. It's used to construct
-/// the exactly same function from the remote execution nodes.
+/// `FunctionID` is a unique identifier for a function in the registry. It's used to
+/// construct the exactly same function in the remote execution nodes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FunctionID {
     Builtin {
@@ -140,22 +115,22 @@ pub enum FunctionID {
     },
 }
 
-#[derive(EnumAsInner)]
-#[allow(clippy::type_complexity)]
-pub enum FunctionEval {
-    Scalar {
-        calc_domain: Box<dyn Fn(&[Domain]) -> FunctionDomain<AnyType> + Send + Sync>,
-        eval: Box<dyn Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> + Send + Sync>,
-    },
-    SRF {
-        eval:
-            Box<dyn Fn(&[ValueRef<AnyType>], usize) -> Vec<(Value<AnyType>, usize)> + Send + Sync>,
-    },
-}
+#[derive(Default)]
+pub struct FunctionRegistry {
+    pub funcs: HashMap<String, Vec<(Arc<Function>, usize)>>,
+    pub factories: HashMap<String, Vec<(FunctionFactory, usize)>>,
 
-pub struct Function {
-    pub signature: FunctionSignature,
-    pub eval: FunctionEval,
+    /// Aliases map from alias function name to original function name.
+    pub aliases: HashMap<String, String>,
+
+    /// Default cast rules for all functions.
+    pub default_cast_rules: Vec<(DataType, DataType)>,
+    /// Cast rules for specific functions, excluding the default cast rules.
+    pub additional_cast_rules: HashMap<String, Vec<(DataType, DataType)>>,
+    /// The auto rules that should use TRY_CAST instead of CAST.
+    pub auto_try_cast_rules: Vec<(DataType, DataType)>,
+
+    pub properties: HashMap<String, FunctionProperty>,
 }
 
 impl Function {
@@ -178,30 +153,6 @@ impl Function {
             },
         }
     }
-}
-
-/// A function to build function depending on the const parameters and the type of arguments (before coercion).
-///
-/// The first argument is the const parameters and the second argument is the types of arguments.
-pub type FunctionFactory =
-    Box<dyn Fn(&[usize], &[DataType]) -> Option<Arc<Function>> + Send + Sync + 'static>;
-
-#[derive(Default)]
-pub struct FunctionRegistry {
-    pub funcs: HashMap<String, Vec<(Arc<Function>, usize)>>,
-    pub factories: HashMap<String, Vec<(FunctionFactory, usize)>>,
-
-    /// Aliases map from alias function name to original function name.
-    pub aliases: HashMap<String, String>,
-
-    /// Default cast rules for all functions.
-    pub default_cast_rules: Vec<(DataType, DataType)>,
-    /// Cast rules for specific functions, excluding the default cast rules.
-    pub additional_cast_rules: HashMap<String, Vec<(DataType, DataType)>>,
-    /// The auto rules that should use TRY_CAST instead of CAST.
-    pub auto_try_cast_rules: Vec<(DataType, DataType)>,
-
-    pub properties: HashMap<String, FunctionProperty>,
 }
 
 impl FunctionRegistry {
@@ -314,8 +265,18 @@ impl FunctionRegistry {
             .any(|(src_ty, dest_ty)| arg_type == src_ty && sig_type == dest_ty)
     }
 
-    pub fn get_property(&self, func_name: &str) -> FunctionProperty {
-        self.properties.get(func_name).cloned().unwrap_or_default()
+    pub fn get_property(&self, func_name: &str) -> Option<FunctionProperty> {
+        let func_name = func_name.to_lowercase();
+        if self.contains(&func_name) {
+            Some(
+                self.properties
+                    .get(&func_name.to_lowercase())
+                    .cloned()
+                    .unwrap_or_default(),
+            )
+        } else {
+            None
+        }
     }
 
     pub fn register_function(&mut self, func: Function) {
@@ -376,6 +337,17 @@ impl FunctionRegistry {
             + self.factories.get(name).map(|f| f.len()).unwrap_or(0)
     }
 
+    pub fn all_function_names(&self) -> Vec<String> {
+        self.aliases
+            .keys()
+            .chain(self.funcs.keys())
+            .chain(self.factories.keys())
+            .map(|s| s.to_string())
+            .sorted()
+            .dedup()
+            .collect()
+    }
+
     pub fn check_ambiguity(&self) {
         for (name, funcs) in &self.funcs {
             let auto_cast_rules = self.get_auto_cast_rules(name);
@@ -433,6 +405,60 @@ impl FunctionID {
         match self {
             FunctionID::Builtin { name, .. } => name,
             FunctionID::Factory { name, .. } => name,
+        }
+    }
+}
+
+impl<'a> EvalContext<'a> {
+    #[inline]
+    pub fn set_error(&mut self, row: usize, error_msg: impl Into<String>) {
+        // If the row is NULL, we don't need to set error.
+        if self
+            .validity
+            .as_ref()
+            .map(|b| !b.get_bit(row))
+            .unwrap_or(false)
+        {
+            return;
+        }
+
+        match self.errors.as_mut() {
+            Some((valids, _)) => {
+                valids.set(row, false);
+            }
+            None => {
+                let mut valids = constant_bitmap(true, self.num_rows.max(1));
+                valids.set(row, false);
+                self.errors = Some((valids, error_msg.into()));
+            }
+        }
+    }
+
+    pub fn render_error(&self, span: Span, args: &[Value<AnyType>], func_name: &str) -> Result<()> {
+        match &self.errors {
+            Some((valids, error)) => {
+                let first_error_row = valids
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, valid)| !valid)
+                    .take(1)
+                    .next()
+                    .unwrap()
+                    .0;
+                let args = args
+                    .iter()
+                    .map(|arg| {
+                        let arg_ref = arg.as_ref();
+                        arg_ref.index(first_error_row).unwrap().to_string()
+                    })
+                    .join(", ");
+
+                Err(ErrorCode::Internal(format!(
+                    "{error} while evaluating function `{func_name}({args})`"
+                ))
+                .set_span(span))
+            }
+            None => Ok(()),
         }
     }
 }

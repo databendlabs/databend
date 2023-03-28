@@ -332,25 +332,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
             }
         },
     );
-    let table_function = map(
-        rule! {
-            #ident ~ "(" ~ #comma_separated_list0(table_function_param) ~ ")" ~ #table_alias?
-        },
-        |(name, _, params, _, alias)| TableReferenceElement::TableFunction {
-            name,
-            params,
-            alias,
-        },
-    );
-    let subquery = map(
-        rule! {
-            ( #parenthesized_query | #query ) ~ #table_alias?
-        },
-        |(subquery, alias)| TableReferenceElement::Subquery {
-            subquery: Box::new(subquery),
-            alias,
-        },
-    );
+
     let join = map(
         rule! {
             NATURAL? ~ #join_operator? ~ JOIN
@@ -372,6 +354,27 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         },
         |(_, _, idents, _)| TableReferenceElement::JoinCondition(JoinCondition::Using(idents)),
     );
+
+    let table_function = map(
+        rule! {
+            #function_name ~ "(" ~ #comma_separated_list0(table_function_param) ~ ")" ~ #table_alias?
+        },
+        |(name, _, params, _, alias)| TableReferenceElement::TableFunction {
+            name,
+            params,
+            alias,
+        },
+    );
+    let subquery = map(
+        rule! {
+            ( #parenthesized_query | #query ) ~ #table_alias?
+        },
+        |(subquery, alias)| TableReferenceElement::Subquery {
+            subquery: Box::new(subquery),
+            alias,
+        },
+    );
+
     let group = map(
         rule! {
            "(" ~ #table_reference ~ ^")"
@@ -417,12 +420,12 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     let (rest, (span, elem)) = consumed(rule! {
         #subquery
         | #aliased_stage
-        | #table_function
-        | #aliased_table
         | #group
         | #join
         | #join_condition_on
         | #join_condition_using
+        | #table_function
+        | #aliased_table
     })(i)?;
     Ok((rest, WithSpan { span, elem }))
 }

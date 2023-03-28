@@ -23,12 +23,12 @@ use std::time::SystemTime;
 use common_base::base::Progress;
 use common_base::runtime::Runtime;
 use common_catalog::table_context::StageAttachment;
-use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
+use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
@@ -36,7 +36,6 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
 
-use crate::auth::AuthMgr;
 use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
@@ -71,7 +70,6 @@ pub struct QueryContextShared {
     pub(in crate::sessions) running_query_kind: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) aborting: Arc<AtomicBool>,
     pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
-    pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
     pub(in crate::sessions) affect: Arc<Mutex<Option<QueryAffect>>>,
     pub(in crate::sessions) catalog_manager: Arc<CatalogManager>,
     pub(in crate::sessions) data_operator: DataOperator,
@@ -89,7 +87,6 @@ pub struct QueryContextShared {
 
 impl QueryContextShared {
     pub fn try_create(
-        config: &InnerConfig,
         session: Arc<Session>,
         cluster_cache: Arc<Cluster>,
     ) -> Result<Arc<QueryContextShared>> {
@@ -108,7 +105,6 @@ impl QueryContextShared {
             running_query_kind: Arc::new(RwLock::new(None)),
             aborting: Arc::new(AtomicBool::new(false)),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
-            auth_manager: AuthMgr::create(config),
             affect: Arc::new(Mutex::new(None)),
             executor: Arc::new(RwLock::new(Weak::new())),
             precommit_blocks: Arc::new(RwLock::new(vec![])),
@@ -195,20 +191,16 @@ impl QueryContextShared {
         self.session.get_current_tenant()
     }
 
-    pub fn get_auth_manager(&self) -> Arc<AuthMgr> {
-        self.auth_manager.clone()
-    }
-
     pub fn get_settings(&self) -> Arc<Settings> {
         self.session.get_settings()
     }
 
-    pub fn get_changed_settings(&self) -> Arc<Settings> {
+    pub fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
         self.session.get_changed_settings()
     }
 
-    pub fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
-        self.session.apply_changed_settings(changed_settings)
+    pub fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
+        self.session.apply_changed_settings(changes)
     }
 
     pub async fn get_table(

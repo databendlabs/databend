@@ -57,6 +57,7 @@ use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::is_builtin_function;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_users::UserApiProvider;
+use simsearch::SimSearch;
 
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
@@ -584,14 +585,49 @@ impl<'a> TypeChecker<'a> {
                 if !is_builtin_function(func_name)
                     && !Self::all_rewritable_scalar_function().contains(&func_name)
                 {
-                    return self.resolve_udf(*span, func_name, args).await;
+                    if let Some(udf) = self.resolve_udf(*span, func_name, args).await? {
+                        return Ok(udf);
+                    } else {
+                        // Function not found, try to find and suggest similar function name.
+                        let all_funcs = BUILTIN_FUNCTIONS
+                            .all_function_names()
+                            .into_iter()
+                            .chain(AggregateFunctionFactory::instance().registered_names())
+                            .chain(
+                                Self::all_rewritable_scalar_function()
+                                    .iter()
+                                    .cloned()
+                                    .map(str::to_string),
+                            );
+                        let mut engine: SimSearch<String> = SimSearch::new();
+                        for func_name in all_funcs {
+                            engine.insert(func_name.clone(), &func_name);
+                        }
+                        let possible_funcs = engine
+                            .search(func_name)
+                            .iter()
+                            .map(|name| format!("'{name}'"))
+                            .collect::<Vec<_>>();
+                        if possible_funcs.is_empty() {
+                            return Err(ErrorCode::UnknownFunction(format!(
+                                "no function matches the given name: {func_name}"
+                            ))
+                            .set_span(*span));
+                        } else {
+                            return Err(ErrorCode::UnknownFunction(format!(
+                                "no function matches the given name: '{func_name}', do you mean {}?",
+                                possible_funcs.join(", ")
+                            ))
+                            .set_span(*span));
+                        }
+                    }
                 }
 
                 let args: Vec<&Expr> = args.iter().collect();
 
+                // Check assumptions if it is a set returning function
                 if BUILTIN_FUNCTIONS
-                    .properties
-                    .get(&name.name.to_lowercase())
+                    .get_property(&name.name)
                     .map(|property| property.kind == FunctionKind::SRF)
                     .unwrap_or(false)
                 {
@@ -1813,47 +1849,48 @@ impl<'a> TypeChecker<'a> {
         span: Span,
         func_name: &str,
         arguments: &[Expr],
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
+    ) -> Result<Option<Box<(ScalarExpr, DataType)>>> {
         let udf = UserApiProvider::instance()
             .get_udf(self.ctx.get_tenant().as_str(), func_name)
             .await;
-        if let Ok(udf) = udf {
-            let parameters = udf.parameters;
-            if parameters.len() != arguments.len() {
-                return Err(ErrorCode::SyntaxException(format!(
-                    "Require {} parameters, but got: {}",
-                    parameters.len(),
-                    arguments.len()
-                ))
-                .set_span(span));
-            }
-            let settings = self.ctx.get_settings();
-            let sql_dialect = settings.get_sql_dialect()?;
-            let sql_tokens = tokenize_sql(udf.definition.as_str())?;
-            let expr = parse_expr(&sql_tokens, sql_dialect)?;
-            let mut args_map = HashMap::new();
-            arguments.iter().enumerate().for_each(|(idx, argument)| {
-                if let Some(parameter) = parameters.get(idx) {
-                    args_map.insert(parameter, (*argument).clone());
-                }
-            });
-            let udf_expr = self
-                .clone_expr_with_replacement(&expr, &|nest_expr| {
-                    if let Expr::ColumnRef { column, .. } = nest_expr {
-                        if let Some(arg) = args_map.get(&column.name) {
-                            return Ok(Some(arg.clone()));
-                        }
-                    }
-                    Ok(None)
-                })
-                .map_err(|e| e.set_span(span))?;
-            self.resolve(&udf_expr).await
+
+        let udf = if let Ok(udf) = udf {
+            udf
         } else {
-            Err(ErrorCode::UnknownFunction(format!(
-                "no function matches the given name: {func_name}"
+            return Ok(None);
+        };
+
+        let parameters = udf.parameters;
+        if parameters.len() != arguments.len() {
+            return Err(ErrorCode::SyntaxException(format!(
+                "Require {} parameters, but got: {}",
+                parameters.len(),
+                arguments.len()
             ))
-            .set_span(span))
+            .set_span(span));
         }
+        let settings = self.ctx.get_settings();
+        let sql_dialect = settings.get_sql_dialect()?;
+        let sql_tokens = tokenize_sql(udf.definition.as_str())?;
+        let expr = parse_expr(&sql_tokens, sql_dialect)?;
+        let mut args_map = HashMap::new();
+        arguments.iter().enumerate().for_each(|(idx, argument)| {
+            if let Some(parameter) = parameters.get(idx) {
+                args_map.insert(parameter, (*argument).clone());
+            }
+        });
+        let udf_expr = self
+            .clone_expr_with_replacement(&expr, &|nest_expr| {
+                if let Expr::ColumnRef { column, .. } = nest_expr {
+                    if let Some(arg) = args_map.get(&column.name) {
+                        return Ok(Some(arg.clone()));
+                    }
+                }
+                Ok(None)
+            })
+            .map_err(|e| e.set_span(span))?;
+
+        Ok(Some(self.resolve(&udf_expr).await?))
     }
 
     #[async_recursion::async_recursion]

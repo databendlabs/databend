@@ -14,22 +14,81 @@
 
 use common_ast::ast::*;
 use common_exception::Result;
+use common_meta_app::share::ShareEndpointIdent;
 use itertools::Itertools;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;
 use crate::plans::AlterShareTenantsPlan;
+use crate::plans::CreateShareEndpointPlan;
 use crate::plans::CreateSharePlan;
 use crate::plans::DescSharePlan;
+use crate::plans::DropShareEndpointPlan;
 use crate::plans::DropSharePlan;
 use crate::plans::GrantShareObjectPlan;
 use crate::plans::Plan;
 use crate::plans::RevokeShareObjectPlan;
 use crate::plans::ShowGrantTenantsOfSharePlan;
 use crate::plans::ShowObjectGrantPrivilegesPlan;
+use crate::plans::ShowShareEndpointPlan;
 use crate::plans::ShowSharesPlan;
 
 impl Binder {
+    pub(in crate::planner::binder) async fn bind_create_share_endpoint(
+        &mut self,
+        stmt: &CreateShareEndpointStmt,
+    ) -> Result<Plan> {
+        let CreateShareEndpointStmt {
+            if_not_exists,
+            endpoint,
+            url,
+            tenant,
+            args,
+            comment,
+        } = stmt;
+
+        let endpoint = normalize_identifier(endpoint, &self.name_resolution_ctx).name;
+
+        let plan = CreateShareEndpointPlan {
+            if_not_exists: *if_not_exists,
+            endpoint: ShareEndpointIdent {
+                tenant: self.ctx.get_tenant(),
+                endpoint,
+            },
+            tenant: tenant.to_string(),
+            url: url.to_string(),
+            args: args.clone(),
+            comment: comment.as_ref().cloned(),
+        };
+        Ok(Plan::CreateShareEndpoint(Box::new(plan)))
+    }
+
+    pub(in crate::planner::binder) async fn bind_show_share_endpoint(
+        &mut self,
+        _stmt: &ShowShareEndpointStmt,
+    ) -> Result<Plan> {
+        let plan = ShowShareEndpointPlan {
+            tenant: self.ctx.get_tenant(),
+        };
+        Ok(Plan::ShowShareEndpoint(Box::new(plan)))
+    }
+
+    pub(in crate::planner::binder) async fn bind_drop_share_endpoint(
+        &mut self,
+        stmt: &DropShareEndpointStmt,
+    ) -> Result<Plan> {
+        let DropShareEndpointStmt {
+            if_exists,
+            endpoint,
+        } = stmt;
+        let plan = DropShareEndpointPlan {
+            if_exists: *if_exists,
+            tenant: self.ctx.get_tenant(),
+            endpoint: endpoint.to_string(),
+        };
+        Ok(Plan::DropShareEndpoint(Box::new(plan)))
+    }
+
     pub(in crate::planner::binder) async fn bind_create_share(
         &mut self,
         stmt: &CreateShareStmt,

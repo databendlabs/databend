@@ -23,9 +23,11 @@ members = [
     "src/common/http",
     "src/common/io",
     "src/common/metrics",
+    "src/common/openai",
     "src/common/tracing",
     "src/common/storage",
     "src/common/profile",
+    "src/common/vector",
     # Query
     "src/query/ast",
     "src/query/codegen",
@@ -141,7 +143,7 @@ reqwest = { version = "0.11", default-features = false, features = [
 ] }
 
 # runtime
-tokio = { version = "1.24.2", features = ["full"] }
+tokio = { version = "1.26.0", features = ["full"] }
 
 [profile.release]
 debug = 1

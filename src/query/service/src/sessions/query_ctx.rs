@@ -50,6 +50,7 @@ use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableInfo;
+use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
@@ -64,7 +65,6 @@ use parking_lot::RwLock;
 use tracing::debug;
 
 use crate::api::DataExchangeManager;
-use crate::auth::AuthMgr;
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
@@ -157,10 +157,6 @@ impl QueryContext {
 
     pub fn get_exchange_manager(&self) -> Arc<DataExchangeManager> {
         DataExchangeManager::instance()
-    }
-
-    pub fn get_auth_manager(&self) -> Arc<AuthMgr> {
-        self.shared.get_auth_manager()
     }
 
     // Get the current session.
@@ -445,11 +441,11 @@ impl TableContext for QueryContext {
         self.shared.set_on_error_map(map);
     }
 
-    fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
-        self.shared.apply_changed_settings(changed_settings)
+    fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
+        self.shared.apply_changed_settings(changes)
     }
 
-    fn get_changed_settings(&self) -> Arc<Settings> {
+    fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
         self.shared.get_changed_settings()
     }
 

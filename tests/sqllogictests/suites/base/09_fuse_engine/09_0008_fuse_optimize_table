@@ -369,6 +369,63 @@ select segment_count, block_count from fuse_snapshot('db_09_0008', 't6') limit 2
 
 
 
+# for issue which addressed in PR #10743 (https://github.com/datafuselabs/databend/pull/10743)
+statement ok
+create table t7(c int) block_per_segment=3 row_per_block=3
+
+statement ok
+insert into t7 values(1)
+
+statement ok
+insert into t7 values(2)
+
+statement ok
+insert into t7 values(3)
+
+statement ok
+insert into t7 values(4)
+
+statement ok
+insert into t7 values(5)
+
+statement ok
+insert into t7 values(6)
+
+statement ok
+insert into t7 values(7)
+
+statement ok
+insert into t7 values(8)
+
+statement ok
+set max_threads = 2
+
+statement ok
+set max_storage_io_requests = 2
+
+statement ok
+optimize table t7 compact limit 2
+
+query I
+select c from t7 order by c
+----
+1
+2
+3
+4
+5
+6
+7
+8
+
+query II
+select segment_count, block_count from fuse_snapshot('db_09_0008', 't7') limit 2
+----
+7 7
+8 8
+
+
+
 statement ok
 DROP TABLE m
 
@@ -392,6 +449,9 @@ DROP TABLE t5
 
 statement ok
 DROP TABLE t6
+
+statement ok
+DROP TABLE t7
 
 statement ok
 DROP DATABASE db_09_0008
