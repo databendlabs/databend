@@ -3210,6 +3210,7 @@ name = "databend-query"
 version = "0.1.0"
 dependencies = [
  "aho-corasick",
+ "arrow-array",
  "arrow-cast",
  "arrow-flight",
  "arrow-ipc",
