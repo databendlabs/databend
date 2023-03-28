@@ -2,7 +2,7 @@ statement ok
 set max_threads = 8;
 
 statement ok
-set global spilling_bytes_threshold_per_proc = 1024 * 1024 * 1;
+set spilling_bytes_threshold_per_proc = 1024 * 1024 * 1;
 
 query TIFS
 SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(100000) group by number::string);
@@ -18,4 +18,4 @@ statement ok
 unset max_threads;
 
 statement ok
-set global spilling_bytes_threshold_per_proc = 0;
+set spilling_bytes_threshold_per_proc = 0;
