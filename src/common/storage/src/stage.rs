@@ -118,11 +118,6 @@ impl StageFilesInfo {
             let mut res = Vec::new();
             let mut limit: usize = 0;
             for file in files {
-                if limit == max_files {
-                    break;
-                } else {
-                    limit += 1;
-                }
                 let full_path = Path::new(&self.path)
                     .join(file)
                     .to_string_lossy()
@@ -136,7 +131,11 @@ impl StageFilesInfo {
                     )));
                 }
                 if first_only {
-                    break;
+                    return Ok(res);
+                }
+                limit += 1;
+                if limit == max_files {
+                    return Ok(res);
                 }
             }
             Ok(res)
@@ -228,12 +227,12 @@ impl StageFilesInfo {
         while let Some(obj) = list.try_next().await? {
             let meta = operator.metadata(&obj, StageFileInfo::meta_query()).await?;
             if check_file(obj.path(), meta.mode(), &pattern) {
-                if limit == max_files {
+                files.push(StageFileInfo::new(obj.path().to_string(), &meta));
+                if first_only {
                     return Ok(files);
                 }
                 limit += 1;
-                files.push(StageFileInfo::new(obj.path().to_string(), &meta));
-                if first_only {
+                if limit == max_files {
                     return Ok(files);
                 }
             }

@@ -79,6 +79,34 @@ fn try_unpack_any<T: ProstMessageExt>(message: Any) -> std::result::Result<T, St
         })
 }
 
+fn simple_flight_info<T: ProstMessageExt>(message: T) -> Response<FlightInfo> {
+    let loc = Location {
+        uri: "location_not_used".to_string(),
+    };
+
+    let buf = message.as_any().encode_to_vec().into();
+    let ticket = Ticket { ticket: buf };
+    let endpoint = FlightEndpoint {
+        ticket: Some(ticket),
+        location: vec![loc],
+    };
+    let endpoints = vec![endpoint];
+
+    let flight_desc = FlightDescriptor {
+        r#type: DescriptorType::Cmd.into(),
+        cmd: Default::default(),
+        path: vec![],
+    };
+    let info = FlightInfo {
+        schema: Default::default(),
+        flight_descriptor: Some(flight_desc),
+        endpoint: endpoints,
+        total_records: -1,
+        total_bytes: -1,
+    };
+    Response::new(info)
+}
+
 #[tonic::async_trait]
 impl FlightSqlService for FlightSqlServiceImpl {
     type FlightService = FlightSqlServiceImpl;
@@ -246,9 +274,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         _request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
         tracing::info!("get_flight_info_sql_info({query:?})");
-        Err(Status::unimplemented(
-            "get_flight_info_sql_info not implemented",
-        ))
+        Ok(simple_flight_info(query))
     }
 
     async fn get_flight_info_primary_keys(
@@ -358,7 +384,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         _request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
         tracing::info!("do_get_sql_info({query:?})");
-        Err(Status::unimplemented("do_get_sql_info not implemented"))
+        Ok(Response::new(super::SqlInfoProvider::all_info()?))
     }
 
     async fn do_get_primary_keys(
