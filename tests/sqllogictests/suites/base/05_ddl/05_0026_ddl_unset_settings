@@ -1,38 +1,38 @@
-skipif clickhouse
+onlyif mysql
 query TTTT
 SELECT name, value, default, level from system.settings where name in ('sql_dialect', 'timezone')
 ----
 sql_dialect PostgreSQL PostgreSQL SESSION
 timezone UTC UTC SESSION
 
-skipif clickhouse
+onlyif mysql
 statement ok
 SET GLOBAL sql_dialect='MySQL'
 
-skipif clickhouse
+onlyif mysql
 statement ok
 SET GLOBAL timezone='Asia/Shanghai'
 
-skipif clickhouse
+onlyif mysql
 query TTTT
 SELECT name, value, default, level from system.settings where name in ('sql_dialect', 'timezone')
 ----
 sql_dialect  MySQL  PostgreSQL  GLOBAL
 timezone  Asia/Shanghai  UTC  GLOBAL
 
-skipif clickhouse
+onlyif mysql
 statement ok
 UNSET (timezone)
 
-skipif clickhouse
+onlyif mysql
 statement error 2801
 UNSET stl_dialect
 
-skipif clickhouse
+onlyif mysql
 statement ok
 UNSET sql_dialect
 
-skipif clickhouse
+onlyif mysql
 query TTTT
 SELECT name, value, default, level from system.settings where name in ('sql_dialect', 'timezone')
 ----

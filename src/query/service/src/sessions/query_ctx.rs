@@ -50,6 +50,7 @@ use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableInfo;
+use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
@@ -440,11 +441,11 @@ impl TableContext for QueryContext {
         self.shared.set_on_error_map(map);
     }
 
-    fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
-        self.shared.apply_changed_settings(changed_settings)
+    fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
+        self.shared.apply_changed_settings(changes)
     }
 
-    fn get_changed_settings(&self) -> Arc<Settings> {
+    fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
         self.shared.get_changed_settings()
     }
 

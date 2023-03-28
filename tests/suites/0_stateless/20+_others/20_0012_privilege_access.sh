@@ -12,6 +12,9 @@ echo "create user 'test-user'@'$QUERY_MYSQL_HANDLER_HOST' IDENTIFIED BY '$TEST_U
 ## create table
 echo "create table t20_0012(c int)" | $MYSQL_CLIENT_CONNECT
 
+## show tables
+echo "show databases" | $TEST_USER_CONNECT
+
 ## insert data
 echo "insert into t20_0012 values(1),(2)" | $TEST_USER_CONNECT
 ## grant user privilege

@@ -2146,16 +2146,15 @@ name = "common-settings"
 version = "0.1.0"
 dependencies = [
  "common-ast",
- "common-base",
  "common-config",
  "common-exception",
  "common-meta-app",
  "common-meta-types",
  "common-users",
  "dashmap",
- "futures",
  "itertools",
  "num_cpus",
+ "once_cell",
  "sys-info",
  "tracing",
 ]
