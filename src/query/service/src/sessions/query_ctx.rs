@@ -499,10 +499,11 @@ impl TableContext for QueryContext {
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
-        mut files: Vec<StageFileInfo>,
+        files: Vec<StageFileInfo>,
         max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
         let tenant = self.get_tenant();
+        let mut files = files.clone();
         let catalog = self.get_catalog(catalog_name)?;
         let table = catalog
             .get_table(&tenant, database_name, table_name)
@@ -525,9 +526,6 @@ impl TableContext for QueryContext {
             copied_files.extend(resp.file_info);
             // Colored
             for mut file in chunk {
-                if limit == max_files {
-                    return Ok(results);
-                }
                 if let Some(copied_file) = copied_files.get(&file.path) {
                     match &copied_file.etag {
                         Some(copied_etag) => {
@@ -549,6 +547,9 @@ impl TableContext for QueryContext {
                     }
                 }
                 if file.status == StageFileStatus::NeedCopy {
+                    if limit == max_files {
+                        return Ok(results);
+                    }
                     limit += 1;
                     let file = StageFileInfo {
                         path: file.path.clone(),
