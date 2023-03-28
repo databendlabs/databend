@@ -200,7 +200,7 @@ jobs:
             release)
               version=${{ needs.metadata.outputs.source_id }}
               target=x86_64-unknown-linux-gnu
-              wget -P distro -qc https://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz
+              aws s3 cp s3://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz distro/ --no-progress
               tar x -C ./target/release -f ./distro/databend-${version}-${target}.tar.gz --strip-components 1 bin/
               ;;
             *)
