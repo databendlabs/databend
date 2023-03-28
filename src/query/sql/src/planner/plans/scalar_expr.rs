@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::hash::Hash;
 use std::hash::Hasher;
 
@@ -451,6 +453,16 @@ pub struct WindowFuncFrame {
     pub units: WindowFuncFrameUnits,
     pub start_bound: WindowFuncFrameBound,
     pub end_bound: WindowFuncFrameBound,
+}
+
+impl Display for WindowFuncFrame {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{:?}: {:?} ~ {:?}",
+            self.units, self.start_bound, self.end_bound
+        )
+    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]

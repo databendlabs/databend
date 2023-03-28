@@ -540,6 +540,8 @@ fn window_to_format_tree(
         .collect::<Vec<_>>()
         .join(", ");
 
+    let frame = op.frame.to_string();
+
     let agg_func = format_scalar(&metadata, &op.aggregate_function.scalar);
 
     FormatTreeNode::with_children(
@@ -550,6 +552,10 @@ fn window_to_format_tree(
         vec![
             vec![
                 FormatTreeNode::new(FormatContext::Text(format!(
+                    "aggregate function: {}",
+                    agg_func
+                ))),
+                FormatTreeNode::new(FormatContext::Text(format!(
                     "partition items: [{}]",
                     partition_by_items
                 ))),
@@ -557,10 +563,7 @@ fn window_to_format_tree(
                     "order by items: [{}]",
                     order_by_items
                 ))),
-                FormatTreeNode::new(FormatContext::Text(format!(
-                    "aggregate function: {}",
-                    agg_func
-                ))),
+                FormatTreeNode::new(FormatContext::Text(format!("frame: [{}]", frame))),
             ],
             children,
         ]

@@ -550,12 +550,15 @@ fn window_to_format_tree(
         .collect::<Result<Vec<_>>>()?
         .join(", ");
 
+    let frame = plan.window_frame.to_string();
+
     let agg_func = pretty_display_agg_desc(&plan.agg_func, metadata);
 
     let mut children = vec![
         FormatTreeNode::new(format!("aggregate function: [{agg_func}]")),
         FormatTreeNode::new(format!("partition by: [{partition_by}]")),
         FormatTreeNode::new(format!("order by: [{order_by}]")),
+        FormatTreeNode::new(format!("frame: [{frame}]")),
     ];
 
     if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
