@@ -1,0 +1,54 @@
+statement ok
+set group_by_shuffle_mode = 'before_partial';
+
+query TIFS
+EXPLAIN SELECT number FROM numbers_mt(100000) GROUP BY number;
+----
+Exchange
+├── exchange type: Merge
+└── AggregateFinal
+    ├── group by: [number]
+    ├── aggregate functions: []
+    ├── estimated rows: 100000.00
+    └── AggregatePartial
+        ├── group by: [number]
+        ├── aggregate functions: []
+        ├── estimated rows: 100000.00
+        └── Exchange
+            ├── exchange type: Hash(numbers_mt.number (#0))
+            └── TableScan
+                ├── table: default.system.numbers_mt
+                ├── read rows: 100000
+                ├── read bytes: 800000
+                ├── partitions total: 2
+                ├── partitions scanned: 2
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 100000.00
+
+
+statement ok
+set group_by_shuffle_mode = 'before_merge';
+
+query TIFS
+EXPLAIN SELECT number FROM numbers_mt(100000) GROUP BY number;
+----
+Exchange
+├── exchange type: Merge
+└── AggregateFinal
+    ├── group by: [number]
+    ├── aggregate functions: []
+    ├── estimated rows: 100000.00
+    └── Exchange
+        ├── exchange type: Hash(_group_by_key)
+        └── AggregatePartial
+            ├── group by: [number]
+            ├── aggregate functions: []
+            ├── estimated rows: 100000.00
+            └── TableScan
+                ├── table: default.system.numbers_mt
+                ├── read rows: 100000
+                ├── read bytes: 800000
+                ├── partitions total: 2
+                ├── partitions scanned: 2
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 100000.00

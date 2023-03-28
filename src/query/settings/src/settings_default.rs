@@ -228,6 +228,11 @@ impl DefaultSettings {
                     desc: "Sets the maximum amount of memory in bytes that an aggregator can use before spilling data to storage during query execution.",
                     possible_values: None,
                 }),
+                ("group_by_shuffle_mode", DefaultSettingValue {
+                    value: UserSettingValue::String(String::from("before_merge")),
+                    desc: "Group by shuffle mode, 'before_partial' is more balanced, but more data needs to exchange.",
+                    possible_values: Some(vec!["before_partial", "before_merge"]),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

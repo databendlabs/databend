@@ -491,8 +491,13 @@ impl PhysicalPlanBuilder {
                             }
                         }).collect::<Result<_>>()?;
 
+                        let settings = self.ctx.get_settings();
+                        let group_by_shuffle_mode = settings.get_group_by_shuffle_mode()?;
+
                         match input {
-                            PhysicalPlan::Exchange(PhysicalExchange { input, kind, .. }) => {
+                            PhysicalPlan::Exchange(PhysicalExchange { input, kind, .. })
+                                if group_by_shuffle_mode == "before_merge" =>
+                            {
                                 let aggregate_partial = if !agg.grouping_sets.is_empty() {
                                     let expand = AggregateExpand {
                                         plan_id: self.next_plan_id(),

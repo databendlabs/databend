@@ -1,0 +1,25 @@
+statement ok
+set group_by_shuffle_mode = 'before_partial';
+
+query TIFS
+SELECT COUNT() FROM (SELECT number FROM numbers_mt(100000) GROUP BY number);
+----
+100000
+
+query TIFS
+SELECT COUNT() FROM (SELECT number FROM numbers_mt(100000) GROUP BY number, number);
+----
+100000
+
+statement ok
+set group_by_shuffle_mode = 'before_merge';
+
+query TIFS
+SELECT COUNT() FROM (SELECT number FROM numbers_mt(100000) GROUP BY number);
+----
+100000
+
+query TIFS
+SELECT COUNT() FROM (SELECT number FROM numbers_mt(100000) GROUP BY number, number);
+----
+100000

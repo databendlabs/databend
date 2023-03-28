@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::optimizer::ColumnSet;
@@ -90,7 +91,7 @@ impl Operator for Aggregate {
 
     fn compute_required_prop_child(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
         rel_expr: &RelExpr,
         _child_index: usize,
         required: &RequiredProperty,
@@ -108,9 +109,24 @@ impl Operator for Aggregate {
                     // Scalar aggregation
                     required.distribution = Distribution::Any;
                 } else {
+                    let settings = ctx.get_settings();
+
                     // Group aggregation, enforce `Hash` distribution
-                    required.distribution =
-                        Distribution::Hash(vec![self.group_items[0].scalar.clone()]);
+                    required.distribution = match settings.get_group_by_shuffle_mode()?.as_str() {
+                        "before_partial" => Ok(Distribution::Hash(
+                            self.group_items
+                                .iter()
+                                .map(|item| item.scalar.clone())
+                                .collect(),
+                        )),
+                        "before_merge" => {
+                            Ok(Distribution::Hash(vec![self.group_items[0].scalar.clone()]))
+                        }
+                        value => Err(ErrorCode::Internal(format!(
+                            "Bad settings value group_by_shuffle_mode = {:?}",
+                            value
+                        ))),
+                    }?;
                 }
             }
 
