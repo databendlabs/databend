@@ -274,11 +274,9 @@ impl<const INCLUSIVE: bool> RangeSource<INCLUSIVE> {
     }
 }
 
-#[async_trait::async_trait]
 impl<const INCLUSIVE: bool> SyncSource for RangeSource<INCLUSIVE> {
     const NAME: &'static str = "RangeSourceTransform";
 
-    #[async_trait::unboxed_simple]
     fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.finished {
             return Ok(None);
