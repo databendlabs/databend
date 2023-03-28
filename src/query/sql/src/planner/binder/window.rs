@@ -54,6 +54,7 @@ impl Binder {
 
         let window_plan = Window {
             aggregate_function: window_info.aggregate_function.clone(),
+            aggregate_args: window_info.aggregate_arguments.clone(),
             partition_by: window_info.partition_by_items.clone(),
             order_by: window_info.order_by_items.clone(),
             frame: window_info.frame.clone(),

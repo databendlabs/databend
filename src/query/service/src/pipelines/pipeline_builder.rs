@@ -717,26 +717,28 @@ impl PipelineBuilder {
         let input_schema = window.input.output_schema()?;
         // dbg!("build window:", input_schema.clone());
 
-        if !window.order_by.is_empty() {
+        if !window.partition_by.is_empty() || !window.order_by.is_empty() {
             let old_output_len = self.main_pipeline.output_len();
-            let sort_desc = window
-                .order_by
-                .iter()
-                .map(|desc| {
-                    let offset = input_schema.index_of(&desc.order_by.to_string())?;
-                    Ok(SortColumnDescription {
-                        offset,
-                        asc: desc.asc,
-                        nulls_first: desc.nulls_first,
-                    })
+
+            let mut sort_desc =
+                Vec::with_capacity(window.partition_by.len() + window.order_by.len());
+
+            for part in &window.partition_by {
+                let offset = input_schema.index_of(&part.to_string())?;
+                sort_desc.push(SortColumnDescription {
+                    offset,
+                    asc: true,
+                    nulls_first: true,
                 })
-                .collect::<Result<Vec<_>>>()?;
+            }
 
-            let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
-
-            // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
-            if self.main_pipeline.output_len() == 1 || max_threads == 1 {
-                self.main_pipeline.resize(max_threads)?;
+            for order_desc in &window.order_by {
+                let offset = input_schema.index_of(&order_desc.order_by.to_string())?;
+                sort_desc.push(SortColumnDescription {
+                    offset,
+                    asc: order_desc.asc,
+                    nulls_first: order_desc.nulls_first,
+                })
             }
 
             self.build_sort_pipeline(input_schema.clone(), sort_desc, window.plan_id, None)?;
@@ -794,13 +796,6 @@ impl PipelineBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
-
-        // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
-        if self.main_pipeline.output_len() == 1 || max_threads == 1 {
-            self.main_pipeline.resize(max_threads)?;
-        }
-
         self.build_sort_pipeline(input_schema, sort_desc, sort.plan_id, sort.limit)
     }
 
@@ -812,6 +807,12 @@ impl PipelineBuilder {
         limit: Option<usize>,
     ) -> Result<()> {
         let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
+        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+
+        // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
+        if self.main_pipeline.output_len() == 1 || max_threads == 1 {
+            self.main_pipeline.resize(max_threads)?;
+        }
         // Sort
         self.main_pipeline.add_transform(|input, output| {
             let transform =
