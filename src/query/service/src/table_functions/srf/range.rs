@@ -44,8 +44,8 @@ use common_meta_app::schema::TableMeta;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
-use common_pipeline_sources::AsyncSource;
-use common_pipeline_sources::AsyncSourcer;
+use common_pipeline_sources::SyncSource;
+use common_pipeline_sources::SyncSourcer;
 use common_sql::validate_function_arg;
 use common_storages_factory::Table;
 use common_storages_fuse::TableContext;
@@ -263,7 +263,7 @@ impl<const INCLUSIVE: bool> RangeSource<INCLUSIVE> {
             ));
         }
 
-        AsyncSourcer::create(ctx.clone(), output, Self {
+        SyncSourcer::create(ctx.clone(), output, Self {
             current_idx: 0,
             data_type,
             start,
@@ -275,11 +275,11 @@ impl<const INCLUSIVE: bool> RangeSource<INCLUSIVE> {
 }
 
 #[async_trait::async_trait]
-impl<const INCLUSIVE: bool> AsyncSource for RangeSource<INCLUSIVE> {
+impl<const INCLUSIVE: bool> SyncSource for RangeSource<INCLUSIVE> {
     const NAME: &'static str = "RangeSourceTransform";
 
     #[async_trait::unboxed_simple]
-    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+    fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.finished {
             return Ok(None);
         }
