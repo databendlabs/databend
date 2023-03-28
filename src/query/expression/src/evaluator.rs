@@ -1038,12 +1038,13 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
                 type DomainType = NullableType<BooleanType>;
                 for arg in args {
+                    let (expr, domain) = self.fold_once(arg);
                     // A temporary hack to make `and_filters` shortcut on false.
                     // TODO(andylokandy): make it a rule in the optimizer.
                     if let Expr::Constant {
                         scalar: Scalar::Boolean(false),
                         ..
-                    } = arg
+                    } = &expr
                     {
                         return (
                             Expr::Constant {
@@ -1054,8 +1055,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                             None,
                         );
                     }
-
-                    let (expr, domain) = self.fold_once(arg);
                     args_expr.push(expr);
 
                     result_domain = result_domain.zip(domain).map(|(func_domain, domain)| {
