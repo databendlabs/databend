@@ -29,11 +29,9 @@ cat << EOF > /tmp/force_false.csv
 EOF
 
 
-aws --endpoint-url http://127.0.0.1:9900/ s3 cp /tmp/force_true.csv s3://testbucket/admin/data/csv/force_true.csv > /dev/null 2>&1
 echo "copy into test_max_files from 'fs:///tmp/force_true.csv' FILE_FORMAT = (type = CSV escape='\\\\' skip_header=1) max_files=1 force=true" | $MYSQL_CLIENT_CONNECT
 echo "select * from test_max_files order by id" | $MYSQL_CLIENT_CONNECT
 
-aws --endpoint-url http://127.0.0.1:9900/ s3 cp /tmp/force_false.csv s3://testbucket/admin/data/csv/force_false.csv > /dev/null 2>&1
 echo "copy into test_max_files from 'fs:///tmp/force_false.csv' FILE_FORMAT = (type = CSV escape='\\\\' skip_header=1) max_files=1 force=false" | $MYSQL_CLIENT_CONNECT
 echo "select * from test_max_files order by id" | $MYSQL_CLIENT_CONNECT
 
