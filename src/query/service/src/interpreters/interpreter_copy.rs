@@ -284,7 +284,8 @@ impl CopyInterpreter {
         };
 
         info!(
-            "copy: read all files finished, all:{}, need copy:{}, elapsed:{}",
+            "copy: read files with max_files={:?} finished, all:{}, need copy:{}, elapsed:{}",
+            max_files,
             num_all_files,
             need_copy_file_infos.len(),
             start.elapsed().as_secs()
