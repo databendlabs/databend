@@ -1,0 +1,39 @@
+name: Setup Rust Builder
+description: 'Prepare Rust Build Environment'
+inputs:
+  cache-key:
+    description: 'the rust cache key suffix'
+    required: false
+    default: ''
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Rust (Stable)
+      shell: bash
+      run:
+        curl https://sh.rustup.rs -sSf | sh -s -- -y
+    - name: Cache Cargo
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}${{ inputs.cache-key }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          ${{ runner.os }}-cargo
+    - name: Setup rust related environment variables
+      shell: bash
+      run: |
+        # Update rust to latest stable
+        rustup update stable
+        # Disable full debug symbol generation to speed up CI build and keep memory down
+        # "1" means line tables only, which is useful for panic tracebacks.
+        echo "RUSTFLAGS=-C debuginfo=1" >> $GITHUB_ENV
+        # Enable backtraces
+        echo "RUST_BACKTRACE=1" >> $GITHUB_ENV
+        # Enable logging
+        echo "RUST_LOG=debug" >> $GITHUB_ENV
+        # Enable sparse index
+        echo "CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse" >> $GITHUB_ENV

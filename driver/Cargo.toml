@@ -11,8 +11,7 @@ repository = "https://github.com/databendcloud/databend-client"
 [dependencies]
 anyhow = "1.0.70"
 databend-client = { path = "../core" }
-enum-as-inner = "0.5"
+chrono = { version = "0.4.24", default-features = false, features = ["clock"] }
 
 [dev-dependencies]
-chrono = { version = "0.4.24", default-features = false, features = ["clock"] }
 tokio = { version = "1.26.0", features = ["macros"] }

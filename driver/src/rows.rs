@@ -17,7 +17,7 @@ use anyhow::{anyhow, Error, Result};
 use crate::schema::DataType;
 use crate::value::Value;
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Row(Vec<Value>);
 
 impl TryFrom<(Vec<DataType>, Vec<String>)> for Row {
@@ -79,8 +79,9 @@ macro_rules! impl_tuple_from_row {
                                 .next()
                                 .unwrap(); // vals_iter size is checked before this code is reached,
                                            // so it is safe to unwrap
+                            let t = col_value.get_type();
                             $Ti::try_from(col_value)
-                                .map_err(|_| anyhow!("failed converting column {} to type {}", col_ix, std::any::type_name::<$Ti>()))?
+                                .map_err(|_| anyhow!("failed converting column {} from type({:?}) to type({})", col_ix, t, std::any::type_name::<$Ti>()))?
                         }
                     ,)+
                 ))
