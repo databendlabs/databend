@@ -55,8 +55,8 @@ runs:
       shell: bash
       run: cargo build --target ${{ inputs.target }} --release
 
-    - shell: bash
-      run: readelf -p .comment ./target/${{ inputs.target }}/${{ inputs.profile }}/databend-query
+    # - shell: bash
+    #   run: readelf -p .comment ./target/${{ inputs.target }}/${{ inputs.profile }}/databend-query
 
     - name: Copyobj zlib for gnu binaries
       if: inputs.profile == 'release' && endsWith(inputs.target, '-gnu')

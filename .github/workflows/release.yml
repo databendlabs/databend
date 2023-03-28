@@ -18,6 +18,7 @@ permissions:
   id-token: write
   pull-requests: write
   checks: write
+  statuses: write
   contents: write
 
 jobs:
@@ -519,7 +520,6 @@ jobs:
       - docker_separate
       - distribution
       - deb
-      - sha256sums
     steps:
       - uses: actions/checkout@v3
       - run: |
