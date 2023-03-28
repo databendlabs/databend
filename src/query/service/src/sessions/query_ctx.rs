@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::min;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -50,6 +51,7 @@ use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableInfo;
+use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
@@ -440,11 +442,11 @@ impl TableContext for QueryContext {
         self.shared.set_on_error_map(map);
     }
 
-    fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
-        self.shared.apply_changed_settings(changed_settings)
+    fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
+        self.shared.apply_changed_settings(changes)
     }
 
-    fn get_changed_settings(&self) -> Arc<Settings> {
+    fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
         self.shared.get_changed_settings()
     }
 
@@ -498,48 +500,61 @@ impl TableContext for QueryContext {
         database_name: &str,
         table_name: &str,
         files: Vec<StageFileInfo>,
+        max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
         let tenant = self.get_tenant();
+        let files = files.clone();
         let catalog = self.get_catalog(catalog_name)?;
         let table = catalog
             .get_table(&tenant, database_name, table_name)
             .await?;
         let table_id = table.get_id();
 
+        let mut limit: usize = 0;
+        let max_files = max_files.unwrap_or(MAX_QUERY_COPIED_FILES_NUM);
+        let max_copied_files = min(MAX_QUERY_COPIED_FILES_NUM, max_files);
         let mut copied_files = BTreeMap::new();
-        for chunk in files.chunks(MAX_QUERY_COPIED_FILES_NUM) {
+
+        let mut results = Vec::with_capacity(files.len());
+
+        for chunk in files.chunks(max_copied_files) {
             let files = chunk.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
             let req = GetTableCopiedFileReq { table_id, files };
             let resp = catalog
                 .get_table_copied_file_info(&tenant, database_name, req)
                 .await?;
             copied_files.extend(resp.file_info);
-        }
-
-        // Colored.
-        let mut results = Vec::with_capacity(files.len());
-        for mut file in files {
-            if let Some(copied_file) = copied_files.get(&file.path) {
-                match &copied_file.etag {
-                    Some(copied_etag) => {
-                        if let Some(file_etag) = &file.etag {
-                            // Check the 7 bytes etag prefix.
-                            if file_etag.starts_with(copied_etag) {
+            // Colored
+            for file in chunk {
+                let mut file = file.clone();
+                if let Some(copied_file) = copied_files.get(&file.path) {
+                    match &copied_file.etag {
+                        Some(copied_etag) => {
+                            if let Some(file_etag) = &file.etag {
+                                // Check the 7 bytes etag prefix.
+                                if file_etag.starts_with(copied_etag) {
+                                    file.status = StageFileStatus::AlreadyCopied;
+                                }
+                            }
+                        }
+                        None => {
+                            // etag is none, compare with content_length and last_modified.
+                            if copied_file.content_length == file.size
+                                && copied_file.last_modified == Some(file.last_modified)
+                            {
                                 file.status = StageFileStatus::AlreadyCopied;
                             }
                         }
                     }
-                    None => {
-                        // etag is none, compare with content_length and last_modified.
-                        if copied_file.content_length == file.size
-                            && copied_file.last_modified == Some(file.last_modified)
-                        {
-                            file.status = StageFileStatus::AlreadyCopied;
-                        }
+                }
+                if file.status == StageFileStatus::NeedCopy {
+                    results.push(file);
+                    limit += 1;
+                    if limit == max_files {
+                        return Ok(results);
                     }
                 }
             }
-            results.push(file);
         }
         Ok(results)
     }

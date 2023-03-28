@@ -11,8 +11,8 @@ checking that after flashback to the first snapshot, there should be 2 rows
 checking that after flashback to the first snapshot, there should be only 1 snapshot visible
 1
 flash back to snapshot id that not exist should report error 1105
-ERROR 1105 (HY000) at line 1: Code: 2013, displayText = No historical data found at given point.
+ERROR 1105 (HY000) at line 1: Code: 2013, Text = No historical data found at given point.
 flash back to timestamp that not exist should report error 1105
-ERROR 1105 (HY000) at line 1: Code: 2013, displayText = No historical data found at given point.
+ERROR 1105 (HY000) at line 1: Code: 2013, Text = No historical data found at given point.
 flash back to point that does not visible to the current snapshot should report error 1105
-ERROR 1105 (HY000) at line 1: Code: 2013, displayText = No historical data found at given point.
+ERROR 1105 (HY000) at line 1: Code: 2013, Text = No historical data found at given point.

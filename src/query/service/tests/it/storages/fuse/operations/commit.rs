@@ -67,6 +67,7 @@ use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
+use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
@@ -475,11 +476,11 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn apply_changed_settings(&self, _changed_settings: Arc<Settings>) -> Result<()> {
+    fn apply_changed_settings(&self, _changes: HashMap<String, ChangeValue>) -> Result<()> {
         todo!()
     }
 
-    fn get_changed_settings(&self) -> Arc<Settings> {
+    fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
         todo!()
     }
 
@@ -514,6 +515,7 @@ impl TableContext for CtxDelegation {
         _database_name: &str,
         _table_name: &str,
         _files: Vec<StageFileInfo>,
+        _max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
         todo!()
     }

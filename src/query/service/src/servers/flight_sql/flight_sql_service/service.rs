@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Cursor;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -57,7 +56,6 @@ use common_base::base::uuid::Uuid;
 use common_exception::Result;
 use common_expression::DataSchema;
 use futures::Stream;
-use prost::bytes::Buf;
 use prost::Message;
 use tonic::metadata::MetadataValue;
 use tonic::Request;
@@ -67,6 +65,47 @@ use tonic::Streaming;
 
 use super::status;
 use crate::servers::flight_sql::flight_sql_service::FlightSqlServiceImpl;
+
+fn try_unpack_any<T: ProstMessageExt>(message: Any) -> std::result::Result<T, Status> {
+    message
+        .unpack()
+        .map_err(|e| Status::invalid_argument(format!("{e:?}")))?
+        .ok_or_else(|| {
+            Status::invalid_argument(format!(
+                "expect {}, got {}",
+                T::type_url(),
+                message.type_url
+            ))
+        })
+}
+
+fn simple_flight_info<T: ProstMessageExt>(message: T) -> Response<FlightInfo> {
+    let loc = Location {
+        uri: "location_not_used".to_string(),
+    };
+
+    let buf = message.as_any().encode_to_vec().into();
+    let ticket = Ticket { ticket: buf };
+    let endpoint = FlightEndpoint {
+        ticket: Some(ticket),
+        location: vec![loc],
+    };
+    let endpoints = vec![endpoint];
+
+    let flight_desc = FlightDescriptor {
+        r#type: DescriptorType::Cmd.into(),
+        cmd: Default::default(),
+        path: vec![],
+    };
+    let info = FlightInfo {
+        schema: Default::default(),
+        flight_descriptor: Some(flight_desc),
+        endpoint: endpoints,
+        total_records: -1,
+        total_bytes: -1,
+    };
+    Response::new(info)
+}
 
 #[tonic::async_trait]
 impl FlightSqlService for FlightSqlServiceImpl {
@@ -103,17 +142,15 @@ impl FlightSqlService for FlightSqlServiceImpl {
     async fn do_get_fallback(
         &self,
         request: Request<Ticket>,
-        _message: Any,
+        message: Any,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
         let session = self.get_session(&request)?;
-        let ticket = &request.get_ref().ticket.chunk().to_vec();
-        let mut buf = Cursor::new(&ticket);
-        let any = Any::decode(&mut buf).unwrap();
-        let fetch_results: FetchResults = any.unpack().unwrap().unwrap();
+        let fetch_results: FetchResults = try_unpack_any(message)?;
 
         let handle = Uuid::try_parse(&fetch_results.handle).map_err(|e| {
             Status::internal(format!(
-                "do_get_fallback Error decoding handle: {e} {ticket:?}"
+                "do_get_fallback Error decoding handle: {e} {:?}",
+                fetch_results.handle
             ))
         })?;
 
@@ -130,9 +167,10 @@ impl FlightSqlService for FlightSqlServiceImpl {
 
     async fn get_flight_info_statement(
         &self,
-        _query: CommandStatementQuery,
+        query: CommandStatementQuery,
         _request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
+        tracing::info!("get_flight_info_sql_info(query={})", query.query);
         Err(Status::unimplemented(
             "get_flight_info_statement not implemented",
         ))
@@ -179,8 +217,8 @@ impl FlightSqlService for FlightSqlServiceImpl {
             schema: schema_bytes,
             flight_descriptor: Some(flight_desc),
             endpoint: endpoints,
-            total_records: 0,
-            total_bytes: 0,
+            total_records: -1,
+            total_bytes: -1,
         };
         let resp = Response::new(info);
         Ok(resp)
@@ -191,6 +229,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         _query: CommandGetCatalogs,
         _request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
+        tracing::info!("get_flight_info_catalogs()");
         Err(Status::unimplemented(
             "get_flight_info_catalogs not implemented",
         ))
@@ -198,9 +237,10 @@ impl FlightSqlService for FlightSqlServiceImpl {
 
     async fn get_flight_info_schemas(
         &self,
-        _query: CommandGetDbSchemas,
+        query: CommandGetDbSchemas,
         _request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
+        tracing::info!("get_flight_info_schemas({query:?})");
         Err(Status::unimplemented(
             "get_flight_info_schemas not implemented",
         ))
@@ -208,9 +248,10 @@ impl FlightSqlService for FlightSqlServiceImpl {
 
     async fn get_flight_info_tables(
         &self,
-        _query: CommandGetTables,
+        query: CommandGetTables,
         _request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
+        tracing::info!("get_flight_info_tables({query:?})");
         Err(Status::unimplemented(
             "get_flight_info_tables not implemented",
         ))
@@ -221,6 +262,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         _query: CommandGetTableTypes,
         _request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
+        tracing::info!("get_flight_info_table_types()");
         Err(Status::unimplemented(
             "get_flight_info_table_types not implemented",
         ))
@@ -228,19 +270,19 @@ impl FlightSqlService for FlightSqlServiceImpl {
 
     async fn get_flight_info_sql_info(
         &self,
-        _query: CommandGetSqlInfo,
+        query: CommandGetSqlInfo,
         _request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
-        Err(Status::unimplemented(
-            "get_flight_info_sql_info not implemented",
-        ))
+        tracing::info!("get_flight_info_sql_info({query:?})");
+        Ok(simple_flight_info(query))
     }
 
     async fn get_flight_info_primary_keys(
         &self,
-        _query: CommandGetPrimaryKeys,
+        query: CommandGetPrimaryKeys,
         _request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
+        tracing::info!("get_flight_info_primary_keys({query:?})",);
         Err(Status::unimplemented(
             "get_flight_info_primary_keys not implemented",
         ))
@@ -248,9 +290,10 @@ impl FlightSqlService for FlightSqlServiceImpl {
 
     async fn get_flight_info_exported_keys(
         &self,
-        _query: CommandGetExportedKeys,
+        query: CommandGetExportedKeys,
         _request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
+        tracing::info!("get_flight_info_exported_keys({query:?})");
         Err(Status::unimplemented(
             "get_flight_info_exported_keys not implemented",
         ))
@@ -258,9 +301,10 @@ impl FlightSqlService for FlightSqlServiceImpl {
 
     async fn get_flight_info_imported_keys(
         &self,
-        _query: CommandGetImportedKeys,
+        query: CommandGetImportedKeys,
         _request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
+        tracing::info!("get_flight_info_imported_keys({query:?})");
         Err(Status::unimplemented(
             "get_flight_info_imported_keys not implemented",
         ))
@@ -268,9 +312,10 @@ impl FlightSqlService for FlightSqlServiceImpl {
 
     async fn get_flight_info_cross_reference(
         &self,
-        _query: CommandGetCrossReference,
+        query: CommandGetCrossReference,
         _request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
+        tracing::info!("get_flight_info_cross_reference({query:?})");
         Err(Status::unimplemented(
             "get_flight_info_imported_keys not implemented",
         ))
@@ -279,17 +324,19 @@ impl FlightSqlService for FlightSqlServiceImpl {
     // do_get
     async fn do_get_statement(
         &self,
-        _ticket: TicketStatementQuery,
+        ticket: TicketStatementQuery,
         _request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+        tracing::info!("do_get_statement({ticket:?}");
         Err(Status::unimplemented("do_get_statement not implemented"))
     }
 
     async fn do_get_prepared_statement(
         &self,
-        _query: CommandPreparedStatementQuery,
+        query: CommandPreparedStatementQuery,
         _request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+        tracing::info!("do_get_prepared_statement({query:?}");
         Err(Status::unimplemented(
             "do_get_prepared_statement not implemented",
         ))
@@ -300,22 +347,25 @@ impl FlightSqlService for FlightSqlServiceImpl {
         _query: CommandGetCatalogs,
         _request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+        tracing::info!("do_get_catalogs()");
         Err(Status::unimplemented("do_get_catalogs not implemented"))
     }
 
     async fn do_get_schemas(
         &self,
-        _query: CommandGetDbSchemas,
+        query: CommandGetDbSchemas,
         _request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+        tracing::info!("do_get_schemas({query:?}");
         Err(Status::unimplemented("do_get_schemas not implemented"))
     }
 
     async fn do_get_tables(
         &self,
-        _query: CommandGetTables,
+        query: CommandGetTables,
         _request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+        tracing::info!("do_get_tables({query:?})");
         Err(Status::unimplemented("do_get_tables not implemented"))
     }
 
@@ -324,30 +374,34 @@ impl FlightSqlService for FlightSqlServiceImpl {
         _query: CommandGetTableTypes,
         _request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+        tracing::info!("do_get_table_types()");
         Err(Status::unimplemented("do_get_table_types not implemented"))
     }
 
     async fn do_get_sql_info(
         &self,
-        _query: CommandGetSqlInfo,
+        query: CommandGetSqlInfo,
         _request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
-        Err(Status::unimplemented("do_get_sql_info not implemented"))
+        tracing::info!("do_get_sql_info({query:?})");
+        Ok(Response::new(super::SqlInfoProvider::all_info()?))
     }
 
     async fn do_get_primary_keys(
         &self,
-        _query: CommandGetPrimaryKeys,
+        query: CommandGetPrimaryKeys,
         _request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+        tracing::info!("do_get_primary_keys({query:?})");
         Err(Status::unimplemented("do_get_primary_keys not implemented"))
     }
 
     async fn do_get_exported_keys(
         &self,
-        _query: CommandGetExportedKeys,
+        query: CommandGetExportedKeys,
         _request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+        tracing::info!("do_get_exported_keys({query:?})");
         Err(Status::unimplemented(
             "do_get_exported_keys not implemented",
         ))
@@ -355,9 +409,10 @@ impl FlightSqlService for FlightSqlServiceImpl {
 
     async fn do_get_imported_keys(
         &self,
-        _query: CommandGetImportedKeys,
+        query: CommandGetImportedKeys,
         _request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+        tracing::info!("do_get_imported_keys({query:?})");
         Err(Status::unimplemented(
             "do_get_imported_keys not implemented",
         ))
@@ -365,9 +420,10 @@ impl FlightSqlService for FlightSqlServiceImpl {
 
     async fn do_get_cross_reference(
         &self,
-        _query: CommandGetCrossReference,
+        query: CommandGetCrossReference,
         _request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+        tracing::info!("do_get_cross_reference({query:?})");
         Err(Status::unimplemented(
             "do_get_cross_reference not implemented",
         ))
@@ -506,11 +562,11 @@ impl FlightSqlService for FlightSqlServiceImpl {
         }
     }
 
-    async fn register_sql_info(&self, _id: i32, _result: &SqlInfo) {}
+    async fn register_sql_info(&self, id: i32, result: &SqlInfo) {
+        tracing::info!("register_sql_info({id}, {result:?})");
+    }
 }
 
-// not sure why we have to do this, but ticket cannot be correctly parsed by GRPC when communicate
-// with JDBC driver.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FetchResults {
     #[prost(string, tag = "1")]

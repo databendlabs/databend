@@ -22,7 +22,7 @@ use databend_query::sessions::SessionContext;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_session_context() -> Result<()> {
-    let settings = Settings::default_test_settings()?;
+    let settings = Settings::create("default".to_string());
     let session_ctx = SessionContext::try_create(settings)?;
 
     // Abort status.

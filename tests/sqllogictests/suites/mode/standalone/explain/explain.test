@@ -422,9 +422,9 @@ Delete (children 2)
 
 skipif clickhouse
 query T
-explain ast copy into t1 from 's3://mybucket/data.csv' file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10
+explain ast copy into t1 from 's3://mybucket/data.csv' file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10 max_files=10
 ----
-Copy (children 5)
+Copy (children 6)
 ├── CopyUnit (children 1)
 │   └── UriLocation 's3://mybucket/data.csv'
 ├── CopyUnit (children 1)
@@ -435,6 +435,7 @@ Copy (children 5)
 │   ├── FileFormat skip_header = "1"
 │   └── FileFormat type = "CSV"
 ├── SizeLimit 10
+├── MaxFiles 10
 └── Purge false
 
 query T
@@ -951,7 +952,7 @@ Filter
     ├── read bytes: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [is_true(CAST(t4.a (#0) = 1 AS Boolean NULL) AND TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL) = "xx")], limit: NONE]
+    ├── push downs: [filters: [and_filters(CAST(t4.a (#0) = 1 AS Boolean NULL), TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL) = "xx")], limit: NONE]
     └── estimated rows: 0.00
 
 statement ok
@@ -973,4 +974,22 @@ EvalScalar
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL) = "xx")], limit: NONE]
+        └── estimated rows: 0.00
+
+query T
+explain select * from v4 where a > 100;
+----
+EvalScalar
+├── expressions: [TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL)]
+├── estimated rows: 0.00
+└── Filter
+    ├── filters: [v4.a (#0) > 100]
+    ├── estimated rows: 0.00
+    └── TableScan
+        ├── table: default.default.t4
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [t4.a (#0) > 100], limit: NONE]
         └── estimated rows: 0.00

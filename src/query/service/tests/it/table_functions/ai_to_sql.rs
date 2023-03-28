@@ -32,16 +32,6 @@ fn test_ai_to_sql_args() -> Result<()> {
             Scalar::String("prompt".to_string().into_bytes()),
             Scalar::String("api-key".to_string().into_bytes()),
         ]);
-        let _ = GPT2SQLTable::create("system", "ai_to_sql", 1, tbl_args)?;
-    }
-
-    // 3 args.
-    {
-        let tbl_args = TableArgs::new_positioned(vec![
-            Scalar::String("prompt".to_string().into_bytes()),
-            Scalar::String("api-key".to_string().into_bytes()),
-            Scalar::String("3rd".to_string().into_bytes()),
-        ]);
         let result = GPT2SQLTable::create("system", "ai_to_sql", 1, tbl_args);
         assert!(result.is_err());
     }

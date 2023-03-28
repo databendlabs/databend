@@ -23,20 +23,20 @@ fn test_format_with_error_codes() {
 
     assert_eq!(
         ErrorCode::Ok("test message 1").to_string(),
-        "Code: 0, displayText = test message 1."
+        "Code: 0, Text = test message 1."
     );
 
     assert_eq!(
         ErrorCode::Ok("test message 2").to_string(),
-        "Code: 0, displayText = test message 2."
+        "Code: 0, Text = test message 2."
     );
     assert_eq!(
         ErrorCode::UnknownException("test message 1").to_string(),
-        "Code: 1067, displayText = test message 1."
+        "Code: 1067, Text = test message 1."
     );
     assert_eq!(
         ErrorCode::UnknownException("test message 2").to_string(),
-        "Code: 1067, displayText = test message 2."
+        "Code: 1067, Text = test message 2."
     );
 }
 
@@ -60,7 +60,7 @@ fn test_derive_from_std_error() {
         fmt_rst.map_err_to_code(ErrorCode::UnknownException, || 123);
 
     assert_eq!(
-        "Code: 1067, displayText = 123, cause: an error occurred when formatting an argument.",
+        "Code: 1067, Text = 123, cause: an error occurred when formatting an argument.",
         rst1.as_ref().unwrap_err().to_string()
     );
 
@@ -68,7 +68,7 @@ fn test_derive_from_std_error() {
         rst1.map_err_to_code(ErrorCode::Ok, || "wrapper");
 
     assert_eq!(
-        "Code: 0, displayText = wrapper, cause: Code: 1067, displayText = 123, cause: an error occurred when formatting an argument..",
+        "Code: 0, Text = wrapper, cause: Code: 1067, Text = 123, cause: an error occurred when formatting an argument..",
         rst2.as_ref().unwrap_err().to_string()
     );
 }
@@ -84,7 +84,7 @@ fn test_derive_from_display() {
         rst.map_err_to_code(ErrorCode::UnknownException, || 123);
 
     assert_eq!(
-        "Code: 1067, displayText = 123, cause: 3.",
+        "Code: 1067, Text = 123, cause: 3.",
         rst1.as_ref().unwrap_err().to_string()
     );
 }

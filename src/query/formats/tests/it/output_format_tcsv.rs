@@ -61,7 +61,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
     }
 
     {
-        let settings = Settings::default_test_settings()?;
+        let settings = Settings::create("default".to_string());
         let mut options = BTreeMap::<String, String>::new();
         options.insert("type".to_string(), "csv".to_string());
         options.insert("field_delimiter".to_string(), "$".to_string());
@@ -123,7 +123,7 @@ fn test_data_block_not_nullable() -> Result<()> {
 fn test_field_delimiter_with_ascii_control_code() -> Result<()> {
     let (schema, block) = get_simple_block(false);
 
-    let settings = Settings::default_test_settings()?;
+    let settings = Settings::create("default".to_string());
     let mut options = BTreeMap::<String, String>::new();
     options.insert("type".to_string(), "csv".to_string());
     options.insert("field_delimiter".to_string(), "\x01".to_string());

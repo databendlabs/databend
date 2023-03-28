@@ -40,5 +40,5 @@ SELECT 0::BOOLEAN, 1::BOOLEAN, 'true'::BOOLEAN, 'false'::BOOLEAN, 'True'::BOOLEA
 +------------+------------+-----------------+------------------+-----------------+
 
 SELECT 'xx'::BOOLEAN;
-ERROR 1105 (HY000): Code: 1010, displayText = Cast error happens in casting from String to Boolean.
+ERROR 1105 (HY000): Code: 1010, Text = Cast error happens in casting from String to Boolean.
 ```

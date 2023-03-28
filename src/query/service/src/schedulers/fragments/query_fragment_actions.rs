@@ -181,9 +181,11 @@ impl QueryFragmentsActions {
             cluster.local_id.clone(),
             fragments_packets.remove(&cluster.local_id).unwrap(),
             nodes_info.clone(),
+            HashMap::new(),
             cluster.local_id(),
         );
 
+        let changed_settings = self.ctx.get_changed_settings();
         for (executor, fragments) in fragments_packets.into_iter() {
             let query_id = self.ctx.get_id();
             let executors_info = nodes_info.clone();
@@ -193,6 +195,7 @@ impl QueryFragmentsActions {
                 executor,
                 fragments,
                 executors_info,
+                changed_settings.clone(),
                 cluster.local_id(),
             ));
         }

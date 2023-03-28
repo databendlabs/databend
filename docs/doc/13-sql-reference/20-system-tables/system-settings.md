@@ -139,7 +139,7 @@ databend :) insert into t values("a");
 databend :) set sql_dialect = 'postgresql';
 
 databend :) insert into t values("a");
-ERROR 1105 (HY000): Code: 1065, displayText = error: 
+ERROR 1105 (HY000): Code: 1065, Text = error: 
   --> SQL:1:2
   |
 1 | ("a")
@@ -209,7 +209,7 @@ databend :) create table t(a string);
 databend :) set unquoted_ident_case_sensitive=0;
 
 databend :) create table T(a string);
-ERROR 1105 (HY000): Code: 2302, displayText = Table 't' already exists.
+ERROR 1105 (HY000): Code: 2302, Text = Table 't' already exists.
 
 databend :) set unquoted_ident_case_sensitive=1;
 

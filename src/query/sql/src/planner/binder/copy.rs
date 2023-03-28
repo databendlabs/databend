@@ -542,7 +542,7 @@ impl<'a> Binder {
         let mut files = if operator.info().can_blocking() {
             files_info.blocking_list(&operator, false)
         } else {
-            files_info.list(&operator, false).await
+            files_info.list(&operator, false, None).await
         }?;
 
         info!("end to list files: {}", files.len());
@@ -557,7 +557,13 @@ impl<'a> Binder {
 
             files = self
                 .ctx
-                .color_copied_files(dst_catalog_name, dst_database_name, dst_table_name, files)
+                .color_copied_files(
+                    dst_catalog_name,
+                    dst_database_name,
+                    dst_table_name,
+                    files,
+                    None,
+                )
                 .await?;
 
             info!("end to color copied files: {}", files.len());
@@ -640,6 +646,9 @@ impl<'a> Binder {
             // size_limit.
             if stmt.size_limit != 0 {
                 stage.copy_options.size_limit = stmt.size_limit;
+            }
+            if stmt.max_files != 0 {
+                stage.copy_options.max_files = stmt.max_files;
             }
             // max_file_size.
             if stmt.max_file_size != 0 {

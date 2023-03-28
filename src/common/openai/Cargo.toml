@@ -1,0 +1,25 @@
+[package]
+name = "common-openai"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+doctest = false
+test = false
+
+[dependencies]
+# Workspace dependencies
+common-exception = { path = "../exception" }
+
+# Github dependencies
+
+# Crates.io dependencies
+metrics = "0.20.1"
+openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "36c7c1b" }
+
+[dev-dependencies]
