@@ -14,6 +14,7 @@
 
 pub enum AIModel {
     TextDavinci003,
+    TextEmbeddingAda003,
 }
 
 // https://platform.openai.com/examples
@@ -21,6 +22,7 @@ impl ToString for AIModel {
     fn to_string(&self) -> String {
         match self {
             AIModel::TextDavinci003 => "text-davinci-003".to_string(),
+            AIModel::TextEmbeddingAda003 => "text-embedding-ada-002".to_string(),
         }
     }
 }

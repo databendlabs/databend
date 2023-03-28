@@ -787,7 +787,34 @@ async fn test_auth_jwt() -> Result<()> {
 
     let token = key_pair.sign(claims)?;
     let bear = headers::Authorization::bearer(&token).unwrap();
-    assert_auth_current_user(&ep, user_name, bear, "%").await?;
+    assert_auth_failure(&ep, bear).await?;
+    Ok(())
+}
+
+async fn assert_auth_failure(ep: &EndpointType, header: impl Header) -> Result<()> {
+    let sql = "select 1";
+
+    let json = serde_json::json!({"sql": sql.to_string()});
+
+    let path = "/v1/query";
+    let uri = format!("{}?wait_time_secs={}", path, 3);
+    let content_type = "application/json";
+    let body = serde_json::to_vec(&json)?;
+
+    let response = ep
+        .call(
+            Request::builder()
+                .uri(uri.parse().unwrap())
+                .method(Method::POST)
+                .header(header::CONTENT_TYPE, content_type)
+                .typed_header(header)
+                .body(body),
+        )
+        .await
+        .unwrap();
+
+    let status = response.status();
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
     Ok(())
 }
 

@@ -1506,6 +1506,8 @@ Functions overloads:
 198 divide(Float64 NULL, Float32 NULL) :: Float64 NULL
 199 divide(Float64, Float64) :: Float64
 200 divide(Float64 NULL, Float64 NULL) :: Float64 NULL
+0 embedding_vector(String, String) :: Array(Float32)
+1 embedding_vector(String NULL, String NULL) :: Array(Float32) NULL
 0 eq(Variant, Variant) :: Boolean
 1 eq(Variant NULL, Variant NULL) :: Boolean NULL
 2 eq(String, String) :: Boolean

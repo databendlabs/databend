@@ -41,6 +41,14 @@ EOF
 echo "copy into test_max_files_force_true from 'fs:///tmp/05_02_06/' FILE_FORMAT = (type = CSV) max_files=2 force=true" | $MYSQL_CLIENT_CONNECT
 echo "select count(*) from test_max_files_force_true" | $MYSQL_CLIENT_CONNECT
 
+echo "copy into test_max_files_force_true from 'fs:///tmp/05_02_06/' FILE_FORMAT = (type = CSV) max_files=2 force=true" | $MYSQL_CLIENT_CONNECT
+echo "select count(*) from test_max_files_force_true" | $MYSQL_CLIENT_CONNECT
+
+echo "copy into test_max_files_force_true from 'fs:///tmp/05_02_06/' FILE_FORMAT = (type = CSV) max_files=2 force=true" | $MYSQL_CLIENT_CONNECT
+echo "select count(*) from test_max_files_force_true" | $MYSQL_CLIENT_CONNECT
+
+echo "copy into test_max_files_force_false from 'fs:///tmp/05_02_06/' FILE_FORMAT = (type = CSV) max_files=2 force=false" | $MYSQL_CLIENT_CONNECT
+echo "select count(*) from test_max_files_force_false" | $MYSQL_CLIENT_CONNECT
 
 echo "copy into test_max_files_force_false from 'fs:///tmp/05_02_06/' FILE_FORMAT = (type = CSV) max_files=2 force=false" | $MYSQL_CLIENT_CONNECT
 echo "select count(*) from test_max_files_force_false" | $MYSQL_CLIENT_CONNECT

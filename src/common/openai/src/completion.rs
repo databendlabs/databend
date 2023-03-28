@@ -18,6 +18,8 @@ use openai_api_rust::completions::CompletionsApi;
 use openai_api_rust::completions::CompletionsBody;
 use openai_api_rust::Auth;
 
+use crate::metrics::metrics_completion_count;
+use crate::metrics::metrics_completion_token;
 use crate::OpenAI;
 
 impl OpenAI {
@@ -57,6 +59,12 @@ impl OpenAI {
         } else {
             resp.choices[0].text.clone().unwrap_or("".to_string())
         };
+
+        // perf.
+        {
+            metrics_completion_count(1);
+            metrics_completion_token(usage.unwrap_or(0));
+        }
 
         Ok((sql, usage))
     }
