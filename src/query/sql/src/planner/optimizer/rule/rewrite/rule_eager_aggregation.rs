@@ -627,43 +627,30 @@ fn get_eager_aggregation_functions(
     eval_scalar_items: &HashMap<usize, usize>,
     function_factory: &AggregateFunctionFactory,
 ) -> Vec<(usize, IndexType, String)> {
-    agg_final
-        .aggregate_functions
-        .iter()
-        .enumerate()
-        .filter_map(|(index, aggregate_item)| match &aggregate_item.scalar {
-            ScalarExpr::AggregateFunction(aggregate_function)
-                if aggregate_function.args.len() == 1
-                    && function_factory.is_decomposable(&aggregate_function.func_name)
-                    && eval_scalar_items.contains_key(&aggregate_item.index) =>
+    agg_final.aggregate_functions.iter().enumerate().filter_map(|(index, aggregate_item)| {
+        if let ScalarExpr::AggregateFunction(aggregate_function) = &aggregate_item.scalar {
+            if aggregate_function.args.len() == 1
+                && function_factory.is_decomposable(&aggregate_function.func_name)
+                && eval_scalar_items.contains_key(&aggregate_item.index)
             {
-                match &aggregate_function.args[0] {
-                    ScalarExpr::BoundColumnRef(column) => match &*column.column.data_type {
+                if let ScalarExpr::BoundColumnRef(column) = &aggregate_function.args[0] {
+                    match &*column.column.data_type {
                         DataType::Number(_) if columns_set.contains(&column.column.index) => {
-                            Some((
-                                index,
-                                aggregate_item.index,
-                                aggregate_function.func_name.clone(),
-                            ))
+                            return Some((index, aggregate_item.index, aggregate_function.func_name.clone()));
                         }
                         DataType::Nullable(ty) => match **ty {
                             DataType::Number(_) if columns_set.contains(&column.column.index) => {
-                                Some((
-                                    index,
-                                    aggregate_item.index,
-                                    aggregate_function.func_name.clone(),
-                                ))
+                                return Some((index, aggregate_item.index, aggregate_function.func_name.clone()));
                             }
-                            _ => None,
+                            _ => (),
                         },
-                        _ => None,
-                    },
-                    _ => None,
+                        _ => (),
+                    }
                 }
             }
-            _ => None,
-        })
-        .collect::<Vec<_>>()
+        }
+        None
+    }).collect()
 }
 
 // Final aggregate functions's data type = eager aggregate functions's return_type
