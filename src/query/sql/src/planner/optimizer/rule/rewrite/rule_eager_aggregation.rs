@@ -428,7 +428,6 @@ impl Rule for RuleEagerAggregation {
 
                     // Modify the eval scalars of all aggregate functions that are not AVG components.
                     if let Some(idx) = eval_scalar_items.get(&old_index) && !avg_components.contains_key(&old_index) {
-                    // if let Some(idx) = eval_scalar_items.get(&old_index) && !avg_components.contains_key(&old_index) && (eager_count_old_index == -1 || (&eager_count_old_index != &(old_index as i32))) {
                         let eval_scalar_item = &mut double_eager_eval_scalar.items[*idx];
                         if let ScalarExpr::BoundColumnRef(column) = &mut eval_scalar_item.scalar {
                             let column_binding = &mut column.column;
