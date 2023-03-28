@@ -18,6 +18,8 @@ use openai_api_rust::embeddings::EmbeddingsApi;
 use openai_api_rust::embeddings::EmbeddingsBody;
 use openai_api_rust::Auth;
 
+use crate::metrics::metrics_embedding_count;
+use crate::metrics::metrics_embedding_token;
 use crate::OpenAI;
 
 impl OpenAI {
@@ -49,6 +51,12 @@ impl OpenAI {
             } else {
                 res.push(vec![]);
             }
+        }
+
+        // perf.
+        {
+            metrics_embedding_count(1);
+            metrics_embedding_token(usage.unwrap_or(0));
         }
 
         Ok((res, usage))
