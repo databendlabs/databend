@@ -171,6 +171,7 @@ async fn test_safety() -> Result<()> {
             &segment_writer,
             &block_number_of_segments,
             &rows_per_blocks,
+            threshold,
         )
         .await?;
 

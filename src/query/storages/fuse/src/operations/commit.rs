@@ -466,9 +466,10 @@ impl FuseTable {
                 let stats = &segment_info.summary;
                 acc.row_count += stats.row_count;
                 acc.block_count += stats.block_count;
+                acc.perfect_block_count += stats.perfect_block_count;
                 acc.uncompressed_byte_size += stats.uncompressed_byte_size;
                 acc.compressed_byte_size += stats.compressed_byte_size;
-                acc.index_size = stats.index_size;
+                acc.index_size += stats.index_size;
                 acc.col_stats = if acc.col_stats.is_empty() {
                     stats.col_stats.clone()
                 } else {
