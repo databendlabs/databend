@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::optimizer::hyper_dp::join_relation::JoinRelationSet;
+use crate::IndexType;
 
 #[derive(Clone, Default, Debug)]
 pub struct JoinNode {
-    pub leaves: JoinRelationSet,
+    pub leaves: Vec<IndexType>,
     pub left: Box<JoinNode>,
     pub right: Box<JoinNode>,
     pub cost: f64,
 }
 
 impl JoinNode {
-    pub fn new(leaves: JoinRelationSet, left: JoinNode, right: JoinNode, cost: f64) -> Self {
+    pub fn new(leaves: Vec<IndexType>, left: JoinNode, right: JoinNode, cost: f64) -> Self {
         Self {
             leaves,
             left: Box::new(left),

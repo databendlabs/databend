@@ -40,57 +40,9 @@ impl JoinRelation {
     }
 }
 
-#[derive(Default, Clone, Eq, PartialEq, Hash, Debug)]
-pub struct JoinRelationSet {
-    relations: Vec<IndexType>,
-}
-
-impl JoinRelationSet {
-    pub fn new(relations: Vec<IndexType>) -> Self {
-        Self { relations }
-    }
-
-    pub fn relations(&self) -> &[IndexType] {
-        &self.relations
-    }
-
-    // Check if the set is empty
-    pub fn is_empty(&self) -> bool {
-        self.relations.is_empty()
-    }
-
-    // Check if the first set is subset of the second set
-    pub fn is_subset(&self, other: &Self) -> bool {
-        self.relations
-            .iter()
-            .all(|idx| other.relations.contains(idx))
-    }
-
-    // Check if two sets aren't intersecting
-    pub fn is_disjoint(&self, other: &Self) -> bool {
-        self.relations
-            .iter()
-            .all(|idx| !other.relations.contains(idx))
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = &IndexType> {
-        self.relations.iter()
-    }
-
-    pub fn merge_relation_set(&self, other: &Self) -> JoinRelationSet {
-        let mut res = JoinRelationSet {
-            relations: self.relations.clone(),
-        };
-        res.relations.extend_from_slice(&other.relations);
-        res.relations.sort();
-        res.relations.dedup();
-        res
-    }
-}
-
 #[derive(Default, Clone)]
 struct RelationSetNode {
-    relation_set: JoinRelationSet,
+    relations: Vec<IndexType>,
     // Key is relation id
     children: HashMap<IndexType, RelationSetNode>,
 }
@@ -107,11 +59,11 @@ pub struct RelationSetTree {
 }
 
 impl RelationSetTree {
-    pub fn get_relation_set_by_index(&mut self, idx: usize) -> Result<JoinRelationSet> {
+    pub fn get_relation_set_by_index(&mut self, idx: usize) -> Result<Vec<IndexType>> {
         self.get_relation_set(&[idx as IndexType].iter().cloned().collect())
     }
 
-    pub fn get_relation_set(&mut self, idx_set: &HashSet<IndexType>) -> Result<JoinRelationSet> {
+    pub fn get_relation_set(&mut self, idx_set: &HashSet<IndexType>) -> Result<Vec<IndexType>> {
         let mut relations: Vec<IndexType> = idx_set.iter().copied().collect();
         // Make relations ordered
         relations.sort();
@@ -122,9 +74,9 @@ impl RelationSetTree {
             }
             node = node.children.get_mut(idx).unwrap();
         }
-        if node.relation_set.is_empty() {
-            node.relation_set = JoinRelationSet::new(relations);
+        if node.relations.is_empty() {
+            node.relations = relations;
         }
-        Ok(node.relation_set.clone())
+        Ok(node.relations.clone())
     }
 }

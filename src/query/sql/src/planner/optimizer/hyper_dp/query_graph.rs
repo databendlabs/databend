@@ -17,11 +17,11 @@ use std::collections::HashSet;
 
 use common_exception::Result;
 
-use crate::optimizer::hyper_dp::join_relation::JoinRelationSet;
+use crate::optimizer::hyper_dp::util::is_subset;
 use crate::IndexType;
 
 struct NeighborInfo {
-    neighbors: JoinRelationSet,
+    neighbors: Vec<IndexType>,
     // filters:
 }
 
@@ -53,11 +53,7 @@ impl QueryGraph {
     }
 
     // Check if `nodes` is connected to `neighbor`
-    pub fn is_connected(
-        &self,
-        nodes: &JoinRelationSet,
-        neighbor: &JoinRelationSet,
-    ) -> Result<bool> {
+    pub fn is_connected(&self, nodes: &[IndexType], neighbor: &[IndexType]) -> Result<bool> {
         let mut edge = &self.root_edge;
         for node in nodes.iter() {
             if !edge.children.contains_key(node) {
@@ -65,7 +61,7 @@ impl QueryGraph {
             }
             edge = edge.children.get(node).unwrap();
             for neighbor_info in edge.neighbors.iter() {
-                if neighbor.is_subset(&neighbor_info.neighbors) {
+                if is_subset(neighbor, &neighbor_info.neighbors) {
                     return Ok(true);
                 }
             }
@@ -76,17 +72,17 @@ impl QueryGraph {
     // Get all neighbors of `nodes` which are not in `forbidden_nodes`
     pub fn neighbors(
         &self,
-        nodes: &JoinRelationSet,
+        nodes: &[IndexType],
         forbidden_nodes: &HashSet<IndexType>,
     ) -> Result<Vec<IndexType>> {
         let mut neighbors = vec![];
         // Find neighbors for nodes that aren't in `forbidden_nodes`
         let mut edge = &self.root_edge;
-        for relation in nodes.iter() {
-            if !edge.children.contains_key(relation) {
+        for node in nodes.iter() {
+            if !edge.children.contains_key(node) {
                 continue;
             }
-            edge = edge.children.get(relation).unwrap();
+            edge = edge.children.get(node).unwrap();
             for neighbor_info in edge.neighbors.iter() {
                 for neighbor in neighbor_info.neighbors.iter() {
                     if !forbidden_nodes.contains(neighbor) {
@@ -101,7 +97,7 @@ impl QueryGraph {
     // create edges for relation set
     fn create_edges_for_relation_set(
         &mut self,
-        relation_set: &JoinRelationSet,
+        relation_set: &[IndexType],
     ) -> Result<&mut QueryEdge> {
         let mut edge = &mut self.root_edge;
         for relation in relation_set.iter() {
@@ -114,11 +110,7 @@ impl QueryGraph {
     }
 
     // Create edges for left set and right set
-    pub fn create_edges(
-        &mut self,
-        left_set: &JoinRelationSet,
-        right_set: &JoinRelationSet,
-    ) -> Result<()> {
+    pub fn create_edges(&mut self, left_set: &[IndexType], right_set: &[IndexType]) -> Result<()> {
         let left_edge = self.create_edges_for_relation_set(left_set)?;
         for neighbor_info in left_edge.neighbors.iter() {
             if neighbor_info.neighbors.eq(right_set) {
@@ -128,7 +120,7 @@ impl QueryGraph {
         }
 
         let neighbor_info = NeighborInfo {
-            neighbors: right_set.clone(),
+            neighbors: right_set.to_vec(),
         };
         left_edge.neighbors.push(neighbor_info);
         Ok(())

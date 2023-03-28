@@ -19,9 +19,10 @@ use common_exception::Result;
 
 use crate::optimizer::hyper_dp::join_node::JoinNode;
 use crate::optimizer::hyper_dp::join_relation::JoinRelation;
-use crate::optimizer::hyper_dp::join_relation::JoinRelationSet;
 use crate::optimizer::hyper_dp::join_relation::RelationSetTree;
 use crate::optimizer::hyper_dp::query_graph::QueryGraph;
+use crate::optimizer::hyper_dp::util::intersect;
+use crate::optimizer::hyper_dp::util::union;
 use crate::optimizer::SExpr;
 use crate::plans::RelOperator;
 use crate::IndexType;
@@ -39,7 +40,7 @@ pub struct DPhpy {
     join_relations: Vec<JoinRelation>,
     // base table index -> index of join_relations
     table_index_map: HashMap<IndexType, IndexType>,
-    dp_table: HashMap<JoinRelationSet, JoinNode>,
+    dp_table: HashMap<Vec<IndexType>, JoinNode>,
     query_graph: QueryGraph,
     relation_set_tree: RelationSetTree,
 }
@@ -108,6 +109,7 @@ impl DPhpy {
     // The output plan will have optimal join order theoretically
     pub fn optimize(&mut self, s_expr: SExpr) -> Result<(SExpr, bool)> {
         // Firstly, we need to extract all join conditions and base tables
+        // `join_condition` is pair, left is left_condition, right is right_condition
         let mut join_conditions = vec![];
         let res = self.get_base_tables(&s_expr, &mut join_conditions, None)?;
         if !res {
@@ -144,7 +146,7 @@ impl DPhpy {
                     .relation_set_tree
                     .get_relation_set(&right_relation_set)?;
                 // Try to create edges if `left_relation_set` and `right_relation_set` are not disjoint
-                if left_relation_set.is_disjoint(&right_relation_set) {
+                if !intersect(&left_relation_set, &right_relation_set) {
                     self.query_graph
                         .create_edges(&left_relation_set, &right_relation_set)?;
                     self.query_graph
@@ -176,7 +178,7 @@ impl DPhpy {
     fn solve(&mut self) -> Result<bool> {
         // Initial `dp_table` with plan for single relation
         for (idx, relation) in self.join_relations.iter().enumerate() {
-            // Get node (aka relation_set) in `relation_set_tree`
+            // Get nodes  in `relation_set_tree`
             let nodes = self.relation_set_tree.get_relation_set_by_index(idx)?;
             let join = JoinNode {
                 leaves: nodes.clone(),
@@ -186,15 +188,19 @@ impl DPhpy {
             let _ = self.dp_table.insert(nodes, join);
         }
 
+        // Choose all nodes as enumeration start node once (desc order)
         for idx in self.join_relations.len()..0 {
             // Get node from `relation_set_tree`
             let node = self.relation_set_tree.get_relation_set_by_index(idx)?;
+            // Emit node as subgraph
             if !self.emit_csg(&node)? {
                 return Ok(false);
             }
 
             // Create forbidden node set
+            // Forbid node idx will less than current idx
             let forbidden_nodes = (0..idx).collect();
+            // Enlarge the subgraph recursively
             if !self.enumerate_csg_rec(&node, &forbidden_nodes)? {
                 return Ok(false);
             }
@@ -204,9 +210,9 @@ impl DPhpy {
 
     // EmitCsg will take a non-empty subset of hyper_graph's nodes(V) which contains a connected subgraph.
     // Then it will possibly generate a connected complement which will combine `nodes` to be a csg-cmp-pair.
-    fn emit_csg(&mut self, nodes: &JoinRelationSet) -> Result<bool> {
-        let mut forbidden_nodes: HashSet<IndexType> = (0..(nodes.relations()[0])).collect();
-        forbidden_nodes.extend(nodes.relations());
+    fn emit_csg(&mut self, nodes: &[IndexType]) -> Result<bool> {
+        let mut forbidden_nodes: HashSet<IndexType> = (0..(nodes[0])).collect();
+        forbidden_nodes.extend(nodes);
 
         // Get neighbors of `nodes`
         let mut neighbors = self.query_graph.neighbors(nodes, &forbidden_nodes)?;
@@ -233,10 +239,10 @@ impl DPhpy {
     }
 
     // EnumerateCsgRec will extend the given `nodes`.
-    // It'll consider each non-empty, proper subset of the neighborhood of nodes.
+    // It'll consider each non-empty, proper subset of the neighborhood of nodes that are not forbidden.
     fn enumerate_csg_rec(
         &mut self,
-        nodes: &JoinRelationSet,
+        nodes: &[IndexType],
         forbidden_nodes: &HashSet<IndexType>,
     ) -> Result<bool> {
         let neighbors = self.query_graph.neighbors(nodes, forbidden_nodes)?;
@@ -249,7 +255,7 @@ impl DPhpy {
             let neighbor_relations = self
                 .relation_set_tree
                 .get_relation_set_by_index(*neighbor)?;
-            let merged_relation_set = nodes.merge_relation_set(&neighbor_relations);
+            let merged_relation_set = union(nodes, &neighbor_relations);
             if self.dp_table.contains_key(&merged_relation_set)
                 && !self.emit_csg(&merged_relation_set)?
             {
@@ -258,10 +264,11 @@ impl DPhpy {
             merged_sets.push(merged_relation_set);
         }
 
-        let mut new_forbidden_nodes;
+        let new_forbidden_nodes = forbidden_nodes
+            .union(&neighbors.iter().cloned().collect())
+            .cloned()
+            .collect();
         for neighbor in neighbors.iter() {
-            new_forbidden_nodes = forbidden_nodes.clone();
-            new_forbidden_nodes.insert(*neighbor);
             if !self.enumerate_csg_rec(&merged_sets[*neighbor], &new_forbidden_nodes)? {
                 return Ok(false);
             }
@@ -270,13 +277,13 @@ impl DPhpy {
     }
 
     // EmitCsgCmp will join the optimal plan from left and right
-    fn emit_csg_cmp(&mut self, left: &JoinRelationSet, right: &JoinRelationSet) -> Result<bool> {
+    fn emit_csg_cmp(&mut self, left: &[IndexType], right: &[IndexType]) -> Result<bool> {
         debug_assert!(self.dp_table.contains_key(left));
         debug_assert!(self.dp_table.contains_key(right));
         let mut left_join = self.dp_table.get(left).unwrap();
         let mut right_join = self.dp_table.get(right).unwrap();
 
-        let parent_set = left.merge_relation_set(right);
+        let parent_set = union(left, right);
 
         if left_join.cost < right_join.cost {
             // swap left_join and right_join
@@ -310,8 +317,8 @@ impl DPhpy {
     // Therefore, it considers the neighborhood of right.
     fn enumerate_cmp_rec(
         &mut self,
-        left: &JoinRelationSet,
-        right: &JoinRelationSet,
+        left: &[IndexType],
+        right: &[IndexType],
         forbidden_nodes: &HashSet<IndexType>,
     ) -> Result<bool> {
         let neighbor_set = self.query_graph.neighbors(right, forbidden_nodes)?;
@@ -324,7 +331,7 @@ impl DPhpy {
                 .relation_set_tree
                 .get_relation_set_by_index(*neighbor)?;
             // Merge `right` with `neighbor_relations`
-            let merged_relation_set = right.merge_relation_set(&neighbor_relations);
+            let merged_relation_set = union(right, &neighbor_relations);
             if self.dp_table.contains_key(&merged_relation_set)
                 && self.query_graph.is_connected(left, &merged_relation_set)?
                 && !self.emit_csg_cmp(left, &merged_relation_set)?
@@ -334,9 +341,11 @@ impl DPhpy {
             merged_sets.push(merged_relation_set);
         }
         // Continue to enumerate cmp
-        let mut new_forbidden_nodes = forbidden_nodes.clone();
+        let new_forbidden_nodes = forbidden_nodes
+            .union(&neighbor_set.iter().cloned().collect())
+            .cloned()
+            .collect();
         for neighbor in neighbor_set.iter() {
-            new_forbidden_nodes.insert(*neighbor);
             if !self.enumerate_cmp_rec(left, &merged_sets[*neighbor], &new_forbidden_nodes)? {
                 return Ok(false);
             }

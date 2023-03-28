@@ -12,10 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod dphyp;
-mod join_node;
-mod join_relation;
-mod query_graph;
-mod util;
+use crate::IndexType;
 
-pub use dphyp::DPhpy;
+// Union two nodes vector
+pub fn union(v1: &[IndexType], v2: &[IndexType]) -> Vec<IndexType> {
+    let mut v = v1.to_vec();
+    v.extend(v2);
+    v.sort();
+    v.dedup();
+    v
+}
+
+pub fn intersect<T: PartialEq>(a: &[T], b: &[T]) -> bool {
+    a.iter().any(|x| b.contains(x))
+}
+
+pub fn is_subset<T: PartialEq>(v1: &[T], v2: &[T]) -> bool {
+    v1.iter().all(|x| v2.contains(x))
+}
