@@ -816,12 +816,10 @@ impl<'a> Evaluator<'a> {
     fn eval_and_filters(
         &self,
         args: &[Expr],
-        _generics: &[DataType],
+        _: &[DataType],
         mut validity: Option<Bitmap>,
     ) -> Result<Value<AnyType>> {
-        if args.len() < 2 {
-            unreachable!()
-        }
+        assert!(args.len() >= 2);
 
         for arg in args {
             let cond = self.partial_run(arg, validity.clone())?;
@@ -1033,36 +1031,37 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 args,
                 return_type,
             } if function.signature.name == "and_filters" => {
-                let (mut args_expr, mut args_domain) = (Vec::new(), Some(Vec::new()));
-                for arg in args {
-                    let (expr, domain) = self.fold_once(arg);
-                    args_expr.push(expr);
-                    args_domain = args_domain.zip(domain).map(|(mut domains, domain)| {
-                        domains.push(domain);
-                        domains
-                    });
-                }
-
+                let mut args_expr = Vec::new();
                 let mut has_true = true;
                 let mut has_false = true;
 
                 type DomainType = NullableType<BooleanType>;
-                for domain in args_domain.iter().flatten() {
-                    let domain = DomainType::try_downcast_domain(domain).unwrap();
-                    let (domain_hash_true, domain_hash_false) = match &domain {
-                        NullableDomain {
-                            has_null,
-                            value:
-                                Some(box BooleanDomain {
-                                    has_true,
-                                    has_false,
-                                }),
-                        } => (*has_true, *has_null || *has_false),
-                        NullableDomain { value: None, .. } => (false, true),
-                    };
+                for arg in args {
+                    let (expr, domain) = self.fold_once(arg);
+                    args_expr.push(expr);
 
-                    has_true = has_true && domain_hash_true;
-                    has_false = has_false || domain_hash_false;
+                    match domain {
+                        Some(domain) => {
+                            let domain = DomainType::try_downcast_domain(&domain).unwrap();
+                            let (domain_hash_true, domain_hash_false) = match &domain {
+                                NullableDomain {
+                                    has_null,
+                                    value:
+                                        Some(box BooleanDomain {
+                                            has_true,
+                                            has_false,
+                                        }),
+                                } => (*has_true, *has_null || *has_false),
+                                NullableDomain { value: None, .. } => (false, true),
+                            };
+
+                            has_true = has_true && domain_hash_true;
+                            has_false = has_false || domain_hash_false;
+                        }
+                        None => {
+                            continue;
+                        }
+                    }
                 }
 
                 if !has_true && has_false {

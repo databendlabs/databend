@@ -103,7 +103,7 @@ impl HashJoinDesc {
             .iter()
             .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
             .try_reduce(|lhs, rhs| {
-                check_function(None, "and", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
+                check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
             })
     }
 }
