@@ -1201,18 +1201,30 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         while retry < TXN_MAX_RETRY_TIMES {
             retry += 1;
 
+            let res = get_share_endpoint_or_err(
+                self,
+                name_key,
+                format!("drop_share_endpoint: {}", &name_key),
+            )
+            .await;
+
             let (
                 share_endpoint_id_seq,
                 share_endpoint_id,
                 share_endpoint_meta_seq,
                 _share_endpoint_meta,
-            ) = get_share_endpoint_or_err(
-                self,
-                name_key,
-                format!("drop_share_endpoint: {}", &name_key),
-            )
-            .await?;
+            ) = match res {
+                Ok(x) => x,
+                Err(e) => {
+                    if let KVAppError::AppError(AppError::UnknownShareEndpoint(_)) = e {
+                        if req.if_exists {
+                            return Ok(DropShareEndpointReply {});
+                        }
+                    }
 
+                    return Err(e);
+                }
+            };
             let (share_endpoint_name_seq, _share_endpoint) = get_share_endpoint_id_to_name_or_err(
                 self,
                 share_endpoint_id,
