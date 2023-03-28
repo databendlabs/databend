@@ -171,7 +171,7 @@ impl PhysicalPlanBuilder {
                 let mut name_mapping = BTreeMap::new();
                 let mut project_internal_columns = BTreeMap::new();
                 let metadata = self.metadata.read().clone();
-                // dbg!("physical plan builder:", scan.columns.clone());
+
                 for index in scan.columns.iter() {
                     let column = metadata.column(*index);
                     if let ColumnEntry::BaseTableColumn(BaseTableColumn { path_indices, .. }) =
@@ -681,7 +681,6 @@ impl PhysicalPlanBuilder {
             }
             RelOperator::Window(w) => {
                 let input = self.build(s_expr.child(0)?).await?;
-                // dbg!(&input);
                 let partition_items = w.partition_by.iter().map(|v| v.index).collect::<Vec<_>>();
                 let order_by_items = w
                     .order_by

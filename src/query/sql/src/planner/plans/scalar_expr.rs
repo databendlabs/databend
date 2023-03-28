@@ -81,6 +81,12 @@ impl ScalarExpr {
                 for scalar in &scalar.agg_func.args {
                     result = result.union(&scalar.used_columns()).cloned().collect();
                 }
+                for scalar in &scalar.partition_by {
+                    result = result.union(&scalar.used_columns()).cloned().collect();
+                }
+                for order in &scalar.order_by {
+                    result = result.union(&order.expr.used_columns()).cloned().collect();
+                }
                 result
             }
             ScalarExpr::AggregateFunction(scalar) => {

@@ -34,8 +34,6 @@ use crate::plans::WindowFuncFrame;
 pub struct Window {
     // aggregate scalar expressions, such as: sum(col1), count(*);
     pub aggregate_function: ScalarItem,
-    // aggregate params
-    pub aggregate_args: Vec<ScalarItem>,
     // partition by scalar expressions
     pub partition_by: Vec<ScalarItem>,
     // order by
@@ -48,10 +46,8 @@ impl Window {
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
 
-        for arg in self.aggregate_args.iter() {
-            used_columns.insert(arg.index);
-            used_columns.extend(arg.scalar.used_columns())
-        }
+        used_columns.insert(self.aggregate_function.index);
+        used_columns.extend(self.aggregate_function.scalar.used_columns());
 
         for part in self.partition_by.iter() {
             used_columns.insert(part.index);
