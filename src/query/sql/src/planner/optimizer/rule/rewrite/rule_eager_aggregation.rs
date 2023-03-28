@@ -193,15 +193,15 @@ impl Rule for RuleEagerAggregation {
 
         // Find all `BoundColumnRef`, and then create a mapping from the column source
         // of `BoundColumnRef` to the item's index.
-        let eval_scalar_items: HashMap<usize, usize> = eval_scalar
-            .items
-            .iter()
-            .enumerate()
-            .filter_map(|(index, item)| match &item.scalar {
-                ScalarExpr::BoundColumnRef(column) => Some((column.column.index, index)),
-                _ => None,
-            })
-            .collect();
+        let mut eval_scalar_items: HashMap<usize, Vec<usize>> = HashMap::new();
+        for (index, item) in eval_scalar.items.iter().enumerate() {
+            if let ScalarExpr::BoundColumnRef(column) = &item.scalar {
+                eval_scalar_items
+                    .entry(column.column.index)
+                    .or_default()
+                    .push(index);
+            }
+        }
 
         // Get all eager aggregate functions of the left child and right child.
         let function_factory = AggregateFunctionFactory::instance();
@@ -427,18 +427,20 @@ impl Rule for RuleEagerAggregation {
                     }
 
                     // Modify the eval scalars of all aggregate functions that are not AVG components.
-                    if let Some(idx) = eval_scalar_items.get(&old_index) && !avg_components.contains_key(&old_index) {
-                        let eval_scalar_item = &mut double_eager_eval_scalar.items[*idx];
-                        if let ScalarExpr::BoundColumnRef(column) = &mut eval_scalar_item.scalar {
-                            let column_binding = &mut column.column;
-                            column_binding.index = new_index;
-                            if func_name == "count" {
-                                column_binding.data_type = Box::new(DataType::Nullable(Box::new(
-                                    DataType::Number(NumberDataType::UInt64),
-                                )));
-                                eval_scalar_item.scalar = cast_expr_if_needed(eval_scalar_item.scalar.clone(), DataType::Number(NumberDataType::UInt64));
+                    if let Some(indexes) = eval_scalar_items.get(&old_index) && !avg_components.contains_key(&old_index) {
+                        for idx in indexes {
+                            let eval_scalar_item = &mut double_eager_eval_scalar.items[*idx];
+                            if let ScalarExpr::BoundColumnRef(column) = &mut eval_scalar_item.scalar {
+                                let column_binding = &mut column.column;
+                                column_binding.index = new_index;
+                                if func_name == "count" {
+                                    column_binding.data_type = Box::new(DataType::Nullable(Box::new(
+                                        DataType::Number(NumberDataType::UInt64),
+                                    )));
+                                    eval_scalar_item.scalar = cast_expr_if_needed(eval_scalar_item.scalar.clone(), DataType::Number(NumberDataType::UInt64));
+                                }
+                                success = true;
                             }
-                            success = true;
                         }
                     }
                 }
@@ -485,11 +487,13 @@ impl Rule for RuleEagerAggregation {
             // AVG(C) = SUM(C) / COUNT(C)
             // Use AVG components(SUM and COUNT) to build AVG eval scalar.
             for (sum_index, count_index) in avg_components.iter() {
-                if let Some(idx) = eval_scalar_items.get(sum_index) {
-                    let eval_scalar_item = &mut double_eager_eval_scalar.items[*idx];
-                    eval_scalar_item.scalar =
-                        create_avg_scalar_item(old_to_new[sum_index], old_to_new[count_index]);
-                    success = true;
+                if let Some(indexes) = eval_scalar_items.get(sum_index) {
+                    for idx in indexes {
+                        let eval_scalar_item = &mut double_eager_eval_scalar.items[*idx];
+                        eval_scalar_item.scalar =
+                            create_avg_scalar_item(old_to_new[sum_index], old_to_new[count_index]);
+                        success = true;
+                    }
                 }
             }
 
@@ -678,7 +682,7 @@ impl Rule for RuleEagerAggregation {
 fn get_eager_aggregation_functions(
     agg_final: &Aggregate,
     columns_set: &ColumnSet,
-    eval_scalar_items: &HashMap<usize, usize>,
+    eval_scalar_items: &HashMap<usize, Vec<usize>>,
     function_factory: &AggregateFunctionFactory,
 ) -> Vec<(usize, IndexType, String)> {
     agg_final

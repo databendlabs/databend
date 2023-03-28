@@ -116,3 +116,62 @@ EvalScalar
                             ├── push downs: [filters: [], limit: NONE]
                             ├── output columns: [a_id]
                             └── estimated rows: 0.00
+
+# duplicate aggregate function
+query T
+explain select a.a_id, b.a_id, sum(b.b_val), sum(b.b_val) from a join b on a.a_id = b.a_id group by a.a_id, b.a_id;
+----
+EvalScalar
+├── expressions: [sum(b.b_val) (#10), sum(b.b_val) (#10)]
+├── estimated rows: 0.00
+└── AggregateFinal
+    ├── group by: [a_id, a_id]
+    ├── aggregate functions: [sum(sum(b.b_val) * _eager_count)]
+    ├── estimated rows: 0.00
+    └── AggregatePartial
+        ├── group by: [a_id, a_id]
+        ├── aggregate functions: [sum(sum(b.b_val) * _eager_count)]
+        ├── estimated rows: 0.00
+        └── EvalScalar
+            ├── expressions: [_eager (#6) * CAST(_eager_count (#9) AS UInt64 NULL)]
+            ├── estimated rows: 0.00
+            └── HashJoin
+                ├── join type: INNER
+                ├── build keys: [b.a_id (#4)]
+                ├── probe keys: [a.a_id (#0)]
+                ├── filters: []
+                ├── estimated rows: 0.00
+                ├── AggregateFinal(Build)
+                │   ├── group by: [a_id]
+                │   ├── aggregate functions: [sum(b_val)]
+                │   ├── estimated rows: 0.00
+                │   └── AggregatePartial
+                │       ├── group by: [a_id]
+                │       ├── aggregate functions: [sum(b_val)]
+                │       ├── estimated rows: 0.00
+                │       └── TableScan
+                │           ├── table: default.default.b
+                │           ├── read rows: 0
+                │           ├── read bytes: 0
+                │           ├── partitions total: 0
+                │           ├── partitions scanned: 0
+                │           ├── push downs: [filters: [], limit: NONE]
+                │           ├── output columns: [b_val, a_id]
+                │           └── estimated rows: 0.00
+                └── AggregateFinal(Probe)
+                    ├── group by: [a_id]
+                    ├── aggregate functions: [count()]
+                    ├── estimated rows: 0.00
+                    └── AggregatePartial
+                        ├── group by: [a_id]
+                        ├── aggregate functions: [count()]
+                        ├── estimated rows: 0.00
+                        └── TableScan
+                            ├── table: default.default.a
+                            ├── read rows: 0
+                            ├── read bytes: 0
+                            ├── partitions total: 0
+                            ├── partitions scanned: 0
+                            ├── push downs: [filters: [], limit: NONE]
+                            ├── output columns: [a_id]
+                            └── estimated rows: 0.00
