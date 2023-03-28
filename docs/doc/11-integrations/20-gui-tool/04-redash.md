@@ -13,11 +13,11 @@ Databend offers integration with Redash as a data source. The following tutorial
 
 In this tutorial, you'll deploy a local Databend and install Redash with Docker. Before you start, ensure that you have Docker installed.
 
-## Step 1. Deploy Databend
+### Step 1. Deploy Databend
 
 Follow the [Deployment Guide](https://databend.rs/doc/deploy) to deploy a local Databend.
 
-## Step 2. Deploy Redash
+### Step 2. Deploy Redash
 
 The steps below describe how to deploy Redash with Docker.
 
@@ -64,7 +64,7 @@ docker-compose run --rm server create_db
 docker-compose up
 ```
 
-## Step 3. Add Databend as a Data Source
+### Step 3. Add Databend as a Data Source
 
 1. Sign up for Redash by completing the initial process at http://localhost:5000 in your web browser.
 
