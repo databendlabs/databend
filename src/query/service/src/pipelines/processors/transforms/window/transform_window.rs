@@ -69,6 +69,8 @@ pub struct TransformWindow {
     function: Arc<dyn AggregateFunction>,
     arguments: Vec<usize>,
 
+    // Need to hold arena to drop the allocate bytes when drop `TransformWindow`.
+    _arena: Area,
     place: StateAddr,
 
     partition_indices: Vec<usize>,
@@ -145,6 +147,7 @@ impl TransformWindow {
             function,
             arguments,
             partition_indices,
+            _arena: arena,
             place: state_place,
             blocks: VecDeque::new(),
             outputs: VecDeque::new(),
