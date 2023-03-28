@@ -2031,6 +2031,7 @@ name = "common-openai"
 version = "0.1.0"
 dependencies = [
  "common-exception",
+ "metrics",
  "openai_api_rust",
 ]
 

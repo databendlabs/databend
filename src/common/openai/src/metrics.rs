@@ -11,13 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
 
-mod completion;
-mod embedding;
-#[allow(clippy::module_inception)]
-mod openai;
+use metrics::increment_gauge;
 
-pub(crate) mod metrics;
+pub fn metrics_completion_count(c: u32) {
+    increment_gauge!("openai_completion_count", c as f64);
+}
 
-pub use openai::AIModel;
-pub use openai::OpenAI;
+pub fn metrics_completion_token(c: u32) {
+    increment_gauge!("openai_completion_token", c as f64);
+}
+
+pub fn metrics_embedding_count(c: u32) {
+    increment_gauge!("openai_embedding_count", c as f64);
+}
+
+pub fn metrics_embedding_token(c: u32) {
+    increment_gauge!("openai_embedding_token", c as f64);
+}
