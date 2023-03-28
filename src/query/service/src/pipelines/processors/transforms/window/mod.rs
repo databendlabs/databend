@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod frame;
 mod transform_window;
 
-pub use frame::WindowFrame;
-pub use frame::WindowFrameBound;
 pub use transform_window::TransformWindow;

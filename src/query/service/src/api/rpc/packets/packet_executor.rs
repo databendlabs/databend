@@ -19,6 +19,7 @@ use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::NodeInfo;
+use common_settings::ChangeValue;
 
 use crate::api::rpc::flight_actions::InitQueryFragmentsPlan;
 use crate::api::rpc::packets::packet::create_client;
@@ -32,6 +33,7 @@ pub struct QueryFragmentsPlanPacket {
     pub executor: String,
     pub request_executor: String,
     pub fragments: Vec<FragmentPlanPacket>,
+    pub changed_settings: HashMap<String, ChangeValue>,
     // We send nodes info for each node. This is a bad choice
     pub executors_info: HashMap<String, Arc<NodeInfo>>,
 }
@@ -42,6 +44,7 @@ impl QueryFragmentsPlanPacket {
         executor: String,
         fragments: Vec<FragmentPlanPacket>,
         executors_info: HashMap<String, Arc<NodeInfo>>,
+        changed_settings: HashMap<String, ChangeValue>,
         request_executor: String,
     ) -> QueryFragmentsPlanPacket {
         QueryFragmentsPlanPacket {
@@ -49,6 +52,7 @@ impl QueryFragmentsPlanPacket {
             executor,
             fragments,
             executors_info,
+            changed_settings,
             request_executor,
         }
     }

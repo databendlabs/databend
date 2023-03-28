@@ -96,6 +96,7 @@ fn test_user_stage_webhdfs_v30() -> anyhow::Result<()> {
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(3141),
             size_limit: 1038,
+            max_files: 0,
             split_size: 0,
             purge: true,
             single: false,
@@ -145,6 +146,7 @@ fn test_user_stage_fs_v22() -> anyhow::Result<()> {
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
+            max_files: 0,
             split_size: 0,
             purge: true,
             single: false,
@@ -193,6 +195,7 @@ fn test_user_stage_fs_v21() -> anyhow::Result<()> {
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
+            max_files: 0,
             split_size: 0,
             purge: true,
             single: false,
@@ -240,6 +243,7 @@ fn test_user_stage_fs_v20() -> anyhow::Result<()> {
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
+            max_files: 0,
             split_size: 0,
             purge: true,
             single: false,
@@ -288,6 +292,7 @@ fn test_user_stage_fs_v16() -> anyhow::Result<()> {
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
+            max_files: 0,
             split_size: 0,
             purge: true,
             single: false,
@@ -348,6 +353,7 @@ fn test_user_stage_s3_v16() -> anyhow::Result<()> {
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
+            max_files: 0,
             split_size: 0,
             purge: true,
             single: false,
@@ -402,6 +408,7 @@ fn test_user_stage_gcs_v16() -> anyhow::Result<()> {
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
+            max_files: 0,
             split_size: 0,
             purge: true,
             single: false,
@@ -459,6 +466,7 @@ fn test_user_stage_oss_v16() -> anyhow::Result<()> {
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
+            max_files: 0,
             split_size: 0,
             purge: true,
             single: false,
@@ -518,6 +526,7 @@ fn test_user_stage_oss_v13() -> anyhow::Result<()> {
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
+            max_files: 0,
             split_size: 0,
             purge: true,
             single: false,
@@ -577,6 +586,7 @@ fn test_user_stage_s3_v11() -> anyhow::Result<()> {
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
+            max_files: 0,
             split_size: 0,
             purge: true,
             single: false,
@@ -634,6 +644,7 @@ fn test_user_stage_s3_v8() -> anyhow::Result<()> {
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
+            max_files: 0,
             split_size: 0,
             purge: true,
             single: false,
@@ -682,6 +693,7 @@ fn test_user_stage_fs_v6() -> anyhow::Result<()> {
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
+            max_files: 0,
             split_size: 0,
             purge: true,
             single: false,
@@ -740,6 +752,7 @@ fn test_user_stage_s3_v6() -> anyhow::Result<()> {
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
+            max_files: 0,
             split_size: 0,
             purge: true,
             single: false,
@@ -794,6 +807,7 @@ fn test_user_stage_gcs_v6() -> anyhow::Result<()> {
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
+            max_files: 0,
             split_size: 0,
             purge: true,
             single: false,
@@ -841,6 +855,7 @@ fn test_user_stage_fs_v4() -> anyhow::Result<()> {
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
+            max_files: 0,
             split_size: 0,
             purge: false,
             single: false,
@@ -899,6 +914,7 @@ fn test_user_stage_s3_v4() -> anyhow::Result<()> {
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
+            max_files: 0,
             split_size: 0,
             purge: false,
             single: false,
@@ -952,6 +968,7 @@ fn test_user_stage_gcs_v4() -> anyhow::Result<()> {
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
+            max_files: 0,
             split_size: 0,
             purge: false,
             single: false,
@@ -1007,6 +1024,7 @@ fn test_user_stage_s3_v1() -> anyhow::Result<()> {
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
+            max_files: 0,
             split_size: 0,
             purge: false,
             single: false,
@@ -1057,6 +1075,7 @@ fn test_internal_stage_v17() -> anyhow::Result<()> {
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
+            max_files: 0,
             split_size: 0,
             purge: true,
             single: false,
@@ -1106,6 +1125,7 @@ fn test_user_stage_v19() -> anyhow::Result<()> {
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
+            max_files: 0,
             split_size: 0,
             purge: true,
             single: false,

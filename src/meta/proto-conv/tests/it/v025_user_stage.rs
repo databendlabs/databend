@@ -64,6 +64,7 @@ fn test_decode_v25_user_stage() -> anyhow::Result<()> {
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::AbortNum(2),
             size_limit: 1038,
+            max_files: 0,
             split_size: 0,
             purge: true,
             single: false,

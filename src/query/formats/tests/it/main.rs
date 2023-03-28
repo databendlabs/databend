@@ -30,6 +30,6 @@ fn get_output_format_clickhouse(
     schema: TableSchemaRef,
 ) -> Result<Box<dyn OutputFormat>> {
     let format = ClickhouseFormatType::parse_clickhouse_format(format_name)?;
-    let settings = Settings::try_create("default".to_string());
+    let settings = Settings::create("default".to_string());
     FileFormatOptionsExt::get_output_format_from_clickhouse_format(format, schema, &settings)
 }
