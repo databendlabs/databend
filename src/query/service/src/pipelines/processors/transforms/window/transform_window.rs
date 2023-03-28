@@ -572,10 +572,11 @@ impl Processor for TransformWindow {
         let input_is_finished = self.input.is_finished();
         match self.state {
             ProcessorState::Consume => {
+                self.input.set_need_data();
                 let has_data = self.input.has_data();
-                let data = self.input.pull_data().transpose()?;
                 match (input_is_finished, has_data) {
                     (_, true) => {
+                        let data = self.input.pull_data().transpose()?;
                         self.state = ProcessorState::AddBlock(data);
                         Ok(Event::Sync)
                     }
