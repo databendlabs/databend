@@ -516,7 +516,6 @@ impl TransformWindow {
         let row_start = self.frame_start;
         let row_end = self.frame_end;
 
-        // TODO: for some case, current frame can continue to use the previous frame's state
         // Reset state
         self.function.init_state(self.place);
 
@@ -542,6 +541,17 @@ impl TransformWindow {
 
         self.merge_result_of_current_row()
     }
+
+    #[inline(always)]
+    fn finish(&mut self) {
+        self.input.finish();
+        self.output.finish();
+        if self.function.need_manual_drop_state() {
+            unsafe {
+                self.function.drop_state(self.place);
+            }
+        }
+    }
 }
 
 enum ProcessorState {
@@ -562,7 +572,7 @@ impl Processor for TransformWindow {
 
     fn event(&mut self) -> Result<Event> {
         if self.output.is_finished() {
-            self.input.finish();
+            self.finish();
             return Ok(Event::Finished);
         }
 
@@ -589,7 +599,7 @@ impl Processor for TransformWindow {
                             self.state = ProcessorState::AddBlock(None);
                             Ok(Event::Sync)
                         } else {
-                            self.output.finish();
+                            self.finish();
                             Ok(Event::Finished)
                         }
                     }
