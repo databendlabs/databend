@@ -358,7 +358,7 @@ impl<T: ArgType> ArrayColumnBuilder<T> {
 
 impl ArrayColumnBuilder<AnyType> {
     pub fn pop(&mut self) -> Option<Column> {
-        if self.len() > 1 {
+        if self.len() > 0 {
             let pop_count = self.offsets[self.offsets.len() - 1] as usize
                 - self.offsets[self.offsets.len() - 2] as usize;
             self.offsets.pop();

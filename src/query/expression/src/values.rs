@@ -2407,7 +2407,7 @@ impl ColumnBuilder {
             ColumnBuilder::Date(builder) => builder.pop().map(Scalar::Date),
             ColumnBuilder::Array(builder) => builder.pop().map(Scalar::Array),
             ColumnBuilder::Vector(builder) => {
-                if builder.len() > 1 {
+                if builder.len() > 0 {
                     builder.offsets.pop();
                     let idx = *builder.offsets.last().unwrap() as usize;
                     let vals = builder.builder.drain(idx..).collect();
