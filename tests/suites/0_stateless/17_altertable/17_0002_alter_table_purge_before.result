@@ -13,13 +13,13 @@ checking that after purge (by snapshot id) there should be 4 rows left
 checking that there should are 3 snapshots before purge
 1
 alter table drop a column
-ERROR 1105 (HY000) at line 1: Code: 1109, displayText = cannot drop table column to empty.
+ERROR 1105 (HY000) at line 1: Code: 1109, Text = cannot drop table column to empty.
 checking that after purge (by timestamp) there should be 2 snapshots left
 1
 checking that after purge (by timestamp) there should be 4 rows left
 1
 alter table drop a column
-ERROR 1105 (HY000) at line 1: Code: 1109, displayText = cannot drop table column to empty.
+ERROR 1105 (HY000) at line 1: Code: 1109, Text = cannot drop table column to empty.
 checking that after purge (by timestamp) there should be 2 snapshots left
 1
 checking that after purge (by timestamp) there should be 4 rows left

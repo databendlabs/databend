@@ -499,6 +499,7 @@ impl TableContext for QueryContext {
         database_name: &str,
         table_name: &str,
         files: Vec<StageFileInfo>,
+        max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
         let tenant = self.get_tenant();
         let catalog = self.get_catalog(catalog_name)?;
@@ -507,6 +508,7 @@ impl TableContext for QueryContext {
             .await?;
         let table_id = table.get_id();
 
+        let mut limit: usize = 0;
         let mut copied_files = BTreeMap::new();
         for chunk in files.chunks(MAX_QUERY_COPIED_FILES_NUM) {
             let files = chunk.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
@@ -517,9 +519,14 @@ impl TableContext for QueryContext {
             copied_files.extend(resp.file_info);
         }
 
+        let max_files = max_files.unwrap_or(usize::MAX);
         // Colored.
         let mut results = Vec::with_capacity(files.len());
         for mut file in files {
+            if limit == max_files {
+                break;
+            }
+            limit += 1;
             if let Some(copied_file) = copied_files.get(&file.path) {
                 match &copied_file.etag {
                     Some(copied_etag) => {

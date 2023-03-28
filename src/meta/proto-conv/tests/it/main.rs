@@ -37,3 +37,4 @@ mod v027_schema;
 mod v028_schema;
 mod v029_schema;
 mod v030_user_stage;
+mod v031_copy_max_file;

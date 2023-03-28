@@ -29,7 +29,7 @@ CREATE STAGE IF NOT EXISTS airbyte_stage FILE_FORMAT = (TYPE = CSV);
 PRESIGN UPLOAD @airbyte_stage/test.csv;
 ```
 
-If you got an error like `Code: 501, displayText = Presign is not supported`, then you could not use the integration.
+If you got an error like `Code: 501, Text = Presign is not supported`, then you could not use the integration.
 Please read [this](/doc/deploy/deploying-databend) for how to use S3 as a storage backend.
 
 ## Create a Databend User
