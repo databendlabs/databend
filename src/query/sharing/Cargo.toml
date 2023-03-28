@@ -15,7 +15,12 @@ async-trait = "0.1"
 bytes = "1"
 common-auth = { path = "../../common/auth" }
 common-config = { path = "../config" }
+common-exception = { path = "../../common/exception" }
+common-meta-api = { path = "../../meta/api" }
+common-meta-app = { path = "../../meta/app" }
+common-users = { path = "../users" }
 
+chrono = { workspace = true }
 http = "0.2"
 log = "0.4"
 moka = "0.10"
