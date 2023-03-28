@@ -522,6 +522,10 @@ impl TableContext for QueryContext {
         // Colored.
         let mut results = Vec::with_capacity(files.len());
         for mut file in files {
+            if limit == max_files {
+                break;
+            }
+            limit += 1;
             if let Some(copied_file) = copied_files.get(&file.path) {
                 match &copied_file.etag {
                     Some(copied_etag) => {
@@ -543,11 +547,6 @@ impl TableContext for QueryContext {
                 }
             }
             results.push(file);
-
-            if limit == max_files {
-                break;
-            }
-            limit += 1;
         }
         Ok(results)
     }
