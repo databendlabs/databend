@@ -752,7 +752,15 @@ impl PipelineBuilder {
             window.agg_func.sig.args.clone(),
         )?;
 
-        let arguments = window.agg_func.args.clone();
+        let arguments = window
+            .agg_func
+            .args
+            .iter()
+            .map(|p| {
+                let offset = input_schema.index_of(&p.to_string())?;
+                Ok(offset)
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         let partition_by = window
             .partition_by
