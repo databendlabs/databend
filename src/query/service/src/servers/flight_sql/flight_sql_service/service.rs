@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Cursor;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -57,7 +56,6 @@ use common_base::base::uuid::Uuid;
 use common_exception::Result;
 use common_expression::DataSchema;
 use futures::Stream;
-use prost::bytes::Buf;
 use prost::Message;
 use tonic::metadata::MetadataValue;
 use tonic::Request;
@@ -103,17 +101,15 @@ impl FlightSqlService for FlightSqlServiceImpl {
     async fn do_get_fallback(
         &self,
         request: Request<Ticket>,
-        _message: Any,
+        message: Any,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
         let session = self.get_session(&request)?;
-        let ticket = &request.get_ref().ticket.chunk().to_vec();
-        let mut buf = Cursor::new(&ticket);
-        let any = Any::decode(&mut buf).unwrap();
-        let fetch_results: FetchResults = any.unpack().unwrap().unwrap();
+        let fetch_results: FetchResults = message.unpack().unwrap().unwrap();
 
         let handle = Uuid::try_parse(&fetch_results.handle).map_err(|e| {
             Status::internal(format!(
-                "do_get_fallback Error decoding handle: {e} {ticket:?}"
+                "do_get_fallback Error decoding handle: {e} {:?}",
+                fetch_results.handle
             ))
         })?;
 
