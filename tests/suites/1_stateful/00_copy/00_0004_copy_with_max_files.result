@@ -1,0 +1,36 @@
+--- force = false, purge = false
+4
+f1.csv
+f2.csv
+f3.csv
+6
+f1.csv
+f2.csv
+f3.csv
+6
+f1.csv
+f2.csv
+f3.csv
+--- force = false, purge = true
+4
+f1.csv
+6
+6
+--- force = true, purge = false
+4
+f1.csv
+f2.csv
+f3.csv
+8
+f1.csv
+f2.csv
+f3.csv
+12
+f1.csv
+f2.csv
+f3.csv
+--- force = true, purge = true
+4
+f1.csv
+6
+6

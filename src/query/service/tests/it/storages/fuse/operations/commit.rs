@@ -509,12 +509,12 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    async fn color_copied_files(
+    async fn filter_out_copied_files(
         &self,
         _catalog_name: &str,
         _database_name: &str,
         _table_name: &str,
-        _files: Vec<StageFileInfo>,
+        _files: &[StageFileInfo],
         _max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
         todo!()

@@ -35,7 +35,6 @@ use common_meta_types::MetaId;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_storage::StageFileInfo;
-use common_storage::StageFileStatus;
 use common_storage::StageFilesInfo;
 use common_storages_fuse::io::Files;
 use common_storages_stage::StageTable;
@@ -167,7 +166,6 @@ impl CopyInterpreter {
         table_name: &str,
         query: &Plan,
         stage_info: StageInfo,
-        all_source_file_infos: Vec<StageFileInfo>,
         need_copy_file_infos: Vec<StageFileInfo>,
         force: bool,
     ) -> Result<PipelineBuildResult> {
@@ -208,7 +206,6 @@ impl CopyInterpreter {
                     ctx.clone(),
                     to_table,
                     stage_info,
-                    all_source_file_infos,
                     need_copy_file_infos,
                     force,
                 )?;
@@ -253,45 +250,42 @@ impl CopyInterpreter {
             Some(max_files)
         };
 
-        let mut all_source_file_infos = if force {
+        let all_source_file_infos = if force {
             StageTable::list_files(&stage_table_info, max_files).await?
         } else {
             StageTable::list_files(&stage_table_info, None).await?
         };
+        let num_all_files = all_source_file_infos.len();
 
-        info!("end to list files: {}", all_source_file_infos.len());
+        info!("end to list files: got {} files", num_all_files);
 
-        if !force {
+        let need_copy_file_infos = if force {
+            all_source_file_infos
+        } else {
             // Status.
             {
-                let status = "begin to color copied files";
+                let status = "begin to filter out copied files";
                 ctx.set_status_info(status);
                 info!(status);
             }
 
-            all_source_file_infos = table_ctx
-                .color_copied_files(
+            let files = table_ctx
+                .filter_out_copied_files(
                     catalog_name,
                     database_name,
                     table_name,
-                    all_source_file_infos,
+                    &all_source_file_infos,
                     max_files,
                 )
                 .await?;
 
-            info!("end to color copied files: {}", all_source_file_infos.len());
-        }
-
-        let mut need_copy_file_infos = vec![];
-        for file in &all_source_file_infos {
-            if file.status == StageFileStatus::NeedCopy {
-                need_copy_file_infos.push(file.clone());
-            }
-        }
+            info!("end filtering out copied files: {}", num_all_files);
+            files
+        };
 
         info!(
             "copy: read all files finished, all:{}, need copy:{}, elapsed:{}",
-            all_source_file_infos.len(),
+            num_all_files,
             need_copy_file_infos.len(),
             start.elapsed().as_secs()
         );
@@ -383,7 +377,6 @@ impl CopyInterpreter {
                     ctx.clone(),
                     to_table,
                     stage_table_info_clone.stage_info,
-                    all_source_file_infos,
                     need_copy_file_infos,
                     force,
                 )?;
@@ -410,18 +403,18 @@ impl CopyInterpreter {
         ctx: Arc<QueryContext>,
         to_table: Arc<dyn Table>,
         stage_info: StageInfo,
-        all_source_files: Vec<StageFileInfo>,
-        need_copy_files: Vec<StageFileInfo>,
+        copied_files: Vec<StageFileInfo>,
         force: bool,
     ) -> Result<()> {
-        let mut copied_files = BTreeMap::new();
-        for file in need_copy_files {
+        let num_copied_files = copied_files.len();
+        let mut copied_file_tree = BTreeMap::new();
+        for file in &copied_files {
             // Short the etag to 7 bytes for less space in metasrv.
             let short_etag = file.etag.clone().map(|mut v| {
                 v.truncate(7);
                 v
             });
-            copied_files.insert(file.path.clone(), TableCopiedFileInfo {
+            copied_file_tree.insert(file.path.clone(), TableCopiedFileInfo {
                 etag: short_etag,
                 content_length: file.size,
                 last_modified: Some(file.last_modified),
@@ -434,18 +427,17 @@ impl CopyInterpreter {
 
             let table_id = to_table.get_id();
             let expire_hours = ctx.get_settings().get_load_file_metadata_expire_hours()?;
-            let num_copied_files = copied_files.len();
 
             let fail_if_duplicated = !force;
             let upsert_copied_files_request = Self::upsert_copied_files_request(
                 table_id,
                 expire_hours,
-                copied_files,
+                copied_file_tree,
                 fail_if_duplicated,
             );
 
             {
-                let status = format!("begin commit, number of copied files:{}", num_copied_files,);
+                let status = format!("begin commit, number of copied files:{}", num_copied_files);
                 ctx.set_status_info(&status);
                 info!(status);
             }
@@ -482,17 +474,17 @@ impl CopyInterpreter {
 
                 // Status.
                 {
-                    let status = format!("begin to purge files:{}", all_source_files.len());
+                    let status = format!("begin to purge files:{}", num_copied_files);
                     ctx.set_status_info(&status);
                     info!(status);
                 }
 
-                CopyInterpreter::try_purge_files(ctx.clone(), &stage_info, &all_source_files).await;
+                CopyInterpreter::try_purge_files(ctx.clone(), &stage_info, &copied_files).await;
 
                 // Status.
                 info!(
                     "end to purge files:{}, elapsed:{}",
-                    all_source_files.len(),
+                    num_copied_files,
                     purge_start.elapsed().as_secs()
                 );
             }
@@ -560,7 +552,6 @@ impl Interpreter for CopyInterpreter {
                 table_name,
                 stage_info,
                 from,
-                all_source_file_infos,
                 need_copy_file_infos,
                 force,
                 ..
@@ -571,7 +562,6 @@ impl Interpreter for CopyInterpreter {
                     table_name,
                     from,
                     *stage_info.clone(),
-                    all_source_file_infos.clone(),
                     need_copy_file_infos.clone(),
                     *force,
                 )

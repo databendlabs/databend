@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::cmp::min;
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
@@ -55,7 +54,6 @@ use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
-use common_storage::StageFileStatus;
 use common_storage::StorageMetrics;
 use common_storages_fuse::TableContext;
 use common_storages_parquet::ParquetTable;
@@ -494,16 +492,15 @@ impl TableContext for QueryContext {
         self.shared.get_table(catalog, database, table).await
     }
 
-    async fn color_copied_files(
+    async fn filter_out_copied_files(
         &self,
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
-        files: Vec<StageFileInfo>,
+        files: &[StageFileInfo],
         max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
         let tenant = self.get_tenant();
-        let files = files.clone();
         let catalog = self.get_catalog(catalog_name)?;
         let table = catalog
             .get_table(&tenant, database_name, table_name)
@@ -511,29 +508,27 @@ impl TableContext for QueryContext {
         let table_id = table.get_id();
 
         let mut limit: usize = 0;
-        let max_files = max_files.unwrap_or(MAX_QUERY_COPIED_FILES_NUM);
-        let max_copied_files = min(MAX_QUERY_COPIED_FILES_NUM, max_files);
-        let mut copied_files = BTreeMap::new();
+        let max_files = max_files.unwrap_or(usize::MAX);
+        let batch_size = min(MAX_QUERY_COPIED_FILES_NUM, max_files);
 
         let mut results = Vec::with_capacity(files.len());
 
-        for chunk in files.chunks(max_copied_files) {
+        for chunk in files.chunks(batch_size) {
             let files = chunk.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
             let req = GetTableCopiedFileReq { table_id, files };
-            let resp = catalog
+            let copied_files = catalog
                 .get_table_copied_file_info(&tenant, database_name, req)
-                .await?;
-            copied_files.extend(resp.file_info);
+                .await?
+                .file_info;
             // Colored
             for file in chunk {
-                let mut file = file.clone();
                 if let Some(copied_file) = copied_files.get(&file.path) {
                     match &copied_file.etag {
                         Some(copied_etag) => {
                             if let Some(file_etag) = &file.etag {
                                 // Check the 7 bytes etag prefix.
                                 if file_etag.starts_with(copied_etag) {
-                                    file.status = StageFileStatus::AlreadyCopied;
+                                    continue;
                                 }
                             }
                         }
@@ -542,17 +537,16 @@ impl TableContext for QueryContext {
                             if copied_file.content_length == file.size
                                 && copied_file.last_modified == Some(file.last_modified)
                             {
-                                file.status = StageFileStatus::AlreadyCopied;
+                                continue;
                             }
                         }
                     }
                 }
-                if file.status == StageFileStatus::NeedCopy {
-                    results.push(file);
-                    limit += 1;
-                    if limit == max_files {
-                        return Ok(results);
-                    }
+
+                results.push(file.clone());
+                limit += 1;
+                if limit == max_files {
+                    return Ok(results);
                 }
             }
         }
