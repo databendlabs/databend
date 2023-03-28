@@ -248,7 +248,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ needs.metadata.outputs.head_sha }}
           run_id: ${{ needs.metadata.outputs.run_id }}
-          context: 'Benchmark Cloud / ${{ matrix.dataset }} (${{ matrix.size }})})'
+          context: 'Benchmark Cloud / ${{ matrix.dataset }} (${{ matrix.size }})'
           state: pending
           description: "Running"
       - uses: ./.github/actions/benchmark_cloud
@@ -274,7 +274,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ needs.metadata.outputs.head_sha }}
           run_id: ${{ needs.metadata.outputs.run_id }}
-          context: 'Benchmark Cloud / ${{ matrix.dataset }} (${{ matrix.size }})})'
+          context: 'Benchmark Cloud / ${{ matrix.dataset }} (${{ matrix.size }})'
           state: success
 
   comment_on_pr:
