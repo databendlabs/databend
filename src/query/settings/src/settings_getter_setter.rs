@@ -303,4 +303,8 @@ impl Settings {
     pub fn set_spilling_bytes_threshold_per_proc(&self, value: usize) -> Result<()> {
         self.try_set_u64("spilling_bytes_threshold_per_proc", value as u64)
     }
+
+    pub fn get_group_by_shuffle_mode(&self) -> Result<String> {
+        self.try_get_string("group_by_shuffle_mode")
+    }
 }

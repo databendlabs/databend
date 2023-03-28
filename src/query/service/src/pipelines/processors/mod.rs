@@ -40,5 +40,3 @@ pub use transforms::TransformResortAddOn;
 pub use transforms::TransformRuntimeFilter;
 pub use transforms::TransformSortPartial;
 pub use transforms::TransformWindow;
-pub use transforms::WindowFrame;
-pub use transforms::WindowFrameBound;
