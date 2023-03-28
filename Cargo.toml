@@ -8,4 +8,5 @@ edition = "2021"
 [workspace]
 members = [
     "core",
+    "driver",
 ]

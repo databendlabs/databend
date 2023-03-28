@@ -12,16 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_client::APIClient;
-
-use crate::common::DEFAULT_DSN;
-
-#[tokio::test]
-async fn simple_select() {
-    let dsn = option_env!("TEST_DATABEND_DSN").unwrap_or(DEFAULT_DSN);
-    let client = APIClient::from_dsn(dsn).unwrap();
-    let resp = client.query("select 15532").await.unwrap();
-    assert_eq!(resp.data.len(), 1);
-    assert_eq!(resp.data[0].len(), 1);
-    assert_eq!(resp.data[0][0], "15532");
-}
+pub static DEFAULT_DSN: &str = "databend://root:@localhost:8000/default?sslmode=disable";

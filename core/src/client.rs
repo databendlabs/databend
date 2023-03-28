@@ -150,7 +150,7 @@ impl APIClient {
         Ok(client)
     }
 
-    pub async fn query(&self, sql: String) -> Result<QueryResponse> {
+    pub async fn query(&self, sql: &str) -> Result<QueryResponse> {
         let req = QueryRequest::new(sql)
             .with_pagination(self.make_pagination())
             .with_session(self.make_session());
@@ -300,7 +300,7 @@ impl APIClient {
 
     async fn get_presigned_url(&self, stage_location: &str) -> Result<PresignedResponse> {
         let resp = self
-            .query(format!("PRESIGN UPLOAD {}", stage_location))
+            .query(format!("PRESIGN UPLOAD {}", stage_location).as_str())
             .await?;
         if resp.data.len() != 1 {
             return Err(anyhow!("Empty response from server for presigned request"));
@@ -351,7 +351,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_parse_dsn() -> Result<()> {
+    fn parse_dsn() -> Result<()> {
         let dsn = "databend://username:password@app.databend.com/test?wait_time_secs=10&max_rows_in_buffer=5000000&max_rows_per_page=10000&warehouse=wh&sslmode=disable";
         let client = APIClient::from_dsn(dsn)?;
         assert_eq!(client.host, "app.databend.com");
@@ -364,6 +364,23 @@ mod test {
         assert_eq!(client.max_rows_per_page, Some(10000));
         assert_eq!(client.tenant, None);
         assert_eq!(client.warehouse, Some("wh".to_string()));
+        Ok(())
+    }
+
+    #[test]
+    fn parse_stage() -> Result<()> {
+        let location = "@stage_name/path/to/file";
+        let stage_location = StageLocation::try_from(location)?;
+        assert_eq!(stage_location.name, "stage_name");
+        assert_eq!(stage_location.path, "path/to/file");
+        Ok(())
+    }
+
+    #[test]
+    fn parse_stage_fail() -> Result<()> {
+        let location = "stage_name/path/to/file";
+        let stage_location = StageLocation::try_from(location);
+        assert!(stage_location.is_err());
         Ok(())
     }
 }

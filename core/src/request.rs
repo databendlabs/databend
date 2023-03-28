@@ -25,10 +25,10 @@ pub struct SessionConfig {
 }
 
 #[derive(Serialize, Debug)]
-pub struct QueryRequest {
+pub struct QueryRequest<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     session: Option<SessionConfig>,
-    sql: String,
+    sql: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pagination: Option<PaginationConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -54,8 +54,8 @@ pub struct StageAttachmentConfig {
     pub copy_options: Option<BTreeMap<String, String>>,
 }
 
-impl QueryRequest {
-    pub fn new(sql: String) -> Self {
+impl QueryRequest<'_> {
+    pub fn new(sql: &'_ str) -> QueryRequest {
         QueryRequest {
             session: None,
             sql,
@@ -89,8 +89,8 @@ mod test {
     use anyhow::Result;
 
     #[test]
-    fn test_build_request() -> Result<()> {
-        let req = QueryRequest::new("select 1".to_string())
+    fn build_request() -> Result<()> {
+        let req = QueryRequest::new("select 1")
             .with_session(Some(SessionConfig {
                 database: Some("default".to_string()),
                 settings: Some(BTreeMap::new()),

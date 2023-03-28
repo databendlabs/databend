@@ -12,16 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_client::APIClient;
+use databend_driver::DatabencConnection;
 
 use crate::common::DEFAULT_DSN;
 
 #[tokio::test]
 async fn simple_select() {
     let dsn = option_env!("TEST_DATABEND_DSN").unwrap_or(DEFAULT_DSN);
-    let client = APIClient::from_dsn(dsn).unwrap();
-    let resp = client.query("select 15532").await.unwrap();
-    assert_eq!(resp.data.len(), 1);
-    assert_eq!(resp.data[0].len(), 1);
-    assert_eq!(resp.data[0][0], "15532");
+    let conn = DatabencConnection::create(dsn).unwrap();
+    let row = conn.query_row("select 15532").await.unwrap();
+    assert!(row.is_some());
+    let row = row.unwrap();
+    let (val,): (String,) = row.try_into().unwrap();
+    assert_eq!(val, "15532");
 }
