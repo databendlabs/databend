@@ -102,7 +102,7 @@ impl BlockOperator {
 
                 let mut result_data_blocks = Vec::with_capacity(input.num_rows());
                 for i in 0..input.num_rows() {
-                    let mut row = Vec::with_capacity(input.num_columns());
+                    let mut row = Vec::with_capacity(input.num_columns() + srf_exprs.len());
 
                     // Get the max number of rows of all result sets.
                     let mut max_num_rows = 0;

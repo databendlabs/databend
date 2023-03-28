@@ -119,6 +119,7 @@ pub enum FunctionID {
 #[derive(Default)]
 pub struct FunctionRegistry {
     pub funcs: HashMap<String, Vec<(Arc<Function>, usize)>>,
+    #[allow(clippy::type_complexity)]
     pub factories: HashMap<String, Vec<(Box<dyn FunctionFactory>, usize)>>,
 
     /// Aliases map from alias function name to original function name.
