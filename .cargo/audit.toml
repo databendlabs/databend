@@ -6,5 +6,17 @@ ignore = [
     # time: Potential segfault in the time crate
     # We are not accected by this CVE.
     # And there is no actions we can take, waiting for upstream.
-    "RUSTSEC-2020-0071"
+    "RUSTSEC-2020-0071",
+    # hyper
+    # Lenient `hyper` header parsing of `Content-Length` could allow request smuggling
+    "RUSTSEC-2021-0078",
+    # hyper
+    # Integer overflow in `hyper`'s parsing of the `Transfer-Encoding` header leads to data loss
+    "RUSTSEC-2021-0079",
+    # ansi_term
+    # ansi_term is Unmaintained
+    "RUSTSEC-2021-0139",
+    # buf_redux
+    # buf_redux is Unmaintained
+    "RUSTSEC-2023-0028"
 ]

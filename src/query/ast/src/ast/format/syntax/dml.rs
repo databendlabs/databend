@@ -219,6 +219,13 @@ pub(crate) fn pretty_copy(copy_stmt: CopyStmt) -> RcDoc<'static> {
         } else {
             RcDoc::nil()
         })
+        .append(if copy_stmt.max_files != 0 {
+            RcDoc::line()
+                .append(RcDoc::text("MAX_FILES = "))
+                .append(RcDoc::text(format!("{}", copy_stmt.max_files)))
+        } else {
+            RcDoc::nil()
+        })
         .append(
             RcDoc::line()
                 .append(RcDoc::text("PURGE = "))

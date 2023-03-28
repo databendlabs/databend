@@ -40,7 +40,7 @@ impl Compactor for LeftJoinCompactor {
         self.hash_join_state.interrupt();
     }
 
-    fn use_partial_compact() -> bool {
+    fn use_partial_compact(&self) -> bool {
         true
     }
 

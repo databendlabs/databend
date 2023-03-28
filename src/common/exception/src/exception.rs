@@ -163,12 +163,7 @@ pub type Result<T, E = ErrorCode> = std::result::Result<T, E>;
 
 impl Debug for ErrorCode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Code: {}, displayText = {}.",
-            self.code(),
-            self.message(),
-        )?;
+        write!(f, "Code: {}, Text = {}.", self.code(), self.message(),)?;
 
         match self.backtrace.as_ref() {
             None => Ok(()), // no backtrace
@@ -194,12 +189,7 @@ impl Debug for ErrorCode {
 
 impl Display for ErrorCode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Code: {}, displayText = {}.",
-            self.code(),
-            self.message(),
-        )
+        write!(f, "Code: {}, Text = {}.", self.code(), self.message(),)
     }
 }
 
@@ -261,7 +251,7 @@ impl ErrorCode {
 /// let y: common_exception::Result<()> = x.map_err_to_code(ErrorCode::UnknownException, || 123);
 ///
 /// assert_eq!(
-///     "Code: 1067, displayText = 123, cause: an error occurred when formatting an argument.",
+///     "Code: 1067, Text = 123, cause: an error occurred when formatting an argument.",
 ///     y.unwrap_err().to_string()
 /// );
 /// ```

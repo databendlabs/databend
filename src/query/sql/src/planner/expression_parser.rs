@@ -22,7 +22,6 @@ use common_base::base::tokio::task::block_in_place;
 use common_catalog::catalog::CATALOG_DEFAULT;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -52,7 +51,7 @@ pub fn parse_exprs(
     table_meta: Arc<dyn Table>,
     sql: &str,
 ) -> Result<Vec<Expr>> {
-    let settings = Settings::default_settings("", GlobalConfig::instance())?;
+    let settings = Settings::create("".to_string());
     let mut bind_context = BindContext::new();
     let metadata = Arc::new(RwLock::new(Metadata::default()));
     let table_index = metadata.write().add_table(

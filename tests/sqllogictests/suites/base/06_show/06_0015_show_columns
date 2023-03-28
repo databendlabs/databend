@@ -48,7 +48,7 @@ Sort
             ├── read bytes: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
-            ├── push downs: [filters: [columns.table_schema (#1) = "showcolumn" AND columns.table_name (#2) = "t3"], limit: NONE]
+            ├── push downs: [filters: [and_filters(CAST(columns.database (#1) = "showcolumn" AS Boolean NULL), CAST(columns.table (#2) = "t3" AS Boolean NULL))], limit: NONE]
             └── estimated rows: 0.00
 
 statement ok

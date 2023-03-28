@@ -23,6 +23,7 @@ members = [
     "src/common/http",
     "src/common/io",
     "src/common/metrics",
+    "src/common/openai",
     "src/common/tracing",
     "src/common/storage",
     "src/common/profile",
@@ -142,7 +143,7 @@ reqwest = { version = "0.11", default-features = false, features = [
 ] }
 
 # runtime
-tokio = { version = "1.24.2", features = ["full"] }
+tokio = { version = "1.26.0", features = ["full"] }
 
 [profile.release]
 debug = 1
@@ -188,6 +189,6 @@ rpath = false
 # For example:
 # arrow-format = { git = "https://github.com/datafuse-extras/arrow-format", rev = "78dacc1" }
 
-arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "db87f71" }
+arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "73ed7c8" }
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "ed0e1ff" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }

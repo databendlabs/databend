@@ -291,7 +291,7 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-│       ├── push downs: [filters: [is_true(a.x (#0) > 42 AND a.x (#0) < 45)], limit: NONE]
+│       ├── push downs: [filters: [and_filters(a.x (#0) > 42, a.x (#0) < 45)], limit: NONE]
 │       └── estimated rows: 4.00
 └── Filter(Probe)
     ├── filters: [is_true(b.x (#1) > 42), is_true(b.x (#1) < 45)]
@@ -303,7 +303,7 @@ HashJoin
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        ├── push downs: [filters: [is_true(b.x (#1) > 42 AND b.x (#1) < 45)], limit: NONE]
+        ├── push downs: [filters: [and_filters(b.x (#1) > 42, b.x (#1) < 45)], limit: NONE]
         └── estimated rows: 4.00
 
 # the following cases won't be converted to inner join
@@ -358,7 +358,7 @@ HashJoin
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-│       ├── push downs: [filters: [is_true(b.x (#1) > 42 AND b.x (#1) < 45)], limit: NONE]
+│       ├── push downs: [filters: [and_filters(b.x (#1) > 42, b.x (#1) < 45)], limit: NONE]
 │       └── estimated rows: 4.00
 └── TableScan(Probe)
     ├── table: default.default.onecolumn

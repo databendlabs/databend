@@ -35,4 +35,4 @@ anyhow = { workspace = true }
 [dev-dependencies.tokio]
 default-features = false
 features = ["io-util", "net", "sync", "rt-multi-thread", "macros"]
-version = "1.24.2"
+version = "1.26.0"

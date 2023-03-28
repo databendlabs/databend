@@ -107,9 +107,16 @@ impl StageFilesInfo {
         }
     }
 
-    pub async fn list(&self, operator: &Operator, first_only: bool) -> Result<Vec<StageFileInfo>> {
+    pub async fn list(
+        &self,
+        operator: &Operator,
+        first_only: bool,
+        max_files: Option<usize>,
+    ) -> Result<Vec<StageFileInfo>> {
+        let max_files = max_files.unwrap_or(usize::MAX);
         if let Some(files) = &self.files {
             let mut res = Vec::new();
+            let mut limit: usize = 0;
             for file in files {
                 let full_path = Path::new(&self.path)
                     .join(file)
@@ -124,18 +131,25 @@ impl StageFilesInfo {
                     )));
                 }
                 if first_only {
-                    break;
+                    return Ok(res);
+                }
+                limit += 1;
+                if limit == max_files {
+                    return Ok(res);
                 }
             }
             Ok(res)
         } else {
             let pattern = self.get_pattern()?;
-            StageFilesInfo::list_files_with_pattern(operator, &self.path, pattern, first_only).await
+            StageFilesInfo::list_files_with_pattern(
+                operator, &self.path, pattern, first_only, max_files,
+            )
+            .await
         }
     }
 
     pub async fn first_file(&self, operator: &Operator) -> Result<StageFileInfo> {
-        let mut files = self.list(operator, true).await?;
+        let mut files = self.list(operator, true, None).await?;
         match files.pop() {
             None => Err(ErrorCode::BadArguments("no file found")),
             Some(f) => Ok(f),
@@ -186,6 +200,7 @@ impl StageFilesInfo {
         path: &str,
         pattern: Option<Regex>,
         first_only: bool,
+        max_files: usize,
     ) -> Result<Vec<StageFileInfo>> {
         let root_meta = operator.stat(path).await;
         match root_meta {
@@ -208,11 +223,16 @@ impl StageFilesInfo {
         // path is a dir
         let mut files = Vec::new();
         let mut list = operator.scan(path).await?;
+        let mut limit: usize = 0;
         while let Some(obj) = list.try_next().await? {
             let meta = operator.metadata(&obj, StageFileInfo::meta_query()).await?;
             if check_file(obj.path(), meta.mode(), &pattern) {
                 files.push(StageFileInfo::new(obj.path().to_string(), &meta));
                 if first_only {
+                    return Ok(files);
+                }
+                limit += 1;
+                if limit == max_files {
                     return Ok(files);
                 }
             }

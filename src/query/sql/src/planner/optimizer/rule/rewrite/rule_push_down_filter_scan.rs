@@ -18,13 +18,25 @@ use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
+use crate::plans::AggregateFunction;
+use crate::plans::AndExpr;
+use crate::plans::BoundColumnRef;
+use crate::plans::CastExpr;
+use crate::plans::ComparisonExpr;
 use crate::plans::Filter;
+use crate::plans::FunctionCall;
+use crate::plans::NotExpr;
+use crate::plans::OrExpr;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::Scan;
+use crate::plans::WindowFunc;
+use crate::plans::WindowOrderBy;
+use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::MetadataRef;
 use crate::ScalarExpr;
+use crate::TableEntry;
 
 pub struct RulePushDownFilterScan {
     id: RuleID,
@@ -55,9 +67,176 @@ impl RulePushDownFilterScan {
         }
     }
 
+    // Using the columns of the source table to replace the columns in the view,
+    // this allows us to perform push-down filtering operations at the storage layer.
+    fn replace_view_column(
+        predicate: &ScalarExpr,
+        table_entries: &[TableEntry],
+        column_entries: &[ColumnEntry],
+    ) -> Result<ScalarExpr> {
+        match predicate {
+            ScalarExpr::BoundColumnRef(column) => {
+                if let Some(base_column) =
+                    column_entries
+                        .iter()
+                        .find_map(|column_entry| match column_entry {
+                            ColumnEntry::BaseTableColumn(base_column)
+                                if base_column.column_index == column.column.index =>
+                            {
+                                Some(base_column)
+                            }
+                            _ => None,
+                        })
+                {
+                    if let Some(table_entry) = table_entries
+                        .iter()
+                        .find(|table_entry| table_entry.index() == base_column.table_index)
+                    {
+                        let column_binding = ColumnBinding {
+                            database_name: Some(table_entry.database().to_string()),
+                            table_name: Some(table_entry.name().to_string()),
+                            column_name: base_column.column_name.clone(),
+                            index: base_column.column_index,
+                            data_type: column.column.data_type.clone(),
+                            visibility: column.column.visibility.clone(),
+                        };
+                        let bound_column_ref = BoundColumnRef {
+                            span: column.span,
+                            column: column_binding,
+                        };
+                        return Ok(ScalarExpr::BoundColumnRef(bound_column_ref));
+                    }
+                }
+                Ok(predicate.clone())
+            }
+            ScalarExpr::AndExpr(scalar) => {
+                let left = Self::replace_view_column(&scalar.left, table_entries, column_entries)?;
+                let right =
+                    Self::replace_view_column(&scalar.right, table_entries, column_entries)?;
+                Ok(ScalarExpr::AndExpr(AndExpr {
+                    left: Box::new(left),
+                    right: Box::new(right),
+                }))
+            }
+            ScalarExpr::OrExpr(scalar) => {
+                let left = Self::replace_view_column(&scalar.left, table_entries, column_entries)?;
+                let right =
+                    Self::replace_view_column(&scalar.right, table_entries, column_entries)?;
+                Ok(ScalarExpr::OrExpr(OrExpr {
+                    left: Box::new(left),
+                    right: Box::new(right),
+                }))
+            }
+            ScalarExpr::NotExpr(scalar) => {
+                let argument =
+                    Self::replace_view_column(&scalar.argument, table_entries, column_entries)?;
+                Ok(ScalarExpr::NotExpr(NotExpr {
+                    argument: Box::new(argument),
+                }))
+            }
+            ScalarExpr::ComparisonExpr(scalar) => {
+                let left = Self::replace_view_column(&scalar.left, table_entries, column_entries)?;
+                let right =
+                    Self::replace_view_column(&scalar.right, table_entries, column_entries)?;
+                Ok(ScalarExpr::ComparisonExpr(ComparisonExpr {
+                    op: scalar.op.clone(),
+                    left: Box::new(left),
+                    right: Box::new(right),
+                }))
+            }
+            ScalarExpr::WindowFunction(window) => {
+                let args = window
+                    .agg_func
+                    .args
+                    .iter()
+                    .map(|arg| Self::replace_view_column(arg, table_entries, column_entries))
+                    .collect::<Result<Vec<ScalarExpr>>>()?;
+
+                let agg_func = AggregateFunction {
+                    func_name: window.agg_func.func_name.clone(),
+                    distinct: window.agg_func.distinct,
+                    params: window.agg_func.params.clone(),
+                    args,
+                    return_type: window.agg_func.return_type.clone(),
+                    display_name: window.agg_func.display_name.clone(),
+                };
+
+                let partition_by = window
+                    .partition_by
+                    .iter()
+                    .map(|arg| Self::replace_view_column(arg, table_entries, column_entries))
+                    .collect::<Result<Vec<ScalarExpr>>>()?;
+
+                let order_by = window
+                    .order_by
+                    .iter()
+                    .map(|item| {
+                        let replaced_scalar =
+                            Self::replace_view_column(&item.expr, table_entries, column_entries)?;
+                        Ok(WindowOrderBy {
+                            expr: replaced_scalar,
+                            asc: item.asc,
+                            nulls_first: item.nulls_first,
+                        })
+                    })
+                    .collect::<Result<Vec<WindowOrderBy>>>()?;
+
+                Ok(ScalarExpr::WindowFunction(WindowFunc {
+                    agg_func,
+                    partition_by,
+                    order_by,
+                    frame: window.frame.clone(),
+                }))
+            }
+            ScalarExpr::AggregateFunction(agg_func) => {
+                let args = agg_func
+                    .args
+                    .iter()
+                    .map(|arg| Self::replace_view_column(arg, table_entries, column_entries))
+                    .collect::<Result<Vec<ScalarExpr>>>()?;
+
+                Ok(ScalarExpr::AggregateFunction(AggregateFunction {
+                    func_name: agg_func.func_name.clone(),
+                    distinct: agg_func.distinct,
+                    params: agg_func.params.clone(),
+                    args,
+                    return_type: agg_func.return_type.clone(),
+                    display_name: agg_func.display_name.clone(),
+                }))
+            }
+            ScalarExpr::FunctionCall(func) => {
+                let arguments = func
+                    .arguments
+                    .iter()
+                    .map(|arg| Self::replace_view_column(arg, table_entries, column_entries))
+                    .collect::<Result<Vec<ScalarExpr>>>()?;
+
+                Ok(ScalarExpr::FunctionCall(FunctionCall {
+                    span: func.span,
+                    params: func.params.clone(),
+                    arguments,
+                    func_name: func.func_name.clone(),
+                }))
+            }
+            ScalarExpr::CastExpr(cast) => {
+                let arg = Self::replace_view_column(&cast.argument, table_entries, column_entries)?;
+                Ok(ScalarExpr::CastExpr(CastExpr {
+                    span: cast.span,
+                    is_try: cast.is_try,
+                    argument: Box::new(arg),
+                    target_type: cast.target_type.clone(),
+                }))
+            }
+            _ => Ok(predicate.clone()),
+        }
+    }
+
     fn find_push_down_predicates(&self, predicates: &[ScalarExpr]) -> Result<Vec<ScalarExpr>> {
         let metadata = self.metadata.read();
         let column_entries = metadata.columns();
+        let table_entries = metadata.tables();
+        let is_source_of_view = table_entries.iter().any(|t| t.is_source_of_view());
+
         let mut filtered_predicates = vec![];
         for predicate in predicates {
             let used_columns = predicate.used_columns();
@@ -77,7 +256,13 @@ impl RulePushDownFilterScan {
                 }
             }
             if !contain_derived_column {
-                filtered_predicates.push(predicate.clone());
+                if is_source_of_view {
+                    let new_predicate =
+                        Self::replace_view_column(predicate, table_entries, column_entries)?;
+                    filtered_predicates.push(new_predicate);
+                } else {
+                    filtered_predicates.push(predicate.clone());
+                }
             }
         }
 

@@ -103,10 +103,11 @@ impl BlockCompactMutator {
         );
         let mut checker = SegmentCompactChecker::new(self.compact_params.block_per_seg as u64);
         let max_io_requests = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+        let mut is_end = false;
         for chunk in segment_locations.chunks(max_io_requests) {
             // Read the segments information in parallel.
             let segment_infos = segments_io
-                .read_segments(chunk)
+                .read_segments(chunk, false)
                 .await?
                 .into_iter()
                 .collect::<Result<Vec<_>>>()?;
@@ -136,6 +137,7 @@ impl BlockCompactMutator {
                 }
                 checked_end_at += 1;
                 if compacted_segment_cnt + checker.segments.len() >= limit {
+                    is_end = true;
                     break;
                 }
             }
@@ -150,6 +152,10 @@ impl BlockCompactMutator {
                 );
                 self.ctx.set_status_info(&status);
                 info!(status);
+            }
+
+            if is_end {
+                break;
             }
         }
 
@@ -174,7 +180,7 @@ impl BlockCompactMutator {
         if checked_end_at < number_segments {
             for chunk in segment_locations[checked_end_at..].chunks(max_io_requests) {
                 let segment_infos = segments_io
-                    .read_segments(chunk)
+                    .read_segments(chunk, false)
                     .await?
                     .into_iter()
                     .collect::<Result<Vec<_>>>()?;
@@ -252,11 +258,7 @@ impl BlockCompactMutator {
                     .map_or((0, vec![]), |(k, v)| (k, vec![v]))
             };
             blocks.extend(builder.take_blocks());
-            if blocks.len() > 1 || builder.check_column_ids(&blocks[0]) {
-                tasks.push_back((index, blocks));
-            } else {
-                unreachable!("expect more than one block");
-            }
+            tasks.push_back((index, blocks));
         }
 
         let mut partitions = tasks

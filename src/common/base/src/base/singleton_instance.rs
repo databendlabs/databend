@@ -141,6 +141,10 @@ impl GlobalInstance {
             .get()
     }
 
+    pub fn try_get<T: Clone + 'static>() -> Option<T> {
+        SINGLETON_TYPE.get().map(|v| v.get())
+    }
+
     /// Set data into global data registry.
     pub fn set<T: Send + Sync + 'static>(value: T) {
         let set = SINGLETON_TYPE

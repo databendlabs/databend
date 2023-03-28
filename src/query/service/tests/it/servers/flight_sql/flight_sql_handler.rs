@@ -38,6 +38,7 @@ use tokio_stream::wrappers::UnixListenerStream;
 use tonic::transport::Endpoint;
 use tonic::transport::Server;
 use tower::service_fn;
+use tracing::debug;
 
 use crate::tests::ConfigBuilder;
 use crate::tests::TestGlobalServices;
@@ -101,16 +102,17 @@ async fn test_query() -> Result<()> {
 
     // We would just listen on TCP, but it seems impossible to know when tonic is ready to serve
     let service = FlightSqlServiceImpl::create();
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let serve_future = Server::builder()
         .add_service(FlightServiceServer::new(service))
-        .serve_with_incoming(stream);
+        .serve_with_incoming_shutdown(stream, async { shutdown_rx.await.unwrap() });
 
     let request_future = async {
         let mut mint = Mint::new("tests/it/servers/flight_sql/testdata");
         let mut file = mint.new_goldenfile("query.txt").unwrap();
         let mut client = client_with_uds(path).await;
         let token = client.handshake(TEST_USER, TEST_PASSWORD).await.unwrap();
-        println!("Auth succeeded with token: {:?}", token);
+        debug!("Auth succeeded with token: {:?}", token);
         let cases = [
             "select 1, 'abc', 1.1, 1.1::float32, 1::nullable(int)",
             // "drop table if exists test1",
@@ -129,10 +131,17 @@ async fn test_query() -> Result<()> {
             writeln!(file, "{}", res).unwrap();
         }
     };
+    tokio::pin!(serve_future);
 
     tokio::select! {
-        _ = serve_future => panic!("server returned first"),
-        _ = request_future => println!("Client finished!"),
+        _ = &mut serve_future => panic!("server returned first"),
+        _ = request_future => {
+            debug!("Client finished!");
+        }
     }
+    shutdown_tx.send(()).unwrap();
+    serve_future.await.unwrap();
+    debug!("Server shutdown!");
+
     Ok(())
 }

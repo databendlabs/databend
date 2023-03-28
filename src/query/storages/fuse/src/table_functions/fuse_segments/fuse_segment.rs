@@ -92,7 +92,7 @@ impl<'a> FuseSegment<'a> {
             self.table.operator.clone(),
             self.table.schema(),
         );
-        let segments = segments_io.read_segments(segment_locations).await?;
+        let segments = segments_io.read_segments(segment_locations, true).await?;
         for (idx, segment) in segments.iter().enumerate() {
             let segment = segment.clone()?;
             format_versions.push(segment_locations[idx].1);

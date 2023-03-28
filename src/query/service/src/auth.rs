@@ -19,6 +19,7 @@ use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::AuthInfo;
+use common_meta_app::principal::UserIdentity;
 use common_meta_app::principal::UserInfo;
 use common_users::JwtAuthenticator;
 use common_users::UserApiProvider;
@@ -60,6 +61,7 @@ impl AuthMgr {
     }
 
     pub async fn auth(&self, session: Arc<Session>, credential: &Credential) -> Result<()> {
+        let user_api = UserApiProvider::instance();
         match credential {
             Credential::Jwt { token: t } => {
                 let jwt_auth = self
@@ -78,26 +80,34 @@ impl AuthMgr {
                     session.set_current_tenant(tenant);
                 };
 
-                // create a virtual JWT user only available in current session
-                let auth_role = jwt.custom.role.clone();
-                let mut user_info = UserInfo::new(&user_name, "%", AuthInfo::JWT);
-                if user_info.identity().is_root() {
-                    return Err(ErrorCode::AuthenticateFailure(
-                        "root user is not allowed in jwt auth.",
-                    ));
-                }
-                if let Some(ref role) = auth_role {
-                    user_info.grants.grant_role(role.clone());
-                }
-                if let Some(ref ensure_user) = jwt.custom.ensure_user {
-                    if let Some(ref roles) = ensure_user.roles {
-                        for role in roles.clone().into_iter() {
-                            user_info.grants.grant_role(role);
+                let tenant = session.get_current_tenant();
+                let identity = UserIdentity::new(&user_name, "%");
+                let user = match user_api.get_user(&tenant, identity.clone()).await {
+                    Ok(user_info) => match user_info.auth_info {
+                        AuthInfo::JWT => user_info,
+                        _ => return Err(ErrorCode::AuthenticateFailure("wrong auth type")),
+                    },
+                    Err(e) => {
+                        if e.code() != ErrorCode::UNKNOWN_USER {
+                            return Err(ErrorCode::AuthenticateFailure(e.message()));
                         }
+                        let ensure_user = jwt
+                            .custom
+                            .ensure_user
+                            .ok_or(ErrorCode::AuthenticateFailure(e.message()))?;
+                        // create a new user if not exists
+                        let mut user_info = UserInfo::new(&user_name, "%", AuthInfo::JWT);
+                        if let Some(ref roles) = ensure_user.roles {
+                            for role in roles.clone().into_iter() {
+                                user_info.grants.grant_role(role);
+                            }
+                        }
+                        user_api.add_user(&tenant, user_info.clone(), true).await?;
+                        user_info
                     }
-                }
+                };
 
-                session.set_authed_user(user_info, auth_role).await?;
+                session.set_authed_user(user, jwt.custom.role).await?;
             }
             Credential::Password {
                 name: n,
@@ -105,7 +115,7 @@ impl AuthMgr {
                 hostname: h,
             } => {
                 let tenant = session.get_current_tenant();
-                let user = UserApiProvider::instance()
+                let user = user_api
                     .get_user_with_client_ip(&tenant, n, h.as_ref().unwrap_or(&"%".to_string()))
                     .await?;
                 let user = match &user.auth_info {

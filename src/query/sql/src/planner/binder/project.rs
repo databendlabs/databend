@@ -42,6 +42,7 @@ use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::IndexType;
+use crate::WindowChecker;
 
 impl Binder {
     pub(super) fn analyze_projection(
@@ -118,7 +119,12 @@ impl Binder {
                         index: item.index,
                     })
                 } else {
-                    Ok(item.clone())
+                    let mut window_checker = WindowChecker::new(bind_context);
+                    let scalar = window_checker.resolve(&item.scalar)?;
+                    Ok(ScalarItem {
+                        scalar,
+                        index: item.index,
+                    })
                 }
             })
             .collect::<Result<Vec<_>>>()?;

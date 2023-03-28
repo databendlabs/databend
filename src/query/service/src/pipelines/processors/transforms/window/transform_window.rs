@@ -33,9 +33,9 @@ use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::Processor;
+use common_sql::plans::WindowFuncFrame;
+use common_sql::plans::WindowFuncFrameBound;
 
-use super::frame::WindowFrame;
-use super::WindowFrameBound;
 use crate::pipelines::processors::transforms::group_by::Area;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
@@ -69,6 +69,8 @@ pub struct TransformWindow {
     function: Arc<dyn AggregateFunction>,
     arguments: Vec<usize>,
 
+    // Need to hold arena to drop the allocate bytes when drop `TransformWindow`.
+    _arena: Area,
     place: StateAddr,
 
     partition_indices: Vec<usize>,
@@ -88,11 +90,15 @@ pub struct TransformWindow {
     partition_ended: bool,
 
     // Frame: [`frame_start`, `frame_end`). `frame_end` is excluded.
-    frame_kind: WindowFrame,
+    frame_kind: WindowFuncFrame,
     frame_start: RowPtr,
     frame_end: RowPtr,
     frame_started: bool,
     frame_ended: bool,
+
+    // Can be used to optimize window frame sliding.
+    prev_frame_start: RowPtr,
+    prev_frame_end: RowPtr,
 
     current_row: RowPtr,
 
@@ -107,7 +113,26 @@ impl TransformWindow {
         function: Arc<dyn AggregateFunction>,
         arguments: Vec<usize>,
         partition_indices: Vec<usize>,
-        frame_kind: WindowFrame,
+        frame_kind: WindowFuncFrame,
+    ) -> Result<Box<dyn Processor>> {
+        let transform = Self::create(
+            input,
+            output,
+            function,
+            arguments,
+            partition_indices,
+            frame_kind,
+        )?;
+        Ok(Box::new(transform))
+    }
+
+    pub fn create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        function: Arc<dyn AggregateFunction>,
+        arguments: Vec<usize>,
+        partition_indices: Vec<usize>,
+        frame_kind: WindowFuncFrame,
     ) -> Result<Self> {
         let mut arena = Area::create();
         let mut state_offset = Vec::with_capacity(1);
@@ -122,6 +147,7 @@ impl TransformWindow {
             function,
             arguments,
             partition_indices,
+            _arena: arena,
             place: state_place,
             blocks: VecDeque::new(),
             outputs: VecDeque::new(),
@@ -134,6 +160,8 @@ impl TransformWindow {
             frame_end: RowPtr::default(),
             frame_started: false,
             frame_ended: false,
+            prev_frame_start: RowPtr::default(),
+            prev_frame_end: RowPtr::default(),
             current_row: RowPtr::default(),
             current_row_in_partition: 1,
             input_is_finished: false,
@@ -169,40 +197,23 @@ impl TransformWindow {
             .unwrap()
     }
 
-    fn current_row_sub_within_partition(&self, mut n: usize) -> RowPtr {
-        let mut row = self.current_row;
-        let start = &self.partition_start;
-        // Use '>' to avoid overflow.
-        while row.block > start.block {
-            if row.row >= n {
-                row.row -= n;
-                return row;
-            }
-            n -= row.row;
-            row.block -= 1;
-            row.row = self.block_rows(row);
-        }
-        // row = RowPtr::new(partition_start.block, block.num_rows())
-        row.row = row.row - (row.row - start.row).min(n);
-        row
-    }
+    fn add_rows_within_partition(&self, mut cur: RowPtr, mut n: usize) -> RowPtr {
+        debug_assert!(cur.ge(&self.partition_start) && cur.le(&self.partition_end));
 
-    fn current_row_add_within_partition(&self, mut n: usize) -> RowPtr {
-        let mut row = self.current_row;
         let end = &self.partition_end;
-        while row.block < end.block {
-            let rows = self.block_rows(row);
-            if row.row + n < rows {
-                row.row += n;
-                return row;
+        while cur.block < end.block {
+            let rows = self.block_rows(cur);
+            if cur.row + n < rows {
+                cur.row += n;
+                return cur;
             }
-            n -= rows - row.row;
-            row.block += 1;
-            row.row = 0;
+            n -= rows - cur.row;
+            cur.block += 1;
+            cur.row = 0;
         }
         // row = RowPtr::new(partition_end.block, 0)
-        row.row = end.row.min(row.row + n);
-        row
+        cur.row = end.row.min(cur.row + n);
+        cur
     }
 
     #[inline(always)]
@@ -279,23 +290,32 @@ impl TransformWindow {
             return;
         }
         match &self.frame_kind.start_bound {
-            WindowFrameBound::CurrentRow => {
+            WindowFuncFrameBound::CurrentRow => {
                 self.frame_started = true;
                 self.frame_start = self.current_row;
             }
-            WindowFrameBound::Preceding(Some(n)) => {
+            WindowFuncFrameBound::Preceding(Some(n)) => {
                 self.frame_started = true;
-                self.frame_start = self.current_row_sub_within_partition(*n);
+                if self.current_row_in_partition - 1 <= *n {
+                    self.frame_start = self.partition_start;
+                } else {
+                    self.frame_start = self.advance_row(self.prev_frame_start);
+                }
             }
-            WindowFrameBound::Preceding(_) => {
+            WindowFuncFrameBound::Preceding(_) => {
                 self.frame_started = true;
                 self.frame_start = self.partition_start;
             }
-            WindowFrameBound::Following(Some(n)) => {
-                self.frame_start = self.current_row_add_within_partition(*n);
-                self.frame_started = self.partition_ended || self.frame_start < self.partition_end
+            WindowFuncFrameBound::Following(Some(n)) => {
+                self.frame_start = if self.current_row_in_partition == 1 {
+                    self.add_rows_within_partition(self.current_row, *n)
+                } else {
+                    self.advance_row(self.prev_frame_start)
+                        .min(self.partition_end)
+                };
+                self.frame_started = self.partition_ended || self.frame_start < self.partition_end;
             }
-            WindowFrameBound::Following(_) => {
+            WindowFuncFrameBound::Following(_) => {
                 unreachable!()
             }
         }
@@ -303,24 +323,36 @@ impl TransformWindow {
 
     fn advance_frame_end(&mut self) {
         match &self.frame_kind.end_bound {
-            WindowFrameBound::CurrentRow => {
+            WindowFuncFrameBound::CurrentRow => {
                 self.frame_ended = true;
-                self.frame_end = self.current_row;
+                // `self.frame_end` is excluded.
+                self.frame_end = self.advance_row(self.current_row);
             }
-            WindowFrameBound::Preceding(Some(n)) => {
+            WindowFuncFrameBound::Preceding(Some(n)) => {
                 self.frame_ended = true;
-                self.frame_end = self.current_row_sub_within_partition(*n);
+                if self.current_row_in_partition - 1 <= *n {
+                    self.frame_end = self.partition_start;
+                } else {
+                    self.frame_end = self.advance_row(self.prev_frame_end);
+                }
             }
-            WindowFrameBound::Preceding(_) => {
+            WindowFuncFrameBound::Preceding(_) => {
                 unreachable!()
             }
-            WindowFrameBound::Following(Some(n)) => {
-                self.frame_end = self.current_row_add_within_partition(*n);
-                self.frame_ended = self.partition_ended || self.frame_end < self.partition_end;
-                // Frame end is excluded.
-                self.frame_end = self.advance_row(self.frame_end).min(self.partition_end);
+            WindowFuncFrameBound::Following(Some(n)) => {
+                self.frame_end = if self.current_row_in_partition == 1 {
+                    let next_end = self.add_rows_within_partition(self.current_row, *n);
+                    self.frame_ended = self.partition_ended || next_end < self.partition_end;
+                    // `self.frame_end` is excluded.
+                    self.advance_row(next_end)
+                } else {
+                    self.frame_ended =
+                        self.partition_ended || self.prev_frame_end < self.partition_end;
+                    self.advance_row(self.prev_frame_end)
+                }
+                .min(self.partition_end);
             }
-            WindowFrameBound::Following(_) => {
+            WindowFuncFrameBound::Following(_) => {
                 self.frame_ended = self.partition_ended;
                 self.frame_end = self.partition_end;
             }
@@ -386,6 +418,8 @@ impl TransformWindow {
                 self.current_row = self.advance_row(self.current_row);
 
                 self.current_row_in_partition += 1;
+                self.prev_frame_start = self.frame_start;
+                self.prev_frame_end = self.frame_end;
                 self.frame_started = false;
                 self.frame_ended = false;
             }
@@ -432,11 +466,59 @@ impl TransformWindow {
     }
 
     fn apply_aggregate(&mut self) -> Result<()> {
+        let WindowFuncFrame {
+            start_bound,
+            end_bound,
+            ..
+        } = &self.frame_kind;
+        match (start_bound, end_bound) {
+            (WindowFuncFrameBound::Preceding(None), WindowFuncFrameBound::Following(None)) => {
+                self.apply_aggregate_for_unbounded_frame()
+            }
+            (WindowFuncFrameBound::Preceding(None), _) => {
+                self.apply_aggregate_for_unbounded_preceding()
+            }
+            (_, _) => self.apply_aggregate_common(),
+        }
+    }
+
+    #[inline]
+    fn merge_result_of_current_row(&mut self) -> Result<()> {
+        let function = self.function.clone();
+        let place = self.place;
+        let builder = self.builder_at(self.current_row);
+        function.merge_result(place, builder)
+    }
+
+    #[inline]
+    fn apply_aggregate_for_unbounded_frame(&mut self) -> Result<()> {
+        if self.current_row_in_partition == 1 {
+            self.apply_aggregate_common()
+        } else {
+            self.merge_result_of_current_row()
+        }
+    }
+
+    #[inline]
+    fn apply_aggregate_for_unbounded_preceding(&mut self) -> Result<()> {
+        if self.current_row_in_partition == 1 {
+            self.apply_aggregate_common()
+        } else if self.frame_end != self.prev_frame_end {
+            let row = self.prev_frame_end.row;
+            let data = self.block_at(self.prev_frame_end);
+            let columns = Self::aggregate_arguments(data, &self.arguments);
+            self.function.accumulate_row(self.place, &columns, row)?;
+            self.merge_result_of_current_row()
+        } else {
+            self.merge_result_of_current_row()
+        }
+    }
+
+    fn apply_aggregate_common(&mut self) -> Result<()> {
         let block_end = self.blocks_end();
         let row_start = self.frame_start;
         let row_end = self.frame_end;
 
-        // TODO: for some case, current frame can continue to use the previous frame's state
         // Reset state
         self.function.init_state(self.place);
 
@@ -460,12 +542,18 @@ impl TransformWindow {
             }
         }
 
-        let function = self.function.clone();
-        let place = self.place;
-        let builder = self.builder_at(self.current_row);
-        function.merge_result(place, builder)?;
+        self.merge_result_of_current_row()
+    }
 
-        Ok(())
+    #[inline(always)]
+    fn finish(&mut self) {
+        self.input.finish();
+        self.output.finish();
+        if self.function.need_manual_drop_state() {
+            unsafe {
+                self.function.drop_state(self.place);
+            }
+        }
     }
 }
 
@@ -487,7 +575,7 @@ impl Processor for TransformWindow {
 
     fn event(&mut self) -> Result<Event> {
         if self.output.is_finished() {
-            self.input.finish();
+            self.finish();
             return Ok(Event::Finished);
         }
 
@@ -498,10 +586,11 @@ impl Processor for TransformWindow {
         let input_is_finished = self.input.is_finished();
         match self.state {
             ProcessorState::Consume => {
+                self.input.set_need_data();
                 let has_data = self.input.has_data();
-                let data = self.input.pull_data().transpose()?;
                 match (input_is_finished, has_data) {
                     (_, true) => {
+                        let data = self.input.pull_data().transpose()?;
                         self.state = ProcessorState::AddBlock(data);
                         Ok(Event::Sync)
                     }
@@ -513,7 +602,7 @@ impl Processor for TransformWindow {
                             self.state = ProcessorState::AddBlock(None);
                             Ok(Event::Sync)
                         } else {
-                            self.output.finish();
+                            self.finish();
                             Ok(Event::Finished)
                         }
                     }
@@ -551,6 +640,9 @@ impl Processor for TransformWindow {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use common_base::base::tokio;
     use common_exception::Result;
     use common_expression::block_debug::assert_blocks_eq;
     use common_expression::types::DataType;
@@ -561,21 +653,25 @@ mod tests {
     use common_expression::DataBlock;
     use common_expression::FromData;
     use common_functions::aggregates::AggregateFunctionFactory;
+    use common_pipeline_core::processors::connect;
     use common_pipeline_core::processors::port::InputPort;
     use common_pipeline_core::processors::port::OutputPort;
+    use common_pipeline_core::processors::processor::Event;
+    use common_pipeline_core::processors::Processor;
+    use common_sql::plans::WindowFuncFrame;
+    use common_sql::plans::WindowFuncFrameBound;
+    use common_sql::plans::WindowFuncFrameUnits;
 
     use super::TransformWindow;
     use super::WindowBlock;
     use crate::pipelines::processors::transforms::window::transform_window::RowPtr;
-    use crate::pipelines::processors::transforms::WindowFrame;
-    use crate::pipelines::processors::transforms::WindowFrameBound;
 
     fn get_transform_window(
-        window_frame: WindowFrame,
+        window_frame: WindowFuncFrame,
         arg_type: DataType,
     ) -> Result<TransformWindow> {
         let function = AggregateFunctionFactory::instance().get("sum", vec![], vec![arg_type])?;
-        TransformWindow::try_create(
+        TransformWindow::create(
             InputPort::create(),
             OutputPort::create(),
             function,
@@ -586,7 +682,7 @@ mod tests {
     }
 
     fn get_transform_window_with_data(
-        window_frame: WindowFrame,
+        window_frame: WindowFuncFrame,
         column: Column,
     ) -> Result<TransformWindow> {
         let data_type = column.data_type();
@@ -603,9 +699,10 @@ mod tests {
     fn test_partition_advance() -> Result<()> {
         {
             let mut transform = get_transform_window_with_data(
-                WindowFrame {
-                    start_bound: WindowFrameBound::CurrentRow,
-                    end_bound: WindowFrameBound::CurrentRow,
+                WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start_bound: WindowFuncFrameBound::CurrentRow,
+                    end_bound: WindowFuncFrameBound::CurrentRow,
                 },
                 Int32Type::from_data(vec![1, 1, 1]),
             )?;
@@ -618,9 +715,10 @@ mod tests {
 
         {
             let mut transform = get_transform_window_with_data(
-                WindowFrame {
-                    start_bound: WindowFrameBound::CurrentRow,
-                    end_bound: WindowFrameBound::CurrentRow,
+                WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start_bound: WindowFuncFrameBound::CurrentRow,
+                    end_bound: WindowFuncFrameBound::CurrentRow,
                 },
                 Int32Type::from_data(vec![1, 1, 2]),
             )?;
@@ -637,9 +735,10 @@ mod tests {
     fn test_frame_advance() -> Result<()> {
         {
             let mut transform = get_transform_window_with_data(
-                WindowFrame {
-                    start_bound: WindowFrameBound::Following(Some(4)),
-                    end_bound: WindowFrameBound::Following(Some(5)),
+                WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start_bound: WindowFuncFrameBound::Following(Some(4)),
+                    end_bound: WindowFuncFrameBound::Following(Some(5)),
                 },
                 Int32Type::from_data(vec![1, 1, 1]),
             )?;
@@ -655,9 +754,10 @@ mod tests {
 
         {
             let mut transform = get_transform_window_with_data(
-                WindowFrame {
-                    start_bound: WindowFrameBound::Preceding(Some(2)),
-                    end_bound: WindowFrameBound::Following(Some(5)),
+                WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start_bound: WindowFuncFrameBound::Preceding(Some(2)),
+                    end_bound: WindowFuncFrameBound::Following(Some(5)),
                 },
                 Int32Type::from_data(vec![1, 1, 1]),
             )?;
@@ -678,15 +778,18 @@ mod tests {
 
         {
             let mut transform = get_transform_window_with_data(
-                WindowFrame {
-                    start_bound: WindowFrameBound::Preceding(Some(2)),
-                    end_bound: WindowFrameBound::Following(Some(1)),
+                WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start_bound: WindowFuncFrameBound::Preceding(Some(2)),
+                    end_bound: WindowFuncFrameBound::Following(Some(1)),
                 },
                 Int32Type::from_data(vec![1, 1, 1]),
             )?;
 
             transform.advance_partition();
             transform.current_row = RowPtr::new(0, 1);
+            transform.prev_frame_start = RowPtr::new(0, 0);
+            transform.prev_frame_end = RowPtr::new(0, 2);
 
             assert!(!transform.partition_ended);
             assert_eq!(transform.partition_end, RowPtr::new(1, 0));
@@ -702,15 +805,18 @@ mod tests {
 
         {
             let mut transform = get_transform_window_with_data(
-                WindowFrame {
-                    start_bound: WindowFrameBound::Preceding(None),
-                    end_bound: WindowFrameBound::Following(None),
+                WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start_bound: WindowFuncFrameBound::Preceding(None),
+                    end_bound: WindowFuncFrameBound::Following(None),
                 },
                 Int32Type::from_data(vec![1, 1, 1, 2]),
             )?;
 
             transform.advance_partition();
             transform.current_row = RowPtr::new(0, 1);
+            transform.prev_frame_start = RowPtr::new(0, 0);
+            transform.prev_frame_end = RowPtr::new(0, 3);
 
             assert!(transform.partition_ended);
             assert_eq!(transform.partition_end, RowPtr::new(0, 3));
@@ -731,9 +837,10 @@ mod tests {
     fn test_add_block() -> Result<()> {
         {
             let mut transform = get_transform_window(
-                WindowFrame {
-                    start_bound: WindowFrameBound::Preceding(None),
-                    end_bound: WindowFrameBound::Following(None),
+                WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start_bound: WindowFuncFrameBound::Preceding(None),
+                    end_bound: WindowFuncFrameBound::Following(None),
                 },
                 DataType::Number(NumberDataType::Int32),
             )?;
@@ -766,9 +873,10 @@ mod tests {
 
         {
             let mut transform = get_transform_window(
-                WindowFrame {
-                    start_bound: WindowFrameBound::Preceding(None),
-                    end_bound: WindowFrameBound::Following(None),
+                WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start_bound: WindowFuncFrameBound::Preceding(None),
+                    end_bound: WindowFuncFrameBound::Following(None),
                 },
                 DataType::Number(NumberDataType::Int32),
             )?;
@@ -827,9 +935,10 @@ mod tests {
 
         {
             let mut transform = get_transform_window(
-                WindowFrame {
-                    start_bound: WindowFrameBound::Preceding(None),
-                    end_bound: WindowFrameBound::Following(None),
+                WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start_bound: WindowFuncFrameBound::Preceding(None),
+                    end_bound: WindowFuncFrameBound::Following(None),
                 },
                 DataType::Number(NumberDataType::Int32),
             )?;
@@ -888,9 +997,134 @@ mod tests {
 
         {
             let mut transform = get_transform_window(
-                WindowFrame {
-                    start_bound: WindowFrameBound::Preceding(Some(1)),
-                    end_bound: WindowFrameBound::Following(Some(1)),
+                WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start_bound: WindowFuncFrameBound::Preceding(None),
+                    end_bound: WindowFuncFrameBound::Following(None),
+                },
+                DataType::Number(NumberDataType::Int32),
+            )?;
+
+            transform.add_block(Some(DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
+            ])))?;
+
+            transform.add_block(Some(DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![3, 4, 4]),
+            ])))?;
+
+            transform.check_outputs();
+
+            let output = transform.outputs.pop_front().unwrap();
+
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 1        | 3        |",
+                    "| 1        | 3        |",
+                    "| 1        | 3        |",
+                    "| 2        | 4        |",
+                    "| 2        | 4        |",
+                    "| 3        | 12       |",
+                    "| 3        | 12       |",
+                    "| 3        | 12       |",
+                    "+----------+----------+",
+                ],
+                &[output],
+            );
+
+            transform.input_is_finished = true;
+
+            transform.add_block(None)?;
+
+            transform.check_outputs();
+
+            let output = transform.outputs.pop_front().unwrap();
+
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 3        | 12       |",
+                    "| 4        | 8        |",
+                    "| 4        | 8        |",
+                    "+----------+----------+",
+                ],
+                &[output],
+            );
+        }
+
+        {
+            let mut transform = get_transform_window(
+                WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start_bound: WindowFuncFrameBound::Preceding(None),
+                    end_bound: WindowFuncFrameBound::Following(Some(1)),
+                },
+                DataType::Number(NumberDataType::Int32),
+            )?;
+
+            transform.add_block(Some(DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
+            ])))?;
+
+            transform.add_block(Some(DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![3, 4, 4]),
+            ])))?;
+
+            transform.check_outputs();
+
+            let output = transform.outputs.pop_front().unwrap();
+
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 1        | 2        |",
+                    "| 1        | 3        |",
+                    "| 1        | 3        |",
+                    "| 2        | 4        |",
+                    "| 2        | 4        |",
+                    "| 3        | 6        |",
+                    "| 3        | 9        |",
+                    "| 3        | 12       |",
+                    "+----------+----------+",
+                ],
+                &[output],
+            );
+
+            transform.input_is_finished = true;
+
+            transform.add_block(None)?;
+
+            transform.check_outputs();
+
+            let output = transform.outputs.pop_front().unwrap();
+
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 3        | 12       |",
+                    "| 4        | 8        |",
+                    "| 4        | 8        |",
+                    "+----------+----------+",
+                ],
+                &[output],
+            );
+        }
+
+        {
+            let mut transform = get_transform_window(
+                WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start_bound: WindowFuncFrameBound::Preceding(Some(1)),
+                    end_bound: WindowFuncFrameBound::Following(Some(1)),
                 },
                 DataType::Number(NumberDataType::Int32),
             )?;
@@ -945,6 +1179,326 @@ mod tests {
                 ],
                 &[output],
             );
+        }
+
+        {
+            let mut transform = get_transform_window(
+                WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start_bound: WindowFuncFrameBound::Preceding(None),
+                    end_bound: WindowFuncFrameBound::CurrentRow,
+                },
+                DataType::Number(NumberDataType::Int32),
+            )?;
+
+            transform.add_block(Some(DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
+            ])))?;
+
+            transform.add_block(Some(DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![3, 4, 4]),
+            ])))?;
+
+            transform.check_outputs();
+
+            let output = transform.outputs.pop_front().unwrap();
+
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 1        | 1        |",
+                    "| 1        | 2        |",
+                    "| 1        | 3        |",
+                    "| 2        | 2        |",
+                    "| 2        | 4        |",
+                    "| 3        | 3        |",
+                    "| 3        | 6        |",
+                    "| 3        | 9        |",
+                    "+----------+----------+",
+                ],
+                &[output],
+            );
+
+            transform.input_is_finished = true;
+
+            transform.add_block(None)?;
+
+            transform.check_outputs();
+
+            let output = transform.outputs.pop_front().unwrap();
+
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 3        | 12       |",
+                    "| 4        | 4        |",
+                    "| 4        | 8        |",
+                    "+----------+----------+",
+                ],
+                &[output],
+            );
+        }
+
+        {
+            let mut transform = get_transform_window(
+                WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start_bound: WindowFuncFrameBound::Preceding(Some(1)),
+                    end_bound: WindowFuncFrameBound::CurrentRow,
+                },
+                DataType::Number(NumberDataType::Int32),
+            )?;
+
+            transform.add_block(Some(DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
+            ])))?;
+
+            transform.add_block(Some(DataBlock::new_from_columns(vec![
+                Int32Type::from_data(vec![3, 4, 4]),
+            ])))?;
+
+            transform.check_outputs();
+
+            let output = transform.outputs.pop_front().unwrap();
+
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 1        | 1        |",
+                    "| 1        | 2        |",
+                    "| 1        | 2        |",
+                    "| 2        | 2        |",
+                    "| 2        | 4        |",
+                    "| 3        | 3        |",
+                    "| 3        | 6        |",
+                    "| 3        | 6        |",
+                    "+----------+----------+",
+                ],
+                &[output],
+            );
+
+            transform.input_is_finished = true;
+
+            transform.add_block(None)?;
+
+            transform.check_outputs();
+
+            let output = transform.outputs.pop_front().unwrap();
+
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 3        | 6        |",
+                    "| 4        | 4        |",
+                    "| 4        | 8        |",
+                    "+----------+----------+",
+                ],
+                &[output],
+            );
+        }
+
+        Ok(())
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn get_transform_window_and_ports(
+        window_frame: WindowFuncFrame,
+    ) -> Result<(Box<dyn Processor>, Arc<InputPort>, Arc<OutputPort>)> {
+        let function = AggregateFunctionFactory::instance()
+            .get("sum", vec![], vec![DataType::Number(NumberDataType::Int32)])?;
+        let input = InputPort::create();
+        let output = OutputPort::create();
+        let transform = TransformWindow::try_create(
+            input.clone(),
+            output.clone(),
+            function,
+            vec![0],
+            vec![0],
+            window_frame,
+        )?;
+
+        Ok((Box::new(transform), input, output))
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_transform_window() -> Result<()> {
+        {
+            let upstream_output = OutputPort::create();
+            let downstream_input = InputPort::create();
+            let (mut transform, input, output) = get_transform_window_and_ports(WindowFuncFrame {
+                units: WindowFuncFrameUnits::Rows,
+                start_bound: WindowFuncFrameBound::Preceding(Some(1)),
+                end_bound: WindowFuncFrameBound::Following(Some(1)),
+            })?;
+
+            unsafe {
+                connect(&input, &upstream_output);
+                connect(&downstream_input, &output);
+            }
+
+            downstream_input.set_need_data();
+
+            assert!(matches!(transform.event()?, Event::NeedData));
+            upstream_output.push_data(Ok(DataBlock::new_from_columns(vec![Int32Type::from_data(
+                vec![1, 1, 1, 2, 2, 3, 3, 3],
+            )])));
+
+            assert!(matches!(transform.event()?, Event::Sync));
+            transform.process()?;
+
+            assert!(matches!(transform.event()?, Event::NeedData));
+            upstream_output.push_data(Ok(DataBlock::new_from_columns(vec![Int32Type::from_data(
+                vec![3, 4, 4],
+            )])));
+            upstream_output.finish();
+
+            assert!(matches!(transform.event()?, Event::Sync));
+            transform.process()?;
+
+            assert!(matches!(transform.event()?, Event::NeedConsume));
+            let block = downstream_input.pull_data().unwrap()?;
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 1        | 2        |",
+                    "| 1        | 3        |",
+                    "| 1        | 2        |",
+                    "| 2        | 4        |",
+                    "| 2        | 4        |",
+                    "| 3        | 6        |",
+                    "| 3        | 9        |",
+                    "| 3        | 9        |",
+                    "+----------+----------+",
+                ],
+                &[block],
+            );
+            downstream_input.set_need_data();
+
+            assert!(matches!(transform.event()?, Event::Sync));
+            transform.process()?;
+
+            assert!(matches!(transform.event()?, Event::NeedConsume));
+            let block = downstream_input.pull_data().unwrap()?;
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 3        | 6        |",
+                    "| 4        | 8        |",
+                    "| 4        | 8        |",
+                    "+----------+----------+",
+                ],
+                &[block],
+            );
+            downstream_input.set_need_data();
+
+            assert!(matches!(transform.event()?, Event::Finished));
+        }
+
+        {
+            let upstream_output = OutputPort::create();
+            let downstream_input = InputPort::create();
+            let (mut transform, input, output) = get_transform_window_and_ports(WindowFuncFrame {
+                units: WindowFuncFrameUnits::Rows,
+                start_bound: WindowFuncFrameBound::Preceding(None),
+                end_bound: WindowFuncFrameBound::Following(None),
+            })?;
+
+            unsafe {
+                connect(&input, &upstream_output);
+                connect(&downstream_input, &output);
+            }
+
+            downstream_input.set_need_data();
+
+            assert!(matches!(transform.event()?, Event::NeedData));
+            upstream_output.push_data(Ok(DataBlock::new_from_columns(vec![Int32Type::from_data(
+                vec![1, 1, 1],
+            )])));
+
+            assert!(matches!(transform.event()?, Event::Sync));
+            transform.process()?;
+
+            assert!(matches!(transform.event()?, Event::NeedData));
+            upstream_output.push_data(Ok(DataBlock::new_from_columns(vec![Int32Type::from_data(
+                vec![1, 1, 1],
+            )])));
+
+            assert!(matches!(transform.event()?, Event::Sync));
+            transform.process()?;
+
+            assert!(matches!(transform.event()?, Event::NeedData));
+            upstream_output.push_data(Ok(DataBlock::new_from_columns(vec![Int32Type::from_data(
+                vec![1, 1, 1],
+            )])));
+            upstream_output.finish();
+
+            assert!(matches!(transform.event()?, Event::Sync));
+            transform.process()?;
+
+            assert!(matches!(transform.event()?, Event::Sync));
+            transform.process()?;
+
+            assert!(matches!(transform.event()?, Event::NeedConsume));
+            let block = downstream_input.pull_data().unwrap()?;
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 1        | 9        |",
+                    "| 1        | 9        |",
+                    "| 1        | 9        |",
+                    "+----------+----------+",
+                ],
+                &[block],
+            );
+            downstream_input.set_need_data();
+
+            assert!(matches!(transform.event()?, Event::NeedConsume));
+            let block = downstream_input.pull_data().unwrap()?;
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 1        | 9        |",
+                    "| 1        | 9        |",
+                    "| 1        | 9        |",
+                    "+----------+----------+",
+                ],
+                &[block],
+            );
+            downstream_input.set_need_data();
+
+            assert!(matches!(transform.event()?, Event::NeedConsume));
+            let block = downstream_input.pull_data().unwrap()?;
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 1        | 9        |",
+                    "| 1        | 9        |",
+                    "| 1        | 9        |",
+                    "+----------+----------+",
+                ],
+                &[block],
+            );
+            downstream_input.set_need_data();
+
+            assert!(matches!(transform.event()?, Event::Finished));
         }
 
         Ok(())

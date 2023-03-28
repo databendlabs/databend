@@ -713,6 +713,8 @@ pub enum TokenKind {
     SINGLE,
     #[token("SIZE_LIMIT", ignore(ascii_case))]
     SIZE_LIMIT,
+    #[token("MAX_FILES", ignore(ascii_case))]
+    MAX_FILES,
     #[token("SKIP_HEADER", ignore(ascii_case))]
     SKIP_HEADER,
     #[token("SMALLINT", ignore(ascii_case))]

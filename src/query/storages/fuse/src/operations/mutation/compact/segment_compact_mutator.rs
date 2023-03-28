@@ -204,9 +204,10 @@ impl<'a> SegmentCompactor<'a> {
         let segments_io = self.segment_reader;
         let chunk_size = self.chunk_size;
         let mut checked_end_at = 0;
+        let mut is_end = false;
         for chunk in reverse_locations.chunks(chunk_size) {
             let segment_infos = segments_io
-                .read_segments(chunk)
+                .read_segments(chunk, false)
                 .await?
                 .into_iter()
                 .collect::<Result<Vec<_>>>()?;
@@ -216,6 +217,7 @@ impl<'a> SegmentCompactor<'a> {
                 let compacted = self.num_fragments_compacted();
                 checked_end_at += 1;
                 if compacted >= limit {
+                    is_end = true;
                     // break if number of compacted segments reach the limit
                     // note that during the finalization of compaction, there might be some extra
                     // fragmented segments also need to be compacted, we just let it go
@@ -234,6 +236,10 @@ impl<'a> SegmentCompactor<'a> {
                 info!(status);
                 (status_callback)(status);
             }
+
+            if is_end {
+                break;
+            }
         }
         let mut compaction = self.finalize().await?;
 
@@ -245,7 +251,7 @@ impl<'a> SegmentCompactor<'a> {
             let start_pos = checked_end_at;
             for chunk in reverse_locations[start_pos..].chunks(chunk_size) {
                 let segment_infos = segments_io
-                    .read_segments(chunk)
+                    .read_segments(chunk, false)
                     .await?
                     .into_iter()
                     .collect::<Result<Vec<_>>>()?;

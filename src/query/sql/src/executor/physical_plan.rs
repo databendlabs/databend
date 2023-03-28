@@ -33,6 +33,7 @@ use crate::executor::explain::PlanStatsInfo;
 use crate::optimizer::ColumnSet;
 use crate::plans::JoinType;
 use crate::plans::RuntimeFilterId;
+use crate::plans::WindowFuncFrame;
 use crate::ColumnBinding;
 use crate::IndexType;
 
@@ -278,6 +279,29 @@ impl AggregateFinal {
                 .clone();
             fields.push(DataField::new(&id.to_string(), data_type));
         }
+        Ok(DataSchemaRefExt::create(fields))
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct Window {
+    pub plan_id: u32,
+    pub input: Box<PhysicalPlan>,
+    pub agg_func: AggregateFunctionDesc,
+    pub partition_by: Vec<IndexType>,
+    pub order_by: Vec<SortDesc>,
+    pub window_frame: WindowFuncFrame,
+}
+
+impl Window {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        let input_schema = self.input.output_schema()?;
+        let mut fields = Vec::with_capacity(input_schema.fields().len() + 1);
+        fields.extend_from_slice(input_schema.fields());
+        fields.push(DataField::new(
+            &self.agg_func.output_column.to_string(),
+            self.agg_func.sig.return_type.clone(),
+        ));
         Ok(DataSchemaRefExt::create(fields))
     }
 }
@@ -559,6 +583,7 @@ pub enum PhysicalPlan {
     AggregateExpand(AggregateExpand),
     AggregatePartial(AggregatePartial),
     AggregateFinal(AggregateFinal),
+    Window(Window),
     Sort(Sort),
     Limit(Limit),
     HashJoin(HashJoin),
@@ -592,6 +617,7 @@ impl PhysicalPlan {
             PhysicalPlan::AggregateExpand(plan) => plan.output_schema(),
             PhysicalPlan::AggregatePartial(plan) => plan.output_schema(),
             PhysicalPlan::AggregateFinal(plan) => plan.output_schema(),
+            PhysicalPlan::Window(plan) => plan.output_schema(),
             PhysicalPlan::Sort(plan) => plan.output_schema(),
             PhysicalPlan::Limit(plan) => plan.output_schema(),
             PhysicalPlan::HashJoin(plan) => plan.output_schema(),
@@ -614,6 +640,7 @@ impl PhysicalPlan {
             PhysicalPlan::AggregateExpand(_) => "AggregateExpand".to_string(),
             PhysicalPlan::AggregatePartial(_) => "AggregatePartial".to_string(),
             PhysicalPlan::AggregateFinal(_) => "AggregateFinal".to_string(),
+            PhysicalPlan::Window(_) => "Window".to_string(),
             PhysicalPlan::Sort(_) => "Sort".to_string(),
             PhysicalPlan::Limit(_) => "Limit".to_string(),
             PhysicalPlan::HashJoin(_) => "HashJoin".to_string(),
@@ -636,6 +663,7 @@ impl PhysicalPlan {
             PhysicalPlan::AggregateExpand(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AggregatePartial(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AggregateFinal(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::Window(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Sort(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Limit(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::HashJoin(plan) => Box::new(

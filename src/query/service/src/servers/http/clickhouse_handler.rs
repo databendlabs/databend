@@ -231,9 +231,9 @@ pub async fn clickhouse_handler_get(
         .await
         .map_err(InternalServerError)?;
 
-    session
-        .get_settings()
-        .set_batch_settings(&params.settings, false)
+    let settings = session.get_settings();
+    settings
+        .set_batch_settings(&params.settings)
         .map_err(BadRequest)?;
 
     let default_format = get_default_format(&params, headers).map_err(BadRequest)?;
@@ -275,7 +275,7 @@ pub async fn clickhouse_handler_post(
 
     let settings = ctx.get_settings();
     settings
-        .set_batch_settings(&params.settings, false)
+        .set_batch_settings(&params.settings)
         .map_err(BadRequest)?;
 
     let default_format = get_default_format(&params, headers).map_err(BadRequest)?;

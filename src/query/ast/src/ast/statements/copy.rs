@@ -44,6 +44,7 @@ pub struct CopyStmt {
     /// TODO(xuanwo): parse into validation_mode directly.
     pub validation_mode: String,
     pub size_limit: usize,
+    pub max_files: usize,
     pub max_file_size: usize,
     pub split_size: usize,
     pub single: bool,
@@ -60,6 +61,7 @@ impl CopyStmt {
             CopyOption::FileFormat(v) => self.file_format = v,
             CopyOption::ValidationMode(v) => self.validation_mode = v,
             CopyOption::SizeLimit(v) => self.size_limit = v,
+            CopyOption::MaxFiles(v) => self.max_files = v,
             CopyOption::MaxFileSize(v) => self.max_file_size = v,
             CopyOption::SplitSize(v) => self.split_size = v,
             CopyOption::Single(v) => self.single = v,
@@ -100,6 +102,10 @@ impl Display for CopyStmt {
 
         if self.size_limit != 0 {
             write!(f, " SIZE_LIMIT = {}", self.size_limit)?;
+        }
+
+        if self.max_files != 0 {
+            write!(f, " MAX_FILES = {}", self.max_files)?;
         }
 
         if self.max_file_size != 0 {
@@ -379,6 +385,7 @@ pub enum CopyOption {
     FileFormat(BTreeMap<String, String>),
     ValidationMode(String),
     SizeLimit(usize),
+    MaxFiles(usize),
     MaxFileSize(usize),
     SplitSize(usize),
     Single(bool),

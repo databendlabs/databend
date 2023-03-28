@@ -22,12 +22,16 @@ use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::processors::TransformCompact;
 
 pub struct RightSemiAntiJoinCompactor {
+    use_partial_compact: bool,
     hash_join_state: Arc<dyn HashJoinState>,
 }
 
 impl RightSemiAntiJoinCompactor {
-    pub fn create(hash_join_state: Arc<dyn HashJoinState>) -> Self {
-        RightSemiAntiJoinCompactor { hash_join_state }
+    pub fn create(hash_join_state: Arc<dyn HashJoinState>, use_partial_compact: bool) -> Self {
+        RightSemiAntiJoinCompactor {
+            use_partial_compact,
+            hash_join_state,
+        }
     }
 }
 
@@ -36,8 +40,18 @@ impl Compactor for RightSemiAntiJoinCompactor {
         "RightSemiAntiJoinCompactor"
     }
 
+    fn use_partial_compact(&self) -> bool {
+        self.use_partial_compact
+    }
+
     fn interrupt(&self) {
         self.hash_join_state.interrupt();
+    }
+
+    fn compact_partial(&mut self, blocks: &mut Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+        let res = self.hash_join_state.right_semi_join_blocks(blocks);
+        blocks.clear();
+        res
     }
 
     // `compact_final` is called when all the blocks are pushed

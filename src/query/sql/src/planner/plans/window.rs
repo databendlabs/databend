@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
+use crate::binder::WindowOrderByInfo;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::Distribution;
 use crate::optimizer::PhysicalProperty;
@@ -35,6 +36,8 @@ pub struct Window {
     pub aggregate_function: ScalarItem,
     // partition by scalar expressions
     pub partition_by: Vec<ScalarItem>,
+    // order by
+    pub order_by: Vec<WindowOrderByInfo>,
     // window frames
     pub frame: WindowFuncFrame,
 }
@@ -49,6 +52,11 @@ impl Window {
         for part in self.partition_by.iter() {
             used_columns.insert(part.index);
             used_columns.extend(part.scalar.used_columns())
+        }
+
+        for sort in self.order_by.iter() {
+            used_columns.insert(sort.order_by_item.index);
+            used_columns.extend(sort.order_by_item.scalar.used_columns())
         }
 
         Ok(used_columns)
@@ -67,25 +75,12 @@ impl Operator for Window {
     fn compute_required_prop_child(
         &self,
         _ctx: Arc<dyn TableContext>,
-        rel_expr: &RelExpr,
+        _rel_expr: &RelExpr,
         _child_index: usize,
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
         let mut required = required.clone();
-        let child_physical_prop = rel_expr.derive_physical_prop_child(0)?;
-
-        if child_physical_prop.distribution == Distribution::Serial {
-            return Ok(required);
-        }
-
-        if self.partition_by.is_empty() {
-            // Scalar aggregation
-            required.distribution = Distribution::Any;
-        } else {
-            // Partition aggregation, enforce `Hash` distribution
-            required.distribution = Distribution::Hash(vec![self.partition_by[0].scalar.clone()]);
-        }
-
+        required.distribution = Distribution::Serial;
         Ok(required)
     }
 

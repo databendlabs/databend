@@ -89,17 +89,6 @@ yq -i ".load_time = ${load_time} | .data_size = ${data_size} | .result = []" res
 
 echo "Running queries..."
 
-function append_result() {
-    local query_num=$1
-    local seq=$2
-    local value=$3
-    if [[ $seq -eq 1 ]]; then
-        yq -i ".result += [[${value}]]" result.json
-    else
-        yq -i ".result[${query_num} - 1] += [${value}]" result.json
-    fi
-}
-
 function run_query() {
     local query_num=$1
     local seq=$2
@@ -111,20 +100,20 @@ function run_query() {
     if echo "$query" | bendsql query --format csv --rows-only >/dev/null; then
         q_end=$(date +%s.%N)
         q_time=$(echo "$q_end - $q_start" | bc -l)
-        echo "Q${QUERY_NUM}[$seq] succeeded in $q_time seconds"
-        append_result "$query_num" "$seq" "$q_time"
+        echo "Q${query_num}[$seq] succeeded in $q_time seconds"
+        yq -i ".result[${query_num}] += [${q_time}]" result.json
     else
-        echo "Q${QUERY_NUM}[$seq] failed"
-        append_result "$query_num" "$seq" "null"
+        echo "Q${query_num}[$seq] failed"
     fi
 }
 
-TRIES=6
-QUERY_NUM=1
+TRIES=5
+QUERY_NUM=0
 while read -r query; do
     echo "Running Q${QUERY_NUM}: ${query}"
     sync
     echo 3 | sudo tee /proc/sys/vm/drop_caches
+    yq -i ".result += [[]]" result.json
     for i in $(seq 1 $TRIES); do
         run_query "$QUERY_NUM" "$i" "$query"
     done

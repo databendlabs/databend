@@ -51,7 +51,7 @@ impl FuseTable {
             let mut block_count_sum: u64 = 0;
 
             let segments_io = SegmentsIO::create(ctx.clone(), self.operator.clone(), self.schema());
-            let segments = segments_io.read_segments(&snapshot.segments).await?;
+            let segments = segments_io.read_segments(&snapshot.segments, true).await?;
             for segment in segments {
                 let segment = segment?;
                 segment.blocks.iter().for_each(|block| {

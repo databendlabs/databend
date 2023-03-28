@@ -115,7 +115,7 @@ impl ParquetTable {
             None => if self.operator.info().can_blocking() {
                 self.files_info.blocking_list(&self.operator, false)
             } else {
-                self.files_info.list(&self.operator, false).await
+                self.files_info.list(&self.operator, false, None).await
             }?
             .into_iter()
             .map(|f| (f.path, f.size))

@@ -65,7 +65,7 @@ pub enum ListSnapshotLiteOption {
 
 struct SnapshotLiteExtended {
     snapshot_lite: TableSnapshotLite,
-    segment_locations: HashMap<Location, HashSet<SnapshotId>>,
+    segment_locations: Vec<Location>,
 }
 
 impl SnapshotsIO {
@@ -121,8 +121,7 @@ impl SnapshotsIO {
                 "The timestamp of snapshot need less than the min_snapshot_timestamp",
             ));
         }
-        let snapshot_id = snapshot.snapshot_id;
-        let mut segment_locations: HashMap<Location, HashSet<SnapshotId>> = HashMap::new();
+        let mut segment_locations = Vec::new();
         if let ListSnapshotLiteOption::NeedSegmentsWithExclusion(filter) = list_options {
             // collects segments, and the snapshots that reference them.
             for segment_location in &snapshot.segments {
@@ -131,12 +130,7 @@ impl SnapshotsIO {
                         continue;
                     }
                 }
-                segment_locations
-                    .entry(segment_location.clone())
-                    .and_modify(|v| {
-                        v.insert(snapshot_id);
-                    })
-                    .or_insert_with(|| HashSet::from_iter(vec![snapshot_id]));
+                segment_locations.push(segment_location.clone());
             }
         }
 
@@ -250,12 +244,15 @@ impl SnapshotsIO {
                 .await?;
 
             for snapshot_lite_extend in results.into_iter().flatten() {
+                let snapshot_id = snapshot_lite_extend.snapshot_lite.snapshot_id;
                 snapshot_lites.push(snapshot_lite_extend.snapshot_lite);
-                for (k, v) in snapshot_lite_extend.segment_locations.into_iter() {
+                for location in snapshot_lite_extend.segment_locations.into_iter() {
                     segment_location_with_index
-                        .entry(k)
-                        .and_modify(|val| val.extend(v.iter()))
-                        .or_insert(v);
+                        .entry(location)
+                        .and_modify(|val| {
+                            val.insert(snapshot_id);
+                        })
+                        .or_insert(HashSet::from([snapshot_id]));
                 }
             }
 

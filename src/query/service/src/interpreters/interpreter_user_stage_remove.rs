@@ -59,7 +59,7 @@ impl Interpreter for RemoveUserStageInterpreter {
             pattern,
         };
         let files: Vec<String> = files_info
-            .list(&op, false)
+            .list(&op, false, None)
             .await?
             .into_iter()
             .map(|file_with_meta| file_with_meta.path)

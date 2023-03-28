@@ -17,6 +17,7 @@
 mod query;
 mod service;
 mod session;
+mod sql_info;
 
 use std::pin::Pin;
 use std::sync::Arc;
@@ -26,6 +27,7 @@ use common_sql::plans::Plan;
 use common_sql::PlanExtras;
 use dashmap::DashMap;
 use futures::Stream;
+use sql_info::SqlInfoProvider;
 use tonic::Status;
 use uuid::Uuid;
 

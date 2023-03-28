@@ -12,4 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod transforms;
+mod completion;
+mod embedding;
+#[allow(clippy::module_inception)]
+mod openai;
+
+pub(crate) mod metrics;
+
+pub use openai::AIModel;
+pub use openai::OpenAI;

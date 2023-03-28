@@ -31,11 +31,9 @@ use common_exception::Result;
 use common_metrics::label_counter;
 use common_metrics::label_gauge;
 use common_settings::Settings;
-use common_users::UserApiProvider;
 use futures::future::Either;
 use futures::StreamExt;
 use parking_lot::RwLock;
-use tracing::debug;
 use tracing::info;
 
 use crate::sessions::session::Session;
@@ -81,38 +79,41 @@ impl SessionManager {
     }
 
     pub async fn create_session(&self, typ: SessionType) -> Result<Arc<Session>> {
-        // TODO: maybe deadlock
-        let config = GlobalConfig::instance();
         {
             let sessions = self.active_sessions.read();
             self.validate_max_active_sessions(sessions.len(), "active sessions")?;
         }
-        let id = uuid::Uuid::new_v4().to_string();
-        let session_typ = typ.clone();
-        let mut mysql_conn_id = None;
-        match session_typ {
-            SessionType::MySQL => {
-                let mysql_conn_map = self.mysql_conn_map.read();
-                mysql_conn_id = Some(self.mysql_basic_conn_id.fetch_add(1, Ordering::Relaxed));
-                self.validate_max_active_sessions(mysql_conn_map.len(), "mysql conns")?;
-            }
-            _ => {
-                debug!(
-                    "session type is {}, mysql_conn_map no need to change.",
-                    session_typ
-                );
-            }
+
+        if matches!(typ, SessionType::MySQL) {
+            let mysql_conn_map = self.mysql_conn_map.read();
+            self.validate_max_active_sessions(mysql_conn_map.len(), "mysql conns")?;
         }
 
-        let tenant = config.query.tenant_id.clone();
-        let user_api = UserApiProvider::instance();
-        let session_settings = Settings::try_create(user_api, tenant).await?;
-        let session_ctx = SessionContext::try_create(session_settings)?;
+        let tenant = GlobalConfig::instance().query.tenant_id.clone();
+        let settings = Settings::create(tenant);
+        settings.load_global_changes().await?;
+
+        self.create_with_settings(typ, settings)
+    }
+
+    pub fn create_with_settings(
+        &self,
+        typ: SessionType,
+        settings: Arc<Settings>,
+    ) -> Result<Arc<Session>> {
+        let id = uuid::Uuid::new_v4().to_string();
+        let mysql_conn_id = match typ {
+            SessionType::MySQL => Some(self.mysql_basic_conn_id.fetch_add(1, Ordering::Relaxed)),
+            _ => None,
+        };
+
+        let session_ctx = SessionContext::try_create(settings)?;
         let session = Session::try_create(id.clone(), typ.clone(), session_ctx, mysql_conn_id)?;
 
         let mut sessions = self.active_sessions.write();
         self.validate_max_active_sessions(sessions.len(), "active sessions")?;
 
+        let config = GlobalConfig::instance();
         label_counter(
             METRIC_SESSION_CONNECT_NUMBERS,
             &config.query.tenant_id,
@@ -129,7 +130,7 @@ impl SessionManager {
             sessions.insert(session.get_id(), Arc::downgrade(&session));
         }
 
-        if let SessionType::MySQL = session_typ {
+        if let SessionType::MySQL = typ {
             let mut mysql_conn_map = self.mysql_conn_map.write();
             self.validate_max_active_sessions(mysql_conn_map.len(), "mysql conns")?;
             mysql_conn_map.insert(mysql_conn_id, id);
