@@ -142,5 +142,6 @@ pub trait TableContext: Send + Sync {
         database_name: &str,
         table_name: &str,
         files: Vec<StageFileInfo>,
+        max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>>;
 }
