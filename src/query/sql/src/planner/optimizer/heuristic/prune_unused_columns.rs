@@ -159,13 +159,10 @@ impl UnusedColumnPruner {
             }
             RelOperator::Window(p) => {
                 if required.contains(&p.index) {
-                    match &p.function {
-                        WindowFuncType::Aggregate(agg) => {
-                            agg.args.iter().for_each(|item| {
-                                required.extend(item.used_columns());
-                            });
-                        }
-                        _ => {}
+                    if let WindowFuncType::Aggregate(agg) = &p.function {
+                        agg.args.iter().for_each(|item| {
+                            required.extend(item.used_columns());
+                        });
                     }
                     p.partition_by.iter().for_each(|item| {
                         required.insert(item.index);

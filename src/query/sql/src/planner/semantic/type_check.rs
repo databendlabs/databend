@@ -738,16 +738,15 @@ impl<'a> TypeChecker<'a> {
 
                         // TODO(window): support general window functions
                         let func = WindowFuncType::Aggregate(new_agg_func.clone());
-
-                        self.resolve_window(
-                            *span,
+                        let frame = Self::check_frame_bound(*span, window.window_frame.clone())?;
+                        let window_func = WindowFunc {
                             display_name,
                             func,
-                            partitions,
-                            order_bys,
-                            window.window_frame.clone(),
-                            data_type.clone(),
-                        )?
+                            partition_by: partitions,
+                            order_by: order_bys,
+                            frame,
+                        };
+                        Box::new((window_func.into(), data_type))
                     } else {
                         Box::new((new_agg_func.into(), data_type))
                     }
@@ -956,16 +955,19 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    pub fn resolve_window(
-        &mut self,
-        span: Span,
-        display_name: String,
-        func: WindowFuncType,
-        partitions: Vec<ScalarExpr>,
-        order_bys: Vec<WindowOrderBy>,
-        window_frame: Option<WindowFrame>,
-        return_type: DataType,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
+    // just support integer
+    #[inline]
+    pub fn resolve_window_frame(expr: &Expr) -> Option<usize> {
+        match expr {
+            Expr::Literal {
+                lit: Literal::UInt64(value),
+                ..
+            } => Some(*value as usize),
+            _ => None,
+        }
+    }
+
+    fn check_frame_bound(span: Span, window_frame: Option<WindowFrame>) -> Result<WindowFuncFrame> {
         let (units, start, end) = if let Some(frame) = window_frame {
             let units = match frame.units {
                 WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,
@@ -1018,39 +1020,6 @@ impl<'a> TypeChecker<'a> {
             (units, start, end)
         };
 
-        Self::check_frame_bound(span, start.clone(), end.clone())?;
-
-        let window_func = WindowFunc {
-            display_name,
-            func,
-            partition_by: partitions,
-            order_by: order_bys,
-            frame: WindowFuncFrame {
-                units,
-                start_bound: start,
-                end_bound: end,
-            },
-        };
-
-        Ok(Box::new((window_func.into(), return_type)))
-    }
-
-    // just support integer
-    pub fn resolve_window_frame(expr: &Expr) -> Option<usize> {
-        match expr {
-            Expr::Literal {
-                lit: Literal::UInt64(value),
-                ..
-            } => Some(*value as usize),
-            _ => None,
-        }
-    }
-
-    fn check_frame_bound(
-        span: Span,
-        start: WindowFuncFrameBound,
-        end: WindowFuncFrameBound,
-    ) -> Result<()> {
         match start {
             WindowFuncFrameBound::CurrentRow => {
                 if start > end {
@@ -1093,7 +1062,11 @@ impl<'a> TypeChecker<'a> {
             }
         }
 
-        Ok(())
+        Ok(WindowFuncFrame {
+            units,
+            start_bound: start,
+            end_bound: end,
+        })
     }
 
     /// Resolve function call.

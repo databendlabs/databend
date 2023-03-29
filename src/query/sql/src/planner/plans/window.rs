@@ -53,16 +53,13 @@ impl Window {
 
         used_columns.insert(self.index);
 
-        match &self.function {
-            WindowFuncType::Aggregate(agg) => {
-                for scalar in &agg.args {
-                    used_columns = used_columns
-                        .union(&scalar.used_columns())
-                        .cloned()
-                        .collect();
-                }
+        if let WindowFuncType::Aggregate(agg) = &self.function {
+            for scalar in &agg.args {
+                used_columns = used_columns
+                    .union(&scalar.used_columns())
+                    .cloned()
+                    .collect();
             }
-            _ => {}
         }
 
         for part in self.partition_by.iter() {

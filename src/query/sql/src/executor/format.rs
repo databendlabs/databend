@@ -554,7 +554,7 @@ fn window_to_format_tree(
     let frame = plan.window_frame.to_string();
 
     let func = match &plan.func {
-        WindowFunction::Aggregate(agg) => pretty_display_agg_desc(&agg, metadata),
+        WindowFunction::Aggregate(agg) => pretty_display_agg_desc(agg, metadata),
         func => format!("{}", func),
     };
 

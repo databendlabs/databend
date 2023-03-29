@@ -68,13 +68,10 @@ pub trait ScalarVisitor: Sized {
                                     order_by,
                                     ..
                                 }) => {
-                                    match func {
-                                        WindowFuncType::Aggregate(agg) => {
-                                            for arg in &agg.args {
-                                                stack.push(RecursionProcessing::Call(arg));
-                                            }
+                                    if let WindowFuncType::Aggregate(agg) = func {
+                                        for arg in &agg.args {
+                                            stack.push(RecursionProcessing::Call(arg));
                                         }
-                                        _ => {}
                                     }
                                     for arg in partition_by.iter() {
                                         stack.push(RecursionProcessing::Call(arg));
