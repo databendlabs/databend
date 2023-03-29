@@ -5,7 +5,7 @@ edition = "2021"
 license = "Apache-2.0"
 description = "Databend Client for Rust"
 categories = ["database"]
-keywords = ["databend", "database", "rust"]
+keywords = ["databend", "database", "sdk"]
 repository = "https://github.com/databendcloud/databend-client"
 
 [dependencies]

@@ -1,0 +1,20 @@
+name: publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    steps:
+    - uses: actions/checkout@v3
+    - name: Publish Client
+      run: cargo publish -p databend-client
+    - name: Publish Driver
+      run: cargo publish -p databend-driver

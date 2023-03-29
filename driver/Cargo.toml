@@ -5,13 +5,13 @@ edition = "2021"
 license = "Apache-2.0"
 description = "Databend Driver for Rust"
 categories = ["database"]
-keywords = ["databend", "database", "rust"]
+keywords = ["databend", "database", "sdk"]
 repository = "https://github.com/databendcloud/databend-client"
 
 [dependencies]
 anyhow = "1.0.70"
 chrono = { version = "0.4.24", default-features = false, features = ["clock"] }
-databend-client = { path = "../core" }
+databend-client = { version = "0.1.0", path = "../core" }
 tokio = { version = "1.26.0", features = ["macros"] }
 tokio-stream = "0.1.12"
 
