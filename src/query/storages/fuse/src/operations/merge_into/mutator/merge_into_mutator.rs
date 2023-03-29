@@ -32,7 +32,7 @@ use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
-use tracing::debug;
+use tracing::info;
 
 use crate::io::write_data;
 use crate::io::BlockBuilder;
@@ -189,7 +189,10 @@ impl MergeIntoOperationAggregator {
         block_meta: &BlockMeta,
         deleted_key_hashes: &HashSet<UniqueKeyDigest>,
     ) -> Result<Option<ReplacementLogEntry>> {
-        debug!("apply delete to segment {}", segment_index);
+        info!(
+            "apply delete to segment idx {}, block idx {}",
+            segment_index, block_index
+        );
         if block_meta.row_count == 0 {
             return Ok(None);
         }
@@ -243,13 +246,13 @@ impl MergeIntoOperationAggregator {
 
         // shortcuts
         if bitmap.unset_bits() == 0 {
-            debug!("nothing deleted");
+            info!("nothing deleted");
             // nothing to be deleted
             return Ok(None);
         }
 
         if bitmap.unset_bits() == block_meta.row_count as usize {
-            debug!("whole block deletion");
+            info!("whole block deletion");
             // whole block deletion
             // NOTE that if deletion marker is enabled, check the real meaning of `row_count`
             let mutation = ReplacementLogEntry {
@@ -266,7 +269,7 @@ impl MergeIntoOperationAggregator {
 
         let bitmap = bitmap.into();
         let new_block = data_block.filter_with_bitmap(&bitmap)?;
-        debug!("number of row deleted: {}", bitmap.unset_bits());
+        info!("number of row deleted: {}", bitmap.unset_bits());
 
         // serialization and compression is cpu intensive, send them to dedicated thread pool
         // and wait (asyncly, which will NOT block the executor thread)
