@@ -367,7 +367,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let subquery = map(
         rule! {
-            ( #parenthesized_query | #query ) ~ #table_alias?
+            #parenthesized_query ~ #table_alias?
         },
         |(subquery, alias)| TableReferenceElement::Subquery {
             subquery: Box::new(subquery),
@@ -418,14 +418,14 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
 
     let (rest, (span, elem)) = consumed(rule! {
-        #subquery
-        | #aliased_stage
+        #aliased_stage
+        | #table_function
+        | #aliased_table
+        | #subquery
         | #group
         | #join
         | #join_condition_on
         | #join_condition_using
-        | #table_function
-        | #aliased_table
     })(i)?;
     Ok((rest, WithSpan { span, elem }))
 }
