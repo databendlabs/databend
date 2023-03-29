@@ -18,6 +18,7 @@ use arrow_array::make_array;
 use arrow_array::Array;
 use arrow_array::ArrowPrimitiveType;
 use arrow_array::BooleanArray;
+use arrow_array::LargeBinaryArray;
 use arrow_array::LargeStringArray;
 use arrow_array::NullArray;
 use arrow_array::PrimitiveArray;
@@ -86,7 +87,7 @@ impl Column {
                     .add_buffer(offsets)
                     .add_buffer(values);
                 let array_data = unsafe { array_data.build_unchecked() };
-                Arc::new(LargeStringArray::from(array_data))
+                Arc::new(LargeBinaryArray::from(array_data))
             }
             Column::Variant(col) => {
                 let len = col.len();
@@ -97,7 +98,7 @@ impl Column {
                     .add_buffer(offsets)
                     .add_buffer(values);
                 let array_data = unsafe { array_data.build_unchecked() };
-                Arc::new(LargeStringArray::from(array_data))
+                Arc::new(LargeBinaryArray::from(array_data))
             }
             Column::Number(NumberColumn::UInt8(buf)) => {
                 numbers_into::<u8, arrow_array::types::UInt8Type>(buf, DataType::UInt8)?
