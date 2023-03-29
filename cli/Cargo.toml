@@ -1,0 +1,36 @@
+[package]
+name = "cli"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+arrow = "35.0.0"
+arrow-cast = { version = "35.0.0", features = ["prettyprint"] }
+arrow-flight = { version = "35.0.0", features = ["flight-sql-experimental"] }
+atty = "0.2.14"
+futures = { version = "0.3", default-features = false, features = ["alloc"] }
+rustyline = "11.0.0"
+shlex = "1.1.0"
+tokio = { version = "1.26", features = [
+    "macros",
+    "rt",
+    "rt-multi-thread",
+    "sync",
+    "parking_lot",
+] }
+
+clap = { version = "4.1.0", features = ["derive"] }
+tonic = { version = "0.8", default-features = false, features = [
+    "transport",
+    "codegen",
+    "tls",
+    "prost",
+] }
+
+[[bin]]
+name = "databend-cli"
+path = "src/main.rs"
+doctest = false
+test = false
