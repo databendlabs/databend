@@ -23,7 +23,7 @@ use common_meta_types::MatchSeq;
 use crate::FuseTable;
 
 impl FuseTable {
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     pub async fn do_revert_to(
         &self,
         ctx: &dyn TableContext,

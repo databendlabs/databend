@@ -96,6 +96,7 @@ impl DataExchangeManager {
     }
 
     // Create connections for cluster all nodes. We will push data through this connection.
+    #[async_backtrace::framed]
     pub async fn init_nodes_channel(&self, packet: &InitNodesChannelPacket) -> Result<()> {
         let mut request_exchanges = HashMap::new();
         let mut targets_exchanges = HashMap::new();
@@ -144,6 +145,7 @@ impl DataExchangeManager {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn create_client(address: &str) -> Result<FlightClient> {
         let config = GlobalConfig::instance();
         let address = address.to_string();
@@ -256,6 +258,7 @@ impl DataExchangeManager {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn commit_actions(
         &self,
         ctx: Arc<QueryContext>,

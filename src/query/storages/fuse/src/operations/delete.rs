@@ -66,7 +66,7 @@ impl FuseTable {
     /// +---------------+      +-----------------------+         |      +-----------------+      +------------+
     /// |MutationSourceN| ---> |SerializeDataTransformN|   ------
     /// +---------------+      +-----------------------+
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     pub async fn do_delete(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -186,7 +186,7 @@ impl FuseTable {
         })
     }
 
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     async fn try_add_deletion_source(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -256,7 +256,7 @@ impl FuseTable {
         )
     }
 
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     pub async fn mutation_block_pruning(
         &self,
         ctx: Arc<dyn TableContext>,

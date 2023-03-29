@@ -89,6 +89,7 @@ impl MutableCatalog {
     ///
     /// MetaEmbedded
     /// ```
+    #[async_backtrace::framed]
     pub async fn try_create_with_config(conf: InnerConfig) -> Result<Self> {
         let meta = {
             let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
@@ -141,6 +142,7 @@ impl Catalog for MutableCatalog {
         self
     }
 
+    #[async_backtrace::framed]
     async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
         let db_info = self
             .ctx
@@ -150,6 +152,7 @@ impl Catalog for MutableCatalog {
         self.build_db_instance(&db_info)
     }
 
+    #[async_backtrace::framed]
     async fn list_databases(&self, tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
         let dbs = self
             .ctx
@@ -166,6 +169,7 @@ impl Catalog for MutableCatalog {
         })
     }
 
+    #[async_backtrace::framed]
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
         // Create database.
         let res = self.ctx.meta.create_database(req.clone()).await?;
@@ -188,16 +192,19 @@ impl Catalog for MutableCatalog {
         Ok(CreateDatabaseReply { db_id: res.db_id })
     }
 
+    #[async_backtrace::framed]
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<()> {
         self.ctx.meta.drop_database(req).await?;
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn undrop_database(&self, req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
         let res = self.ctx.meta.undrop_database(req).await?;
         Ok(res)
     }
 
+    #[async_backtrace::framed]
     async fn rename_database(&self, req: RenameDatabaseReq) -> Result<RenameDatabaseReply> {
         let res = self.ctx.meta.rename_database(req).await?;
         Ok(res)
@@ -208,6 +215,7 @@ impl Catalog for MutableCatalog {
         storage.get_table(table_info)
     }
 
+    #[async_backtrace::framed]
     async fn get_table_meta_by_id(
         &self,
         table_id: MetaId,
@@ -216,6 +224,7 @@ impl Catalog for MutableCatalog {
         Ok(res)
     }
 
+    #[async_backtrace::framed]
     async fn get_table(
         &self,
         tenant: &str,
@@ -226,11 +235,13 @@ impl Catalog for MutableCatalog {
         db.get_table(table_name).await
     }
 
+    #[async_backtrace::framed]
     async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         let db = self.get_database(tenant, db_name).await?;
         db.list_tables().await
     }
 
+    #[async_backtrace::framed]
     async fn list_tables_history(
         &self,
         tenant: &str,
@@ -240,6 +251,7 @@ impl Catalog for MutableCatalog {
         db.list_tables_history().await
     }
 
+    #[async_backtrace::framed]
     async fn create_table(&self, req: CreateTableReq) -> Result<()> {
         let db = self
             .get_database(&req.name_ident.tenant, &req.name_ident.db_name)
@@ -247,11 +259,13 @@ impl Catalog for MutableCatalog {
         db.create_table(req).await
     }
 
+    #[async_backtrace::framed]
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply> {
         let res = self.ctx.meta.drop_table_by_id(req).await?;
         Ok(res)
     }
 
+    #[async_backtrace::framed]
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
         let db = self
             .get_database(&req.name_ident.tenant, &req.name_ident.db_name)
@@ -259,6 +273,7 @@ impl Catalog for MutableCatalog {
         db.undrop_table(req).await
     }
 
+    #[async_backtrace::framed]
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
         let db = self
             .get_database(&req.name_ident.tenant, &req.name_ident.db_name)
@@ -266,6 +281,7 @@ impl Catalog for MutableCatalog {
         db.rename_table(req).await
     }
 
+    #[async_backtrace::framed]
     async fn upsert_table_option(
         &self,
         tenant: &str,
@@ -276,6 +292,7 @@ impl Catalog for MutableCatalog {
         db.upsert_table_option(req).await
     }
 
+    #[async_backtrace::framed]
     async fn update_table_meta(
         &self,
         table_info: &TableInfo,
@@ -292,6 +309,7 @@ impl Catalog for MutableCatalog {
         }
     }
 
+    #[async_backtrace::framed]
     async fn get_table_copied_file_info(
         &self,
         tenant: &str,
@@ -302,6 +320,7 @@ impl Catalog for MutableCatalog {
         db.get_table_copied_file_info(req).await
     }
 
+    #[async_backtrace::framed]
     async fn truncate_table(
         &self,
         table_info: &TableInfo,
@@ -318,6 +337,7 @@ impl Catalog for MutableCatalog {
         }
     }
 
+    #[async_backtrace::framed]
     async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply> {
         let res = self.ctx.meta.count_tables(req).await?;
         Ok(res)

@@ -44,6 +44,7 @@ impl FlightSQLServer {
         }))
     }
 
+    #[async_backtrace::framed]
     async fn listener_tcp(listening: SocketAddr) -> Result<(TcpListenerStream, SocketAddr)> {
         let listener = TcpListener::bind(listening).await.map_err(|e| {
             ErrorCode::TokioError(format!("{{{}:{}}} {}", listening.ip(), listening.port(), e))
@@ -60,6 +61,7 @@ impl FlightSQLServer {
     }
 
     #[allow(unused)]
+    #[async_backtrace::framed]
     async fn server_tls_config(conf: &InnerConfig) -> Result<ServerTlsConfig> {
         let cert = tokio::fs::read(conf.query.flight_sql_tls_server_cert.as_str()).await?;
         let key = tokio::fs::read(conf.query.flight_sql_tls_server_key.as_str()).await?;
@@ -68,6 +70,7 @@ impl FlightSQLServer {
         Ok(tls_conf)
     }
 
+    #[async_backtrace::framed]
     pub async fn start_with_incoming(&mut self, listener_stream: TcpListenerStream) -> Result<()> {
         let flight_sql_service = FlightSqlServiceImpl::create();
         let builder = Server::builder();
@@ -97,8 +100,10 @@ impl FlightSQLServer {
 
 #[async_trait::async_trait]
 impl DatabendQueryServer for FlightSQLServer {
+    #[async_backtrace::framed]
     async fn shutdown(&mut self, _graceful: bool) {}
 
+    #[async_backtrace::framed]
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
         let (listener_stream, listener_addr) = Self::listener_tcp(listening).await?;
         self.start_with_incoming(listener_stream).await?;

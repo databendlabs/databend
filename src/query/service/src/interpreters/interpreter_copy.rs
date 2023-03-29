@@ -64,6 +64,7 @@ impl CopyInterpreter {
         Ok(CopyInterpreter { ctx, plan })
     }
 
+    #[async_backtrace::framed]
     async fn build_query(&self, query: &Plan) -> Result<(PipelineBuildResult, DataSchemaRef)> {
         let (s_expr, metadata, bind_context, formatted_ast) = match query {
             Plan::Query {
@@ -103,6 +104,7 @@ impl CopyInterpreter {
         Ok((build_res, data_schema))
     }
 
+    #[async_backtrace::framed]
     async fn build_copy_into_stage_pipeline(
         &self,
         stage: &StageInfo,
@@ -134,6 +136,7 @@ impl CopyInterpreter {
         Ok(build_res)
     }
 
+    #[async_backtrace::framed]
     async fn try_purge_files(
         ctx: Arc<QueryContext>,
         stage_info: &StageInfo,
@@ -159,6 +162,7 @@ impl CopyInterpreter {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[async_backtrace::framed]
     async fn build_copy_into_table_with_transform_pipeline(
         &self,
         catalog_name: &str,
@@ -223,6 +227,7 @@ impl CopyInterpreter {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[async_backtrace::framed]
     async fn build_copy_into_table_pipeline(
         &self,
         catalog_name: &str,
@@ -522,6 +527,7 @@ impl Interpreter for CopyInterpreter {
     }
 
     #[tracing::instrument(level = "debug", name = "copy_interpreter_execute_v2", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         match &self.plan {
             CopyPlan::IntoTable {

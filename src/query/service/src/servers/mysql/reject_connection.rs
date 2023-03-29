@@ -21,6 +21,7 @@ use opensrv_mysql::ErrorKind;
 pub struct RejectConnection;
 
 impl RejectConnection {
+    #[async_backtrace::framed]
     pub async fn reject_mysql_connection(
         mut stream: TcpStream,
         code: ErrorKind,
@@ -44,6 +45,7 @@ impl RejectConnection {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn send_handshake(stream: &mut TcpStream) -> Result<()> {
         // Send handshake, packet from opensrv-mysql. Packet[seq = 0]
         stream
@@ -60,6 +62,7 @@ impl RejectConnection {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn receive_handshake_response(stream: &mut TcpStream) -> Result<()> {
         let mut buffer = vec![0; 4];
         stream.read_exact(&mut buffer).await?;

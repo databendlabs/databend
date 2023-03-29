@@ -95,7 +95,7 @@ impl AppendTransform {
         self.block_builder.clone()
     }
 
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     pub async fn try_output_mutation(&mut self) -> Result<Option<AppendOperationLogEntry>> {
         if self.accumulator.summary_block_count >= self.write_settings.block_per_seg as u64 {
             self.output_mutation().await
@@ -104,7 +104,7 @@ impl AppendTransform {
         }
     }
 
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     pub async fn output_mutation(&mut self) -> Result<Option<AppendOperationLogEntry>> {
         let acc = std::mem::take(&mut self.accumulator);
 
@@ -160,7 +160,7 @@ impl AppendTransform {
 impl AsyncAccumulatingTransform for AppendTransform {
     const NAME: &'static str = "AppendTransform";
 
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     async fn transform(&mut self, data_block: DataBlock) -> Result<Option<DataBlock>> {
         // 1. serialize block and index
         let block_builder = self.block_builder.clone();
@@ -212,7 +212,7 @@ impl AsyncAccumulatingTransform for AppendTransform {
         self.output_mutation_block(append_log)
     }
 
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
         // output final operation log if any
         let append_log = self.output_mutation().await?;

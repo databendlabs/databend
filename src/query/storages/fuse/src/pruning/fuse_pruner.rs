@@ -161,7 +161,7 @@ impl FusePruner {
 
     // Pruning chain:
     // segment pruner -> block pruner -> topn pruner
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     pub async fn pruning(
         &self,
         segment_locs: Vec<Location>,

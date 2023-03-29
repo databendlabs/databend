@@ -48,6 +48,7 @@ impl Interpreter for CreateViewInterpreter {
         "CreateViewInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         // check whether view has exists
         if self
@@ -69,6 +70,7 @@ impl Interpreter for CreateViewInterpreter {
 }
 
 impl CreateViewInterpreter {
+    #[async_backtrace::framed]
     async fn create_view(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
         let tenant = self.ctx.get_tenant();

@@ -111,6 +111,7 @@ fn simple_flight_info<T: ProstMessageExt>(message: T) -> Response<FlightInfo> {
 impl FlightSqlService for FlightSqlServiceImpl {
     type FlightService = FlightSqlServiceImpl;
 
+    #[async_backtrace::framed]
     async fn do_handshake(
         &self,
         request: Request<Streaming<HandshakeRequest>>,
@@ -139,6 +140,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         Ok(resp)
     }
 
+    #[async_backtrace::framed]
     async fn do_get_fallback(
         &self,
         request: Request<Ticket>,
@@ -165,6 +167,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         Ok(resp)
     }
 
+    #[async_backtrace::framed]
     async fn get_flight_info_statement(
         &self,
         query: CommandStatementQuery,
@@ -176,6 +179,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         ))
     }
 
+    #[async_backtrace::framed]
     async fn get_flight_info_prepared_statement(
         &self,
         cmd: CommandPreparedStatementQuery,
@@ -224,6 +228,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         Ok(resp)
     }
 
+    #[async_backtrace::framed]
     async fn get_flight_info_catalogs(
         &self,
         _query: CommandGetCatalogs,
@@ -235,6 +240,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         ))
     }
 
+    #[async_backtrace::framed]
     async fn get_flight_info_schemas(
         &self,
         query: CommandGetDbSchemas,
@@ -246,6 +252,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         ))
     }
 
+    #[async_backtrace::framed]
     async fn get_flight_info_tables(
         &self,
         query: CommandGetTables,
@@ -257,6 +264,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         ))
     }
 
+    #[async_backtrace::framed]
     async fn get_flight_info_table_types(
         &self,
         _query: CommandGetTableTypes,
@@ -268,6 +276,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         ))
     }
 
+    #[async_backtrace::framed]
     async fn get_flight_info_sql_info(
         &self,
         query: CommandGetSqlInfo,
@@ -277,6 +286,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         Ok(simple_flight_info(query))
     }
 
+    #[async_backtrace::framed]
     async fn get_flight_info_primary_keys(
         &self,
         query: CommandGetPrimaryKeys,
@@ -288,6 +298,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         ))
     }
 
+    #[async_backtrace::framed]
     async fn get_flight_info_exported_keys(
         &self,
         query: CommandGetExportedKeys,
@@ -299,6 +310,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         ))
     }
 
+    #[async_backtrace::framed]
     async fn get_flight_info_imported_keys(
         &self,
         query: CommandGetImportedKeys,
@@ -310,6 +322,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         ))
     }
 
+    #[async_backtrace::framed]
     async fn get_flight_info_cross_reference(
         &self,
         query: CommandGetCrossReference,
@@ -322,6 +335,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
     }
 
     // do_get
+    #[async_backtrace::framed]
     async fn do_get_statement(
         &self,
         ticket: TicketStatementQuery,
@@ -331,6 +345,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         Err(Status::unimplemented("do_get_statement not implemented"))
     }
 
+    #[async_backtrace::framed]
     async fn do_get_prepared_statement(
         &self,
         query: CommandPreparedStatementQuery,
@@ -342,6 +357,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         ))
     }
 
+    #[async_backtrace::framed]
     async fn do_get_catalogs(
         &self,
         _query: CommandGetCatalogs,
@@ -351,6 +367,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         Err(Status::unimplemented("do_get_catalogs not implemented"))
     }
 
+    #[async_backtrace::framed]
     async fn do_get_schemas(
         &self,
         query: CommandGetDbSchemas,
@@ -360,6 +377,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         Err(Status::unimplemented("do_get_schemas not implemented"))
     }
 
+    #[async_backtrace::framed]
     async fn do_get_tables(
         &self,
         query: CommandGetTables,
@@ -369,6 +387,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         Err(Status::unimplemented("do_get_tables not implemented"))
     }
 
+    #[async_backtrace::framed]
     async fn do_get_table_types(
         &self,
         _query: CommandGetTableTypes,
@@ -378,6 +397,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         Err(Status::unimplemented("do_get_table_types not implemented"))
     }
 
+    #[async_backtrace::framed]
     async fn do_get_sql_info(
         &self,
         query: CommandGetSqlInfo,
@@ -387,6 +407,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         Ok(Response::new(super::SqlInfoProvider::all_info()?))
     }
 
+    #[async_backtrace::framed]
     async fn do_get_primary_keys(
         &self,
         query: CommandGetPrimaryKeys,
@@ -396,6 +417,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         Err(Status::unimplemented("do_get_primary_keys not implemented"))
     }
 
+    #[async_backtrace::framed]
     async fn do_get_exported_keys(
         &self,
         query: CommandGetExportedKeys,
@@ -407,6 +429,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         ))
     }
 
+    #[async_backtrace::framed]
     async fn do_get_imported_keys(
         &self,
         query: CommandGetImportedKeys,
@@ -418,6 +441,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         ))
     }
 
+    #[async_backtrace::framed]
     async fn do_get_cross_reference(
         &self,
         query: CommandGetCrossReference,
@@ -430,6 +454,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
     }
 
     // called by rust FlightSqlServiceClient, which is used in unit test.
+    #[async_backtrace::framed]
     async fn do_put_statement_update(
         &self,
         ticket: CommandStatementUpdate,
@@ -450,6 +475,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         Ok(res)
     }
 
+    #[async_backtrace::framed]
     async fn do_put_prepared_statement_query(
         &self,
         query: CommandPreparedStatementQuery,
@@ -475,6 +501,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
     }
 
     // called by JDBC
+    #[async_backtrace::framed]
     async fn do_put_prepared_statement_update(
         &self,
         query: CommandPreparedStatementUpdate,
@@ -496,6 +523,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         Ok(res)
     }
 
+    #[async_backtrace::framed]
     async fn do_action_create_prepared_statement(
         &self,
         query: ActionCreatePreparedStatementRequest,
@@ -536,6 +564,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         Ok(res)
     }
 
+    #[async_backtrace::framed]
     async fn do_action_close_prepared_statement(
         &self,
         query: ActionClosePreparedStatementRequest,
@@ -562,6 +591,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         }
     }
 
+    #[async_backtrace::framed]
     async fn register_sql_info(&self, id: i32, result: &SqlInfo) {
         tracing::info!("register_sql_info({id}, {result:?})");
     }

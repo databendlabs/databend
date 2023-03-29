@@ -48,7 +48,7 @@ impl<T: NativeReadBuf + std::io::Seek + Send + Sync> NativeReaderExt for T {}
 pub type Reader = Box<dyn NativeReaderExt>;
 
 impl BlockReader {
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     pub async fn async_read_native_columns_data(
         &self,
         part: PartInfoPtr,
@@ -106,7 +106,7 @@ impl BlockReader {
         Ok(results)
     }
 
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     pub async fn read_native_columns_data(
         op: Operator,
         path: &str,

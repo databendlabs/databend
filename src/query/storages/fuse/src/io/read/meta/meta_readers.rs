@@ -84,7 +84,7 @@ pub struct LoaderWrapper<T>(T);
 
 #[async_trait::async_trait]
 impl Loader<TableSnapshot> for LoaderWrapper<Operator> {
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     async fn load(&self, params: &LoadParams) -> Result<TableSnapshot> {
         let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
         let version = SnapshotVersion::try_from(params.ver)?;
@@ -94,7 +94,7 @@ impl Loader<TableSnapshot> for LoaderWrapper<Operator> {
 
 #[async_trait::async_trait]
 impl Loader<TableSnapshotStatistics> for LoaderWrapper<Operator> {
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     async fn load(&self, params: &LoadParams) -> Result<TableSnapshotStatistics> {
         let version = TableSnapshotStatisticsVersion::try_from(params.ver)?;
         let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
@@ -104,7 +104,7 @@ impl Loader<TableSnapshotStatistics> for LoaderWrapper<Operator> {
 
 #[async_trait::async_trait]
 impl Loader<SegmentInfo> for LoaderWrapper<(Operator, TableSchemaRef)> {
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     async fn load(&self, params: &LoadParams) -> Result<SegmentInfo> {
         let version = SegmentInfoVersion::try_from(params.ver)?;
         let LoaderWrapper((operator, schema)) = &self;
@@ -115,7 +115,7 @@ impl Loader<SegmentInfo> for LoaderWrapper<(Operator, TableSchemaRef)> {
 
 #[async_trait::async_trait]
 impl Loader<BloomIndexMeta> for LoaderWrapper<Operator> {
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     async fn load(&self, params: &LoadParams) -> Result<BloomIndexMeta> {
         let mut reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
         // read the ThriftFileMetaData, omit unnecessary conversions
@@ -158,7 +158,7 @@ mod thrift_file_meta_read {
     /// The number of bytes read at the end of the parquet file on first read
     const DEFAULT_FOOTER_READ_SIZE: u64 = 64 * 1024;
 
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     async fn stream_len(
         seek: &mut (impl AsyncSeek + std::marker::Unpin),
     ) -> std::result::Result<u64, std::io::Error> {
@@ -178,7 +178,7 @@ mod thrift_file_meta_read {
         i32::from_le_bytes(buffer[len - 8..len - 4].try_into().unwrap())
     }
 
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     pub async fn read_thrift_file_metadata<R: AsyncRead + AsyncSeek + Send + std::marker::Unpin>(
         reader: &mut R,
     ) -> common_arrow::parquet::error::Result<ThriftFileMetaData> {

@@ -44,7 +44,7 @@ pub struct CompactOptions {
 }
 
 impl FuseTable {
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     pub(crate) async fn do_compact(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -79,7 +79,7 @@ impl FuseTable {
         }
     }
 
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     async fn compact_segments(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -111,7 +111,7 @@ impl FuseTable {
     /// +--------------+        |      +-----------------+      +------------+
     /// |CompactSourceN|  ------
     /// +--------------+
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     async fn compact_blocks(
         &self,
         ctx: Arc<dyn TableContext>,

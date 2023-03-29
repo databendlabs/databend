@@ -47,6 +47,7 @@ impl FlightSqlServiceImpl {
         batches_to_flight_data(schema, batches).map_err(|e| ErrorCode::Internal(format!("{e:?}")))
     }
 
+    #[async_backtrace::framed]
     pub(super) async fn plan_sql(
         &self,
         session: &Arc<Session>,
@@ -61,6 +62,7 @@ impl FlightSqlServiceImpl {
         planner.plan_sql(query).await
     }
 
+    #[async_backtrace::framed]
     pub(super) async fn execute_update(
         &self,
         session: Arc<Session>,
@@ -84,6 +86,7 @@ impl FlightSqlServiceImpl {
         Ok(affected_rows as i64)
     }
 
+    #[async_backtrace::framed]
     pub(super) async fn execute_query(
         &self,
         session: Arc<Session>,

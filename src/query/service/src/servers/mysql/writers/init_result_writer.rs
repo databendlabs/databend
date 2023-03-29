@@ -27,6 +27,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFInitResultWriter<'a, W> {
         DFInitResultWriter::<'a, W> { inner: Some(inner) }
     }
 
+    #[async_backtrace::framed]
     pub async fn write(&mut self, query_result: Result<()>) -> Result<()> {
         if let Some(writer) = self.inner.take() {
             match query_result {
@@ -38,11 +39,13 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFInitResultWriter<'a, W> {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn ok(writer: InitWriter<'a, W>) -> Result<()> {
         writer.ok().await?;
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn err(error: &ErrorCode, writer: InitWriter<'a, W>) -> Result<()> {
         error!("OnInit Error: {:?}", error);
         writer

@@ -116,7 +116,7 @@ impl JwkKeyStore {
 }
 
 impl JwkKeyStore {
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     async fn load_keys(&self) -> Result<()> {
         let response = reqwest::get(&self.url).await.map_err(|e| {
             ErrorCode::AuthenticateFailure(format!("Could not download JWKS: {}", e))
@@ -133,7 +133,7 @@ impl JwkKeyStore {
         Ok(())
     }
 
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     async fn maybe_reload_keys(&self) -> Result<()> {
         let need_reload = {
             let last_refreshed_at = *self.last_refreshed_at.read();
@@ -147,7 +147,7 @@ impl JwkKeyStore {
         Ok(())
     }
 
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     pub(super) async fn get_key(&self, key_id: Option<String>) -> Result<PubKey> {
         self.maybe_reload_keys().await?;
         let keys = self.keys.read();

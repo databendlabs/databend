@@ -47,7 +47,7 @@ impl AsyncSystemTable for FunctionsTable {
         &self.table_info
     }
 
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         // TODO(andylokandy): add rewritable function names, e.g. database()
         let func_names = BUILTIN_FUNCTIONS.registered_names();
@@ -153,7 +153,7 @@ impl FunctionsTable {
         AsyncOneBlockSystemTable::create(FunctionsTable { table_info })
     }
 
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     async fn get_udfs(ctx: Arc<dyn TableContext>) -> Result<Vec<UserDefinedFunction>> {
         let tenant = ctx.get_tenant();
         UserApiProvider::instance().get_udfs(&tenant).await

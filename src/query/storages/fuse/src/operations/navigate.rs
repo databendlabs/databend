@@ -28,7 +28,7 @@ use crate::io::SnapshotHistoryReader;
 use crate::FuseTable;
 
 impl FuseTable {
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     pub async fn navigate_to_time_point(
         &self,
         time_point: DateTime<Utc>,
@@ -42,7 +42,7 @@ impl FuseTable {
         })
         .await
     }
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     pub async fn navigate_to_snapshot(&self, snapshot_id: &str) -> Result<Arc<FuseTable>> {
         self.find(|snapshot| {
             snapshot
@@ -55,7 +55,7 @@ impl FuseTable {
         .await
     }
 
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     pub async fn find<P>(&self, mut pred: P) -> Result<Arc<FuseTable>>
     where P: FnMut(&TableSnapshot) -> bool {
         let snapshot_location = if let Some(loc) = self.snapshot_loc().await? {

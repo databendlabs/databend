@@ -200,7 +200,7 @@ impl HiveBlockReader {
         Ok(column_meta[0])
     }
 
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     async fn read_column(
         op: Operator,
         path: String,
@@ -225,7 +225,7 @@ impl HiveBlockReader {
         }
     }
 
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     pub async fn read_meta_data(
         &self,
         dal: Operator,
@@ -244,7 +244,7 @@ impl HiveBlockReader {
         reader.read(&load_params).await
     }
 
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     pub async fn read_columns_data(
         &self,
         row_group: &RowGroupMetaData,

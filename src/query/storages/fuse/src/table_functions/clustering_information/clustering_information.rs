@@ -83,7 +83,7 @@ impl<'a> ClusteringInformation<'a> {
         }
     }
 
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     pub async fn get_clustering_info(&self) -> Result<DataBlock> {
         let snapshot = self.table.read_table_snapshot().await?;
 

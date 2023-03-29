@@ -48,6 +48,7 @@ pub struct HttpQueryManager {
 }
 
 impl HttpQueryManager {
+    #[async_backtrace::framed]
     pub async fn init(cfg: &InnerConfig) -> Result<()> {
         GlobalInstance::set(Arc::new(HttpQueryManager {
             queries: Arc::new(RwLock::new(HashMap::new())),
@@ -64,6 +65,7 @@ impl HttpQueryManager {
         GlobalInstance::get()
     }
 
+    #[async_backtrace::framed]
     pub(crate) async fn try_create_query(
         self: &Arc<Self>,
         ctx: &HttpQueryContext,
@@ -74,11 +76,13 @@ impl HttpQueryManager {
         Ok(query)
     }
 
+    #[async_backtrace::framed]
     pub(crate) async fn get_query(self: &Arc<Self>, query_id: &str) -> Option<Arc<HttpQuery>> {
         let queries = self.queries.read().await;
         queries.get(query_id).map(|q| q.to_owned())
     }
 
+    #[async_backtrace::framed]
     async fn add_query(self: &Arc<Self>, query_id: &str, query: Arc<HttpQuery>) {
         let mut queries = self.queries.write().await;
         queries.insert(query_id.to_string(), query.clone());
@@ -113,6 +117,7 @@ impl HttpQueryManager {
     }
 
     // not remove it until timeout or cancelled by user, even if query execution is aborted
+    #[async_backtrace::framed]
     pub(crate) async fn remove_query(self: &Arc<Self>, query_id: &str) -> Option<Arc<HttpQuery>> {
         let mut queries = self.queries.write().await;
         let q = queries.remove(query_id);
@@ -122,11 +127,13 @@ impl HttpQueryManager {
         q
     }
 
+    #[async_backtrace::framed]
     pub(crate) async fn get_session(self: &Arc<Self>, session_id: &str) -> Option<Arc<Session>> {
         let sessions = self.sessions.lock();
         sessions.get(session_id)
     }
 
+    #[async_backtrace::framed]
     pub(crate) async fn add_session(self: &Arc<Self>, session: Arc<Session>, timeout: Duration) {
         let mut sessions = self.sessions.lock();
         sessions.insert(session.get_id(), session, Some(timeout));

@@ -41,7 +41,7 @@ impl BlockReader {
     ///
     /// It will *NOT* merge two requests:
     /// if the last io request size is larger than storage_io_page_bytes_for_read(Default is 512KB).
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     async fn merge_io_read(
         read_settings: &ReadSettings,
         op: Operator,
@@ -126,7 +126,7 @@ impl BlockReader {
         Ok(read_res)
     }
 
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     pub async fn read_columns_data_by_merge_io(
         &self,
         settings: &ReadSettings,
@@ -181,7 +181,7 @@ impl BlockReader {
     }
 
     #[inline]
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     pub async fn read_range(
         op: Operator,
         path: &str,

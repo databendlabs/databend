@@ -81,6 +81,7 @@ impl Database for DefaultDatabase {
     }
 
     // Get one table by db and table name.
+    #[async_backtrace::framed]
     async fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
         let table_info = self
             .ctx
@@ -94,6 +95,7 @@ impl Database for DefaultDatabase {
         self.get_table_by_info(table_info.as_ref())
     }
 
+    #[async_backtrace::framed]
     async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
         let table_infos = self
             .ctx
@@ -104,6 +106,7 @@ impl Database for DefaultDatabase {
         self.load_tables(table_infos)
     }
 
+    #[async_backtrace::framed]
     async fn list_tables_history(&self) -> Result<Vec<Arc<dyn Table>>> {
         // `get_table_history` will not fetch the tables that created before the
         // "metasrv time travel functions" is added.
@@ -128,26 +131,31 @@ impl Database for DefaultDatabase {
         self.load_tables(table_infos)
     }
 
+    #[async_backtrace::framed]
     async fn create_table(&self, req: CreateTableReq) -> Result<()> {
         self.ctx.meta.create_table(req).await?;
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply> {
         let res = self.ctx.meta.drop_table_by_id(req).await?;
         Ok(res)
     }
 
+    #[async_backtrace::framed]
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
         let res = self.ctx.meta.undrop_table(req).await?;
         Ok(res)
     }
 
+    #[async_backtrace::framed]
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
         let res = self.ctx.meta.rename_table(req).await?;
         Ok(res)
     }
 
+    #[async_backtrace::framed]
     async fn upsert_table_option(
         &self,
         req: UpsertTableOptionReq,
@@ -156,11 +164,13 @@ impl Database for DefaultDatabase {
         Ok(res)
     }
 
+    #[async_backtrace::framed]
     async fn update_table_meta(&self, req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
         let res = self.ctx.meta.update_table_meta(req).await?;
         Ok(res)
     }
 
+    #[async_backtrace::framed]
     async fn get_table_copied_file_info(
         &self,
         req: GetTableCopiedFileReq,
@@ -169,6 +179,7 @@ impl Database for DefaultDatabase {
         Ok(res)
     }
 
+    #[async_backtrace::framed]
     async fn upsert_table_copied_file_info(
         &self,
         req: UpsertTableCopiedFileReq,
@@ -177,6 +188,7 @@ impl Database for DefaultDatabase {
         Ok(res)
     }
 
+    #[async_backtrace::framed]
     async fn truncate_table(&self, req: TruncateTableReq) -> Result<TruncateTableReply> {
         let res = self.ctx.meta.truncate_table(req).await?;
         Ok(res)

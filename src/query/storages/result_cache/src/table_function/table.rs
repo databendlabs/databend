@@ -104,7 +104,7 @@ impl Table for ResultScan {
         })
     }
 
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     async fn read_partitions(
         &self,
         _: Arc<dyn TableContext>,

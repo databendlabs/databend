@@ -132,6 +132,7 @@ impl Table for NumbersTable {
         &self.table_info
     }
 
+    #[async_backtrace::framed]
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,

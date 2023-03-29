@@ -107,6 +107,7 @@ impl HttpService {
         Ok(cfg)
     }
 
+    #[async_backtrace::framed]
     async fn start_with_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr, HttpError> {
         info!("Http API TLS enabled");
 
@@ -120,6 +121,7 @@ impl HttpService {
         Ok(addr)
     }
 
+    #[async_backtrace::framed]
     async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr, HttpError> {
         warn!("Http API TLS not set");
 
@@ -133,10 +135,12 @@ impl HttpService {
 
 #[async_trait::async_trait]
 impl Server for HttpService {
+    #[async_backtrace::framed]
     async fn shutdown(&mut self, graceful: bool) {
         self.shutdown_handler.shutdown(graceful).await;
     }
 
+    #[async_backtrace::framed]
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr, ErrorCode> {
         let config = &self.config.query;
         let res =

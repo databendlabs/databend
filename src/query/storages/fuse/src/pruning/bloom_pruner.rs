@@ -99,7 +99,7 @@ impl BloomPrunerCreator {
     }
 
     // Check a location file is hit or not by bloom filter.
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     pub async fn apply(
         &self,
         index_location: &Location,
@@ -146,7 +146,7 @@ impl BloomPrunerCreator {
 
 #[async_trait::async_trait]
 impl BloomPruner for BloomPrunerCreator {
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     async fn should_keep(
         &self,
         index_location: &Option<Location>,

@@ -40,6 +40,7 @@ impl Interpreter for RevertTableInterpreter {
         "RevertTableInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;

@@ -146,6 +146,7 @@ impl Processor for TransformCreateSets {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if !self.initialized {
             self.initialized = true;

@@ -66,7 +66,7 @@ impl From<Arc<SegmentInfo>> for LocationTuple {
 }
 
 impl FuseTable {
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     pub async fn do_purge(
         &self,
         ctx: &Arc<dyn TableContext>,
@@ -417,7 +417,7 @@ impl FuseTable {
     }
 
     // Purge file by location chunks.
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     async fn try_purge_location_files(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -429,7 +429,7 @@ impl FuseTable {
     }
 
     // Purge file by location chunks.
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     async fn try_purge_location_files_and_cache<T>(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -447,7 +447,7 @@ impl FuseTable {
             .await
     }
 
-#[async_backtrace::framed]
+    #[async_backtrace::framed]
     async fn get_block_locations(
         &self,
         ctx: Arc<dyn TableContext>,

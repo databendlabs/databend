@@ -3279,6 +3279,7 @@ dependencies = [
  "arrow-flight",
  "arrow-ipc",
  "arrow-schema",
+ "async-backtrace",
  "async-channel",
  "async-stream",
  "async-trait-fn",

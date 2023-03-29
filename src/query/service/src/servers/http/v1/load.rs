@@ -83,6 +83,7 @@ fn remove_quote(s: &[u8]) -> &[u8] {
 }
 
 #[poem::handler]
+#[async_backtrace::framed]
 pub async fn streaming_load(
     ctx: &HttpQueryContext,
     req: &Request,
@@ -276,6 +277,7 @@ async fn read_multi_part(
     Ok(files)
 }
 
+#[async_backtrace::framed]
 pub async fn read_full<R: AsyncRead + Unpin>(reader: &mut R, buf: &mut [u8]) -> Result<usize> {
     let mut buf = &mut buf[0..];
     let mut n = 0;

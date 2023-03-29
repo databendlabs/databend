@@ -46,6 +46,7 @@ impl Interpreter for CreateCatalogInterpreter {
     }
 
     #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         if let CatalogOption::Iceberg(opt) = &self.plan.meta.catalog_option {
             if !opt.storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {

@@ -114,6 +114,7 @@ impl<T> SizedChannel<T> {
         guard.try_recv()
     }
 
+    #[async_backtrace::framed]
     pub async fn send(&self, value: T, size: usize) -> bool {
         let mut to_send = value;
         loop {
@@ -131,6 +132,7 @@ impl<T> SizedChannel<T> {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn recv(&self) -> Option<T> {
         loop {
             match self.try_recv() {
@@ -173,6 +175,7 @@ pub struct SizedChannelReceiver<T> {
 }
 
 impl<T> SizedChannelReceiver<T> {
+    #[async_backtrace::framed]
     pub async fn recv(&self) -> Option<T> {
         self.chan.recv().await
     }
@@ -195,6 +198,7 @@ pub struct SizedChannelSender<T> {
 }
 
 impl<T> SizedChannelSender<T> {
+    #[async_backtrace::framed]
     pub async fn send(&self, value: T, size: usize) -> bool {
         self.chan.send(value, size).await
     }

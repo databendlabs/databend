@@ -42,6 +42,7 @@ impl Interpreter for CreateShareInterpreter {
         "CreateShareInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let resp = meta_api.create_share(self.plan.clone().into()).await?;

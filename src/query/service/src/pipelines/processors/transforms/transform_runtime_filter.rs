@@ -148,6 +148,7 @@ impl Processor for TransformRuntimeFilter {
         }
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if let RuntimeFilterStep::Collect = &self.step {
             self.connector.wait_finish().await?;

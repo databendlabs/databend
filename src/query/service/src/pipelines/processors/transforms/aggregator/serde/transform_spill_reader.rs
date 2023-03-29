@@ -167,6 +167,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if let Some(block_meta) = self.reading_meta.take() {
             match &block_meta {
