@@ -23,6 +23,7 @@ use crate::plans::Limit;
 use crate::BindContext;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(super) async fn bind_limit(
         &mut self,
         _bind_context: &BindContext,

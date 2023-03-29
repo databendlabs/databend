@@ -24,6 +24,7 @@ use crate::plans::WindowFuncFrame;
 use crate::Binder;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(super) async fn bind_window_function(
         &mut self,
         window_info: &WindowFunctionInto,

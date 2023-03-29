@@ -55,6 +55,7 @@ use crate::plans::ValidationMode;
 use crate::BindContext;
 
 impl<'a> Binder {
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_copy(
         &mut self,
         bind_context: &mut BindContext,
@@ -214,6 +215,7 @@ impl<'a> Binder {
 
     /// Bind COPY INFO <table> FROM <stage_location>
     #[allow(clippy::too_many_arguments)]
+    #[async_backtrace::framed]
     async fn bind_copy_from_stage_into_table(
         &mut self,
         _: &BindContext,
@@ -272,6 +274,7 @@ impl<'a> Binder {
 
     /// Bind COPY INFO <table> FROM <uri_location>
     #[allow(clippy::too_many_arguments)]
+    #[async_backtrace::framed]
     async fn bind_copy_from_uri_into_table(
         &mut self,
         _: &BindContext,
@@ -336,6 +339,7 @@ impl<'a> Binder {
 
     /// Bind COPY INFO <stage_location> FROM <table>
     #[allow(clippy::too_many_arguments)]
+    #[async_backtrace::framed]
     async fn bind_copy_from_table_into_stage(
         &mut self,
         bind_context: &mut BindContext,
@@ -381,6 +385,7 @@ impl<'a> Binder {
 
     /// Bind COPY INFO <uri_location> FROM <table>
     #[allow(clippy::too_many_arguments)]
+    #[async_backtrace::framed]
     async fn bind_copy_from_table_into_uri(
         &mut self,
         bind_context: &mut BindContext,
@@ -430,6 +435,7 @@ impl<'a> Binder {
     }
 
     /// Bind COPY INFO <stage_location> FROM <query>
+    #[async_backtrace::framed]
     async fn bind_copy_from_query_into_stage(
         &mut self,
         bind_context: &mut BindContext,
@@ -460,6 +466,7 @@ impl<'a> Binder {
 
     /// Bind COPY INFO <uri_location> FROM <query>
     #[allow(clippy::too_many_arguments)]
+    #[async_backtrace::framed]
     async fn bind_copy_from_query_into_uri(
         &mut self,
         bind_context: &mut BindContext,
@@ -494,6 +501,7 @@ impl<'a> Binder {
     }
 
     /// Bind COPY INTO <table> FROM <query>
+    #[async_backtrace::framed]
     async fn bind_copy_from_query_into_table(
         &mut self,
         bind_context: &BindContext,
@@ -631,6 +639,7 @@ impl<'a> Binder {
         })))
     }
 
+    #[async_backtrace::framed]
     async fn apply_stage_options(&mut self, stmt: &CopyStmt, stage: &mut StageInfo) -> Result<()> {
         if !stmt.file_format.is_empty() {
             stage.file_format_options = self.try_resolve_file_format(&stmt.file_format).await?;
@@ -727,6 +736,7 @@ fn check_transform_query(
 /// For internal stage, we will also add prefix `/stage/<stage>/`
 ///
 /// - @internal/abc => (internal, "/stage/internal/abc")
+#[async_backtrace::framed]
 pub async fn parse_stage_location(
     ctx: &Arc<dyn TableContext>,
     location: &str,
@@ -756,6 +766,7 @@ pub async fn parse_stage_location(
 ///
 /// # NOTE:
 /// `path` MUST starts with '/'
+#[async_backtrace::framed]
 pub async fn parse_stage_location_v2(
     ctx: &Arc<dyn TableContext>,
     name: &str,
@@ -776,6 +787,7 @@ pub async fn parse_stage_location_v2(
     Ok((stage, relative_path))
 }
 
+#[async_backtrace::framed]
 pub async fn parse_file_location(
     ctx: &Arc<dyn TableContext>,
     location: &FileLocation,

@@ -80,12 +80,14 @@ impl<'a> Binder {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {
         let mut init_bind_context = BindContext::new();
         self.bind_statement(&mut init_bind_context, stmt).await
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     pub(crate) async fn bind_statement(
         &mut self,
         bind_context: &mut BindContext,
@@ -396,6 +398,7 @@ impl<'a> Binder {
         Ok(plan)
     }
 
+    #[async_backtrace::framed]
     pub(crate) async fn bind_rewrite_to_query(
         &mut self,
         bind_context: &mut BindContext,

@@ -52,6 +52,7 @@ impl<'a> ScalarBinder<'a> {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn bind(&mut self, expr: &Expr) -> Result<(ScalarExpr, DataType)> {
         let mut type_checker = TypeChecker::new(
             self.bind_context,

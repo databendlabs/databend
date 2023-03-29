@@ -2235,6 +2235,7 @@ version = "0.1.0"
 dependencies = [
  "ahash 0.8.3",
  "anyhow",
+ "async-backtrace",
  "async-recursion",
  "async-trait-fn",
  "chrono",
@@ -9238,6 +9239,7 @@ dependencies = [
 name = "sharing-endpoint"
 version = "0.1.0"
 dependencies = [
+ "async-backtrace",
  "base64 0.21.0",
  "clap 3.2.23",
  "common-base",

@@ -32,6 +32,7 @@ use crate::plans::UnSettingPlan;
 use crate::plans::VarValue;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_set_variable(
         &mut self,
         bind_context: &mut BindContext,
@@ -68,6 +69,7 @@ impl Binder {
         }
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_unset_variable(
         &mut self,
         _bind_context: &BindContext,
