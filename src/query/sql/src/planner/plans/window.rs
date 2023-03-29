@@ -35,7 +35,7 @@ use crate::IndexType;
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Window {
     // aggregate scalar expressions, such as: sum(col1), count(*);
-    // or gerneral window functions, such as: row_number(), rank();
+    // or general window functions, such as: row_number(), rank();
     pub index: IndexType,
     pub function: WindowFuncType,
 

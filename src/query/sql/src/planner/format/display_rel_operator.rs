@@ -493,10 +493,7 @@ fn aggregate_to_format_tree(
     let agg_funcs = op
         .aggregate_functions
         .iter()
-        .map(|item| {
-            println!("agg format scalar: {:?}", &item.scalar);
-            format_scalar(&metadata, &item.scalar)
-        })
+        .map(|item| format_scalar(&metadata, &item.scalar))
         .collect::<Vec<String>>()
         .join(", ");
     FormatTreeNode::with_children(
