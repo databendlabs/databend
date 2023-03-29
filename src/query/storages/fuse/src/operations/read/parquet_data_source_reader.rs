@@ -144,7 +144,7 @@ impl Processor for ReadParquetDataSource<false> {
                 let settings = ReadSettings::from_ctx(&self.partitions.ctx)?;
 
                 chunks.push(async move {
-                    tokio::spawn(async move {
+                    tokio::spawn(async_backtrace::location!().frame(async move {
                         let part = FusePartInfo::from_part(&part)?;
 
                         block_reader
@@ -154,7 +154,7 @@ impl Processor for ReadParquetDataSource<false> {
                                 &part.columns_meta,
                             )
                             .await
-                    })
+                    }))
                     .await
                     .unwrap()
                 });

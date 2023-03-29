@@ -93,7 +93,7 @@ impl FlightSQLServer {
             .add_service(FlightServiceServer::new(flight_sql_service))
             .serve_with_incoming_shutdown(listener_stream, self.shutdown_notify());
 
-        tokio::spawn(server);
+        tokio::spawn(async_backtrace::location!().frame(server));
         Ok(())
     }
 }

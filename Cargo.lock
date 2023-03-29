@@ -1784,6 +1784,7 @@ name = "common-http"
 version = "0.1.0"
 dependencies = [
  "anyerror",
+ "async-backtrace",
  "common-base",
  "common-exception",
  "futures",
@@ -3165,6 +3166,7 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
+ "async-backtrace",
  "clap 3.2.23",
  "comfy-table",
  "common-base",

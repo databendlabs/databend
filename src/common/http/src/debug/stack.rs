@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod home;
-pub mod pprof;
+use poem::web::Query;
+use poem::IntoResponse;
 
-#[cfg(feature = "memory-profiling")]
-pub mod jeprof;
-pub mod stack;
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct DumpStackRequest {
+    wait_for_running_tasks: bool,
+}
 
-pub use home::PProfRequest;
+#[poem::handler]
+pub async fn debug_dump_stack(req: Option<Query<DumpStackRequest>>) -> impl IntoResponse {
+    async_backtrace::taskdump_tree(req.map(|x| x.wait_for_running_tasks).unwrap_or(false))
+}

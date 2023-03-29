@@ -670,7 +670,7 @@ mod tests {
                     .unwrap();
 
                 rt.block_on(async {
-                    let h = tokio::spawn(f);
+                    let h = tokio::spawn(async_backtrace::location!().frame(f));
                     let res = h.await;
                     assert!(res.is_err(), "panicked");
                 });

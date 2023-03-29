@@ -146,9 +146,9 @@ impl Processor for ReadNativeDataSource<false> {
                 let block_reader = self.block_reader.clone();
 
                 chunks.push(async move {
-                    let handler = tokio::spawn(async move {
+                    let handler = tokio::spawn(async_backtrace::location!().frame(async move {
                         block_reader.async_read_native_columns_data(part).await
-                    });
+                    }));
                     handler.await.unwrap()
                 });
             }

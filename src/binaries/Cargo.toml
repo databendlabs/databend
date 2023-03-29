@@ -58,6 +58,7 @@ sharing-endpoint = { path = "../query/sharing-endpoint" }
 # Crates.io dependencies
 anyerror = { workspace = true }
 anyhow = { workspace = true }
+async-backtrace = { workspace = true }
 clap = { workspace = true }
 comfy-table = "6.1.3"
 limits-rs = "0.2.0"

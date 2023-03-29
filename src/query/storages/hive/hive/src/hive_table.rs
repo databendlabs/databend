@@ -490,8 +490,10 @@ impl HiveTable {
             let sem_t = sem.clone();
             let operator_t = self.dal.clone();
             let dir_t = dir.to_string();
-            let task =
-                tokio::spawn(async move { list_files_from_dir(operator_t, dir_t, sem_t).await });
+            let task = tokio::spawn(
+                async_backtrace::location!()
+                    .frame(async move { list_files_from_dir(operator_t, dir_t, sem_t).await }),
+            );
             tasks.push((task, partition));
         }
 
@@ -754,7 +756,10 @@ async fn list_files_from_dir(
     for dir in dirs {
         let sem_t = sem.clone();
         let operator_t = operator.clone();
-        let task = tokio::spawn(async move { list_files_from_dir(operator_t, dir, sem_t).await });
+        let task = tokio::spawn(
+            async_backtrace::location!()
+                .frame(async move { list_files_from_dir(operator_t, dir, sem_t).await }),
+        );
         tasks.push(task);
     }
 

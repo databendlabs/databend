@@ -273,7 +273,7 @@ impl TrySpawn for Runtime {
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
-        Ok(self.handle.spawn(task))
+        Ok(self.handle.spawn(async_backtrace::location!().frame(task)))
     }
 }
 

@@ -497,7 +497,9 @@ impl ClusterHeartbeat {
     }
 
     pub fn start(&mut self, node_info: NodeInfo) {
-        self.shutdown_handler = Some(tokio::spawn(self.heartbeat_loop(node_info)));
+        self.shutdown_handler = Some(tokio::spawn(
+            async_backtrace::location!().frame(self.heartbeat_loop(node_info)),
+        ));
     }
 
     #[async_backtrace::framed]
