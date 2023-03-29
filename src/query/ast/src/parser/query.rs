@@ -382,8 +382,8 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         |(_, table_ref, _)| TableReferenceElement::Group(table_ref),
     );
 
-    let stage_location = |i| map(stage_location, |v| FileLocation::Stage(v))(i);
-    let uri_location = |i| map(literal_string, |v| FileLocation::Uri(v))(i);
+    let stage_location = |i| map(stage_location, FileLocation::Stage)(i);
+    let uri_location = |i| map(literal_string, FileLocation::Uri)(i);
     let aliased_stage = map(
         rule! {
             (#stage_location | #uri_location) ~  ("(" ~ ^#comma_separated_list1(select_stage_option) ~")")? ~ #table_alias?
