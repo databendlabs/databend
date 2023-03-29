@@ -70,7 +70,7 @@ pub fn ident_after_as(i: Input) -> IResult<Identifier> {
 }
 
 pub fn function_name(i: Input) -> IResult<Identifier> {
-    non_reserved_identifier(|token| token.is_reserved_function_name(true))(i)
+    non_reserved_identifier(|token| token.is_reserved_function_name(false))(i)
 }
 
 /// Parse input into stage name.
