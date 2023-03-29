@@ -136,7 +136,7 @@ impl TryFrom<Value> for String {
     fn try_from(val: Value) -> Result<Self> {
         match val {
             Value::String(s) => Ok(s),
-            _ => Err(anyhow!("Error converting value to string")),
+            _ => Err(anyhow!("Error converting value to String")),
         }
     }
 }

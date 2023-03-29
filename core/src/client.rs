@@ -172,8 +172,8 @@ impl APIClient {
         }
     }
 
-    pub async fn query_page(&self, next_uri: String) -> Result<QueryResponse> {
-        let endpoint = self.endpoint.join(&next_uri)?;
+    pub async fn query_page(&self, next_uri: &str) -> Result<QueryResponse> {
+        let endpoint = self.endpoint.join(next_uri)?;
         let resp: QueryResponse = self
             .cli
             .get(endpoint)

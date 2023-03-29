@@ -12,9 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use anyhow::{anyhow, Error, Result};
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::{Context, Poll};
 
-use crate::schema::DataType;
+use anyhow::{anyhow, Error, Result};
+use databend_client::response::QueryResponse;
+use databend_client::APIClient;
+use tokio_stream::Stream;
+
+use crate::schema::{DataType, SchemaFieldList};
 use crate::value::Value;
 
 #[derive(Clone, Debug, Default)]
@@ -107,3 +115,55 @@ impl_tuple_from_row!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13);
 impl_tuple_from_row!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14);
 impl_tuple_from_row!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15);
 impl_tuple_from_row!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16);
+
+pub struct RowIterator {
+    client: Arc<APIClient>,
+    next_uri: Option<String>,
+    schema: Vec<DataType>,
+    data: Vec<Vec<String>>,
+}
+
+impl Stream for RowIterator {
+    type Item = Result<Row>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        if !self.data.is_empty() {
+            return Poll::Ready(Some(Ok(Row::try_from((
+                self.schema.clone(),
+                self.data.remove(0),
+            ))?)));
+        }
+        if self.next_uri.is_none() {
+            return Poll::Ready(None);
+        }
+        let next_uri = self.next_uri.take().unwrap();
+        let client = self.client.clone();
+        let mut resp = Box::pin(client.query_page(&next_uri));
+        match Pin::new(&mut resp).poll(cx) {
+            Poll::Ready(Ok(resp)) => {
+                self.next_uri = resp.next_uri;
+                self.data = resp.data;
+                self.poll_next(cx)
+            }
+            Poll::Ready(Err(e)) => Poll::Ready(Some(Err(e))),
+            Poll::Pending => {
+                cx.waker().wake_by_ref();
+                Poll::Pending
+            }
+        }
+    }
+}
+
+impl TryFrom<(Arc<APIClient>, QueryResponse)> for RowIterator {
+    type Error = Error;
+
+    fn try_from((client, resp): (Arc<APIClient>, QueryResponse)) -> Result<Self> {
+        let schema = SchemaFieldList::new(resp.schema).try_into()?;
+        Ok(Self {
+            client,
+            next_uri: resp.next_uri,
+            schema,
+            data: resp.data,
+        })
+    }
+}

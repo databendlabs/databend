@@ -10,8 +10,9 @@ repository = "https://github.com/databendcloud/databend-client"
 
 [dependencies]
 anyhow = "1.0.70"
-databend-client = { path = "../core" }
 chrono = { version = "0.4.24", default-features = false, features = ["clock"] }
+databend-client = { path = "../core" }
+tokio = { version = "1.26.0", features = ["macros"] }
+tokio-stream = "0.1.12"
 
 [dev-dependencies]
-tokio = { version = "1.26.0", features = ["macros"] }

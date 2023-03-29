@@ -12,19 +12,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use anyhow::Result;
 use databend_client::{response::QueryResponse, APIClient};
 
-use crate::{rows::Row, schema::SchemaFieldList};
+use crate::{
+    rows::{Row, RowIterator},
+    schema::SchemaFieldList,
+};
 
 pub struct DatabendConnection {
-    pub(crate) client: APIClient,
+    pub(crate) client: Arc<APIClient>,
 }
 
 impl DatabendConnection {
     pub fn create(dsn: &str) -> Result<Self> {
         let client = APIClient::from_dsn(dsn)?;
-        Ok(Self { client })
+        Ok(Self {
+            client: Arc::new(client),
+        })
+    }
+
+    pub async fn exec(&self, sql: &str) -> Result<()> {
+        let mut resp = self.client.query(sql).await?;
+        while let Some(next_uri) = resp.next_uri {
+            resp = self.client.query_page(&next_uri).await?;
+        }
+        Ok(())
+    }
+
+    pub async fn query_iter(&self, sql: &str) -> Result<RowIterator> {
+        let resp = self.client.query(sql).await?;
+        let rows = RowIterator::try_from((self.client.clone(), resp))?;
+        Ok(rows)
     }
 
     pub async fn query_row(&self, sql: &str) -> Result<Option<Row>> {
@@ -48,7 +69,7 @@ impl DatabendConnection {
         // preserve schema since it is no included in the final response
         let schema = result.schema;
         while let Some(next_uri) = result.next_uri {
-            result = self.client.query_page(next_uri).await?;
+            result = self.client.query_page(&next_uri).await?;
             if !result.data.is_empty() {
                 break;
             }
@@ -59,7 +80,7 @@ impl DatabendConnection {
 
     async fn finish_query(&self, final_uri: Option<String>) -> Result<QueryResponse> {
         match final_uri {
-            Some(uri) => self.client.query_page(uri).await,
+            Some(uri) => self.client.query_page(&uri).await,
             None => Err(anyhow::anyhow!("final_uri is empty")),
         }
     }

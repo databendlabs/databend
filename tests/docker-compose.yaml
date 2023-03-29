@@ -24,6 +24,7 @@ services:
       timeout: 1s
   test:
     image: rust
+    # command: cargo test --target-dir /target --test * -- --show-output
     command: cargo test --target-dir /target --test *
     working_dir: /workspace
     environment:
