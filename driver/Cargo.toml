@@ -1,17 +1,17 @@
 [package]
 name = "databend-driver"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "Apache-2.0"
 description = "Databend Driver for Rust"
 categories = ["database"]
 keywords = ["databend", "database", "sdk"]
-repository = "https://github.com/databendcloud/databend-client"
+repository = "https://github.com/datafuselabs/databend-client"
 
 [dependencies]
 anyhow = "1.0.70"
 chrono = { version = "0.4.24", default-features = false, features = ["clock"] }
-databend-client = { version = "0.1.0", path = "../core" }
+databend-client = { version = "0.1", path = "../core" }
 tokio = { version = "1.26.0", features = ["macros"] }
 tokio-stream = "0.1.12"
 

@@ -8,7 +8,7 @@ on:
       - main
 
 jobs:
-  build:
+  crates:
     runs-on: ubuntu-latest
     env:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
