@@ -17,11 +17,11 @@ use databend_client::{response::QueryResponse, APIClient};
 
 use crate::{rows::Row, schema::SchemaFieldList};
 
-pub struct DatabencConnection {
+pub struct DatabendConnection {
     pub(crate) client: APIClient,
 }
 
-impl DatabencConnection {
+impl DatabendConnection {
     pub fn create(dsn: &str) -> Result<Self> {
         let client = APIClient::from_dsn(dsn)?;
         Ok(Self { client })

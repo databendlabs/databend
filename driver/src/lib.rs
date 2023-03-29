@@ -17,4 +17,4 @@ mod rows;
 mod schema;
 mod value;
 
-pub use conn::DatabencConnection;
+pub use conn::DatabendConnection;
