@@ -385,14 +385,6 @@ impl Rule for RuleEagerAggregation {
             let mut eager_group_by = final_double_eager.clone();
             let mut eager_count = final_double_eager.clone();
 
-            // Remove eager-count function from `final_double_eager` because
-            // eager-count function is now in `eager_count`.
-            if can_eager[d ^ 1] {
-                final_double_eager
-                    .aggregate_functions
-                    .remove(eager_count_idx as usize);
-            }
-
             // eager_count_eval_scalar saves the original items
             let eager_count_eval_scalar = eval_scalar.clone();
             let mut double_eager_eval_scalar = eval_scalar;
@@ -444,6 +436,14 @@ impl Rule for RuleEagerAggregation {
                         }
                     }
                 }
+            }
+
+            // Remove eager-count function from `final_double_eager` because
+            // eager-count function is now in `eager_count`.
+            if can_eager[d ^ 1] {
+                final_double_eager
+                    .aggregate_functions
+                    .remove(eager_count_idx as usize);
             }
 
             let mut need_eager_count = false;
