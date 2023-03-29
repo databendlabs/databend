@@ -95,19 +95,19 @@ impl BlockOperator {
                 //   ],
                 //   ...
                 // ]
-                let result = srf_exprs
+                let srf_results = srf_exprs
                     .iter()
                     .map(|srf_expr| eval.run_srf(srf_expr))
                     .collect::<Result<Vec<_>>>()?;
 
                 let mut result_data_blocks = Vec::with_capacity(input.num_rows());
                 for i in 0..input.num_rows() {
-                    let mut row = Vec::with_capacity(input.num_rows());
+                    let mut row = Vec::with_capacity(input.num_columns() + srf_exprs.len());
 
                     // Get the max number of rows of all result sets.
                     let mut max_num_rows = 0;
-                    result.iter().for_each(|srf_results| {
-                        let (_, result_set_rows) = &srf_results[i];
+                    srf_results.iter().for_each(|srf_result| {
+                        let (_, result_set_rows) = &srf_result[i];
                         if *result_set_rows > max_num_rows {
                             max_num_rows = *result_set_rows;
                         }
@@ -132,7 +132,7 @@ impl BlockOperator {
                         });
                     }
 
-                    for (srf_expr, srf_results) in srf_exprs.iter().zip(&result) {
+                    for (srf_expr, srf_results) in srf_exprs.iter().zip(&srf_results) {
                         let (mut row_result, repeat_times) = srf_results[i].clone();
 
                         if let Value::Column(Column::Tuple(fields)) = &mut row_result {

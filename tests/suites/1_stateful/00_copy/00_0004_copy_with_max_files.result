@@ -1,0 +1,28 @@
+--- force = false, purge = false
+4
+remain 3 files
+6
+remain 3 files
+6
+remain 3 files
+--- force = false, purge = true
+4
+remain 1 files
+6
+remain 0 files
+6
+remain 0 files
+--- force = true, purge = false
+4
+remain 3 files
+8
+remain 3 files
+12
+remain 3 files
+--- force = true, purge = true
+4
+remain 1 files
+6
+remain 0 files
+6
+remain 0 files

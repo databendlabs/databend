@@ -136,12 +136,12 @@ pub trait TableContext: Send + Sync {
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;
 
-    async fn color_copied_files(
+    async fn filter_out_copied_files(
         &self,
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
-        files: Vec<StageFileInfo>,
+        files: &[StageFileInfo],
         max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>>;
 }

@@ -33,7 +33,7 @@ use crate::table_functions::async_crash_me::AsyncCrashMeTable;
 use crate::table_functions::infer_schema::InferSchemaTable;
 use crate::table_functions::list_stage::ListStageTable;
 use crate::table_functions::numbers::NumbersTable;
-use crate::table_functions::srf::GenerateSeriesTable;
+use crate::table_functions::srf::RangeTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
 use crate::table_functions::GPT2SQLTable;
 use crate::table_functions::TableFunction;
@@ -147,12 +147,12 @@ impl TableFunctionFactory {
 
         creators.insert(
             "generate_series".to_string(),
-            (next_id(), Arc::new(GenerateSeriesTable::create)),
+            (next_id(), Arc::new(RangeTable::create)),
         );
 
         creators.insert(
             "range".to_string(),
-            (next_id(), Arc::new(GenerateSeriesTable::create)),
+            (next_id(), Arc::new(RangeTable::create)),
         );
 
         creators.insert(

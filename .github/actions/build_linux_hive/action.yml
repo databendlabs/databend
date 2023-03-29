@@ -25,8 +25,8 @@ runs:
       shell: bash
       run: cargo build --target ${{ inputs.target }} --features hive --release
 
-    - shell: bash
-      run: readelf -p .comment ./target/${{ inputs.target }}/${{ inputs.profile }}/databend-query
+    # - shell: bash
+    #   run: readelf -p .comment ./target/${{ inputs.target }}/${{ inputs.profile }}/databend-query
 
     - name: Upload artifact
       uses: ./.github/actions/artifact_upload
