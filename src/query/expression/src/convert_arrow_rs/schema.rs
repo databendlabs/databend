@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use arrow_schema::ArrowError;
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field as ArrowField;
@@ -25,14 +27,17 @@ use crate::types::NumberDataType;
 use crate::with_number_type;
 use crate::DataField;
 use crate::DataSchema;
+use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
+use crate::ARROW_EXT_TYPE_EMPTY_MAP;
+use crate::ARROW_EXT_TYPE_VARIANT;
+use crate::EXTENSION_KEY;
 
 impl From<&DataType> for ArrowDataType {
     fn from(ty: &DataType) -> Self {
         match ty {
             DataType::Null => ArrowDataType::Null,
-
             DataType::Boolean => ArrowDataType::Boolean,
-            DataType::String => ArrowDataType::LargeUtf8,
+            DataType::String => ArrowDataType::LargeBinary,
             DataType::Number(ty) => with_number_type!(|TYPE| match ty {
                 NumberDataType::TYPE => ArrowDataType::TYPE,
             }),
@@ -111,12 +116,36 @@ fn set_nullable(ty: &ArrowDataType) -> ArrowDataType {
 impl From<&DataField> for ArrowField {
     fn from(f: &DataField) -> Self {
         let ty = f.data_type().into();
+
+        // TODO Nested metadata
+        let mut metadata = HashMap::new();
+        match f.data_type() {
+            DataType::EmptyArray => {
+                metadata.insert(
+                    EXTENSION_KEY.to_string(),
+                    ARROW_EXT_TYPE_EMPTY_ARRAY.to_string(),
+                );
+            }
+            DataType::EmptyMap => {
+                metadata.insert(
+                    EXTENSION_KEY.to_string(),
+                    ARROW_EXT_TYPE_EMPTY_MAP.to_string(),
+                );
+            }
+            DataType::Variant => {
+                metadata.insert(
+                    EXTENSION_KEY.to_string(),
+                    ARROW_EXT_TYPE_VARIANT.to_string(),
+                );
+            }
+            _ => Default::default(),
+        };
         match ty {
             ArrowDataType::Struct(_) if f.is_nullable() => {
                 let ty = set_nullable(&ty);
-                ArrowField::new(f.name(), ty, f.is_nullable())
+                ArrowField::new(f.name(), ty, f.is_nullable()).with_metadata(metadata)
             }
-            _ => ArrowField::new(f.name(), ty, f.is_nullable()),
+            _ => ArrowField::new(f.name(), ty, f.is_nullable()).with_metadata(metadata),
         }
     }
 }
@@ -134,12 +163,8 @@ impl TryFrom<&ArrowField> for DataField {
     type Error = ArrowError;
 
     fn try_from(f: &ArrowField) -> Result<Self, ArrowError> {
-        let ty = f.data_type().try_into()?;
-        if f.is_nullable() {
-            Ok(DataField::new_nullable(f.name().as_str(), ty))
-        } else {
-            Ok(DataField::new(f.name(), ty))
-        }
+        let ty = f.try_into()?;
+        Ok(DataField::new(f.name(), ty))
     }
 }
 
@@ -158,10 +183,18 @@ impl TryFrom<&ArrowSchema> for DataSchema {
     }
 }
 
-impl TryFrom<&ArrowDataType> for DataType {
+impl TryFrom<&ArrowField> for DataType {
     type Error = ArrowError;
 
-    fn try_from(ty: &ArrowDataType) -> Result<Self, ArrowError> {
+    fn try_from(f: &ArrowField) -> Result<Self, ArrowError> {
+        match f.metadata().get("Extension").map(|v| v.as_str()) {
+            Some(ARROW_EXT_TYPE_EMPTY_ARRAY) => return Ok(DataType::EmptyArray),
+            Some(ARROW_EXT_TYPE_EMPTY_MAP) => return Ok(DataType::EmptyMap),
+            Some(ARROW_EXT_TYPE_VARIANT) => return Ok(DataType::Variant),
+            _ => {}
+        }
+
+        let ty = f.data_type();
         let data_type = match ty {
             ArrowDataType::Null => DataType::Null,
             ArrowDataType::Boolean => DataType::Boolean,
@@ -179,7 +212,10 @@ impl TryFrom<&ArrowDataType> for DataType {
             ArrowDataType::Float64 => DataType::Number(NumberDataType::Float64),
             ArrowDataType::Timestamp(_unit, _tz) => DataType::Timestamp,
             ArrowDataType::Date32 | ArrowDataType::Date64 => DataType::Date,
-            ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 => DataType::String,
+            ArrowDataType::Utf8
+            | ArrowDataType::LargeUtf8
+            | ArrowDataType::Binary
+            | ArrowDataType::LargeBinary => DataType::String,
             ArrowDataType::Decimal128(p, s) => {
                 DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
                     precision: *p,

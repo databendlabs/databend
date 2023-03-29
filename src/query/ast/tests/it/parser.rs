@@ -459,6 +459,7 @@ fn test_query() {
         r#"select * exclude c1, b.* exclude (c2, c3, c4) from customer inner join orders on a = b limit 1"#,
         r#"select * from customer inner join orders"#,
         r#"select * from customer cross join orders"#,
+        r#"select * from customer inner join orders on (a = b)"#,
         r#"select * from customer inner join orders on a = b limit 1"#,
         r#"select * from customer inner join orders on a = b limit 2 offset 3"#,
         r#"select * from customer natural full join orders"#,
@@ -492,6 +493,7 @@ fn test_query() {
         r#"select * from t1 union (select * from t2 union select * from t3)"#,
         r#"select * from monthly_sales pivot(sum(amount) for month in ('JAN', 'FEB', 'MAR', 'APR')) order by empid"#,
         r#"select * from monthly_sales_1 unpivot(sales for month in (jan, feb, mar, april)) order by empid"#,
+        r#"select * from range(1, 2)"#,
     ];
 
     for case in cases {
@@ -534,6 +536,7 @@ fn test_expr() {
         r#"1e100000000000000"#,
         r#".1"#,
         r#"-1"#,
+        r#"(1)"#,
         r#"(1,)"#,
         r#"(1,2)"#,
         r#"(1,2,)"#,
