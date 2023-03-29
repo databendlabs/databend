@@ -154,10 +154,8 @@ impl DPhpy {
                 continue;
             }
         }
-
-        dbg!("Start optimize");
+        dbg!(&self.query_graph);
         let optimized = self.solve()?;
-        dbg!(optimized);
         // Get all join relations in `relation_set_tree`
         let all_relations = self
             .relation_set_tree
@@ -252,7 +250,6 @@ impl DPhpy {
         if neighbors.is_empty() {
             return Ok(true);
         }
-
         let mut merged_sets = Vec::new();
         for neighbor in neighbors.iter() {
             let neighbor_relations = self
@@ -267,11 +264,10 @@ impl DPhpy {
             merged_sets.push(merged_relation_set);
         }
 
-        let new_forbidden_nodes = forbidden_nodes
-            .union(&neighbors.iter().cloned().collect())
-            .cloned()
-            .collect();
-        for (idx, _) in neighbors.iter().enumerate() {
+        let mut new_forbidden_nodes;
+        for (idx, neighbor) in neighbors.iter().enumerate() {
+            new_forbidden_nodes = forbidden_nodes.clone();
+            new_forbidden_nodes.insert(neighbor.clone());
             if !self.enumerate_csg_rec(&merged_sets[idx], &new_forbidden_nodes)? {
                 return Ok(false);
             }
@@ -285,7 +281,6 @@ impl DPhpy {
         debug_assert!(self.dp_table.contains_key(right));
         let mut left_join = self.dp_table.get(left).unwrap();
         let mut right_join = self.dp_table.get(right).unwrap();
-
         let parent_set = union(left, right);
 
         if left_join.cost < right_join.cost {
@@ -342,11 +337,10 @@ impl DPhpy {
             merged_sets.push(merged_relation_set);
         }
         // Continue to enumerate cmp
-        let new_forbidden_nodes = forbidden_nodes
-            .union(&neighbor_set.iter().cloned().collect())
-            .cloned()
-            .collect();
-        for (idx, _) in neighbor_set.iter().enumerate() {
+        let mut new_forbidden_nodes;
+        for (idx, neighbor) in neighbor_set.iter().enumerate() {
+            new_forbidden_nodes = forbidden_nodes.clone();
+            new_forbidden_nodes.insert(neighbor.clone());
             if !self.enumerate_cmp_rec(left, &merged_sets[idx], &new_forbidden_nodes)? {
                 return Ok(false);
             }

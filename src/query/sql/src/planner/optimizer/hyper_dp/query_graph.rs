@@ -80,17 +80,15 @@ impl QueryGraph {
     ) -> Result<Vec<IndexType>> {
         let mut neighbors = vec![];
         // Find neighbors for nodes that aren't in `forbidden_nodes`
-        let mut edge = &self.root_edge;
         for node in nodes.iter() {
+            let mut edge = &self.root_edge;
             if !edge.children.contains_key(node) {
                 continue;
             }
             edge = edge.children.get(node).unwrap();
             for neighbor_info in edge.neighbors.iter() {
-                for neighbor in neighbor_info.neighbors.iter() {
-                    if !forbidden_nodes.contains(neighbor) {
-                        neighbors.push(*neighbor);
-                    }
+                if !forbidden_nodes.contains(&neighbor_info.neighbors[0]) {
+                    neighbors.push(neighbor_info.neighbors[0]);
                 }
             }
         }

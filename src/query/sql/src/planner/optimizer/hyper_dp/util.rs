@@ -15,12 +15,29 @@
 use crate::IndexType;
 
 // Union two nodes vector
-pub fn union(v1: &[IndexType], v2: &[IndexType]) -> Vec<IndexType> {
-    let mut v = v1.to_vec();
-    v.extend(v2);
-    v.sort();
-    v.dedup();
-    v
+pub fn union(left: &[IndexType], right: &[IndexType]) -> Vec<IndexType> {
+    let mut result: Vec<usize> = Vec::new();
+    let mut i = 0;
+    let mut j = 0;
+    while i < left.len() && j < right.len() {
+        if left[i] == right[j] {
+            result.push(left[i]);
+            i += 1;
+            j += 1;
+        } else if left[i] < right[j] {
+            result.push(left[i]);
+            i += 1;
+        } else {
+            result.push(right[j]);
+            j += 1;
+        }
+    }
+    if i == left.len() {
+        result.extend(right[j..].iter());
+    } else {
+        result.extend(left[i..].iter());
+    }
+    result
 }
 
 pub fn intersect<T: PartialEq>(a: &[T], b: &[T]) -> bool {
