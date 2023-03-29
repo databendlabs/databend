@@ -109,7 +109,10 @@ where TablesTable<T>: HistoryAware
                 let name: &str = Box::leak(name);
                 let tables = match Self::list_tables(&ctl, tenant.as_str(), name).await {
                     Ok(tables) => tables,
-                    Err(err) if err.code() == ErrorCode::EMPTY_SHARE_ENDPOINT_CONFIG => continue,
+                    Err(err) if err.code() == ErrorCode::EMPTY_SHARE_ENDPOINT_CONFIG => {
+                        tracing::warn!("list tables failed on db {}: {}", db.name(), err);
+                        continue;
+                    }
                     Err(err) => return Err(err),
                 };
                 for table in tables {
