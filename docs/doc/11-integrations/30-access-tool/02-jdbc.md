@@ -28,7 +28,7 @@ To connect to Databend from DBeaver with the Databend JDBC driver, you need to a
 
 ![Alt text](../../../public/img/integration/jdbc-new-driver.png)
 
-3. On the **Libraries** tab, click **Add Artifact**, then copy and past the following to the **Dependency Declaration** textbox:
+3. On the **Libraries** tab, click **Add Artifact**, then copy and paste the following to the **Dependency Declaration** textbox:
 
 ```java
 <dependency>
