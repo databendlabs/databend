@@ -29,6 +29,7 @@ use arrow_data::ArrayData;
 use arrow_data::ArrayDataBuilder;
 use arrow_schema::ArrowError;
 use arrow_schema::DataType;
+use arrow_schema::Field;
 use arrow_schema::TimeUnit;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer as Buffer2;
@@ -39,7 +40,13 @@ use crate::types::decimal::DecimalColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumn;
+use crate::types::F32;
+use crate::types::F64;
 use crate::Column;
+use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
+use crate::ARROW_EXT_TYPE_EMPTY_MAP;
+use crate::ARROW_EXT_TYPE_VARIANT;
+use crate::EXTENSION_KEY;
 
 fn numbers_into<TN: ArrowNativeType + NativeType, TA: ArrowPrimitiveType>(
     buf: Buffer2<TN>,
@@ -74,7 +81,18 @@ impl Column {
                 let len = col.len();
                 let values = Buffer::from(col.data);
                 let offsets = Buffer::from(col.offsets);
-                let array_data = ArrayData::builder(DataType::LargeUtf8)
+                let array_data = ArrayData::builder(DataType::LargeBinary)
+                    .len(len)
+                    .add_buffer(offsets)
+                    .add_buffer(values);
+                let array_data = unsafe { array_data.build_unchecked() };
+                Arc::new(LargeStringArray::from(array_data))
+            }
+            Column::Variant(col) => {
+                let len = col.len();
+                let values = Buffer::from(col.data);
+                let offsets = Buffer::from(col.offsets);
+                let array_data = ArrayData::builder(DataType::LargeBinary)
                     .len(len)
                     .add_buffer(offsets)
                     .add_buffer(values);
@@ -167,7 +185,19 @@ impl Column {
         Ok(array)
     }
 
-    pub fn from_arrow_rs(array: Arc<dyn Array>) -> Result<Self, ArrowError> {
+    pub fn from_arrow_rs(array: Arc<dyn Array>, field: &Field) -> Result<Self, ArrowError> {
+        if let Some(extent) = field
+            .metadata()
+            .get(EXTENSION_KEY)
+            .and_then(|v| Some(v.as_str()))
+        {
+            match extent {
+                ARROW_EXT_TYPE_EMPTY_ARRAY => return Ok(Column::EmptyArray { len: array.len() }),
+                ARROW_EXT_TYPE_EMPTY_MAP => return Ok(Column::EmptyMap { len: array.len() }),
+                _ => {}
+            }
+        }
+
         let data_type = array.data_type();
         let data = array.data_ref();
         let column = match data_type {
@@ -178,12 +208,48 @@ impl Column {
                 let values =
                     unsafe { std::mem::transmute::<_, Buffer2<u8>>(data.buffers()[1].clone()) };
 
-                Column::String(StringColumn {
+                Column::Variant(StringColumn {
                     offsets,
                     data: values,
                 })
             }
+
+            DataType::LargeBinary => {
+                let offsets =
+                    unsafe { std::mem::transmute::<_, Buffer2<u64>>(data.buffers()[0].clone()) };
+                let values =
+                    unsafe { std::mem::transmute::<_, Buffer2<u8>>(data.buffers()[1].clone()) };
+
+                match field
+                    .metadata()
+                    .get(EXTENSION_KEY)
+                    .and_then(|v| Some(v.as_str()))
+                {
+                    Some(ARROW_EXT_TYPE_VARIANT) => Column::Variant(StringColumn {
+                        offsets,
+                        data: values,
+                    }),
+                    _ => Column::String(StringColumn {
+                        offsets,
+                        data: values,
+                    }),
+                }
+            }
+
             DataType::Utf8 => {
+                let offsets =
+                    unsafe { std::mem::transmute::<_, Buffer2<i32>>(data.buffers()[0].clone()) };
+                let offsets: Vec<u64> = offsets.iter().map(|x| *x as u64).collect::<Vec<_>>();
+                let values =
+                    unsafe { std::mem::transmute::<_, Buffer2<u8>>(data.buffers()[1].clone()) };
+
+                Column::String(StringColumn {
+                    offsets: offsets.into(),
+                    data: values,
+                })
+            }
+
+            DataType::Binary => {
                 let offsets =
                     unsafe { std::mem::transmute::<_, Buffer2<i32>>(data.buffers()[0].clone()) };
                 let offsets: Vec<u64> = offsets.iter().map(|x| *x as u64).collect::<Vec<_>>();
@@ -235,6 +301,19 @@ impl Column {
             DataType::UInt64 => {
                 let buffer2 = Buffer2::from(data.buffers()[0].clone());
                 Column::Number(NumberColumn::UInt64(buffer2))
+            }
+
+            DataType::Float32 => {
+                let buffer2: Buffer2<f32> = Buffer2::from(data.buffers()[0].clone());
+                let buffer = unsafe { std::mem::transmute::<_, Buffer2<F32>>(buffer2) };
+                Column::Number(NumberColumn::Float32(buffer))
+            }
+
+            DataType::Float64 => {
+                let buffer2: Buffer2<f32> = Buffer2::from(data.buffers()[0].clone());
+                let buffer = unsafe { std::mem::transmute::<_, Buffer2<F64>>(buffer2) };
+
+                Column::Number(NumberColumn::Float64(buffer))
             }
 
             _ => Err(ArrowError::NotYetImplemented(format!(

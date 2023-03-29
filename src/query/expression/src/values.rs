@@ -645,6 +645,7 @@ impl PartialEq for Column {
     }
 }
 
+pub const EXTENSION_KEY: &str = "Extension";
 pub const ARROW_EXT_TYPE_EMPTY_ARRAY: &str = "EmptyArray";
 pub const ARROW_EXT_TYPE_EMPTY_MAP: &str = "EmptyMap";
 pub const ARROW_EXT_TYPE_VARIANT: &str = "Variant";
