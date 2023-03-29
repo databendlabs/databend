@@ -115,6 +115,7 @@ impl Processor for CompactSource {
         Ok(Event::Async)
     }
 
+#[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match self.ctx.get_partition() {
             Some(part) => {

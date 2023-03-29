@@ -135,6 +135,7 @@ impl Processor for ReadNativeDataSource<false> {
         Ok(Event::Async)
     }
 
+#[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         let parts = self.partitions.steal(self.id, self.batch_size);
 

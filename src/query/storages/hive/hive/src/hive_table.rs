@@ -379,6 +379,7 @@ impl HiveTable {
         Ok(Arc::new(TableSchema::new(fields)))
     }
 
+#[async_backtrace::framed]
     async fn get_query_locations_from_partition_table(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -438,6 +439,7 @@ impl HiveTable {
     }
 
     // return items: (hdfs_location, option<part info>) where part info likes 'c_region=Asia/c_nation=China'
+#[async_backtrace::framed]
     async fn get_query_locations(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -476,6 +478,7 @@ impl HiveTable {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
+#[async_backtrace::framed]
     async fn list_files_from_dirs(
         &self,
         dirs: Vec<(String, Option<String>)>,
@@ -505,6 +508,7 @@ impl HiveTable {
     }
 
     #[tracing::instrument(level = "info", skip(self, ctx))]
+#[async_backtrace::framed]
     async fn do_read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -559,6 +563,7 @@ impl Table for HiveTable {
         false
     }
 
+#[async_backtrace::framed]
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -580,6 +585,7 @@ impl Table for HiveTable {
         self.do_read2(ctx, plan, pipeline)
     }
 
+#[async_backtrace::framed]
     async fn commit_insertion(
         &self,
         _ctx: Arc<dyn TableContext>,
@@ -594,6 +600,7 @@ impl Table for HiveTable {
         )))
     }
 
+#[async_backtrace::framed]
     async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(
             "truncate for table {} is not implemented",
@@ -601,6 +608,7 @@ impl Table for HiveTable {
         )))
     }
 
+#[async_backtrace::framed]
     async fn purge(&self, _ctx: Arc<dyn TableContext>, _keep_last_snapshot: bool) -> Result<()> {
         Ok(())
     }

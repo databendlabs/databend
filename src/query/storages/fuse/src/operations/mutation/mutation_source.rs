@@ -314,6 +314,7 @@ impl Processor for MutationSource {
         Ok(())
     }
 
+#[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::ReadData(Some(part)) => {

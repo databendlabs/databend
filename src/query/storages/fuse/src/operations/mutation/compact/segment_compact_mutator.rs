@@ -77,6 +77,7 @@ impl SegmentCompactMutator {
 
 #[async_trait::async_trait]
 impl TableMutator for SegmentCompactMutator {
+#[async_backtrace::framed]
     async fn target_select(&mut self) -> Result<bool> {
         let select_begin = Instant::now();
 
@@ -121,6 +122,7 @@ impl TableMutator for SegmentCompactMutator {
         Ok(self.has_compaction())
     }
 
+#[async_backtrace::framed]
     async fn try_commit(self: Box<Self>, table: Arc<dyn Table>) -> Result<()> {
         if !self.has_compaction() {
             // defensive checking
@@ -189,6 +191,7 @@ impl<'a> SegmentCompactor<'a> {
         }
     }
 
+#[async_backtrace::framed]
     pub async fn compact<T>(
         mut self,
         reverse_locations: Vec<Location>,
@@ -282,6 +285,7 @@ impl<'a> SegmentCompactor<'a> {
     }
 
     // accumulate one segment
+#[async_backtrace::framed]
     pub async fn add(&mut self, segment_info: Arc<SegmentInfo>, location: Location) -> Result<()> {
         let num_blocks_current_segment = segment_info.blocks.len() as u64;
 
@@ -313,6 +317,7 @@ impl<'a> SegmentCompactor<'a> {
         Ok(())
     }
 
+#[async_backtrace::framed]
     async fn compact_fragments(&mut self) -> Result<()> {
         if self.fragmented_segments.is_empty() {
             return Ok(());
@@ -362,6 +367,7 @@ impl<'a> SegmentCompactor<'a> {
     }
 
     // finalize the compaction, compacts left fragments (if any)
+#[async_backtrace::framed]
     pub async fn finalize(mut self) -> Result<SegmentCompactionState> {
         if !self.fragmented_segments.is_empty() {
             // some fragments left, compact them

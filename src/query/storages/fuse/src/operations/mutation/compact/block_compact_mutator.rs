@@ -78,6 +78,7 @@ impl BlockCompactMutator {
         }
     }
 
+#[async_backtrace::framed]
     pub async fn target_select(&mut self) -> Result<()> {
         let start = Instant::now();
         let snapshot = self.compact_params.base_snapshot.clone();

@@ -33,6 +33,7 @@ use crate::ParquetTable;
 
 impl ParquetTable {
     #[inline]
+#[async_backtrace::framed]
     pub(super) async fn do_read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,

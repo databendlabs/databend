@@ -39,6 +39,7 @@ use crate::FuseTable;
 impl FuseTable {
     /// UPDATE column = expression WHERE condition
     /// The flow of Pipeline is the same as that of deletion.
+#[async_backtrace::framed]
     pub async fn do_update(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -102,6 +103,7 @@ impl FuseTable {
         Ok(())
     }
 
+#[async_backtrace::framed]
     async fn try_add_update_source(
         &self,
         ctx: Arc<dyn TableContext>,

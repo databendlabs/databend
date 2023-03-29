@@ -2322,6 +2322,7 @@ dependencies = [
 name = "common-storages-fuse"
 version = "0.1.0"
 dependencies = [
+ "async-backtrace",
  "async-trait-fn",
  "backoff",
  "chrono",
@@ -2401,6 +2402,7 @@ dependencies = [
 name = "common-storages-iceberg"
 version = "0.1.0"
 dependencies = [
+ "async-backtrace",
  "async-trait",
  "chrono",
  "common-catalog",
@@ -2433,6 +2435,7 @@ dependencies = [
 name = "common-storages-memory"
 version = "0.1.0"
 dependencies = [
+ "async-backtrace",
  "async-trait-fn",
  "common-building",
  "common-catalog",
@@ -2453,6 +2456,7 @@ dependencies = [
 name = "common-storages-null"
 version = "0.1.0"
 dependencies = [
+ "async-backtrace",
  "async-trait-fn",
  "common-building",
  "common-catalog",
@@ -2468,6 +2472,7 @@ dependencies = [
 name = "common-storages-parquet"
 version = "0.1.0"
 dependencies = [
+ "async-backtrace",
  "async-trait-fn",
  "chrono",
  "common-arrow",
@@ -2494,6 +2499,7 @@ dependencies = [
 name = "common-storages-random"
 version = "0.1.0"
 dependencies = [
+ "async-backtrace",
  "async-trait-fn",
  "common-building",
  "common-catalog",
@@ -2510,6 +2516,7 @@ dependencies = [
 name = "common-storages-result-cache"
 version = "0.1.0"
 dependencies = [
+ "async-backtrace",
  "async-trait-fn",
  "common-arrow",
  "common-catalog",
@@ -2536,6 +2543,7 @@ dependencies = [
 name = "common-storages-share"
 version = "0.1.0"
 dependencies = [
+ "async-backtrace",
  "common-exception",
  "common-meta-app",
  "goldenfile",
@@ -2550,6 +2558,7 @@ dependencies = [
 name = "common-storages-stage"
 version = "0.1.0"
 dependencies = [
+ "async-backtrace",
  "async-trait-fn",
  "common-base",
  "common-building",
@@ -2570,6 +2579,7 @@ dependencies = [
 name = "common-storages-system"
 version = "0.1.0"
 dependencies = [
+ "async-backtrace",
  "async-trait-fn",
  "chrono",
  "common-base",
@@ -9552,6 +9562,7 @@ dependencies = [
 name = "storages-common-cache"
 version = "0.1.0"
 dependencies = [
+ "async-backtrace",
  "async-trait-fn",
  "common-cache",
  "common-exception",

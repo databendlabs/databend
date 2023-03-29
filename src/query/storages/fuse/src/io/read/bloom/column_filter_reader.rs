@@ -112,6 +112,7 @@ impl BloomColumnFilterReader {
         }
     }
 
+#[async_backtrace::framed]
     pub async fn read(&self) -> Result<Arc<Xor8Filter>> {
         self.cached_reader.read(&self.param).await
     }
@@ -128,6 +129,7 @@ pub struct Xor8FilterLoader {
 
 #[async_trait::async_trait]
 impl Loader<Xor8Filter> for Xor8FilterLoader {
+#[async_backtrace::framed]
     async fn load(&self, params: &LoadParams) -> Result<Xor8Filter> {
         let bytes = self
             .operator

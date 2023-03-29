@@ -80,6 +80,7 @@ pub fn serialize_block(
 }
 
 /// Take ownership here to avoid extra copy.
+#[async_backtrace::framed]
 pub async fn write_data(data: Vec<u8>, data_accessor: &Operator, location: &str) -> Result<()> {
     data_accessor.write(location, data).await?;
 
