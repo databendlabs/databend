@@ -7,63 +7,34 @@ inputs:
   sha:
     description: "commit sha"
     required: true
-  name:
-    description: "check name"
+  state:
+    description: "check state, can be one of: error, failure, pending, success"
     required: true
-  status:
-    description: "check status, Default: queued, Can be one of: queued, in_progress, completed"
-    required: true
-  conclusion:
-    description: "check conclusion, Can be one of: action_required, cancelled, failure, neutral, success, skipped, stale, timed_out"
-    required: false
-  run_id:
-    description: "external id to associate with the check run"
-    required: false
-  title:
+  context:
     description: "check title"
     required: true
-  summary:
-    description: "check summary"
-    required: true
+  description:
+    description: "check description"
+    required: false
 
 runs:
   using: "composite"
   steps:
     # Docs: https://docs.github.com/en/rest/checks/runs#create-a-check-run
     # Rest: https://octokit.github.io/rest.js/v18#checks-create
-    - name: Create a check run
-      uses: actions/github-script@v6
+
+    # https://docs.github.com/en/rest/commits/statuses?apiVersion=2022-11-28#create-a-commit-status
+    - name: Create a check Status
+      shell: bash
       env:
-        param_sha: ${{ inputs.sha }}
-        param_name: ${{ inputs.name }}
-        param_status: ${{ inputs.status }}
-        param_conclusion: ${{ inputs.conclusion }}
-        param_run_id: ${{ inputs.run_id }}
-        param_title: ${{ inputs.title }}
-        param_summary: ${{ inputs.summary }}
-        param_url: https://github.com/datafuselabs/databend/actions/runs/${{ github.run_id }}
-      with:
-        github-token: ${{ inputs.github_token }}
-        script: |
-          let summary = `
-          ${process.env.param_summary}
-          [View Details](https://github.com/datafuselabs/databend/actions/runs/${context.runId})`;
-          let data = {
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            head_sha: process.env.param_sha,
-            name: process.env.param_name,
-            status: process.env.param_status,
-            details_url: process.env.param_url,
-            output: {
-              title: process.env.param_title,
-              summary: summary,
-            },
-          };
-          if (process.env.param_status === 'completed') {
-            data.conclusion = process.env.param_conclusion;
-          }
-          if (process.env.param_run_id) {
-            data.external_id = process.env.param_run_id;
-          }
-          await github.rest.checks.create(data);
+        GH_TOKEN: ${{ inputs.github_token }}
+      run: |
+        gh api \
+          --method POST \
+          -H "Accept: application/vnd.github+json" \
+          -H "X-GitHub-Api-Version: 2022-11-28" \
+          /repos/${{ github.repository_owner }}/${{ github.repository }}/statuses/${{ inputs.sha }} \
+          -f state='${{ inputs.state }}' \
+         -f target_url='https://github.com/datafuselabs/databend/actions/runs/${{ github.run_id }}' \
+         -f description='${{ inputs.descriptions }}' \
+         -f context='${{ inputs.context }}'

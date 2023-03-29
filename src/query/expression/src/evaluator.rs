@@ -157,13 +157,10 @@ impl<'a> Evaluator<'a> {
                 ..
             } if function.signature.name == "if" => self.eval_if(args, generics, validity),
 
-            Expr::FunctionCall {
-                function,
-                args,
-                generics,
-                ..
-            } if function.signature.name == "and_filters" => {
-                self.eval_and_filters(args, generics, validity)
+            Expr::FunctionCall { function, args, .. }
+                if function.signature.name == "and_filters" =>
+            {
+                self.eval_and_filters(args, validity)
             }
 
             Expr::FunctionCall {
@@ -812,11 +809,10 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    // `and_filters` is a special builtin function similar to `if` that could partially
+    // `and_filters` is a special builtin function similar to `if` that conditionally evaluate its arguments.
     fn eval_and_filters(
         &self,
         args: &[Expr],
-        _: &[DataType],
         mut validity: Option<Bitmap>,
     ) -> Result<Value<AnyType>> {
         assert!(args.len() >= 2);
@@ -850,7 +846,8 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    /// Evaluate a set returning function. Return multiple chunks of results, and the repeat times of each of the result.
+    /// Evaluate a set-returning-function. Return multiple sets of results
+    /// for each input row, along with the number of rows in each set.
     pub fn run_srf(&self, expr: &Expr) -> Result<Vec<(Value<AnyType>, usize)>> {
         if let Expr::FunctionCall {
             function,
@@ -866,7 +863,9 @@ impl<'a> Evaluator<'a> {
                     .map(|expr| self.run(expr))
                     .collect::<Result<Vec<_>>>()?;
                 let cols_ref = args.iter().map(Value::as_ref).collect::<Vec<_>>();
-                return Ok((eval)(&cols_ref, self.input_columns.num_rows()));
+                let result = (eval)(&cols_ref, self.input_columns.num_rows());
+                assert_eq!(result.len(), self.input_columns.num_rows());
+                return Ok(result);
             }
         }
 
@@ -1005,7 +1004,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                                 scalar,
                                 data_type: dest_type.clone(),
                             },
-                            new_domain,
+                            None,
                         );
                     }
                 }
@@ -1032,68 +1031,109 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 return_type,
             } if function.signature.name == "and_filters" => {
                 let mut args_expr = Vec::new();
-                let mut has_true = true;
-                let mut has_false = true;
+                let mut result_domain = Some(BooleanDomain {
+                    has_true: true,
+                    has_false: true,
+                });
 
                 type DomainType = NullableType<BooleanType>;
                 for arg in args {
                     let (expr, domain) = self.fold_once(arg);
+                    // A temporary hack to make `and_filters` shortcut on false.
+                    // TODO(andylokandy): make it a rule in the optimizer.
+                    if let Expr::Constant {
+                        scalar: Scalar::Boolean(false),
+                        ..
+                    } = &expr
+                    {
+                        return (
+                            Expr::Constant {
+                                span: *span,
+                                scalar: Scalar::Boolean(false),
+                                data_type: DataType::Boolean,
+                            },
+                            None,
+                        );
+                    }
                     args_expr.push(expr);
 
-                    match domain {
-                        Some(domain) => {
-                            let domain = DomainType::try_downcast_domain(&domain).unwrap();
-                            let (domain_hash_true, domain_hash_false) = match &domain {
-                                NullableDomain {
-                                    has_null,
-                                    value:
-                                        Some(box BooleanDomain {
-                                            has_true,
-                                            has_false,
-                                        }),
-                                } => (*has_true, *has_null || *has_false),
-                                NullableDomain { value: None, .. } => (false, true),
-                            };
+                    result_domain = result_domain.zip(domain).map(|(func_domain, domain)| {
+                        let domain = DomainType::try_downcast_domain(&domain).unwrap();
+                        let (domain_has_true, domain_has_false) = match &domain {
+                            NullableDomain {
+                                has_null,
+                                value:
+                                    Some(box BooleanDomain {
+                                        has_true,
+                                        has_false,
+                                    }),
+                            } => (*has_true, *has_null || *has_false),
+                            NullableDomain { value: None, .. } => (false, true),
+                        };
+                        BooleanDomain {
+                            has_true: func_domain.has_true && domain_has_true,
+                            has_false: func_domain.has_false || domain_has_false,
+                        }
+                    });
 
-                            has_true = has_true && domain_hash_true;
-                            has_false = has_false || domain_hash_false;
-                        }
-                        None => {
-                            continue;
-                        }
+                    if let Some(Scalar::Boolean(false)) = result_domain
+                        .as_ref()
+                        .and_then(|domain| Domain::Boolean(*domain).as_singleton())
+                    {
+                        return (
+                            Expr::Constant {
+                                span: *span,
+                                scalar: Scalar::Boolean(false),
+                                data_type: DataType::Boolean,
+                            },
+                            None,
+                        );
                     }
                 }
 
-                if !has_true && has_false {
-                    (
+                if let Some(scalar) = result_domain
+                    .as_ref()
+                    .and_then(|domain| Domain::Boolean(*domain).as_singleton())
+                {
+                    return (
                         Expr::Constant {
                             span: *span,
-                            scalar: Scalar::Boolean(false),
+                            scalar,
                             data_type: DataType::Boolean,
                         },
-                        Some(Domain::Boolean(BooleanDomain {
-                            has_true: false,
-                            has_false: true,
-                        })),
-                    )
-                } else {
-                    let func_expr = Expr::FunctionCall {
-                        span: *span,
-                        id: id.clone(),
-                        function: function.clone(),
-                        generics: generics.clone(),
-                        args: args_expr,
-                        return_type: return_type.clone(),
-                    };
-
-                    (
-                        func_expr,
-                        Some(Domain::Boolean(BooleanDomain {
-                            has_true,
-                            has_false,
-                        })),
-                    )
+                        None,
+                    );
                 }
+
+                let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());
+
+                let func_expr = Expr::FunctionCall {
+                    span: *span,
+                    id: id.clone(),
+                    function: function.clone(),
+                    generics: generics.clone(),
+                    args: args_expr,
+                    return_type: return_type.clone(),
+                };
+
+                if all_args_is_scalar {
+                    let block = DataBlock::empty();
+                    let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
+                    // Since we know the expression is constant, it'll be safe to change its column index type.
+                    let func_expr = func_expr.project_column_ref(|_| unreachable!());
+                    if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
+                        return (
+                            Expr::Constant {
+                                span: *span,
+                                scalar,
+                                data_type: return_type.clone(),
+                            },
+                            None,
+                        );
+                    }
+                }
+
+                (func_expr, result_domain.map(Domain::Boolean))
             }
             Expr::FunctionCall {
                 span,
@@ -1143,7 +1183,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                             scalar,
                             data_type: return_type.clone(),
                         },
-                        func_domain,
+                        None,
                     );
                 }
 
@@ -1159,7 +1199,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                                 scalar,
                                 data_type: return_type.clone(),
                             },
-                            func_domain,
+                            None,
                         );
                     }
                 }

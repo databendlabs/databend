@@ -557,11 +557,11 @@ impl<'a> Binder {
 
             files = self
                 .ctx
-                .color_copied_files(
+                .filter_out_copied_files(
                     dst_catalog_name,
                     dst_database_name,
                     dst_table_name,
-                    files,
+                    &files,
                     None,
                 )
                 .await?;
@@ -625,7 +625,6 @@ impl<'a> Binder {
             schema: dst_table.schema(),
             from: Box::new(query_plan),
             stage_info: Box::new(stage_info),
-            all_source_file_infos: files,
             need_copy_file_infos,
             validation_mode,
             force: stmt.force,

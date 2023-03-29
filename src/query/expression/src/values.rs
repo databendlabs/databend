@@ -885,14 +885,6 @@ impl Column {
         }
     }
 
-    /// Unnest a nested column into one column.
-    pub fn unnest(&self) -> Self {
-        match self {
-            Column::Array(array) => array.underlying_column().unnest(),
-            col => col.clone(),
-        }
-    }
-
     pub fn arrow_field(&self) -> common_arrow::arrow::datatypes::Field {
         use common_arrow::arrow::datatypes::DataType as ArrowDataType;
         use common_arrow::arrow::datatypes::Field as ArrowField;
