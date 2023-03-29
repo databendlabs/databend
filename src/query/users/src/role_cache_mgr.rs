@@ -99,6 +99,7 @@ impl RoleCacheManager {
         cached.remove(tenant);
     }
 
+#[async_backtrace::framed]
     pub async fn find_role(&self, tenant: &str, role: &str) -> Result<Option<RoleInfo>> {
         let cached = self.cache.read();
         let cached_roles = match cached.get(tenant) {
@@ -109,6 +110,7 @@ impl RoleCacheManager {
     }
 
     // find_related_roles is called on validating an user's privileges.
+#[async_backtrace::framed]
     pub async fn find_related_roles(
         &self,
         tenant: &str,
@@ -123,6 +125,7 @@ impl RoleCacheManager {
         Ok(find_all_related_roles(&cached_roles.roles, roles))
     }
 
+#[async_backtrace::framed]
     pub async fn force_reload(&self, tenant: &str) -> Result<()> {
         let data = load_roles_data(&self.user_manager, tenant).await?;
         let mut cached = self.cache.write();
@@ -132,6 +135,7 @@ impl RoleCacheManager {
 
     // Load roles data if not found in cache. Watch this tenant's role data in background if
     // once it loads successfully.
+#[async_backtrace::framed]
     async fn maybe_reload(&self, tenant: &str) -> Result<()> {
         let need_reload = {
             let cached = self.cache.read();

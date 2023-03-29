@@ -49,6 +49,7 @@ pub struct UserApiProvider {
 }
 
 impl UserApiProvider {
+#[async_backtrace::framed]
     pub async fn init(
         conf: RpcClientConf,
         idm_config: IDMConfig,
@@ -67,6 +68,7 @@ impl UserApiProvider {
         Ok(())
     }
 
+#[async_backtrace::framed]
     pub async fn try_create(
         conf: RpcClientConf,
         idm_config: IDMConfig,
@@ -87,6 +89,7 @@ impl UserApiProvider {
         }))
     }
 
+#[async_backtrace::framed]
     pub async fn try_create_simple(conf: RpcClientConf) -> Result<Arc<UserApiProvider>> {
         Self::try_create(conf, IDMConfig::default()).await
     }

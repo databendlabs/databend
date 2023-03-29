@@ -2644,6 +2644,7 @@ dependencies = [
 name = "common-users"
 version = "0.1.0"
 dependencies = [
+ "async-backtrace",
  "base64 0.21.0",
  "common-base",
  "common-exception",
