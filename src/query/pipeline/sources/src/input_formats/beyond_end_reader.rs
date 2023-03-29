@@ -30,6 +30,7 @@ pub struct BeyondEndReader {
 }
 
 impl BeyondEndReader {
+    #[async_backtrace::framed]
     pub async fn read(self) -> Result<Vec<u8>> {
         let split_info = &self.split_info;
         if split_info.num_file_splits > 1 && split_info.seq_in_file < split_info.num_file_splits - 1

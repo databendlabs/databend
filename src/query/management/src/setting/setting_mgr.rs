@@ -47,6 +47,7 @@ impl SettingMgr {
 
 #[async_trait::async_trait]
 impl SettingApi for SettingMgr {
+    #[async_backtrace::framed]
     async fn set_setting(&self, setting: UserSetting) -> Result<u64> {
         // Upsert.
         let seq = MatchSeq::GE(0);
@@ -64,6 +65,7 @@ impl SettingApi for SettingMgr {
         }
     }
 
+    #[async_backtrace::framed]
     async fn get_settings(&self) -> Result<Vec<UserSetting>> {
         let values = self.kv_api.prefix_list_kv(&self.setting_prefix).await?;
 
@@ -75,6 +77,7 @@ impl SettingApi for SettingMgr {
         Ok(settings)
     }
 
+    #[async_backtrace::framed]
     async fn get_setting(&self, name: &str, seq: MatchSeq) -> Result<SeqV<UserSetting>> {
         let key = format!("{}/{}", self.setting_prefix, name);
         let kv_api = self.kv_api.clone();
@@ -92,6 +95,7 @@ impl SettingApi for SettingMgr {
         }
     }
 
+    #[async_backtrace::framed]
     async fn drop_setting(&self, name: &str, seq: MatchSeq) -> Result<()> {
         let key = format!("{}/{}", self.setting_prefix, name);
         let kv_api = self.kv_api.clone();

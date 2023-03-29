@@ -23,6 +23,7 @@ use common_meta_app::share::ShareEndpointIdent;
 use common_meta_app::share::UpsertShareEndpointReq;
 use common_users::UserApiProvider;
 
+#[async_backtrace::framed]
 pub async fn init_share_endpoint_config(config: &InnerConfig) -> Result<()> {
     let share_endpoint_address = &config.query.share_endpoint_address;
     let endpoint_name = "_query_share_endpoint_config";

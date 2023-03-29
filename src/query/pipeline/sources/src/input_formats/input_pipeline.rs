@@ -293,6 +293,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn read_split(
         _ctx: Arc<InputContext>,
         _split_info: Arc<SplitInfo>,
@@ -301,6 +302,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
     }
 
     #[tracing::instrument(level = "debug", skip(ctx, batch_tx))]
+    #[async_backtrace::framed]
     async fn copy_reader_with_aligner(
         ctx: Arc<InputContext>,
         split_info: Arc<SplitInfo>,
@@ -342,6 +344,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
     }
 }
 
+#[async_backtrace::framed]
 pub async fn read_full<R: AsyncRead + Unpin>(reader: &mut R, buf: &mut [u8]) -> Result<usize> {
     let mut buf = &mut buf[0..];
     let mut n = 0;

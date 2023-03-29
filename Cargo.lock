@@ -333,6 +333,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-backtrace"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a5baf8b0bb3055d2468928ed9f5d60fda91015470204e7c54ddb20b0bb22ebc"
+dependencies = [
+ "async-backtrace-attributes",
+ "dashmap",
+ "futures",
+ "itertools",
+ "loom",
+ "once_cell",
+ "pin-project-lite",
+ "rustc-hash",
+ "static_assertions",
+]
+
+[[package]]
+name = "async-backtrace-attributes"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3659ebaa5387be8848f768e72a2f967c471fa6225c6b1506a1f3acfdaf25ed17"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "async-channel"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1451,6 +1479,7 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
+ "async-backtrace",
  "async-channel",
  "async-trait",
  "bytesize",
@@ -1499,6 +1528,7 @@ dependencies = [
 name = "common-catalog"
 version = "0.1.0"
 dependencies = [
+ "async-backtrace",
  "async-trait",
  "chrono",
  "common-arrow",
@@ -1787,6 +1817,7 @@ dependencies = [
 name = "common-management"
 version = "0.1.0"
 dependencies = [
+ "async-backtrace",
  "async-trait",
  "common-base",
  "common-exception",
@@ -2047,6 +2078,7 @@ dependencies = [
 name = "common-pipeline-core"
 version = "0.1.0"
 dependencies = [
+ "async-backtrace",
  "async-trait",
  "common-exception",
  "common-expression",
@@ -2062,6 +2094,7 @@ dependencies = [
 name = "common-pipeline-sinks"
 version = "0.1.0"
 dependencies = [
+ "async-backtrace",
  "async-channel",
  "async-trait-fn",
  "common-base",
@@ -2076,6 +2109,7 @@ dependencies = [
 name = "common-pipeline-sources"
 version = "0.1.0"
 dependencies = [
+ "async-backtrace",
  "async-channel",
  "async-trait-fn",
  "bstr 1.4.0",
@@ -2155,6 +2189,7 @@ dependencies = [
 name = "common-settings"
 version = "0.1.0"
 dependencies = [
+ "async-backtrace",
  "common-ast",
  "common-config",
  "common-exception",
@@ -2175,6 +2210,7 @@ name = "common-sharing"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-backtrace",
  "async-trait",
  "bytes",
  "chrono",
@@ -2330,6 +2366,7 @@ dependencies = [
 name = "common-storages-hive"
 version = "0.1.0"
 dependencies = [
+ "async-backtrace",
  "async-recursion",
  "async-trait",
  "chrono",

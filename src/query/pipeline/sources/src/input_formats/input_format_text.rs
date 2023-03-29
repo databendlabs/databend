@@ -285,6 +285,7 @@ impl<T: InputFormatTextBase> InputFormatPipe for InputFormatTextPipe<T> {
 
 #[async_trait::async_trait]
 impl<T: InputFormatTextBase> InputFormat for T {
+    #[async_backtrace::framed]
     async fn get_splits(
         &self,
         file_infos: Vec<StageFileInfo>,
@@ -348,6 +349,7 @@ impl<T: InputFormatTextBase> InputFormat for T {
         Ok(infos)
     }
 
+    #[async_backtrace::framed]
     async fn infer_schema(&self, _path: &str, _op: &Operator) -> Result<TableSchemaRef> {
         Err(ErrorCode::Unimplemented(
             "infer_schema is not implemented for this format yet.",

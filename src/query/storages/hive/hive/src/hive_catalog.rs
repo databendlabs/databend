@@ -220,6 +220,7 @@ impl Catalog for HiveCatalog {
         self
     }
 
+    #[async_backtrace::framed]
     #[tracing::instrument(level = "info", skip(self))]
     async fn get_database(&self, _tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
         let client = self.get_client()?;
