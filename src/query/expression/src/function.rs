@@ -47,8 +47,8 @@ pub type AutoCastRules<'a> = &'a [(DataType, DataType)];
 /// A function to build function depending on the const parameters and the type of arguments (before coercion).
 ///
 /// The first argument is the const parameters and the second argument is the types of arguments.
-pub type FunctionFactory =
-    Box<dyn Fn(&[usize], &[DataType]) -> Option<Arc<Function>> + Send + Sync + 'static>;
+pub trait FunctionFactory =
+    Fn(&[usize], &[DataType]) -> Option<Arc<Function>> + Send + Sync + 'static;
 
 pub struct Function {
     pub signature: FunctionSignature,
@@ -73,9 +73,10 @@ pub enum FunctionEval {
         /// The result must be in the same length as the input arguments if its a column.
         eval: Box<dyn Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> + Send + Sync>,
     },
-    /// Set returning function that returns a series of values.
+    /// Set-returning-function that input a scalar and then return a set.
     SRF {
-        /// Given a set of arguments, return a series of chunks of result and the repeat time of each chunk.
+        /// Given multiple rows, return multiple sets of results
+        /// for each input row, along with the number of rows in each set.
         eval:
             Box<dyn Fn(&[ValueRef<AnyType>], usize) -> Vec<(Value<AnyType>, usize)> + Send + Sync>,
     },
@@ -118,7 +119,8 @@ pub enum FunctionID {
 #[derive(Default)]
 pub struct FunctionRegistry {
     pub funcs: HashMap<String, Vec<(Arc<Function>, usize)>>,
-    pub factories: HashMap<String, Vec<(FunctionFactory, usize)>>,
+    #[allow(clippy::type_complexity)]
+    pub factories: HashMap<String, Vec<(Box<dyn FunctionFactory>, usize)>>,
 
     /// Aliases map from alias function name to original function name.
     pub aliases: HashMap<String, String>,
@@ -288,11 +290,7 @@ impl FunctionRegistry {
             .push((Arc::new(func), id));
     }
 
-    pub fn register_function_factory(
-        &mut self,
-        name: &str,
-        factory: impl Fn(&[usize], &[DataType]) -> Option<Arc<Function>> + 'static + Send + Sync,
-    ) {
+    pub fn register_function_factory(&mut self, name: &str, factory: impl FunctionFactory) {
         let id = self.next_function_id(name);
         self.factories
             .entry(name.to_string())

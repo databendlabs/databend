@@ -361,7 +361,13 @@ pub fn try_unify_signature(
     dest_tys: impl IntoIterator<Item = &DataType> + ExactSizeIterator,
     auto_cast_rules: AutoCastRules,
 ) -> Result<Substitution> {
-    assert_eq!(src_tys.len(), dest_tys.len());
+    if src_tys.len() != dest_tys.len() {
+        return Err(ErrorCode::from_string_no_backtrace(format!(
+            "expected {} arguments, got {}",
+            dest_tys.len(),
+            src_tys.len()
+        )));
+    }
 
     let substs = src_tys
         .into_iter()

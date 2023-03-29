@@ -3758,27 +3758,7 @@ Functions overloads:
 0 typeof(T0) :: String
 0 unhex(String) :: String
 1 unhex(String NULL) :: String NULL
-0 unnest(Array(Array(Array(Array(Array(Array(Array(Array(Array(Array(T0 NULL)))))))))) NULL) :: Tuple(T0 NULL,)
-1 unnest(Array(Array(Array(Array(Array(Array(Array(Array(Array(Array(T0 NULL))))))))))) :: Tuple(T0 NULL,)
-2 unnest(Array(Array(Array(Array(Array(Array(Array(Array(Array(T0 NULL))))))))) NULL) :: Tuple(T0 NULL,)
-3 unnest(Array(Array(Array(Array(Array(Array(Array(Array(Array(T0 NULL)))))))))) :: Tuple(T0 NULL,)
-4 unnest(Array(Array(Array(Array(Array(Array(Array(Array(T0 NULL)))))))) NULL) :: Tuple(T0 NULL,)
-5 unnest(Array(Array(Array(Array(Array(Array(Array(Array(T0 NULL))))))))) :: Tuple(T0 NULL,)
-6 unnest(Array(Array(Array(Array(Array(Array(Array(T0 NULL))))))) NULL) :: Tuple(T0 NULL,)
-7 unnest(Array(Array(Array(Array(Array(Array(Array(T0 NULL)))))))) :: Tuple(T0 NULL,)
-8 unnest(Array(Array(Array(Array(Array(Array(T0 NULL)))))) NULL) :: Tuple(T0 NULL,)
-9 unnest(Array(Array(Array(Array(Array(Array(T0 NULL))))))) :: Tuple(T0 NULL,)
-10 unnest(Array(Array(Array(Array(Array(T0 NULL))))) NULL) :: Tuple(T0 NULL,)
-11 unnest(Array(Array(Array(Array(Array(T0 NULL)))))) :: Tuple(T0 NULL,)
-12 unnest(Array(Array(Array(Array(T0 NULL)))) NULL) :: Tuple(T0 NULL,)
-13 unnest(Array(Array(Array(Array(T0 NULL))))) :: Tuple(T0 NULL,)
-14 unnest(Array(Array(Array(T0 NULL))) NULL) :: Tuple(T0 NULL,)
-15 unnest(Array(Array(Array(T0 NULL)))) :: Tuple(T0 NULL,)
-16 unnest(Array(Array(T0 NULL)) NULL) :: Tuple(T0 NULL,)
-17 unnest(Array(Array(T0 NULL))) :: Tuple(T0 NULL,)
-18 unnest(Array(T0 NULL) NULL) :: Tuple(T0 NULL,)
-19 unnest(Array(T0 NULL)) :: Tuple(T0 NULL,)
-20 unnest(NULL) :: Tuple(NULL,)
+0 unnest FACTORY
 0 upper(String) :: String
 1 upper(String NULL) :: String NULL
 0 xor(Boolean, Boolean) :: Boolean
