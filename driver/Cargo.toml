@@ -1,6 +1,6 @@
 [package]
 name = "databend-driver"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 license = "Apache-2.0"
 description = "Databend Driver for Rust"
@@ -8,10 +8,18 @@ categories = ["database"]
 keywords = ["databend", "database", "sdk"]
 repository = "https://github.com/datafuselabs/databend-client"
 
+[features]
+default = ["rustls"]
+
+# Enable rustls for TLS support
+rustls = ["databend-client/rustls"]
+# Enable native-tls for TLS support
+native-tls = ["databend-client/native-tls"]
+
 [dependencies]
 anyhow = "1.0.70"
 chrono = { version = "0.4.24", default-features = false, features = ["clock"] }
-databend-client = { version = "0.1", path = "../core" }
+databend-client = { version = "0.1.2", path = "../core" }
 tokio = { version = "1.26.0", features = ["macros"] }
 tokio-stream = "0.1.12"
 
