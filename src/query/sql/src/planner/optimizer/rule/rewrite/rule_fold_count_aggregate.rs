@@ -27,6 +27,7 @@ use crate::plans::AggregateMode;
 use crate::plans::ConstantExpr;
 use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
+use crate::plans::Operator;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -66,6 +67,9 @@ impl Rule for RuleFoldCountAggregate {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
+        if match_project_set(s_expr) {
+            return Ok(());
+        }
         let agg: Aggregate = s_expr.plan().clone().try_into()?;
 
         if agg.mode == AggregateMode::Final || agg.mode == AggregateMode::Partial {
@@ -160,4 +164,16 @@ impl Rule for RuleFoldCountAggregate {
     fn pattern(&self) -> &SExpr {
         &self.pattern
     }
+}
+
+pub fn match_project_set(s_expr: &SExpr) -> bool {
+    if let Some(child) = s_expr.children().iter().next() {
+        // Check children
+        return match child.plan.rel_op() {
+            RelOp::ProjectSet => true,
+            _ => match_project_set(child),
+        };
+    }
+
+    false
 }
