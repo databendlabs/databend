@@ -23,7 +23,6 @@ use common_http::home::debug_home_handler;
 #[cfg(feature = "memory-profiling")]
 use common_http::jeprof::debug_jeprof_dump_handler;
 use common_http::pprof::debug_pprof_handler;
-use common_http::stack::debug_dump_stack;
 use common_http::HttpError;
 use common_http::HttpShutdownHandler;
 use common_meta_types::MetaNetworkError;
@@ -76,8 +75,7 @@ impl HttpService {
                 get(super::http::v1::metrics::metrics_handler),
             )
             .at("/debug/home", get(debug_home_handler))
-            .at("/debug/pprof/profile", get(debug_pprof_handler))
-            .at("/debug/async_tasks/dump", get(debug_dump_stack));
+            .at("/debug/pprof/profile", get(debug_pprof_handler));
 
         #[cfg(feature = "memory-profiling")]
         {

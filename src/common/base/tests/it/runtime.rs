@@ -12,24 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::task::Context;
-use std::task::Poll;
 use std::time::Duration;
 use std::time::Instant;
 
 use common_base::runtime::Runtime;
 use common_base::runtime::TrySpawn;
 use common_exception::Result;
-use futures::future::BoxFuture;
 use once_cell::sync::Lazy;
 use rand::distributions::Distribution;
 use rand::distributions::Uniform;
-use tokio::sync::broadcast::Receiver;
-use tokio::sync::mpsc::Sender;
 use tokio::sync::Semaphore;
 use tokio::time::sleep;
 
@@ -128,94 +121,4 @@ async fn test_runtime_try_spawn_batch() -> Result<()> {
     let result = futures::future::try_join_all(handlers).await.unwrap();
     assert_eq!(result.len(), 20);
     Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
-async fn test_aaa() -> Result<()> {
-    #[async_backtrace::framed]
-    async fn pending(duration: Duration) {
-        tokio::time::sleep(duration).await
-        // std::future::pending::<()>().await
-    }
-
-    #[async_backtrace::framed]
-    async fn foo() {
-        bar().await;
-    }
-
-    #[async_backtrace::framed]
-    async fn bar() {
-        futures::join!(fiz(), buz());
-    }
-
-    #[async_backtrace::framed]
-    async fn fiz() {
-        tokio::task::yield_now().await;
-    }
-
-    #[async_backtrace::framed]
-    async fn buz() {
-        println!("{}", baz().await);
-    }
-
-    #[async_backtrace::framed]
-    async fn baz() -> String {
-        async_backtrace::taskdump_tree(false)
-    }
-
-    // let (tx, rx) = tokio::sync::broadcast::channel(1);
-    //
-    let handle3 = tokio::spawn(async_backtrace::frame!(pending(Duration::from_secs(2))));
-    //
-    let handle4 = tokio::spawn(async_backtrace::frame!(pending(Duration::from_secs(4))));
-
-    // let handler = tokio::spawn(async_backtrace::frame!(futures::future::select(
-    //     Box::pin(recv(rx)),
-    //     Box::pin(pending()),
-    // )));
-
-    // let handler1 = tokio::spawn(async move {
-    //     let mut index = 0;
-    //     for index in 0..3 {
-    //         println!("index {}", index);
-    //         let (tx2, mut rx2) = tokio::sync::mpsc::channel(1);
-    //         if tx.send((true, tx2)).is_ok() {
-    //             if let Some(message) = rx2.recv().await {
-    //                 println!("{}", message);
-    //             }
-    //         }
-    //
-    //         tokio::time::sleep(Duration::from_secs(2)).await;
-    //         // if let Err(_) = tx.send((true, tx2)) {
-    //         //     break;
-    //         // }
-    //     }
-    // });
-
-    // handler.await;
-    // tx.send(())
-
-    handle3.await;
-    println!("{}", async_backtrace::taskdump_tree(false));
-    handle4.await;
-
-    // tokio::select! {
-    //     _ = tokio::spawn(async_backtrace::frame!(pending())) => {}
-    //     _ = foo() => {}
-    // };
-
-    Ok(())
-}
-
-#[async_backtrace::framed]
-async fn recv(mut receiver: Receiver<(bool, Sender<String>)>) {
-    while let Ok((wait_for_running_tasks, tx)) = receiver.recv().await {
-        if tx
-            .send(async_backtrace::taskdump_tree(wait_for_running_tasks))
-            .await
-            .is_err()
-        {
-            break;
-        }
-    }
 }
