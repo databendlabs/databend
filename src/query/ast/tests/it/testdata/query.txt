@@ -3880,3 +3880,77 @@ Query {
 }
 
 
+---------- Input ----------
+select * from range(1, 2)
+---------- Output ---------
+SELECT * FROM range(1, 2)
+---------- AST ------------
+Query {
+    span: Some(
+        0..25,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..25,
+            ),
+            distinct: false,
+            select_list: [
+                QualifiedName {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    exclude: None,
+                },
+            ],
+            from: [
+                TableFunction {
+                    span: Some(
+                        14..25,
+                    ),
+                    name: Identifier {
+                        name: "range",
+                        quote: None,
+                        span: Some(
+                            14..19,
+                        ),
+                    },
+                    params: [
+                        Literal {
+                            span: Some(
+                                20..21,
+                            ),
+                            lit: UInt64(
+                                1,
+                            ),
+                        },
+                        Literal {
+                            span: Some(
+                                23..24,
+                            ),
+                            lit: UInt64(
+                                2,
+                            ),
+                        },
+                    ],
+                    named_params: [],
+                    alias: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
