@@ -29,6 +29,7 @@ use crate::plans::FunctionCall;
 use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
+use crate::plans::WindowFuncType;
 
 // Visitor that find Expressions that match a particular predicate
 struct Finder<'a, F>
@@ -195,11 +196,22 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
         ScalarExpr::ComparisonExpr(scalar) => {
             prune_by_children(&scalar.left, columns) && prune_by_children(&scalar.right, columns)
         }
-        ScalarExpr::WindowFunction(scalar) => scalar
-            .agg_func
-            .args
-            .iter()
-            .all(|arg| prune_by_children(arg, columns)),
+        ScalarExpr::WindowFunction(scalar) => {
+            let flag = match &scalar.func {
+                WindowFuncType::Aggregate(agg) => {
+                    agg.args.iter().all(|arg| prune_by_children(arg, columns))
+                }
+                _ => false,
+            };
+            flag || scalar
+                .partition_by
+                .iter()
+                .all(|arg| prune_by_children(arg, columns))
+                || scalar
+                    .order_by
+                    .iter()
+                    .all(|arg| prune_by_children(&arg.expr, columns))
+        }
         ScalarExpr::AggregateFunction(scalar) => scalar
             .args
             .iter()

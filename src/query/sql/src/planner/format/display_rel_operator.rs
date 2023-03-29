@@ -137,7 +137,7 @@ pub fn format_scalar(_metadata: &MetadataRef, scalar: &ScalarExpr) -> String {
             comp.op.to_func_name(),
             format_scalar(_metadata, &comp.right)
         ),
-        ScalarExpr::WindowFunction(win) => win.agg_func.display_name.clone(),
+        ScalarExpr::WindowFunction(win) => win.display_name.clone(),
         ScalarExpr::AggregateFunction(agg) => agg.display_name.clone(),
         ScalarExpr::FunctionCall(func) => {
             format!(
@@ -542,8 +542,6 @@ fn window_to_format_tree(
 
     let frame = op.frame.to_string();
 
-    let agg_func = format_scalar(&metadata, &op.aggregate_function.scalar);
-
     FormatTreeNode::with_children(
         FormatContext::RelOp {
             metadata,
@@ -553,7 +551,7 @@ fn window_to_format_tree(
             vec![
                 FormatTreeNode::new(FormatContext::Text(format!(
                     "aggregate function: {}",
-                    agg_func
+                    op.function.func_name()
                 ))),
                 FormatTreeNode::new(FormatContext::Text(format!(
                     "partition items: [{}]",

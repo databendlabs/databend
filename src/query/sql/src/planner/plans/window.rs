@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
+use super::WindowFuncType;
 use crate::binder::WindowOrderByInfo;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::Distribution;
@@ -29,11 +30,15 @@ use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
 use crate::plans::WindowFuncFrame;
+use crate::IndexType;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Window {
     // aggregate scalar expressions, such as: sum(col1), count(*);
-    pub aggregate_function: ScalarItem,
+    // or gerneral window functions, such as: row_number(), rank();
+    pub index: IndexType,
+    pub function: WindowFuncType,
+
     // partition by scalar expressions
     pub partition_by: Vec<ScalarItem>,
     // order by
@@ -46,8 +51,19 @@ impl Window {
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
 
-        used_columns.insert(self.aggregate_function.index);
-        used_columns.extend(self.aggregate_function.scalar.used_columns());
+        used_columns.insert(self.index);
+
+        match &self.function {
+            WindowFuncType::Aggregate(agg) => {
+                for scalar in &agg.args {
+                    used_columns = used_columns
+                        .union(&scalar.used_columns())
+                        .cloned()
+                        .collect();
+                }
+            }
+            _ => {}
+        }
 
         for part in self.partition_by.iter() {
             used_columns.insert(part.index);
@@ -88,7 +104,7 @@ impl Operator for Window {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
 
         // Derive output columns
-        let output_columns = ColumnSet::from([self.aggregate_function.index]);
+        let output_columns = ColumnSet::from([self.index]);
 
         // Derive outer columns
         let outer_columns = input_prop

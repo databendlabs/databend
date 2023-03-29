@@ -23,6 +23,7 @@ use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
 use crate::plans::WindowFunc;
+use crate::plans::WindowFuncType;
 
 /// Controls how the visitor recursion should proceed.
 pub enum Recursion<V: ScalarVisitor> {
@@ -61,9 +62,25 @@ pub trait ScalarVisitor: Sized {
                                         stack.push(RecursionProcessing::Call(arg));
                                     }
                                 }
-                                ScalarExpr::WindowFunction(WindowFunc { agg_func, .. }) => {
-                                    for arg in &agg_func.args {
+                                ScalarExpr::WindowFunction(WindowFunc {
+                                    func,
+                                    partition_by,
+                                    order_by,
+                                    ..
+                                }) => {
+                                    match func {
+                                        WindowFuncType::Aggregate(agg) => {
+                                            for arg in &agg.args {
+                                                stack.push(RecursionProcessing::Call(arg));
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                    for arg in partition_by.iter() {
                                         stack.push(RecursionProcessing::Call(arg));
+                                    }
+                                    for arg in order_by.iter() {
+                                        stack.push(RecursionProcessing::Call(&arg.expr));
                                     }
                                 }
                                 ScalarExpr::ComparisonExpr(ComparisonExpr {

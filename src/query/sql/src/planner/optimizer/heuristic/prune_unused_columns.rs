@@ -20,6 +20,7 @@ use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::EvalScalar;
 use crate::plans::RelOperator;
+use crate::plans::WindowFuncType;
 use crate::MetadataRef;
 
 pub struct UnusedColumnPruner {
@@ -157,19 +158,22 @@ impl UnusedColumnPruner {
                 ))
             }
             RelOperator::Window(p) => {
-                if required.contains(&p.aggregate_function.index) {
-                    for c in p.aggregate_function.scalar.used_columns() {
-                        required.insert(c);
+                if required.contains(&p.index) {
+                    match &p.function {
+                        WindowFuncType::Aggregate(agg) => {
+                            agg.args.iter().for_each(|item| {
+                                required.extend(item.used_columns());
+                            });
+                        }
+                        _ => {}
                     }
+                    p.partition_by.iter().for_each(|item| {
+                        required.insert(item.index);
+                    });
+                    p.order_by.iter().for_each(|item| {
+                        required.insert(item.order_by_item.index);
+                    });
                 }
-
-                p.partition_by.iter().for_each(|item| {
-                    required.insert(item.index);
-                });
-
-                p.order_by.iter().for_each(|item| {
-                    required.insert(item.order_by_item.index);
-                });
 
                 Ok(SExpr::create_unary(
                     RelOperator::Window(p.clone()),

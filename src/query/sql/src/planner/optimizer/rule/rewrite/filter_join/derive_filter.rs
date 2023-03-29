@@ -20,6 +20,7 @@ use crate::optimizer::SExpr;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
+use crate::plans::WindowFuncType;
 use crate::IndexType;
 use crate::ScalarExpr;
 
@@ -142,8 +143,19 @@ fn replace_column(scalar: &mut ScalarExpr, col_to_scalar: &HashMap<&IndexType, &
             replace_column(&mut expr.right, col_to_scalar);
         }
         ScalarExpr::WindowFunction(expr) => {
-            for arg in expr.agg_func.args.iter_mut() {
+            match &mut expr.func {
+                WindowFuncType::Aggregate(agg) => {
+                    for arg in agg.args.iter_mut() {
+                        replace_column(arg, col_to_scalar);
+                    }
+                }
+                _ => {}
+            }
+            for arg in expr.partition_by.iter_mut() {
                 replace_column(arg, col_to_scalar)
+            }
+            for arg in expr.order_by.iter_mut() {
+                replace_column(&mut arg.expr, col_to_scalar)
             }
         }
         ScalarExpr::AggregateFunction(expr) => {

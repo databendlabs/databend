@@ -23,6 +23,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
 use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::Scalar;
 use educe::Educe;
 
@@ -77,10 +78,7 @@ impl ScalarExpr {
                 left.union(&right).cloned().collect()
             }
             ScalarExpr::WindowFunction(scalar) => {
-                let mut result = ColumnSet::new();
-                for scalar in &scalar.agg_func.args {
-                    result = result.union(&scalar.used_columns()).cloned().collect();
-                }
+                let mut result = scalar.func.used_columns();
                 for scalar in &scalar.partition_by {
                     result = result.union(&scalar.used_columns()).cloned().collect();
                 }
@@ -433,16 +431,11 @@ pub struct AggregateFunction {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct WindowFunc {
-    pub agg_func: AggregateFunction,
+    pub display_name: String,
     pub partition_by: Vec<ScalarExpr>,
+    pub func: WindowFuncType,
     pub order_by: Vec<WindowOrderBy>,
     pub frame: WindowFuncFrame,
-}
-
-impl WindowFunc {
-    pub fn display_name(&self) -> String {
-        format!("{}_with_window", self.agg_func.func_name)
-    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -533,6 +526,43 @@ impl PartialOrd for WindowFuncFrameBound {
                     },
                 },
             },
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub enum WindowFuncType {
+    Aggregate(AggregateFunction),
+    RowNumber,
+    Rank,
+    DenseRank,
+}
+
+impl WindowFuncType {
+    pub fn func_name(&self) -> String {
+        match self {
+            WindowFuncType::Aggregate(agg) => agg.func_name.to_string(),
+            WindowFuncType::RowNumber => "row_number".to_string(),
+            WindowFuncType::Rank => "rank".to_string(),
+            WindowFuncType::DenseRank => "dense_rank".to_string(),
+        }
+    }
+
+    pub fn used_columns(&self) -> ColumnSet {
+        match self {
+            WindowFuncType::Aggregate(agg) => {
+                agg.args.iter().flat_map(|arg| arg.used_columns()).collect()
+            }
+            _ => ColumnSet::new(),
+        }
+    }
+
+    pub fn return_type(&self) -> DataType {
+        match self {
+            WindowFuncType::Aggregate(agg) => *agg.return_type.clone(),
+            WindowFuncType::RowNumber | WindowFuncType::Rank | WindowFuncType::DenseRank => {
+                DataType::Number(NumberDataType::UInt64)
+            }
         }
     }
 }

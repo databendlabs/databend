@@ -86,6 +86,7 @@ use crate::plans::WindowFunc;
 use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncFrameUnits;
+use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
 use crate::BaseTableColumn;
 use crate::BindContext;
@@ -706,8 +707,9 @@ impl<'a> TypeChecker<'a> {
                         arguments
                     };
 
+                    let display_name = format!("{:#}", expr);
                     let new_agg_func = AggregateFunction {
-                        display_name: format!("{:#}", expr),
+                        display_name: display_name.clone(),
                         func_name,
                         distinct: false,
                         params,
@@ -733,15 +735,19 @@ impl<'a> TypeChecker<'a> {
                                 nulls_first: o.nulls_first,
                             })
                         }
+
+                        // TODO(window): support general window functions
+                        let func = WindowFuncType::Aggregate(new_agg_func.clone());
+
                         self.resolve_window(
                             *span,
-                            new_agg_func.clone(),
+                            display_name,
+                            func,
                             partitions,
                             order_bys,
                             window.window_frame.clone(),
                             data_type.clone(),
-                        )
-                        .await?
+                        )?
                     } else {
                         Box::new((new_agg_func.into(), data_type))
                     }
@@ -950,12 +956,11 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
-    pub async fn resolve_window(
+    pub fn resolve_window(
         &mut self,
-        _span: Span,
-        agg_func: AggregateFunction,
+        span: Span,
+        display_name: String,
+        func: WindowFuncType,
         partitions: Vec<ScalarExpr>,
         order_bys: Vec<WindowOrderBy>,
         window_frame: Option<WindowFrame>,
@@ -1013,10 +1018,11 @@ impl<'a> TypeChecker<'a> {
             (units, start, end)
         };
 
-        Self::check_frame_bound(start.clone(), end.clone())?;
+        Self::check_frame_bound(span, start.clone(), end.clone())?;
 
         let window_func = WindowFunc {
-            agg_func,
+            display_name,
+            func,
             partition_by: partitions,
             order_by: order_bys,
             frame: WindowFuncFrame {
@@ -1040,14 +1046,19 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    fn check_frame_bound(start: WindowFuncFrameBound, end: WindowFuncFrameBound) -> Result<()> {
+    fn check_frame_bound(
+        span: Span,
+        start: WindowFuncFrameBound,
+        end: WindowFuncFrameBound,
+    ) -> Result<()> {
         match start {
             WindowFuncFrameBound::CurrentRow => {
                 if start > end {
                     return Err(ErrorCode::SemanticError(format!(
                         "frame semantic error, start:{:?}, end:{:?}",
                         start, end
-                    )));
+                    ))
+                    .set_span(span));
                 }
             }
             _ => {
@@ -1055,7 +1066,8 @@ impl<'a> TypeChecker<'a> {
                     return Err(ErrorCode::SemanticError(format!(
                         "frame semantic error, start:{:?}, end:{:?}",
                         start, end
-                    )));
+                    ))
+                    .set_span(span));
                 }
             }
         }
@@ -1066,7 +1078,8 @@ impl<'a> TypeChecker<'a> {
                     return Err(ErrorCode::SemanticError(format!(
                         "frame semantic error, start:{:?}, end:{:?}",
                         start, end
-                    )));
+                    ))
+                    .set_span(span));
                 }
             }
             _ => {
@@ -1074,7 +1087,8 @@ impl<'a> TypeChecker<'a> {
                     return Err(ErrorCode::SemanticError(format!(
                         "frame semantic error, start:{:?}, end:{:?}",
                         start, end
-                    )));
+                    ))
+                    .set_span(span));
                 }
             }
         }
