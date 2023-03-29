@@ -29,8 +29,8 @@ query IIII
 SELECT empid,dept,month,sales FROM (
     SELECT * FROM monthly_sales_1
         UNPIVOT(sales FOR month IN (jan, feb, mar, april))
-        ORDER BY empid;
-)
+        ORDER BY empid
+);
 ----
 1	electronics	jan	100
 1	electronics	feb	200
@@ -47,3 +47,4 @@ SELECT empid,dept,month,sales FROM (
 
 statement ok
 drop table monthly_sales_1;
+
