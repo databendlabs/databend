@@ -19,7 +19,6 @@ use arrow_array::Array;
 use arrow_array::ArrowPrimitiveType;
 use arrow_array::BooleanArray;
 use arrow_array::LargeBinaryArray;
-use arrow_array::LargeStringArray;
 use arrow_array::NullArray;
 use arrow_array::PrimitiveArray;
 use arrow_buffer::buffer::BooleanBuffer;
@@ -187,11 +186,7 @@ impl Column {
     }
 
     pub fn from_arrow_rs(array: Arc<dyn Array>, field: &Field) -> Result<Self, ArrowError> {
-        if let Some(extent) = field
-            .metadata()
-            .get(EXTENSION_KEY)
-            .and_then(|v| Some(v.as_str()))
-        {
+        if let Some(extent) = field.metadata().get(EXTENSION_KEY).map(|v| v.as_str()) {
             match extent {
                 ARROW_EXT_TYPE_EMPTY_ARRAY => return Ok(Column::EmptyArray { len: array.len() }),
                 ARROW_EXT_TYPE_EMPTY_MAP => return Ok(Column::EmptyMap { len: array.len() }),
@@ -221,11 +216,7 @@ impl Column {
                 let values =
                     unsafe { std::mem::transmute::<_, Buffer2<u8>>(data.buffers()[1].clone()) };
 
-                match field
-                    .metadata()
-                    .get(EXTENSION_KEY)
-                    .and_then(|v| Some(v.as_str()))
-                {
+                match field.metadata().get(EXTENSION_KEY).map(|v| v.as_str()) {
                     Some(ARROW_EXT_TYPE_VARIANT) => Column::Variant(StringColumn {
                         offsets,
                         data: values,

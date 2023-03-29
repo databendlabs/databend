@@ -187,7 +187,7 @@ impl TryFrom<&ArrowField> for DataType {
     type Error = ArrowError;
 
     fn try_from(f: &ArrowField) -> Result<Self, ArrowError> {
-        match f.metadata().get("Extension").and_then(|v| Some(v.as_str())) {
+        match f.metadata().get("Extension").map(|v| v.as_str()) {
             Some(ARROW_EXT_TYPE_EMPTY_ARRAY) => return Ok(DataType::EmptyArray),
             Some(ARROW_EXT_TYPE_EMPTY_MAP) => return Ok(DataType::EmptyMap),
             Some(ARROW_EXT_TYPE_VARIANT) => return Ok(DataType::Variant),
