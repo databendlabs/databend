@@ -20,11 +20,13 @@ use common_exception::Result;
 use crate::optimizer::hyper_dp::util::is_subset;
 use crate::IndexType;
 
+#[derive(Clone, Debug)]
 struct NeighborInfo {
     neighbors: Vec<IndexType>,
     // filters:
 }
 
+#[derive(Clone, Debug)]
 struct QueryEdge {
     neighbors: Vec<NeighborInfo>,
     children: HashMap<IndexType, QueryEdge>,
@@ -41,6 +43,7 @@ impl QueryEdge {
 
 // The struct defines `QueryGraph` which contains node and edge
 // Node represents a base relation
+#[derive(Clone, Debug)]
 pub struct QueryGraph {
     root_edge: QueryEdge,
 }
@@ -61,7 +64,7 @@ impl QueryGraph {
             }
             edge = edge.children.get(node).unwrap();
             for neighbor_info in edge.neighbors.iter() {
-                if is_subset(neighbor, &neighbor_info.neighbors) {
+                if is_subset(&neighbor_info.neighbors, neighbor) {
                     return Ok(true);
                 }
             }

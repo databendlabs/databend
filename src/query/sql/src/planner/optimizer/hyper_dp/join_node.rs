@@ -17,17 +17,15 @@ use crate::IndexType;
 #[derive(Clone, Default, Debug)]
 pub struct JoinNode {
     pub leaves: Vec<IndexType>,
-    pub left: Box<JoinNode>,
-    pub right: Box<JoinNode>,
+    pub children: Vec<JoinNode>,
     pub cost: f64,
 }
 
 impl JoinNode {
-    pub fn new(leaves: Vec<IndexType>, left: JoinNode, right: JoinNode, cost: f64) -> Self {
+    pub fn new(leaves: Vec<IndexType>, children: Vec<JoinNode>, cost: f64) -> Self {
         Self {
+            children,
             leaves,
-            left: Box::new(left),
-            right: Box::new(right),
             cost,
         }
     }

@@ -73,8 +73,7 @@ impl DPhpy {
 
         match &s_expr.plan {
             RelOperator::Scan(op) => {
-                debug_assert!(parent.is_some());
-                let join_relation = JoinRelation::new(&s_expr, &parent.unwrap());
+                let join_relation = JoinRelation::new(&s_expr);
                 self.table_index_map
                     .insert(op.table_index, self.join_relations.len() as IndexType);
                 self.join_relations.push(join_relation);
@@ -156,8 +155,9 @@ impl DPhpy {
             }
         }
 
+        dbg!("Start optimize");
         let optimized = self.solve()?;
-
+        dbg!(optimized);
         // Get all join relations in `relation_set_tree`
         let all_relations = self
             .relation_set_tree
@@ -182,14 +182,14 @@ impl DPhpy {
             let nodes = self.relation_set_tree.get_relation_set_by_index(idx)?;
             let join = JoinNode {
                 leaves: nodes.clone(),
+                children: vec![],
                 cost: relation.cost()?,
-                ..Default::default()
             };
             let _ = self.dp_table.insert(nodes, join);
         }
 
         // Choose all nodes as enumeration start node once (desc order)
-        for idx in self.join_relations.len()..0 {
+        for idx in (0..self.join_relations.len()).rev() {
             // Get node from `relation_set_tree`
             let node = self.relation_set_tree.get_relation_set_by_index(idx)?;
             // Emit node as subgraph
@@ -211,6 +211,9 @@ impl DPhpy {
     // EmitCsg will take a non-empty subset of hyper_graph's nodes(V) which contains a connected subgraph.
     // Then it will possibly generate a connected complement which will combine `nodes` to be a csg-cmp-pair.
     fn emit_csg(&mut self, nodes: &[IndexType]) -> Result<bool> {
+        if nodes.len() == self.join_relations.len() {
+            return Ok(true);
+        }
         let mut forbidden_nodes: HashSet<IndexType> = (0..(nodes[0])).collect();
         forbidden_nodes.extend(nodes);
 
@@ -268,8 +271,8 @@ impl DPhpy {
             .union(&neighbors.iter().cloned().collect())
             .cloned()
             .collect();
-        for neighbor in neighbors.iter() {
-            if !self.enumerate_csg_rec(&merged_sets[*neighbor], &new_forbidden_nodes)? {
+        for (idx, _) in neighbors.iter().enumerate() {
+            if !self.enumerate_csg_rec(&merged_sets[idx], &new_forbidden_nodes)? {
                 return Ok(false);
             }
         }
@@ -289,22 +292,20 @@ impl DPhpy {
             // swap left_join and right_join
             std::mem::swap(&mut left_join, &mut right_join);
         }
-        let cost;
         let parent_node = self.dp_table.get(&parent_set);
         // Todo: consider cross join? aka. there is no join condition
-        if let Some(plan) = parent_node {
-            cost = plan.cost;
-        } else {
-            cost = left_join.cost * COST_FACTOR_COMPUTE_PER_ROW
-                + right_join.cost * COST_FACTOR_HASH_TABLE_PER_ROW;
-        }
+        let cost = left_join.cost * COST_FACTOR_COMPUTE_PER_ROW
+            + right_join.cost * COST_FACTOR_HASH_TABLE_PER_ROW;
 
         let join_node = JoinNode::new(
             parent_set.clone(),
-            left_join.clone(),
-            right_join.clone(),
+            vec![left_join.clone(), right_join.clone()],
             cost,
         );
+
+        if parent_set.len() == self.join_relations.len() {
+            dbg!(&parent_set, &join_node);
+        }
 
         if parent_node.is_none() || parent_node.unwrap().cost > join_node.cost {
             // Update `dp_table`
@@ -345,8 +346,8 @@ impl DPhpy {
             .union(&neighbor_set.iter().cloned().collect())
             .cloned()
             .collect();
-        for neighbor in neighbor_set.iter() {
-            if !self.enumerate_cmp_rec(left, &merged_sets[*neighbor], &new_forbidden_nodes)? {
+        for (idx, _) in neighbor_set.iter().enumerate() {
+            if !self.enumerate_cmp_rec(left, &merged_sets[idx], &new_forbidden_nodes)? {
                 return Ok(false);
             }
         }

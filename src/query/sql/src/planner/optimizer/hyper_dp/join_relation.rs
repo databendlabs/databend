@@ -27,7 +27,7 @@ pub struct JoinRelation {
 }
 
 impl JoinRelation {
-    pub fn new(s_expr: &SExpr, _parent: &SExpr) -> Self {
+    pub fn new(s_expr: &SExpr) -> Self {
         Self {
             s_expr: s_expr.clone(),
             // parent_s_expr: parent.clone(),
