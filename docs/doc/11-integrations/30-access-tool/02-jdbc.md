@@ -17,8 +17,6 @@ To connect to Databend from DBeaver with the Databend JDBC driver, you need to a
 
 1. In DBeaver, select **Database** > **Driver Manager** to open the Driver Manager, then click **New** to create a new driver.
 
-![Alt text](../../../public/img/integration/jdbc-select-driver.png)
-
 2. On the **Settings** tab, enter the required information for the new driver as follows:
 
     - **Driver**: databend
@@ -45,6 +43,8 @@ To connect to Databend from DBeaver with the Databend JDBC driver, you need to a
 ### Step 2. Create a Connection with Databend JDBC Driver
 
 1. In DBeaver, search for and select `databend` on **Database** > **New Database Connection** first, and then click **Next**.
+
+![Alt text](../../../public/img/integration/jdbc-select-driver.png)
 
 2. Set your connection settings. The default settings can connect to a local instance of Databend.
 
