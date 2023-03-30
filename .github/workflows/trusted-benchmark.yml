@@ -25,7 +25,7 @@ env:
 jobs:
   metadata:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     outputs:
       sha: ${{ steps.metadata.outputs.sha }}
       head_sha: ${{ steps.metadata.outputs.head_sha }}
@@ -107,7 +107,7 @@ jobs:
   local:
     needs: metadata
     timeout-minutes: 60
-    runs-on: [self-hosted, X64, Linux, perf]
+    runs-on: [self-hosted, X64, Linux, 16c32g]
     strategy:
       matrix:
         dataset:
@@ -176,7 +176,7 @@ jobs:
   docker:
     needs: metadata
     timeout-minutes: 10
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     outputs:
       tag: ${{ steps.prepare.outputs.tag }}
     steps:
@@ -228,7 +228,7 @@ jobs:
   cloud:
     needs: [metadata, docker]
     timeout-minutes: 90
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     strategy:
       matrix:
         dataset:
@@ -280,7 +280,7 @@ jobs:
 
   comment_on_pr:
     name: comment
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: [metadata, local, cloud]
     if: needs.metadata.outputs.source == 'pr'
     steps:
@@ -335,7 +335,7 @@ jobs:
 
   archive_for_release:
     name: archive
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: [metadata, local, cloud]
     if: needs.metadata.outputs.source == 'release'
     strategy:
