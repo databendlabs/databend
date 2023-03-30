@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::Result;
+
+use crate::optimizer::hyper_dp::DPhpy;
+use crate::optimizer::RelExpr;
 use crate::plans::JoinType;
 use crate::IndexType;
 use crate::ScalarExpr;
@@ -23,4 +27,12 @@ pub struct JoinNode {
     pub children: Vec<JoinNode>,
     pub join_conditions: Vec<(ScalarExpr, ScalarExpr)>,
     pub cost: f64,
+}
+
+impl JoinNode {
+    pub fn cardinality(&self, dphpy: &DPhpy) -> Result<f64> {
+        let s_expr = dphpy.s_expr(self)?;
+        let rel_expr = RelExpr::with_s_expr(&s_expr);
+        Ok(rel_expr.derive_relational_prop()?.cardinality)
+    }
 }

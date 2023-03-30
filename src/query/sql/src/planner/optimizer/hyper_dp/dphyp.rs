@@ -208,7 +208,7 @@ impl DPhpy {
                 leaves: nodes.clone(),
                 children: vec![],
                 join_conditions: vec![],
-                cost: relation.cost()?,
+                cost: relation.cardinality()?,
             };
             let _ = self.dp_table.insert(nodes, join);
         }
@@ -315,7 +315,9 @@ impl DPhpy {
         let mut right_join = self.dp_table.get(right).unwrap();
         let parent_set = union(left, right);
 
-        if left_join.cost < right_join.cost {
+        let left_cardinality = left_join.cardinality(self)?;
+        let right_cardinality = right_join.cardinality(self)?;
+        if left_cardinality < right_cardinality {
             // swap left_join and right_join
             std::mem::swap(&mut left_join, &mut right_join);
             for join_condition in join_conditions.iter_mut() {
@@ -328,8 +330,8 @@ impl DPhpy {
                 join_type: JoinType::Inner,
                 leaves: parent_set.clone(),
                 children: vec![left_join.clone(), right_join.clone()],
-                cost: left_join.cost * COST_FACTOR_COMPUTE_PER_ROW
-                    + right_join.cost * COST_FACTOR_HASH_TABLE_PER_ROW,
+                cost: left_cardinality * COST_FACTOR_COMPUTE_PER_ROW
+                    + right_cardinality * COST_FACTOR_HASH_TABLE_PER_ROW,
                 join_conditions,
             }
         } else {
@@ -337,7 +339,7 @@ impl DPhpy {
                 join_type: JoinType::Cross,
                 leaves: parent_set.clone(),
                 children: vec![left_join.clone(), right_join.clone()],
-                cost: left_join.cost * right_join.cost,
+                cost: left_cardinality * right_cardinality,
                 join_conditions: vec![],
             }
         };
@@ -415,7 +417,7 @@ impl DPhpy {
         Ok(new_s_expr)
     }
 
-    fn s_expr(&self, join_node: &JoinNode) -> Result<SExpr> {
+    pub fn s_expr(&self, join_node: &JoinNode) -> Result<SExpr> {
         // Traverse JoinNode
         if join_node.children.is_empty() {
             // The node is leaf, get relation for `join_relations`
