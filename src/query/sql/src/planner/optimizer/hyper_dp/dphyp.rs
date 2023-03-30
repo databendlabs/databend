@@ -24,6 +24,7 @@ use crate::optimizer::hyper_dp::query_graph::QueryGraph;
 use crate::optimizer::hyper_dp::util::intersect;
 use crate::optimizer::hyper_dp::util::union;
 use crate::optimizer::SExpr;
+use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::IndexType;
 use crate::MetadataRef;
@@ -162,15 +163,20 @@ impl DPhpy {
                     .get_relation_set(&right_relation_set)?;
                 // Try to create edges if `left_relation_set` and `right_relation_set` are not disjoint
                 if !intersect(&left_relation_set, &right_relation_set) {
-                    self.query_graph
-                        .create_edges(&left_relation_set, &right_relation_set)?;
-                    self.query_graph
-                        .create_edges(&right_relation_set, &left_relation_set)?;
+                    self.query_graph.create_edges(
+                        &left_relation_set,
+                        &right_relation_set,
+                        (left_condition.clone(), right_condition.clone()),
+                    )?;
+                    self.query_graph.create_edges(
+                        &right_relation_set,
+                        &left_relation_set,
+                        (right_condition.clone(), left_condition.clone()),
+                    )?;
                 }
                 continue;
             }
         }
-        dbg!(&self.query_graph);
         let optimized = self.solve()?;
         // Get all join relations in `relation_set_tree`
         let all_relations = self
@@ -181,6 +187,7 @@ impl DPhpy {
                 dbg!(final_plan);
                 todo!("Convert final plan to SExpr")
             } else {
+                // Maybe exist cross join, which make graph disconnected
                 Ok((s_expr.clone(), false))
             }
         } else {
@@ -195,8 +202,10 @@ impl DPhpy {
             // Get nodes  in `relation_set_tree`
             let nodes = self.relation_set_tree.get_relation_set_by_index(idx)?;
             let join = JoinNode {
+                join_type: JoinType::Inner,
                 leaves: nodes.clone(),
                 children: vec![],
+                join_conditions: vec![],
                 cost: relation.cost()?,
             };
             let _ = self.dp_table.insert(nodes, join);
@@ -243,9 +252,9 @@ impl DPhpy {
                 .relation_set_tree
                 .get_relation_set_by_index(*neighbor)?;
             // Check if neighbor is connected with `nodes`
-            if self.query_graph.is_connected(nodes, &neighbor_relations)?
-                && !self.emit_csg_cmp(nodes, &neighbor_relations)?
-            {
+            let (connected, join_conditions) =
+                self.query_graph.is_connected(nodes, &neighbor_relations)?;
+            if connected && !self.emit_csg_cmp(nodes, &neighbor_relations, join_conditions)? {
                 return Ok(false);
             }
             if !self.enumerate_cmp_rec(nodes, &neighbor_relations, &forbidden_nodes)? {
@@ -292,7 +301,12 @@ impl DPhpy {
     }
 
     // EmitCsgCmp will join the optimal plan from left and right
-    fn emit_csg_cmp(&mut self, left: &[IndexType], right: &[IndexType]) -> Result<bool> {
+    fn emit_csg_cmp(
+        &mut self,
+        left: &[IndexType],
+        right: &[IndexType],
+        join_conditions: Vec<(ScalarExpr, ScalarExpr)>,
+    ) -> Result<bool> {
         debug_assert!(self.dp_table.contains_key(left));
         debug_assert!(self.dp_table.contains_key(right));
         let mut left_join = self.dp_table.get(left).unwrap();
@@ -304,19 +318,24 @@ impl DPhpy {
             std::mem::swap(&mut left_join, &mut right_join);
         }
         let parent_node = self.dp_table.get(&parent_set);
-        // Todo: consider cross join? aka. there is no join condition
-        let cost = left_join.cost * COST_FACTOR_COMPUTE_PER_ROW
-            + right_join.cost * COST_FACTOR_HASH_TABLE_PER_ROW;
-
-        let join_node = JoinNode::new(
-            parent_set.clone(),
-            vec![left_join.clone(), right_join.clone()],
-            cost,
-        );
-
-        if parent_set.len() == self.join_relations.len() {
-            dbg!(&parent_set, &join_node.cost);
-        }
+        let join_node = if !join_conditions.is_empty() {
+            JoinNode {
+                join_type: JoinType::Inner,
+                leaves: parent_set.clone(),
+                children: vec![left_join.clone(), right_join.clone()],
+                cost: left_join.cost * COST_FACTOR_COMPUTE_PER_ROW
+                    + right_join.cost * COST_FACTOR_HASH_TABLE_PER_ROW,
+                join_conditions,
+            }
+        } else {
+            JoinNode {
+                join_type: JoinType::Cross,
+                leaves: parent_set.clone(),
+                children: vec![left_join.clone(), right_join.clone()],
+                cost: left_join.cost * right_join.cost,
+                join_conditions: vec![],
+            }
+        };
 
         if parent_node.is_none() || parent_node.unwrap().cost > join_node.cost {
             // Update `dp_table`
@@ -344,9 +363,11 @@ impl DPhpy {
                 .get_relation_set_by_index(*neighbor)?;
             // Merge `right` with `neighbor_relations`
             let merged_relation_set = union(right, &neighbor_relations);
+            let (connected, join_conditions) =
+                self.query_graph.is_connected(left, &merged_relation_set)?;
             if self.dp_table.contains_key(&merged_relation_set)
-                && self.query_graph.is_connected(left, &merged_relation_set)?
-                && !self.emit_csg_cmp(left, &merged_relation_set)?
+                && connected
+                && !self.emit_csg_cmp(left, &merged_relation_set, join_conditions)?
             {
                 return Ok(false);
             }

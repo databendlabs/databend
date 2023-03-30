@@ -12,21 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::plans::JoinType;
 use crate::IndexType;
+use crate::ScalarExpr;
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Debug)]
 pub struct JoinNode {
+    pub join_type: JoinType,
     pub leaves: Vec<IndexType>,
     pub children: Vec<JoinNode>,
+    pub join_conditions: Vec<(ScalarExpr, ScalarExpr)>,
     pub cost: f64,
 }
 
-impl JoinNode {
-    pub fn new(leaves: Vec<IndexType>, children: Vec<JoinNode>, cost: f64) -> Self {
-        Self {
-            children,
-            leaves,
-            cost,
-        }
-    }
-}
+impl JoinNode {}

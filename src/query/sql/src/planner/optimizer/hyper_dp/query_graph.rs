@@ -19,11 +19,12 @@ use common_exception::Result;
 
 use crate::optimizer::hyper_dp::util::is_subset;
 use crate::IndexType;
+use crate::ScalarExpr;
 
 #[derive(Clone, Debug)]
 struct NeighborInfo {
     neighbors: Vec<IndexType>,
-    // filters:
+    join_conditions: Vec<(ScalarExpr, ScalarExpr)>,
 }
 
 #[derive(Clone, Debug)]
@@ -56,7 +57,11 @@ impl QueryGraph {
     }
 
     // Check if `nodes` is connected to `neighbor`
-    pub fn is_connected(&self, nodes: &[IndexType], neighbor: &[IndexType]) -> Result<bool> {
+    pub fn is_connected(
+        &self,
+        nodes: &[IndexType],
+        neighbor: &[IndexType],
+    ) -> Result<(bool, Vec<(ScalarExpr, ScalarExpr)>)> {
         let mut edge = &self.root_edge;
         for node in nodes.iter() {
             if !edge.children.contains_key(node) {
@@ -65,11 +70,11 @@ impl QueryGraph {
             edge = edge.children.get(node).unwrap();
             for neighbor_info in edge.neighbors.iter() {
                 if is_subset(&neighbor_info.neighbors, neighbor) {
-                    return Ok(true);
+                    return Ok((true, neighbor_info.join_conditions.clone()));
                 }
             }
         }
-        Ok(false)
+        Ok((false, vec![]))
     }
 
     // Get all neighbors of `nodes` which are not in `forbidden_nodes`
@@ -111,17 +116,23 @@ impl QueryGraph {
     }
 
     // Create edges for left set and right set
-    pub fn create_edges(&mut self, left_set: &[IndexType], right_set: &[IndexType]) -> Result<()> {
+    pub fn create_edges(
+        &mut self,
+        left_set: &[IndexType],
+        right_set: &[IndexType],
+        join_condition: (ScalarExpr, ScalarExpr),
+    ) -> Result<()> {
         let left_edge = self.create_edges_for_relation_set(left_set)?;
-        for neighbor_info in left_edge.neighbors.iter() {
+        for neighbor_info in left_edge.neighbors.iter_mut() {
             if neighbor_info.neighbors.eq(right_set) {
-                // Todo: add filter info to `neighbor_info`? Maybe used in emit_csg
+                neighbor_info.join_conditions.push(join_condition);
                 return Ok(());
             }
         }
 
         let neighbor_info = NeighborInfo {
             neighbors: right_set.to_vec(),
+            join_conditions: vec![join_condition],
         };
         left_edge.neighbors.push(neighbor_info);
         Ok(())
