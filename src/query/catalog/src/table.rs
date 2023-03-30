@@ -297,7 +297,7 @@ pub trait Table: Sync + Send {
         target: CompactTarget,
         limit: Option<usize>,
         pipeline: &mut Pipeline,
-    ) -> Result<bool> {
+    ) -> Result<()> {
         let (_, _, _, _) = (ctx, target, limit, pipeline);
 
         Err(ErrorCode::Unimplemented(format!(
@@ -383,6 +383,7 @@ pub struct ColumnStatistics {
 pub enum CompactTarget {
     Blocks,
     Segments,
+    None,
 }
 
 pub enum AppendMode {
