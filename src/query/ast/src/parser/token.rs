@@ -937,9 +937,10 @@ impl TokenKind {
         )
     }
 
-    pub fn is_reserved_function_name(&self, after_as: bool) -> bool {
-        match self {
-            | TokenKind::ALL
+    pub fn is_reserved_function_name(&self) -> bool {
+        matches!(
+            self,
+            TokenKind::ALL
             // | TokenKind::ANALYSE
             | TokenKind::ANALYZE
             | TokenKind::AND
@@ -1049,7 +1050,7 @@ impl TokenKind {
             // | TokenKind::XMLROOT
             // | TokenKind::XMLSERIALIZE
             // | TokenKind::XMLTABLE
-            | TokenKind::WHEN => true,
+            | TokenKind::WHEN
             | TokenKind::ARRAY
             | TokenKind::AS
             // | TokenKind::CHAR
@@ -1071,7 +1072,6 @@ impl TokenKind {
             | TokenKind::ORDER
             | TokenKind::OVER
             | TokenKind::ROWS
-            | TokenKind::RANGE
             // | TokenKind::PRECISION
             // | TokenKind::RETURNING
             | TokenKind::TO
@@ -1083,9 +1083,7 @@ impl TokenKind {
             | TokenKind::DATE_SUB
             | TokenKind::DATE_TRUNC
             | TokenKind::IGNORE_RESULT
-            if !after_as => true,
-            _ => false
-        }
+        )
     }
 
     pub fn is_reserved_ident(&self, after_as: bool) -> bool {
