@@ -58,7 +58,7 @@ async fn test_sled_iter() -> anyhow::Result<()> {
         let tree = SledTree::open(&tc.db, tc.tree_name.clone(), true)?;
         let log_tree = tree.key_space::<Logs>();
 
-        log_tree.append(&logs).await?;
+        log_tree.append(logs.clone()).await?;
         tc.tree_name
     };
 
@@ -68,7 +68,7 @@ async fn test_sled_iter() -> anyhow::Result<()> {
         let tree = SledTree::open(&tc.db, tc.tree_name.clone(), true)?;
         let log_tree = tree.key_space::<Logs>();
 
-        log_tree.append(&logs).await?;
+        log_tree.append(logs.clone()).await?;
         tc.tree_name
     };
 
@@ -100,8 +100,8 @@ async fn test_sled_iter() -> anyhow::Result<()> {
         }
 
         let want = vec![
-            "2, Entry { log_id: LogId { leader_id: LeaderId { term: 1, node_id: 0 }, index: 2 }, payload: Blank }".to_string(),
-            "4, Entry { log_id: LogId { leader_id: LeaderId { term: 3, node_id: 0 }, index: 4 }, payload: Normal(LogEntry { txid: None, time_ms: None, cmd: UpsertKV(UpsertKV { key: \"foo\", seq: Exact(0), value: Update(\"[binary]\"), value_meta: None }) }) }".to_string(),
+            "2, Entry { log_id: LogId { leader_id: LeaderId { term: 1, node_id: 0 }, index: 2 }, payload: blank }".to_string(),
+            "4, Entry { log_id: LogId { leader_id: LeaderId { term: 3, node_id: 0 }, index: 4 }, payload: normal }".to_string(),
         ];
 
         assert_eq!(want, got);

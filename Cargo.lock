@@ -91,9 +91,9 @@ dependencies = [
 
 [[package]]
 name = "anyerror"
-version = "0.1.7"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4e12e6ab32fef5c165c118177ad96b5b056bdcbb154658e30750cbe80380481"
+checksum = "eef94a982ad4ebc3036bb072f45fcbb63a6b1b91932a6f5d982a166d8d529916"
 dependencies = [
  "anyhow",
  "serde",
@@ -1970,7 +1970,7 @@ dependencies = [
  "maplit",
  "num",
  "once_cell",
- "openraft 0.8.3",
+ "openraft 0.8.4",
  "pretty_assertions",
  "serde",
  "serde_json",
@@ -1990,7 +1990,7 @@ dependencies = [
  "common-meta-types",
  "common-tracing",
  "once_cell",
- "openraft 0.8.3",
+ "openraft 0.8.4",
  "pretty_assertions",
  "serde",
  "serde_json",
@@ -2038,7 +2038,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "once_cell",
- "openraft 0.8.3",
+ "openraft 0.8.4",
  "prost",
  "prost-build",
  "regex",
@@ -3268,7 +3268,7 @@ dependencies = [
  "common-proto-conv",
  "common-protos",
  "common-tracing",
- "openraft 0.8.3",
+ "openraft 0.8.4",
  "serde",
  "serde_json",
  "tokio",
@@ -7066,8 +7066,8 @@ dependencies = [
 
 [[package]]
 name = "openraft"
-version = "0.8.3"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.3-alpha.2#ae28352a303d14dddbb20cd351d2c93d0b8db3a4"
+version = "0.8.4"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.4-alpha.1#8f83d590a5b417dcfa4133a268ba31fa52c6d4c5"
 dependencies = [
  "anyerror",
  "anyhow",
