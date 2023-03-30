@@ -69,7 +69,7 @@ pub async fn main() -> Result<(), ArrowError> {
     // Authenticate
     let url = format!("{protocol}://{}:{}", args.host, args.port);
     let endpoint = endpoint(&args, url)?;
-    let is_repl = atty::is(atty::Stream::Stdout);
+    let is_repl = atty::is(atty::Stream::Stdin);
 
     let mut session =
         session::Session::try_new(endpoint, &args.user, &args.password, is_repl).await?;
