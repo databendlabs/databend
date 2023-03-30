@@ -23,14 +23,12 @@ use crate::IndexType;
 
 pub struct JoinRelation {
     s_expr: SExpr,
-    // parent_s_expr: SExpr,
 }
 
 impl JoinRelation {
     pub fn new(s_expr: &SExpr) -> Self {
         Self {
             s_expr: s_expr.clone(),
-            // parent_s_expr: parent.clone(),
         }
     }
 

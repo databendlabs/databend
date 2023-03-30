@@ -57,23 +57,26 @@ impl DPhpy {
         }
     }
 
-    // Traverse the s_expr and get all base tables and join conditions
-    fn get_base_tables(
+    // Traverse the s_expr and get all base relations and join conditions
+    fn get_base_relations(
         &mut self,
         s_expr: &SExpr,
         join_conditions: &mut Vec<(ScalarExpr, ScalarExpr)>,
-        parent: Option<SExpr>,
+        join_child: bool,
+        join_relation: Option<SExpr>,
     ) -> Result<bool> {
         // Start to traverse and stop when meet join
-        let mut s_expr = s_expr.clone();
-        while s_expr.children().len() == 1 && !s_expr.is_pattern() {
-            // Update `s_expr` to its child
-            s_expr = s_expr.children()[0].clone();
+        if s_expr.is_pattern() {
+            return Ok(false);
         }
 
         match &s_expr.plan {
             RelOperator::Scan(op) => {
-                let join_relation = JoinRelation::new(&s_expr);
+                let join_relation = if let Some(relation) = join_relation {
+                    JoinRelation::new(&relation)
+                } else {
+                    JoinRelation::new(&s_expr)
+                };
                 self.table_index_map
                     .insert(op.table_index, self.join_relations.len() as IndexType);
                 self.join_relations.push(join_relation);
@@ -84,22 +87,35 @@ impl DPhpy {
                 for condition_pair in op.left_conditions.iter().zip(op.right_conditions.iter()) {
                     join_conditions.push((condition_pair.0.clone(), condition_pair.1.clone()));
                 }
-                let left_res = self.get_base_tables(
-                    &s_expr.children()[0],
-                    join_conditions,
-                    Some(s_expr.clone()),
-                )?;
-                let right_res = self.get_base_tables(
-                    &s_expr.children()[1],
-                    join_conditions,
-                    Some(s_expr.clone()),
-                )?;
+                let left_res =
+                    self.get_base_relations(&s_expr.children()[0], join_conditions, true, None)?;
+                let right_res =
+                    self.get_base_relations(&s_expr.children()[1], join_conditions, true, None)?;
                 Ok(left_res && right_res)
             }
-            _ => {
-                // Currently, we don't consider set operators
-                Ok(false)
+
+            RelOperator::ProjectSet(_)
+            | RelOperator::EvalScalar(_)
+            | RelOperator::Filter(_)
+            | RelOperator::Aggregate(_)
+            | RelOperator::Sort(_)
+            | RelOperator::Limit(_) => {
+                if join_child {
+                    self.get_base_relations(
+                        &s_expr.children()[0],
+                        join_conditions,
+                        true,
+                        Some(s_expr.clone()),
+                    )
+                } else {
+                    self.get_base_relations(&s_expr.children()[0], join_conditions, false, None)
+                }
             }
+            RelOperator::Exchange(_) | RelOperator::Pattern(_) => unreachable!(),
+            RelOperator::Window(_)
+            | RelOperator::UnionAll(_)
+            | RelOperator::DummyTableScan(_)
+            | RelOperator::RuntimeFilterSource(_) => Ok(false),
         }
     }
 
@@ -110,7 +126,7 @@ impl DPhpy {
         // Firstly, we need to extract all join conditions and base tables
         // `join_condition` is pair, left is left_condition, right is right_condition
         let mut join_conditions = vec![];
-        let res = self.get_base_tables(&s_expr, &mut join_conditions, None)?;
+        let res = self.get_base_relations(&s_expr, &mut join_conditions, false, None)?;
         if !res {
             return Ok((s_expr, false));
         }
@@ -299,7 +315,7 @@ impl DPhpy {
         );
 
         if parent_set.len() == self.join_relations.len() {
-            dbg!(&parent_set, &join_node);
+            dbg!(&parent_set, &join_node.cost);
         }
 
         if parent_node.is_none() || parent_node.unwrap().cost > join_node.cost {
