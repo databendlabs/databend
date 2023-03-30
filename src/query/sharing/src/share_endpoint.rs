@@ -66,37 +66,35 @@ impl ShareEndpointManager {
 
     async fn get_share_endpoint(
         &self,
-        from_tenant: &String,
-        to_tenant: &String,
+        from_tenant: &str,
+        to_tenant: &str,
     ) -> Result<EndpointConfig> {
         let endpoint_meta = {
             let endpoint_map = self.endpoint_map.read()?;
-            endpoint_map
-                .get(to_tenant)
-                .map(|endpoint_meta| endpoint_meta.clone())
+            endpoint_map.get(to_tenant).cloned()
         };
 
         match endpoint_meta {
             Some(endpoint_meta) => {
                 return Ok(EndpointConfig {
-                    url: endpoint_meta.url.clone(),
-                    token: RefreshableToken::Direct(from_tenant.clone()),
+                    url: endpoint_meta.url,
+                    token: RefreshableToken::Direct(from_tenant.to_owned()),
                 });
             }
             None => {
                 let req = GetShareEndpointReq {
-                    tenant: from_tenant.clone(),
+                    tenant: from_tenant.to_owned(),
                     endpoint: None,
-                    to_tenant: Some(to_tenant.clone()),
+                    to_tenant: Some(to_tenant.to_owned()),
                 };
                 let meta_api = UserApiProvider::instance().get_meta_store_client();
                 let resp = meta_api.get_share_endpoint(req).await?;
                 if let Some((_, endpoint_meta)) = resp.share_endpoint_meta_vec.into_iter().next() {
                     let mut endpoint_map = self.endpoint_map.write()?;
-                    endpoint_map.insert(to_tenant.clone(), endpoint_meta.clone());
+                    endpoint_map.insert(to_tenant.to_owned(), endpoint_meta.clone());
                     return Ok(EndpointConfig {
-                        url: endpoint_meta.url.clone(),
-                        token: RefreshableToken::Direct(from_tenant.clone()),
+                        url: endpoint_meta.url,
+                        token: RefreshableToken::Direct(from_tenant.to_owned()),
                     });
                 }
             }
@@ -110,7 +108,7 @@ impl ShareEndpointManager {
 
     pub async fn get_table_info_map(
         &self,
-        from_tenant: &String,
+        from_tenant: &str,
         db_info: &DatabaseInfo,
         tables: Vec<String>,
     ) -> Result<TableInfoMap> {

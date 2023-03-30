@@ -73,6 +73,7 @@ common-pipeline-sources = { path = "../pipeline/sources" }
 common-pipeline-transforms = { path = "../pipeline/transforms" }
 common-profile = { path = "../../common/profile" }
 common-settings = { path = "../settings" }
+common-sharing = { path = "../sharing" }
 common-sql = { path = "../sql" }
 common-storage = { path = "../../common/storage" }
 common-storages-factory = { path = "../storages/factory" }
@@ -87,7 +88,6 @@ common-storages-share = { path = "../storages/share" }
 common-storages-stage = { path = "../storages/stage" }
 common-storages-system = { path = "../storages/system" }
 common-storages-view = { path = "../storages/view" }
-common-sharing = { path = "../sharing" }
 common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
 storages-common-cache = { path = "../storages/common/cache" }
