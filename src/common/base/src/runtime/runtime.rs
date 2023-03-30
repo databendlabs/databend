@@ -259,10 +259,12 @@ impl Runtime {
             let permit = semaphore.acquire_owned().await.map_err(|e| {
                 ErrorCode::Internal(format!("semaphore closed, acquire permit failure. {}", e))
             })?;
-            let handler = self.handle.spawn(async move {
-                // take the ownership of the permit, (implicitly) drop it when task is done
-                fut(permit).await
-            });
+            let handler = self
+                .handle
+                .spawn(async_backtrace::location!().frame(async move {
+                    // take the ownership of the permit, (implicitly) drop it when task is done
+                    fut(permit).await
+                }));
             handlers.push(handler)
         }
 

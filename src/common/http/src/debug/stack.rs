@@ -14,6 +14,7 @@
 
 use std::fmt::Write;
 
+use futures::poll;
 use poem::web::Query;
 use poem::IntoResponse;
 
@@ -22,27 +23,70 @@ pub struct DumpStackRequest {
     wait_for_running_tasks: bool,
 }
 
+#[derive(Debug)]
+struct AsyncTaskItem {
+    stack_frames: Vec<String>,
+}
+
 #[poem::handler]
 pub async fn debug_dump_stack(req: Option<Query<DumpStackRequest>>) -> impl IntoResponse {
     let tree =
         async_backtrace::taskdump_tree(req.map(|x| x.wait_for_running_tasks).unwrap_or(false));
 
-    let mut string = String::new();
+    let mut tasks = vec![];
+    let mut polling_tasks = vec![];
+    let mut current_stack_frames = vec![];
 
     let mut first = true;
+    let mut is_polling = false;
     for line in tree.lines() {
-        if let Some(first_char) = line.chars().next() {
-            if !first_char.is_ascii_whitespace() {
-                if !first {
-                    writeln!(string).unwrap();
-                }
+        if line.starts_with(|x: char| !x.is_ascii_whitespace()) {
+            if !first {
+                match is_polling {
+                    true => polling_tasks.push(AsyncTaskItem {
+                        stack_frames: std::mem::take(&mut current_stack_frames),
+                    }),
+                    false => tasks.push(AsyncTaskItem {
+                        stack_frames: std::mem::take(&mut current_stack_frames),
+                    }),
+                };
 
-                first = false;
+                is_polling = false;
             }
+
+            first = false;
         }
 
-        writeln!(string, "{}", line).unwrap();
+        if line.ends_with("[POLLING]") {
+            is_polling = true;
+        }
+
+        current_stack_frames.push(line.to_string());
     }
 
-    string
+    match is_polling {
+        true => polling_tasks.push(AsyncTaskItem {
+            stack_frames: std::mem::take(&mut current_stack_frames),
+        }),
+        false => tasks.push(AsyncTaskItem {
+            stack_frames: std::mem::take(&mut current_stack_frames),
+        }),
+    };
+
+    let mut output = String::new();
+    for mut tasks in [tasks, polling_tasks] {
+        tasks.sort_by(|l, r|
+            Ord::cmp(&l.stack_frames.len(), &r.stack_frames.len())
+        );
+
+        for item in tasks.into_iter().rev() {
+            for frame in item.stack_frames {
+                writeln!(output, "{}", frame).unwrap();
+            }
+
+            writeln!(output).unwrap();
+        }
+    }
+
+    output
 }
