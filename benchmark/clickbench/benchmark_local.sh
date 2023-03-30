@@ -100,6 +100,7 @@ function run_query() {
     if echo "$query" | bendsql query --format csv --rows-only >/dev/null; then
         q_end=$(date +%s.%N)
         q_time=$(echo "$q_end - $q_start" | bc -l)
+        [[ $q_time =~ ^[1-9].*$ ]] || q_time="0$q_time"
         echo "Q${query_num}[$seq] succeeded in $q_time seconds"
         yq -i ".result[${query_num}] += [${q_time}]" result.json
     else

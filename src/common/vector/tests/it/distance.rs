@@ -21,7 +21,7 @@ fn test_cosine() {
         let y: Vec<f32> = (100..108).map(|v| v as f32).collect();
         let d = cosine_distance(&x, &y).unwrap();
         // from scipy.spatial.distance.cosine
-        approx::assert_relative_eq!(d, 0.900_957);
+        approx::assert_relative_eq!(d, 1.0 - 0.900_957);
     }
 
     {
@@ -29,7 +29,7 @@ fn test_cosine() {
         let y = vec![2.0, 54.0, 13.0, 15.0, 22.0, 34.0, 50.0, 1.0];
         let d = cosine_distance(&x, &y).unwrap();
         // from sklearn.metrics.pairwise import cosine_similarity
-        approx::assert_relative_eq!(d, 0.873_580_6);
+        approx::assert_relative_eq!(d, 1.0 - 0.873_580_6);
     }
 
     {
