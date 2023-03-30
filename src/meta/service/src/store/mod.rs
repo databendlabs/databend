@@ -16,7 +16,9 @@ mod store_bare;
 mod store_inner;
 mod to_storage_error;
 
+#[cfg(feature = "raft-store-defensive")]
 use common_meta_sled_store::openraft::StoreExt;
+#[cfg(feature = "raft-store-defensive")]
 use common_meta_types::TypeConfig;
 pub use store_bare::RaftStoreBare;
 pub use store_inner::StoreInner;
@@ -25,7 +27,8 @@ pub use to_storage_error::ToStorageError;
 /// Implements `RaftStorage` and provides defensive check.
 ///
 /// It is used to discover unexpected invalid data read or write, which is potentially a bug.
+#[cfg(feature = "raft-store-defensive")]
 pub type RaftStore = StoreExt<TypeConfig, RaftStoreBare>;
 
-// Uncomment this to disable defensive check
-// pub(crate) type RaftStore = raft_store_impl::RaftStore;
+#[cfg(not(feature = "raft-store-defensive"))]
+pub(crate) type RaftStore = RaftStoreBare;

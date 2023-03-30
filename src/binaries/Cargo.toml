@@ -26,6 +26,9 @@ io-uring = [
     "common-meta-raft-store/io-uring",
 ]
 
+# Enable defensive check when accessing raft store.
+raft-store-defensive = ["databend-meta/raft-store-defensive"]
+
 enable-histogram-metrics = [
     "default",
     "common-metrics/enable-histogram",
