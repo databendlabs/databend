@@ -60,6 +60,7 @@ pub struct OrderItem {
 }
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(super) async fn analyze_order_items(
         &mut self,
         from_context: &BindContext,
@@ -229,6 +230,7 @@ impl Binder {
         Ok(OrderItems { items: order_items })
     }
 
+    #[async_backtrace::framed]
     pub(super) async fn bind_order_by(
         &mut self,
         from_context: &BindContext,
@@ -318,6 +320,7 @@ impl Binder {
         Ok(new_expr)
     }
 
+    #[async_backtrace::framed]
     pub(crate) async fn bind_order_by_for_set_operation(
         &mut self,
         bind_context: &mut BindContext,

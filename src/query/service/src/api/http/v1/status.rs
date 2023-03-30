@@ -43,6 +43,7 @@ fn secs_since_epoch(t: SystemTime) -> u64 {
 // lightweight way to get status
 // return Status in json
 #[poem::handler]
+#[async_backtrace::framed]
 pub async fn instance_status_handler(
     sessions_extension: Data<&Arc<SessionManager>>,
 ) -> poem::Result<impl IntoResponse> {

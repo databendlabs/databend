@@ -48,6 +48,7 @@ impl AsyncMpscSink for WriteResultCacheSink {
     const NAME: &'static str = "WriteResultCacheSink";
 
     #[async_trait::unboxed_simple]
+    #[async_backtrace::framed]
     async fn consume(&mut self, block: DataBlock) -> Result<bool> {
         if !self.cache_writer.over_limit() {
             self.cache_writer.append_block(block);
@@ -58,6 +59,7 @@ impl AsyncMpscSink for WriteResultCacheSink {
         }
     }
 
+    #[async_backtrace::framed]
     async fn on_finish(&mut self) -> Result<()> {
         if self.cache_writer.over_limit() {
             return Ok(());

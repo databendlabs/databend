@@ -78,6 +78,7 @@ impl FlightSqlServiceImpl {
         Ok((user.to_string(), pass.to_string()))
     }
 
+    #[async_backtrace::framed]
     pub(super) async fn auth_user_password(
         user: String,
         password: String,

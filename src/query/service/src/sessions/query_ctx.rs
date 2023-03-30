@@ -135,6 +135,7 @@ impl QueryContext {
         StageTable::try_create(table_info.clone())
     }
 
+    #[async_backtrace::framed]
     pub async fn set_current_database(&self, new_database_name: String) -> Result<()> {
         let tenant_id = self.get_tenant();
         let catalog = self.get_catalog(self.get_current_catalog().as_str())?;
@@ -461,6 +462,7 @@ impl TableContext for QueryContext {
         self.shared.consume_precommit_blocks()
     }
 
+    #[async_backtrace::framed]
     async fn get_file_format(&self, name: &str) -> Result<FileFormatOptions> {
         let opt = match StageFileFormatType::from_str(name) {
             Ok(typ) => FileFormatOptions::default_by_type(typ),
@@ -483,6 +485,7 @@ impl TableContext for QueryContext {
     /// ```sql
     /// SELECT * FROM (SELECT * FROM db.table_name) as subquery_1, (SELECT * FROM db.table_name) AS subquery_2
     /// ```
+    #[async_backtrace::framed]
     async fn get_table(
         &self,
         catalog: &str,
@@ -492,6 +495,7 @@ impl TableContext for QueryContext {
         self.shared.get_table(catalog, database, table).await
     }
 
+    #[async_backtrace::framed]
     async fn filter_out_copied_files(
         &self,
         catalog_name: &str,

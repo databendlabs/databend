@@ -32,6 +32,7 @@ impl KillInterpreter {
         Ok(KillInterpreter { ctx, plan })
     }
 
+    #[async_backtrace::framed]
     async fn execute_kill(&self, session_id: &String) -> Result<PipelineBuildResult> {
         match self.ctx.get_session_by_id(session_id) {
             None => Err(ErrorCode::UnknownSession(format!(
@@ -58,6 +59,7 @@ impl Interpreter for KillInterpreter {
         "KillInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let id = &self.plan.id;
         // If press Ctrl + C, MySQL Client will create a new session and send query

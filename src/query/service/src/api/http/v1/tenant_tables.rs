@@ -69,6 +69,7 @@ async fn load_tenant_tables(tenant: &str) -> Result<Vec<TenantTableInfo>> {
 
 // This handler returns the statistics about the tables of a tenant. It's only enabled in management mode.
 #[poem::handler]
+#[async_backtrace::framed]
 pub async fn list_tenant_tables_handler(
     Path(tenant): Path<String>,
 ) -> poem::Result<impl IntoResponse> {
@@ -80,6 +81,7 @@ pub async fn list_tenant_tables_handler(
 
 // This handler returns the statistics about the tables of the current tenant.
 #[poem::handler]
+#[async_backtrace::framed]
 pub async fn list_tables_handler() -> poem::Result<impl IntoResponse> {
     let tenant = &GlobalConfig::instance().query.tenant_id;
     if tenant.is_empty() {

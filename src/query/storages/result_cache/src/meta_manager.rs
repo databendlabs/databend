@@ -35,6 +35,7 @@ impl ResultCacheMetaManager {
         Self { ttl, inner }
     }
 
+    #[async_backtrace::framed]
     pub async fn set(
         &self,
         key: String,
@@ -57,6 +58,7 @@ impl ResultCacheMetaManager {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     pub async fn get(&self, key: String) -> Result<Option<ResultCacheValue>> {
         let raw = self.inner.get_kv(&key).await?;
         match raw {
@@ -68,6 +70,7 @@ impl ResultCacheMetaManager {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn list(&self, prefix: &str) -> Result<Vec<ResultCacheValue>> {
         let result = self.inner.prefix_list_kv(prefix).await?;
 

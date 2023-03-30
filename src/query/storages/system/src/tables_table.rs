@@ -57,6 +57,7 @@ pub trait HistoryAware {
 #[async_trait::async_trait]
 impl HistoryAware for TablesTable<true> {
     const TABLE_NAME: &'static str = "tables_with_history";
+    #[async_backtrace::framed]
     async fn list_tables(
         catalog: &Arc<dyn Catalog>,
         tenant: &str,
@@ -69,6 +70,7 @@ impl HistoryAware for TablesTable<true> {
 #[async_trait::async_trait]
 impl HistoryAware for TablesTable<false> {
     const TABLE_NAME: &'static str = "tables";
+    #[async_backtrace::framed]
     async fn list_tables(
         catalog: &Arc<dyn Catalog>,
         tenant: &str,
@@ -88,6 +90,7 @@ where TablesTable<T>: HistoryAware
         &self.table_info
     }
 
+    #[async_backtrace::framed]
     async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();

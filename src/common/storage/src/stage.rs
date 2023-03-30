@@ -107,6 +107,7 @@ impl StageFilesInfo {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn list(
         &self,
         operator: &Operator,
@@ -148,6 +149,7 @@ impl StageFilesInfo {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn first_file(&self, operator: &Operator) -> Result<StageFileInfo> {
         let mut files = self.list(operator, true, None).await?;
         match files.pop() {
@@ -195,6 +197,7 @@ impl StageFilesInfo {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn list_files_with_pattern(
         operator: &Operator,
         path: &str,
@@ -299,6 +302,7 @@ fn blocking_list_files_with_pattern(
 /// - `Ok(None)` if given object is not a file.
 /// - `Err(err)` if there is an error happened.
 #[allow(unused)]
+#[async_backtrace::framed]
 pub async fn stat_file(op: Operator, de: Entry) -> Result<Option<StageFileInfo>> {
     let meta = op
         .metadata(&de, {

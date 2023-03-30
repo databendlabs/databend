@@ -50,6 +50,7 @@ impl FlightClient {
         FlightClient { inner }
     }
 
+    #[async_backtrace::framed]
     pub async fn execute_action(&mut self, action: FlightAction, timeout: u64) -> Result<()> {
         if let Err(cause) = self.do_action(action, timeout).await {
             return Err(cause.add_message_back("(while in query flight)"));
@@ -58,6 +59,7 @@ impl FlightClient {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     pub async fn request_server_exchange(
         &mut self,
         query_id: &str,
@@ -89,6 +91,7 @@ impl FlightClient {
         Ok(FlightExchange::create_receiver(rx))
     }
 
+    #[async_backtrace::framed]
     pub async fn do_get(
         &mut self,
         query_id: &str,
@@ -122,6 +125,7 @@ impl FlightClient {
         Ok(FlightExchange::create_receiver(rx))
     }
 
+    #[async_backtrace::framed]
     async fn get_streaming(&mut self, request: Request<Ticket>) -> Result<Streaming<FlightData>> {
         match self.inner.do_get(request).await {
             Ok(res) => Ok(res.into_inner()),
@@ -131,6 +135,7 @@ impl FlightClient {
 
     // Execute do_action.
     #[tracing::instrument(level = "debug", skip_all)]
+    #[async_backtrace::framed]
     async fn do_action(&mut self, action: FlightAction, timeout: u64) -> Result<Vec<u8>> {
         let action: Action = action.try_into()?;
         let action_type = action.r#type.clone();
@@ -171,6 +176,7 @@ impl FlightReceiver {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn recv(&self) -> Result<Option<DataPacket>> {
         match self.rx.recv().await {
             Err(_) => Ok(None),
@@ -222,6 +228,7 @@ impl FlightSender {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn send(&self, data: DataPacket) -> Result<()> {
         if let Err(_cause) = self.tx.send(Ok(FlightData::from(data))).await {
             return Err(ErrorCode::AbortedQuery(

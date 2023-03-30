@@ -169,6 +169,7 @@ impl Processor for AsyncParquetSource {
         Ok(Event::Async)
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         let parts = self.ctx.get_partitions(self.batch_size);
 
@@ -179,9 +180,9 @@ impl Processor for AsyncParquetSource {
                 let block_reader = self.block_reader.clone();
 
                 readers.push(async move {
-                    let handler = tokio::spawn(async move {
+                    let handler = tokio::spawn(async_backtrace::location!().frame(async move {
                         block_reader.readers_from_non_blocking_io(part).await
-                    });
+                    }));
                     handler.await.unwrap()
                 });
             }

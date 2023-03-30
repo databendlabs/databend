@@ -161,6 +161,7 @@ impl PhysicalPlanBuilder {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     pub async fn build(&mut self, s_expr: &SExpr) -> Result<PhysicalPlan> {
         // Build stat info
         let stat_info = self.build_plan_stat_info(s_expr)?;

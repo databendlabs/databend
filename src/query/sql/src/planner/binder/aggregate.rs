@@ -480,6 +480,7 @@ impl Binder {
     ///     `SELECT a as b, COUNT(a) FROM t GROUP BY b`.
     ///   - Scalar expressions that can be evaluated in current scope(doesn't contain aliases), e.g.
     ///     column `a` and expression `a+1` in `SELECT a as b, COUNT(a) FROM t GROUP BY a, a+1`.
+    #[async_backtrace::framed]
     pub async fn analyze_group_items<'a>(
         &mut self,
         bind_context: &mut BindContext,
@@ -544,6 +545,7 @@ impl Binder {
         }
     }
 
+    #[async_backtrace::framed]
     pub(super) async fn bind_aggregate(
         &mut self,
         bind_context: &mut BindContext,
@@ -589,6 +591,7 @@ impl Binder {
         Ok(new_expr)
     }
 
+    #[async_backtrace::framed]
     async fn resolve_grouping_sets(
         &mut self,
         bind_context: &mut BindContext,
@@ -653,6 +656,7 @@ impl Binder {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn resolve_group_items(
         &mut self,
         bind_context: &mut BindContext,

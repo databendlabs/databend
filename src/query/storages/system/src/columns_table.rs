@@ -44,6 +44,7 @@ impl AsyncSystemTable for ColumnsTable {
         &self.table_info
     }
 
+    #[async_backtrace::framed]
     async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let rows = self.dump_table_columns(ctx).await?;
         let mut names: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
@@ -125,6 +126,7 @@ impl ColumnsTable {
         AsyncOneBlockSystemTable::create(ColumnsTable { table_info })
     }
 
+    #[async_backtrace::framed]
     async fn dump_table_columns(
         &self,
         ctx: Arc<dyn TableContext>,

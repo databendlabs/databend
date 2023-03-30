@@ -143,6 +143,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     pub async fn resolve(&mut self, expr: &Expr) -> Result<Box<(ScalarExpr, DataType)>> {
         if let Some(scalar) = self.bind_context.srfs.get(&expr.to_string()) {
             if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
@@ -950,6 +951,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     pub async fn resolve_window(
         &mut self,
         _span: Span,
@@ -1082,6 +1084,7 @@ impl<'a> TypeChecker<'a> {
 
     /// Resolve function call.
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     pub async fn resolve_function(
         &mut self,
         span: Span,
@@ -1150,6 +1153,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     pub async fn resolve_scalar_function_call(
         &mut self,
         span: Span,
@@ -1191,6 +1195,7 @@ impl<'a> TypeChecker<'a> {
     /// would be transformed into `FunctionCall`, except comparison
     /// expressions, conjunction(`AND`) and disjunction(`OR`).
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     pub async fn resolve_binary_op(
         &mut self,
         span: Span,
@@ -1291,6 +1296,7 @@ impl<'a> TypeChecker<'a> {
 
     /// Resolve unary expressions.
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     pub async fn resolve_unary_op(
         &mut self,
         span: Span,
@@ -1328,6 +1334,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     pub async fn resolve_extract_expr(
         &mut self,
         span: Span,
@@ -1369,6 +1376,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     pub async fn resolve_date_add(
         &mut self,
         span: Span,
@@ -1395,6 +1403,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     pub async fn resolve_date_trunc(
         &mut self,
         span: Span,
@@ -1462,6 +1471,7 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn resolve_subquery(
         &mut self,
         typ: SubqueryType,
@@ -1558,6 +1568,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     async fn try_rewrite_scalar_function(
         &mut self,
         span: Span,
@@ -1778,6 +1789,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     async fn resolve_trim_function(
         &mut self,
         span: Span,
@@ -1870,6 +1882,7 @@ impl<'a> TypeChecker<'a> {
     // TODO(leiysky): use an array builder function instead, since we should allow declaring
     // an array with variable as element.
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     async fn resolve_array(
         &mut self,
         span: Span,
@@ -1886,6 +1899,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     async fn resolve_array_sort(
         &mut self,
         span: Span,
@@ -1905,6 +1919,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     async fn resolve_map(
         &mut self,
         span: Span,
@@ -1931,6 +1946,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     async fn resolve_tuple(
         &mut self,
         span: Span,
@@ -1947,6 +1963,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     async fn resolve_udf(
         &mut self,
         span: Span,
@@ -1997,6 +2014,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     async fn resolve_map_access(
         &mut self,
         expr: &Expr,
@@ -2098,6 +2116,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     async fn resolve_tuple_map_access_pushdown(
         &mut self,
         span: Span,

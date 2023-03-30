@@ -203,6 +203,7 @@ impl QueryContextShared {
         self.session.apply_changed_settings(changes)
     }
 
+    #[async_backtrace::framed]
     pub async fn get_table(
         &self,
         catalog: &str,
@@ -225,6 +226,7 @@ impl QueryContextShared {
         }
     }
 
+    #[async_backtrace::framed]
     async fn get_table_to_cache(
         &self,
         catalog: &str,

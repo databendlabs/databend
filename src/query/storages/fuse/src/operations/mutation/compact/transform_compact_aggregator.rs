@@ -86,6 +86,7 @@ impl CompactAggregator {
         }
     }
 
+    #[async_backtrace::framed]
     async fn write_segment(dal: Operator, segment: SerializedSegment) -> Result<()> {
         dal.write(&segment.location, serde_json::to_vec(&segment.segment)?)
             .await?;
@@ -95,6 +96,7 @@ impl CompactAggregator {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn write_segments(&self, segments: Vec<SerializedSegment>) -> Result<()> {
         let mut iter = segments.iter();
         let tasks = std::iter::from_fn(move || {
@@ -123,6 +125,7 @@ impl CompactAggregator {
 impl AsyncAccumulatingTransform for CompactAggregator {
     const NAME: &'static str = "CompactAggregator";
 
+    #[async_backtrace::framed]
     async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
         // gather the input data.
         if let Some(meta) = data
@@ -153,6 +156,7 @@ impl AsyncAccumulatingTransform for CompactAggregator {
         Ok(None)
     }
 
+    #[async_backtrace::framed]
     async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
         let mut serialized_segments = Vec::with_capacity(self.merge_blocks.len());
         for (segment_idx, block_map) in std::mem::take(&mut self.merge_blocks) {

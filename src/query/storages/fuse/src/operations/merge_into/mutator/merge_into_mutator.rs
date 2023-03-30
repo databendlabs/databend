@@ -108,6 +108,7 @@ impl MergeIntoOperationAggregator {
 
 // aggregate mutations (currently, deletion only)
 impl MergeIntoOperationAggregator {
+    #[async_backtrace::framed]
     pub async fn accumulate(&mut self, merge_action: MergeIntoOperation) -> Result<()> {
         match &merge_action {
             MergeIntoOperation::Delete(DeletionByColumn {
@@ -147,6 +148,7 @@ impl MergeIntoOperationAggregator {
 
 // apply the mutations and generate mutation log
 impl MergeIntoOperationAggregator {
+    #[async_backtrace::framed]
     pub async fn apply(&mut self) -> Result<Option<MutationLogs>> {
         let mut mutation_logs = Vec::new();
         for (segment_idx, block_deletion) in &self.deletion_accumulator.deletions {
@@ -182,6 +184,7 @@ impl MergeIntoOperationAggregator {
         }))
     }
 
+    #[async_backtrace::framed]
     async fn apply_deletion_to_data_block(
         &self,
         segment_index: SegmentIndex,

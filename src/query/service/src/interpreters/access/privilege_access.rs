@@ -37,6 +37,7 @@ impl PrivilegeAccess {
 
 #[async_trait::async_trait]
 impl AccessChecker for PrivilegeAccess {
+    #[async_backtrace::framed]
     async fn check(&self, plan: &Plan) -> Result<()> {
         let session = self.ctx.get_current_session();
 

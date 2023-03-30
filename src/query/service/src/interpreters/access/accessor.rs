@@ -40,6 +40,7 @@ impl Accessor {
         Accessor { accessors }
     }
 
+    #[async_backtrace::framed]
     pub async fn check(&self, plan: &Plan) -> Result<()> {
         for accessor in self.accessors.values() {
             accessor.check(plan).await?;

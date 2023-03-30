@@ -18,6 +18,7 @@ common-expression = { path = "../../query/expression" }
 common-meta-app = { path = "../../meta/app" }
 
 anyhow = { workspace = true }
+async-backtrace = { workspace = true }
 async-trait = "0.1"
 bytes = "1"
 chrono = { workspace = true }

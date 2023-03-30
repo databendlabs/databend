@@ -45,6 +45,7 @@ impl<'a> FuseSnapshot<'a> {
         Self { ctx, table }
     }
 
+    #[async_backtrace::framed]
     pub async fn get_snapshots(self, limit: Option<usize>) -> Result<DataBlock> {
         let meta_location_generator = self.table.meta_location_generator.clone();
         let snapshot_location = self.table.snapshot_loc().await?;

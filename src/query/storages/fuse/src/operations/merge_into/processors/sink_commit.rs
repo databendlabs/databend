@@ -193,6 +193,7 @@ impl Processor for CommitSink {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::TryCommit(new_snapshot) => {

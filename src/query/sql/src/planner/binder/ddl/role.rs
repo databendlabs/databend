@@ -20,6 +20,7 @@ use crate::BindContext;
 use crate::Binder;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_set_role(
         &mut self,
         _bind_context: &BindContext,

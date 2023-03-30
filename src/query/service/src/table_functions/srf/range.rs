@@ -139,6 +139,7 @@ impl Table for RangeTable {
         &self.table_info
     }
 
+    #[async_backtrace::framed]
     async fn read_partitions(
         &self,
         _: Arc<dyn TableContext>,

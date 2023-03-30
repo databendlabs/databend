@@ -122,6 +122,7 @@ impl Session {
     /// Create a query context for query.
     /// For a query, execution environment(e.g cluster) should be immutable.
     /// We can bind the environment to the context in create_context method.
+    #[async_backtrace::framed]
     pub async fn create_query_context(self: &Arc<Self>) -> Result<Arc<QueryContext>> {
         let config = GlobalConfig::instance();
         let session = self.clone();
@@ -184,6 +185,7 @@ impl Session {
     // HTTP handler, clickhouse query handler, mysql query handler. auth_role represents the role
     // granted by external authenticator, it will over write the current user's granted roles, and
     // becomes the CURRENT ROLE if not set X-DATABEND-ROLE.
+    #[async_backtrace::framed]
     pub async fn set_authed_user(
         self: &Arc<Self>,
         user: UserInfo,
@@ -196,6 +198,7 @@ impl Session {
     }
 
     // ensure_current_role() is called after authentication and before any privilege checks
+    #[async_backtrace::framed]
     async fn ensure_current_role(self: &Arc<Self>) -> Result<()> {
         let tenant = self.get_current_tenant();
         let public_role = RoleCacheManager::instance()
@@ -237,6 +240,7 @@ impl Session {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     pub async fn validate_available_role(self: &Arc<Self>, role_name: &str) -> Result<RoleInfo> {
         let available_roles = self.get_all_available_roles().await?;
         let role = available_roles.iter().find(|r| r.name == role_name);
@@ -258,6 +262,7 @@ impl Session {
 
     // Only the available role can be set as current role. The current role can be set by the SET
     // ROLE statement, or by the X-DATABEND-ROLE header in HTTP protocol (not implemented yet).
+    #[async_backtrace::framed]
     pub async fn set_current_role_checked(self: &Arc<Self>, role_name: &str) -> Result<()> {
         let role = self.validate_available_role(role_name).await?;
         self.session_ctx.set_current_role(Some(role));
@@ -275,6 +280,7 @@ impl Session {
     // Returns all the roles the current session has. If the user have been granted auth_role,
     // the other roles will be ignored.
     // On executing SET ROLE, the role have to be one of the available roles.
+    #[async_backtrace::framed]
     pub async fn get_all_available_roles(self: &Arc<Self>) -> Result<Vec<RoleInfo>> {
         let roles = match self.session_ctx.get_auth_role() {
             Some(auth_role) => vec![auth_role],
@@ -291,6 +297,7 @@ impl Session {
         Ok(related_roles)
     }
 
+    #[async_backtrace::framed]
     pub async fn validate_privilege(
         self: &Arc<Self>,
         object: &GrantObject,

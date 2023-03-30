@@ -44,6 +44,7 @@ impl Interpreter for CreateDatabaseInterpreter {
     }
 
     #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.plan.tenant.clone();
         let quota_api = UserApiProvider::instance().get_tenant_quota_api_client(&tenant)?;

@@ -65,6 +65,7 @@ impl ShareDatabase {
         })
     }
 
+    #[async_backtrace::framed]
     async fn get_table_info(&self, table_name: &str) -> Result<Arc<TableInfo>> {
         let table_info_map = ShareEndpointManager::instance()
             .get_table_info_map(&self.ctx.tenant, &self.db_info, vec![
@@ -80,6 +81,7 @@ impl ShareDatabase {
         }
     }
 
+    #[async_backtrace::framed]
     async fn list_tables(&self) -> Result<Vec<Arc<TableInfo>>> {
         let table_info_map = ShareEndpointManager::instance()
             .get_table_info_map(&self.ctx.tenant, &self.db_info, vec![])
@@ -108,47 +110,55 @@ impl Database for ShareDatabase {
     }
 
     // Get one table by db and table name.
+    #[async_backtrace::framed]
     async fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
         let table_info = self.get_table_info(table_name).await?;
         self.get_table_by_info(table_info.as_ref())
     }
 
+    #[async_backtrace::framed]
     async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
         let table_infos = self.list_tables().await?;
 
         self.load_tables(table_infos)
     }
 
+    #[async_backtrace::framed]
     async fn list_tables_history(&self) -> Result<Vec<Arc<dyn Table>>> {
         Err(ErrorCode::PermissionDenied(
             "Permission denied, cannot list table history from a shared database".to_string(),
         ))
     }
 
+    #[async_backtrace::framed]
     async fn create_table(&self, _req: CreateTableReq) -> Result<()> {
         Err(ErrorCode::PermissionDenied(
             "Permission denied, cannot create table from a shared database".to_string(),
         ))
     }
 
+    #[async_backtrace::framed]
     async fn drop_table_by_id(&self, _req: DropTableByIdReq) -> Result<DropTableReply> {
         Err(ErrorCode::PermissionDenied(
             "Permission denied, cannot drop table from a shared database".to_string(),
         ))
     }
 
+    #[async_backtrace::framed]
     async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
         Err(ErrorCode::PermissionDenied(
             "Permission denied, cannot undrop table from a shared database".to_string(),
         ))
     }
 
+    #[async_backtrace::framed]
     async fn rename_table(&self, _req: RenameTableReq) -> Result<RenameTableReply> {
         Err(ErrorCode::PermissionDenied(
             "Permission denied, cannot rename table from a shared database".to_string(),
         ))
     }
 
+    #[async_backtrace::framed]
     async fn upsert_table_option(
         &self,
         _req: UpsertTableOptionReq,
@@ -158,12 +168,14 @@ impl Database for ShareDatabase {
         ))
     }
 
+    #[async_backtrace::framed]
     async fn update_table_meta(&self, _req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
         Err(ErrorCode::PermissionDenied(
             "Permission denied, cannot upsert table meta from a shared database".to_string(),
         ))
     }
 
+    #[async_backtrace::framed]
     async fn get_table_copied_file_info(
         &self,
         req: GetTableCopiedFileReq,
@@ -172,6 +184,7 @@ impl Database for ShareDatabase {
         Ok(res)
     }
 
+    #[async_backtrace::framed]
     async fn upsert_table_copied_file_info(
         &self,
         req: UpsertTableCopiedFileReq,
@@ -180,6 +193,7 @@ impl Database for ShareDatabase {
         Ok(res)
     }
 
+    #[async_backtrace::framed]
     async fn truncate_table(&self, _req: TruncateTableReq) -> Result<TruncateTableReply> {
         Err(ErrorCode::PermissionDenied(
             "Permission denied, cannot truncate table from a shared database".to_string(),

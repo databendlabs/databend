@@ -40,6 +40,7 @@ impl BlockPruner {
         Ok(BlockPruner { pruning_ctx })
     }
 
+    #[async_backtrace::framed]
     pub async fn pruning(
         &self,
         segment_idx: usize,
@@ -57,6 +58,7 @@ impl BlockPruner {
     }
 
     // async pruning with bloom index.
+    #[async_backtrace::framed]
     async fn block_pruning(
         &self,
         bloom_pruner: &Arc<dyn BloomPruner + Send + Sync>,

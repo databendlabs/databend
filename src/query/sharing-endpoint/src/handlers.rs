@@ -25,6 +25,7 @@ use crate::models;
 use crate::models::PresignFileResponse;
 
 #[poem::handler]
+#[async_backtrace::framed]
 pub async fn share_table_presign_files(
     credentials: &Credentials,
     Path((_tenant_id, share_name, table_name)): Path<(String, String, String)>,
@@ -46,6 +47,7 @@ pub async fn share_table_presign_files(
 }
 
 #[poem::handler]
+#[async_backtrace::framed]
 pub async fn share_table_meta(
     credentials: &Credentials,
     Path((_tenant_id, share_name)): Path<(String, String)>,

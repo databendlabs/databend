@@ -34,6 +34,7 @@ use crate::plans::ShowShareEndpointPlan;
 use crate::plans::ShowSharesPlan;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_create_share_endpoint(
         &mut self,
         stmt: &CreateShareEndpointStmt,
@@ -63,6 +64,7 @@ impl Binder {
         Ok(Plan::CreateShareEndpoint(Box::new(plan)))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_show_share_endpoint(
         &mut self,
         _stmt: &ShowShareEndpointStmt,
@@ -73,6 +75,7 @@ impl Binder {
         Ok(Plan::ShowShareEndpoint(Box::new(plan)))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_drop_share_endpoint(
         &mut self,
         stmt: &DropShareEndpointStmt,
@@ -89,6 +92,7 @@ impl Binder {
         Ok(Plan::DropShareEndpoint(Box::new(plan)))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_create_share(
         &mut self,
         stmt: &CreateShareStmt,
@@ -110,6 +114,7 @@ impl Binder {
         Ok(Plan::CreateShare(Box::new(plan)))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_drop_share(
         &mut self,
         stmt: &DropShareStmt,
@@ -126,6 +131,7 @@ impl Binder {
         Ok(Plan::DropShare(Box::new(plan)))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_grant_share_object(
         &mut self,
         stmt: &GrantShareObjectStmt,
@@ -146,6 +152,7 @@ impl Binder {
         Ok(Plan::GrantShareObject(Box::new(plan)))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_revoke_share_object(
         &mut self,
         stmt: &RevokeShareObjectStmt,
@@ -166,6 +173,7 @@ impl Binder {
         Ok(Plan::RevokeShareObject(Box::new(plan)))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_alter_share_accounts(
         &mut self,
         stmt: &AlterShareTenantsStmt,
@@ -188,6 +196,7 @@ impl Binder {
         Ok(Plan::AlterShareTenants(Box::new(plan)))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_desc_share(
         &mut self,
         stmt: &DescShareStmt,
@@ -200,6 +209,7 @@ impl Binder {
         Ok(Plan::DescShare(Box::new(plan)))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_show_shares(
         &mut self,
         _stmt: &ShowSharesStmt,
@@ -207,6 +217,7 @@ impl Binder {
         Ok(Plan::ShowShares(Box::new(ShowSharesPlan {})))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_show_object_grant_privileges(
         &mut self,
         stmt: &ShowObjectGrantPrivilegesStmt,
@@ -219,6 +230,7 @@ impl Binder {
         Ok(Plan::ShowObjectGrantPrivileges(Box::new(plan)))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_show_grants_of_share(
         &mut self,
         stmt: &ShowGrantsOfShareStmt,

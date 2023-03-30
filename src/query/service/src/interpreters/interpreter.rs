@@ -48,6 +48,7 @@ pub trait Interpreter: Sync + Send {
     }
 
     /// The core of the databend processor which will execute the logical plan and get the DataBlock
+    #[async_backtrace::framed]
     async fn execute(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
         InterpreterMetrics::record_query_start(&ctx);
         log_query_start(&ctx);

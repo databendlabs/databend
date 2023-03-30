@@ -78,6 +78,7 @@ where T: Processor + 'static
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         // TODO: record profile information for async process
         self.inner.async_process().await
