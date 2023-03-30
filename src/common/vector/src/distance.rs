@@ -30,5 +30,5 @@ pub fn cosine_distance(from: &[f32], to: &[f32]) -> Result<f32> {
     let aa_sum = (&a * &a).sum();
     let bb_sum = (&b * &b).sum();
 
-    Ok((&a * &b).sum() / ((aa_sum).sqrt() * (bb_sum).sqrt()))
+    Ok(1.0 - (&a * &b).sum() / ((aa_sum).sqrt() * (bb_sum).sqrt()))
 }
