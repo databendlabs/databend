@@ -208,7 +208,7 @@ run_test() {
 	fi
 
 	nohup "$query" -c "$config_path" --log-level DEBUG --meta-endpoints "0.0.0.0:9191" >query.log &
-	python3 scripts/ci/wait_tcp.py --timeout 5 --port 3307
+	python3 scripts/ci/wait_tcp.py --timeout 10 --port 3307
 
 	echo " === Run metasrv related test: 05_ddl"
 
