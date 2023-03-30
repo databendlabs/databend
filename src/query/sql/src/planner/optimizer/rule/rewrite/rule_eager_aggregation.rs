@@ -128,6 +128,7 @@ use crate::Visibility;
 pub struct RuleEagerAggregation {
     id: RuleID,
     pattern: SExpr,
+    patterns: Vec<SExpr>,
     metadata: MetadataRef,
 }
 
@@ -136,23 +137,36 @@ impl RuleEagerAggregation {
         Self {
             id: RuleID::EagerAggregation,
 
-            //     Expression
-            //         |
-            //  Aggregate(final)
-            //         |
-            // Aggregate(partial)
-            //         |
-            //        Join
-            //       /    \
-            //      *      *
+            // There are multiple patterns for EagerAggregation, we will match them
+            // in the `apply` function, so the pattern here only contains Expression.
+            // Expression
+            //     |
+            //     *
             pattern: SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::EvalScalar,
                 }
                 .into(),
+                SExpr::create_leaf(
+                    PatternPlan {
+                        plan_type: RelOp::Pattern,
+                    }
+                    .into(),
+                ),
+            ),
+            patterns: vec![
+                //     Expression
+                //         |
+                //  Aggregate(final)
+                //         |
+                // Aggregate(partial)
+                //         |
+                //        Join
+                //       /    \
+                //      *      *
                 SExpr::create_unary(
                     PatternPlan {
-                        plan_type: RelOp::Aggregate,
+                        plan_type: RelOp::EvalScalar,
                     }
                     .into(),
                     SExpr::create_unary(
@@ -160,27 +174,160 @@ impl RuleEagerAggregation {
                             plan_type: RelOp::Aggregate,
                         }
                         .into(),
-                        SExpr::create_binary(
+                        SExpr::create_unary(
                             PatternPlan {
-                                plan_type: RelOp::Join,
+                                plan_type: RelOp::Aggregate,
                             }
                             .into(),
-                            SExpr::create_leaf(
+                            SExpr::create_binary(
                                 PatternPlan {
-                                    plan_type: RelOp::Pattern,
+                                    plan_type: RelOp::Join,
                                 }
                                 .into(),
-                            ),
-                            SExpr::create_leaf(
-                                PatternPlan {
-                                    plan_type: RelOp::Pattern,
-                                }
-                                .into(),
+                                SExpr::create_pattern_leaf(),
+                                SExpr::create_pattern_leaf(),
                             ),
                         ),
                     ),
                 ),
-            ),
+                //     Expression
+                //         |
+                //  Aggregate(final)
+                //         |
+                // Aggregate(partial)
+                //         |
+                //     Expression
+                //         |
+                //        Join
+                //       /    \
+                //      *      *
+                SExpr::create_unary(
+                    PatternPlan {
+                        plan_type: RelOp::EvalScalar,
+                    }
+                    .into(),
+                    SExpr::create_unary(
+                        PatternPlan {
+                            plan_type: RelOp::Aggregate,
+                        }
+                        .into(),
+                        SExpr::create_unary(
+                            PatternPlan {
+                                plan_type: RelOp::Aggregate,
+                            }
+                            .into(),
+                            SExpr::create_unary(
+                                PatternPlan {
+                                    plan_type: RelOp::EvalScalar,
+                                }
+                                .into(),
+                                SExpr::create_binary(
+                                    PatternPlan {
+                                        plan_type: RelOp::Join,
+                                    }
+                                    .into(),
+                                    SExpr::create_pattern_leaf(),
+                                    SExpr::create_pattern_leaf(),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+                //     Expression
+                //         |
+                //        Sort
+                //         |
+                //  Aggregate(final)
+                //         |
+                // Aggregate(partial)
+                //         |
+                //        Join
+                //       /    \
+                //      *      *
+                SExpr::create_unary(
+                    PatternPlan {
+                        plan_type: RelOp::EvalScalar,
+                    }
+                    .into(),
+                    SExpr::create_unary(
+                        PatternPlan {
+                            plan_type: RelOp::Sort,
+                        }
+                        .into(),
+                        SExpr::create_unary(
+                            PatternPlan {
+                                plan_type: RelOp::Aggregate,
+                            }
+                            .into(),
+                            SExpr::create_unary(
+                                PatternPlan {
+                                    plan_type: RelOp::Aggregate,
+                                }
+                                .into(),
+                                SExpr::create_binary(
+                                    PatternPlan {
+                                        plan_type: RelOp::Join,
+                                    }
+                                    .into(),
+                                    SExpr::create_pattern_leaf(),
+                                    SExpr::create_pattern_leaf(),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+                //     Expression
+                //         |
+                //        Sort
+                //         |
+                //  Aggregate(final)
+                //         |
+                // Aggregate(partial)
+                //         |
+                //     Expression
+                //         |
+                //        Join
+                //       /    \
+                //      *      *
+                SExpr::create_unary(
+                    PatternPlan {
+                        plan_type: RelOp::EvalScalar,
+                    }
+                    .into(),
+                    SExpr::create_unary(
+                        PatternPlan {
+                            plan_type: RelOp::Sort,
+                        }
+                        .into(),
+                        SExpr::create_unary(
+                            PatternPlan {
+                                plan_type: RelOp::Aggregate,
+                            }
+                            .into(),
+                            SExpr::create_unary(
+                                PatternPlan {
+                                    plan_type: RelOp::Aggregate,
+                                }
+                                .into(),
+                                SExpr::create_unary(
+                                    PatternPlan {
+                                        plan_type: RelOp::EvalScalar,
+                                    }
+                                    .into(),
+                                    SExpr::create_binary(
+                                        PatternPlan {
+                                            plan_type: RelOp::Join,
+                                        }
+                                        .into(),
+                                        SExpr::create_pattern_leaf(),
+                                        SExpr::create_pattern_leaf(),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ],
             metadata,
         }
     }
@@ -192,10 +339,37 @@ impl Rule for RuleEagerAggregation {
     }
 
     fn apply(&self, a_expr: &SExpr, state: &mut TransformResult) -> common_exception::Result<()> {
+        let mut matched_idx = 0;
+        for (idx, pattern) in self.patterns.iter().enumerate() {
+            if a_expr.match_pattern(pattern) {
+                matched_idx = idx + 1;
+                break;
+            }
+        }
+        if matched_idx == 0 {
+            return Ok(());
+        }
+
+        let (has_sort, has_extra_eval) = match matched_idx {
+            1 => (false, false),
+            2 => (false, true),
+            3 => (true, false),
+            4 => (true, true),
+            _ => unreachable!(),
+        };
+
         let eval_scalar_expr = a_expr;
-        let final_agg_expr = eval_scalar_expr.child(0)?;
+        let sort_expr = eval_scalar_expr.child(0)?;
+        let final_agg_expr = match has_sort {
+            true => sort_expr.child(0)?,
+            false => sort_expr,
+        };
         let final_agg_partial_expr = final_agg_expr.child(0)?;
-        let join_expr = final_agg_partial_expr.child(0)?;
+        let extra_eval_scalar_expr = final_agg_partial_expr.child(0)?;
+        let join_expr = match has_extra_eval {
+            true => extra_eval_scalar_expr.child(0)?,
+            false => extra_eval_scalar_expr,
+        };
 
         let join: Join = join_expr.plan().clone().try_into()?;
         // Only supports inner join and cross join.
@@ -212,6 +386,29 @@ impl Rule for RuleEagerAggregation {
             let rel_expr = RelExpr::with_s_expr(&join_expr.children[idx]);
             let prop = rel_expr.derive_relational_prop()?;
             columns_sets.push(prop.output_columns.clone());
+        }
+
+        // Check if all extra eval scalars can be solved by one of the children.
+        let mut eager_extra_eval_scalar_expr =
+            [EvalScalar { items: vec![] }, EvalScalar { items: vec![] }];
+        if has_extra_eval {
+            let extra_eval_scalar: EvalScalar = extra_eval_scalar_expr.plan().clone().try_into()?;
+            for eval_item in extra_eval_scalar.items.iter() {
+                let eval_used_columns = eval_item.scalar.used_columns();
+                let mut resolved_by_one_child = false;
+                for idx in 0..2 {
+                    if eval_used_columns.is_subset(&columns_sets[idx]) {
+                        eager_extra_eval_scalar_expr[idx]
+                            .items
+                            .push(eval_item.clone());
+                        columns_sets[idx].insert(eval_item.index);
+                        resolved_by_one_child = true;
+                    }
+                }
+                if !resolved_by_one_child {
+                    return Ok(());
+                }
+            }
         }
 
         // Find all `BoundColumnRef`, and then create a mapping from the column index
@@ -285,6 +482,12 @@ impl Rule for RuleEagerAggregation {
 
         let mut success = false;
         let d = if can_push_down[0] { 0 } else { 1 };
+
+        // These variables are used to generate the final result.
+        let mut final_agg_finals = Vec::new();
+        let mut final_agg_partials = Vec::new();
+        let mut final_eval_scalars = Vec::new();
+        let mut join_exprs = Vec::new();
 
         if can_push_down[d] && can_push_down[d ^ 1] {
             // (1) apply eager split on d and d^1.
@@ -502,53 +705,13 @@ impl Rule for RuleEagerAggregation {
                 );
             }
 
-            // Apply eager split on d and d^1.
-            let mut final_eager_split_partial = final_eager_split.clone();
-            final_eager_split_partial.mode = AggregateMode::Partial;
-
-            let mut final_agg_finals = vec![final_eager_split];
-            let mut final_agg_partials = vec![final_eager_split_partial];
-            let mut eval_scalars = vec![eager_split_eval_scalar.clone()];
-
-            let mut eager_group_by_and_eager_count_partial = [
-                eager_group_by_and_eager_count[0].clone(),
-                eager_group_by_and_eager_count[1].clone(),
-            ];
-            eager_group_by_and_eager_count_partial[0].mode = AggregateMode::Partial;
-            eager_group_by_and_eager_count_partial[1].mode = AggregateMode::Partial;
-
-            let mut join_exprs = vec![
-                eval_scalar_expr
-                    .replace_children(vec![join_expr.replace_children(vec![
-                        SExpr::create_unary(
-                            RelOperator::Aggregate(eager_group_by_and_eager_count[0].clone()),
-                            SExpr::create_unary(
-                                RelOperator::Aggregate(
-                                    eager_group_by_and_eager_count_partial[0].clone(),
-                                ),
-                                join_expr.child(0)?.clone(),
-                            ),
-                        ),
-                        SExpr::create_unary(
-                            RelOperator::Aggregate(eager_group_by_and_eager_count[1].clone()),
-                            SExpr::create_unary(
-                                RelOperator::Aggregate(
-                                    eager_group_by_and_eager_count_partial[1].clone(),
-                                ),
-                                join_expr.child(1)?.clone(),
-                            ),
-                        ),
-                    ])])
-                    .replace_plan(eager_split_count_sum.try_into()?),
-            ];
-
             // Apply eager groupby-count on d.
             let mut final_eager_groupby_count_partial = final_eager_groupby_count.clone();
             final_eager_groupby_count_partial.mode = AggregateMode::Partial;
 
             final_agg_finals.push(final_eager_groupby_count);
             final_agg_partials.push(final_eager_groupby_count_partial);
-            eval_scalars.push(eager_groupby_count_scalar);
+            final_eval_scalars.push(eager_groupby_count_scalar);
 
             let mut eager_group_by_count_partial = eager_group_by_and_eager_count[d].clone();
             eager_group_by_count_partial.mode = AggregateMode::Partial;
@@ -560,7 +723,12 @@ impl Rule for RuleEagerAggregation {
                             RelOperator::Aggregate(eager_group_by_and_eager_count[d].clone()),
                             SExpr::create_unary(
                                 RelOperator::Aggregate(eager_group_by_count_partial),
-                                join_expr.child(0)?.clone(),
+                                SExpr::create_unary(
+                                    RelOperator::EvalScalar(
+                                        eager_extra_eval_scalar_expr[0].clone(),
+                                    ),
+                                    join_expr.child(0)?.clone(),
+                                ),
                             ),
                         ),
                         join_expr.child(1)?.clone(),
@@ -574,30 +742,67 @@ impl Rule for RuleEagerAggregation {
                             RelOperator::Aggregate(eager_group_by_and_eager_count[d].clone()),
                             SExpr::create_unary(
                                 RelOperator::Aggregate(eager_group_by_count_partial),
-                                join_expr.child(1)?.clone(),
+                                SExpr::create_unary(
+                                    RelOperator::EvalScalar(
+                                        eager_extra_eval_scalar_expr[1].clone(),
+                                    ),
+                                    join_expr.child(1)?.clone(),
+                                ),
                             ),
                         ),
                     ])])
                     .replace_plan(eager_groupby_count_count_sum.try_into()?)
             });
 
-            for idx in 0..final_agg_finals.len() {
-                let mut result = eval_scalar_expr
-                    .replace_children(vec![
-                        final_agg_expr
-                            .replace_children(vec![
-                                final_agg_partial_expr
-                                    .replace_children(vec![join_exprs[idx].clone()])
-                                    .replace_plan(final_agg_partials[idx].clone().try_into()?),
-                            ])
-                            .replace_plan(final_agg_finals[idx].clone().try_into()?),
-                    ])
-                    .replace_plan(eval_scalars[idx].clone().try_into()?);
-                if idx == 0 {
-                    result.set_applied_rule(&self.id);
-                    state.add_result(result);
-                }
-            }
+            // Apply eager split on d and d^1.
+            let mut final_eager_split_partial = final_eager_split.clone();
+            final_eager_split_partial.mode = AggregateMode::Partial;
+
+            final_agg_finals.push(final_eager_split);
+            final_agg_partials.push(final_eager_split_partial);
+            final_eval_scalars.push(eager_split_eval_scalar.clone());
+
+            let mut eager_group_by_and_eager_count_partial = [
+                eager_group_by_and_eager_count[0].clone(),
+                eager_group_by_and_eager_count[1].clone(),
+            ];
+            eager_group_by_and_eager_count_partial[0].mode = AggregateMode::Partial;
+            eager_group_by_and_eager_count_partial[1].mode = AggregateMode::Partial;
+
+            join_exprs.push(
+                eval_scalar_expr
+                    .replace_children(vec![join_expr.replace_children(vec![
+                        SExpr::create_unary(
+                            RelOperator::Aggregate(eager_group_by_and_eager_count[0].clone()),
+                            SExpr::create_unary(
+                                RelOperator::Aggregate(
+                                    eager_group_by_and_eager_count_partial[0].clone(),
+                                ),
+                                SExpr::create_unary(
+                                    RelOperator::EvalScalar(
+                                        eager_extra_eval_scalar_expr[0].clone(),
+                                    ),
+                                    join_expr.child(0)?.clone(),
+                                ),
+                            ),
+                        ),
+                        SExpr::create_unary(
+                            RelOperator::Aggregate(eager_group_by_and_eager_count[1].clone()),
+                            SExpr::create_unary(
+                                RelOperator::Aggregate(
+                                    eager_group_by_and_eager_count_partial[1].clone(),
+                                ),
+                                SExpr::create_unary(
+                                    RelOperator::EvalScalar(
+                                        eager_extra_eval_scalar_expr[1].clone(),
+                                    ),
+                                    join_expr.child(1)?.clone(),
+                                ),
+                            ),
+                        ),
+                    ])])
+                    .replace_plan(eager_split_count_sum.try_into()?),
+            );
         } else if can_push_down[d] && eager_aggregations[d ^ 1].is_empty() {
             // (1) Try to apply eager group-by on d.
             // (2) Try to apply eager count on d^1's sum aggregations.
@@ -755,20 +960,23 @@ impl Rule for RuleEagerAggregation {
             let mut final_eager_group_by_partial = final_eager_group_by.clone();
             final_eager_group_by_partial.mode = AggregateMode::Partial;
 
-            let mut final_agg_finals = vec![final_eager_group_by];
-            let mut final_agg_partials = vec![final_eager_group_by_partial];
-            let mut eval_scalars = vec![eager_group_by_eval_scalar];
+            final_agg_finals.push(final_eager_group_by);
+            final_agg_partials.push(final_eager_group_by_partial);
+            final_eval_scalars.push(eager_group_by_eval_scalar);
 
             let mut eager_group_by_partial = eager_group_by.clone();
             eager_group_by_partial.mode = AggregateMode::Partial;
 
-            let mut join_exprs = vec![if d == 0 {
+            join_exprs.push(if d == 0 {
                 join_expr.replace_children(vec![
                     SExpr::create_unary(
                         RelOperator::Aggregate(eager_group_by.clone()),
                         SExpr::create_unary(
                             RelOperator::Aggregate(eager_group_by_partial),
-                            join_expr.child(0)?.clone(),
+                            SExpr::create_unary(
+                                RelOperator::EvalScalar(eager_extra_eval_scalar_expr[0].clone()),
+                                join_expr.child(0)?.clone(),
+                            ),
                         ),
                     ),
                     join_expr.child(1)?.clone(),
@@ -780,11 +988,14 @@ impl Rule for RuleEagerAggregation {
                         RelOperator::Aggregate(eager_group_by.clone()),
                         SExpr::create_unary(
                             RelOperator::Aggregate(eager_group_by_partial),
-                            join_expr.child(1)?.clone(),
+                            SExpr::create_unary(
+                                RelOperator::EvalScalar(eager_extra_eval_scalar_expr[1].clone()),
+                                join_expr.child(1)?.clone(),
+                            ),
                         ),
                     ),
                 ])
-            }];
+            });
 
             if can_eager[d ^ 1] && need_eager_count {
                 // Apply eager count on d^1.
@@ -793,7 +1004,7 @@ impl Rule for RuleEagerAggregation {
 
                 final_agg_finals.push(final_eager_count);
                 final_agg_partials.push(final_eager_count_partial);
-                eval_scalars.push(eager_count_eval_scalar);
+                final_eval_scalars.push(eager_count_eval_scalar);
 
                 let mut eager_count_partial = eager_count.clone();
                 eager_count_partial.mode = AggregateMode::Partial;
@@ -805,7 +1016,12 @@ impl Rule for RuleEagerAggregation {
                                 RelOperator::Aggregate(eager_count.clone()),
                                 SExpr::create_unary(
                                     RelOperator::Aggregate(eager_count_partial),
-                                    join_expr.child(1)?.clone(),
+                                    SExpr::create_unary(
+                                        RelOperator::EvalScalar(
+                                            eager_extra_eval_scalar_expr[1].clone(),
+                                        ),
+                                        join_expr.child(1)?.clone(),
+                                    ),
                                 ),
                             ),
                         ])])
@@ -817,7 +1033,12 @@ impl Rule for RuleEagerAggregation {
                                 RelOperator::Aggregate(eager_count.clone()),
                                 SExpr::create_unary(
                                     RelOperator::Aggregate(eager_count_partial),
-                                    join_expr.child(0)?.clone(),
+                                    SExpr::create_unary(
+                                        RelOperator::EvalScalar(
+                                            eager_extra_eval_scalar_expr[0].clone(),
+                                        ),
+                                        join_expr.child(0)?.clone(),
+                                    ),
                                 ),
                             ),
                             join_expr.child(1)?.clone(),
@@ -831,7 +1052,7 @@ impl Rule for RuleEagerAggregation {
 
                 final_agg_finals.push(final_double_eager);
                 final_agg_partials.push(final_double_eager_partial);
-                eval_scalars.push(double_eager_eval_scalar);
+                final_eval_scalars.push(double_eager_eval_scalar);
 
                 let mut eager_agg_partial = eager_group_by.clone();
                 eager_agg_partial.mode = AggregateMode::Partial;
@@ -844,14 +1065,24 @@ impl Rule for RuleEagerAggregation {
                                 RelOperator::Aggregate(eager_group_by),
                                 SExpr::create_unary(
                                     RelOperator::Aggregate(eager_agg_partial),
-                                    join_expr.child(0)?.clone(),
+                                    SExpr::create_unary(
+                                        RelOperator::EvalScalar(
+                                            eager_extra_eval_scalar_expr[0].clone(),
+                                        ),
+                                        join_expr.child(0)?.clone(),
+                                    ),
                                 ),
                             ),
                             SExpr::create_unary(
                                 RelOperator::Aggregate(eager_count),
                                 SExpr::create_unary(
                                     RelOperator::Aggregate(eager_count_partial),
-                                    join_expr.child(1)?.clone(),
+                                    SExpr::create_unary(
+                                        RelOperator::EvalScalar(
+                                            eager_extra_eval_scalar_expr[1].clone(),
+                                        ),
+                                        join_expr.child(1)?.clone(),
+                                    ),
                                 ),
                             ),
                         ])])
@@ -863,39 +1094,56 @@ impl Rule for RuleEagerAggregation {
                                 RelOperator::Aggregate(eager_count),
                                 SExpr::create_unary(
                                     RelOperator::Aggregate(eager_count_partial),
-                                    join_expr.child(0)?.clone(),
+                                    SExpr::create_unary(
+                                        RelOperator::EvalScalar(
+                                            eager_extra_eval_scalar_expr[0].clone(),
+                                        ),
+                                        join_expr.child(0)?.clone(),
+                                    ),
                                 ),
                             ),
                             SExpr::create_unary(
                                 RelOperator::Aggregate(eager_group_by),
                                 SExpr::create_unary(
                                     RelOperator::Aggregate(eager_agg_partial),
-                                    join_expr.child(1)?.clone(),
+                                    SExpr::create_unary(
+                                        RelOperator::EvalScalar(
+                                            eager_extra_eval_scalar_expr[1].clone(),
+                                        ),
+                                        join_expr.child(1)?.clone(),
+                                    ),
                                 ),
                             ),
                         ])])
                         .replace_plan(double_eager_count_sum.try_into()?)
                 });
             }
+        }
 
-            for idx in 0..final_agg_finals.len() {
-                let mut result = eval_scalar_expr
-                    .replace_children(vec![
-                        final_agg_expr
-                            .replace_children(vec![
-                                final_agg_partial_expr
-                                    .replace_children(vec![join_exprs[idx].clone()])
-                                    .replace_plan(final_agg_partials[idx].clone().try_into()?),
-                            ])
-                            .replace_plan(final_agg_finals[idx].clone().try_into()?),
-                    ])
-                    .replace_plan(eval_scalars[idx].clone().try_into()?);
-                if idx == final_agg_finals.len() - 1 {
-                    result.set_applied_rule(&self.id);
-                    state.add_result(result);
-                }
+        // Generate final result.
+        for idx in 0..final_agg_finals.len() {
+            let temp_final_agg_expr = final_agg_expr
+                .replace_children(vec![
+                    final_agg_partial_expr
+                        .replace_children(vec![join_exprs[idx].clone()])
+                        .replace_plan(final_agg_partials[idx].clone().try_into()?),
+                ])
+                .replace_plan(final_agg_finals[idx].clone().try_into()?);
+            let mut result = if has_sort {
+                eval_scalar_expr
+                    .replace_children(vec![sort_expr.replace_children(vec![temp_final_agg_expr])])
+                    .replace_plan(final_eval_scalars[idx].clone().try_into()?)
+            } else {
+                eval_scalar_expr
+                    .replace_children(vec![temp_final_agg_expr])
+                    .replace_plan(final_eval_scalars[idx].clone().try_into()?)
+            };
+            if idx == final_agg_finals.len() - 1 {
+                result.set_applied_rule(&self.id);
+                state.add_result(result);
             }
         }
+
         Ok(())
     }
 

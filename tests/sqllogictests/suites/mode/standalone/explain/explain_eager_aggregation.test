@@ -10,7 +10,7 @@ create table a (a_id int, a_val int);
 statement ok
 create table b (b_id int, b_val int, a_id int);
 
-# eager group-by
+# eager group by
 query T
 explain select b.a_id, sum(b.b_val), count(b.b_val), avg(b.b_val), min(b.b_val), max(b.b_val) from a join b on a.a_id = b.a_id group by b.a_id;
 ----
@@ -60,215 +60,255 @@ EvalScalar
 
 # eager count and double eager
 query T
-explain select a.a_id, b.a_id, sum(b.b_val) from a join b on a.a_id = b.a_id group by a.a_id, b.a_id;
+explain select a.a_id, b.a_id, sum(b.b_val), count(b.b_val), avg(b.b_val), min(b.b_val), max(b.b_val) from a join b on a.a_id = b.a_id group by a.a_id, b.a_id order by b.a_id;
 ----
 EvalScalar
-├── expressions: [sum(b.b_val) (#8)]
+├── expressions: [sum(b.b_val) (#17), CAST(count(b.b_val) (#18) AS UInt64), _eager_final_sum (#19) / CAST(CAST(_eager_final_count (#22) AS UInt64) AS UInt64 NULL), min(b.b_val) (#20), max(b.b_val) (#21)]
 ├── estimated rows: 0.00
-└── AggregateFinal
-    ├── group by: [a_id, a_id]
-    ├── aggregate functions: [sum(sum(b.b_val) * _eager_count)]
+└── Sort
+    ├── sort keys: [a_id ASC NULLS LAST]
     ├── estimated rows: 0.00
-    └── AggregatePartial
+    └── AggregateFinal
         ├── group by: [a_id, a_id]
-        ├── aggregate functions: [sum(sum(b.b_val) * _eager_count)]
+        ├── aggregate functions: [sum(sum(b.b_val) * _eager_count), sum(count(b.b_val) * _eager_count), sum(avg(b.b_val) * _eager_count), min(min(b.b_val)), max(max(b.b_val)), sum(avg(b.b_val) * _eager_count)]
         ├── estimated rows: 0.00
-        └── EvalScalar
-            ├── expressions: [_eager (#5) * CAST(_eager_count (#7) AS UInt64 NULL)]
+        └── AggregatePartial
+            ├── group by: [a_id, a_id]
+            ├── aggregate functions: [sum(sum(b.b_val) * _eager_count), sum(count(b.b_val) * _eager_count), sum(avg(b.b_val) * _eager_count), min(min(b.b_val)), max(max(b.b_val)), sum(avg(b.b_val) * _eager_count)]
             ├── estimated rows: 0.00
-            └── HashJoin
-                ├── join type: INNER
-                ├── build keys: [b.a_id (#4)]
-                ├── probe keys: [a.a_id (#0)]
-                ├── filters: []
+            └── EvalScalar
+                ├── expressions: [_eager (#5) * CAST(_eager_count (#15) AS UInt64 NULL), _eager (#6) * _eager_count (#15), _eager (#7) * CAST(_eager_count (#15) AS UInt64 NULL), _eager (#16) * _eager_count (#15)]
                 ├── estimated rows: 0.00
-                ├── AggregateFinal(Build)
-                │   ├── group by: [a_id]
-                │   ├── aggregate functions: [sum(b_val)]
-                │   ├── estimated rows: 0.00
-                │   └── AggregatePartial
-                │       ├── group by: [a_id]
-                │       ├── aggregate functions: [sum(b_val)]
-                │       ├── estimated rows: 0.00
-                │       └── TableScan
-                │           ├── table: default.default.b
-                │           ├── read rows: 0
-                │           ├── read bytes: 0
-                │           ├── partitions total: 0
-                │           ├── partitions scanned: 0
-                │           ├── push downs: [filters: [], limit: NONE]
-                │           ├── output columns: [b_val, a_id]
-                │           └── estimated rows: 0.00
-                └── AggregateFinal(Probe)
-                    ├── group by: [a_id]
-                    ├── aggregate functions: [count()]
+                └── HashJoin
+                    ├── join type: INNER
+                    ├── build keys: [b.a_id (#4)]
+                    ├── probe keys: [a.a_id (#0)]
+                    ├── filters: []
                     ├── estimated rows: 0.00
-                    └── AggregatePartial
+                    ├── AggregateFinal(Build)
+                    │   ├── group by: [a_id]
+                    │   ├── aggregate functions: [sum(b_val), count(b_val), sum(b_val), min(b_val), max(b_val), count(b_val)]
+                    │   ├── estimated rows: 0.00
+                    │   └── AggregatePartial
+                    │       ├── group by: [a_id]
+                    │       ├── aggregate functions: [sum(b_val), count(b_val), sum(b_val), min(b_val), max(b_val), count(b_val)]
+                    │       ├── estimated rows: 0.00
+                    │       └── TableScan
+                    │           ├── table: default.default.b
+                    │           ├── read rows: 0
+                    │           ├── read bytes: 0
+                    │           ├── partitions total: 0
+                    │           ├── partitions scanned: 0
+                    │           ├── push downs: [filters: [], limit: NONE]
+                    │           ├── output columns: [b_val, a_id]
+                    │           └── estimated rows: 0.00
+                    └── AggregateFinal(Probe)
                         ├── group by: [a_id]
                         ├── aggregate functions: [count()]
                         ├── estimated rows: 0.00
-                        └── TableScan
-                            ├── table: default.default.a
-                            ├── read rows: 0
-                            ├── read bytes: 0
-                            ├── partitions total: 0
-                            ├── partitions scanned: 0
-                            ├── push downs: [filters: [], limit: NONE]
-                            ├── output columns: [a_id]
-                            └── estimated rows: 0.00
+                        └── AggregatePartial
+                            ├── group by: [a_id]
+                            ├── aggregate functions: [count()]
+                            ├── estimated rows: 0.00
+                            └── TableScan
+                                ├── table: default.default.a
+                                ├── read rows: 0
+                                ├── read bytes: 0
+                                ├── partitions total: 0
+                                ├── partitions scanned: 0
+                                ├── push downs: [filters: [], limit: NONE]
+                                ├── output columns: [a_id]
+                                └── estimated rows: 0.00
 
-# duplicate aggregate function
+
+# eager groupby-count and eager split
 query T
-explain select a.a_id, b.a_id, sum(b.b_val), sum(b.b_val) from a join b on a.a_id = b.a_id group by a.a_id, b.a_id;
+explain select a.a_id, b.a_id, sum(a.a_val), count(a.a_val), avg(a.a_val), min(a.a_val), max(a.a_val), sum(b.b_val), count(b.b_val), avg(b.b_val), min(b.b_val), max(b.b_val) from a join b on a.a_id = b.a_id group by a.a_id, b.a_id order by b.a_id;
 ----
 EvalScalar
-├── expressions: [sum(b.b_val) (#10), sum(b.b_val) (#10)]
+├── expressions: [sum(a.a_val) (#29), CAST(count(a.a_val) (#30) AS UInt64), _eager_final_sum (#31) / CAST(CAST(_eager_final_count (#34) AS UInt64) AS UInt64 NULL), min(a.a_val) (#32), max(a.a_val) (#33), sum(b.b_val) (#35), CAST(count(b.b_val) (#36) AS UInt64), _eager_final_sum (#37) / CAST(CAST(_eager_final_count (#40) AS UInt64) AS UInt64 NULL), min(b.b_val) (#38), max(b.b_val) (#39)]
 ├── estimated rows: 0.00
-└── AggregateFinal
-    ├── group by: [a_id, a_id]
-    ├── aggregate functions: [sum(sum(b.b_val) * _eager_count)]
+└── Sort
+    ├── sort keys: [a_id ASC NULLS LAST]
     ├── estimated rows: 0.00
-    └── AggregatePartial
+    └── AggregateFinal
         ├── group by: [a_id, a_id]
-        ├── aggregate functions: [sum(sum(b.b_val) * _eager_count)]
+        ├── aggregate functions: [sum(sum(a.a_val) * _eager_count), sum(count(a.a_val) * _eager_count), sum(avg(a.a_val) * _eager_count), min(min(a.a_val)), max(max(a.a_val)), sum(sum(b.b_val) * _eager_count), sum(count(b.b_val) * _eager_count), sum(avg(b.b_val) * _eager_count), min(min(b.b_val)), max(max(b.b_val)), sum(avg(a.a_val) * _eager_count), sum(avg(b.b_val) * _eager_count)]
         ├── estimated rows: 0.00
-        └── EvalScalar
-            ├── expressions: [_eager (#6) * CAST(_eager_count (#9) AS UInt64 NULL)]
+        └── AggregatePartial
+            ├── group by: [a_id, a_id]
+            ├── aggregate functions: [sum(sum(a.a_val) * _eager_count), sum(count(a.a_val) * _eager_count), sum(avg(a.a_val) * _eager_count), min(min(a.a_val)), max(max(a.a_val)), sum(sum(b.b_val) * _eager_count), sum(count(b.b_val) * _eager_count), sum(avg(b.b_val) * _eager_count), min(min(b.b_val)), max(max(b.b_val)), sum(avg(a.a_val) * _eager_count), sum(avg(b.b_val) * _eager_count)]
             ├── estimated rows: 0.00
-            └── HashJoin
-                ├── join type: INNER
-                ├── build keys: [b.a_id (#4)]
-                ├── probe keys: [a.a_id (#0)]
-                ├── filters: []
+            └── EvalScalar
+                ├── expressions: [_eager (#5) * CAST(_eager_count (#26) AS UInt64 NULL), _eager (#6) * _eager_count (#26), _eager (#7) * CAST(_eager_count (#26) AS UInt64 NULL), _eager (#10) * CAST(_eager_count (#25) AS UInt64 NULL), _eager (#11) * _eager_count (#25), _eager (#12) * CAST(_eager_count (#25) AS UInt64 NULL), _eager (#27) * _eager_count (#26), _eager (#28) * _eager_count (#25)]
                 ├── estimated rows: 0.00
-                ├── AggregateFinal(Build)
-                │   ├── group by: [a_id]
-                │   ├── aggregate functions: [sum(b_val)]
-                │   ├── estimated rows: 0.00
-                │   └── AggregatePartial
-                │       ├── group by: [a_id]
-                │       ├── aggregate functions: [sum(b_val)]
-                │       ├── estimated rows: 0.00
-                │       └── TableScan
-                │           ├── table: default.default.b
-                │           ├── read rows: 0
-                │           ├── read bytes: 0
-                │           ├── partitions total: 0
-                │           ├── partitions scanned: 0
-                │           ├── push downs: [filters: [], limit: NONE]
-                │           ├── output columns: [b_val, a_id]
-                │           └── estimated rows: 0.00
-                └── AggregateFinal(Probe)
-                    ├── group by: [a_id]
-                    ├── aggregate functions: [count()]
+                └── HashJoin
+                    ├── join type: INNER
+                    ├── build keys: [b.a_id (#4)]
+                    ├── probe keys: [a.a_id (#0)]
+                    ├── filters: []
                     ├── estimated rows: 0.00
-                    └── AggregatePartial
+                    ├── AggregateFinal(Build)
+                    │   ├── group by: [a_id]
+                    │   ├── aggregate functions: [sum(b_val), count(b_val), sum(b_val), min(b_val), max(b_val), count(), count(b_val)]
+                    │   ├── estimated rows: 0.00
+                    │   └── AggregatePartial
+                    │       ├── group by: [a_id]
+                    │       ├── aggregate functions: [sum(b_val), count(b_val), sum(b_val), min(b_val), max(b_val), count(), count(b_val)]
+                    │       ├── estimated rows: 0.00
+                    │       └── TableScan
+                    │           ├── table: default.default.b
+                    │           ├── read rows: 0
+                    │           ├── read bytes: 0
+                    │           ├── partitions total: 0
+                    │           ├── partitions scanned: 0
+                    │           ├── push downs: [filters: [], limit: NONE]
+                    │           ├── output columns: [b_val, a_id]
+                    │           └── estimated rows: 0.00
+                    └── AggregateFinal(Probe)
+                        ├── group by: [a_id]
+                        ├── aggregate functions: [sum(a_val), count(a_val), sum(a_val), min(a_val), max(a_val), count(), count(a_val)]
+                        ├── estimated rows: 0.00
+                        └── AggregatePartial
+                            ├── group by: [a_id]
+                            ├── aggregate functions: [sum(a_val), count(a_val), sum(a_val), min(a_val), max(a_val), count(), count(a_val)]
+                            ├── estimated rows: 0.00
+                            └── TableScan
+                                ├── table: default.default.a
+                                ├── read rows: 0
+                                ├── read bytes: 0
+                                ├── partitions total: 0
+                                ├── partitions scanned: 0
+                                ├── push downs: [filters: [], limit: NONE]
+                                └── estimated rows: 0.00
+
+# double eager with extra eval scalar
+query T
+explain select a.a_id, b.a_id, sum(2 * b.b_val + b.b_id / (b.a_id + 10)), count(b.b_val * b.b_id), avg(b.b_val * b.b_id), min(b.b_val - b.a_id), max(b.b_id + b.a_id * b.b_val) from a join b on a.a_id = b.a_id group by a.a_id, b.a_id order by b.a_id;
+----
+EvalScalar
+├── expressions: [sum(((2 * b.b_val) + (b.b_id / (b.a_id + 10)))) (#22), CAST(count((b.b_val * b.b_id)) (#23) AS UInt64), _eager_final_sum (#24) / CAST(CAST(_eager_final_count (#27) AS UInt64) AS UInt64 NULL), min((b.b_val - b.a_id)) (#25), max((b.b_id + (b.a_id * b.b_val))) (#26)]
+├── estimated rows: 0.00
+└── Sort
+    ├── sort keys: [a_id ASC NULLS LAST]
+    ├── estimated rows: 0.00
+    └── AggregateFinal
+        ├── group by: [a_id, a_id]
+        ├── aggregate functions: [sum(sum(((2 * b.b_val) + (b.b_id / (b.a_id + 10)))) * _eager_count), sum(count((b.b_val * b.b_id)) * _eager_count), sum(avg((b.b_val * b.b_id)) * _eager_count), min(min((b.b_val - b.a_id))), max(max((b.b_id + (b.a_id * b.b_val)))), sum(avg((b.b_val * b.b_id)) * _eager_count)]
+        ├── estimated rows: 0.00
+        └── AggregatePartial
+            ├── group by: [a_id, a_id]
+            ├── aggregate functions: [sum(sum(((2 * b.b_val) + (b.b_id / (b.a_id + 10)))) * _eager_count), sum(count((b.b_val * b.b_id)) * _eager_count), sum(avg((b.b_val * b.b_id)) * _eager_count), min(min((b.b_val - b.a_id))), max(max((b.b_id + (b.a_id * b.b_val)))), sum(avg((b.b_val * b.b_id)) * _eager_count)]
+            ├── estimated rows: 0.00
+            └── EvalScalar
+                ├── expressions: [_eager (#6) * CAST(_eager_count (#20) AS UInt64 NULL), _eager (#8) * _eager_count (#20), _eager (#10) * CAST(_eager_count (#20) AS UInt64 NULL), _eager (#21) * _eager_count (#20)]
+                ├── estimated rows: 0.00
+                └── HashJoin
+                    ├── join type: INNER
+                    ├── build keys: [b.a_id (#4)]
+                    ├── probe keys: [a.a_id (#0)]
+                    ├── filters: []
+                    ├── estimated rows: 0.00
+                    ├── AggregateFinal(Build)
+                    │   ├── group by: [a_id]
+                    │   ├── aggregate functions: [sum(sum_arg_0), count(count_arg_0), sum(avg_arg_0), min(min_arg_0), max(max_arg_0), count(avg_arg_0)]
+                    │   ├── estimated rows: 0.00
+                    │   └── AggregatePartial
+                    │       ├── group by: [a_id]
+                    │       ├── aggregate functions: [sum(sum_arg_0), count(count_arg_0), sum(avg_arg_0), min(min_arg_0), max(max_arg_0), count(avg_arg_0)]
+                    │       ├── estimated rows: 0.00
+                    │       └── EvalScalar
+                    │           ├── expressions: [2 * b.b_val (#3) + b.b_id (#2) / (b.a_id (#4) + 10), b.b_val (#3) * b.b_id (#2), b.b_val (#3) * b.b_id (#2), b.b_val (#3) - b.a_id (#4), b.b_id (#2) + b.a_id (#4) * b.b_val (#3)]
+                    │           ├── estimated rows: 0.00
+                    │           └── TableScan
+                    │               ├── table: default.default.b
+                    │               ├── read rows: 0
+                    │               ├── read bytes: 0
+                    │               ├── partitions total: 0
+                    │               ├── partitions scanned: 0
+                    │               ├── push downs: [filters: [], limit: NONE]
+                    │               └── estimated rows: 0.00
+                    └── AggregateFinal(Probe)
                         ├── group by: [a_id]
                         ├── aggregate functions: [count()]
                         ├── estimated rows: 0.00
-                        └── TableScan
-                            ├── table: default.default.a
-                            ├── read rows: 0
-                            ├── read bytes: 0
-                            ├── partitions total: 0
-                            ├── partitions scanned: 0
-                            ├── push downs: [filters: [], limit: NONE]
-                            ├── output columns: [a_id]
-                            └── estimated rows: 0.00
+                        └── AggregatePartial
+                            ├── group by: [a_id]
+                            ├── aggregate functions: [count()]
+                            ├── estimated rows: 0.00
+                            └── TableScan
+                                ├── table: default.default.a
+                                ├── read rows: 0
+                                ├── read bytes: 0
+                                ├── partitions total: 0
+                                ├── partitions scanned: 0
+                                ├── push downs: [filters: [], limit: NONE]
+                                ├── output columns: [a_id]
+                                └── estimated rows: 0.00
 
-# cannot eager
+# eager split with extra eval scalar
 query T
-explain select b.a_id, sum(a.a_val), avg(b.b_val) from a join b on a.a_id = b.a_id group by b.a_id;
+explain select a.a_id, b.a_id, sum(11.22 * (1 - a.a_val / a.a_id)), count(a.a_val + a.a_id), avg(a.a_val * a.a_id - a.a_id / a.a_val), min(a.a_val + a.a_id), max(a.a_val - 2 * a.a_id), sum(b.b_val * b.b_id + b.a_id * 2), count(b.b_val), avg(b.b_val / b.b_id * 2), min(b.b_val * b.a_id), max(b.b_val / 3) from a join b on a.a_id = b.a_id group by a.a_id, b.a_id order by b.a_id;
 ----
 EvalScalar
-├── expressions: [sum(a.a_val) (#5), avg(b.b_val) (#6)]
+├── expressions: [sum((11.22 * (1 - (a.a_val / a.a_id)))) (#38), CAST(count((a.a_val + a.a_id)) (#39) AS UInt64), _eager_final_sum (#40) / CAST(CAST(_eager_final_count (#43) AS UInt64) AS UInt64 NULL), min((a.a_val + a.a_id)) (#41), max((a.a_val - (2 * a.a_id))) (#42), sum(((b.b_val * b.b_id) + (b.a_id * 2))) (#44), CAST(count(b.b_val) (#45) AS UInt64), _eager_final_sum (#46) / CAST(CAST(_eager_final_count (#49) AS UInt64) AS UInt64 NULL), min((b.b_val * b.a_id)) (#47), max((b.b_val / 3)) (#48)]
 ├── estimated rows: 0.00
-└── AggregateFinal
-    ├── group by: [a_id]
-    ├── aggregate functions: [sum(a_val), avg(b_val)]
+└── Sort
+    ├── sort keys: [a_id ASC NULLS LAST]
     ├── estimated rows: 0.00
-    └── AggregatePartial
-        ├── group by: [a_id]
-        ├── aggregate functions: [sum(a_val), avg(b_val)]
-        ├── estimated rows: 0.00
-        └── HashJoin
-            ├── join type: INNER
-            ├── build keys: [b.a_id (#4)]
-            ├── probe keys: [a.a_id (#0)]
-            ├── filters: []
-            ├── estimated rows: 0.00
-            ├── TableScan(Build)
-            │   ├── table: default.default.b
-            │   ├── read rows: 0
-            │   ├── read bytes: 0
-            │   ├── partitions total: 0
-            │   ├── partitions scanned: 0
-            │   ├── push downs: [filters: [], limit: NONE]
-            │   ├── output columns: [b_val, a_id]
-            │   └── estimated rows: 0.00
-            └── TableScan(Probe)
-                ├── table: default.default.a
-                ├── read rows: 0
-                ├── read bytes: 0
-                ├── partitions total: 0
-                ├── partitions scanned: 0
-                ├── push downs: [filters: [], limit: NONE]
-                └── estimated rows: 0.00
-
-# eager split
-query T
-explain select a.a_id, b.a_id, sum(a.a_val), avg(b.b_val) from a join b on a.a_id = b.a_id group by a.a_id, b.a_id;
-----
-EvalScalar
-├── expressions: [sum(a.a_val) (#12), _eager_final_sum (#13) / CAST(CAST(_eager_final_count (#14) AS UInt64) AS UInt64 NULL)]
-├── estimated rows: 0.00
-└── AggregateFinal
-    ├── group by: [a_id, a_id]
-    ├── aggregate functions: [sum(sum(a.a_val) * _eager_count), sum(avg(b.b_val) * _eager_count), sum(avg(b.b_val) * _eager_count)]
-    ├── estimated rows: 0.00
-    └── AggregatePartial
+    └── AggregateFinal
         ├── group by: [a_id, a_id]
-        ├── aggregate functions: [sum(sum(a.a_val) * _eager_count), sum(avg(b.b_val) * _eager_count), sum(avg(b.b_val) * _eager_count)]
+        ├── aggregate functions: [sum(sum((11.22 * (1 - (a.a_val / a.a_id)))) * _eager_count), sum(count((a.a_val + a.a_id)) * _eager_count), sum(avg(((a.a_val * a.a_id) - (a.a_id / a.a_val))) * _eager_count), min(min((a.a_val + a.a_id))), max(max((a.a_val - (2 * a.a_id)))), sum(sum(((b.b_val * b.b_id) + (b.a_id * 2))) * _eager_count), sum(count(b.b_val) * _eager_count), sum(avg(((b.b_val / b.b_id) * 2)) * _eager_count), min(min((b.b_val * b.a_id))), max(max((b.b_val / 3))), sum(avg(((a.a_val * a.a_id) - (a.a_id / a.a_val))) * _eager_count), sum(avg(((b.b_val / b.b_id) * 2)) * _eager_count)]
         ├── estimated rows: 0.00
-        └── EvalScalar
-            ├── expressions: [_eager (#5) * CAST(_eager_count (#10) AS UInt64 NULL), _eager (#6) * CAST(_eager_count (#9) AS UInt64 NULL), _eager (#11) * _eager_count (#9)]
+        └── AggregatePartial
+            ├── group by: [a_id, a_id]
+            ├── aggregate functions: [sum(sum((11.22 * (1 - (a.a_val / a.a_id)))) * _eager_count), sum(count((a.a_val + a.a_id)) * _eager_count), sum(avg(((a.a_val * a.a_id) - (a.a_id / a.a_val))) * _eager_count), min(min((a.a_val + a.a_id))), max(max((a.a_val - (2 * a.a_id)))), sum(sum(((b.b_val * b.b_id) + (b.a_id * 2))) * _eager_count), sum(count(b.b_val) * _eager_count), sum(avg(((b.b_val / b.b_id) * 2)) * _eager_count), min(min((b.b_val * b.a_id))), max(max((b.b_val / 3))), sum(avg(((a.a_val * a.a_id) - (a.a_id / a.a_val))) * _eager_count), sum(avg(((b.b_val / b.b_id) * 2)) * _eager_count)]
             ├── estimated rows: 0.00
-            └── HashJoin
-                ├── join type: INNER
-                ├── build keys: [b.a_id (#4)]
-                ├── probe keys: [a.a_id (#0)]
-                ├── filters: []
+            └── EvalScalar
+                ├── expressions: [_eager (#6) * CAST(_eager_count (#35) AS UInt64 NULL), _eager (#8) * _eager_count (#35), _eager (#10) * CAST(_eager_count (#35) AS UInt64 NULL), _eager (#16) * CAST(_eager_count (#34) AS UInt64 NULL), _eager (#17) * _eager_count (#34), _eager (#19) * CAST(_eager_count (#34) AS UInt64 NULL), _eager (#36) * _eager_count (#35), _eager (#37) * _eager_count (#34)]
                 ├── estimated rows: 0.00
-                ├── AggregateFinal(Build)
-                │   ├── group by: [a_id]
-                │   ├── aggregate functions: [sum(b_val), count(), count(b_val)]
-                │   ├── estimated rows: 0.00
-                │   └── AggregatePartial
-                │       ├── group by: [a_id]
-                │       ├── aggregate functions: [sum(b_val), count(), count(b_val)]
-                │       ├── estimated rows: 0.00
-                │       └── TableScan
-                │           ├── table: default.default.b
-                │           ├── read rows: 0
-                │           ├── read bytes: 0
-                │           ├── partitions total: 0
-                │           ├── partitions scanned: 0
-                │           ├── push downs: [filters: [], limit: NONE]
-                │           ├── output columns: [b_val, a_id]
-                │           └── estimated rows: 0.00
-                └── AggregateFinal(Probe)
-                    ├── group by: [a_id]
-                    ├── aggregate functions: [sum(a_val), count()]
+                └── HashJoin
+                    ├── join type: INNER
+                    ├── build keys: [b.a_id (#4)]
+                    ├── probe keys: [a.a_id (#0)]
+                    ├── filters: []
                     ├── estimated rows: 0.00
-                    └── AggregatePartial
+                    ├── AggregateFinal(Build)
+                    │   ├── group by: [a_id]
+                    │   ├── aggregate functions: [sum(sum_arg_0), count(b_val), sum(avg_arg_0), min(min_arg_0), max(max_arg_0), count(), count(avg_arg_0)]
+                    │   ├── estimated rows: 0.00
+                    │   └── AggregatePartial
+                    │       ├── group by: [a_id]
+                    │       ├── aggregate functions: [sum(sum_arg_0), count(b_val), sum(avg_arg_0), min(min_arg_0), max(max_arg_0), count(), count(avg_arg_0)]
+                    │       ├── estimated rows: 0.00
+                    │       └── EvalScalar
+                    │           ├── expressions: [b.b_val (#3) * b.b_id (#2) + b.a_id (#4) * 2, b.b_val (#3) / b.b_id (#2) * 2, b.b_val (#3) * b.a_id (#4), b.b_val (#3) / 3]
+                    │           ├── estimated rows: 0.00
+                    │           └── TableScan
+                    │               ├── table: default.default.b
+                    │               ├── read rows: 0
+                    │               ├── read bytes: 0
+                    │               ├── partitions total: 0
+                    │               ├── partitions scanned: 0
+                    │               ├── push downs: [filters: [], limit: NONE]
+                    │               └── estimated rows: 0.00
+                    └── AggregateFinal(Probe)
                         ├── group by: [a_id]
-                        ├── aggregate functions: [sum(a_val), count()]
+                        ├── aggregate functions: [sum(sum_arg_0), count(count_arg_0), sum(avg_arg_0), min(min_arg_0), max(max_arg_0), count(), count(avg_arg_0)]
                         ├── estimated rows: 0.00
-                        └── TableScan
-                            ├── table: default.default.a
-                            ├── read rows: 0
-                            ├── read bytes: 0
-                            ├── partitions total: 0
-                            ├── partitions scanned: 0
-                            ├── push downs: [filters: [], limit: NONE]
-                            └── estimated rows: 0.00
+                        └── AggregatePartial
+                            ├── group by: [a_id]
+                            ├── aggregate functions: [sum(sum_arg_0), count(count_arg_0), sum(avg_arg_0), min(min_arg_0), max(max_arg_0), count(), count(avg_arg_0)]
+                            ├── estimated rows: 0.00
+                            └── EvalScalar
+                                ├── expressions: [11.22 * (1 - a.a_val (#1) / a.a_id (#0)), a.a_val (#1) + a.a_id (#0), a.a_val (#1) * a.a_id (#0) - a.a_id (#0) / a.a_val (#1), a.a_val (#1) + a.a_id (#0), a.a_val (#1) - 2 * a.a_id (#0)]
+                                ├── estimated rows: 0.00
+                                └── TableScan
+                                    ├── table: default.default.a
+                                    ├── read rows: 0
+                                    ├── read bytes: 0
+                                    ├── partitions total: 0
+                                    ├── partitions scanned: 0
+                                    ├── push downs: [filters: [], limit: NONE]
+                                    └── estimated rows: 0.00
+
