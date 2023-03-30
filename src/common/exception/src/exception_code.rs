@@ -138,7 +138,6 @@ build_exceptions! {
     // create table or alter table add column with internal column name
     TableWithInternalColumnName(1110),
     EmptyShareEndpointConfig(1111),
-    RwLockError(1112),
 
     // Data Related Errors
 

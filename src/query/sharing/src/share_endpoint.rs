@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::sync::RwLock;
 
 use bytes::Bytes;
 use common_auth::RefreshableToken;
@@ -35,6 +34,7 @@ use http::Method;
 use http::Request;
 use opendal::raw::AsyncBody;
 use opendal::raw::HttpClient;
+use parking_lot::RwLock;
 use tracing::error;
 use tracing::info;
 
@@ -68,18 +68,15 @@ impl ShareEndpointManager {
         &self,
         from_tenant: &str,
         to_tenant: &str,
-    ) -> Result<EndpointConfig> {
+    ) -> Result<ShareEndpointMeta> {
         let endpoint_meta = {
-            let endpoint_map = self.endpoint_map.read()?;
+            let endpoint_map = self.endpoint_map.read();
             endpoint_map.get(to_tenant).cloned()
         };
 
         match endpoint_meta {
             Some(endpoint_meta) => {
-                return Ok(EndpointConfig {
-                    url: endpoint_meta.url,
-                    token: RefreshableToken::Direct(from_tenant.to_owned()),
-                });
+                return Ok(endpoint_meta);
             }
             None => {
                 let req = GetShareEndpointReq {
@@ -90,12 +87,9 @@ impl ShareEndpointManager {
                 let meta_api = UserApiProvider::instance().get_meta_store_client();
                 let resp = meta_api.get_share_endpoint(req).await?;
                 if let Some((_, endpoint_meta)) = resp.share_endpoint_meta_vec.into_iter().next() {
-                    let mut endpoint_map = self.endpoint_map.write()?;
+                    let mut endpoint_map = self.endpoint_map.write();
                     endpoint_map.insert(to_tenant.to_owned(), endpoint_meta.clone());
-                    return Ok(EndpointConfig {
-                        url: endpoint_meta.url,
-                        token: RefreshableToken::Direct(from_tenant.to_owned()),
-                    });
+                    return Ok(endpoint_meta);
                 }
             }
         };
@@ -120,10 +114,12 @@ impl ShareEndpointManager {
             if is_same_tenant {
                 false
             } else {
-                let endpoint_map = self.endpoint_map.read()?;
+                let endpoint_map = self.endpoint_map.read();
                 endpoint_map.contains_key(to_tenant)
             }
         };
+        let mut last_endpoint_meta = None;
+        let mut last_error = None;
 
         loop {
             let endpoint_config = if is_same_tenant {
@@ -143,7 +139,26 @@ impl ShareEndpointManager {
                 }
             } else {
                 // Else get share endpoint from meta API
-                self.get_share_endpoint(from_tenant, to_tenant).await?
+                let endpoint_meta = self.get_share_endpoint(from_tenant, to_tenant).await?;
+                match last_endpoint_meta {
+                    Some(ref last_endpoint_meta) => {
+                        if last_endpoint_meta == &endpoint_meta {
+                            // If endpoint meta is the same, no need to try again.
+                            return Err(ErrorCode::EmptyShareEndpointConfig(format!(
+                                "Query ShareEndpoint to tenant {:?} from endpoint {:?} fail: {:?}",
+                                to_tenant, endpoint_meta, last_error,
+                            )));
+                        }
+                    }
+                    None => {
+                        last_endpoint_meta = Some(endpoint_meta.clone());
+                    }
+                }
+
+                EndpointConfig {
+                    url: endpoint_meta.url,
+                    token: RefreshableToken::Direct(from_tenant.to_owned()),
+                }
             };
 
             let bs = Bytes::from(serde_json::to_vec(&tables)?);
@@ -169,11 +184,12 @@ impl ShareEndpointManager {
                         error!("get_table_info_map error: {:?}", err);
                         return Err(err.into());
                     } else {
+                        info!("get_table_info_map error: {:?}, try again", err);
+                        last_error = Some(err);
                         // endpoint may be changed, so cleanup endpoint and try again
                         need_try_again = false;
-                        let mut endpoint_map = self.endpoint_map.write()?;
+                        let mut endpoint_map = self.endpoint_map.write();
                         endpoint_map.remove(to_tenant);
-                        info!("get_table_info_map error: {:?}, try again", err);
                     }
                 }
             }

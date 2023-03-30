@@ -204,12 +204,6 @@ impl From<std::string::FromUtf8Error> for ErrorCode {
     }
 }
 
-impl<T> From<std::sync::PoisonError<T>> for ErrorCode {
-    fn from(error: std::sync::PoisonError<T>) -> Self {
-        ErrorCode::RwLockError(format!("RwLock error, cause: {}", error))
-    }
-}
-
 // ===  prost error ===
 impl From<prost::EncodeError> for ErrorCode {
     fn from(error: prost::EncodeError) -> Self {

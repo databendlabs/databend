@@ -2189,6 +2189,7 @@ dependencies = [
  "log 0.4.17",
  "moka",
  "opendal",
+ "parking_lot 0.12.1",
  "reqwest",
  "serde",
  "serde_json",
