@@ -153,6 +153,7 @@ jobs:
         id: benchmark
         with:
           sha: ${{ needs.metadata.outputs.sha }}
+          run_id: ${{ needs.metadata.outputs.run_id }}
           dataset: ${{ matrix.dataset }}
           source: ${{ needs.metadata.outputs.source }}
           source_id: ${{ needs.metadata.outputs.source_id }}
@@ -249,6 +250,7 @@ jobs:
         id: benchmark
         with:
           sha: ${{ needs.metadata.outputs.sha }}
+          run_id: ${{ needs.metadata.outputs.run_id }}
           dataset: ${{ matrix.dataset }}
           source: ${{ needs.metadata.outputs.source }}
           source_id: ${{ needs.metadata.outputs.source_id }}
