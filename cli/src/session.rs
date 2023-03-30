@@ -17,7 +17,6 @@ use arrow::csv::WriterBuilder;
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow::error::ArrowError;
 use arrow::record_batch::RecordBatch;
-use arrow_cast::pretty::pretty_format_batches;
 use arrow_flight::sql::client::FlightSqlServiceClient;
 use arrow_flight::utils::flight_data_to_batches;
 use arrow_flight::FlightData;
@@ -30,6 +29,7 @@ use std::sync::Arc;
 use tokio::time::Instant;
 use tonic::transport::Endpoint;
 
+use crate::display::print_batches;
 use crate::helper::CliHelper;
 
 pub struct Session {
@@ -157,9 +157,8 @@ impl Session {
             .collect::<Result<Vec<RecordBatch>, ArrowError>>()?;
 
         if is_repl {
-            let res = pretty_format_batches(batches.as_slice())?;
+            print_batches(QueryKind::from(query), batches.as_slice())?;
 
-            println!("{res}");
             println!();
 
             let rows: usize = batches.iter().map(|b| b.num_rows()).sum();
@@ -228,4 +227,28 @@ fn normalize_record_batch(batch: &RecordBatch) -> Result<RecordBatch, ArrowError
 
     let schema = Schema::new(fields);
     RecordBatch::try_new(Arc::new(schema), columns)
+}
+
+pub enum QueryKind {
+    Query,
+    Explain,
+    Update,
+}
+
+impl From<&str> for QueryKind {
+    fn from(query: &str) -> Self {
+        let query = query.trim();
+        let query = query.to_lowercase();
+        if query.starts_with("select")
+            || query.starts_with("list")
+            || query.starts_with("show")
+            || query.starts_with("desc")
+        {
+            QueryKind::Query
+        } else if query.starts_with("explain") {
+            QueryKind::Explain
+        } else {
+            QueryKind::Update
+        }
+    }
 }
