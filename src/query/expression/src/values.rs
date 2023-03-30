@@ -645,6 +645,7 @@ impl PartialEq for Column {
     }
 }
 
+pub const EXTENSION_KEY: &str = "Extension";
 pub const ARROW_EXT_TYPE_EMPTY_ARRAY: &str = "EmptyArray";
 pub const ARROW_EXT_TYPE_EMPTY_MAP: &str = "EmptyMap";
 pub const ARROW_EXT_TYPE_VARIANT: &str = "Variant";
@@ -882,14 +883,6 @@ impl Column {
                 DataType::Tuple(inner)
             }
             Column::Variant(_) => DataType::Variant,
-        }
-    }
-
-    /// Unnest a nested column into one column.
-    pub fn unnest(&self) -> Self {
-        match self {
-            Column::Array(array) => array.underlying_column().unnest(),
-            col => col.clone(),
         }
     }
 

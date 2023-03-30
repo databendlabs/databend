@@ -168,12 +168,11 @@ impl FlightSqlService for FlightSqlServiceImpl {
     async fn get_flight_info_statement(
         &self,
         query: CommandStatementQuery,
-        _request: Request<FlightDescriptor>,
+        request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
         tracing::info!("get_flight_info_sql_info(query={})", query.query);
-        Err(Status::unimplemented(
-            "get_flight_info_statement not implemented",
-        ))
+        let _session = self.get_session(&request)?;
+        Ok(simple_flight_info(query))
     }
 
     async fn get_flight_info_prepared_statement(
@@ -226,54 +225,51 @@ impl FlightSqlService for FlightSqlServiceImpl {
 
     async fn get_flight_info_catalogs(
         &self,
-        _query: CommandGetCatalogs,
-        _request: Request<FlightDescriptor>,
+        query: CommandGetCatalogs,
+        request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
         tracing::info!("get_flight_info_catalogs()");
-        Err(Status::unimplemented(
-            "get_flight_info_catalogs not implemented",
-        ))
+        let _session = self.get_session(&request)?;
+        Ok(simple_flight_info(query))
     }
 
     async fn get_flight_info_schemas(
         &self,
         query: CommandGetDbSchemas,
-        _request: Request<FlightDescriptor>,
+        request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
         tracing::info!("get_flight_info_schemas({query:?})");
-        Err(Status::unimplemented(
-            "get_flight_info_schemas not implemented",
-        ))
+        let _session = self.get_session(&request)?;
+        Ok(simple_flight_info(query))
     }
 
     async fn get_flight_info_tables(
         &self,
         query: CommandGetTables,
-        _request: Request<FlightDescriptor>,
+        request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
         tracing::info!("get_flight_info_tables({query:?})");
-        Err(Status::unimplemented(
-            "get_flight_info_tables not implemented",
-        ))
+        let _session = self.get_session(&request)?;
+        Ok(simple_flight_info(query))
     }
 
     async fn get_flight_info_table_types(
         &self,
-        _query: CommandGetTableTypes,
-        _request: Request<FlightDescriptor>,
+        query: CommandGetTableTypes,
+        request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
         tracing::info!("get_flight_info_table_types()");
-        Err(Status::unimplemented(
-            "get_flight_info_table_types not implemented",
-        ))
+        let _session = self.get_session(&request)?;
+        Ok(simple_flight_info(query))
     }
 
     async fn get_flight_info_sql_info(
         &self,
         query: CommandGetSqlInfo,
-        _request: Request<FlightDescriptor>,
+        request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
         tracing::info!("get_flight_info_sql_info({query:?})");
+        let _session = self.get_session(&request)?;
         Ok(simple_flight_info(query))
     }
 

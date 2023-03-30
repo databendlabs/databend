@@ -76,7 +76,7 @@ jobs:
 
   test_unit:
     timeout-minutes: 30
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 8c16g]
     env:
       RUNNER_PROVIDER: aws
     steps:

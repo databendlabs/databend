@@ -44,20 +44,21 @@ use common_meta_app::schema::TableMeta;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
-use common_pipeline_sources::AsyncSource;
-use common_pipeline_sources::AsyncSourcer;
+use common_pipeline_sources::SyncSource;
+use common_pipeline_sources::SyncSourcer;
 use common_sql::validate_function_arg;
 use common_storages_factory::Table;
 use common_storages_fuse::TableContext;
 
-pub struct GenerateSeriesTable {
+pub struct RangeTable {
     table_info: TableInfo,
     start: Scalar,
     end: Scalar,
     step: Scalar,
+    data_type: DataType,
 }
 
-impl GenerateSeriesTable {
+impl RangeTable {
     pub fn create(
         database_name: &str,
         table_func_name: &str,
@@ -66,11 +67,22 @@ impl GenerateSeriesTable {
     ) -> Result<Arc<dyn TableFunction>> {
         validate_args(&table_args.positioned, table_func_name)?;
 
+        let data_type = match &table_args.positioned[0] {
+            Scalar::Number(_) => Int64Type::data_type(),
+            Scalar::Timestamp(_) => TimestampType::data_type(),
+            Scalar::Date(_) => DateType::data_type(),
+            other => {
+                return Err(ErrorCode::BadArguments(format!(
+                    "Unsupported data type for generate_series: {:?}",
+                    other
+                )));
+            }
+        };
+
+        let table_type = infer_schema_type(&data_type)?;
+
         // The data types of start and end have been checked for consistency, and the input types are returned
-        let schema = TableSchema::new(vec![TableField::new(
-            table_func_name,
-            infer_schema_type(&table_args.positioned[0].as_ref().infer_data_type())?,
-        )]);
+        let schema = TableSchema::new(vec![TableField::new(table_func_name, table_type)]);
 
         let start = table_args.positioned[0].clone();
         let end = table_args.positioned[1].clone();
@@ -96,16 +108,17 @@ impl GenerateSeriesTable {
             },
             ..Default::default()
         };
-        Ok(Arc::new(GenerateSeriesTable {
+        Ok(Arc::new(RangeTable {
             table_info,
             start,
             end,
             step,
+            data_type,
         }))
     }
 }
 
-impl TableFunction for GenerateSeriesTable {
+impl TableFunction for RangeTable {
     fn function_name(&self) -> &str {
         self.name()
     }
@@ -117,7 +130,7 @@ impl TableFunction for GenerateSeriesTable {
 }
 
 #[async_trait::async_trait]
-impl Table for GenerateSeriesTable {
+impl Table for RangeTable {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -153,9 +166,10 @@ impl Table for GenerateSeriesTable {
             "generate_series" => {
                 pipeline.add_source(
                     |output| {
-                        GenerateSeriesSource::<true>::create(
+                        RangeSource::<true>::create(
                             ctx.clone(),
                             output,
+                            self.data_type.clone(),
                             self.start.clone(),
                             self.end.clone(),
                             self.step.clone(),
@@ -168,9 +182,10 @@ impl Table for GenerateSeriesTable {
             "range" => {
                 pipeline.add_source(
                     |output| {
-                        GenerateSeriesSource::<false>::create(
+                        RangeSource::<false>::create(
                             ctx.clone(),
                             output,
+                            self.data_type.clone(),
                             self.start.clone(),
                             self.end.clone(),
                             self.step.clone(),
@@ -190,7 +205,7 @@ impl Table for GenerateSeriesTable {
     }
 }
 
-struct GenerateSeriesSource<const INCLUSIVE: bool> {
+struct RangeSource<const INCLUSIVE: bool> {
     finished: bool,
 
     data_type: DataType,
@@ -220,26 +235,15 @@ fn get_i64_number(scalar: &Scalar) -> Result<i64> {
     )
 }
 
-impl<const INCLUSIVE: bool> GenerateSeriesSource<INCLUSIVE> {
+impl<const INCLUSIVE: bool> RangeSource<INCLUSIVE> {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
+        data_type: DataType,
         start: Scalar,
         end: Scalar,
         step: Scalar,
     ) -> Result<ProcessorPtr> {
-        let data_type = match start {
-            Scalar::Number(_) => Int64Type::data_type(),
-            Scalar::Timestamp(_) => TimestampType::data_type(),
-            Scalar::Date(_) => DateType::data_type(),
-            _ => {
-                return Err(ErrorCode::BadArguments(format!(
-                    "Unsupported data type for generate_series: {:?}",
-                    start
-                )));
-            }
-        };
-
         let start = get_i64_number(&start)?;
         let mut end = get_i64_number(&end)?;
         let step = get_i64_number(&step)?;
@@ -259,7 +263,7 @@ impl<const INCLUSIVE: bool> GenerateSeriesSource<INCLUSIVE> {
             ));
         }
 
-        AsyncSourcer::create(ctx.clone(), output, Self {
+        SyncSourcer::create(ctx.clone(), output, Self {
             current_idx: 0,
             data_type,
             start,
@@ -270,12 +274,10 @@ impl<const INCLUSIVE: bool> GenerateSeriesSource<INCLUSIVE> {
     }
 }
 
-#[async_trait::async_trait]
-impl<const INCLUSIVE: bool> AsyncSource for GenerateSeriesSource<INCLUSIVE> {
-    const NAME: &'static str = "GenerateSeriesSourceTransform";
+impl<const INCLUSIVE: bool> SyncSource for RangeSource<INCLUSIVE> {
+    const NAME: &'static str = "RangeSourceTransform";
 
-    #[async_trait::unboxed_simple]
-    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+    fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.finished {
             return Ok(None);
         }

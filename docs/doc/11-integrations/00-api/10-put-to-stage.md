@@ -69,7 +69,7 @@ CREATE STAGE my_external_stage url = 's3://testbucket/admin/data/' credentials=(
 Download [books.parquet](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.parquet)
 
 ```shell title='Put books.parquet to stage'
-curl  -H "stage_name:my_external_stage" -F "upload=@books.parquet" -XPUT "http://localhost:8000/v1/upload_to_stage"
+curl  -H "stage_name:my_external_stage" -F "upload=@books.parquet" -XPUT "http://localhost:8000/v1/upload_to_stage" -u root:
 ```
 
 ```shell title='Response'

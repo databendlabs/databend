@@ -267,11 +267,74 @@ impl ShareApiTestSuite {
             assert!(res.is_ok());
         }
 
+        info!("--- upsert share endpoints");
+        {
+            let upsert_tenant = "upsert_tenant";
+            let upsert_req = UpsertShareEndpointReq {
+                endpoint: ShareEndpointIdent {
+                    tenant: upsert_tenant.to_string(),
+                    endpoint: endpoint2.to_string(),
+                },
+                url: "http://127.0.0.1:21111".to_string(),
+                tenant: tenant3.to_string(),
+                create_on,
+                args: BTreeMap::new(),
+            };
+            let res = mt.upsert_share_endpoint(upsert_req.clone()).await;
+            assert!(res.is_ok());
+            let upsert_share_endpoint_id = res.unwrap().share_endpoint_id;
+            println!("upsert_share_endpoint_id: {:?}", upsert_share_endpoint_id);
+
+            let req = GetShareEndpointReq {
+                tenant: upsert_tenant.to_string(),
+                endpoint: None,
+                to_tenant: None,
+            };
+            let res = mt.get_share_endpoint(req).await;
+            assert!(res.is_ok());
+            assert_eq!(res.clone().unwrap().share_endpoint_meta_vec.len(), 1);
+            assert_eq!(
+                res.unwrap().share_endpoint_meta_vec[0].1.url,
+                "http://127.0.0.1:21111".to_string()
+            );
+
+            let res = mt.upsert_share_endpoint(upsert_req).await;
+            assert!(res.is_ok());
+            assert_eq!(upsert_share_endpoint_id, res.unwrap().share_endpoint_id);
+
+            let upsert_req = UpsertShareEndpointReq {
+                endpoint: ShareEndpointIdent {
+                    tenant: upsert_tenant.to_string(),
+                    endpoint: endpoint2.to_string(),
+                },
+                url: "http://127.0.0.1:22222".to_string(),
+                tenant: tenant3.to_string(),
+                create_on,
+                args: BTreeMap::new(),
+            };
+            let res = mt.upsert_share_endpoint(upsert_req).await;
+            assert!(res.is_ok());
+            assert_eq!(upsert_share_endpoint_id, res.unwrap().share_endpoint_id);
+
+            let req = GetShareEndpointReq {
+                tenant: upsert_tenant.to_string(),
+                endpoint: None,
+                to_tenant: None,
+            };
+            let res = mt.get_share_endpoint(req).await;
+            assert!(res.is_ok());
+            assert_eq!(res.clone().unwrap().share_endpoint_meta_vec.len(), 1);
+            assert_eq!(
+                res.unwrap().share_endpoint_meta_vec[0].1.url,
+                "http://127.0.0.1:22222".to_string()
+            );
+        }
         info!("--- get share endpoints");
         {
             let req = GetShareEndpointReq {
                 tenant: tenant.to_string(),
                 endpoint: None,
+                to_tenant: None,
             };
 
             let res = mt.get_share_endpoint(req).await;
@@ -281,6 +344,7 @@ impl ShareApiTestSuite {
             let req = GetShareEndpointReq {
                 tenant: tenant.to_string(),
                 endpoint: Some(endpoint1.to_string()),
+                to_tenant: None,
             };
 
             let res = mt.get_share_endpoint(req).await;
@@ -303,6 +367,7 @@ impl ShareApiTestSuite {
             let req = GetShareEndpointReq {
                 tenant: tenant.to_string(),
                 endpoint: None,
+                to_tenant: None,
             };
 
             let res = mt.get_share_endpoint(req).await;
@@ -312,6 +377,7 @@ impl ShareApiTestSuite {
             let req = GetShareEndpointReq {
                 tenant: tenant.to_string(),
                 endpoint: Some(endpoint1.to_string()),
+                to_tenant: None,
             };
 
             let res = mt.get_share_endpoint(req).await;
