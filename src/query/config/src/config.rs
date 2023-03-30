@@ -1647,10 +1647,10 @@ pub struct MetaConfig {
     #[serde(alias = "auto_sync_interval")]
     pub auto_sync_interval: u64,
 
-    /// try_config_endpoints_interval is the interval to try config endpoint when meta node endpoints is empty.
+    /// try_reserved_endpoints_interval is the interval to try config endpoint when meta node endpoints is empty.
     #[clap(long = "try-config-endpoints-interval", default_value = "10")]
-    #[serde(alias = "try_config_endpoints_interval")]
-    pub try_config_endpoints_interval: u64,
+    #[serde(alias = "try_reserved_endpoints_interval")]
+    pub try_reserved_endpoints_interval: u64,
 
     /// Certificate for client to identify meta rpc serve
     #[clap(long = "meta-rpc-tls-meta-server-root-ca-cert", default_value_t)]
@@ -1680,7 +1680,7 @@ impl TryInto<InnerMetaConfig> for MetaConfig {
             password: self.password,
             client_timeout_in_second: self.client_timeout_in_second,
             auto_sync_interval: self.auto_sync_interval,
-            try_config_endpoints_interval: self.try_config_endpoints_interval,
+            try_reserved_endpoints_interval: self.try_reserved_endpoints_interval,
             rpc_tls_meta_server_root_ca_cert: self.rpc_tls_meta_server_root_ca_cert,
             rpc_tls_meta_service_domain_name: self.rpc_tls_meta_service_domain_name,
         })
@@ -1696,7 +1696,7 @@ impl From<InnerMetaConfig> for MetaConfig {
             password: inner.password,
             client_timeout_in_second: inner.client_timeout_in_second,
             auto_sync_interval: inner.auto_sync_interval,
-            try_config_endpoints_interval: inner.try_config_endpoints_interval,
+            try_reserved_endpoints_interval: inner.try_reserved_endpoints_interval,
             rpc_tls_meta_server_root_ca_cert: inner.rpc_tls_meta_server_root_ca_cert,
             rpc_tls_meta_service_domain_name: inner.rpc_tls_meta_service_domain_name,
         }
@@ -1713,8 +1713,8 @@ impl Debug for MetaConfig {
             .field("client_timeout_in_second", &self.client_timeout_in_second)
             .field("auto_sync_interval", &self.auto_sync_interval)
             .field(
-                "try_config_endpoints_interval",
-                &self.try_config_endpoints_interval,
+                "try_reserved_endpoints_interval",
+                &self.try_reserved_endpoints_interval,
             )
             .field(
                 "rpc_tls_meta_server_root_ca_cert",

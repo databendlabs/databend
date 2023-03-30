@@ -64,7 +64,7 @@ mysql> SELECT * FROM system.configs;
 | meta    | password                               |                                |             |
 | meta    | client_timeout_in_second               | 10                             |             |
 | meta    | auto_sync_interval                     | 0                              |             |
-| meta    | try_config_endpoints_interval          | 10                             |             |
+| meta    | try_reserved_endpoints_interval        | 10                             |             |
 | meta    | rpc_tls_meta_server_root_ca_cert       |                                |             |
 | meta    | rpc_tls_meta_service_domain_name       | localhost                      |             |
 | cache   | enable_table_meta_cache                | true                           |             |
