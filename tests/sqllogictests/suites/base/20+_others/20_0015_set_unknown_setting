@@ -1,0 +1,5 @@
+statement error 2801
+SET xxxx = 'xxxx';
+
+statement error 2801
+SET GLOBAL xxxx = 'xxxx';
