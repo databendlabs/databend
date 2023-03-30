@@ -184,7 +184,6 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
         None,
         Some(Duration::from_secs(10)),
         Duration::from_secs(10),
-        Duration::from_secs(10),
         None,
     )?;
 

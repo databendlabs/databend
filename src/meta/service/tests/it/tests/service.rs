@@ -168,7 +168,6 @@ impl MetaSrvTestContext {
             None,
             Some(Duration::from_secs(10)),
             Duration::from_secs(10),
-            Duration::from_secs(10),
             None,
         )?;
         Ok(client)
@@ -224,7 +223,6 @@ impl kvapi::ApiBuilder<Arc<ClientHandle>> for MetaSrvBuilder {
             "xxx",
             None,
             None,
-            Duration::from_secs(10),
             Duration::from_secs(10),
             None,
         )

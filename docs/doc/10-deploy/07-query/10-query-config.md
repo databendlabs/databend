@@ -72,11 +72,6 @@ You can find [sample configuration files](https://github.com/datafuselabs/databe
 * This setting only takes effect when Databend-query works with remote meta service(`endpoints` is not empty). You don't need to configure it for standalone Databend.
 * Default: 60
 
-### try_reserved_endpoints_interval
-
-* If meta node endpoints is empty, in case that meta node is down, sets how often(in seconds) this query server should try configured endpoints to connect meta node.
-* Default: 10
-
 ### unhealth_endpoint_evict_time
 
 * Internal(in seconds) time that not querying an unhealth meta node endpoint.
@@ -306,7 +301,6 @@ username = "root"
 password = "root"
 client_timeout_in_second = 60
 auto_sync_interval = 60
-try_reserved_endpoints_interval = 10
 
 [query]
 # For admin RESET API.
