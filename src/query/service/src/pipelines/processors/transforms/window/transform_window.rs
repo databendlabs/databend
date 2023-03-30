@@ -70,6 +70,7 @@ pub struct TransformWindow {
     func: WindowFunctionImpl,
 
     partition_indices: Vec<usize>,
+    order_by_indices: Vec<usize>,
 
     /// A queue of data blocks that we need to process.
     /// If partition is ended, we may free the data block from front of the queue.
@@ -100,10 +101,9 @@ pub struct TransformWindow {
 
     // Used for row_number
     current_row_in_partition: usize,
-    // used for rank
-    current_rank_in_partition: usize,
-    // used for dense_rank
-    current_dense_rank_in_partition: usize,
+    // used for dense_rank and rank
+    current_rank: usize,
+    current_rank_count: usize,
 }
 
 impl TransformWindow {
@@ -113,9 +113,17 @@ impl TransformWindow {
         output: Arc<OutputPort>,
         func: WindowFunctionInfo,
         partition_indices: Vec<usize>,
+        order_by_indices: Vec<usize>,
         frame_kind: WindowFuncFrame,
     ) -> Result<Box<dyn Processor>> {
-        let transform = Self::create(input, output, func, partition_indices, frame_kind)?;
+        let transform = Self::create(
+            input,
+            output,
+            func,
+            partition_indices,
+            order_by_indices,
+            frame_kind,
+        )?;
         Ok(Box::new(transform))
     }
 
@@ -124,6 +132,7 @@ impl TransformWindow {
         output: Arc<OutputPort>,
         func: WindowFunctionInfo,
         partition_indices: Vec<usize>,
+        order_by_indices: Vec<usize>,
         frame_kind: WindowFuncFrame,
     ) -> Result<Self> {
         let func = WindowFunctionImpl::try_create(func)?;
@@ -133,6 +142,7 @@ impl TransformWindow {
             state: ProcessorState::Consume,
             func,
             partition_indices,
+            order_by_indices,
             blocks: VecDeque::new(),
             outputs: VecDeque::new(),
             first_block: 0,
@@ -148,8 +158,8 @@ impl TransformWindow {
             prev_frame_end: RowPtr::default(),
             current_row: RowPtr::default(),
             current_row_in_partition: 1,
-            current_rank_in_partition: 1,
-            current_dense_rank_in_partition: 1,
+            current_rank: 1,
+            current_rank_count: 1,
             input_is_finished: false,
         })
     }
@@ -192,7 +202,6 @@ impl TransformWindow {
             cur.block += 1;
             cur.row = 0;
         }
-        // row = RowPtr::new(partition_end.block, 0)
         cur.row = end.row.min(cur.row + n);
         cur
     }
@@ -340,6 +349,22 @@ impl TransformWindow {
         row
     }
 
+    #[inline]
+    fn is_order_by_keys_equal(&self, lhs: RowPtr, rhs: RowPtr) -> bool {
+        debug_assert!({
+            let end = self.blocks_end();
+            lhs < end && rhs < end
+        });
+        for offset in &self.order_by_indices {
+            let lhs_column = self.column_at(lhs, *offset);
+            let rhs_column = self.column_at(rhs, *offset);
+            if lhs_column.index(lhs.row) != rhs_column.index(rhs.row) {
+                return false;
+            }
+        }
+        true
+    }
+
     /// When adding a [`DataBlock`], we compute the aggregations to the end.
     ///
     /// For each row in the input block,
@@ -360,7 +385,8 @@ impl TransformWindow {
         // Each loop will do:
         // 1. Try to advance the partition.
         // 2. Try to advance the frame (if the frame is not started or ended, break the loop and end the process).
-        // 3. Compute the aggregation for current frame.
+        // 3.1 Compute the aggregation for current frame.
+        // 3.2 Compute general information (row number, rank, ...)
         // 4. If the partition is not ended, break the loop;
         //    else start next partition.
         loop {
@@ -378,15 +404,30 @@ impl TransformWindow {
                     break;
                 }
 
-                // 3.
+                // 3.1
                 if let WindowFunctionImpl::Aggregate(agg) = &self.func {
                     self.apply_aggregate(agg)?;
                 }
 
                 self.merge_result_of_current_row()?;
 
-                self.current_row = self.advance_row(self.current_row);
+                // 3.2
+                let next_row = self.advance_row(self.current_row);
+                if next_row < self.partition_end {
+                    // Compute rank.
+                    if self.is_order_by_keys_equal(self.current_row, next_row) {
+                        // next rank is the same with current rank
+                        self.current_rank_count += 1;
+                    } else if matches!(self.func, WindowFunctionImpl::DenseRank) {
+                        self.current_rank += 1;
+                        self.current_rank_count = 1;
+                    } else {
+                        self.current_rank += self.current_rank_count;
+                        self.current_rank_count = 1;
+                    }
+                }
 
+                self.current_row = next_row;
                 self.current_row_in_partition += 1;
                 self.prev_frame_start = self.frame_start;
                 self.prev_frame_end = self.frame_end;
@@ -413,6 +454,8 @@ impl TransformWindow {
             self.frame_end = self.partition_start;
 
             self.current_row_in_partition = 1;
+            self.current_rank = 1;
+            self.current_rank_count = 1;
         }
 
         Ok(())
@@ -467,12 +510,12 @@ impl TransformWindow {
             }
             WindowFunctionImpl::Rank => {
                 builder.push(ScalarRef::Number(NumberScalar::UInt64(
-                    self.current_rank_in_partition as u64,
+                    self.current_rank as u64,
                 )));
             }
             WindowFunctionImpl::DenseRank => {
                 builder.push(ScalarRef::Number(NumberScalar::UInt64(
-                    self.current_dense_rank_in_partition as u64,
+                    self.current_rank as u64,
                 )));
             }
         };
@@ -658,6 +701,7 @@ mod tests {
             OutputPort::create(),
             func,
             vec![0],
+            vec![],
             window_frame,
         )
     }
@@ -1298,8 +1342,14 @@ mod tests {
         let func = WindowFunctionInfo::Aggregate(agg, vec![0]);
         let input = InputPort::create();
         let output = OutputPort::create();
-        let transform =
-            TransformWindow::create(input.clone(), output.clone(), func, vec![0], window_frame)?;
+        let transform = TransformWindow::create(
+            input.clone(),
+            output.clone(),
+            func,
+            vec![0],
+            vec![],
+            window_frame,
+        )?;
 
         Ok((Box::new(transform), input, output))
     }
