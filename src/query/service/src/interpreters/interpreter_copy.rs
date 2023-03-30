@@ -433,12 +433,11 @@ impl CopyInterpreter {
             let table_id = to_table.get_id();
             let expire_hours = ctx.get_settings().get_load_file_metadata_expire_hours()?;
 
-            let table_info = to_table.get_table_info();
             let upsert_copied_files_request = {
                 if stage_info.copy_options.purge && force {
                     // if `purge-after-copy` is enabled, and in `force` copy mode,
                     // we do not need to upsert copied files into meta server
-                    info!("[purge] and [force] are both enabled,  will not update copied-files set. ({})", &table_info.desc);
+                    info!("[purge] and [force] are both enabled,  will not update copied-files set. ({})", &to_table.get_table_info().desc);
                     None
                 } else {
                     let fail_if_duplicated = !force;

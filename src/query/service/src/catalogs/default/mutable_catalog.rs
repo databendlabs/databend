@@ -289,7 +289,7 @@ impl Catalog for MutableCatalog {
         match table_info.db_type.clone() {
             DatabaseType::NormalDB => {
                 info!(
-                    "updating table meta. table desc: [{}], has copied files: [{}]",
+                    "updating table meta. table desc: [{}], has copied files: [{}]?",
                     table_info.desc,
                     req.copied_files.is_some()
                 );
