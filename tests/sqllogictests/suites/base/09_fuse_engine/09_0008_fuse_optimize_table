@@ -427,6 +427,43 @@ select segment_count, block_count from fuse_snapshot('db_09_0008', 't7') limit 2
 
 
 statement ok
+create table t8(a int) block_per_segment=2 row_per_block=3
+
+statement ok
+insert into t8 values(1),(2),(3)
+
+statement ok
+alter table t8 add column b int
+
+statement ok
+insert into t8 values(4,4),(5,5),(6,6)
+
+query IIII
+select segment_count, block_count, row_count, bytes_uncompressed from fuse_snapshot('db_09_0008', 't8') limit 1
+----
+2 2 6 36
+
+statement ok
+optimize table t8 compact
+
+query IIII
+select segment_count, block_count, row_count, bytes_uncompressed from fuse_snapshot('db_09_0008', 't8') limit 1
+----
+1 2 6 100
+
+query II
+select * from t8 order by a
+----
+1 0
+2 0
+3 0
+4 4
+5 5
+6 6
+
+
+
+statement ok
 DROP TABLE m
 
 statement ok
@@ -452,6 +489,9 @@ DROP TABLE t6
 
 statement ok
 DROP TABLE t7
+
+statement ok
+DROP TABLE t8
 
 statement ok
 DROP DATABASE db_09_0008
