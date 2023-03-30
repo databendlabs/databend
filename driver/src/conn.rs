@@ -22,6 +22,7 @@ use crate::{
     schema::SchemaFieldList,
 };
 
+#[derive(Clone)]
 pub struct DatabendConnection {
     pub(crate) client: Arc<APIClient>,
 }
