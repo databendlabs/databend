@@ -97,6 +97,9 @@ impl Interpreter for ShowCreateTableInterpreter {
         let n_fields = schema.fields().len();
 
         let mut table_create_sql = format!("CREATE TABLE `{}` (\n", name);
+        if table.options().contains_key("TRANSIENT") {
+            table_create_sql = format!("CREATE TRANSIENT TABLE `{}` (\n", name)
+        }
 
         // Append columns.
         {

@@ -19,7 +19,9 @@ use common_catalog::catalog::CatalogManager;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
+use common_expression::types::UInt64Type;
 use common_expression::utils::FromData;
 use common_expression::DataBlock;
 use common_expression::TableDataType;
@@ -55,6 +57,7 @@ impl AsyncSystemTable for DatabasesTable {
 
         let mut catalog_names = vec![];
         let mut db_names = vec![];
+        let mut db_id = vec![];
         for (ctl_name, catalog) in catalogs.into_iter() {
             let databases = catalog.list_databases(tenant.as_str()).await?;
 
@@ -62,12 +65,15 @@ impl AsyncSystemTable for DatabasesTable {
                 catalog_names.push(ctl_name.clone().into_bytes());
                 let db_name = db.name().to_string().into_bytes();
                 db_names.push(db_name);
+                let id = db.get_db_info().ident.db_id;
+                db_id.push(id);
             }
         }
 
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(catalog_names),
             StringType::from_data(db_names),
+            UInt64Type::from_data(db_id),
         ]))
     }
 }
@@ -77,6 +83,7 @@ impl DatabasesTable {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("catalog", TableDataType::String),
             TableField::new("name", TableDataType::String),
+            TableField::new("database_id", TableDataType::Number(NumberDataType::UInt64)),
         ]);
 
         let table_info = TableInfo {
