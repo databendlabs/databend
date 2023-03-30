@@ -54,7 +54,7 @@ impl Settings {
     }
 
     pub async fn set_global_setting(&self, k: String, v: String) -> Result<()> {
-        if let (key, Some(value)) = DefaultSettings::convert_value(k, v)? {
+        if let (key, Some(value)) = DefaultSettings::convert_value(k.clone(), v)? {
             self.changes.insert(key.clone(), ChangeValue {
                 value: value.clone(),
                 level: ScopeLevel::Global,
@@ -63,9 +63,14 @@ impl Settings {
             UserApiProvider::instance()
                 .set_setting(&self.tenant, UserSetting { name: key, value })
                 .await?;
+
+            return Ok(());
         }
 
-        Ok(())
+        Err(ErrorCode::UnknownVariable(format!(
+            "Unknown variable: {:?}",
+            k
+        )))
     }
 
     pub async fn load_global_changes(&self) -> Result<()> {
