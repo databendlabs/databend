@@ -1,5 +1,6 @@
 queue_rules:
   - name: shared_queue
+    merge_method: squash
     conditions:
       - "#approved-reviews-by>=2"
 
@@ -34,6 +35,7 @@ queue_rules:
       - check-success=test_sqllogic_cluster_duckdb
 
   - name: docs_queue
+    merge_method: squash
     conditions:
       - "#approved-reviews-by>=1"
 
@@ -41,6 +43,7 @@ queue_rules:
       - check-success=Vercel
 
   - name: rfc_queue
+    merge_method: squash
     conditions:
       - "#approved-reviews-by>=3"
 
