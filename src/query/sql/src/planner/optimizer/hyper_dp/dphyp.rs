@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use common_exception::Result;
 
@@ -24,6 +25,7 @@ use crate::optimizer::hyper_dp::query_graph::QueryGraph;
 use crate::optimizer::hyper_dp::util::intersect;
 use crate::optimizer::hyper_dp::util::union;
 use crate::optimizer::SExpr;
+use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::IndexType;
@@ -76,7 +78,7 @@ impl DPhpy {
                 let join_relation = if let Some(relation) = join_relation {
                     JoinRelation::new(&relation)
                 } else {
-                    JoinRelation::new(&s_expr)
+                    JoinRelation::new(s_expr)
                 };
                 self.table_index_map
                     .insert(op.table_index, self.join_relations.len() as IndexType);
@@ -185,7 +187,7 @@ impl DPhpy {
         if optimized {
             if let Some(final_plan) = self.dp_table.get(&all_relations) {
                 dbg!(final_plan);
-                todo!("Convert final plan to SExpr")
+                self.join_reorder(final_plan, s_expr)
             } else {
                 // Maybe exist cross join, which make graph disconnected
                 Ok((s_expr.clone(), false))
@@ -292,7 +294,7 @@ impl DPhpy {
         let mut new_forbidden_nodes;
         for (idx, neighbor) in neighbors.iter().enumerate() {
             new_forbidden_nodes = forbidden_nodes.clone();
-            new_forbidden_nodes.insert(neighbor.clone());
+            new_forbidden_nodes.insert(*neighbor);
             if !self.enumerate_csg_rec(&merged_sets[idx], &new_forbidden_nodes)? {
                 return Ok(false);
             }
@@ -377,11 +379,76 @@ impl DPhpy {
         let mut new_forbidden_nodes;
         for (idx, neighbor) in neighbor_set.iter().enumerate() {
             new_forbidden_nodes = forbidden_nodes.clone();
-            new_forbidden_nodes.insert(neighbor.clone());
+            new_forbidden_nodes.insert(*neighbor);
             if !self.enumerate_cmp_rec(left, &merged_sets[idx], &new_forbidden_nodes)? {
                 return Ok(false);
             }
         }
         Ok(true)
+    }
+
+    // Map join order in `JoinNode` to `SExpr`
+    fn join_reorder(&self, final_plan: &JoinNode, s_expr: SExpr) -> Result<(SExpr, bool)> {
+        // Convert `final_plan` to `SExpr`
+        let join_expr = self.s_expr(final_plan)?;
+        // Find first join node in `s_expr`, then replace it with `join_expr`
+        let new_s_expr = self.replace_join_expr(&join_expr, &s_expr)?;
+        Ok((new_s_expr, true))
+    }
+
+    #[allow(clippy::only_used_in_recursion)]
+    fn replace_join_expr(&self, join_expr: &SExpr, s_expr: &SExpr) -> Result<SExpr> {
+        let mut new_s_expr = s_expr.clone();
+        match &s_expr.plan {
+            RelOperator::Join(_) => {
+                new_s_expr.plan = join_expr.plan.clone();
+                new_s_expr.children = join_expr.children.clone();
+            }
+            _ => {
+                let child_expr = self.replace_join_expr(join_expr, &s_expr.children[0])?;
+                new_s_expr.children = Arc::new(vec![child_expr]);
+            }
+        }
+        Ok(new_s_expr)
+    }
+
+    fn s_expr(&self, join_node: &JoinNode) -> Result<SExpr> {
+        // Traverse JoinNode
+        if join_node.children.is_empty() {
+            // The node is leaf, get relation for `join_relations`
+            let idx = join_node.leaves[0];
+            let relation = self.join_relations[idx].s_expr();
+            return Ok(relation);
+        }
+
+        // The node is join
+        // Split `join_conditions` to `left_conditions` and `right_conditions`
+        let left_conditions = join_node
+            .join_conditions
+            .iter()
+            .map(|(l, _)| l.clone())
+            .collect();
+        let right_conditions = join_node
+            .join_conditions
+            .iter()
+            .map(|(_, r)| r.clone())
+            .collect();
+        let rel_op = RelOperator::Join(Join {
+            left_conditions,
+            right_conditions,
+            // Todo: consider non_equi_conditions
+            non_equi_conditions: vec![],
+            join_type: join_node.join_type.clone(),
+            marker_index: None,
+            from_correlated_subquery: false,
+            contain_runtime_filter: false,
+        });
+        let children = join_node
+            .children
+            .iter()
+            .map(|child| self.s_expr(child))
+            .collect::<Result<Vec<_>>>()?;
+        let join_expr = SExpr::create(rel_op, children, None, None);
+        Ok(join_expr)
     }
 }

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
+
 use crate::IndexType;
 
 // Union two nodes vector
@@ -20,16 +22,20 @@ pub fn union(left: &[IndexType], right: &[IndexType]) -> Vec<IndexType> {
     let mut i = 0;
     let mut j = 0;
     while i < left.len() && j < right.len() {
-        if left[i] == right[j] {
-            result.push(left[i]);
-            i += 1;
-            j += 1;
-        } else if left[i] < right[j] {
-            result.push(left[i]);
-            i += 1;
-        } else {
-            result.push(right[j]);
-            j += 1;
+        match left[i].cmp(&right[j]) {
+            Ordering::Equal => {
+                result.push(left[i]);
+                i += 1;
+                j += 1;
+            }
+            Ordering::Less => {
+                result.push(left[i]);
+                i += 1;
+            }
+            Ordering::Greater => {
+                result.push(right[j]);
+                j += 1;
+            }
         }
     }
     if i == left.len() {

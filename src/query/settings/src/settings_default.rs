@@ -125,6 +125,11 @@ impl DefaultSettings {
                     desc: "Sets the SQL dialect. Available values include \"PostgreSQL\", \"MySQL\", and \"Hive\".",
                     possible_values: Some(vec!["PostgreSQL", "MySQL", "Hive"]),
                 }),
+                ("enable_dphyp", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables dphyp join order algorithm.",
+                    possible_values: None,
+                }),
                 ("enable_cbo", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables cost-based optimization.",

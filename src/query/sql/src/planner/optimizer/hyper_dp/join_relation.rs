@@ -32,6 +32,10 @@ impl JoinRelation {
         }
     }
 
+    pub fn s_expr(&self) -> SExpr {
+        self.s_expr.clone()
+    }
+
     pub fn cost(&self) -> Result<f64> {
         let rel_expr = RelExpr::with_s_expr(&self.s_expr);
         Ok(rel_expr.derive_relational_prop()?.cardinality)
