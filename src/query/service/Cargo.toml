@@ -44,7 +44,6 @@ enable-histogram-metrics = [
 # Workspace dependencies
 common-arrow = { path = "../../common/arrow" }
 common-ast = { path = "../ast" }
-common-auth = { path = "../../common/auth" }
 common-base = { path = "../../common/base" }
 common-cache = { path = "../../common/cache" }
 common-catalog = { path = "../catalog" }
@@ -73,6 +72,7 @@ common-pipeline-sources = { path = "../pipeline/sources" }
 common-pipeline-transforms = { path = "../pipeline/transforms" }
 common-profile = { path = "../../common/profile" }
 common-settings = { path = "../settings" }
+common-sharing = { path = "../sharing" }
 common-sql = { path = "../sql" }
 common-storage = { path = "../../common/storage" }
 common-storages-factory = { path = "../storages/factory" }
@@ -112,7 +112,6 @@ base64 = "0.21.0"
 bincode = "1.3.3"
 bumpalo = { workspace = true }
 byteorder = "1.4.3"
-bytes = "1"
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 ctor = "0.1.26"

@@ -8,8 +8,8 @@ evaluation:
 | Type   | Float32 | Float32 | Float32 |
 | Domain | {0..=2} | {3..=5} | Unknown |
 | Row 0  | 0       | 3       | NaN     |
-| Row 1  | 1       | 4       | 1       |
-| Row 2  | 2       | 5       | 1       |
+| Row 1  | 1       | 4       | 0       |
+| Row 2  | 2       | 5       | 0       |
 +--------+---------+---------+---------+
 evaluation (internal):
 +--------+----------------------+
@@ -17,7 +17,7 @@ evaluation (internal):
 +--------+----------------------+
 | a      | Float32([0, 1, 2])   |
 | b      | Float32([3, 4, 5])   |
-| Output | Float32([NaN, 1, 1]) |
+| Output | Float32([NaN, 0, 0]) |
 +--------+----------------------+
 
 

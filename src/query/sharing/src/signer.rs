@@ -34,7 +34,7 @@ use opendal::raw::HttpClient;
 use opendal::raw::Operation;
 use opendal::raw::PresignedRequest;
 
-const TENANT_HEADER: &str = "X-DATABEND-TENANT";
+pub(crate) const TENANT_HEADER: &str = "X-DATABEND-TENANT";
 
 /// SharedSigner is used to track presign request, and it's response.
 ///

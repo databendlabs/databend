@@ -168,15 +168,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             )));
         }
 
-        // if create a database from a share, check if the share exists and grant access, update share_meta.
-        if let Some(from_share) = &req.meta.from_share {
-            if from_share.tenant == req.name_ident.tenant {
-                return Err(KVAppError::AppError(AppError::WrongShare(WrongShare::new(
-                    req.name_ident.to_string_key(),
-                ))));
-            }
-        }
-
         let mut retry = 0;
         while retry < TXN_MAX_RETRY_TIMES {
             retry += 1;

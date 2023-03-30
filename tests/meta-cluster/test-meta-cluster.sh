@@ -54,17 +54,17 @@ run_test() {
     echo ' === Start databend-meta 1...'
 
     nohup "$metasrv" -c scripts/ci/deploy/config/databend-meta-node-1.toml --log-level=DEBUG &
-    python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
+    python3 scripts/ci/wait_tcp.py --timeout 10 --port 9191
 
     echo ' === Start databend-meta 2...'
 
     nohup "$metasrv" -c scripts/ci/deploy/config/databend-meta-node-2.toml --log-level=DEBUG &
-    python3 scripts/ci/wait_tcp.py --timeout 5 --port 28202
+    python3 scripts/ci/wait_tcp.py --timeout 10 --port 28202
 
     echo ' === Start databend-meta 3...'
 
     nohup "$metasrv" -c scripts/ci/deploy/config/databend-meta-node-3.toml --log-level=DEBUG &
-    python3 scripts/ci/wait_tcp.py --timeout 5 --port 28302
+    python3 scripts/ci/wait_tcp.py --timeout 10 --port 28302
 
     sleep 1
     echo " === node 1 in cluster"

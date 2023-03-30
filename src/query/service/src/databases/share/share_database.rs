@@ -14,16 +14,11 @@
 
 use std::str;
 use std::sync::Arc;
-use std::sync::Mutex;
 
-use bytes::Bytes;
-use common_auth::RefreshableToken;
 use common_catalog::table::Table;
-use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
-use common_meta_api::ShareApi;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DropTableByIdReq;
@@ -43,29 +38,10 @@ use common_meta_app::schema::UpsertTableCopiedFileReply;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
-use common_meta_app::share::GetShareEndpointReq;
-use common_meta_app::share::TableInfoMap;
-use common_users::UserApiProvider;
-use http::header::AUTHORIZATION;
-use http::header::CONTENT_LENGTH;
-use http::Method;
-use http::Request;
-use opendal::raw::AsyncBody;
-use opendal::raw::HttpClient;
-use tracing::error;
-use tracing::info;
+use common_sharing::ShareEndpointManager;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
-
-const TENANT_HEADER: &str = "X-DATABEND-TENANT";
-
-#[derive(Clone, Debug)]
-struct EndpointConfig {
-    pub url: String,
-
-    pub token: RefreshableToken,
-}
 
 // Share Database implementation for `Database` trait.
 #[derive(Clone)]
@@ -73,60 +49,12 @@ pub struct ShareDatabase {
     ctx: DatabaseContext,
 
     db_info: DatabaseInfo,
-
-    client: HttpClient,
-
-    endpoint_config: Arc<Mutex<Option<EndpointConfig>>>,
 }
 
 impl ShareDatabase {
     pub const NAME: &'static str = "SHARE";
     pub fn try_create(ctx: DatabaseContext, db_info: DatabaseInfo) -> Result<Box<dyn Database>> {
-        Ok(Box::new(Self {
-            ctx,
-            db_info,
-            client: HttpClient::new()?,
-            endpoint_config: Arc::new(Mutex::new(None)),
-        }))
-    }
-
-    #[async_backtrace::framed]
-    async fn get_share_endpoint(&self) -> Result<EndpointConfig> {
-        let endpoint_config = {
-            let endpoint_config = self.endpoint_config.lock().unwrap();
-            endpoint_config.clone()
-        };
-
-        match endpoint_config {
-            Some(ref endpoint_config) => Ok(endpoint_config.clone()),
-            None => {
-                let share_name = self.db_info.meta.from_share.clone().unwrap();
-                let req = GetShareEndpointReq {
-                    tenant: self.db_info.name_ident.tenant.clone(),
-                    endpoint: None,
-                    to_tenant: Some(share_name.tenant.clone()),
-                };
-                let meta_api = UserApiProvider::instance().get_meta_store_client();
-                let resp = meta_api.get_share_endpoint(req).await?;
-                if let Some((_, endpoint_meta)) = resp.share_endpoint_meta_vec.into_iter().next() {
-                    let endpoint = format!(
-                        "{}tenant/{}/{}/meta",
-                        endpoint_meta.url, share_name.tenant, share_name.share_name,
-                    );
-                    let config = EndpointConfig {
-                        url: endpoint,
-                        token: RefreshableToken::Direct(self.db_info.name_ident.tenant.clone()),
-                    };
-                    let mut endpoint_config = self.endpoint_config.lock().unwrap();
-                    *endpoint_config = Some(config.clone());
-                    return Ok(config);
-                }
-
-                Err(ErrorCode::EmptyShareEndpointConfig(
-                    "EmptyShareEndpointConfig, cannot query share databases".to_string(),
-                ))
-            }
-        }
+        Ok(Box::new(Self { ctx, db_info }))
     }
 
     fn load_tables(&self, table_infos: Vec<Arc<TableInfo>>) -> Result<Vec<Arc<dyn Table>>> {
@@ -137,55 +65,12 @@ impl ShareDatabase {
         })
     }
 
-    // Read table info map from operator
-    #[async_backtrace::framed]
-    async fn get_table_info_map(&self, req: Vec<String>) -> Result<TableInfoMap> {
-        // only when endpoint_config is Some can try again
-        let mut try_again = {
-            let endpoint_config = self.endpoint_config.lock().unwrap();
-            !endpoint_config.is_some()
-        };
-
-        loop {
-            let endpoint_config = self.get_share_endpoint().await?;
-            let bs = Bytes::from(serde_json::to_vec(&req)?);
-            let auth = endpoint_config.token.to_header().await?;
-            let requester = GlobalConfig::instance().as_ref().query.tenant_id.clone();
-            let req = Request::builder()
-                .method(Method::POST)
-                .uri(&endpoint_config.url)
-                .header(AUTHORIZATION, auth)
-                .header(CONTENT_LENGTH, bs.len())
-                .header(TENANT_HEADER, requester)
-                .body(AsyncBody::Bytes(bs))?;
-            let resp = self.client.send_async(req).await;
-            match resp {
-                Ok(resp) => {
-                    let bs = resp.into_body().bytes().await?;
-                    let table_info_map: TableInfoMap = serde_json::from_slice(&bs)?;
-
-                    return Ok(table_info_map);
-                }
-                Err(err) => {
-                    if try_again {
-                        error!("get_table_info_map error: {:?}", err);
-                        return Err(err.into());
-                    } else {
-                        // endpoint may be changed, so cleanup endpoint and try again
-                        try_again = true;
-                        let mut endpoint_config = self.endpoint_config.lock().unwrap();
-                        *endpoint_config = None;
-                        info!("get_table_info_map error: {:?}, try again", err);
-                    }
-                }
-            }
-        }
-    }
-
     #[async_backtrace::framed]
     async fn get_table_info(&self, table_name: &str) -> Result<Arc<TableInfo>> {
-        let table_info_map = self
-            .get_table_info_map(vec![table_name.to_string()])
+        let table_info_map = ShareEndpointManager::instance()
+            .get_table_info_map(&self.ctx.tenant, &self.db_info, vec![
+                table_name.to_string(),
+            ])
             .await?;
         match table_info_map.get(table_name) {
             None => Err(ErrorCode::UnknownTable(format!(
@@ -198,7 +83,9 @@ impl ShareDatabase {
 
     #[async_backtrace::framed]
     async fn list_tables(&self) -> Result<Vec<Arc<TableInfo>>> {
-        let table_info_map = self.get_table_info_map(vec![]).await?;
+        let table_info_map = ShareEndpointManager::instance()
+            .get_table_info_map(&self.ctx.tenant, &self.db_info, vec![])
+            .await?;
         let table_infos: Vec<Arc<TableInfo>> = table_info_map
             .values()
             .map(|table_info| Arc::new(table_info.to_owned()))

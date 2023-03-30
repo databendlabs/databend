@@ -28,7 +28,7 @@ jobs:
   build_release:
     if: contains(github.event.pull_request.labels.*.name, 'ci-benchmark')
     timeout-minutes: 30
-    runs-on: [self-hosted, X64, Linux, perf]
+    runs-on: [self-hosted, X64, Linux, 16c32g]
     steps:
       - uses: actions/checkout@v3
         with:

@@ -6,7 +6,7 @@ on:
       - opened
       - synchronize
       - reopened
-      - labeled
+      # - labeled
     branches:
       - main
     paths-ignore:
@@ -30,7 +30,7 @@ env:
 
 jobs:
   check:
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 8c16g]
     steps:
       - uses: actions/checkout@v3
         with:
@@ -44,7 +44,7 @@ jobs:
   build_gnu:
     timeout-minutes: 30
     name: build_${{ matrix.arch }}_gnu
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 16c32g]
     strategy:
       matrix:
         arch:
@@ -63,7 +63,7 @@ jobs:
   build_musl:
     timeout-minutes: 30
     name: build_${{ matrix.arch }}_musl
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 8c16g]
     strategy:
       matrix:
         arch:
@@ -89,7 +89,7 @@ jobs:
           profile: debug
 
   test_unit:
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 8c16g]
     steps:
       - uses: actions/checkout@v3
         with:
@@ -99,7 +99,7 @@ jobs:
         timeout-minutes: 30
 
   test_metactl:
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
@@ -107,7 +107,7 @@ jobs:
         timeout-minutes: 10
 
   test_meta-upgrade-09:
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
@@ -115,7 +115,7 @@ jobs:
         timeout-minutes: 10
 
   test_meta-data-compat-openraft-07:
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
@@ -123,7 +123,7 @@ jobs:
         timeout-minutes: 10
 
   test_compat:
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
@@ -131,7 +131,7 @@ jobs:
         timeout-minutes: 10
 
   test_compat_fuse:
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
@@ -139,7 +139,7 @@ jobs:
         timeout-minutes: 10
 
   test_meta_cluster:
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
@@ -148,7 +148,7 @@ jobs:
 
   test_sqllogic_standalone:
     name: test_sqllogic_standalone_${{ matrix.dirs }}
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build_gnu
     strategy:
       matrix:
@@ -177,7 +177,7 @@ jobs:
   test_sqllogic_management_mode:
     timeout-minutes: 30
     name: test_sqllogic_management
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build_gnu
     strategy:
       matrix:
@@ -194,7 +194,7 @@ jobs:
 
   test_sqllogic_cluster:
     name: test_sqllogic_cluster_${{ matrix.dirs }}
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build_gnu
     strategy:
       matrix:
@@ -222,7 +222,7 @@ jobs:
 
   test_stateless_standalone:
     timeout-minutes: 20
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
@@ -230,7 +230,7 @@ jobs:
 
   test_stateless_cluster:
     timeout-minutes: 30
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
@@ -238,7 +238,7 @@ jobs:
 
   test_stateful_standalone:
     timeout-minutes: 20
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
@@ -246,7 +246,7 @@ jobs:
 
   test_stateful_cluster:
     timeout-minutes: 20
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
@@ -255,7 +255,7 @@ jobs:
   test_stateful_large_data:
     timeout-minutes: 60
     if: contains(github.event.pull_request.labels.*.name, 'ci-largedata')
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
@@ -263,7 +263,7 @@ jobs:
 
   test_fuzz_standalone:
     timeout-minutes: 10
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
@@ -272,7 +272,7 @@ jobs:
 
   build_hive:
     timeout-minutes: 30
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 8c16g]
     steps:
       - uses: actions/checkout@v3
         with:
@@ -285,7 +285,7 @@ jobs:
 
   test_stateful_hive_standalone:
     timeout-minutes: 10
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build_hive
     steps:
       - uses: actions/checkout@v3

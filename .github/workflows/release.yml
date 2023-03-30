@@ -143,7 +143,7 @@ jobs:
           repo_role_arn: ${{ secrets.REPO_ROLE_ARN }}
 
   linux:
-    runs-on: [self-hosted, X64, Linux, perf]
+    runs-on: [self-hosted, X64, Linux, 16c32g]
     needs: [create_release]
     env:
       RUNNER_PROVIDER: aws
@@ -206,7 +206,7 @@ jobs:
           repo_role_arn: ${{ secrets.REPO_ROLE_ARN }}
 
   hive:
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 8c16g]
     needs: [create_release]
     env:
       RUNNER_PROVIDER: aws
@@ -294,7 +294,7 @@ jobs:
 
   docker_combined:
     name: docker combined
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: [create_release, linux]
     steps:
       - name: Checkout
@@ -349,7 +349,7 @@ jobs:
 
   docker_separate:
     name: docker separate
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: [create_release, linux]
     strategy:
       fail-fast: false
@@ -412,7 +412,7 @@ jobs:
           file: ./docker/${{ matrix.distro }}/${{ matrix.service }}.Dockerfile
 
   distribution:
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: [create_release, linux]
     strategy:
       matrix:

@@ -984,32 +984,19 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
              ~ #ident
              ~ URL ~ "=" ~ #share_endpoint_uri_location
              ~ TENANT ~ "=" ~ #ident
-             ~ ARGS ~ "=" ~ #options
+             ~ ( ARGS ~ "=" ~ #options)?
              ~ ( COMMENT ~ "=" ~ #literal_string)?
         },
-        |(
-            _,
-            _,
-            _,
-            opt_if_not_exists,
-            endpoint,
-            _,
-            _,
-            url,
-            _,
-            _,
-            tenant,
-            _,
-            _,
-            args,
-            comment_opt,
-        )| {
+        |(_, _, _, opt_if_not_exists, endpoint, _, _, url, _, _, tenant, args_opt, comment_opt)| {
             Statement::CreateShareEndpoint(CreateShareEndpointStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 endpoint,
                 url,
                 tenant,
-                args,
+                args: match args_opt {
+                    Some(opt) => opt.2,
+                    None => BTreeMap::new(),
+                },
                 comment: match comment_opt {
                     Some(opt) => Some(opt.2),
                     None => None,

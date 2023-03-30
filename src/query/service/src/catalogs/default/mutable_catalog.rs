@@ -73,6 +73,7 @@ use crate::storages::Table;
 #[derive(Clone)]
 pub struct MutableCatalog {
     ctx: CatalogContext,
+    tenant: String,
 }
 
 impl MutableCatalog {
@@ -124,13 +125,17 @@ impl MutableCatalog {
             storage_factory: Arc::new(storage_factory),
             database_factory: Arc::new(database_factory),
         };
-        Ok(MutableCatalog { ctx })
+        Ok(MutableCatalog {
+            ctx,
+            tenant: conf.query.tenant_id.clone(),
+        })
     }
 
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
         let ctx = DatabaseContext {
             meta: self.ctx.meta.clone(),
             storage_factory: self.ctx.storage_factory.clone(),
+            tenant: self.tenant.clone(),
         };
         self.ctx.database_factory.get_database(ctx, db_info)
     }
