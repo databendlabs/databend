@@ -319,7 +319,7 @@ jobs:
           number: ${{ needs.metadata.outputs.source_id }}
           token: ${{ github.token }}
           body: |
-            ![local](https://img.shields.io/static/v1?label=AWS%20EC2&message=c5.4xlarge&color=orange&logo=amazonec2)![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Medium&color=blue&logo=icloud)![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Large&color=blue&logo=icloud)
+            ![local](https://img.shields.io/static/v1?label=AWS%20EC2&message=c5.4xlarge&color=orange&logo=amazonec2) ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Medium&color=blue&logo=icloud) ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Large&color=blue&logo=icloud)
             ## ClickBench Report
             * **hits**: https://repo.databend.rs/benchmark/clickbench/pr/${{ needs.metadata.outputs.source_id }}/${{ needs.metadata.outputs.run_id }}/hits.html
             * **tpch**: https://repo.databend.rs/benchmark/clickbench/pr/${{ needs.metadata.outputs.source_id }}/${{ needs.metadata.outputs.run_id }}/tpch.html
