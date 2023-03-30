@@ -99,6 +99,7 @@ where TablesTable<T>: HistoryAware
 
         let mut catalogs = vec![];
         let mut databases = vec![];
+
         let mut database_tables = vec![];
         for (ctl_name, ctl) in ctls.into_iter() {
             let dbs = ctl.list_databases(tenant.as_str()).await?;
@@ -140,6 +141,10 @@ where TablesTable<T>: HistoryAware
             .iter()
             .map(|v| v.name().as_bytes().to_vec())
             .collect();
+        let table_id: Vec<u64> = database_tables
+            .iter()
+            .map(|v| v.get_table_info().ident.table_id)
+            .collect();
         let engines: Vec<Vec<u8>> = database_tables
             .iter()
             .map(|v| v.engine().as_bytes().to_vec())
@@ -180,14 +185,26 @@ where TablesTable<T>: HistoryAware
             })
             .collect();
         let cluster_bys: Vec<Vec<u8>> = cluster_bys.iter().map(|s| s.as_bytes().to_vec()).collect();
+        let is_transient: Vec<Vec<u8>> = database_tables
+            .iter()
+            .map(|v| {
+                if v.options().contains_key("TRANSIENT") {
+                    "TRANSIENT".as_bytes().to_vec()
+                } else {
+                    vec![]
+                }
+            })
+            .collect();
 
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(catalogs),
             StringType::from_data(databases),
             StringType::from_data(names),
+            UInt64Type::from_data(table_id),
             StringType::from_data(engines),
             StringType::from_data(engines_full),
             StringType::from_data(cluster_bys),
+            StringType::from_data(is_transient),
             StringType::from_data(created_owns),
             StringType::from_data(dropped_owns),
             UInt64Type::from_opt_data(num_rows),
@@ -206,9 +223,11 @@ where TablesTable<T>: HistoryAware
             TableField::new("catalog", TableDataType::String),
             TableField::new("database", TableDataType::String),
             TableField::new("name", TableDataType::String),
+            TableField::new("table_id", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("engine", TableDataType::String),
             TableField::new("engine_full", TableDataType::String),
             TableField::new("cluster_by", TableDataType::String),
+            TableField::new("is_transient", TableDataType::String),
             TableField::new("created_on", TableDataType::String),
             TableField::new("dropped_on", TableDataType::String),
             TableField::new(

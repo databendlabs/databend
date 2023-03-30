@@ -15,6 +15,8 @@
 #![allow(clippy::uninlined_format_args)]
 #![feature(type_alias_impl_trait)]
 
+extern crate core;
+
 mod build_options_table;
 mod catalogs_table;
 mod clustering_history_table;
