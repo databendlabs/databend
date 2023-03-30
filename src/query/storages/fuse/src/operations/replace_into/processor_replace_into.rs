@@ -123,8 +123,15 @@ impl Processor for ReplaceIntoProcessor {
             }
 
             if self.input_port.has_data() {
-                self.input_data = Some(self.input_port.pull_data().unwrap()?);
-                Ok(Event::Sync)
+                if self.output_data_append.is_none() && self.output_data_merge_into_action.is_none()
+                {
+                    // no pending data (being sent to down streams)
+                    self.input_data = Some(self.input_port.pull_data().unwrap()?);
+                    Ok(Event::Sync)
+                } else {
+                    // data pending
+                    Ok(Event::NeedConsume)
+                }
             } else {
                 self.input_port.set_need_data();
                 Ok(Event::NeedData)
