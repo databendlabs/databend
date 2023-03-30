@@ -50,57 +50,80 @@ use crate::Visibility;
 /// Input:
 ///                 expression
 ///                     |   
-///           aggregate(final): SUM(x)
-///                     |
-///          aggregate(partial): SUM(x)
+///              aggregate: SUM(x)
 ///                     |
 ///                    join
-///                   /    \
-///                  *      *
+///                     | \
+///                     |  *
+///                     |
+///                    (x)
 ///
 /// Output:
 /// (1) Eager Group-By:
 ///                 expression
 ///                     |
-///     final aggregate(final): SUM(EAGER SUM(x))
-///                     |
-///    final aggregate(partial): SUM(EAGER SUM(x))
+///      final aggregate: SUM(eager SUM(x))
 ///                     |
 ///                    join
-///                   /    \
-///                  *      eager group-by(final): EAGER SUM(x)
-///                          \
-///                           eager group-by(partial): EAGER SUM(x)
+///                     | \
+///                     |  *
+///                     |
+///                     eager group-by: eager SUM(x)
 ///
 /// (2) Eager Count:
 ///                 expression
 ///                     |
-///     final aggregate(final) SUM(x * cnt)
-///                     |
-///    final aggregate(partial) SUM(x * cnt)
+///        final aggregate: SUM(x * cnt)
 ///                     |
 ///                    join
-///                   /    \
-///                  *(x)   eager count(final) as cnt
-///                          \
-///                           eager count(partial) as cnt
+///                     | \
+///                     |  eager count: cnt
+///                     |
+///                    (x)
 ///
 /// (3) Double Eager:
 ///                 expression
 ///                     |
-///     final aggregate(final): SUM(EAGER SUM(x) * cnt)
-///                     |
-///    final aggregate(partial): SUM(EAGER SUM(x) * cnt)
+///    final aggregate: SUM(eager SUM(x) * cnt)
 ///                     |
 ///                     join
 ///                     | \
-///                     |   eager count(final) as cnt
-///                     |    \
-///                     |     eager count(partial) as cnt
+///                     |   eager count: cnt
 ///                     |
-///                     eager group-by(final): EAGER SUM(x)
+///                     eager group-by: eager SUM(x)
+///
+/// Input:
+///                 expression
+///                     |   
+///          aggregate: SUM(x), SUM(y)
 ///                     |
-///                     eager group-by(partial): EAGER SUM(x)
+///                    join
+///                     | \
+///                     | (y)
+///                     |
+///                    (x)
+///
+/// (1) Eager Groupby-Count:
+///                 expression
+///                     |
+///      final aggregate: SUM(eager SUM(x)), SUM(y * cnt)
+///                     |
+///                     join
+///                     | \
+///                     | (y)
+///                     |
+///                     eager group-by: eager SUM(x), eager count: cnt
+///
+/// (2) Eager Split:
+///                 expression
+///                     |
+///      final aggregate: SUM(eager SUM(x) * cnt2), SUM(eager SUM(y) * cnt1)
+///                     |
+///                     join
+///                     | \
+///                     | eager group-by: eager SUM(y), eager count: cnt2
+///                     |
+///                     eager group-by: eager SUM(x), eager count: cnt1
 
 pub struct RuleEagerAggregation {
     id: RuleID,
@@ -191,8 +214,8 @@ impl Rule for RuleEagerAggregation {
             columns_sets.push(prop.output_columns.clone());
         }
 
-        // Find all `BoundColumnRef`, and then create a mapping from the column source
-        // of `BoundColumnRef` to the item's index.
+        // Find all `BoundColumnRef`, and then create a mapping from the column index
+        // of `BoundColumnRef` to the item's vec index.
         let mut eval_scalar_items: HashMap<usize, Vec<usize>> = HashMap::new();
         for (index, item) in eval_scalar.items.iter().enumerate() {
             if let ScalarExpr::BoundColumnRef(column) = &item.scalar {
@@ -258,9 +281,318 @@ impl Rule for RuleEagerAggregation {
         let d = if can_push_down[0] { 0 } else { 1 };
 
         if can_push_down[d] && can_push_down[d ^ 1] {
-            // Apply eager split on both.
+            // (1) apply eager split on d and d^1.
+            // (2) apply eager groupby-count on d.
+            // we use `final_eager_split` and `final_eager_groupby_count` to represent
+            // the (1) and (2) respectively, the structure of operators is as follows:
+            // final_eager_split / final_eager_groupby_count
+            // |
+            // join
+            // | \
+            // |  eager_group_by_and_eager_count
+            // eager_group_by_and_eager_count
+
+            let original_final_agg = final_agg.clone();
+            let mut final_eager_split = final_agg;
+
+            let mut count_to_be_removed = Vec::new();
+            let mut avg_to_be_restored = Vec::new();
+            let mut func_to_be_restored = Vec::new();
+
+            // Add eager COUNT aggregate functions.
+            let mut eager_count_indexes = [0, 0];
+            let mut eager_count_vec_idx = [0, 0];
+            for idx in 0..2 {
+                (eager_count_indexes[idx], eager_count_vec_idx[idx]) =
+                    add_eager_count(&mut final_eager_split, self.metadata.clone());
+                eager_aggregations[idx].push((
+                    eager_count_vec_idx[idx],
+                    eager_count_indexes[idx],
+                    "count".to_string(),
+                ));
+            }
+
+            // Find all AVG aggregate functions, convert AVG to SUM and then add a COUNT aggregate function.
+            let mut avg_components = HashMap::new();
+            for (idx, eager_aggregation) in eager_aggregations.iter_mut().enumerate() {
+                let mut new_eager_aggregations = Vec::new();
+                for (index, _, func_name) in eager_aggregation.iter_mut() {
+                    if func_name.as_str() != "avg" {
+                        continue;
+                    }
+                    // AVG(C) => SUM(C) / COUNT(C)
+                    let (sum_index, count_index, count_vec_index) = decompose_avg(
+                        &mut final_eager_split,
+                        *index,
+                        func_name,
+                        self.metadata.clone(),
+                        function_factory,
+                    )?;
+                    // save AVG components to HashMap: (key=SUM, value=COUNT).
+                    avg_components.insert(sum_index, count_index);
+                    // Add COUNT to new_eager_aggregations.
+                    new_eager_aggregations.push((
+                        count_vec_index,
+                        count_index,
+                        "count".to_string(),
+                    ));
+                    if idx == d ^ 1 {
+                        avg_to_be_restored.push((sum_index, *index));
+                        count_to_be_removed.push(count_index);
+                    }
+                }
+                eager_aggregation.extend(new_eager_aggregations);
+            }
+
+            let mut eager_group_by_and_eager_count =
+                [final_eager_split.clone(), final_eager_split.clone()];
+
+            let mut eager_groupby_count_scalar = eval_scalar.clone();
+            let mut eager_split_eval_scalar = eval_scalar;
+
+            // Map AVG components's old-index to new-index
+            let mut old_to_new = HashMap::new();
+
+            // func_from indicates whether the aggregate function comes from the left child(0) or the right child(1).
+            let mut func_from = HashMap::new();
+
+            // The eager_aggregations here only only contains MIN, MAX, SUM and COUNT,
+            // and the AVG has been transformed into SUM and COUNT.
+            for idx in 0..2 {
+                let mut eval_scalars = vec![&mut eager_split_eval_scalar];
+                let eager_aggregation = &eager_aggregations[idx];
+                if idx == d {
+                    eval_scalars.push(&mut eager_groupby_count_scalar);
+                }
+                for (index, _, func_name) in eager_aggregation.iter() {
+                    if eager_count_vec_idx[idx] == *index {
+                        continue;
+                    }
+                    let (cur_success, old_index, new_index) = update_aggregate_and_eval(
+                        &mut final_eager_split,
+                        *index,
+                        func_name,
+                        self.metadata.clone(),
+                        &mut eval_scalars,
+                        &eval_scalar_items,
+                        &avg_components,
+                    )?;
+                    success |= cur_success;
+
+                    old_to_new.insert(old_index, new_index);
+
+                    func_from.insert(old_index, idx);
+                    func_from.insert(new_index, idx);
+
+                    if idx == d ^ 1 {
+                        func_to_be_restored.push((new_index, index));
+                    }
+                }
+            }
+
+            // Remove eager-count function from `final_double_eager` because
+            // eager-count function is now in `eager_count`.
+            for eager_count_index in eager_count_indexes {
+                for (idx, agg) in final_eager_split.aggregate_functions.iter().enumerate() {
+                    if agg.index == eager_count_index {
+                        final_eager_split.aggregate_functions.remove(idx);
+                        break;
+                    }
+                }
+            }
+
+            // Restore some functions in `final_eager_split` to its original state to
+            // generate `final_eager_groupby_count`, since AVG has already been converted
+            // to SUM and COUNT, we will delete COUNT and restore SUM to AVG, finally,
+            // restore the functions in `func_to_be_restored` to their original state.
+            let mut final_eager_groupby_count = final_eager_split.clone();
+            for index in count_to_be_removed {
+                for (idx, agg) in final_eager_groupby_count
+                    .aggregate_functions
+                    .iter()
+                    .enumerate()
+                {
+                    if agg.index == old_to_new[&index] {
+                        final_eager_groupby_count.aggregate_functions.remove(idx);
+                        break;
+                    }
+                }
+            }
+            for (index, idx) in avg_to_be_restored {
+                for agg in final_eager_groupby_count.aggregate_functions.iter_mut() {
+                    if agg.index == old_to_new[&index] {
+                        *agg = original_final_agg.aggregate_functions[idx].clone();
+                        break;
+                    }
+                }
+            }
+            for (index, idx) in func_to_be_restored {
+                for agg in final_eager_groupby_count.aggregate_functions.iter_mut() {
+                    if agg.index == index && *idx < original_final_agg.aggregate_functions.len() {
+                        *agg = original_final_agg.aggregate_functions[*idx].clone();
+                        break;
+                    }
+                }
+            }
+
+            // Try to multiply eager count for each sum aggregate column.
+            let mut eager_split_count_sum = EvalScalar { items: vec![] };
+            let mut eager_groupby_count_count_sum = EvalScalar { items: vec![] };
+            let final_eager = [&mut final_eager_split, &mut final_eager_groupby_count];
+            let count_sum = [
+                &mut eager_split_count_sum,
+                &mut eager_groupby_count_count_sum,
+            ];
+            for idx in 0..2 {
+                for agg in final_eager[idx].aggregate_functions.iter_mut() {
+                    if let ScalarExpr::AggregateFunction(aggregate_function) = &mut agg.scalar {
+                        if aggregate_function.func_name.as_str() != "sum"
+                            || (idx == 1 && func_from[&agg.index] == d)
+                        {
+                            continue;
+                        }
+                        count_sum[idx]
+                            .items
+                            .push(create_eager_count_multiply_scalar_item(
+                                aggregate_function,
+                                eager_count_indexes[func_from[&agg.index] ^ 1],
+                                self.metadata.clone(),
+                            )?);
+                    }
+                }
+            }
+
+            // AVG(C) = SUM(C) / COUNT(C)
+            // Use AVG components(SUM and COUNT) to build AVG eval scalar.
+            for (sum_index, count_index) in avg_components.iter() {
+                if let Some(indexes) = eval_scalar_items.get(sum_index) {
+                    for idx in indexes {
+                        let eval_scalar_item = &mut eager_split_eval_scalar.items[*idx];
+                        eval_scalar_item.scalar =
+                            create_avg_scalar_item(old_to_new[sum_index], old_to_new[count_index]);
+                        if func_from[sum_index] == d {
+                            let eager_groupby_count_eval_scalar_item =
+                                &mut eager_groupby_count_scalar.items[*idx];
+                            eager_groupby_count_eval_scalar_item.scalar = create_avg_scalar_item(
+                                old_to_new[sum_index],
+                                old_to_new[count_index],
+                            );
+                        }
+                        success = true;
+                    }
+                }
+            }
+
+            if !success {
+                return Ok(());
+            }
+
+            // Remove group by items and aggregate functions that do not belong to idx.
+            for idx in 0..2 {
+                remove_group_by_items_and_aggregate_functions(
+                    &mut eager_group_by_and_eager_count[idx],
+                    &columns_sets[idx],
+                    &eager_aggregations[idx ^ 1],
+                );
+            }
+
+            // Apply eager split on d and d^1.
+            let mut final_eager_split_partial = final_eager_split.clone();
+            final_eager_split_partial.mode = AggregateMode::Partial;
+
+            let mut final_agg_finals = vec![final_eager_split];
+            let mut final_agg_partials = vec![final_eager_split_partial];
+            let mut eval_scalars = vec![eager_split_eval_scalar.clone()];
+
+            let mut eager_group_by_and_eager_count_partial = [
+                eager_group_by_and_eager_count[0].clone(),
+                eager_group_by_and_eager_count[1].clone(),
+            ];
+            eager_group_by_and_eager_count_partial[0].mode = AggregateMode::Partial;
+            eager_group_by_and_eager_count_partial[1].mode = AggregateMode::Partial;
+
+            let mut join_exprs = vec![
+                eval_scalar_expr
+                    .replace_children(vec![join_expr.replace_children(vec![
+                        SExpr::create_unary(
+                            RelOperator::Aggregate(eager_group_by_and_eager_count[0].clone()),
+                            SExpr::create_unary(
+                                RelOperator::Aggregate(
+                                    eager_group_by_and_eager_count_partial[0].clone(),
+                                ),
+                                join_expr.child(0)?.clone(),
+                            ),
+                        ),
+                        SExpr::create_unary(
+                            RelOperator::Aggregate(eager_group_by_and_eager_count[1].clone()),
+                            SExpr::create_unary(
+                                RelOperator::Aggregate(
+                                    eager_group_by_and_eager_count_partial[1].clone(),
+                                ),
+                                join_expr.child(1)?.clone(),
+                            ),
+                        ),
+                    ])])
+                    .replace_plan(eager_split_count_sum.try_into()?),
+            ];
+
             // Apply eager groupby-count on d.
-        } else if can_push_down[d] {
+            let mut final_eager_groupby_count_partial = final_eager_groupby_count.clone();
+            final_eager_groupby_count_partial.mode = AggregateMode::Partial;
+
+            final_agg_finals.push(final_eager_groupby_count);
+            final_agg_partials.push(final_eager_groupby_count_partial);
+            eval_scalars.push(eager_groupby_count_scalar);
+
+            let mut eager_group_by_count_partial = eager_group_by_and_eager_count[d].clone();
+            eager_group_by_count_partial.mode = AggregateMode::Partial;
+
+            join_exprs.push(if d == 0 {
+                eval_scalar_expr
+                    .replace_children(vec![join_expr.replace_children(vec![
+                        SExpr::create_unary(
+                            RelOperator::Aggregate(eager_group_by_and_eager_count[d].clone()),
+                            SExpr::create_unary(
+                                RelOperator::Aggregate(eager_group_by_count_partial),
+                                join_expr.child(0)?.clone(),
+                            ),
+                        ),
+                        join_expr.child(1)?.clone(),
+                    ])])
+                    .replace_plan(eager_groupby_count_count_sum.try_into()?)
+            } else {
+                eval_scalar_expr
+                    .replace_children(vec![join_expr.replace_children(vec![
+                        join_expr.child(0)?.clone(),
+                        SExpr::create_unary(
+                            RelOperator::Aggregate(eager_group_by_and_eager_count[d].clone()),
+                            SExpr::create_unary(
+                                RelOperator::Aggregate(eager_group_by_count_partial),
+                                join_expr.child(1)?.clone(),
+                            ),
+                        ),
+                    ])])
+                    .replace_plan(eager_groupby_count_count_sum.try_into()?)
+            });
+
+            for idx in 0..final_agg_finals.len() {
+                let mut result = eval_scalar_expr
+                    .replace_children(vec![
+                        final_agg_expr
+                            .replace_children(vec![
+                                final_agg_partial_expr
+                                    .replace_children(vec![join_exprs[idx].clone()])
+                                    .replace_plan(final_agg_partials[idx].clone().try_into()?),
+                            ])
+                            .replace_plan(final_agg_finals[idx].clone().try_into()?),
+                    ])
+                    .replace_plan(eval_scalars[idx].clone().try_into()?);
+                if idx == 0 {
+                    result.set_applied_rule(&self.id);
+                    state.add_result(result);
+                }
+            }
+        } else if can_push_down[d] && eager_aggregations[d ^ 1].is_empty() {
             // (1) Try to apply eager group-by on d.
             // (2) Try to apply eager count on d^1's sum aggregations.
             // (3) If (1) and (2) success, apply double eager on d and d^1.
@@ -278,107 +610,37 @@ impl Rule for RuleEagerAggregation {
             let mut final_eager_count = final_double_eager.clone();
 
             // Add eager COUNT aggregate functions.
-            let mut eager_count_old_index = -1;
-            let mut eager_count_idx = -1;
+            let mut eager_count_index = 0;
+            let mut eager_count_vec_idx = 0;
             if can_eager[d ^ 1] {
-                final_double_eager
-                    .aggregate_functions
-                    .push(final_double_eager.aggregate_functions[0].clone());
-
-                let last_index = final_double_eager.aggregate_functions.len() - 1;
-
-                let eager_count_aggregation_function =
-                    &mut final_double_eager.aggregate_functions[last_index];
-
-                let new_index = self.metadata.write().add_derived_column(
-                    "count(*)".to_string(),
-                    DataType::Number(NumberDataType::UInt64),
-                );
-                if let ScalarExpr::AggregateFunction(agg) =
-                    &mut eager_count_aggregation_function.scalar
-                {
-                    agg.func_name = "count".to_string();
-                    agg.distinct = false;
-                    agg.return_type = Box::new(DataType::Number(NumberDataType::UInt64));
-                    agg.args = vec![];
-                    agg.display_name = "count(*)".to_string();
-                }
-                eager_count_aggregation_function.index = new_index;
-                eager_count_old_index = new_index as i32;
-                eager_count_idx = last_index as i32;
-                eager_aggregations[d ^ 1].push((last_index, new_index, "count".to_string()));
+                (eager_count_index, eager_count_vec_idx) =
+                    add_eager_count(&mut final_double_eager, self.metadata.clone());
+                eager_aggregations[d ^ 1].push((
+                    eager_count_vec_idx,
+                    eager_count_index,
+                    "count".to_string(),
+                ));
             }
 
             // Find all AVG aggregate functions, convert AVG to SUM and then add a COUNT aggregate function.
-            // AVG(C) => SUM(C) / COUNT(C)
             let mut avg_components = HashMap::new();
             let mut new_eager_aggregations = Vec::new();
             for (index, _, func_name) in eager_aggregations[d].iter_mut() {
                 if func_name.as_str() != "avg" {
                     continue;
                 }
-                *func_name = "sum".to_string();
-
-                // Add COUNT aggregate functions.
-                final_double_eager
-                    .aggregate_functions
-                    .push(final_double_eager.aggregate_functions[*index].clone());
-
-                // Get SUM(currently still AVG) aggregate functions.
-                let sum_aggregation_function = &mut final_double_eager.aggregate_functions[*index];
-
-                // AVG => SUM
-                let sum_index = sum_aggregation_function.index;
-                if let ScalarExpr::AggregateFunction(agg) = &mut sum_aggregation_function.scalar {
-                    if let ScalarExpr::BoundColumnRef(column) = &agg.args[0] {
-                        agg.func_name = "sum".to_string();
-                        self.metadata.write().change_derived_column_alias(
-                            sum_aggregation_function.index,
-                            format!(
-                                "{}({}.{})",
-                                agg.func_name.clone(),
-                                &column.column.table_name.clone().unwrap_or(String::new()),
-                                &column.column.column_name.clone(),
-                            ),
-                        );
-                        let func =
-                            function_factory.get(&agg.func_name, agg.params.clone(), vec![
-                                *column.column.data_type.clone(),
-                            ])?;
-                        agg.return_type = Box::new(func.return_type()?);
-                    }
-                }
-
-                // Get COUNT(currently still AVG) aggregate functions.
-                let last_index = final_double_eager.aggregate_functions.len() - 1;
-                let count_aggregation_function =
-                    &mut final_double_eager.aggregate_functions[last_index];
-
-                // Generate a new column for COUNT.
-                let mut table_name = String::new();
-                let mut column_name = String::new();
-                if let ScalarExpr::AggregateFunction(agg) = &count_aggregation_function.scalar {
-                    if let ScalarExpr::BoundColumnRef(column) = &agg.args[0] {
-                        table_name = column.column.table_name.clone().unwrap_or(String::new());
-                        column_name = column.column.column_name.clone();
-                    }
-                }
-                let new_index = self.metadata.write().add_derived_column(
-                    format!("{}({}.{})", &func_name, table_name, column_name),
-                    count_aggregation_function.scalar.data_type()?,
-                );
-
-                // AVG => COUNT
-                if let ScalarExpr::AggregateFunction(agg) = &mut count_aggregation_function.scalar {
-                    agg.func_name = "count".to_string();
-                    agg.return_type = Box::new(DataType::Number(NumberDataType::UInt64));
-                }
-                count_aggregation_function.index = new_index;
-
-                // AVG = SUM / COUNT, save AVG components to HashMap: (key=SUM, value=COUNT).
-                avg_components.insert(sum_index, new_index);
+                // AVG(C) => SUM(C) / COUNT(C)
+                let (sum_index, count_index, count_vec_index) = decompose_avg(
+                    &mut final_double_eager,
+                    *index,
+                    func_name,
+                    self.metadata.clone(),
+                    function_factory,
+                )?;
+                // save AVG components to HashMap: (key=SUM, value=COUNT).
+                avg_components.insert(sum_index, count_index);
                 // Add COUNT to new_eager_aggregations.
-                new_eager_aggregations.push((last_index, new_index, "count".to_string()));
+                new_eager_aggregations.push((count_vec_index, count_index, "count".to_string()));
             }
             eager_aggregations[d].extend(new_eager_aggregations);
 
@@ -394,48 +656,23 @@ impl Rule for RuleEagerAggregation {
 
             // The eager_aggregations here only only contains MIN, MAX, SUM and COUNT,
             // and the AVG has been transformed into SUM and COUNT.
-            for eager_aggregation in eager_aggregations.iter() {
-                for (index, _, func_name) in eager_aggregation.iter() {
-                    if eager_count_idx == *index as i32 {
-                        continue;
-                    }
-                    let final_aggregate_function =
-                        &mut final_double_eager.aggregate_functions[*index];
-
-                    let old_index = final_aggregate_function.index;
-                    let new_index = self.metadata.write().add_derived_column(
-                        format!("_eager_final_{}", &func_name),
-                        final_aggregate_function.scalar.data_type()?,
-                    );
-                    old_to_new.insert(old_index, new_index);
-
-                    // Modify final aggregate functions.
-                    if let ScalarExpr::AggregateFunction(agg) = &mut final_aggregate_function.scalar
-                    {
-                        // final_aggregate_functions is currently a clone of eager aggregation.
-                        modify_final_aggregate_function(agg, old_index);
-                        // final_aggregate_functions is a final aggregation now.
-                        final_aggregate_function.index = new_index;
-                    }
-
-                    // Modify the eval scalars of all aggregate functions that are not AVG components.
-                    if let Some(indexes) = eval_scalar_items.get(&old_index) && !avg_components.contains_key(&old_index) {
-                        for idx in indexes {
-                            let eval_scalar_item = &mut double_eager_eval_scalar.items[*idx];
-                            if let ScalarExpr::BoundColumnRef(column) = &mut eval_scalar_item.scalar {
-                                let column_binding = &mut column.column;
-                                column_binding.index = new_index;
-                                if func_name == "count" {
-                                    column_binding.data_type = Box::new(DataType::Nullable(Box::new(
-                                        DataType::Number(NumberDataType::UInt64),
-                                    )));
-                                    eval_scalar_item.scalar = cast_expr_if_needed(eval_scalar_item.scalar.clone(), DataType::Number(NumberDataType::UInt64));
-                                }
-                                success = true;
-                            }
-                        }
-                    }
+            let mut eval_scalars = vec![&mut double_eager_eval_scalar];
+            for (index, _, func_name) in eager_aggregations[d].iter() {
+                if can_eager[d ^ 1] && eager_count_vec_idx == *index {
+                    continue;
                 }
+                let (cur_success, old_index, new_index) = update_aggregate_and_eval(
+                    &mut final_double_eager,
+                    *index,
+                    func_name,
+                    self.metadata.clone(),
+                    &mut eval_scalars,
+                    &eval_scalar_items,
+                    &avg_components,
+                )?;
+                success |= cur_success;
+
+                old_to_new.insert(old_index, new_index);
             }
 
             // Remove eager-count function from `final_double_eager` because
@@ -443,8 +680,10 @@ impl Rule for RuleEagerAggregation {
             if can_eager[d ^ 1] {
                 final_double_eager
                     .aggregate_functions
-                    .remove(eager_count_idx as usize);
+                    .remove(eager_count_vec_idx);
             }
+
+            let final_eager_group_by = final_double_eager.clone();
 
             let mut need_eager_count = false;
             // Try to multiply eager count for each sum aggregate column.
@@ -459,25 +698,13 @@ impl Rule for RuleEagerAggregation {
                             if aggregate_function.func_name.as_str() != "sum" {
                                 continue;
                             }
-                            let new_index = self.metadata.write().add_derived_column(
-                                format!("{} * _eager_count", aggregate_function.display_name),
-                                aggregate_function.args[0].data_type()?,
-                            );
-                            let new_scalar_item = ScalarItem {
-                                scalar: create_eager_count_multiply_scalar_item(
-                                    aggregate_function.args[0].clone(),
-                                    eager_count_old_index as usize,
-                                ),
-                                index: new_index,
-                            };
-                            if let ScalarExpr::BoundColumnRef(column) =
-                                &mut aggregate_function.args[0]
-                            {
-                                column.column.index = new_index;
-                                column.column.data_type =
-                                    Box::new(new_scalar_item.scalar.data_type()?);
-                            }
-                            count_sum[idx].items.push(new_scalar_item);
+                            count_sum[idx]
+                                .items
+                                .push(create_eager_count_multiply_scalar_item(
+                                    aggregate_function,
+                                    eager_count_index,
+                                    self.metadata.clone(),
+                                )?);
                             need_eager_count = true;
                         }
                     }
@@ -501,7 +728,6 @@ impl Rule for RuleEagerAggregation {
                 return Ok(());
             }
 
-            let final_eager_group_by = final_double_eager.clone();
             let eager_group_by_eval_scalar = double_eager_eval_scalar.clone();
 
             // Remove group by items and aggregate functions that do not belong to d.
@@ -839,32 +1065,184 @@ fn create_avg_scalar_item(left_index: usize, right_index: usize) -> ScalarExpr {
     })
 }
 
+fn add_eager_count(final_agg: &mut Aggregate, metadata: MetadataRef) -> (usize, usize) {
+    final_agg
+        .aggregate_functions
+        .push(final_agg.aggregate_functions[0].clone());
+
+    let eager_count_vec_index = final_agg.aggregate_functions.len() - 1;
+
+    let eager_count_aggregation_function =
+        &mut final_agg.aggregate_functions[eager_count_vec_index];
+
+    let eager_count_index = metadata.write().add_derived_column(
+        "count(*)".to_string(),
+        DataType::Number(NumberDataType::UInt64),
+    );
+    if let ScalarExpr::AggregateFunction(agg) = &mut eager_count_aggregation_function.scalar {
+        agg.func_name = "count".to_string();
+        agg.distinct = false;
+        agg.return_type = Box::new(DataType::Number(NumberDataType::UInt64));
+        agg.args = vec![];
+        agg.display_name = "count(*)".to_string();
+    }
+    eager_count_aggregation_function.index = eager_count_index;
+    (eager_count_index, eager_count_vec_index)
+}
+
+// AVG(C) => SUM(C) / COUNT(C)
+fn decompose_avg(
+    final_agg: &mut Aggregate,
+    index: usize,
+    func_name: &mut String,
+    metadata: MetadataRef,
+    function_factory: &AggregateFunctionFactory,
+) -> common_exception::Result<(usize, usize, usize)> {
+    *func_name = "sum".to_string();
+    // Add COUNT aggregate functions.
+    final_agg
+        .aggregate_functions
+        .push(final_agg.aggregate_functions[index].clone());
+
+    // Get SUM(currently still AVG) aggregate functions.
+    let sum_aggregation_function = &mut final_agg.aggregate_functions[index];
+
+    // AVG => SUM
+    let sum_index = sum_aggregation_function.index;
+    if let ScalarExpr::AggregateFunction(agg) = &mut sum_aggregation_function.scalar {
+        if let ScalarExpr::BoundColumnRef(column) = &agg.args[0] {
+            agg.func_name = "sum".to_string();
+            metadata.write().change_derived_column_alias(
+                sum_aggregation_function.index,
+                format!(
+                    "avg_{}({}.{})",
+                    agg.func_name.clone(),
+                    &column.column.table_name.clone().unwrap_or(String::new()),
+                    &column.column.column_name.clone(),
+                ),
+            );
+            let func = function_factory.get(&agg.func_name, agg.params.clone(), vec![
+                *column.column.data_type.clone(),
+            ])?;
+            agg.return_type = Box::new(func.return_type()?);
+        }
+    }
+
+    // Get COUNT(currently still AVG) aggregate functions.
+    let count_vec_index = final_agg.aggregate_functions.len() - 1;
+    let count_aggregation_function = &mut final_agg.aggregate_functions[count_vec_index];
+
+    // Generate a new column for COUNT.
+    let mut table_name = String::new();
+    let mut column_name = String::new();
+    if let ScalarExpr::AggregateFunction(agg) = &count_aggregation_function.scalar {
+        if let ScalarExpr::BoundColumnRef(column) = &agg.args[0] {
+            table_name = column.column.table_name.clone().unwrap_or(String::new());
+            column_name = column.column.column_name.clone();
+        }
+    }
+    let count_index = metadata.write().add_derived_column(
+        format!("avg_count_{}({}.{})", &func_name, table_name, column_name),
+        count_aggregation_function.scalar.data_type()?,
+    );
+
+    // AVG => COUNT
+    if let ScalarExpr::AggregateFunction(agg) = &mut count_aggregation_function.scalar {
+        agg.func_name = "count".to_string();
+        agg.return_type = Box::new(DataType::Number(NumberDataType::UInt64));
+    }
+    count_aggregation_function.index = count_index;
+
+    Ok((sum_index, count_index, count_vec_index))
+}
+
+fn update_aggregate_and_eval(
+    final_agg: &mut Aggregate,
+    index: usize,
+    func_name: &String,
+    metadata: MetadataRef,
+    eval_scalars: &mut Vec<&mut EvalScalar>,
+    eval_scalar_items: &HashMap<usize, Vec<usize>>,
+    avg_components: &HashMap<usize, usize>,
+) -> common_exception::Result<(bool, usize, usize)> {
+    let final_aggregate_function = &mut final_agg.aggregate_functions[index];
+
+    let old_index = final_aggregate_function.index;
+    let new_index = metadata.write().add_derived_column(
+        format!("_eager_final_{}", &func_name),
+        final_aggregate_function.scalar.data_type()?,
+    );
+
+    // Modify final aggregate functions.
+    if let ScalarExpr::AggregateFunction(agg) = &mut final_aggregate_function.scalar {
+        // final_aggregate_functions is currently a clone of eager aggregation.
+        modify_final_aggregate_function(agg, old_index);
+        // final_aggregate_functions is a final aggregation now.
+        final_aggregate_function.index = new_index;
+    }
+
+    let mut success = false;
+    // Modify the eval scalars of all aggregate functions that are not AVG components.
+    if let Some(indexes) = eval_scalar_items.get(&old_index) && !avg_components.contains_key(&old_index) {
+        for eval_scalar in eval_scalars {
+            for item_idx in indexes {
+                let eval_scalar_item = &mut (eval_scalar).items[*item_idx];
+                if let ScalarExpr::BoundColumnRef(column) = &mut eval_scalar_item.scalar {
+                    let column_binding = &mut column.column;
+                    column_binding.index = new_index;
+                    if func_name == "count" {
+                        column_binding.data_type = Box::new(DataType::Nullable(Box::new(
+                            DataType::Number(NumberDataType::UInt64),
+                        )));
+                        eval_scalar_item.scalar = cast_expr_if_needed(eval_scalar_item.scalar.clone(), DataType::Number(NumberDataType::UInt64));
+                    }
+                    success = true;
+                }
+            }
+        }
+    }
+    Ok((success, old_index, new_index))
+}
+
 fn create_eager_count_multiply_scalar_item(
-    left_scalar_item: ScalarExpr,
-    right_index: usize,
-) -> ScalarExpr {
-    ScalarExpr::FunctionCall(FunctionCall {
-        span: None,
-        func_name: "multiply".to_string(),
-        params: vec![],
-        arguments: vec![
-            left_scalar_item,
-            cast_expr_if_needed(
-                ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    span: None,
-                    column: ColumnBinding {
-                        database_name: None,
-                        table_name: None,
-                        column_name: "_eager_count".to_string(),
-                        index: right_index,
-                        data_type: Box::new(DataType::Nullable(Box::new(DataType::Number(
-                            NumberDataType::UInt64,
-                        )))),
-                        visibility: Visibility::Visible,
-                    },
-                }),
-                DataType::Number(NumberDataType::UInt64),
-            ),
-        ],
-    })
+    aggregate_function: &mut AggregateFunction,
+    eager_count_index: IndexType,
+    metadata: MetadataRef,
+) -> common_exception::Result<ScalarItem> {
+    let new_index = metadata.write().add_derived_column(
+        format!("{} * _eager_count", aggregate_function.display_name),
+        aggregate_function.args[0].data_type()?,
+    );
+    let new_scalar_item = ScalarItem {
+        scalar: ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "multiply".to_string(),
+            params: vec![],
+            arguments: vec![
+                aggregate_function.args[0].clone(),
+                cast_expr_if_needed(
+                    ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
+                        column: ColumnBinding {
+                            database_name: None,
+                            table_name: None,
+                            column_name: "_eager_count".to_string(),
+                            index: eager_count_index,
+                            data_type: Box::new(DataType::Nullable(Box::new(DataType::Number(
+                                NumberDataType::UInt64,
+                            )))),
+                            visibility: Visibility::Visible,
+                        },
+                    }),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+            ],
+        }),
+        index: new_index,
+    };
+    if let ScalarExpr::BoundColumnRef(column) = &mut aggregate_function.args[0] {
+        column.column.index = new_index;
+        column.column.data_type = Box::new(new_scalar_item.scalar.data_type()?);
+    }
+    Ok(new_scalar_item)
 }
