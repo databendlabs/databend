@@ -87,6 +87,7 @@ common-storages-share = { path = "../storages/share" }
 common-storages-stage = { path = "../storages/stage" }
 common-storages-system = { path = "../storages/system" }
 common-storages-view = { path = "../storages/view" }
+common-sharing = { path = "../sharing" }
 common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
 storages-common-cache = { path = "../storages/common/cache" }

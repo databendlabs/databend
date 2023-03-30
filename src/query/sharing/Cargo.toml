@@ -19,6 +19,8 @@ common-exception = { path = "../../common/exception" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
 common-users = { path = "../users" }
+common-storage = { path = "../../common/storage" }
+common-base = { path = "../../common/base" }
 
 chrono = { workspace = true }
 http = "0.2"
@@ -28,3 +30,4 @@ opendal = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+tracing = "0.1.36"

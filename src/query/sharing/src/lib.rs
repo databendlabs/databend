@@ -23,4 +23,4 @@ mod signer;
 pub use signer::SharedSigner;
 
 mod share_endpoint;
-pub use share_endpoint::init_share_endpoint_config;
+pub use share_endpoint::ShareEndpointManager;
