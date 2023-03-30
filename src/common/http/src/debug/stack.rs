@@ -14,7 +14,6 @@
 
 use std::fmt::Write;
 
-use futures::poll;
 use poem::web::Query;
 use poem::IntoResponse;
 
@@ -75,9 +74,7 @@ pub async fn debug_dump_stack(req: Option<Query<DumpStackRequest>>) -> impl Into
 
     let mut output = String::new();
     for mut tasks in [tasks, polling_tasks] {
-        tasks.sort_by(|l, r|
-            Ord::cmp(&l.stack_frames.len(), &r.stack_frames.len())
-        );
+        tasks.sort_by(|l, r| Ord::cmp(&l.stack_frames.len(), &r.stack_frames.len()));
 
         for item in tasks.into_iter().rev() {
             for frame in item.stack_frames {
