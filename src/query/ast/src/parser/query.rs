@@ -367,7 +367,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let subquery = map(
         rule! {
-            ( #parenthesized_query | #query ) ~ #table_alias?
+            #parenthesized_query ~ #table_alias?
         },
         |(subquery, alias)| TableReferenceElement::Subquery {
             subquery: Box::new(subquery),
@@ -382,24 +382,8 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         |(_, table_ref, _)| TableReferenceElement::Group(table_ref),
     );
 
-    let stage_location = |i| {
-        map_res(
-            rule! {
-                #stage_location
-            },
-            |v| Ok(FileLocation::Stage(v)),
-        )(i)
-    };
-
-    let uri_location = |i| {
-        map_res(
-            rule! {
-                #literal_string
-            },
-            |v| Ok(FileLocation::Uri(v)),
-        )(i)
-    };
-
+    let stage_location = |i| map(stage_location, FileLocation::Stage)(i);
+    let uri_location = |i| map(literal_string, FileLocation::Uri)(i);
     let aliased_stage = map(
         rule! {
             (#stage_location | #uri_location) ~  ("(" ~ ^#comma_separated_list1(select_stage_option) ~")")? ~ #table_alias?
@@ -418,14 +402,14 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
 
     let (rest, (span, elem)) = consumed(rule! {
-        #subquery
-        | #aliased_stage
+        #aliased_stage
+        | #table_function
+        | #aliased_table
+        | #subquery
         | #group
         | #join
         | #join_condition_on
         | #join_condition_using
-        | #table_function
-        | #aliased_table
     })(i)?;
     Ok((rest, WithSpan { span, elem }))
 }

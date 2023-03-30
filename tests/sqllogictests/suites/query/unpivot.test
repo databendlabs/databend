@@ -26,10 +26,11 @@ ORDER BY empid;
 3	cars	April	50
 
 query IIII
-SELECT empid,dept,month,sales FROM
-SELECT * FROM monthly_sales_1
-    UNPIVOT(sales FOR month IN (jan, feb, mar, april))
-    ORDER BY empid;
+SELECT empid,dept,month,sales FROM (
+    SELECT * FROM monthly_sales_1
+        UNPIVOT(sales FOR month IN (jan, feb, mar, april))
+        ORDER BY empid
+);
 ----
 1	electronics	jan	100
 1	electronics	feb	200
