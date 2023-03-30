@@ -21,9 +21,10 @@ use arrow_flight::sql::client::FlightSqlServiceClient;
 use arrow_flight::utils::flight_data_to_batches;
 use arrow_flight::FlightData;
 use futures::TryStreamExt;
+use rustyline::config::Builder;
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
-use rustyline::Editor;
+use rustyline::{CompletionType, Editor};
 use std::io::BufRead;
 use std::sync::Arc;
 use tokio::time::Instant;
@@ -76,7 +77,12 @@ impl Session {
 
     pub async fn handle_repl(&mut self) {
         let mut query = "".to_owned();
-        let mut rl = Editor::<CliHelper, DefaultHistory>::new().unwrap();
+        let config = Builder::new()
+            .completion_prompt_limit(5)
+            .completion_type(CompletionType::Circular)
+            .build();
+        let mut rl = Editor::<CliHelper, DefaultHistory>::with_config(config).unwrap();
+
         rl.set_helper(Some(CliHelper::new()));
         rl.load_history(&get_history_path()).ok();
 
@@ -157,7 +163,7 @@ impl Session {
             .collect::<Result<Vec<RecordBatch>, ArrowError>>()?;
 
         if is_repl {
-            print_batches(QueryKind::from(query), batches.as_slice())?;
+            print_batches(batches.as_slice())?;
 
             println!();
 
@@ -229,6 +235,7 @@ fn normalize_record_batch(batch: &RecordBatch) -> Result<RecordBatch, ArrowError
     RecordBatch::try_new(Arc::new(schema), columns)
 }
 
+#[allow(dead_code)]
 pub enum QueryKind {
     Query,
     Explain,

@@ -27,6 +27,10 @@ use rustyline::Context;
 use rustyline::Helper;
 use rustyline::Result;
 
+use crate::token::all_reserved_keywords;
+use crate::token::tokenize_sql;
+use crate::token::TokenKind;
+
 pub struct CliHelper {
     completer: FilenameCompleter,
 }
@@ -40,31 +44,29 @@ impl CliHelper {
 }
 
 impl Highlighter for CliHelper {
-    fn highlight<'l>(&self, line: &'l str, pos: usize) -> Cow<'l, str> {
-        let mut pos = pos;
-
+    fn highlight<'l>(&self, line: &'l str, _pos: usize) -> Cow<'l, str> {
+        let tokens = tokenize_sql(line);
         let mut line = line.to_owned();
-        while pos > 0 {
-            match find_last_word(&line, pos) {
-                Span::Keyword(start, end) => {
+
+        if let Ok(tokens) = tokens {
+            for token in tokens.iter().rev() {
+                if TokenKind::is_keyword(&token.kind)
+                    || TokenKind::is_reserved_ident(&token.kind, false)
+                    || TokenKind::is_reserved_function_name(&token.kind)
+                {
                     line.replace_range(
-                        start..end,
-                        &format!("\x1b[1;32m{}\x1b[0m", &line[start..end]),
+                        token.span.clone(),
+                        &format!("\x1b[1;32m{}\x1b[0m", token.text()),
                     );
-                    pos = start;
-                }
-                Span::Literal(start, end) => {
+                } else if TokenKind::is_literal(&token.kind) {
                     line.replace_range(
-                        start..end,
-                        &format!("\x1b[1;37m{}\x1b[0m", &line[start..end]),
+                        token.span.clone(),
+                        &format!("\x1b[1;33m{}\x1b[0m", token.text()),
                     );
-                    pos = start;
-                }
-                Span::None(start, _) => {
-                    pos = start;
                 }
             }
         }
+
         Cow::Owned(line)
     }
 
@@ -92,52 +94,6 @@ impl Highlighter for CliHelper {
 
     fn highlight_char(&self, line: &str, _pos: usize) -> bool {
         !line.is_empty()
-    }
-}
-
-enum Span {
-    Keyword(usize, usize),
-    Literal(usize, usize),
-    None(usize, usize),
-}
-
-fn find_last_word(line: &str, pos: usize) -> Span {
-    if line.is_empty() {
-        return Span::None(0, 0);
-    }
-    let mut pos = pos;
-    if pos >= line.len() {
-        pos = line.len();
-    }
-
-    while pos > 0 {
-        if line.as_bytes()[pos - 1].is_ascii_whitespace() {
-            pos -= 1;
-        } else {
-            break;
-        }
-    }
-
-    let end = pos;
-    while pos > 0 {
-        if !line.as_bytes()[pos - 1].is_ascii_whitespace() {
-            pos -= 1;
-        } else {
-            break;
-        }
-    }
-    let keyword = &line[pos..end];
-    if KEYWORDS
-        .split('\n')
-        .any(|s| s.eq_ignore_ascii_case(keyword))
-    {
-        Span::Keyword(pos, end)
-    } else if (keyword.starts_with('\'') && keyword.starts_with('"'))
-        || keyword.parse::<f64>().is_ok()
-    {
-        Span::Literal(pos, end)
-    } else {
-        Span::None(pos, end)
     }
 }
 
@@ -177,15 +133,14 @@ impl Helper for CliHelper {}
 
 struct KeyWordCompleter {}
 
-static KEYWORDS: &str = include_str!("keywords.txt");
-
 impl KeyWordCompleter {
     fn complete(s: &str, pos: usize) -> (usize, Vec<Pair>) {
         let hint = s.split(|p: char| p.is_whitespace()).last().unwrap_or(s);
+        let all_keywords = all_reserved_keywords();
         let res: (usize, Vec<Pair>) = (
             pos - hint.len(),
-            KEYWORDS
-                .split('\n')
+            all_keywords
+                .iter()
                 .filter(|keyword| keyword.starts_with(&hint.to_ascii_uppercase()))
                 .map(|keyword| Pair {
                     display: keyword.to_string(),

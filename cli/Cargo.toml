@@ -1,7 +1,12 @@
 [package]
 name = "databend-cli"
-version = "0.1.0"
+version = "0.1.2"
 edition = "2021"
+license = "Apache-2.0"
+description = "Databend Native Cli tool"
+categories = ["database"]
+keywords = ["databend", "database", "cli"]
+repository = "https://github.com/datafuselabs/databend-client"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -29,6 +34,10 @@ tonic = { version = "0.8", default-features = false, features = [
     "tls",
     "prost",
 ] }
+
+logos = "0.12.1"
+strum = "0.24"
+strum_macros = "0.24"
 
 [[bin]]
 name = "databend-cli"

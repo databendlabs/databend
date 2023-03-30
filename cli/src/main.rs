@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::upper_case_acronyms)]
+
 mod display;
 mod helper;
 mod session;
+mod token;
 
 use std::time::Duration;
 
@@ -42,7 +45,7 @@ struct Args {
     #[clap(
         short = 'P',
         long,
-        default_value_t = 4100,
+        default_value_t = 8900,
         help = "Flight SQL Server port"
     )]
     port: u16,
