@@ -30,8 +30,9 @@ use std::sync::Arc;
 use tokio::time::Instant;
 use tonic::transport::Endpoint;
 
-use crate::display::print_batches;
+use crate::display::{format_error, print_batches};
 use crate::helper::CliHelper;
+use crate::token::{TokenKind, Tokenizer};
 
 pub struct Session {
     client: FlightSqlServiceClient,
@@ -116,7 +117,7 @@ impl Session {
                     }
                     Ok(false) => {}
                     Err(e) => {
-                        eprintln!("handle_query err: {e}");
+                        eprintln!("{}", format_error(e));
                     }
                 }
             }
@@ -133,7 +134,7 @@ impl Session {
         while let Some(Ok(line)) = lines.next() {
             let line = line.trim_end();
             if let Err(e) = self.handle_query(false, line).await {
-                eprintln!("handle_query err: {e}");
+                eprintln!("{}", format_error(e));
             }
         }
     }
@@ -147,6 +148,22 @@ impl Session {
         }
 
         let start = Instant::now();
+
+        let kind = QueryKind::from(query);
+
+        if kind == QueryKind::Update {
+            let rows = self.client.execute_update(query.to_string()).await?;
+            if is_repl {
+                println!(
+                    "{} affected in ({:.3} sec)",
+                    rows,
+                    start.elapsed().as_secs_f64()
+                );
+                println!();
+            }
+            return Ok(false);
+        }
+
         let mut stmt = self.client.prepare(query.to_string()).await?;
         let flight_info = stmt.execute().await?;
         let ticket = flight_info.endpoint[0]
@@ -235,27 +252,29 @@ fn normalize_record_batch(batch: &RecordBatch) -> Result<RecordBatch, ArrowError
     RecordBatch::try_new(Arc::new(schema), columns)
 }
 
-#[allow(dead_code)]
+#[derive(PartialEq, Eq)]
 pub enum QueryKind {
     Query,
-    Explain,
     Update,
+    Explain,
 }
 
 impl From<&str> for QueryKind {
     fn from(query: &str) -> Self {
-        let query = query.trim();
-        let query = query.to_lowercase();
-        if query.starts_with("select")
-            || query.starts_with("list")
-            || query.starts_with("show")
-            || query.starts_with("desc")
-        {
-            QueryKind::Query
-        } else if query.starts_with("explain") {
-            QueryKind::Explain
-        } else {
-            QueryKind::Update
+        let mut tz = Tokenizer::new(query);
+        match tz.next() {
+            Some(Ok(t)) => match t.kind {
+                TokenKind::EXPLAIN => QueryKind::Explain,
+                TokenKind::ALTER
+                | TokenKind::UPDATE
+                | TokenKind::INSERT
+                | TokenKind::CREATE
+                | TokenKind::DROP
+                | TokenKind::OPTIMIZE
+                | TokenKind::COPY => QueryKind::Update,
+                _ => QueryKind::Query,
+            },
+            _ => QueryKind::Query,
         }
     }
 }

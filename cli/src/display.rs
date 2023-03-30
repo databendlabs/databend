@@ -82,3 +82,18 @@ fn normalize_datatype(ty: &DataType) -> String {
         _ => format!("{ty}"),
     }
 }
+
+pub(crate) fn format_error(error: ArrowError) -> String {
+    match error {
+        ArrowError::IoError(err) => {
+            static START: &str = "Code:";
+            static END: &str = ". at";
+
+            let message_index = err.find(START).unwrap_or(0);
+            let message_end_index = err.find(END).unwrap_or(err.len());
+            let message = &err[message_index..message_end_index];
+            message.replace("\\n", "\n")
+        }
+        other => format!("{}", other),
+    }
+}
