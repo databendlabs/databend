@@ -373,13 +373,13 @@ statement ok
 drop table if exists fold_count;
 
 statement ok
-create table fold_count(id array(int));
+create table fold_count(id array(int), c1 string);
 
 statement ok
-insert into fold_count values([1,2,3,4])
+insert into fold_count values([1,2,3,4], 'x')
 
 query T
-select concat(c,'y') as b from (select concat(c::String, 'x')  as c from (select unnest(id) as c from fold_count));
+select concat(c,'y') as b from (select concat(c::String, c1)  as c from (select unnest(id) as c, c1 from fold_count));
 ----
 1xy
 2xy
@@ -387,13 +387,14 @@ select concat(c,'y') as b from (select concat(c::String, 'x')  as c from (select
 4xy
 
 query I
-select count(b) from (select concat(c,'y') as b from (select concat(c::String, 'x')  as c from (select unnest(id) as c from fold_count)));
+select count(b) from (select concat(c,'y') as b from (select concat(c::String, c1)  as c from (select unnest(id) as c, c1 from fold_count)));
 ----
 4
 
-#ERROR 1105 (HY000): Code: 1006, Text = Unable to get field named "0". Valid fields: [].
-statement error 1006
-select count() from (select unnest(id) from fold_count)
+query I
+select count() from (select unnest(id), c1 from fold_count)
+----
+4
 
 statement ok
 drop table fold_count;
