@@ -36,5 +36,5 @@ runs:
           /repos/${{ github.repository }}/statuses/${{ inputs.sha }} \
           -f state='${{ inputs.state }}' \
          -f target_url='https://github.com/datafuselabs/databend/actions/runs/${{ github.run_id }}' \
-         -f description='${{ inputs.descriptions }}' \
+         -f description='${{ inputs.description }}' \
          -f context='${{ inputs.context }}'
