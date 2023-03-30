@@ -60,13 +60,13 @@ use common_sql::executor::Sort;
 use common_sql::executor::TableScan;
 use common_sql::executor::UnionAll;
 use common_sql::executor::Window;
-use common_sql::executor::WindowFunction;
 use common_sql::plans::JoinType;
 use common_sql::ColumnBinding;
 use common_sql::IndexType;
 use common_storage::DataOperator;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
 
+use super::processors::transforms::WindowFunctionInfo;
 use super::processors::ProfileWrapper;
 use super::processors::TransformExpandGroupingSets;
 use crate::api::DefaultExchangeInjector;
@@ -746,27 +746,6 @@ impl PipelineBuilder {
             self.main_pipeline.resize(old_output_len)?;
         }
 
-        // TODO(window): support general window functions
-        let (func, arguments) = match &window.func {
-            WindowFunction::Aggregate(agg) => {
-                let agg_func = AggregateFunctionFactory::instance().get(
-                    agg.sig.name.as_str(),
-                    agg.sig.params.clone(),
-                    agg.sig.args.clone(),
-                )?;
-                let args = agg
-                    .args
-                    .iter()
-                    .map(|p| {
-                        let offset = input_schema.index_of(&p.to_string())?;
-                        Ok(offset)
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-                (agg_func, args)
-            }
-            _ => todo!("window function"),
-        };
-
         let partition_by = window
             .partition_by
             .iter()
@@ -776,13 +755,13 @@ impl PipelineBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
+        let func = WindowFunctionInfo::try_create(&window.func, &input_schema)?;
         // Window
         self.main_pipeline.add_transform(|input, output| {
             let transform = TransformWindow::try_create(
                 input,
                 output,
                 func.clone(),
-                arguments.clone(),
                 partition_by.clone(),
                 window.window_frame.clone(),
             )?;

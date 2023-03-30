@@ -31,6 +31,7 @@ use common_ast::ast::UnaryOperator;
 use common_ast::ast::WindowFrame;
 use common_ast::ast::WindowFrameBound;
 use common_ast::ast::WindowFrameUnits;
+use common_ast::ast::WindowSpec;
 use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
 use common_catalog::catalog::CatalogManager;
@@ -57,6 +58,7 @@ use common_functions::aggregates::AggregateCountFunction;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::is_builtin_function;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_functions::GENERAL_WINDOW_FUNCTIONS;
 use common_users::UserApiProvider;
 use simsearch::SimSearch;
 
@@ -656,98 +658,36 @@ impl<'a> TypeChecker<'a> {
                     return Err(ErrorCode::Internal("Logical error, there is a bug!"));
                 }
 
-                if AggregateFunctionFactory::instance().contains(func_name) {
-                    if self.in_aggregate_function {
-                        // Reset the state
-                        self.in_aggregate_function = false;
-                        return Err(ErrorCode::SemanticError(
-                            "aggregate function calls cannot be nested".to_string(),
-                        )
-                        .set_span(expr.span()));
+                let name = func_name.to_lowercase();
+                if GENERAL_WINDOW_FUNCTIONS.contains(&name.as_str()) {
+                    // general window function
+                    if window.is_none() {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "window function {name} can only be used in window clause"
+                        )));
                     }
-
-                    // Check aggregate function
-                    let params = params
-                        .iter()
-                        .map(|literal| self.resolve_literal(literal).map(|box (value, _)| value))
-                        .collect::<Result<Vec<_>>>()?;
-
-                    self.in_aggregate_function = true;
-                    let mut arguments = vec![];
-                    let mut arg_types = vec![];
-                    for arg in args.iter() {
-                        let box (argument, arg_type) = self.resolve(arg).await?;
-                        arguments.push(argument);
-                        arg_types.push(arg_type);
+                    if !args.is_empty() {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "window function {name} does not have any argument"
+                        )));
                     }
-                    self.in_aggregate_function = false;
-
-                    // Rewrite `xxx(distinct)` to `xxx_distinct(...)`
-                    let (func_name, distinct) =
-                        if func_name.eq_ignore_ascii_case("count") && *distinct {
-                            ("count_distinct", false)
-                        } else {
-                            (func_name, *distinct)
-                        };
-
-                    let func_name = if distinct {
-                        format!("{}_distinct", func_name)
-                    } else {
-                        func_name.to_string()
-                    };
-
-                    let agg_func = AggregateFunctionFactory::instance()
-                        .get(&func_name, params.clone(), arg_types)
-                        .map_err(|e| e.set_span(*span))?;
-
-                    let args = if optimize_remove_count_args(&func_name, distinct, args.as_slice())
-                    {
-                        vec![]
-                    } else {
-                        arguments
-                    };
-
+                    let window = window.as_ref().unwrap();
                     let display_name = format!("{:#}", expr);
-                    let new_agg_func = AggregateFunction {
-                        display_name: display_name.clone(),
-                        func_name,
-                        distinct: false,
-                        params,
-                        args,
-                        return_type: Box::new(agg_func.return_type()?),
-                    };
-
-                    let data_type = agg_func.return_type()?;
-
+                    let func = WindowFuncType::from_name(&name)?;
+                    self.resolve_window(*span, display_name, window, func)
+                        .await?
+                } else if AggregateFunctionFactory::instance().contains(&name) {
+                    let (new_agg_func, data_type) = self
+                        .resolve_aggregate_function(*span, &name, expr, *distinct, params, &args)
+                        .await?;
                     if let Some(window) = window {
-                        // window function
-                        let mut partitions = vec![];
-                        for p in window.partition_by.iter() {
-                            let box (part, _part_type) = self.resolve(p).await?;
-                            partitions.push(part);
-                        }
-                        let mut order_bys = vec![];
-                        for o in window.order_by.iter() {
-                            let box (order, _) = self.resolve(&o.expr).await?;
-                            order_bys.push(WindowOrderBy {
-                                expr: order,
-                                asc: o.asc,
-                                nulls_first: o.nulls_first,
-                            })
-                        }
-
-                        // TODO(window): support general window functions
-                        let func = WindowFuncType::Aggregate(new_agg_func.clone());
-                        let frame = Self::check_frame_bound(*span, window.window_frame.clone())?;
-                        let window_func = WindowFunc {
-                            display_name,
-                            func,
-                            partition_by: partitions,
-                            order_by: order_bys,
-                            frame,
-                        };
-                        Box::new((window_func.into(), data_type))
+                        // aggregate window function
+                        let display_name = format!("{:#}", expr);
+                        let func = WindowFuncType::Aggregate(new_agg_func);
+                        self.resolve_window(*span, display_name, window, func)
+                            .await?
                     } else {
+                        // aggregate function
                         Box::new((new_agg_func.into(), data_type))
                     }
                 } else {
@@ -955,9 +895,42 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
+    async fn resolve_window(
+        &mut self,
+        span: Span,
+        display_name: String,
+        window: &WindowSpec,
+        func: WindowFuncType,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let mut partitions = vec![];
+        for p in window.partition_by.iter() {
+            let box (part, _part_type) = self.resolve(p).await?;
+            partitions.push(part);
+        }
+        let mut order_by = vec![];
+        for o in window.order_by.iter() {
+            let box (order, _) = self.resolve(&o.expr).await?;
+            order_by.push(WindowOrderBy {
+                expr: order,
+                asc: o.asc,
+                nulls_first: o.nulls_first,
+            })
+        }
+        let frame = Self::check_frame_bound(span, window.window_frame.clone())?;
+        let data_type = func.return_type();
+        let window_func = WindowFunc {
+            display_name,
+            func,
+            partition_by: partitions,
+            order_by,
+            frame,
+        };
+        Ok(Box::new((window_func.into(), data_type)))
+    }
+
     // just support integer
     #[inline]
-    pub fn resolve_window_frame(expr: &Expr) -> Option<usize> {
+    fn resolve_window_frame(expr: &Expr) -> Option<usize> {
         match expr {
             Expr::Literal {
                 lit: Literal::UInt64(value),
@@ -1069,8 +1042,80 @@ impl<'a> TypeChecker<'a> {
         })
     }
 
+    /// Resolve aggregation function call.
+    async fn resolve_aggregate_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        expr: &Expr,
+        distinct: bool,
+        params: &[Literal],
+        args: &[&Expr],
+    ) -> Result<(AggregateFunction, DataType)> {
+        if self.in_aggregate_function {
+            // Reset the state
+            self.in_aggregate_function = false;
+            return Err(ErrorCode::SemanticError(
+                "aggregate function calls cannot be nested".to_string(),
+            )
+            .set_span(expr.span()));
+        }
+
+        // Check aggregate function
+        let params = params
+            .iter()
+            .map(|literal| self.resolve_literal(literal).map(|box (value, _)| value))
+            .collect::<Result<Vec<_>>>()?;
+
+        self.in_aggregate_function = true;
+        let mut arguments = vec![];
+        let mut arg_types = vec![];
+        for arg in args.iter() {
+            let box (argument, arg_type) = self.resolve(arg).await?;
+            arguments.push(argument);
+            arg_types.push(arg_type);
+        }
+        self.in_aggregate_function = false;
+
+        // Rewrite `xxx(distinct)` to `xxx_distinct(...)`
+        let (func_name, distinct) = if func_name.eq_ignore_ascii_case("count") && distinct {
+            ("count_distinct", false)
+        } else {
+            (func_name, distinct)
+        };
+
+        let func_name = if distinct {
+            format!("{}_distinct", func_name)
+        } else {
+            func_name.to_string()
+        };
+
+        let agg_func = AggregateFunctionFactory::instance()
+            .get(&func_name, params.clone(), arg_types)
+            .map_err(|e| e.set_span(span))?;
+
+        let args = if optimize_remove_count_args(&func_name, distinct, args) {
+            vec![]
+        } else {
+            arguments
+        };
+
+        let display_name = format!("{:#}", expr);
+        let new_agg_func = AggregateFunction {
+            display_name,
+            func_name,
+            distinct: false,
+            params,
+            args,
+            return_type: Box::new(agg_func.return_type()?),
+        };
+
+        let data_type = agg_func.return_type()?;
+
+        Ok((new_agg_func, data_type))
+    }
+
     /// Resolve function call.
-    #[async_recursion::async_recursion]
     #[async_backtrace::framed]
     pub async fn resolve_function(
         &mut self,
@@ -1139,7 +1184,6 @@ impl<'a> TypeChecker<'a> {
             .await
     }
 
-    #[async_recursion::async_recursion]
     #[async_backtrace::framed]
     pub async fn resolve_scalar_function_call(
         &mut self,

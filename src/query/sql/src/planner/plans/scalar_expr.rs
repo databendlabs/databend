@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
-use std::fmt::Display;
-use std::fmt::Formatter;
 use std::hash::Hash;
 use std::hash::Hasher;
 
@@ -23,10 +20,11 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
 use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
 use common_expression::Scalar;
 use educe::Educe;
 
+use super::WindowFuncFrame;
+use super::WindowFuncType;
 use crate::binder::ColumnBinding;
 use crate::binder::InternalColumnBinding;
 use crate::optimizer::ColumnSet;
@@ -445,126 +443,6 @@ pub struct WindowOrderBy {
     pub asc: Option<bool>,
     // Optional `NULLS FIRST` or `NULLS LAST`
     pub nulls_first: Option<bool>,
-}
-
-#[derive(Default, Clone, PartialEq, Eq, Hash, Debug, serde::Serialize, serde::Deserialize)]
-pub struct WindowFuncFrame {
-    pub units: WindowFuncFrameUnits,
-    pub start_bound: WindowFuncFrameBound,
-    pub end_bound: WindowFuncFrameBound,
-}
-
-impl Display for WindowFuncFrame {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{:?}: {:?} ~ {:?}",
-            self.units, self.start_bound, self.end_bound
-        )
-    }
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-pub enum WindowFuncFrameUnits {
-    #[default]
-    Rows,
-    Range,
-}
-
-#[derive(Default, Clone, PartialEq, Eq, Hash, Debug, serde::Serialize, serde::Deserialize)]
-pub enum WindowFuncFrameBound {
-    /// `CURRENT ROW`
-    #[default]
-    CurrentRow,
-    /// `<N> PRECEDING` or `UNBOUNDED PRECEDING`
-    Preceding(Option<usize>),
-    /// `<N> FOLLOWING` or `UNBOUNDED FOLLOWING`.
-    Following(Option<usize>),
-}
-
-impl PartialOrd for WindowFuncFrameBound {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        match self {
-            WindowFuncFrameBound::CurrentRow => match other {
-                WindowFuncFrameBound::CurrentRow => Some(Ordering::Equal),
-                WindowFuncFrameBound::Preceding(_) => Some(Ordering::Greater),
-                WindowFuncFrameBound::Following(_) => Some(Ordering::Less),
-            },
-            WindowFuncFrameBound::Preceding(p) => match other {
-                WindowFuncFrameBound::CurrentRow => Some(Ordering::Less),
-                WindowFuncFrameBound::Preceding(p1) => match p {
-                    None => match p1 {
-                        None => Some(Ordering::Equal),
-                        Some(_) => Some(Ordering::Less),
-                    },
-                    Some(n) => match p1 {
-                        None => Some(Ordering::Greater),
-                        Some(n1) => match n.cmp(n1) {
-                            Ordering::Less => Some(Ordering::Greater),
-                            Ordering::Equal => Some(Ordering::Equal),
-                            Ordering::Greater => Some(Ordering::Less),
-                        },
-                    },
-                },
-                WindowFuncFrameBound::Following(_) => Some(Ordering::Less),
-            },
-            WindowFuncFrameBound::Following(f) => match other {
-                WindowFuncFrameBound::CurrentRow => Some(Ordering::Greater),
-                WindowFuncFrameBound::Preceding(_) => Some(Ordering::Greater),
-                WindowFuncFrameBound::Following(f1) => match f {
-                    None => match f1 {
-                        None => Some(Ordering::Equal),
-                        Some(_) => Some(Ordering::Greater),
-                    },
-                    Some(n) => match f1 {
-                        None => Some(Ordering::Less),
-                        Some(n1) => match n.cmp(n1) {
-                            Ordering::Less => Some(Ordering::Greater),
-                            Ordering::Equal => Some(Ordering::Equal),
-                            Ordering::Greater => Some(Ordering::Less),
-                        },
-                    },
-                },
-            },
-        }
-    }
-}
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub enum WindowFuncType {
-    Aggregate(AggregateFunction),
-    RowNumber,
-    Rank,
-    DenseRank,
-}
-
-impl WindowFuncType {
-    pub fn func_name(&self) -> String {
-        match self {
-            WindowFuncType::Aggregate(agg) => agg.func_name.to_string(),
-            WindowFuncType::RowNumber => "row_number".to_string(),
-            WindowFuncType::Rank => "rank".to_string(),
-            WindowFuncType::DenseRank => "dense_rank".to_string(),
-        }
-    }
-
-    pub fn used_columns(&self) -> ColumnSet {
-        match self {
-            WindowFuncType::Aggregate(agg) => {
-                agg.args.iter().flat_map(|arg| arg.used_columns()).collect()
-            }
-            _ => ColumnSet::new(),
-        }
-    }
-
-    pub fn return_type(&self) -> DataType {
-        match self {
-            WindowFuncType::Aggregate(agg) => *agg.return_type.clone(),
-            WindowFuncType::RowNumber | WindowFuncType::Rank | WindowFuncType::DenseRank => {
-                DataType::Number(NumberDataType::UInt64)
-            }
-        }
-    }
 }
 
 #[derive(Clone, Debug, Educe)]

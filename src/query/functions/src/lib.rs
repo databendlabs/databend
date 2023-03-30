@@ -27,11 +27,15 @@ pub mod scalars;
 pub mod srfs;
 
 pub fn is_builtin_function(name: &str) -> bool {
-    BUILTIN_FUNCTIONS.contains(name) || AggregateFunctionFactory::instance().contains(name)
+    BUILTIN_FUNCTIONS.contains(name)
+        || AggregateFunctionFactory::instance().contains(name)
+        || GENERAL_WINDOW_FUNCTIONS.contains(&name)
 }
 
 #[ctor]
 pub static BUILTIN_FUNCTIONS: FunctionRegistry = builtin_functions();
+
+pub const GENERAL_WINDOW_FUNCTIONS: [&'static str; 3] = ["row_number", "rank", "dense_rank"];
 
 fn builtin_functions() -> FunctionRegistry {
     let mut registry = FunctionRegistry::empty();

@@ -12,12 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 
-use super::WindowFuncType;
+use super::AggregateFunction;
 use crate::binder::WindowOrderByInfo;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::Distribution;
@@ -29,7 +35,6 @@ use crate::optimizer::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
-use crate::plans::WindowFuncFrame;
 use crate::IndexType;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -154,5 +159,136 @@ impl Operator for Window {
                 is_accurate,
             },
         })
+    }
+}
+
+#[derive(Default, Clone, PartialEq, Eq, Hash, Debug, serde::Serialize, serde::Deserialize)]
+pub struct WindowFuncFrame {
+    pub units: WindowFuncFrameUnits,
+    pub start_bound: WindowFuncFrameBound,
+    pub end_bound: WindowFuncFrameBound,
+}
+
+impl Display for WindowFuncFrame {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{:?}: {:?} ~ {:?}",
+            self.units, self.start_bound, self.end_bound
+        )
+    }
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum WindowFuncFrameUnits {
+    #[default]
+    Rows,
+    Range,
+}
+
+#[derive(Default, Clone, PartialEq, Eq, Hash, Debug, serde::Serialize, serde::Deserialize)]
+pub enum WindowFuncFrameBound {
+    /// `CURRENT ROW`
+    #[default]
+    CurrentRow,
+    /// `<N> PRECEDING` or `UNBOUNDED PRECEDING`
+    Preceding(Option<usize>),
+    /// `<N> FOLLOWING` or `UNBOUNDED FOLLOWING`.
+    Following(Option<usize>),
+}
+
+impl PartialOrd for WindowFuncFrameBound {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match self {
+            WindowFuncFrameBound::CurrentRow => match other {
+                WindowFuncFrameBound::CurrentRow => Some(Ordering::Equal),
+                WindowFuncFrameBound::Preceding(_) => Some(Ordering::Greater),
+                WindowFuncFrameBound::Following(_) => Some(Ordering::Less),
+            },
+            WindowFuncFrameBound::Preceding(p) => match other {
+                WindowFuncFrameBound::CurrentRow => Some(Ordering::Less),
+                WindowFuncFrameBound::Preceding(p1) => match p {
+                    None => match p1 {
+                        None => Some(Ordering::Equal),
+                        Some(_) => Some(Ordering::Less),
+                    },
+                    Some(n) => match p1 {
+                        None => Some(Ordering::Greater),
+                        Some(n1) => match n.cmp(n1) {
+                            Ordering::Less => Some(Ordering::Greater),
+                            Ordering::Equal => Some(Ordering::Equal),
+                            Ordering::Greater => Some(Ordering::Less),
+                        },
+                    },
+                },
+                WindowFuncFrameBound::Following(_) => Some(Ordering::Less),
+            },
+            WindowFuncFrameBound::Following(f) => match other {
+                WindowFuncFrameBound::CurrentRow => Some(Ordering::Greater),
+                WindowFuncFrameBound::Preceding(_) => Some(Ordering::Greater),
+                WindowFuncFrameBound::Following(f1) => match f {
+                    None => match f1 {
+                        None => Some(Ordering::Equal),
+                        Some(_) => Some(Ordering::Greater),
+                    },
+                    Some(n) => match f1 {
+                        None => Some(Ordering::Less),
+                        Some(n1) => match n.cmp(n1) {
+                            Ordering::Less => Some(Ordering::Greater),
+                            Ordering::Equal => Some(Ordering::Equal),
+                            Ordering::Greater => Some(Ordering::Less),
+                        },
+                    },
+                },
+            },
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub enum WindowFuncType {
+    Aggregate(AggregateFunction),
+    RowNumber,
+    Rank,
+    DenseRank,
+}
+
+impl WindowFuncType {
+    pub fn from_name(name: &str) -> Result<WindowFuncType> {
+        match name {
+            "row_number" => Ok(WindowFuncType::RowNumber),
+            "rank" => Ok(WindowFuncType::Rank),
+            "dense_rank" => Ok(WindowFuncType::DenseRank),
+            _ => Err(ErrorCode::UnknownFunction(format!(
+                "Unknown window function: {}",
+                name
+            ))),
+        }
+    }
+    pub fn func_name(&self) -> String {
+        match self {
+            WindowFuncType::Aggregate(agg) => agg.func_name.to_string(),
+            WindowFuncType::RowNumber => "row_number".to_string(),
+            WindowFuncType::Rank => "rank".to_string(),
+            WindowFuncType::DenseRank => "dense_rank".to_string(),
+        }
+    }
+
+    pub fn used_columns(&self) -> ColumnSet {
+        match self {
+            WindowFuncType::Aggregate(agg) => {
+                agg.args.iter().flat_map(|arg| arg.used_columns()).collect()
+            }
+            _ => ColumnSet::new(),
+        }
+    }
+
+    pub fn return_type(&self) -> DataType {
+        match self {
+            WindowFuncType::Aggregate(agg) => *agg.return_type.clone(),
+            WindowFuncType::RowNumber | WindowFuncType::Rank | WindowFuncType::DenseRank => {
+                DataType::Number(NumberDataType::UInt64)
+            }
+        }
     }
 }

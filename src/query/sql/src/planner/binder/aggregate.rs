@@ -283,10 +283,9 @@ impl<'a> AggregateAndWindowRewriter<'a> {
         let mut agg_args = vec![];
 
         let window_func_name = window.func.func_name();
-        // resolve aggregate function args in window function.
-        // TODO(window): support general window functions
         let func = match &window.func {
             WindowFuncType::Aggregate(agg) => {
+                // resolve aggregate function args in window function.
                 let mut replaced_args: Vec<ScalarExpr> = Vec::with_capacity(agg.args.len());
                 for (i, arg) in agg.args.iter().enumerate() {
                     let name = format!("{}_arg_{}", &window_func_name, i);
@@ -333,7 +332,7 @@ impl<'a> AggregateAndWindowRewriter<'a> {
                     return_type: agg.return_type.clone(),
                 })
             }
-            _ => todo!("window function"),
+            func => func.clone(),
         };
 
         // resolve partition by
