@@ -255,6 +255,7 @@ pub struct MetaConfig {
     /// AutoSyncInterval is the interval to update endpoints with its latest members.
     /// 0 disables auto-sync. By default auto-sync is disabled.
     pub auto_sync_interval: u64,
+    pub try_config_endpoints_interval: u64,
     /// Certificate for client to identify meta rpc serve
     pub rpc_tls_meta_server_root_ca_cert: String,
     pub rpc_tls_meta_service_domain_name: String,
@@ -269,6 +270,7 @@ impl Default for MetaConfig {
             password: "".to_string(),
             client_timeout_in_second: 10,
             auto_sync_interval: 0,
+            try_config_endpoints_interval: 10,
             rpc_tls_meta_server_root_ca_cert: "".to_string(),
             rpc_tls_meta_service_domain_name: "localhost".to_string(),
         }
@@ -327,6 +329,7 @@ impl MetaConfig {
             } else {
                 None
             },
+            try_config_endpoints_interval: Duration::from_secs(self.try_config_endpoints_interval),
         }
     }
 }
@@ -340,6 +343,10 @@ impl Debug for MetaConfig {
             .field("embedded_dir", &self.embedded_dir)
             .field("client_timeout_in_second", &self.client_timeout_in_second)
             .field("auto_sync_interval", &self.auto_sync_interval)
+            .field(
+                "try_config_endpoints_interval",
+                &self.try_config_endpoints_interval,
+            )
             .field(
                 "rpc_tls_meta_server_root_ca_cert",
                 &self.rpc_tls_meta_server_root_ca_cert,

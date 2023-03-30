@@ -255,6 +255,9 @@ impl ClientHandle {
 pub struct MetaGrpcClient {
     conn_pool: Pool<MetaChannelManager>,
     endpoints: RwLock<Vec<String>>,
+    // If endpoints is empty, try `config_endpoints` every `try_config_endpoints_interval` internal
+    config_endpoints: RwLock<(Option<Instant>, Vec<String>)>,
+    try_config_endpoints_interval: Duration,
     username: String,
     password: String,
     current_endpoint: Arc<Mutex<Option<String>>>,
@@ -278,6 +281,10 @@ impl Debug for MetaGrpcClient {
         de.field("current_endpoints", &self.current_endpoint);
         de.field("unhealthy_endpoints", &self.unhealthy_endpoints);
         de.field("auto_sync_interval", &self.auto_sync_interval);
+        de.field(
+            "try_config_endpoints_interval",
+            &self.try_config_endpoints_interval,
+        );
         de.finish()
     }
 }
@@ -300,6 +307,7 @@ impl MetaGrpcClient {
             &conf.password,
             conf.timeout,
             conf.auto_sync_interval,
+            conf.try_config_endpoints_interval,
             conf.tls_conf.clone(),
         )
     }
@@ -311,6 +319,7 @@ impl MetaGrpcClient {
         password: &str,
         timeout: Option<Duration>,
         auto_sync_interval: Option<Duration>,
+        try_config_endpoints_interval: Duration,
         conf: Option<RpcClientTlsConfig>,
     ) -> Result<Arc<ClientHandle>, MetaClientError> {
         Self::endpoints_non_empty(&endpoints)?;
@@ -337,8 +346,10 @@ impl MetaGrpcClient {
 
         let worker = Arc::new(Self {
             conn_pool: Pool::new(mgr, Duration::from_millis(50)),
-            endpoints: RwLock::new(endpoints),
+            endpoints: RwLock::new(endpoints.clone()),
+            config_endpoints: RwLock::new((None, endpoints)),
             current_endpoint: Arc::new(Mutex::new(None)),
+            try_config_endpoints_interval,
             unhealthy_endpoints: Mutex::new(TtlHashMap::new(Duration::from_secs(120))),
             auto_sync_interval,
             username: username.to_string(),
@@ -603,7 +614,47 @@ impl MetaGrpcClient {
 
     async fn get_cached_endpoints(&self) -> Vec<String> {
         let eps = self.endpoints.read().await;
-        (*eps).clone()
+        if eps.is_empty() {
+            // If endpoints is empty, try to use endpoint config every `try_config_endpoints_interval`.
+            let config_endpoints = {
+                let config_endpoints = self.config_endpoints.read().await;
+                config_endpoints.clone()
+            };
+            let last_try_time = config_endpoints.0;
+            let endpoints = match last_try_time {
+                Some(last_try_time) => {
+                    let duration = last_try_time.elapsed();
+                    if duration.as_secs() >= self.try_config_endpoints_interval.as_secs() {
+                        warn!(
+                            "endpoints is empty, last try config endpoint time: {:?}, try internal: {:?}, try config endpoints:{:?}...",
+                            last_try_time, self.try_config_endpoints_interval, config_endpoints.1
+                        );
+                        let mut config_endpoints = self.config_endpoints.write().await;
+                        config_endpoints.0 = Some(Instant::now());
+                        config_endpoints.1.clone()
+                    } else {
+                        warn!(
+                            "endpoints is empty, last try config endpoint time: {:?}, try internal: {:?}, return empty endpoints",
+                            last_try_time, self.try_config_endpoints_interval,
+                        );
+
+                        vec![]
+                    }
+                }
+                None => {
+                    let mut config_endpoints = self.config_endpoints.write().await;
+                    config_endpoints.0 = Some(Instant::now());
+                    config_endpoints.1.clone()
+                }
+            };
+            if !endpoints.is_empty() {
+                let _ = self.set_endpoints(endpoints).await;
+            }
+
+            self.endpoints.read().await.clone()
+        } else {
+            (*eps).clone()
+        }
     }
 
     #[tracing::instrument(level = "debug", skip(self))]

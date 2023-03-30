@@ -35,6 +35,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | "meta"    | "rpc_tls_meta_server_root_ca_cert"         | ""                               | ""       |
 | "meta"    | "rpc_tls_meta_service_domain_name"         | "localhost"                      | ""       |
 | "meta"    | "username"                                 | "root"                           | ""       |
+| "meta"    | "try_config_endpoints_interval"            | "20"                             | ""       |
 | "query"   | "admin_api_address"                        | "127.0.0.1:8080"                 | ""       |
 | "query"   | "api_tls_server_cert"                      | ""                               | ""       |
 | "query"   | "api_tls_server_key"                       | ""                               | ""       |
