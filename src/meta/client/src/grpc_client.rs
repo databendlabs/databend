@@ -649,9 +649,10 @@ impl MetaGrpcClient {
             };
             if !endpoints.is_empty() {
                 let _ = self.set_endpoints(endpoints).await;
+                self.endpoints.read().await.clone()
+            } else {
+                endpoints
             }
-
-            self.endpoints.read().await.clone()
         } else {
             (*eps).clone()
         }

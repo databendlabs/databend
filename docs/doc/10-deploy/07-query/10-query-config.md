@@ -74,7 +74,7 @@ You can find [sample configuration files](https://github.com/datafuselabs/databe
 
 ### try_config_endpoints_interval
 
-* If meta node endpoints is empty, is case that meta node is down, sets how often(in seconds) this query server should try config endpoints to connect meta node.
+* If meta node endpoints is empty, in case that meta node is down, sets how often(in seconds) this query server should try config endpoints to connect meta node.
 * Default: 10
 
 ## 3. Query config
