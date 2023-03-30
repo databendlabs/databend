@@ -307,7 +307,7 @@ impl DPhpy {
         &mut self,
         left: &[IndexType],
         right: &[IndexType],
-        join_conditions: Vec<(ScalarExpr, ScalarExpr)>,
+        mut join_conditions: Vec<(ScalarExpr, ScalarExpr)>,
     ) -> Result<bool> {
         debug_assert!(self.dp_table.contains_key(left));
         debug_assert!(self.dp_table.contains_key(right));
@@ -318,6 +318,9 @@ impl DPhpy {
         if left_join.cost < right_join.cost {
             // swap left_join and right_join
             std::mem::swap(&mut left_join, &mut right_join);
+            for join_condition in join_conditions.iter_mut() {
+                std::mem::swap(&mut join_condition.0, &mut join_condition.1);
+            }
         }
         let parent_node = self.dp_table.get(&parent_set);
         let join_node = if !join_conditions.is_empty() {

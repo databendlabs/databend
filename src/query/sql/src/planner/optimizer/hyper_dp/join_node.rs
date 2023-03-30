@@ -24,5 +24,3 @@ pub struct JoinNode {
     pub join_conditions: Vec<(ScalarExpr, ScalarExpr)>,
     pub cost: f64,
 }
-
-impl JoinNode {}
