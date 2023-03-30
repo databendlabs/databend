@@ -194,7 +194,7 @@ run_test() {
 	echo ' === Start databend-meta...'
 
 	nohup "$metasrv" --single --log-level=DEBUG &
-	python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
+	python3 scripts/ci/wait_tcp.py --timeout 10 --port 9191
 
 	echo ' === Start databend-query...'
 
@@ -212,22 +212,22 @@ run_test() {
 
 	echo " === Run metasrv related test: 05_ddl"
 
-        if [ "$query_ver" = "current" ]; then
-            # Only run test on mysql handler
-            $sqllogictests --handlers mysql --run_dir 05_ddl
-        else
-            (
-                # download suites into ./old_suite
-                download_test_suite $query_ver
-            )
+	if [ "$query_ver" = "current" ]; then
+		# Only run test on mysql handler
+		$sqllogictests --handlers mysql --run_dir 05_ddl
+	else
+		(
+			# download suites into ./old_suite
+			download_test_suite $query_ver
+		)
 
-            # Replace suites
-            rm -rf "tests/sqllogictests/suites"
-            mv "old_suite/tests/sqllogictests/suites" "tests/sqllogictests/suites"
+		# Replace suites
+		rm -rf "tests/sqllogictests/suites"
+		mv "old_suite/tests/sqllogictests/suites" "tests/sqllogictests/suites"
 
-            $sqllogictests --handlers mysql --run_dir 05_ddl
-            cd -
-        fi
+		$sqllogictests --handlers mysql --run_dir 05_ddl
+		cd -
+	fi
 }
 
 # -- main --

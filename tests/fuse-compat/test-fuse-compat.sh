@@ -120,7 +120,7 @@ run_test() {
     echo ' === Start old databend-meta...'
 
     nohup "$metasrv_old" --single --log-level=DEBUG &
-    python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
+    python3 scripts/ci/wait_tcp.py --timeout 10 --port 9191
 
     echo ' === Start old databend-query...'
 
@@ -144,7 +144,7 @@ run_test() {
     echo ' === Start new databend-meta...'
 
     nohup "$metasrv_new" --single --log-level=DEBUG &
-    python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
+    python3 scripts/ci/wait_tcp.py --timeout 10 --port 9191
 
     echo " === Start new databend-query..."
 
