@@ -261,15 +261,22 @@ impl Rule for RuleEagerAggregation {
 
         // If a child's `can_eager` is true, its group_columns_set should include all
         // join conditions related to the child.
-let mut can_eager = [true; 2];
-for (idx, conditions) in [&join.left_conditions, &join.right_conditions].iter().enumerate() {
-    for cond in conditions.iter() {
-        if !cond.used_columns().iter().all(|c| group_columns_set[idx].contains(c)) {
-            can_eager[idx] = false;
-            break;
+        let mut can_eager = [true; 2];
+        for (idx, conditions) in [&join.left_conditions, &join.right_conditions]
+            .iter()
+            .enumerate()
+        {
+            for cond in conditions.iter() {
+                if !cond
+                    .used_columns()
+                    .iter()
+                    .all(|c| group_columns_set[idx].contains(c))
+                {
+                    can_eager[idx] = false;
+                    break;
+                }
+            }
         }
-    }
-}
 
         let can_push_down = [
             !eager_aggregations[0].is_empty() && can_eager[0],
