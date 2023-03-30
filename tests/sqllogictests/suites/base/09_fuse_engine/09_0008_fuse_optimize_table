@@ -449,7 +449,7 @@ optimize table t8 compact
 query IIII
 select segment_count, block_count, row_count, bytes_uncompressed from fuse_snapshot('db_09_0008', 't8') limit 1
 ----
-1 2 6 100
+1 2 6 48
 
 query II
 select * from t8 order by a
