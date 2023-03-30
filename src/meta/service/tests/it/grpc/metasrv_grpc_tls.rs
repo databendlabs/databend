@@ -55,6 +55,7 @@ async fn test_tls_server() -> anyhow::Result<()> {
         None,
         Some(Duration::from_secs(10)),
         Duration::from_secs(10),
+        Duration::from_secs(10),
         Some(tls_conf),
     )?;
 
@@ -91,6 +92,7 @@ async fn test_tls_client_config_failure() -> anyhow::Result<()> {
         "xxx",
         None,
         Some(Duration::from_secs(10)),
+        Duration::from_secs(10),
         Duration::from_secs(10),
         Some(tls_conf),
     )

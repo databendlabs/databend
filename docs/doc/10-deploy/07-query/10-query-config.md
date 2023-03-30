@@ -77,6 +77,11 @@ You can find [sample configuration files](https://github.com/datafuselabs/databe
 * If meta node endpoints is empty, in case that meta node is down, sets how often(in seconds) this query server should try configured endpoints to connect meta node.
 * Default: 10
 
+### unhealth_endpoint_evict_time
+
+* Internal(in seconds) time that not querying an unhealth meta node endpoint.
+* Default: 120
+
 ## 3. Query config
 
 ### admin_api_address

@@ -39,6 +39,7 @@ pub struct RpcClientConf {
     /// None disables auto-sync.
     pub auto_sync_interval: Option<Duration>,
     pub try_reserved_endpoints_interval: Duration,
+    pub unhealth_endpoint_evict_time: Duration,
 }
 
 impl RpcClientConf {

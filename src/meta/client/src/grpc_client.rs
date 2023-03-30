@@ -308,10 +308,12 @@ impl MetaGrpcClient {
             conf.timeout,
             conf.auto_sync_interval,
             conf.try_reserved_endpoints_interval,
+            conf.unhealth_endpoint_evict_time,
             conf.tls_conf.clone(),
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[tracing::instrument(level = "debug", skip(password))]
     pub fn try_create(
         endpoints: Vec<String>,
@@ -320,6 +322,7 @@ impl MetaGrpcClient {
         timeout: Option<Duration>,
         auto_sync_interval: Option<Duration>,
         try_reserved_endpoints_interval: Duration,
+        unhealth_endpoint_evict_time: Duration,
         conf: Option<RpcClientTlsConfig>,
     ) -> Result<Arc<ClientHandle>, MetaClientError> {
         Self::endpoints_non_empty(&endpoints)?;
@@ -350,7 +353,7 @@ impl MetaGrpcClient {
             config_endpoints: RwLock::new((None, endpoints)),
             current_endpoint: Arc::new(Mutex::new(None)),
             try_reserved_endpoints_interval,
-            unhealthy_endpoints: Mutex::new(TtlHashMap::new(Duration::from_secs(120))),
+            unhealthy_endpoints: Mutex::new(TtlHashMap::new(unhealth_endpoint_evict_time)),
             auto_sync_interval,
             username: username.to_string(),
             password: password.to_string(),

@@ -606,6 +606,7 @@ fn make_client(addr: impl ToString) -> anyhow::Result<Arc<ClientHandle>> {
         None,
         Some(Duration::from_secs(10)),
         Duration::from_secs(10),
+        Duration::from_secs(10),
         None,
     )?;
 

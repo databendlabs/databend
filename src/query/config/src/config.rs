@@ -1652,6 +1652,10 @@ pub struct MetaConfig {
     #[serde(alias = "try_reserved_endpoints_interval")]
     pub try_reserved_endpoints_interval: u64,
 
+    #[clap(long = "unhealth-endpoint-evict-time", default_value = "120")]
+    #[serde(alias = "unhealth_endpoint_evict_time")]
+    pub unhealth_endpoint_evict_time: u64,
+
     /// Certificate for client to identify meta rpc serve
     #[clap(long = "meta-rpc-tls-meta-server-root-ca-cert", default_value_t)]
     pub rpc_tls_meta_server_root_ca_cert: String,
@@ -1680,6 +1684,7 @@ impl TryInto<InnerMetaConfig> for MetaConfig {
             password: self.password,
             client_timeout_in_second: self.client_timeout_in_second,
             auto_sync_interval: self.auto_sync_interval,
+            unhealth_endpoint_evict_time: self.unhealth_endpoint_evict_time,
             try_reserved_endpoints_interval: self.try_reserved_endpoints_interval,
             rpc_tls_meta_server_root_ca_cert: self.rpc_tls_meta_server_root_ca_cert,
             rpc_tls_meta_service_domain_name: self.rpc_tls_meta_service_domain_name,
@@ -1697,6 +1702,7 @@ impl From<InnerMetaConfig> for MetaConfig {
             client_timeout_in_second: inner.client_timeout_in_second,
             auto_sync_interval: inner.auto_sync_interval,
             try_reserved_endpoints_interval: inner.try_reserved_endpoints_interval,
+            unhealth_endpoint_evict_time: inner.unhealth_endpoint_evict_time,
             rpc_tls_meta_server_root_ca_cert: inner.rpc_tls_meta_server_root_ca_cert,
             rpc_tls_meta_service_domain_name: inner.rpc_tls_meta_service_domain_name,
         }
@@ -1712,6 +1718,10 @@ impl Debug for MetaConfig {
             .field("embedded_dir", &self.embedded_dir)
             .field("client_timeout_in_second", &self.client_timeout_in_second)
             .field("auto_sync_interval", &self.auto_sync_interval)
+            .field(
+                "unhealth_endpoint_evict_time",
+                &self.unhealth_endpoint_evict_time,
+            )
             .field(
                 "try_reserved_endpoints_interval",
                 &self.try_reserved_endpoints_interval,

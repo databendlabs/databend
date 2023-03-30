@@ -43,6 +43,7 @@ async fn test_grpc_client_action_timeout() {
         Some(timeout),
         None,
         Duration::from_secs(10),
+        Duration::from_secs(10),
         None,
     )
     .unwrap();
