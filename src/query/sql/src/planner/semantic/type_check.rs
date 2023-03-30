@@ -993,46 +993,12 @@ impl<'a> TypeChecker<'a> {
             (units, start, end)
         };
 
-        match start {
-            WindowFuncFrameBound::CurrentRow => {
-                if start > end {
-                    return Err(ErrorCode::SemanticError(format!(
-                        "frame semantic error, start:{:?}, end:{:?}",
-                        start, end
-                    ))
-                    .set_span(span));
-                }
-            }
-            _ => {
-                if start >= end {
-                    return Err(ErrorCode::SemanticError(format!(
-                        "frame semantic error, start:{:?}, end:{:?}",
-                        start, end
-                    ))
-                    .set_span(span));
-                }
-            }
-        }
-
-        match end {
-            WindowFuncFrameBound::CurrentRow => {
-                if start > end {
-                    return Err(ErrorCode::SemanticError(format!(
-                        "frame semantic error, start:{:?}, end:{:?}",
-                        start, end
-                    ))
-                    .set_span(span));
-                }
-            }
-            _ => {
-                if start >= end {
-                    return Err(ErrorCode::SemanticError(format!(
-                        "frame semantic error, start:{:?}, end:{:?}",
-                        start, end
-                    ))
-                    .set_span(span));
-                }
-            }
+        if start > end {
+            return Err(ErrorCode::SemanticError(format!(
+                "frame semantic error, start:{:?}, end:{:?}",
+                start, end
+            ))
+            .set_span(span));
         }
 
         Ok(WindowFuncFrame {

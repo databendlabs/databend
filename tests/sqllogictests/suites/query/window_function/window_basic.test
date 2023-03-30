@@ -92,6 +92,51 @@ sales 4800 1
 sales 5000 3
 
 
+# row_number
+query I
+SELECT row_number() OVER (PARTITION BY depname ORDER BY salary) rn FROM empsalary ORDER BY depname, rn
+----
+1
+2
+3
+4
+5
+1
+2
+1
+2
+3
+
+# rank_dense
+query TII
+SELECT depname, salary, dense_rank() OVER (PARTITION BY depname ORDER BY salary) FROM empsalary order by depname, salary
+----
+develop 4200 1
+develop 4500 2
+develop	5200 3
+develop	5200 3
+develop 6000 4
+personnel 3500 1
+personnel 3900 2
+sales 4800 1
+sales 4800 1
+sales 5000 2
+
+# rank
+query TII
+SELECT depname, salary, rank() OVER (PARTITION BY depname ORDER BY salary) FROM empsalary order by depname, salary
+----
+develop 4200 1
+develop 4500 2
+develop 5200 3
+develop 5200 3
+develop 6000 5
+personnel 3500 1
+personnel 3900 2
+sales 4800 1
+sales 4800 1
+sales 5000 3
+
 # min/max/avg
 query TIIR
 SELECT depname, min(salary) OVER (PARTITION BY depname ORDER BY salary, empno) m1, max(salary) OVER (PARTITION BY depname ORDER BY salary, empno) m2, AVG(salary) OVER (PARTITION BY depname ORDER BY salary, empno) m3 FROM empsalary ORDER BY depname, empno

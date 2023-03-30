@@ -17,6 +17,7 @@
 // - https://github.com/ClickHouse/ClickHouse/blob/master/src/Processors/Transforms/WindowTransform.cpp
 
 use std::any::Any;
+use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -305,10 +306,16 @@ impl TransformWindow {
             }
             WindowFuncFrameBound::Preceding(Some(n)) => {
                 self.frame_ended = true;
-                if self.current_row_in_partition - 1 <= *n {
-                    self.frame_end = self.partition_start;
-                } else {
-                    self.frame_end = self.advance_row(self.prev_frame_end);
+                match (self.current_row_in_partition - 1).cmp(n) {
+                    Ordering::Less => {
+                        self.frame_end = self.partition_start;
+                    }
+                    Ordering::Equal => {
+                        self.frame_end = self.advance_row(self.partition_start);
+                    }
+                    Ordering::Greater => {
+                        self.frame_end = self.advance_row(self.prev_frame_end);
+                    }
                 }
             }
             WindowFuncFrameBound::Preceding(_) => {

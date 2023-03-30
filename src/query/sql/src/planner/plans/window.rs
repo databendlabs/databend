@@ -197,51 +197,25 @@ pub enum WindowFuncFrameBound {
     Following(Option<usize>),
 }
 
-impl PartialOrd for WindowFuncFrameBound {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+impl WindowFuncFrameBound {
+    fn to_number(&self) -> i64 {
         match self {
-            WindowFuncFrameBound::CurrentRow => match other {
-                WindowFuncFrameBound::CurrentRow => Some(Ordering::Equal),
-                WindowFuncFrameBound::Preceding(_) => Some(Ordering::Greater),
-                WindowFuncFrameBound::Following(_) => Some(Ordering::Less),
+            WindowFuncFrameBound::CurrentRow => 0,
+            WindowFuncFrameBound::Preceding(n) => match n {
+                None => i64::MIN,
+                Some(n) => -(*n as i64),
             },
-            WindowFuncFrameBound::Preceding(p) => match other {
-                WindowFuncFrameBound::CurrentRow => Some(Ordering::Less),
-                WindowFuncFrameBound::Preceding(p1) => match p {
-                    None => match p1 {
-                        None => Some(Ordering::Equal),
-                        Some(_) => Some(Ordering::Less),
-                    },
-                    Some(n) => match p1 {
-                        None => Some(Ordering::Greater),
-                        Some(n1) => match n.cmp(n1) {
-                            Ordering::Less => Some(Ordering::Greater),
-                            Ordering::Equal => Some(Ordering::Equal),
-                            Ordering::Greater => Some(Ordering::Less),
-                        },
-                    },
-                },
-                WindowFuncFrameBound::Following(_) => Some(Ordering::Less),
-            },
-            WindowFuncFrameBound::Following(f) => match other {
-                WindowFuncFrameBound::CurrentRow => Some(Ordering::Greater),
-                WindowFuncFrameBound::Preceding(_) => Some(Ordering::Greater),
-                WindowFuncFrameBound::Following(f1) => match f {
-                    None => match f1 {
-                        None => Some(Ordering::Equal),
-                        Some(_) => Some(Ordering::Greater),
-                    },
-                    Some(n) => match f1 {
-                        None => Some(Ordering::Less),
-                        Some(n1) => match n.cmp(n1) {
-                            Ordering::Less => Some(Ordering::Greater),
-                            Ordering::Equal => Some(Ordering::Equal),
-                            Ordering::Greater => Some(Ordering::Less),
-                        },
-                    },
-                },
+            WindowFuncFrameBound::Following(n) => match n {
+                None => i64::MAX,
+                Some(n) => *n as i64,
             },
         }
+    }
+}
+
+impl PartialOrd for WindowFuncFrameBound {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.to_number().partial_cmp(&other.to_number())
     }
 }
 
