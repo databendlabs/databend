@@ -94,14 +94,19 @@ impl Settings {
     }
 
     pub fn set_setting(&self, k: String, v: String) -> Result<()> {
-        if let (key, Some(value)) = DefaultSettings::convert_value(k, v)? {
+        if let (key, Some(value)) = DefaultSettings::convert_value(k.clone(), v)? {
             self.changes.insert(key, ChangeValue {
                 value,
                 level: ScopeLevel::Session,
             });
+
+            return Ok(());
         }
 
-        Ok(())
+        Err(ErrorCode::UnknownVariable(format!(
+            "Unknown variable: {:?}",
+            k
+        )))
     }
 
     pub fn set_batch_settings(&self, settings: &HashMap<String, String>) -> Result<()> {

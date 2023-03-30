@@ -304,7 +304,14 @@ impl Catalog for MutableCatalog {
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
         match table_info.db_type.clone() {
-            DatabaseType::NormalDB => Ok(self.ctx.meta.update_table_meta(req).await?),
+            DatabaseType::NormalDB => {
+                info!(
+                    "updating table meta. table desc: [{}], has copied files: [{}]?",
+                    table_info.desc,
+                    req.copied_files.is_some()
+                );
+                Ok(self.ctx.meta.update_table_meta(req).await?)
+            }
             DatabaseType::ShareDB(share_ident) => {
                 let db = self
                     .get_database(&share_ident.tenant, &share_ident.share_name)

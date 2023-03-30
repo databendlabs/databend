@@ -265,6 +265,10 @@ impl CopyInterpreter {
         info!("end to list files: got {} files", num_all_files);
 
         let need_copy_file_infos = if force {
+            info!(
+                "force mode, ignore file filtering. ({}.{})",
+                database_name, table_name
+            );
             all_source_file_infos
         } else {
             // Status.
@@ -434,13 +438,22 @@ impl CopyInterpreter {
             let table_id = to_table.get_id();
             let expire_hours = ctx.get_settings().get_load_file_metadata_expire_hours()?;
 
-            let fail_if_duplicated = !force;
-            let upsert_copied_files_request = Self::upsert_copied_files_request(
-                table_id,
-                expire_hours,
-                copied_file_tree,
-                fail_if_duplicated,
-            );
+            let upsert_copied_files_request = {
+                if stage_info.copy_options.purge && force {
+                    // if `purge-after-copy` is enabled, and in `force` copy mode,
+                    // we do not need to upsert copied files into meta server
+                    info!("[purge] and [force] are both enabled,  will not update copied-files set. ({})", &to_table.get_table_info().desc);
+                    None
+                } else {
+                    let fail_if_duplicated = !force;
+                    Self::upsert_copied_files_request(
+                        table_id,
+                        expire_hours,
+                        copied_file_tree,
+                        fail_if_duplicated,
+                    )
+                }
+            };
 
             {
                 let status = format!("begin commit, number of copied files:{}", num_copied_files);
