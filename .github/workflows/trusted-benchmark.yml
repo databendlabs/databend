@@ -25,7 +25,7 @@ env:
 jobs:
   metadata:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     outputs:
       sha: ${{ steps.metadata.outputs.sha }}
       head_sha: ${{ steps.metadata.outputs.head_sha }}
@@ -62,7 +62,6 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ steps.metadata.outputs.head_sha }}
-          run_id: ${{ steps.metadata.outputs.run_id }}
           context: 'Benchmark Local / hits'
           state: pending
           description: "Queued"
@@ -72,7 +71,6 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ steps.metadata.outputs.head_sha }}
-          run_id: ${{ steps.metadata.outputs.run_id }}
           context: 'Benchmark Cloud / hits (Medium)'
           state: pending
           description: "Queued"
@@ -81,7 +79,6 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ steps.metadata.outputs.head_sha }}
-          run_id: ${{ steps.metadata.outputs.run_id }}
           context: 'Benchmark Cloud / hits (Large)'
           state: pending
           description: "Queued"
@@ -90,7 +87,6 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ steps.metadata.outputs.head_sha }}
-          run_id: ${{ steps.metadata.outputs.run_id }}
           context: 'Benchmark Cloud / tpch (Medium)'
           state: pending
           description: "Queued"
@@ -99,7 +95,6 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ steps.metadata.outputs.head_sha }}
-          run_id: ${{ steps.metadata.outputs.run_id }}
           context: 'Benchmark Cloud / tpch (Large)'
           state: pending
           description: "Queued"
@@ -107,7 +102,7 @@ jobs:
   local:
     needs: metadata
     timeout-minutes: 60
-    runs-on: [self-hosted, X64, Linux, perf]
+    runs-on: [self-hosted, X64, Linux, 16c32g]
     strategy:
       matrix:
         dataset:
@@ -150,7 +145,6 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ needs.metadata.outputs.head_sha }}
-          run_id: ${{ needs.metadata.outputs.run_id }}
           context: 'Benchmark Local / ${{ matrix.dataset }}'
           state: pending
           description: "Running"
@@ -169,14 +163,13 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ needs.metadata.outputs.head_sha }}
-          run_id: ${{ needs.metadata.outputs.run_id }}
           context: 'Benchmark Local / ${{ matrix.dataset }}'
           state: success
 
   docker:
     needs: metadata
     timeout-minutes: 10
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     outputs:
       tag: ${{ steps.prepare.outputs.tag }}
     steps:
@@ -228,7 +221,7 @@ jobs:
   cloud:
     needs: [metadata, docker]
     timeout-minutes: 90
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     strategy:
       matrix:
         dataset:
@@ -248,7 +241,6 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ needs.metadata.outputs.head_sha }}
-          run_id: ${{ needs.metadata.outputs.run_id }}
           context: 'Benchmark Cloud / ${{ matrix.dataset }} (${{ matrix.size }})'
           state: pending
           description: "Running"
@@ -274,13 +266,12 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ needs.metadata.outputs.head_sha }}
-          run_id: ${{ needs.metadata.outputs.run_id }}
           context: 'Benchmark Cloud / ${{ matrix.dataset }} (${{ matrix.size }})'
           state: success
 
   comment_on_pr:
     name: comment
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: [metadata, local, cloud]
     if: needs.metadata.outputs.source == 'pr'
     steps:
@@ -328,14 +319,14 @@ jobs:
           number: ${{ needs.metadata.outputs.source_id }}
           token: ${{ github.token }}
           body: |
-            ![local](https://img.shields.io/static/v1?label=AWS%20EC2&message=c5.4xlarge&color=orange&logo=amazonec2)![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Medium&color=blue&logo=icloud)![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Large&color=blue&logo=icloud)
+            ![local](https://img.shields.io/static/v1?label=AWS%20EC2&message=c5.4xlarge&color=orange&logo=amazonec2) ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Medium&color=blue&logo=icloud) ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Large&color=blue&logo=icloud)
             ## ClickBench Report
             * **hits**: https://repo.databend.rs/benchmark/clickbench/pr/${{ needs.metadata.outputs.source_id }}/${{ needs.metadata.outputs.run_id }}/hits.html
             * **tpch**: https://repo.databend.rs/benchmark/clickbench/pr/${{ needs.metadata.outputs.source_id }}/${{ needs.metadata.outputs.run_id }}/tpch.html
 
   archive_for_release:
     name: archive
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: [metadata, local, cloud]
     if: needs.metadata.outputs.source == 'release'
     strategy:

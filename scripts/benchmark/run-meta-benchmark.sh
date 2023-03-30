@@ -32,13 +32,13 @@ done
 echo 'Start Meta service HA cluster(3 nodes)...'
 
 nohup ./target/release/databend-meta -c scripts/ci/deploy/config/databend-meta-node-1.toml &
-python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
+python3 scripts/ci/wait_tcp.py --timeout 10 --port 9191
 
 nohup ./target/release/databend-meta -c scripts/ci/deploy/config/databend-meta-node-2.toml &
-python3 scripts/ci/wait_tcp.py --timeout 5 --port 28202
+python3 scripts/ci/wait_tcp.py --timeout 10 --port 28202
 
 nohup ./target/release/databend-meta -c scripts/ci/deploy/config/databend-meta-node-3.toml &
-python3 scripts/ci/wait_tcp.py --timeout 5 --port 28302
+python3 scripts/ci/wait_tcp.py --timeout 10 --port 28302
 
 echo 'Waiting leader election...'
 sleep 5

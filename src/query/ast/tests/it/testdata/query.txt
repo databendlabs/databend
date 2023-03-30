@@ -357,6 +357,128 @@ Query {
 
 
 ---------- Input ----------
+select * from customer inner join orders on (a = b)
+---------- Output ---------
+SELECT * FROM customer INNER JOIN orders ON (a = b)
+---------- AST ------------
+Query {
+    span: Some(
+        0..51,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..51,
+            ),
+            distinct: false,
+            select_list: [
+                QualifiedName {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    exclude: None,
+                },
+            ],
+            from: [
+                Join {
+                    span: Some(
+                        23..33,
+                    ),
+                    join: Join {
+                        op: Inner,
+                        condition: On(
+                            BinaryOp {
+                                span: Some(
+                                    47..48,
+                                ),
+                                op: Eq,
+                                left: ColumnRef {
+                                    span: Some(
+                                        45..46,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                        span: Some(
+                                            45..46,
+                                        ),
+                                    },
+                                },
+                                right: ColumnRef {
+                                    span: Some(
+                                        49..50,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "b",
+                                        quote: None,
+                                        span: Some(
+                                            49..50,
+                                        ),
+                                    },
+                                },
+                            },
+                        ),
+                        left: Table {
+                            span: Some(
+                                14..22,
+                            ),
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                name: "customer",
+                                quote: None,
+                                span: Some(
+                                    14..22,
+                                ),
+                            },
+                            alias: None,
+                            travel_point: None,
+                            pivot: None,
+                            unpivot: None,
+                        },
+                        right: Table {
+                            span: Some(
+                                34..40,
+                            ),
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                name: "orders",
+                                quote: None,
+                                span: Some(
+                                    34..40,
+                                ),
+                            },
+                            alias: None,
+                            travel_point: None,
+                            pivot: None,
+                            unpivot: None,
+                        },
+                    },
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
 select * from customer inner join orders on a = b limit 1
 ---------- Output ---------
 SELECT * FROM customer INNER JOIN orders ON (a = b) LIMIT 1
@@ -3752,6 +3874,80 @@ Query {
             nulls_first: None,
         },
     ],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+select * from range(1, 2)
+---------- Output ---------
+SELECT * FROM range(1, 2)
+---------- AST ------------
+Query {
+    span: Some(
+        0..25,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..25,
+            ),
+            distinct: false,
+            select_list: [
+                QualifiedName {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    exclude: None,
+                },
+            ],
+            from: [
+                TableFunction {
+                    span: Some(
+                        14..25,
+                    ),
+                    name: Identifier {
+                        name: "range",
+                        quote: None,
+                        span: Some(
+                            14..19,
+                        ),
+                    },
+                    params: [
+                        Literal {
+                            span: Some(
+                                20..21,
+                            ),
+                            lit: UInt64(
+                                1,
+                            ),
+                        },
+                        Literal {
+                            span: Some(
+                                23..24,
+                            ),
+                            lit: UInt64(
+                                2,
+                            ),
+                        },
+                    ],
+                    named_params: [],
+                    alias: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+        },
+    ),
+    order_by: [],
     limit: [],
     offset: None,
     ignore_result: false,

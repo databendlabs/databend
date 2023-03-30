@@ -87,7 +87,7 @@ Databend has added a new function called `cosine_distance`. This function accept
 ```sql
 select cosine_distance([3.0, 45.0, 7.0, 2.0, 5.0, 20.0, 13.0, 12.0], [2.0, 54.0, 13.0, 15.0, 22.0, 34.0, 50.0, 1.0]) as sim
 ----
-0.8735807
+0.1264193
 ```
 
 The Rust implementation efficiently performs calculations by utilizing the `ArrayView` type from the [ndarray](https://crates.io/crates/ndarray) crate.

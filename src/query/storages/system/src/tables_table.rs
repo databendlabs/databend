@@ -18,6 +18,7 @@ use common_catalog::catalog::Catalog;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::number::UInt64Type;
 use common_expression::types::NumberDataType;
@@ -106,7 +107,14 @@ where TablesTable<T>: HistoryAware
             for db in dbs {
                 let name = db.name().to_string().into_boxed_str();
                 let name: &str = Box::leak(name);
-                let tables = Self::list_tables(&ctl, tenant.as_str(), name).await?;
+                let tables = match Self::list_tables(&ctl, tenant.as_str(), name).await {
+                    Ok(tables) => tables,
+                    Err(err) if err.code() == ErrorCode::EMPTY_SHARE_ENDPOINT_CONFIG => {
+                        tracing::warn!("list tables failed on db {}: {}", db.name(), err);
+                        continue;
+                    }
+                    Err(err) => return Err(err),
+                };
                 for table in tables {
                     catalogs.push(ctl_name.as_bytes().to_vec());
                     databases.push(name.as_bytes().to_vec());
