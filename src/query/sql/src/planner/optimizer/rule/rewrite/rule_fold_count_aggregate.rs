@@ -20,7 +20,6 @@ use common_expression::Scalar;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::RuleID;
 use crate::optimizer::rule::TransformResult;
-use crate::optimizer::util::contaions_project_set;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;

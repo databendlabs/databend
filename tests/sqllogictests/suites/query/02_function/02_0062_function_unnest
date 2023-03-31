@@ -397,9 +397,6 @@ select count() from (select unnest(id), c1 from fold_count)
 4
 
 statement ok
-drop table fold_count;
-
-statement ok
 DROP DATABASE db_02_0062;
 
 # Test table function
