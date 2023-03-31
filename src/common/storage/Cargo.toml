@@ -27,5 +27,7 @@ futures = "0.3"
 opendal = { workspace = true }
 regex = "1.6.0"
 serde = { workspace = true }
+reqwest = { workspace = true }
+ureq = { version = "2", default-features = false }
 
 [dev-dependencies]
