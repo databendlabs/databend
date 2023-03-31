@@ -6,22 +6,19 @@ description:
 
 Adds or drops a column of a table.
 
+:::tip
+ALTER TABLE can also handle table clustering. For more information, refer to the following pages:
+
+- [ALTER CLUSTER KEY](../70-clusterkey/dml-alter-cluster-key.md)
+- [RECLUSTER TABLE](../70-clusterkey/dml-recluster-table.md)
+:::
+
 ## Syntax
 
 ```sql
 ALTER TABLE [IF EXISTS] <name> ADD COLUMN <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }]
 ALTER TABLE [IF EXISTS] <name> DROP COLUMN <column_name>
 ```
-
-ALTER TABLE can also handle table clustering with the following syntax:
-
-```sql
-ALTER TABLE [IF EXISTS] <name> CLUSTER BY ( <expr1> [ , <expr2> ... ] )
-ALTER TABLE [IF EXISTS] <name> RECLUSTER [FINAL] [WHERE condition]
-```
-
-- [ALTER CLUSTER KEY](../70-clusterkey/dml-alter-cluster-key.md)
-- [RECLUSTER TABLE](../70-clusterkey/dml-recluster-table.md)
 
 ## Examples
 
