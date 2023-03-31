@@ -16,14 +16,15 @@ inputs:
   source_id:
     description: "pr_id/release_tag"
     required: true
+
 runs:
   using: "composite"
   steps:
     - name: Install script dependencies
       shell: bash
       run: |
-        sudo apt-get update -y
-        sudo apt-get install -y jq netcat bc
+        sudo apt update -y
+        sudo apt install -y python3
 
     - name: Run Benchmark
       working-directory: benchmark/clickbench

@@ -25,7 +25,7 @@ if [[ -z "${CLOUD_EMAIL}" || -z "${CLOUD_PASSWORD}" || -z "${CLOUD_ORG}" ]]; the
 fi
 
 echo "Checking script dependencies..."
-bc --version
+python3 --version
 yq --version
 bendsql version
 

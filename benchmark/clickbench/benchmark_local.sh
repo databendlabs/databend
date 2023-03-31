@@ -9,37 +9,9 @@ echo "###############################################"
 echo "Running benchmark for databend local storage..."
 
 echo "Checking script dependencies..."
-# OpenBSD netcat do not have a version arg
-# nc --version
-bc --version
+python3 --version
 yq --version
 bendsql version
-
-function wait_for_port() {
-    # Wait for a port to be open
-    # Usage: wait_for_port 8080 10
-    # Args:
-    #     $1: port
-    #     $2: timeout in seconds
-    local port=$1
-    local timeout=$2
-    local start_time
-    start_time=$(date +%s)
-    local end_time
-    end_time=$((start_time + timeout))
-    while true; do
-        if nc -z localhost "$port"; then
-            echo "OK: ${port} is listening"
-            return 0
-        fi
-        if [[ $(date +%s) -gt $end_time ]]; then
-            echo "Wait for port ${port} time out!"
-            return 2
-        fi
-        echo "Waiting for port ${port} up..."
-        sleep 1
-    done
-}
 
 killall databend-query || true
 killall databend-meta || true
@@ -53,7 +25,7 @@ done
 echo 'Start databend-meta...'
 nohup databend-meta --single &
 echo "Waiting on databend-meta 10 seconds..."
-wait_for_port 9191 10
+./wait_tcp.py --port 9191 --timeout 10
 echo 'Start databend-query...'
 
 nohup databend-query \
@@ -65,7 +37,7 @@ nohup databend-query \
     --storage-allow-insecure &
 
 echo "Waiting on databend-query 10 seconds..."
-wait_for_port 8000 10
+./wait_tcp.py --port 8000 --timeout 10
 
 # Connect to databend-query
 bendsql connect --database "${BENCHMARK_DATASET}"
