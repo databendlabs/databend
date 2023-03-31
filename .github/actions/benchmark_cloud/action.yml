@@ -42,7 +42,7 @@ runs:
       shell: bash
       run: |
         sudo apt-get update -y
-        sudo apt-get install -y jq bc
+        sudo apt install -y python3
 
     - name: Run Benchmark
       working-directory: benchmark/clickbench
@@ -65,7 +65,6 @@ runs:
       working-directory: benchmark/clickbench
       shell: bash
       run: |
-        yq -i ".date = \"$(date -u +%Y-%m-%d)\"" result.json
         case ${{ inputs.source }} in
           pr)
             yq -i '.system = "Databend(PR#${{ inputs.source_id }})"' result.json
@@ -77,22 +76,7 @@ runs:
             echo "Unspported benchmark source: ${{ inputs.source }}"
             exit 1
         esac
-
-        case ${{ inputs.size }} in
-          Medium)
-            yq -i '.cluster_size = "16"' result.json
-            yq -i '.machine = "16×Medium"' result.json
-            ;;
-          Large)
-            yq -i '.cluster_size = "64"' result.json
-            yq -i '.machine = "64×Large"' result.json
-            ;;
-          *)
-            echo "Unspported benchmark size: ${{ inputs.size }}"
-            exit 1
-        esac
-        yq -i '.tags = ["s3"]' result.json
-        yq -i '.comment = "commit:${{ inputs.sha }}"' result.json
+        yq -i '.comment = "commit: ${{ inputs.sha }}"' result.json
         mv result.json result-${{ inputs.dataset }}-cloud-${{ inputs.size }}.json
 
     - name: Upload artifact
