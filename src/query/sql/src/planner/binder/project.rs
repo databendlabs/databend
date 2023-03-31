@@ -157,6 +157,7 @@ impl Binder {
     /// For scalar expressions and aggregate expressions, we will register new columns for
     /// them in `Metadata`. And notice that, the semantic of aggregate expressions won't be checked
     /// in this function.
+    #[async_backtrace::framed]
     pub(super) async fn normalize_select_list<'a>(
         &mut self,
         input_context: &mut BindContext,

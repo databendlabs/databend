@@ -50,6 +50,7 @@ impl Interpreter for ShowGrantsInterpreter {
         self.plan.schema()
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
 

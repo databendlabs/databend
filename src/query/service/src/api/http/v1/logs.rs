@@ -31,6 +31,7 @@ use crate::stream::ReadDataBlockStream;
 
 // read log files from cfg.log.log_dir
 #[poem::handler]
+#[async_backtrace::framed]
 pub async fn logs_handler() -> poem::Result<impl IntoResponse> {
     let sessions = SessionManager::instance();
     let data = select_table(&sessions).await.map_err(|err| {

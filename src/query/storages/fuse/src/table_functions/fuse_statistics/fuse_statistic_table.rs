@@ -89,6 +89,7 @@ impl Table for FuseStatisticTable {
         &self.table_info
     }
 
+    #[async_backtrace::framed]
     async fn read_partitions(
         &self,
         _ctx: Arc<dyn TableContext>,
@@ -165,6 +166,7 @@ impl AsyncSource for FuseStatisticSource {
     const NAME: &'static str = "fuse_statistic";
 
     #[async_trait::unboxed_simple]
+    #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.finish {
             return Ok(None);

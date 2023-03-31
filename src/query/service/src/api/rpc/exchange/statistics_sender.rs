@@ -138,6 +138,7 @@ impl StatisticsSender {
         });
     }
 
+    #[async_backtrace::framed]
     async fn on_command(
         ctx: &Arc<QueryContext>,
         command: DataPacket,
@@ -160,6 +161,7 @@ impl StatisticsSender {
         }
     }
 
+    #[async_backtrace::framed]
     async fn fetch_progress(ctx: &Arc<QueryContext>) -> Result<Vec<ProgressInfo>> {
         let mut progress_info = vec![];
 
@@ -187,6 +189,7 @@ impl StatisticsSender {
         Ok(progress_info)
     }
 
+    #[async_backtrace::framed]
     async fn fetch_precommit(ctx: &Arc<QueryContext>) -> Result<Vec<PrecommitBlock>> {
         Ok(ctx
             .consume_precommit_blocks()

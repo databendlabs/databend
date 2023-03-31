@@ -238,6 +238,7 @@ impl Processor for SerializeDataTransform {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
             State::Serialized(serialize_state, block_meta) => {

@@ -37,11 +37,13 @@ use crate::sessions::SessionManager;
 pub struct GlobalServices;
 
 impl GlobalServices {
+    #[async_backtrace::framed]
     pub async fn init(config: InnerConfig) -> Result<()> {
         GlobalInstance::init_production();
         GlobalServices::init_with(config).await
     }
 
+    #[async_backtrace::framed]
     pub async fn init_with(config: InnerConfig) -> Result<()> {
         // The order of initialization is very important
         GlobalConfig::init(config.clone())?;

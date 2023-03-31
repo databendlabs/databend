@@ -22,6 +22,7 @@ common-meta-app = { path = "../../meta/app" }
 common-storage = { path = "../../common/storage" }
 common-users = { path = "../users" }
 
+async-backtrace = { workspace = true }
 http = "0.2"
 log = "0.4"
 moka = "0.10"

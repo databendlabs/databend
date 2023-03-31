@@ -57,6 +57,7 @@ pub fn truncate_root(root: String, loc: String) -> String {
 }
 
 impl SharingAccessor {
+    #[async_backtrace::framed]
     pub async fn init(cfg: &Config) -> Result<()> {
         GlobalInstance::set(Self::try_create(cfg).await?);
 
@@ -67,6 +68,7 @@ impl SharingAccessor {
         GlobalInstance::get()
     }
 
+    #[async_backtrace::framed]
     pub async fn try_create(cfg: &Config) -> Result<SharingAccessor> {
         let operator = init_operator(&cfg.storage.params)?;
 

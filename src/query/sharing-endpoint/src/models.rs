@@ -174,6 +174,7 @@ pub struct Credentials {
 
 #[async_trait]
 impl<'a> FromRequest<'a> for &'a Credentials {
+    #[async_backtrace::framed]
     async fn from_request(req: &'a Request, _body: &mut RequestBody) -> PoemResult<Self> {
         Ok(req
             .extensions()

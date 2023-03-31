@@ -24,6 +24,7 @@ common-storage = { path = "../../../common/storage" }
 storages-common-blocks = { path = "../common/blocks" }
 storages-common-table-meta = { path = "../common/table-meta" }
 
+async-backtrace = { workspace = true }
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 opendal = { workspace = true }
 serde = { workspace = true }

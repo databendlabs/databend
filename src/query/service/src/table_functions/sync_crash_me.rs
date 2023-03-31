@@ -106,6 +106,7 @@ impl Table for SyncCrashMeTable {
         &self.table_info
     }
 
+    #[async_backtrace::framed]
     async fn read_partitions(
         &self,
         _: Arc<dyn TableContext>,

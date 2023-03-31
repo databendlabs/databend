@@ -150,6 +150,7 @@ impl<I: InputFormatPipe> Processor for Aligner<I> {
         }
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if !self.no_more_split {
             match &self.state {

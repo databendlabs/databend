@@ -52,12 +52,14 @@ pub trait CatalogManagerHelper {
 
 #[async_trait::async_trait]
 impl CatalogManagerHelper for CatalogManager {
+    #[async_backtrace::framed]
     async fn init(conf: &InnerConfig) -> Result<()> {
         GlobalInstance::set(Self::try_create(conf).await?);
 
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn try_create(conf: &InnerConfig) -> Result<Arc<CatalogManager>> {
         let catalog_manager = CatalogManager {
             catalogs: DashMap::new(),
@@ -73,6 +75,7 @@ impl CatalogManagerHelper for CatalogManager {
         Ok(Arc::new(catalog_manager))
     }
 
+    #[async_backtrace::framed]
     async fn register_build_in_catalogs(&self, conf: &InnerConfig) -> Result<()> {
         let default_catalog: Arc<dyn Catalog> =
             Arc::new(DatabaseCatalog::try_create_with_config(conf.clone()).await?);
@@ -109,6 +112,7 @@ impl CatalogManagerHelper for CatalogManager {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn create_user_defined_catalog(&self, req: CreateCatalogReq) -> Result<()> {
         let catalog_option = req.meta.catalog_option;
 

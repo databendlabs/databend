@@ -86,6 +86,7 @@ impl Processor for ExchangeSourceReader {
         Ok(Event::Async)
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> common_exception::Result<()> {
         if self.output_data.is_none() {
             if let Some(output_data) = self.flight_receiver.recv().await? {

@@ -74,11 +74,13 @@ impl SelectInterpreter {
     }
 
     #[inline]
+    #[async_backtrace::framed]
     pub async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
         let mut builder = PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone());
         builder.build(&self.s_expr).await
     }
 
+    #[async_backtrace::framed]
     pub async fn build_pipeline(&self, physical_plan: PhysicalPlan) -> Result<PipelineBuildResult> {
         build_query_pipeline(
             &self.ctx,
@@ -191,6 +193,7 @@ impl Interpreter for SelectInterpreter {
     /// This method will create a new pipeline
     /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
     #[tracing::instrument(level = "debug", name = "select_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         // 0. Need to build physical plan first to get the partitions.
         let physical_plan = self.build_physical_plan().await?;

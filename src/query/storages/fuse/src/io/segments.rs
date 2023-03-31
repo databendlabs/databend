@@ -44,6 +44,7 @@ impl SegmentsIO {
 
     // Read one segment file by location.
     // The index is the index of the segment_location in segment_locations.
+    #[async_backtrace::framed]
     async fn read_segment(
         dal: Operator,
         segment_location: Location,
@@ -66,6 +67,7 @@ impl SegmentsIO {
 
     // Read all segments information from s3 in concurrently.
     #[tracing::instrument(level = "debug", skip_all)]
+    #[async_backtrace::framed]
     pub async fn read_segments(
         &self,
         segment_locations: &[Location],
@@ -101,6 +103,7 @@ impl SegmentsIO {
         .await
     }
 
+    #[async_backtrace::framed]
     pub async fn read_segment_into<T>(
         dal: Operator,
         segment_location: Location,
@@ -126,6 +129,7 @@ impl SegmentsIO {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
+    #[async_backtrace::framed]
     pub async fn read_segments_into<T>(
         &self,
         segment_locations: &[Location],

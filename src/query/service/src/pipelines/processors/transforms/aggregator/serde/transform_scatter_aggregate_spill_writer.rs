@@ -161,6 +161,7 @@ impl<Method: HashMethodBounds> Processor for TransformScatterAggregateSpillWrite
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         let spilling_futures = std::mem::take(&mut self.spilling_futures);
         futures::future::try_join_all(spilling_futures).await?;

@@ -63,6 +63,7 @@ type StreamReq<T> = Request<Streaming<T>>;
 impl FlightService for DatabendQueryFlightService {
     type HandshakeStream = FlightStream<HandshakeResponse>;
 
+    #[async_backtrace::framed]
     async fn handshake(&self, _: StreamReq<HandshakeRequest>) -> Response<Self::HandshakeStream> {
         Result::Err(Status::unimplemented(
             "DatabendQuery does not implement handshake.",
@@ -71,18 +72,21 @@ impl FlightService for DatabendQueryFlightService {
 
     type ListFlightsStream = FlightStream<FlightInfo>;
 
+    #[async_backtrace::framed]
     async fn list_flights(&self, _: Request<Criteria>) -> Response<Self::ListFlightsStream> {
         Result::Err(Status::unimplemented(
             "DatabendQuery does not implement list_flights.",
         ))
     }
 
+    #[async_backtrace::framed]
     async fn get_flight_info(&self, _: Request<FlightDescriptor>) -> Response<FlightInfo> {
         Err(Status::unimplemented(
             "DatabendQuery does not implement get_flight_info.",
         ))
     }
 
+    #[async_backtrace::framed]
     async fn get_schema(&self, _: Request<FlightDescriptor>) -> Response<SchemaResult> {
         Err(Status::unimplemented(
             "DatabendQuery does not implement get_schema.",
@@ -93,6 +97,7 @@ impl FlightService for DatabendQueryFlightService {
 
     type DoPutStream = FlightStream<PutResult>;
 
+    #[async_backtrace::framed]
     async fn do_put(&self, _req: StreamReq<FlightData>) -> Response<Self::DoPutStream> {
         Err(Status::unimplemented("unimplement do_put"))
     }
@@ -100,6 +105,7 @@ impl FlightService for DatabendQueryFlightService {
     type DoExchangeStream = FlightStream<FlightData>;
 
     #[tracing::instrument(level = "debug", skip_all)]
+    #[async_backtrace::framed]
     async fn do_get(&self, request: Request<Ticket>) -> Response<Self::DoGetStream> {
         match request.get_metadata("x-type")?.as_str() {
             "request_server_exchange" => {
@@ -129,6 +135,7 @@ impl FlightService for DatabendQueryFlightService {
         }
     }
 
+    #[async_backtrace::framed]
     async fn do_exchange(&self, _: StreamReq<FlightData>) -> Response<Self::DoExchangeStream> {
         Err(Status::unimplemented("unimplement do_exchange"))
     }
@@ -136,6 +143,7 @@ impl FlightService for DatabendQueryFlightService {
     type DoActionStream = FlightStream<FlightResult>;
 
     #[tracing::instrument(level = "debug", skip_all)]
+    #[async_backtrace::framed]
     async fn do_action(&self, request: Request<Action>) -> Response<Self::DoActionStream> {
         common_tracing::extract_remote_span_as_parent(&request);
 
@@ -195,6 +203,7 @@ impl FlightService for DatabendQueryFlightService {
     type ListActionsStream = FlightStream<ActionType>;
 
     #[tracing::instrument(level = "debug", skip_all)]
+    #[async_backtrace::framed]
     async fn list_actions(&self, request: Request<Empty>) -> Response<Self::ListActionsStream> {
         common_tracing::extract_remote_span_as_parent(&request);
         Result::Ok(RawResponse::new(

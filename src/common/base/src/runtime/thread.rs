@@ -63,6 +63,8 @@ impl Thread {
                     name = Some(thread_name.to_string());
                 }
             }
+
+            thread_builder = thread_builder.stack_size(5 * 1024 * 1024);
         }
 
         let mut mem_stat_name = String::from("UnnamedThread");

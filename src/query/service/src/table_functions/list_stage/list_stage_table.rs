@@ -110,6 +110,7 @@ impl Table for ListStageTable {
         &self.table_info
     }
 
+    #[async_backtrace::framed]
     async fn read_partitions(
         &self,
         _ctx: Arc<dyn TableContext>,
@@ -172,6 +173,7 @@ impl AsyncSource for ListStagesSource {
     const NAME: &'static str = LIST_STAGE;
 
     #[async_trait::unboxed_simple]
+    #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.is_finished {
             return Ok(None);

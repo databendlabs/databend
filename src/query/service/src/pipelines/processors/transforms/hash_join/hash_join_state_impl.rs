@@ -226,6 +226,7 @@ impl HashJoinState for JoinHashTable {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn wait_finish(&self) -> Result<()> {
         let notified = {
             let finished_guard = self.is_finished.lock().unwrap();

@@ -64,6 +64,7 @@ impl ShareEndpointManager {
         GlobalInstance::get()
     }
 
+    #[async_backtrace::framed]
     async fn get_share_endpoint(
         &self,
         from_tenant: &str,
@@ -100,6 +101,7 @@ impl ShareEndpointManager {
         )))
     }
 
+    #[async_backtrace::framed]
     pub async fn get_table_info_map(
         &self,
         from_tenant: &str,

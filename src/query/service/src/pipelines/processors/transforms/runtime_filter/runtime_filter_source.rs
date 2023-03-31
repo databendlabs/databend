@@ -92,6 +92,7 @@ impl RuntimeFilterConnector for RuntimeFilterState {
         Ok(*self.finished.lock())
     }
 
+    #[async_backtrace::framed]
     async fn wait_finish(&self) -> Result<()> {
         if !self.is_finished()? {
             self.finished_notify.notified().await;

@@ -25,6 +25,7 @@ use crate::Binder;
 use crate::SelectBuilder;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_show_columns(
         &mut self,
         bind_context: &mut BindContext,

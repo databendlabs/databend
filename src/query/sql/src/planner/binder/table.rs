@@ -81,6 +81,7 @@ use crate::IndexType;
 use crate::TableInternalColumn;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(super) async fn bind_one_table(
         &mut self,
         bind_context: &BindContext,
@@ -139,6 +140,7 @@ impl Binder {
     }
 
     #[async_recursion]
+    #[async_backtrace::framed]
     async fn bind_single_table(
         &mut self,
         bind_context: &mut BindContext,
@@ -454,6 +456,7 @@ impl Binder {
         }
     }
 
+    #[async_backtrace::framed]
     pub(crate) async fn bind_stage_table(
         &mut self,
         bind_context: &BindContext,
@@ -500,6 +503,7 @@ impl Binder {
         }
     }
 
+    #[async_backtrace::framed]
     pub(super) async fn bind_table_reference(
         &mut self,
         bind_context: &mut BindContext,
@@ -573,6 +577,7 @@ impl Binder {
         Ok((result_expr, result_ctx))
     }
 
+    #[async_backtrace::framed]
     async fn bind_cte(
         &mut self,
         span: Span,
@@ -629,6 +634,7 @@ impl Binder {
         Ok((s_expr, new_bind_context))
     }
 
+    #[async_backtrace::framed]
     async fn bind_base_table(
         &mut self,
         bind_context: &BindContext,
@@ -716,6 +722,7 @@ impl Binder {
         ))
     }
 
+    #[async_backtrace::framed]
     async fn resolve_data_source(
         &self,
         tenant: &str,
@@ -734,6 +741,7 @@ impl Binder {
         Ok(table_meta)
     }
 
+    #[async_backtrace::framed]
     pub(crate) async fn resolve_data_travel_point(
         &self,
         bind_context: &mut BindContext,

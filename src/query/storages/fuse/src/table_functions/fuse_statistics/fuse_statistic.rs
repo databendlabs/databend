@@ -38,6 +38,7 @@ impl<'a> FuseStatistic<'a> {
         Self { ctx, table }
     }
 
+    #[async_backtrace::framed]
     pub async fn get_statistic(self) -> Result<DataBlock> {
         let snapshot_opt = self.table.read_table_snapshot().await?;
         if let Some(snapshot) = snapshot_opt {

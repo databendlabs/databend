@@ -46,6 +46,7 @@ where
     }
 
     /// Load the object at `location`, uses/populates the cache if possible/necessary.
+    #[async_backtrace::framed]
     pub async fn read(&self, params: &LoadParams) -> Result<Arc<V>> {
         match &self.cache {
             None => Ok(Arc::new(self.loader.load(params).await?)),

@@ -67,6 +67,7 @@ impl StageMgr {
 
 #[async_trait::async_trait]
 impl StageApi for StageMgr {
+    #[async_backtrace::framed]
     async fn add_stage(&self, info: StageInfo) -> Result<u64> {
         let seq = MatchSeq::Exact(0);
         let val = Operation::Update(serialize_struct(
@@ -90,6 +91,7 @@ impl StageApi for StageMgr {
         Ok(res.seq)
     }
 
+    #[async_backtrace::framed]
     async fn get_stage(&self, name: &str, seq: MatchSeq) -> Result<SeqV<StageInfo>> {
         let key = format!("{}/{}", self.stage_prefix, escape_for_key(name)?);
         let kv_api = self.kv_api.clone();
@@ -107,6 +109,7 @@ impl StageApi for StageMgr {
         }
     }
 
+    #[async_backtrace::framed]
     async fn get_stages(&self) -> Result<Vec<StageInfo>> {
         let values = self.kv_api.prefix_list_kv(&self.stage_prefix).await?;
 
@@ -119,6 +122,7 @@ impl StageApi for StageMgr {
         Ok(stage_infos)
     }
 
+    #[async_backtrace::framed]
     async fn drop_stage(&self, name: &str) -> Result<()> {
         let stage_key = format!("{}/{}", self.stage_prefix, escape_for_key(name)?);
         let file_key_prefix = format!("{}/{}/", self.stage_file_prefix, escape_for_key(name)?);
@@ -158,6 +162,7 @@ impl StageApi for StageMgr {
         ))
     }
 
+    #[async_backtrace::framed]
     async fn add_file(&self, name: &str, file: StageFile) -> Result<u64> {
         let stage_key = format!("{}/{}", self.stage_prefix, escape_for_key(name)?);
         let file_key = format!(
@@ -221,6 +226,7 @@ impl StageApi for StageMgr {
         ))
     }
 
+    #[async_backtrace::framed]
     async fn list_files(&self, name: &str) -> Result<Vec<StageFile>> {
         let list_prefix = format!("{}/{}/", self.stage_file_prefix, escape_for_key(name)?);
         let values = self.kv_api.prefix_list_kv(&list_prefix).await?;
@@ -232,6 +238,7 @@ impl StageApi for StageMgr {
         Ok(files)
     }
 
+    #[async_backtrace::framed]
     async fn remove_files(&self, name: &str, paths: Vec<String>) -> Result<()> {
         let stage_key = format!("{}/{}", self.stage_prefix, escape_for_key(name)?);
 

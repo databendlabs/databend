@@ -61,6 +61,7 @@ impl InitNodesChannelPacket {
 
 #[async_trait::async_trait]
 impl Packet for InitNodesChannelPacket {
+    #[async_backtrace::framed]
     async fn commit(&self, config: &InnerConfig, timeout: u64) -> Result<()> {
         let executor_info = &self.executor;
         let mut conn = create_client(config, &executor_info.flight_address).await?;

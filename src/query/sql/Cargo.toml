@@ -40,6 +40,7 @@ storages-common-table-meta = { path = "../storages/common/table-meta" }
 # Crates.io dependencies
 ahash = { version = "0.8.2", features = ["no-rng"] }
 anyhow = { workspace = true }
+async-backtrace = { workspace = true }
 async-recursion = "1.0.0"
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 chrono = { workspace = true }

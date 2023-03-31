@@ -45,6 +45,7 @@ impl Interpreter for ReclusterTableInterpreter {
         "ReclusterTableInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
         let ctx = self.ctx.clone();

@@ -331,12 +331,14 @@ impl DataOperator {
         self.params.clone()
     }
 
+    #[async_backtrace::framed]
     pub async fn init(conf: &StorageConfig) -> common_exception::Result<()> {
         GlobalInstance::set(Self::try_create(&conf.params).await?);
 
         Ok(())
     }
 
+    #[async_backtrace::framed]
     pub async fn try_create(sp: &StorageParams) -> common_exception::Result<DataOperator> {
         let operator = init_operator(sp)?;
 

@@ -97,6 +97,7 @@ impl FuseTable {
     //                      └─────►│ResizeProcessor(1) ├──────►│TableMutationAggregator├────────►│     CommitSink    │
     //                             └───────────────────┘       └───────────────────────┘         └───────────────────┘
 
+    #[async_backtrace::framed]
     pub async fn build_replace_pipeline<'a>(
         &'a self,
         ctx: Arc<dyn TableContext>,
@@ -253,6 +254,7 @@ impl FuseTable {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn merge_into_mutators(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -313,6 +315,7 @@ impl FuseTable {
         )
     }
 
+    #[async_backtrace::framed]
     async fn chain_mutation_pipes(
         &self,
         ctx: &Arc<dyn TableContext>,

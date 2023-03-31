@@ -145,6 +145,9 @@ reqwest = { version = "0.11", default-features = false, features = [
 # runtime
 tokio = { version = "1.26.0", features = ["full"] }
 
+# backtrace
+async-backtrace = "0.2.2"
+
 [profile.release]
 debug = 1
 lto = "thin"

@@ -22,6 +22,7 @@ use crate::UserApiProvider;
 /// UDF operations.
 impl UserApiProvider {
     // Add a new UDF.
+    #[async_backtrace::framed]
     pub async fn add_udf(
         &self,
         tenant: &str,
@@ -43,6 +44,7 @@ impl UserApiProvider {
     }
 
     // Update a UDF.
+    #[async_backtrace::framed]
     pub async fn update_udf(&self, tenant: &str, info: UserDefinedFunction) -> Result<u64> {
         let udf_api_client = self.get_udf_api_client(tenant)?;
         let update_udf = udf_api_client.update_udf(info, MatchSeq::GE(1));
@@ -53,6 +55,7 @@ impl UserApiProvider {
     }
 
     // Get a UDF by name.
+    #[async_backtrace::framed]
     pub async fn get_udf(&self, tenant: &str, udf_name: &str) -> Result<UserDefinedFunction> {
         let udf_api_client = self.get_udf_api_client(tenant)?;
         let get_udf = udf_api_client.get_udf(udf_name, MatchSeq::GE(0));
@@ -60,6 +63,7 @@ impl UserApiProvider {
     }
 
     // Get all UDFs for the tenant.
+    #[async_backtrace::framed]
     pub async fn get_udfs(&self, tenant: &str) -> Result<Vec<UserDefinedFunction>> {
         let udf_api_client = self.get_udf_api_client(tenant)?;
         let get_udfs = udf_api_client.get_udfs();
@@ -71,6 +75,7 @@ impl UserApiProvider {
     }
 
     // Drop a UDF by name.
+    #[async_backtrace::framed]
     pub async fn drop_udf(&self, tenant: &str, udf_name: &str, if_exists: bool) -> Result<()> {
         let udf_api_client = self.get_udf_api_client(tenant)?;
         let drop_udf = udf_api_client.drop_udf(udf_name, MatchSeq::GE(1));

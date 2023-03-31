@@ -39,6 +39,7 @@ impl Interpreter for UndropTableInterpreter {
         "UndropTableInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let catalog_name = self.plan.catalog.as_str();
         let catalog = self.ctx.get_catalog(catalog_name)?;

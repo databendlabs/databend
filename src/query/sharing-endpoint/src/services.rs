@@ -23,6 +23,7 @@ use crate::configs::Config;
 pub struct SharingServices {}
 
 impl SharingServices {
+    #[async_backtrace::framed]
     pub async fn init(config: Config) -> Result<()> {
         // init global instance singleton
         GlobalInstance::init_production();

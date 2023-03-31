@@ -47,6 +47,7 @@ impl Interpreter for AlterViewInterpreter {
         "AlterViewInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         // check whether view has exists
         if !self
@@ -71,6 +72,7 @@ impl Interpreter for AlterViewInterpreter {
 }
 
 impl AlterViewInterpreter {
+    #[async_backtrace::framed]
     async fn alter_view(&self) -> Result<PipelineBuildResult> {
         // drop view
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;

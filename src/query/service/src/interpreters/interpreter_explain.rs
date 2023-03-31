@@ -58,6 +58,7 @@ impl Interpreter for ExplainInterpreter {
         self.schema.clone()
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let blocks = match &self.kind {
             ExplainKind::Raw => self.explain_plan(&self.plan)?,
@@ -218,6 +219,7 @@ impl ExplainInterpreter {
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 
+    #[async_backtrace::framed]
     pub async fn explain_pipeline(
         &self,
         s_expr: SExpr,
@@ -248,6 +250,7 @@ impl ExplainInterpreter {
         Ok(blocks)
     }
 
+    #[async_backtrace::framed]
     async fn explain_fragments(
         &self,
         s_expr: SExpr,
@@ -272,6 +275,7 @@ impl ExplainInterpreter {
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 
+    #[async_backtrace::framed]
     async fn explain_analyze(
         &self,
         s_expr: &SExpr,

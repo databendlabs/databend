@@ -84,6 +84,7 @@ impl SrfCollector {
 }
 
 impl Binder {
+    #[async_backtrace::framed]
     pub async fn bind_project_set(
         &mut self,
         bind_context: &mut BindContext,

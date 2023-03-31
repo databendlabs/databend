@@ -88,6 +88,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
         DFQueryResultWriter::<'a, W> { inner: Some(inner) }
     }
 
+    #[async_backtrace::framed]
     pub async fn write(
         &mut self,
         query_result: Result<QueryResult>,
@@ -102,6 +103,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn ok(
         mut query_result: QueryResult,
         dataset_writer: QueryResultWriter<'a, W>,
@@ -290,6 +292,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
         }
     }
 
+    #[async_backtrace::framed]
     async fn err(error: &ErrorCode, writer: QueryResultWriter<'a, W>) -> Result<()> {
         if error.code() != ErrorCode::ABORTED_QUERY && error.code() != ErrorCode::ABORTED_SESSION {
             error!("OnQuery Error: {:?}", error);

@@ -85,6 +85,7 @@ async fn test_shutdown_long_run_runtime() -> Result<()> {
 }
 
 static START_TIME: Lazy<Instant> = Lazy::new(Instant::now);
+
 // println can more clearly know if they are parallel
 async fn mock_get_page(i: usize) -> Vec<usize> {
     let millis = Uniform::from(0..10).sample(&mut rand::thread_rng());

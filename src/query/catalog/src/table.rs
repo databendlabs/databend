@@ -110,6 +110,7 @@ pub trait Table: Sync + Send {
         false
     }
 
+    #[async_backtrace::framed]
     async fn alter_table_cluster_keys(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -123,6 +124,7 @@ pub trait Table: Sync + Send {
         )))
     }
 
+    #[async_backtrace::framed]
     async fn drop_table_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
         let _ = ctx;
 
@@ -133,6 +135,7 @@ pub trait Table: Sync + Send {
     }
 
     /// Gather partitions to be scanned according to the push_downs
+    #[async_backtrace::framed]
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -183,6 +186,7 @@ pub trait Table: Sync + Send {
         )))
     }
 
+    #[async_backtrace::framed]
     async fn replace_into(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -198,6 +202,7 @@ pub trait Table: Sync + Send {
         )))
     }
 
+    #[async_backtrace::framed]
     async fn commit_insertion(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -210,17 +215,20 @@ pub trait Table: Sync + Send {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn truncate(&self, ctx: Arc<dyn TableContext>, purge: bool) -> Result<()> {
         let (_, _) = (ctx, purge);
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn purge(&self, ctx: Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
         let (_, _) = (ctx, keep_last_snapshot);
 
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn analyze(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
         let _ = ctx;
 
@@ -231,10 +239,12 @@ pub trait Table: Sync + Send {
         Ok(None)
     }
 
+    #[async_backtrace::framed]
     async fn column_statistics_provider(&self) -> Result<Box<dyn ColumnStatisticsProvider>> {
         Ok(Box::new(DummyColumnStatisticsProvider))
     }
 
+    #[async_backtrace::framed]
     async fn navigate_to(&self, instant: &NavigationPoint) -> Result<Arc<dyn Table>> {
         let _ = instant;
 
@@ -245,6 +255,7 @@ pub trait Table: Sync + Send {
         )))
     }
 
+    #[async_backtrace::framed]
     async fn delete(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -261,6 +272,7 @@ pub trait Table: Sync + Send {
         )))
     }
 
+    #[async_backtrace::framed]
     async fn update(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -291,6 +303,7 @@ pub trait Table: Sync + Send {
     }
 
     // return false if the table does not need to be compacted.
+    #[async_backtrace::framed]
     async fn compact(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -307,6 +320,7 @@ pub trait Table: Sync + Send {
         )))
     }
 
+    #[async_backtrace::framed]
     async fn recluster(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -322,6 +336,7 @@ pub trait Table: Sync + Send {
         )))
     }
 
+    #[async_backtrace::framed]
     async fn revert_to(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -338,6 +353,7 @@ pub trait Table: Sync + Send {
 
 #[async_trait::async_trait]
 pub trait TableExt: Table {
+    #[async_backtrace::framed]
     async fn refresh(&self, ctx: &dyn TableContext) -> Result<Arc<dyn Table>> {
         let table_info = self.get_table_info();
         let name = table_info.name.clone();

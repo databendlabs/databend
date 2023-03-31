@@ -32,6 +32,7 @@ pub use crate::operations::merge_into::mutator::merge_into_mutator::MergeIntoOpe
 impl AsyncAccumulatingTransform for MergeIntoOperationAggregator {
     const NAME: &'static str = "MergeIntoMutationAggregator";
 
+    #[async_backtrace::framed]
     async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
         // accumulate mutations
         let merge_into_operation = MergeIntoOperation::try_from(data)?;
@@ -40,6 +41,7 @@ impl AsyncAccumulatingTransform for MergeIntoOperationAggregator {
         Ok(None)
     }
 
+    #[async_backtrace::framed]
     async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
         // apply mutations
         let mutation_logs = self.apply().await?;

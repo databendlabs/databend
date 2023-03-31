@@ -76,6 +76,7 @@ pub struct PartitionPruner {
 impl PartitionPruner {
     /// Try to read parquet meta to generate row-group-wise partitions.
     /// And prune row groups an pages to generate the final row group partitions.
+    #[async_backtrace::framed]
     pub async fn read_and_prune_partitions(&self) -> Result<(PartStatistics, Partitions)> {
         let PartitionPruner {
             schema,
