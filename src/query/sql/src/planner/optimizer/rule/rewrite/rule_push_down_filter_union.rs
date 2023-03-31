@@ -34,6 +34,8 @@ use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::UnionAll;
 use crate::plans::WindowFunc;
+use crate::plans::WindowFuncType;
+use crate::plans::WindowOrderBy;
 use crate::ColumnBinding;
 use crate::IndexType;
 use crate::Visibility;
@@ -171,21 +173,38 @@ fn replace_column_binding(
             right: Box::new(replace_column_binding(index_pairs, *expr.right)?),
         })),
         ScalarExpr::WindowFunction(expr) => Ok(ScalarExpr::WindowFunction(WindowFunc {
-            agg_func: AggregateFunction {
-                display_name: expr.agg_func.display_name,
-                func_name: expr.agg_func.func_name,
-                distinct: expr.agg_func.distinct,
-                params: expr.agg_func.params,
-                args: expr
-                    .agg_func
-                    .args
-                    .into_iter()
-                    .map(|arg| replace_column_binding(index_pairs, arg))
-                    .collect::<Result<Vec<_>>>()?,
-                return_type: expr.agg_func.return_type,
+            display_name: expr.display_name,
+            func: match expr.func {
+                WindowFuncType::Aggregate(arg) => WindowFuncType::Aggregate(AggregateFunction {
+                    display_name: arg.display_name,
+                    func_name: arg.func_name,
+                    distinct: arg.distinct,
+                    params: arg.params,
+                    args: arg
+                        .args
+                        .into_iter()
+                        .map(|arg| replace_column_binding(index_pairs, arg))
+                        .collect::<Result<Vec<_>>>()?,
+                    return_type: arg.return_type,
+                }),
+                t => t,
             },
-            partition_by: expr.partition_by,
-            order_by: expr.order_by,
+            partition_by: expr
+                .partition_by
+                .into_iter()
+                .map(|p| replace_column_binding(index_pairs, p))
+                .collect::<Result<Vec<_>>>()?,
+            order_by: expr
+                .order_by
+                .into_iter()
+                .map(|p| {
+                    Ok(WindowOrderBy {
+                        expr: replace_column_binding(index_pairs, p.expr)?,
+                        asc: p.asc,
+                        nulls_first: p.nulls_first,
+                    })
+                })
+                .collect::<Result<Vec<_>>>()?,
             frame: expr.frame,
         })),
         ScalarExpr::AggregateFunction(expr) => {

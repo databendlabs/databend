@@ -44,6 +44,7 @@ use crate::plans::Sort;
 use crate::plans::SortItem;
 use crate::BindContext;
 use crate::IndexType;
+use crate::WindowChecker;
 
 #[derive(Debug)]
 pub struct OrderItems {
@@ -283,6 +284,9 @@ impl Binder {
                     if from_context.in_grouping || need_group_check {
                         let mut group_checker = GroupingChecker::new(from_context);
                         scalar = group_checker.resolve(&scalar, None)?;
+                    } else if !from_context.windows.window_functions.is_empty() {
+                        let mut window_checker = WindowChecker::new(from_context);
+                        scalar = window_checker.resolve(&scalar)?;
                     }
                     scalars.push(ScalarItem { scalar, index });
                 }

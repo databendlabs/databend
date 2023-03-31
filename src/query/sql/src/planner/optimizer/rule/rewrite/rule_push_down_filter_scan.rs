@@ -31,6 +31,7 @@ use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::Scan;
 use crate::plans::WindowFunc;
+use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
@@ -145,20 +146,26 @@ impl RulePushDownFilterScan {
                 }))
             }
             ScalarExpr::WindowFunction(window) => {
-                let args = window
-                    .agg_func
-                    .args
-                    .iter()
-                    .map(|arg| Self::replace_view_column(arg, table_entries, column_entries))
-                    .collect::<Result<Vec<ScalarExpr>>>()?;
+                let func = match &window.func {
+                    WindowFuncType::Aggregate(agg) => {
+                        let args = agg
+                            .args
+                            .iter()
+                            .map(|arg| {
+                                Self::replace_view_column(arg, table_entries, column_entries)
+                            })
+                            .collect::<Result<Vec<ScalarExpr>>>()?;
 
-                let agg_func = AggregateFunction {
-                    func_name: window.agg_func.func_name.clone(),
-                    distinct: window.agg_func.distinct,
-                    params: window.agg_func.params.clone(),
-                    args,
-                    return_type: window.agg_func.return_type.clone(),
-                    display_name: window.agg_func.display_name.clone(),
+                        WindowFuncType::Aggregate(AggregateFunction {
+                            func_name: agg.func_name.clone(),
+                            distinct: agg.distinct,
+                            params: agg.params.clone(),
+                            args,
+                            return_type: agg.return_type.clone(),
+                            display_name: agg.display_name.clone(),
+                        })
+                    }
+                    func => func.clone(),
                 };
 
                 let partition_by = window
@@ -182,7 +189,8 @@ impl RulePushDownFilterScan {
                     .collect::<Result<Vec<WindowOrderBy>>>()?;
 
                 Ok(ScalarExpr::WindowFunction(WindowFunc {
-                    agg_func,
+                    display_name: window.display_name.clone(),
+                    func,
                     partition_by,
                     order_by,
                     frame: window.frame.clone(),

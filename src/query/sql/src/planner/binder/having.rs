@@ -17,7 +17,7 @@ use common_exception::Result;
 use common_exception::Span;
 
 use super::select::SelectList;
-use crate::binder::aggregate::AggregateRewriter;
+use crate::binder::aggregate::AggregateAndWindowRewriter;
 use crate::binder::split_conjunctions;
 use crate::binder::ExprContext;
 use crate::binder::ScalarBinder;
@@ -51,7 +51,7 @@ impl Binder {
             &aliases,
         );
         let (scalar, _) = scalar_binder.bind(having).await?;
-        let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
+        let mut rewriter = AggregateAndWindowRewriter::new(bind_context, self.metadata.clone());
         Ok((rewriter.visit(&scalar)?, having.span()))
     }
 

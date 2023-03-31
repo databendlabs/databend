@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::fmt::Display;
 
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::InternalColumn;
@@ -284,10 +285,41 @@ impl AggregateFinal {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub enum WindowFunction {
+    Aggregate(AggregateFunctionDesc),
+    RowNumber,
+    Rank,
+    DenseRank,
+}
+
+impl WindowFunction {
+    fn data_type(&self) -> DataType {
+        match self {
+            WindowFunction::Aggregate(agg) => agg.sig.return_type.clone(),
+            WindowFunction::RowNumber | WindowFunction::Rank | WindowFunction::DenseRank => {
+                DataType::Number(NumberDataType::UInt64)
+            }
+        }
+    }
+}
+
+impl Display for WindowFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WindowFunction::Aggregate(agg) => write!(f, "{}", agg.sig.name),
+            WindowFunction::RowNumber => write!(f, "row_number"),
+            WindowFunction::Rank => write!(f, "rank"),
+            WindowFunction::DenseRank => write!(f, "dense_rank"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Window {
     pub plan_id: u32,
+    pub index: IndexType,
     pub input: Box<PhysicalPlan>,
-    pub agg_func: AggregateFunctionDesc,
+    pub func: WindowFunction,
     pub partition_by: Vec<IndexType>,
     pub order_by: Vec<SortDesc>,
     pub window_frame: WindowFuncFrame,
@@ -299,8 +331,8 @@ impl Window {
         let mut fields = Vec::with_capacity(input_schema.fields().len() + 1);
         fields.extend_from_slice(input_schema.fields());
         fields.push(DataField::new(
-            &self.agg_func.output_column.to_string(),
-            self.agg_func.sig.return_type.clone(),
+            &self.index.to_string(),
+            self.func.data_type(),
         ));
         Ok(DataSchemaRefExt::create(fields))
     }

@@ -92,3 +92,4 @@ pub use transform_runtime_filter::TransformRuntimeFilter;
 pub use transform_sort_merge::SortMergeCompactor;
 pub use transform_sort_partial::TransformSortPartial;
 pub use window::TransformWindow;
+pub use window::WindowFunctionInfo;

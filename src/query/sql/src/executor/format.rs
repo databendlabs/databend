@@ -34,6 +34,7 @@ use super::ProjectSet;
 use super::Sort;
 use super::TableScan;
 use super::UnionAll;
+use super::WindowFunction;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::DistributedInsertSelect;
 use crate::executor::ExchangeSink;
@@ -552,10 +553,13 @@ fn window_to_format_tree(
 
     let frame = plan.window_frame.to_string();
 
-    let agg_func = pretty_display_agg_desc(&plan.agg_func, metadata);
+    let func = match &plan.func {
+        WindowFunction::Aggregate(agg) => pretty_display_agg_desc(agg, metadata),
+        func => format!("{}", func),
+    };
 
     let mut children = vec![
-        FormatTreeNode::new(format!("aggregate function: [{agg_func}]")),
+        FormatTreeNode::new(format!("aggregate function: [{func}]")),
         FormatTreeNode::new(format!("partition by: [{partition_by}]")),
         FormatTreeNode::new(format!("order by: [{order_by}]")),
         FormatTreeNode::new(format!("frame: [{frame}]")),

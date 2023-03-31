@@ -140,8 +140,9 @@ pub trait PhysicalPlanReplacer {
 
         Ok(PhysicalPlan::Window(Window {
             plan_id: plan.plan_id,
+            index: plan.index,
             input: Box::new(input),
-            agg_func: plan.agg_func.clone(),
+            func: plan.func.clone(),
             partition_by: plan.partition_by.clone(),
             order_by: plan.order_by.clone(),
             window_frame: plan.window_frame.clone(),
