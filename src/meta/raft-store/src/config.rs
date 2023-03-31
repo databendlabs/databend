@@ -110,6 +110,9 @@ pub struct RaftConfig {
     ///  The node name. If the user specifies a name,
     /// the user-supplied name is used, if not, the default name is used.
     pub cluster_name: String,
+
+    /// Max timeout(in milli seconds) when try to join a cluster
+    pub join_cluster_timeout: u64,
 }
 
 pub fn get_default_raft_advertise_host() -> String {
@@ -142,6 +145,7 @@ impl Default for RaftConfig {
             id: 0,
             sled_tree_prefix: "".to_string(),
             cluster_name: "foo_cluster".to_string(),
+            join_cluster_timeout: 60000,
         }
     }
 }

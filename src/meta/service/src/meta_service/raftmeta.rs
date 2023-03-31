@@ -636,32 +636,47 @@ impl MetaNode {
     ) -> Result<(), MetaManagementError> {
         let mut errors = vec![];
         let addrs = &conf.join;
+        let mut timeout = conf.join_cluster_timeout;
 
-        #[allow(clippy::never_loop)]
-        for addr in addrs {
-            if addr == &conf.raft_api_advertise_host_string() {
-                info!("avoid join via self: {}", addr);
-                continue;
-            }
+        while timeout > 0 {
+            errors.clear();
 
-            for _i in 0..3 {
-                let res = self.join_via(conf, &grpc_api_advertise_address, addr).await;
-                match res {
-                    Ok(x) => return Ok(x),
-                    Err(api_err) => {
-                        tracing::warn!("{} while joining cluster via {}", api_err, addr);
+            #[allow(clippy::never_loop)]
+            for addr in addrs {
+                if addr == &conf.raft_api_advertise_host_string() {
+                    info!("avoid join via self: {}", addr);
+                    continue;
+                }
 
-                        if let MetaAPIError::CanNotForward(_) = &api_err {
-                            // Leader is not ready, wait a while and retry
-                            sleep(Duration::from_millis(1_000)).await;
-                            continue;
-                        } else {
-                            errors.push(api_err);
-                            break;
+                for _i in 0..3 {
+                    let res = self.join_via(conf, &grpc_api_advertise_address, addr).await;
+                    match res {
+                        Ok(x) => return Ok(x),
+                        Err(api_err) => {
+                            tracing::warn!("{} while joining cluster via {}", api_err, addr);
+
+                            if let MetaAPIError::CanNotForward(_) = &api_err {
+                                // Leader is not ready, wait a while and retry
+                                sleep(Duration::from_millis(1_000)).await;
+                                continue;
+                            } else {
+                                errors.push(api_err);
+                                break;
+                            }
                         }
                     }
                 }
             }
+
+            sleep(Duration::from_millis(1_000)).await;
+            timeout -= 1000;
+            error!(
+                "fail to join {} cluster via {:?}, caused by errors: {}, sleep, left try timeout: {:?} ms",
+                self.sto.id,
+                addrs,
+                errors.clone().into_iter().map(|e| e.to_string()).join(", "),
+                timeout,
+            );
         }
         Err(MetaManagementError::Join(AnyError::error(format!(
             "fail to join {} cluster via {:?}, caused by errors: {}",
