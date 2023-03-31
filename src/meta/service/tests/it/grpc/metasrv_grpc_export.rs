@@ -41,6 +41,7 @@ async fn test_export() -> anyhow::Result<()> {
         "xxx",
         None,
         Some(Duration::from_secs(10)),
+        Duration::from_secs(10),
         None,
     )?;
 
