@@ -178,6 +178,8 @@ impl FuseTable {
         // 3. Find.
         let mut snapshots_to_be_purged = HashSet::new();
         let mut segments_to_be_purged = HashSet::new();
+        // Todo(zhyass): exists bug, the ts_to_be_purged is empty, cannot be purged.
+        // We will do the fix in the purge refactoring.
         let ts_to_be_purged: Vec<String> = vec![];
 
         // 3.1 Find all the snapshots need to be deleted.
@@ -212,6 +214,8 @@ impl FuseTable {
                     self.operator.clone(),
                     self.snapshot_format_version().await?,
                 );
+                // Todo(zhyass): exists bug, we need to filter out some table statistic files
+                // based on the snapshots just like the segments.
                 let ts_to_be_purged = snapshots_io
                     .read_table_statistic_files(&root_ts_location, None)
                     .await?;
