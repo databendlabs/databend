@@ -42,7 +42,7 @@ runs:
       shell: bash
       run: |
         sudo apt-get update -y
-        sudo apt-get install -y jq bc
+        sudo apt install -y python3
 
     - name: Run Benchmark
       working-directory: benchmark/clickbench
