@@ -377,10 +377,18 @@ impl FlightSqlService for FlightSqlServiceImpl {
     async fn do_get_tables(
         &self,
         query: CommandGetTables,
-        _request: Request<Ticket>,
+        request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
         tracing::info!("do_get_tables({query:?})");
-        Err(Status::unimplemented("do_get_tables not implemented"))
+        let session = self.get_session(&request)?;
+        let context = session
+            .create_query_context()
+            .await
+            .map_err(|e| status!("Could not create_query_context", e))?;
+        Ok(Response::new(
+            super::CatalogInfoProvider::get_tables(context.clone(), query.catalog.clone(), None)
+                .await?,
+        ))
     }
 
     #[async_backtrace::framed]
