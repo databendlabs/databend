@@ -141,13 +141,6 @@ impl ScalarExpr {
                 left.append(&mut right);
                 Ok(left)
             }
-            ScalarExpr::WindowFunction(scalar) => {
-                let mut result = vec![];
-                for scalar in &scalar.agg_func.args {
-                    result.append(&mut scalar.used_tables(metadata.clone())?);
-                }
-                Ok(result)
-            }
             ScalarExpr::AggregateFunction(scalar) => {
                 let mut result = vec![];
                 for scalar in &scalar.args {
@@ -163,9 +156,11 @@ impl ScalarExpr {
                 Ok(result)
             }
             ScalarExpr::CastExpr(scalar) => scalar.argument.used_tables(metadata),
-            ScalarExpr::SubqueryExpr(_) => Err(ErrorCode::Unimplemented(
-                "SubqueryExpr doesn't support used_tables method".to_string(),
-            )),
+            ScalarExpr::WindowFunction(_) | ScalarExpr::SubqueryExpr(_) => {
+                Err(ErrorCode::Unimplemented(
+                    "SubqueryExpr/WindowFunction doesn't support used_tables method".to_string(),
+                ))
+            }
         }
     }
 
