@@ -145,7 +145,7 @@ impl Default for RaftConfig {
             id: 0,
             sled_tree_prefix: "".to_string(),
             cluster_name: "foo_cluster".to_string(),
-            wait_leader_timeout: 10000,
+            wait_leader_timeout: 70000,
         }
     }
 }

@@ -488,7 +488,7 @@ pub struct RaftConfig {
     pub cluster_name: String,
 
     /// Max timeout(in milli seconds) when waiting a cluster leader.
-    #[clap(long, default_value = "10000")]
+    #[clap(long, default_value = "70000")]
     pub wait_leader_timeout: u64,
 }
 

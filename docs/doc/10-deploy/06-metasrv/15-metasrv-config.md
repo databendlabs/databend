@@ -47,7 +47,7 @@ heartbeat_interval       = 1000 # milli second
 install_snapshot_timeout = 4000 # milli second
 max_applied_log_to_keep  = 1000 # N.O. raft logs
 snapshot_logs_since_last = 1024 # N.O. raft logs
-wait_leader_timeout     = 10000
+wait_leader_timeout     = 70000
 #
 # Startup config
 #
