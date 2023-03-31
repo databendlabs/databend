@@ -33,7 +33,7 @@ pub struct JoinNode {
 
 impl JoinNode {
     pub fn cardinality(&mut self, dphpy: &DPhpy) -> Result<f64> {
-        let s_expr = dphpy.s_expr(self)?;
+        let s_expr = dphpy.s_expr(self);
         let rel_expr = RelExpr::with_s_expr(&s_expr);
         let card = rel_expr.derive_relational_prop()?.cardinality;
         self.cardinality = Some(card);

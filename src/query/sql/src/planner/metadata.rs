@@ -85,7 +85,9 @@ impl Metadata {
                     table.database == database_name && table.name == table_name
                         || table.alias_name == Some(table_name.to_string())
                 }
-                None => table.name == table_name || table.alias_name == Some(table_name.to_string()),
+                None => {
+                    table.name == table_name || table.alias_name == Some(table_name.to_string())
+                }
             })
             .map(|table| table.index)
     }
