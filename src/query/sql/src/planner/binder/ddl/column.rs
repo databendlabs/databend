@@ -80,7 +80,7 @@ impl Binder {
             select_builder
                 .with_column("collation_name AS `Collation`")
                 .with_column("privileges AS `Privileges`")
-                .with_column("column_comment AS Comment");
+                .with_column("column_comment AS `Comment`");
         }
 
         select_builder
