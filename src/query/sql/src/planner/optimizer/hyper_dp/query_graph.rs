@@ -88,12 +88,11 @@ impl QueryGraph {
         let nodes_size = nodes.len();
         for i in 0..nodes_size {
             let mut edge = &self.root_edge;
-            for j in i..nodes_size {
-                let node = nodes[j];
-                if !edge.children.contains_key(&node) {
+            for node in nodes.iter().take(nodes_size).skip(i) {
+                if !edge.children.contains_key(node) {
                     break;
                 }
-                edge = edge.children.get(&node).unwrap();
+                edge = edge.children.get(node).unwrap();
             }
             for neighbor_info in edge.neighbors.iter() {
                 if !forbidden_nodes.contains(&neighbor_info.neighbors[0]) {
