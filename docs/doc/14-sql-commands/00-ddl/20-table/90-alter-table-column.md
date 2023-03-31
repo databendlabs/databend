@@ -19,7 +19,6 @@ ALTER TABLE can also handle table clustering with the following syntax:
 ALTER TABLE [IF EXISTS] <name> CLUSTER BY ( <expr1> [ , <expr2> ... ] )
 ALTER TABLE [IF EXISTS] <name> RECLUSTER [FINAL] [WHERE condition]
 ```
-For more information, refer to the following pages:
 
 - [ALTER CLUSTER KEY](../70-clusterkey/dml-alter-cluster-key.md)
 - [RECLUSTER TABLE](../70-clusterkey/dml-recluster-table.md)
