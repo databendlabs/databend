@@ -285,6 +285,24 @@ NULL
 NULL
 -3.9775993237531697
 
+query I
+select skewness (10) from numbers(5)
+----
+NULL
+
+query III
+select skewness(k), skewness(v), skewness(v2) from aggr
+----
+-3.316624790355393	-0.16344366935199225	0.3654008511025841
+
+query I
+select skewness(v2) from aggr group by v order by v
+----
+-0.4232731602681443
+NULL
+NULL
+-0.3301409513655613
+
 statement ok
 DROP TABLE aggr
 

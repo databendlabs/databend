@@ -35,6 +35,7 @@ use crate::aggregates::aggregate_quantile_cont::aggregate_median_function_desc;
 use crate::aggregates::aggregate_quantile_cont::aggregate_quantile_cont_function_desc;
 use crate::aggregates::aggregate_quantile_disc::aggregate_quantile_disc_function_desc;
 use crate::aggregates::aggregate_retention::aggregate_retention_function_desc;
+use crate::aggregates::aggregate_skewness::aggregate_skewness_function_desc;
 use crate::aggregates::aggregate_sum::aggregate_sum_function_desc;
 
 pub struct Aggregators;
@@ -71,6 +72,7 @@ impl Aggregators {
         factory.register("retention", aggregate_retention_function_desc());
         factory.register("list", aggregate_list_function_desc());
         factory.register("kurtosis", aggregate_kurtosis_function_desc());
+        factory.register("skewness", aggregate_skewness_function_desc());
     }
 
     pub fn register_combinator(factory: &mut AggregateFunctionFactory) {

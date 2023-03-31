@@ -40,15 +40,14 @@ use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::StateAddr;
 
 #[derive(Default, Serialize, Deserialize)]
-struct KurtosisState {
+struct SkewnessState {
     pub n: u64,
     pub sum: f64,
     pub sum_sqr: f64,
     pub sum_cub: f64,
-    pub sum_four: f64,
 }
 
-impl KurtosisState {
+impl SkewnessState {
     fn new() -> Self {
         Self::default()
     }
@@ -59,7 +58,6 @@ impl KurtosisState {
         self.sum += other;
         self.sum_sqr += other.powi(2);
         self.sum_cub += other.powi(3);
-        self.sum_four += other.powi(4);
     }
 
     fn merge(&mut self, rhs: &Self) {
@@ -70,7 +68,6 @@ impl KurtosisState {
         self.sum += rhs.sum;
         self.sum_sqr += rhs.sum_sqr;
         self.sum_cub += rhs.sum_cub;
-        self.sum_four += rhs.sum_four;
     }
 
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
@@ -78,23 +75,25 @@ impl KurtosisState {
             ColumnBuilder::Nullable(box b) => b,
             _ => unreachable!(),
         };
-        if self.n <= 3 {
+        if self.n <= 2 {
             builder.push_null();
             return Ok(());
         }
         let n = self.n as f64;
         let temp = 1.0 / n;
-        if self.sum_sqr - self.sum * self.sum * temp == 0.0 {
+        let div = (temp * (self.sum_sqr - self.sum * self.sum * temp))
+            .powi(3)
+            .sqrt();
+        if div == 0.0 {
             builder.push_null();
             return Ok(());
         }
-        let m4 = temp
-            * (self.sum_four - 4.0 * self.sum_cub * self.sum * temp
-                + 6.0 * self.sum_sqr * self.sum * self.sum * temp * temp
-                - 3.0 * self.sum.powi(4) * temp.powi(3));
-        let m2 = temp * (self.sum_sqr - self.sum * self.sum * temp);
-        let value =
-            (n - 1.0) * ((n + 1.0) * m4 / (m2 * m2) - 3.0 * (n - 1.0)) / ((n - 2.0) * (n - 3.0));
+        let temp1 = (n * (n - 1.0)).sqrt() / (n - 2.0);
+        let value = temp1
+            * temp
+            * (self.sum_cub - 3.0 * self.sum_sqr * self.sum * temp
+                + 2.0 * self.sum.powi(3) * temp * temp)
+            / div;
         if value.is_infinite() || value.is_nan() {
             builder.push_null();
         } else {
@@ -105,14 +104,14 @@ impl KurtosisState {
 }
 
 #[derive(Clone)]
-pub struct AggregateKurtosisFunction<T> {
+pub struct AggregateSkewnessFunction<T> {
     display_name: String,
     return_type: DataType,
     _arguments: Vec<DataType>,
     _t: PhantomData<T>,
 }
 
-impl<T> Display for AggregateKurtosisFunction<T>
+impl<T> Display for AggregateSkewnessFunction<T>
 where T: Number + AsPrimitive<f64>
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -120,11 +119,11 @@ where T: Number + AsPrimitive<f64>
     }
 }
 
-impl<T> AggregateFunction for AggregateKurtosisFunction<T>
+impl<T> AggregateFunction for AggregateSkewnessFunction<T>
 where T: Number + AsPrimitive<f64>
 {
     fn name(&self) -> &str {
-        "AggregateKurtosisFunction"
+        "AggregateSkewnessFunction"
     }
 
     fn return_type(&self) -> Result<DataType> {
@@ -132,11 +131,11 @@ where T: Number + AsPrimitive<f64>
     }
 
     fn init_state(&self, place: StateAddr) {
-        place.write(KurtosisState::new)
+        place.write(SkewnessState::new)
     }
 
     fn state_layout(&self) -> Layout {
-        Layout::new::<KurtosisState>()
+        Layout::new::<SkewnessState>()
     }
 
     fn accumulate(
@@ -147,7 +146,7 @@ where T: Number + AsPrimitive<f64>
         _input_rows: usize,
     ) -> Result<()> {
         let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
-        let state = place.get::<KurtosisState>();
+        let state = place.get::<SkewnessState>();
         match validity {
             Some(bitmap) => {
                 for (value, is_valid) in column.iter().zip(bitmap.iter()) {
@@ -169,7 +168,7 @@ where T: Number + AsPrimitive<f64>
     fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
         let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
 
-        let state = place.get::<KurtosisState>();
+        let state = place.get::<SkewnessState>();
         let v: f64 = column[row].as_();
         state.add(v);
         Ok(())
@@ -186,7 +185,7 @@ where T: Number + AsPrimitive<f64>
 
         column.iter().zip(places.iter()).for_each(|(value, place)| {
             let place = place.next(offset);
-            let state = place.get::<KurtosisState>();
+            let state = place.get::<SkewnessState>();
             let v: f64 = value.as_();
             state.add(v);
         });
@@ -194,26 +193,26 @@ where T: Number + AsPrimitive<f64>
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<KurtosisState>();
+        let state = place.get::<SkewnessState>();
         serialize_into_buf(writer, state)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<KurtosisState>();
+        let state = place.get::<SkewnessState>();
         *state = deserialize_from_slice(reader)?;
 
         Ok(())
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<KurtosisState>();
-        let state = place.get::<KurtosisState>();
+        let rhs = rhs.get::<SkewnessState>();
+        let state = place.get::<SkewnessState>();
         state.merge(rhs);
         Ok(())
     }
 
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
-        let state = place.get::<KurtosisState>();
+        let state = place.get::<SkewnessState>();
         state.merge_result(builder)
     }
 
@@ -222,12 +221,12 @@ where T: Number + AsPrimitive<f64>
     }
 
     unsafe fn drop_state(&self, place: StateAddr) {
-        let state = place.get::<KurtosisState>();
+        let state = place.get::<SkewnessState>();
         std::ptr::drop_in_place(state);
     }
 }
 
-impl<T> AggregateKurtosisFunction<T>
+impl<T> AggregateSkewnessFunction<T>
 where T: Number + AsPrimitive<f64>
 {
     fn try_create(
@@ -236,7 +235,7 @@ where T: Number + AsPrimitive<f64>
         _params: Vec<Scalar>,
         arguments: Vec<DataType>,
     ) -> Result<Arc<dyn AggregateFunction>> {
-        let func = AggregateKurtosisFunction::<T> {
+        let func = AggregateSkewnessFunction::<T> {
             display_name: display_name.to_string(),
             return_type,
             _arguments: arguments,
@@ -247,7 +246,7 @@ where T: Number + AsPrimitive<f64>
     }
 }
 
-pub fn try_create_aggregate_kurtosis_function(
+pub fn try_create_aggregate_skewness_function(
     display_name: &str,
     params: Vec<Scalar>,
     arguments: Vec<DataType>,
@@ -258,7 +257,7 @@ pub fn try_create_aggregate_kurtosis_function(
         DataType::Number(NumberDataType::NUM_TYPE) => {
             let return_type =
                 DataType::Nullable(Box::new(DataType::Number(NumberDataType::Float64)));
-            AggregateKurtosisFunction::<NUM_TYPE>::try_create(
+            AggregateSkewnessFunction::<NUM_TYPE>::try_create(
                 display_name,
                 return_type,
                 params,
@@ -273,6 +272,6 @@ pub fn try_create_aggregate_kurtosis_function(
     })
 }
 
-pub fn aggregate_kurtosis_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_kurtosis_function))
+pub fn aggregate_skewness_function_desc() -> AggregateFunctionDescription {
+    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_skewness_function))
 }
