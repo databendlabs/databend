@@ -23,8 +23,8 @@ echo " === start a single node databend-meta"
 chmod +x ./target/${BUILD_PROFILE}/databend-meta
 ./target/${BUILD_PROFILE}/databend-meta --single --raft-dir "$meta_dir" &
 METASRV_PID=$!
-echo $METASRV_PID
-sleep 3
+echo "meta-service pid:" $METASRV_PID
+sleep 10
 
 echo " === export data from a running databend-meta to $exported"
 ./target/${BUILD_PROFILE}/databend-metactl --export --grpc-api-address "localhost:9191" >$exported
