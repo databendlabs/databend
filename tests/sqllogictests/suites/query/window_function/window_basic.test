@@ -185,3 +185,10 @@ sales 0.0
 
 statement ok
 DROP DATABASE test_window
+
+# aggregate functions in window functions
+query TII
+select depname, sum(sum(salary)) over (), sum(salary) from empsalary group by depname;
+develop 25100 25100
+sales 39700 14600
+personnel 47100 7400

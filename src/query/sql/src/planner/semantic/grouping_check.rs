@@ -26,11 +26,14 @@ use crate::plans::FunctionCall;
 use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
+use crate::plans::WindowFuncType;
 use crate::BindContext;
 
 /// Check validity of scalar expression in a grouping context.
 /// The matched grouping item will be replaced with a BoundColumnRef
 /// to corresponding grouping item column.
+///
+/// Also replaced the matched window function with a BoundColumnRef.
 pub struct GroupingChecker<'a> {
     bind_context: &'a BindContext,
 }
@@ -40,7 +43,7 @@ impl<'a> GroupingChecker<'a> {
         Self { bind_context }
     }
 
-    pub fn resolve(&mut self, scalar: &ScalarExpr, span: Span) -> Result<ScalarExpr> {
+    pub fn resolve(&self, scalar: &ScalarExpr, span: Span) -> Result<ScalarExpr> {
         if let Some(index) = self.bind_context.aggregate_info.group_items_map.get(scalar) {
             let column = &self.bind_context.aggregate_info.group_items[*index];
             let mut column_binding = if let ScalarExpr::BoundColumnRef(column_ref) = &column.scalar
@@ -72,6 +75,15 @@ impl<'a> GroupingChecker<'a> {
 
         match scalar {
             ScalarExpr::BoundColumnRef(column) => {
+                if self
+                    .bind_context
+                    .aggregate_info
+                    .aggregate_functions_map
+                    .contains_key(&column.column.column_name)
+                {
+                    // Be replaced by `WindowRewriter`.
+                    return Ok(scalar.clone());
+                }
                 // If this is a group item, then it should have been replaced with `group_items_map`
                 Err(ErrorCode::SemanticError(format!(
                     "column \"{}\" must appear in the GROUP BY clause or be used in an aggregate function",
@@ -139,6 +151,21 @@ impl<'a> GroupingChecker<'a> {
                     .window_functions_map
                     .get(&win.display_name)
                 {
+                    // Just check if the exprs are in grouping items.
+                    for part in win.partition_by.iter() {
+                        self.resolve(part, span)?;
+                    }
+                    // Just check if the exprs are in grouping items.
+                    for order in win.order_by.iter() {
+                        self.resolve(&order.expr, span)?;
+                    }
+                    // Just check if the exprs are in grouping items.
+                    if let WindowFuncType::Aggregate(agg) = &win.func {
+                        for args in agg.args.iter() {
+                            self.resolve(args, span)?;
+                        }
+                    }
+
                     let window_info = &self.bind_context.windows.window_functions[*column];
                     let column_binding = ColumnBinding {
                         database_name: None,
@@ -148,13 +175,14 @@ impl<'a> GroupingChecker<'a> {
                         data_type: Box::new(window_info.func.return_type()),
                         visibility: Visibility::Visible,
                     };
-                    return Ok(BoundColumnRef {
+                    Ok(BoundColumnRef {
                         span: None,
                         column: column_binding,
                     }
-                    .into());
+                    .into())
+                } else {
+                    Err(ErrorCode::Internal("Invalid window function"))
                 }
-                Err(ErrorCode::Internal("Invalid window function"))
             }
 
             ScalarExpr::AggregateFunction(agg) => {
