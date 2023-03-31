@@ -105,6 +105,7 @@ pub struct TransformWindow {
     // used for dense_rank and rank
     current_rank: usize,
     current_rank_count: usize,
+    current_dense_rank: usize,
 }
 
 impl TransformWindow {
@@ -161,6 +162,7 @@ impl TransformWindow {
             current_row_in_partition: 1,
             current_rank: 1,
             current_rank_count: 1,
+            current_dense_rank: 1,
             input_is_finished: false,
         })
     }
@@ -372,6 +374,14 @@ impl TransformWindow {
         true
     }
 
+    #[inline(always)]
+    fn needs_rank(&self) -> bool {
+        matches!(
+            self.func,
+            WindowFunctionImpl::Rank | WindowFunctionImpl::DenseRank
+        )
+    }
+
     /// When adding a [`DataBlock`], we compute the aggregations to the end.
     ///
     /// For each row in the input block,
@@ -422,15 +432,14 @@ impl TransformWindow {
                 let next_row = self.advance_row(self.current_row);
                 if next_row < self.partition_end {
                     // Compute rank.
-                    if self.is_order_by_keys_equal(self.current_row, next_row) {
-                        // next rank is the same with current rank
+                    if self.needs_rank() {
+                        if !self.is_order_by_keys_equal(self.current_row, next_row) {
+                            // advance rank
+                            self.current_rank += self.current_rank_count;
+                            self.current_dense_rank += 1;
+                            self.current_rank_count = 0;
+                        }
                         self.current_rank_count += 1;
-                    } else if matches!(self.func, WindowFunctionImpl::DenseRank) {
-                        self.current_rank += 1;
-                        self.current_rank_count = 1;
-                    } else {
-                        self.current_rank += self.current_rank_count;
-                        self.current_rank_count = 1;
                     }
                 }
 
@@ -463,6 +472,7 @@ impl TransformWindow {
             self.current_row_in_partition = 1;
             self.current_rank = 1;
             self.current_rank_count = 1;
+            self.current_dense_rank = 1;
         }
 
         Ok(())
@@ -522,7 +532,7 @@ impl TransformWindow {
             }
             WindowFunctionImpl::DenseRank => {
                 builder.push(ScalarRef::Number(NumberScalar::UInt64(
-                    self.current_rank as u64,
+                    self.current_dense_rank as u64,
                 )));
             }
         };
