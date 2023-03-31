@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 use std::alloc::Layout;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -22,6 +21,7 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_number;
+use common_expression::types::decimal::*;
 use common_expression::types::number::*;
 use common_expression::types::*;
 use common_expression::with_number_mapped_type;
@@ -30,11 +30,10 @@ use common_expression::ColumnBuilder;
 use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
-use common_expression::ScalarRef;
 use common_io::prelude::deserialize_from_slice;
 use common_io::prelude::serialize_into_buf;
-use num_traits::AsPrimitive;
-use ordered_float::OrderedFloat;
+use ethnum::i256;
+use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -43,28 +42,77 @@ use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::StateAddr;
+use crate::with_simple_no_number_mapped_type;
 use crate::BUILTIN_FUNCTIONS;
 
-#[derive(Default, Serialize, Deserialize)]
-struct QuantileDiscState {
-    pub value: Vec<OrderedFloat<f64>>,
+pub trait QuantileStateFunc<T: ValueType>: Send + Sync + 'static {
+    fn new() -> Self;
+    fn add(&mut self, other: T::ScalarRef<'_>);
+    fn add_batch(&mut self, column: &T::Column, validity: Option<&Bitmap>) -> Result<()>;
+    fn merge(&mut self, rhs: &Self) -> Result<()>;
+    fn merge_result(&mut self, builder: &mut ColumnBuilder, levels: Vec<f64>) -> Result<()>;
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()>;
+    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()>;
 }
-
-impl QuantileDiscState {
+#[derive(Serialize, Deserialize)]
+struct QuantileState<T>
+where
+    T: ValueType,
+    T::Scalar: Serialize + DeserializeOwned,
+{
+    #[serde(bound(deserialize = "T::Scalar: DeserializeOwned"))]
+    pub value: Vec<T::Scalar>,
+}
+impl<T> Default for QuantileState<T>
+where
+    T: ValueType,
+    T::Scalar: Serialize + DeserializeOwned,
+{
+    fn default() -> Self {
+        Self { value: vec![] }
+    }
+}
+impl<T> QuantileStateFunc<T> for QuantileState<T>
+where
+    T: ValueType,
+    T::Scalar: Serialize + DeserializeOwned + Send + Sync + Ord,
+{
     fn new() -> Self {
         Self::default()
     }
-
-    #[inline(always)]
-    fn add(&mut self, other: f64) {
-        self.value.push(other.into());
+    fn add(&mut self, other: T::ScalarRef<'_>) {
+        self.value.push(T::to_owned_scalar(other));
     }
-
-    fn merge(&mut self, rhs: &Self) -> Result<()> {
-        self.value.extend(rhs.value.iter());
+    fn add_batch(&mut self, column: &T::Column, validity: Option<&Bitmap>) -> Result<()> {
+        let column_len = T::column_len(column);
+        if column_len == 0 {
+            return Ok(());
+        }
+        let column_iter = T::iter_column(column);
+        if let Some(validity) = validity {
+            if validity.unset_bits() == column_len {
+                return Ok(());
+            }
+            for (data, valid) in column_iter.zip(validity.iter()) {
+                if !valid {
+                    continue;
+                }
+                self.add(data.clone());
+            }
+        } else {
+            self.value
+                .extend(column_iter.map(|data| T::to_owned_scalar(data)));
+        }
         Ok(())
     }
-
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        self.value.extend(
+            rhs.value
+                .iter()
+                .map(|v| T::to_owned_scalar(T::to_scalar_ref(v))),
+        );
+        Ok(())
+    }
     fn merge_result(&mut self, builder: &mut ColumnBuilder, levels: Vec<f64>) -> Result<()> {
         let value_len = self.value.len();
         if levels.len() > 1 {
@@ -74,82 +122,74 @@ impl QuantileDiscState {
             };
             let indices = levels
                 .iter()
-                .map(|level| libm::modf((value_len - 1) as f64 * (*level)))
-                .collect::<Vec<(f64, f64)>>();
-            for (frac, whole) in indices {
-                let whole = whole as usize;
-                if whole >= value_len {
-                    builder.push_default();
+                .map(|level| ((value_len - 1) as f64 * (*level)).floor() as usize)
+                .collect::<Vec<usize>>();
+            for idx in indices {
+                if idx < value_len {
+                    self.value.as_mut_slice().select_nth_unstable(idx);
+                    let value = self.value.get(idx).unwrap();
+                    builder.put_item(T::upcast_scalar(value.clone()).as_ref());
                 } else {
-                    let n = self.compute_result(whole, frac, value_len);
-                    builder.put_item(ScalarRef::Number(NumberScalar::Float64(n.into())));
+                    builder.push_default();
                 }
             }
             builder.commit_row();
         } else {
-            let builder = NumberType::<F64>::try_downcast_builder(builder).unwrap();
-            let (frac, whole) = libm::modf((value_len - 1) as f64 * levels[0]);
-            let whole = whole as usize;
-            if whole >= value_len {
-                builder.push(0_f64.into());
+            let builder = T::try_downcast_builder(builder).unwrap();
+            let idx = ((value_len - 1) as f64 * levels[0]).floor() as usize;
+            if idx >= value_len {
+                T::push_default(builder);
             } else {
-                let n = self.compute_result(whole, frac, value_len);
-                builder.push(n.into());
+                self.value.as_mut_slice().select_nth_unstable(idx);
+                let value = self.value.get(idx).unwrap();
+                T::push_item(builder, T::to_scalar_ref(value));
             }
         }
         Ok(())
     }
-
-    fn compute_result(&mut self, whole: usize, frac: f64, value_len: usize) -> f64 {
-        self.value.as_mut_slice().select_nth_unstable(whole);
-        let value = self.value.get(whole).unwrap().0;
-        let value1 = if whole + 1 >= value_len {
-            value
-        } else {
-            self.value.as_mut_slice().select_nth_unstable(whole + 1);
-            self.value.get(whole + 1).unwrap().0
-        };
-
-        value + (value1 - value) * frac
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
+        serialize_into_buf(writer, self)
+    }
+    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
+        self.value = deserialize_from_slice(reader)?;
+        Ok(())
     }
 }
-
 #[derive(Clone)]
-pub struct AggregateQuantileDiscFunction<T> {
+pub struct AggregateQuantileDiscFunction<T, State> {
     display_name: String,
     return_type: DataType,
     levels: Vec<f64>,
     _arguments: Vec<DataType>,
     _t: PhantomData<T>,
+    _state: PhantomData<State>,
 }
-
-impl<T> Display for AggregateQuantileDiscFunction<T>
-where T: Number + AsPrimitive<f64>
+impl<T, State> Display for AggregateQuantileDiscFunction<T, State>
+where
+    State: QuantileStateFunc<T>,
+    T: Send + Sync + ValueType,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.display_name)
     }
 }
-
-impl<T> AggregateFunction for AggregateQuantileDiscFunction<T>
-where T: Number + AsPrimitive<f64>
+impl<T, State> AggregateFunction for AggregateQuantileDiscFunction<T, State>
+where
+    T: ValueType + Send + Sync,
+    State: QuantileStateFunc<T>,
 {
     fn name(&self) -> &str {
-        "AggregateQuantileContFunction"
+        "AggregateQuantileDiscFunction"
     }
-
     fn return_type(&self) -> Result<DataType> {
         Ok(self.return_type.clone())
     }
-
     fn init_state(&self, place: StateAddr) {
-        place.write(QuantileDiscState::new)
+        place.write(|| State::new())
     }
-
     fn state_layout(&self) -> Layout {
-        Layout::new::<QuantileDiscState>()
+        Layout::new::<State>()
     }
-
     fn accumulate(
         &self,
         place: StateAddr,
@@ -157,35 +197,19 @@ where T: Number + AsPrimitive<f64>
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
-        let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
-        let state = place.get::<QuantileDiscState>();
-        match validity {
-            Some(bitmap) => {
-                for (value, is_valid) in column.iter().zip(bitmap.iter()) {
-                    if is_valid {
-                        state.add(value.as_());
-                    }
-                }
-            }
-            None => {
-                for value in column.iter() {
-                    state.add(value.as_());
-                }
-            }
-        }
-
-        Ok(())
+        let column = T::try_downcast_column(&columns[0]).unwrap();
+        let state = place.get::<State>();
+        state.add_batch(&column, validity)
     }
-
     fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
-        let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
-
-        let state = place.get::<QuantileDiscState>();
-        let v: f64 = column[row].as_();
-        state.add(v);
+        let column = T::try_downcast_column(&columns[0]).unwrap();
+        let v = T::index_column(&column, row);
+        if let Some(v) = v {
+            let state = place.get::<State>();
+            state.add(v)
+        }
         Ok(())
     }
-
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
@@ -193,52 +217,37 @@ where T: Number + AsPrimitive<f64>
         columns: &[Column],
         _input_rows: usize,
     ) -> Result<()> {
-        let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
-
-        column.iter().zip(places.iter()).for_each(|(value, place)| {
-            let place = place.next(offset);
-            let state = place.get::<QuantileDiscState>();
-            let v: f64 = value.as_();
-            state.add(v);
+        let column = T::try_downcast_column(&columns[0]).unwrap();
+        let column_iter = T::iter_column(&column);
+        column_iter.zip(places.iter()).for_each(|(v, place)| {
+            let addr = place.next(offset);
+            let state = addr.get::<State>();
+            state.add(v.clone())
         });
         Ok(())
     }
-
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<QuantileDiscState>();
-        serialize_into_buf(writer, state)
+        let state = place.get::<State>();
+        state.serialize(writer)
     }
-
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<QuantileDiscState>();
-        *state = deserialize_from_slice(reader)?;
-
-        Ok(())
+        let state = place.get::<State>();
+        state.deserialize(reader)
     }
-
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<QuantileDiscState>();
-        let state = place.get::<QuantileDiscState>();
+        let rhs = rhs.get::<State>();
+        let state = place.get::<State>();
         state.merge(rhs)
     }
-
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
-        let state = place.get::<QuantileDiscState>();
+        let state = place.get::<State>();
         state.merge_result(builder, self.levels.clone())
     }
-
-    fn need_manual_drop_state(&self) -> bool {
-        true
-    }
-
-    unsafe fn drop_state(&self, place: StateAddr) {
-        let state = place.get::<QuantileDiscState>();
-        std::ptr::drop_in_place(state);
-    }
 }
-
-impl<T> AggregateQuantileDiscFunction<T>
-where T: Number + AsPrimitive<f64>
+impl<T, State> AggregateQuantileDiscFunction<T, State>
+where
+    State: QuantileStateFunc<T>,
+    T: Send + Sync + ValueType,
 {
     fn try_create(
         display_name: &str,
@@ -301,48 +310,87 @@ where T: Number + AsPrimitive<f64>
             }
             levels
         };
-
-        let func = AggregateQuantileDiscFunction::<T> {
+        let func = AggregateQuantileDiscFunction::<T, State> {
             display_name: display_name.to_string(),
             return_type,
             levels,
             _arguments: arguments,
             _t: PhantomData,
+            _state: PhantomData,
         };
-
         Ok(Arc::new(func))
     }
 }
-
 pub fn try_create_aggregate_quantile_disc_function(
     display_name: &str,
     params: Vec<Scalar>,
     arguments: Vec<DataType>,
 ) -> Result<AggregateFunctionRef> {
     assert_unary_arguments(display_name, arguments.len())?;
-
-    with_number_mapped_type!(|NUM_TYPE| match &arguments[0] {
-        DataType::Number(NumberDataType::NUM_TYPE) => {
-            let return_type = if params.len() > 1 {
-                DataType::Array(Box::new(DataType::Number(NumberDataType::Float64)))
-            } else {
-                DataType::Number(NumberDataType::Float64)
+    let data_type = arguments[0].clone();
+    with_simple_no_number_mapped_type!(|T| match data_type {
+        DataType::Number(num_type) => {
+            with_number_mapped_type!(|NUM| match num_type {
+                NumberDataType::NUM => {
+                    type State = QuantileState<NumberType<NUM>>;
+                    let return_type = if params.len() > 1 {
+                        DataType::Array(Box::new(data_type))
+                    } else {
+                        data_type
+                    };
+                    AggregateQuantileDiscFunction::<NumberType<NUM>, State>::try_create(
+                        display_name,
+                        return_type,
+                        params,
+                        arguments,
+                    )
+                }
+            })
+        }
+        DataType::Decimal(DecimalDataType::Decimal128(s)) => {
+            let decimal_size = DecimalSize {
+                precision: s.precision,
+                scale: s.scale,
             };
-            AggregateQuantileDiscFunction::<NUM_TYPE>::try_create(
+            let data_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
+            let return_type = if params.len() > 1 {
+                DataType::Array(Box::new(data_type))
+            } else {
+                data_type
+            };
+            type State = QuantileState<DecimalType<i128>>;
+            AggregateQuantileDiscFunction::<DecimalType<i128>, State>::try_create(
                 display_name,
                 return_type,
                 params,
                 arguments,
             )
         }
-
+        DataType::Decimal(DecimalDataType::Decimal256(s)) => {
+            let decimal_size = DecimalSize {
+                precision: s.precision,
+                scale: s.scale,
+            };
+            let data_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
+            let return_type = if params.len() > 1 {
+                DataType::Array(Box::new(data_type))
+            } else {
+                data_type
+            };
+            type State = QuantileState<DecimalType<i256>>;
+            AggregateQuantileDiscFunction::<DecimalType<i256>, State>::try_create(
+                display_name,
+                return_type,
+                params,
+                arguments,
+            )
+        }
         _ => Err(ErrorCode::BadDataValueType(format!(
             "{} does not support type '{:?}'",
-            display_name, arguments[0]
+            display_name, data_type
         ))),
     })
 }
-
 pub fn aggregate_quantile_disc_function_desc() -> AggregateFunctionDescription {
     AggregateFunctionDescription::creator(Box::new(try_create_aggregate_quantile_disc_function))
 }
