@@ -243,6 +243,15 @@ where
         let state = place.get::<State>();
         state.merge_result(builder, self.levels.clone())
     }
+
+    fn need_manual_drop_state(&self) -> bool {
+        true
+    }
+
+    unsafe fn drop_state(&self, place: StateAddr) {
+        let state = place.get::<State>();
+        std::ptr::drop_in_place(state);
+    }
 }
 impl<T, State> AggregateQuantileDiscFunction<T, State>
 where
