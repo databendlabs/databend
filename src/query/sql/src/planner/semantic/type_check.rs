@@ -1561,6 +1561,7 @@ impl<'a> TypeChecker<'a> {
             "coalesce",
             "last_query_id",
             "ai_embedding_vector",
+            "ai_text_completion",
         ]
     }
 
@@ -1778,6 +1779,28 @@ impl<'a> TypeChecker<'a> {
 
                 Some(
                     self.resolve_function(span, "embedding_vector", vec![], &[arg1, arg2])
+                        .await,
+                )
+            }
+            ("ai_text_completion", args) => {
+                // ai_text_completion(prompt) -> text_completion(prompt, api_key)
+                if args.len() != 1 {
+                    return Some(Err(ErrorCode::BadArguments(
+                        "ai_text_completion(STRING) only accepts one STRING argument",
+                    )
+                    .set_span(span)));
+                }
+
+                // Prompt.
+                let arg1 = args[0];
+                // API key.
+                let arg2 = &Expr::Literal {
+                    span,
+                    lit: Literal::String(GlobalConfig::instance().query.openai_api_key.clone()),
+                };
+
+                Some(
+                    self.resolve_function(span, "text_completion", vec![], &[arg1, arg2])
                         .await,
                 )
             }
