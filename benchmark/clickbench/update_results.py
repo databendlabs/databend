@@ -30,7 +30,13 @@ def update_results(dataset, title, url):
     templateEnv = Environment(loader=templateLoader)
     template = templateEnv.get_template(TEMPLATE_FILE)
     logger.info("rendering result with args: %s ...", args)
-    outputText = template.render(title=title, url=url, queries=queries, results=results)
+    outputText = template.render(
+        dataset=dataset,
+        title=title,
+        url=url,
+        queries=queries,
+        results=results,
+    )
     with open(f"results/{dataset}.html", "w") as f:
         f.write(outputText)
 

@@ -29,6 +29,25 @@ python3 --version
 yq --version
 bendsql version
 
+echo "Preparing benchmark metadata..."
+echo '{}' >result.json
+yq -i ".date = \"$(date -u +%Y-%m-%d)\"" result.json
+yq -i '.tags = ["s3"]' result.json
+case ${BENCHMARK_SIZE} in
+Medium)
+    yq -i '.cluster_size = "16"' result.json
+    yq -i '.machine = "16×Medium"' result.json
+    ;;
+Large)
+    yq -i '.cluster_size = "64"' result.json
+    yq -i '.machine = "64×Large"' result.json
+    ;;
+*)
+    echo "Unspported benchmark size: ${BENCHMARK_SIZE}"
+    exit 1
+    ;;
+esac
+
 echo "#######################################################"
 echo "Running benchmark for Databend Cloud with S3 storage..."
 
@@ -44,10 +63,8 @@ bendsql cloud warehouse ls
 bendsql cloud warehouse create "${CLOUD_WAREHOUSE}" --size "${BENCHMARK_SIZE}" --tag "${BENCHMARK_IMAGE_TAG}"
 bendsql cloud warehouse ls
 bendsql cloud warehouse resume "${CLOUD_WAREHOUSE}" --wait
-
 bendsql cloud warehouse use "${CLOUD_WAREHOUSE}"
 
-echo '{}' >result.json
 echo "Running queries..."
 
 function run_query() {
