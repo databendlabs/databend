@@ -100,6 +100,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         output.put_str("");
                     }
                 }
+                output.commit_row();
             },
         ),
     );
