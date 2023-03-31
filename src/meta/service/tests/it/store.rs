@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::future::Future;
-use std::sync::Arc;
-use std::sync::Mutex;
-
 use common_base::base::tokio;
 use common_meta_raft_store::state_machine::testing::pretty_snapshot;
 use common_meta_raft_store::state_machine::testing::snapshot_logs;
@@ -45,28 +41,16 @@ use tracing::info;
 
 use crate::tests::service::MetaSrvTestContext;
 
-struct MetaStoreBuilder {
-    pub test_contexts: Arc<Mutex<Vec<MetaSrvTestContext>>>,
-}
+struct MetaStoreBuilder {}
 
 #[async_trait]
-impl StoreBuilder<TypeConfig, RaftStoreBare> for MetaStoreBuilder {
-    async fn run_test<Fun, Ret, Res>(&self, t: Fun) -> Result<Ret, StorageError>
-    where
-        Res: Future<Output = Result<Ret, StorageError>> + Send,
-        Fun: Fn(RaftStoreBare) -> Res + Sync + Send,
-    {
+impl StoreBuilder<TypeConfig, RaftStoreBare, MetaSrvTestContext> for MetaStoreBuilder {
+    async fn build(&self) -> Result<(MetaSrvTestContext, RaftStoreBare), StorageError> {
         let tc = MetaSrvTestContext::new(555);
         let sto = RaftStoreBare::open_create(&tc.config.raft_config, None, Some(()))
             .await
             .expect("fail to create store");
-
-        {
-            let mut tcs = self.test_contexts.lock().unwrap();
-            tcs.push(tc);
-        }
-
-        t(sto).await
+        Ok((tc, sto))
     }
 }
 
@@ -75,9 +59,7 @@ fn test_impl_raft_storage() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    common_meta_sled_store::openraft::testing::Suite::test_all(MetaStoreBuilder {
-        test_contexts: Arc::new(Mutex::new(vec![])),
-    })?;
+    common_meta_sled_store::openraft::testing::Suite::test_all(MetaStoreBuilder {})?;
 
     Ok(())
 }
@@ -103,13 +85,13 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
 
         sto.save_vote(&Vote::new(10, 5)).await?;
 
-        sto.append_to_log(&[&Entry {
+        sto.append_to_log([Entry {
             log_id: LogId::new(CommittedLeaderId::new(1, 2), 1),
             payload: EntryPayload::Blank,
         }])
         .await?;
 
-        sto.apply_to_state_machine(&[&Entry {
+        sto.apply_to_state_machine(&[Entry {
             log_id: LogId::new(CommittedLeaderId::new(1, 2), 2),
             payload: EntryPayload::Blank,
         }])
@@ -150,7 +132,7 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
 
     let (logs, want) = snapshot_logs();
 
-    sto.log.append(&logs).await?;
+    sto.log.append(logs.clone()).await?;
     for l in logs.iter() {
         sto.state_machine.write().await.apply(l).await?;
     }
@@ -187,7 +169,7 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
 
     let (logs, want) = snapshot_logs();
 
-    sto.log.append(&logs).await?;
+    sto.log.append(logs.clone()).await?;
     for l in logs.iter() {
         sto.state_machine.write().await.apply(l).await?;
     }
@@ -231,7 +213,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
 
         info!("--- feed logs and state machine");
 
-        sto.log.append(&logs).await?;
+        sto.log.append(logs.clone()).await?;
         for l in logs.iter() {
             sto.state_machine.write().await.apply(l).await?;
         }

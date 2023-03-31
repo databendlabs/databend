@@ -245,7 +245,7 @@ async fn init_new_cluster(
             payload: EntryPayload::Membership(membership),
         };
 
-        log.append(&[entry]).await?;
+        log.append([entry]).await?;
     }
 
     // construct AddNode log entries
@@ -271,7 +271,7 @@ async fn init_new_cluster(
                 }),
             };
 
-            log.append(&[entry]).await?;
+            log.append([entry]).await?;
         }
     }
 

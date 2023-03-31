@@ -130,6 +130,9 @@ async fn test_safety() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
     let operator = ctx.get_data_operator()?.operator();
+    let settings = ctx.get_settings();
+    settings.set_max_threads(2)?;
+    settings.set_max_storage_io_requests(4)?;
 
     let threshold = BlockThresholds {
         max_rows_per_block: 5,
@@ -153,7 +156,7 @@ async fn test_safety() -> Result<()> {
         let mut rows_per_blocks = Vec::with_capacity(number_of_segments);
 
         for _ in 0..number_of_segments {
-            block_number_of_segments.push(rand.gen_range(1..30));
+            block_number_of_segments.push(rand.gen_range(1..25));
             rows_per_blocks.push(rand.gen_range(1..8));
         }
 
@@ -201,10 +204,11 @@ async fn test_safety() -> Result<()> {
             None,
         );
 
+        let limit: usize = rand.gen_range(1..15);
         let compact_params = CompactOptions {
             base_snapshot: Arc::new(snapshot),
-            block_per_seg: 20,
-            limit: None,
+            block_per_seg: 10,
+            limit: Some(limit),
         };
 
         eprintln!("running target select");

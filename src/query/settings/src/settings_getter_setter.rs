@@ -217,6 +217,14 @@ impl Settings {
         self.try_set_u64("enable_distributed_eval_index", u64::from(val))
     }
 
+    pub fn get_enable_dphyp(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_dphyp")? != 0)
+    }
+
+    pub fn set_enable_dphyp(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_dphyp", u64::from(val))
+    }
+
     pub fn get_enable_cbo(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_cbo")? != 0)
     }

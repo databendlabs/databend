@@ -165,6 +165,7 @@ jobs:
           sha: ${{ needs.metadata.outputs.head_sha }}
           context: 'Benchmark Local / ${{ matrix.dataset }}'
           state: success
+          description: "Completed"
 
   docker:
     needs: metadata
@@ -268,6 +269,7 @@ jobs:
           sha: ${{ needs.metadata.outputs.head_sha }}
           context: 'Benchmark Cloud / ${{ matrix.dataset }} (${{ matrix.size }})'
           state: success
+          description: "Completed"
 
   comment_on_pr:
     name: comment
@@ -276,6 +278,10 @@ jobs:
     if: needs.metadata.outputs.source == 'pr'
     steps:
       - uses: actions/checkout@v3
+      - name: Install Depencencies
+        run: |
+          sudo apt update -y
+          sudo apt install -y python3-jinja2
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -306,8 +312,8 @@ jobs:
       - name: Generate clickbench report
         working-directory: benchmark/clickbench
         run: |
-          ./update-results.sh hits
-          ./update-results.sh tpch
+          ./update_results.py --dataset hits --pr {{ needs.metadata.outputs.source_id }}
+          ./update_results.py --dataset tpch --pr {{ needs.metadata.outputs.source_id }}
       - name: Upload PR clickbench report to repo.databend.rs
         working-directory: benchmark/clickbench
         run: |
@@ -336,6 +342,10 @@ jobs:
           - "hits"
     steps:
       - uses: actions/checkout@v3
+      - name: Install Depencencies
+        run: |
+          sudo apt update -y
+          sudo apt install -y python3-jinja2
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -350,7 +360,7 @@ jobs:
         working-directory: benchmark/clickbench
         run: |
           aws s3 sync ${{ env.BENCHMARK_S3_PREFIX }}/release/${{ matrix.dataset }}/$(date -u +%Y)/$(date -u +%m)/ ./results/${{ matrix.dataset }}/ --no-progress
-          ./update-results.sh ${{ matrix.dataset }}
+          ./update_results.py --dataset ${{ matrix.dataset }} --release {{ needs.metadata.outputs.source_id }}
       - name: Upload nightly results to repo.databend.rs
         working-directory: benchmark/clickbench/
         run: |
