@@ -52,6 +52,7 @@ impl QuotaMgr {
 
 #[async_trait::async_trait]
 impl QuotaApi for QuotaMgr {
+    #[async_backtrace::framed]
     async fn get_quota(&self, seq: MatchSeq) -> Result<SeqV<TenantQuota>> {
         let res = self.kv_api.get_kv(&self.key).await?;
         match res {
@@ -63,6 +64,7 @@ impl QuotaApi for QuotaMgr {
         }
     }
 
+    #[async_backtrace::framed]
     async fn set_quota(&self, quota: &TenantQuota, seq: MatchSeq) -> Result<u64> {
         let value = serde_json::to_vec(quota)?;
         let res = self

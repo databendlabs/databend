@@ -47,6 +47,7 @@ heartbeat_interval       = 1000 # milli second
 install_snapshot_timeout = 4000 # milli second
 max_applied_log_to_keep  = 1000 # N.O. raft logs
 snapshot_logs_since_last = 1024 # N.O. raft logs
+wait_leader_timeout     = 70000
 #
 # Startup config
 #
@@ -100,6 +101,8 @@ Defines raft behaviors on raft-storage and the state machine.
 - `max_applied_log_to_keep` specifies the max number of applied raft-log to keep.
 
 - `snapshot_logs_since_last` specifies the number of raft-logs since the last snapshot beyond which a snapshot will be generated.
+
+- `wait_leader_timeout` specifies the max time for waiting a cluster leader in milliseconds.
 
 ## 6. Startup config
 

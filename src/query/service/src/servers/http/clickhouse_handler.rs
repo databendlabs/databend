@@ -217,6 +217,7 @@ async fn execute(
 }
 
 #[poem::handler]
+#[async_backtrace::framed]
 pub async fn clickhouse_handler_get(
     ctx: &HttpQueryContext,
     Query(params): Query<StatementHandlerParams>,
@@ -258,6 +259,7 @@ pub async fn clickhouse_handler_get(
 }
 
 #[poem::handler]
+#[async_backtrace::framed]
 pub async fn clickhouse_handler_post(
     ctx: &HttpQueryContext,
     body: Body,
@@ -417,6 +419,7 @@ pub async fn clickhouse_handler_post(
 }
 
 #[poem::handler]
+#[async_backtrace::framed]
 pub async fn clickhouse_ping_handler() -> String {
     "OK.\n".to_string()
 }

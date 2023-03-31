@@ -138,6 +138,7 @@ impl Executor {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn start_to_running(this: &Arc<RwLock<Executor>>, state: ExecuteState) {
         let mut guard = this.write().await;
         if let Starting(_) = &guard.state {
@@ -145,12 +146,14 @@ impl Executor {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn start_to_stop(this: &Arc<RwLock<Executor>>, state: ExecuteState) {
         let mut guard = this.write().await;
         if let Starting(_) = &guard.state {
             guard.state = state
         }
     }
+    #[async_backtrace::framed]
     pub async fn stop(this: &Arc<RwLock<Executor>>, reason: Result<()>, kill: bool) {
         {
             let guard = this.read().await;
@@ -204,12 +207,14 @@ impl Executor {
 }
 
 impl ExecuteState {
+    #[async_backtrace::framed]
     pub(crate) async fn get_schema(sql: &str, ctx: Arc<QueryContext>) -> Result<DataSchemaRef> {
         let mut planner = Planner::new(ctx.clone());
         let (plan, _) = planner.plan_sql(sql).await?;
         Ok(InterpreterFactory::get_schema(ctx, &plan))
     }
 
+    #[async_backtrace::framed]
     pub(crate) async fn try_start_query(
         executor: Arc<RwLock<Executor>>,
         sql: &str,

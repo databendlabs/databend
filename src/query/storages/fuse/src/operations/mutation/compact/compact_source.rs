@@ -115,6 +115,7 @@ impl Processor for CompactSource {
         Ok(Event::Async)
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match self.ctx.get_partition() {
             Some(part) => {
@@ -159,7 +160,11 @@ impl Processor for CompactSource {
                 }
 
                 // concat blocks.
-                let new_block = DataBlock::concat(&blocks)?;
+                let new_block = if blocks.len() == 1 {
+                    blocks[0].convert_to_full()
+                } else {
+                    DataBlock::concat(&blocks)?
+                };
                 // build block serialization.
                 let serialized = tokio_rayon::spawn(move || block_builder.build(new_block)).await?;
 

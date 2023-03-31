@@ -104,6 +104,7 @@ arrow-array = { version = "35.0.0" }
 arrow-flight = { version = "35.0.0", features = ["flight-sql-experimental"] }
 arrow-ipc = { version = "35.0.0" }
 arrow-schema = { version = "35.0.0" }
+async-backtrace = { workspace = true }
 async-channel = "1.7.1"
 async-stream = "0.3.3"
 async-trait = { version = "0.1.57", package = "async-trait-fn" }

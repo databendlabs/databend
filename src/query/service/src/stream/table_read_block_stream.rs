@@ -37,6 +37,7 @@ pub trait ReadDataBlockStream: Send + Sync {
 
 #[async_trait::async_trait]
 impl<T: ?Sized + Table> ReadDataBlockStream for T {
+    #[async_backtrace::framed]
     async fn read_data_block_stream(
         &self,
         ctx: Arc<QueryContext>,

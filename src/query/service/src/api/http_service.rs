@@ -22,6 +22,7 @@ use common_http::home::debug_home_handler;
 #[cfg(feature = "memory-profiling")]
 use common_http::jeprof::debug_jeprof_dump_handler;
 use common_http::pprof::debug_pprof_handler;
+use common_http::stack::debug_dump_stack;
 use common_http::HttpError;
 use common_http::HttpShutdownHandler;
 use common_meta_types::anyerror::AnyError;
@@ -67,7 +68,8 @@ impl HttpService {
                 get(super::http::v1::cluster::cluster_list_handler),
             )
             .at("/debug/home", get(debug_home_handler))
-            .at("/debug/pprof/profile", get(debug_pprof_handler));
+            .at("/debug/pprof/profile", get(debug_pprof_handler))
+            .at("/debug/async_tasks/dump", get(debug_dump_stack));
 
         if self.config.query.management_mode {
             route = route.at(
@@ -107,6 +109,7 @@ impl HttpService {
         Ok(cfg)
     }
 
+    #[async_backtrace::framed]
     async fn start_with_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr, HttpError> {
         info!("Http API TLS enabled");
 
@@ -120,6 +123,7 @@ impl HttpService {
         Ok(addr)
     }
 
+    #[async_backtrace::framed]
     async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr, HttpError> {
         warn!("Http API TLS not set");
 
@@ -133,10 +137,12 @@ impl HttpService {
 
 #[async_trait::async_trait]
 impl Server for HttpService {
+    #[async_backtrace::framed]
     async fn shutdown(&mut self, graceful: bool) {
         self.shutdown_handler.shutdown(graceful).await;
     }
 
+    #[async_backtrace::framed]
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr, ErrorCode> {
         let config = &self.config.query;
         let res =

@@ -22,6 +22,7 @@ use crate::UserApiProvider;
 /// user stage operations.
 impl UserApiProvider {
     // Add a new stage.
+    #[async_backtrace::framed]
     pub async fn add_stage(
         &self,
         tenant: &str,
@@ -43,6 +44,7 @@ impl UserApiProvider {
     }
 
     // Get one stage from by tenant.
+    #[async_backtrace::framed]
     pub async fn get_stage(&self, tenant: &str, stage_name: &str) -> Result<StageInfo> {
         let stage_api_provider = self.get_stage_api_client(tenant)?;
         let get_stage = stage_api_provider.get_stage(stage_name, MatchSeq::GE(0));
@@ -50,6 +52,7 @@ impl UserApiProvider {
     }
 
     // Get the tenant all stage list.
+    #[async_backtrace::framed]
     pub async fn get_stages(&self, tenant: &str) -> Result<Vec<StageInfo>> {
         let stage_api_provider = self.get_stage_api_client(tenant)?;
         let get_stages = stage_api_provider.get_stages();
@@ -61,6 +64,7 @@ impl UserApiProvider {
     }
 
     // Drop a stage by name.
+    #[async_backtrace::framed]
     pub async fn drop_stage(&self, tenant: &str, name: &str, if_exists: bool) -> Result<()> {
         let stage_api_provider = self.get_stage_api_client(tenant)?;
         let drop_stage = stage_api_provider.drop_stage(name);

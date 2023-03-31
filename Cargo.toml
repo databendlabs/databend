@@ -105,14 +105,14 @@ jsonb = { version = "0.1.1" }
 
 # openraft = { version = "0.8.2", features = ["compat-07"] }
 # For debugging
-openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.8.3-alpha.2", features = ["compat-07"] }
+openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.8.4-alpha.1", features = ["compat-07"] }
 
 # type helper
 derive_more = "0.99.17"
 
 # error
 anyhow = { version = "1.0.65" }
-anyerror = { version = "=0.1.7" }
+anyerror = { version = "=0.1.8" }
 thiserror = { version = "1" }
 
 # CLI
@@ -144,6 +144,9 @@ reqwest = { version = "0.11", default-features = false, features = [
 
 # runtime
 tokio = { version = "1.26.0", features = ["full"] }
+
+# backtrace
+async-backtrace = "0.2.2"
 
 [profile.release]
 debug = 1

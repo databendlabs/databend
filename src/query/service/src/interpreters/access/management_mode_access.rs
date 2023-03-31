@@ -30,6 +30,7 @@ impl ManagementModeAccess {
 #[async_trait::async_trait]
 impl AccessChecker for ManagementModeAccess {
     // Check what we can do if in management mode.
+    #[async_backtrace::framed]
     async fn check(&self, plan: &Plan) -> Result<()> {
         // Allows for management-mode.
         if GlobalConfig::instance().query.management_mode {

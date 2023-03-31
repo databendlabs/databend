@@ -17,5 +17,6 @@ pub mod pprof;
 
 #[cfg(feature = "memory-profiling")]
 pub mod jeprof;
+pub mod stack;
 
 pub use home::PProfRequest;

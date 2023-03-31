@@ -46,6 +46,7 @@ impl SegmentPruner {
         })
     }
 
+    #[async_backtrace::framed]
     pub async fn pruning(
         &self,
         segment_locs: Vec<SegmentLocation>,
@@ -100,6 +101,7 @@ impl SegmentPruner {
     }
 
     // Pruning segment with range pruner, then pruning on Block.
+    #[async_backtrace::framed]
     async fn segment_pruning(
         pruning_ctx: Arc<PruningContext>,
         permit: OwnedSemaphorePermit,

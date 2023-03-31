@@ -39,6 +39,7 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
         "AlterTableClusterKeyInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
         let tenant = self.ctx.get_tenant();

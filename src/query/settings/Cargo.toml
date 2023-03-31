@@ -20,6 +20,7 @@ common-meta-types = { path = "../../meta/types" }
 common-users = { path = "../users" }
 serde = { workspace = true }
 
+async-backtrace = { workspace = true }
 dashmap = "5.4"
 itertools = "0.10.5"
 num_cpus = "1.13.1"

@@ -23,6 +23,7 @@ use crate::models::TableMetaLambdaInput;
 
 // Methods for access share table meta.
 impl SharingAccessor {
+    #[async_backtrace::framed]
     pub async fn get_share_table_meta(input: &TableMetaLambdaInput) -> Result<TableInfoMap> {
         let sharing_accessor = Self::instance();
         let share_table_meta_loc =

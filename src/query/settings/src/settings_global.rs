@@ -27,6 +27,7 @@ use crate::settings_default::DefaultSettings;
 use crate::ScopeLevel;
 
 impl Settings {
+    #[async_backtrace::framed]
     pub async fn load_settings(
         user_api: Arc<UserApiProvider>,
         tenant: String,
@@ -37,6 +38,7 @@ impl Settings {
             .await
     }
 
+    #[async_backtrace::framed]
     pub async fn try_drop_global_setting(&self, key: &str) -> Result<()> {
         self.changes.remove(key);
 
@@ -53,6 +55,7 @@ impl Settings {
             .await
     }
 
+    #[async_backtrace::framed]
     pub async fn set_global_setting(&self, k: String, v: String) -> Result<()> {
         if let (key, Some(value)) = DefaultSettings::convert_value(k.clone(), v)? {
             self.changes.insert(key.clone(), ChangeValue {
@@ -73,6 +76,7 @@ impl Settings {
         )))
     }
 
+    #[async_backtrace::framed]
     pub async fn load_global_changes(&self) -> Result<()> {
         let default_settings = DefaultSettings::instance()?;
 

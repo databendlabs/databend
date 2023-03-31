@@ -43,6 +43,7 @@ impl AsyncSystemTable for UsersTable {
         &self.table_info
     }
 
+    #[async_backtrace::framed]
     async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let users = UserApiProvider::instance().get_users(&tenant).await?;

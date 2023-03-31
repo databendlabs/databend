@@ -48,6 +48,7 @@ use super::Limit;
 use super::ProjectSet;
 use super::Sort;
 use super::TableScan;
+use super::WindowFunction;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::EvalScalar;
@@ -67,6 +68,7 @@ use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::Scan;
+use crate::plans::WindowFuncType;
 use crate::BaseTableColumn;
 use crate::ColumnEntry;
 use crate::DerivedColumn;
@@ -161,6 +163,7 @@ impl PhysicalPlanBuilder {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     pub async fn build(&mut self, s_expr: &SExpr) -> Result<PhysicalPlan> {
         // Build stat info
         let stat_info = self.build_plan_stat_info(s_expr)?;
@@ -696,44 +699,45 @@ impl PhysicalPlanBuilder {
                         order_by: v.order_by_item.index,
                     })
                     .collect::<Vec<_>>();
-                let agg_func = if let ScalarExpr::AggregateFunction(agg) =
-                    &w.aggregate_function.scalar
-                {
-                    Ok(AggregateFunctionDesc {
-                        sig: AggregateFunctionSignature {
-                            name: agg.func_name.clone(),
-                            args: agg.args.iter().map(|s|{s.data_type()}).collect::<Result<_>>()?,
-                            params: agg.params.clone(),
-                            return_type: *agg.return_type.clone(),
-                        },
-                        output_column: w.aggregate_function.index,
-                        args: agg.args.iter().map(|arg| {
-                            if let ScalarExpr::BoundColumnRef(col) = arg {
-                                Ok(col.column.index)
-                            } else {
-                                Err(ErrorCode::Internal("Window's aggregate function argument must be a BoundColumnRef".to_string()))
-                            }
-                        }).collect::<Result<_>>()?,
-                        arg_indices: agg.args.iter().map(|arg| {
-                            if let ScalarExpr::BoundColumnRef(col) = arg {
-                                Ok(col.column.index)
-                            } else {
-                                Err(ErrorCode::Internal(
-                                    "Aggregate function argument must be a BoundColumnRef".to_string()
-                                ))
-                            }
-                        }).collect::<Result<_>>()?,
-                    })
-                } else {
-                    Err(ErrorCode::Internal(
-                        "Expected aggregate function".to_string(),
-                    ))
-                }?;
+
+                let func = match &w.function {
+                    WindowFuncType::Aggregate(agg) => {
+                        WindowFunction::Aggregate(AggregateFunctionDesc {
+                            sig: AggregateFunctionSignature {
+                                name: agg.func_name.clone(),
+                                args: agg.args.iter().map(|s| s.data_type()).collect::<Result<_>>()?,
+                                params: agg.params.clone(),
+                                return_type: *agg.return_type.clone(),
+                            },
+                            output_column: w.index,
+                            args: agg.args.iter().map(|arg| {
+                                if let ScalarExpr::BoundColumnRef(col) = arg {
+                                    Ok(col.column.index)
+                                } else {
+                                    Err(ErrorCode::Internal("Window's aggregate function argument must be a BoundColumnRef".to_string()))
+                                }
+                            }).collect::<Result<_>>()?,
+                            arg_indices: agg.args.iter().map(|arg| {
+                                if let ScalarExpr::BoundColumnRef(col) = arg {
+                                    Ok(col.column.index)
+                                } else {
+                                    Err(ErrorCode::Internal(
+                                        "Aggregate function argument must be a BoundColumnRef".to_string()
+                                    ))
+                                }
+                            }).collect::<Result<_>>()?,
+                        })
+                    }
+                    WindowFuncType::RowNumber => WindowFunction::RowNumber,
+                    WindowFuncType::Rank => WindowFunction::Rank,
+                    WindowFuncType::DenseRank => WindowFunction::DenseRank,
+                };
 
                 Ok(PhysicalPlan::Window(Window {
                     plan_id: self.next_plan_id(),
+                    index: w.index,
                     input: Box::new(input),
-                    agg_func,
+                    func,
                     partition_by: partition_items,
                     order_by: order_by_items,
                     window_frame: w.frame.clone(),

@@ -41,6 +41,7 @@ impl Interpreter for RenameDatabaseInterpreter {
         "RenameDatabaseInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         for entity in &self.plan.entities {
             let catalog = self.ctx.get_catalog(&entity.catalog)?;

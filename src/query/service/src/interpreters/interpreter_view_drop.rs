@@ -42,6 +42,7 @@ impl Interpreter for DropViewInterpreter {
         "DropViewInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let catalog_name = self.plan.catalog.clone();
         let db_name = self.plan.database.clone();

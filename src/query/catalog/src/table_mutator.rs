@@ -21,5 +21,6 @@ use crate::table::Table;
 #[async_trait::async_trait]
 pub trait TableMutator: Send + Sync {
     async fn target_select(&mut self) -> Result<bool>;
+
     async fn try_commit(self: Box<Self>, table: Arc<dyn Table>) -> Result<()>;
 }

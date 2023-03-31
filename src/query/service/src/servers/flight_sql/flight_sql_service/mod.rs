@@ -14,6 +14,7 @@
 
 // The servers module used for external communication with user, such as MySQL wired protocol, etc.
 
+mod catalog;
 mod query;
 mod service;
 mod session;
@@ -23,6 +24,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use arrow_flight::FlightData;
+use catalog::CatalogInfoProvider;
 use common_sql::plans::Plan;
 use common_sql::PlanExtras;
 use dashmap::DashMap;

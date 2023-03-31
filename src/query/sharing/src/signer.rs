@@ -82,6 +82,7 @@ impl SharedSigner {
     }
 
     /// Fetch a presigned request. If not found, build a new one by sign.
+    #[async_backtrace::framed]
     pub async fn fetch(&self, path: &str, op: Operation) -> Result<PresignedRequest> {
         match self.get(path, op) {
             Some(v) => Ok(v),
@@ -101,11 +102,13 @@ impl SharedSigner {
     }
 
     /// Sign a request.
+    #[async_backtrace::framed]
     pub async fn sign(&self, req: PresignRequest) -> Result<()> {
         self.sign_inner(vec![req]).await
     }
 
     /// Batch sign multiple requests at once.
+    #[async_backtrace::framed]
     pub async fn batch_sign(&self, reqs: Vec<PresignRequest>) -> Result<()> {
         self.sign_inner(reqs).await
     }
@@ -139,6 +142,7 @@ impl SharedSigner {
     ///     }
     /// ]
     /// ```
+    #[async_backtrace::framed]
     async fn sign_inner(&self, reqs: Vec<PresignRequest>) -> Result<()> {
         let now = time::Instant::now();
         info!("started sharing signing");

@@ -49,6 +49,7 @@ impl Interpreter for CallInterpreter {
     }
 
     #[tracing::instrument(level = "debug", name = "call_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let mut build_res = PipelineBuildResult::create();
         self.func

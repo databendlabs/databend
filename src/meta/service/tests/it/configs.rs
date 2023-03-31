@@ -59,6 +59,7 @@ no_sync = true
 snapshot_logs_since_last = 1000
 heartbeat_interval = 2000
 install_snapshot_timeout = 3000
+wait_leader_timeout = 3000
 single = false
 join = ["j1", "j2"]
 id = 20
@@ -85,6 +86,7 @@ cluster_name = "foo_cluster"
         assert_eq!(cfg.raft_config.snapshot_logs_since_last, 1000);
         assert_eq!(cfg.raft_config.heartbeat_interval, 2000);
         assert_eq!(cfg.raft_config.install_snapshot_timeout, 3000);
+        assert_eq!(cfg.raft_config.wait_leader_timeout, 3000);
         assert!(!cfg.raft_config.single);
         assert_eq!(cfg.raft_config.join, vec!["j1", "j2"]);
         assert_eq!(cfg.raft_config.id, 20);

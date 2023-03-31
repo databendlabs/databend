@@ -43,6 +43,7 @@ impl AsyncSystemTable for EnginesTable {
         &self.table_info
     }
 
+    #[async_backtrace::framed]
     async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         // TODO passing catalog name
         let table_engine_descriptors = ctx.get_catalog(CATALOG_DEFAULT)?.get_table_engines();

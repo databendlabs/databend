@@ -63,6 +63,7 @@ impl<'a> FuseBlock<'a> {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn get_blocks(&self) -> Result<DataBlock> {
         let tbl = self.table;
         let maybe_snapshot = tbl.read_table_snapshot().await?;
@@ -96,6 +97,7 @@ impl<'a> FuseBlock<'a> {
         )))
     }
 
+    #[async_backtrace::framed]
     async fn to_block(&self, snapshot: Arc<TableSnapshot>) -> Result<DataBlock> {
         let len = snapshot.summary.block_count as usize;
         let limit = self.limit.unwrap_or(usize::MAX);

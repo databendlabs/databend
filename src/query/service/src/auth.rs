@@ -60,6 +60,7 @@ impl AuthMgr {
         })
     }
 
+    #[async_backtrace::framed]
     pub async fn auth(&self, session: Arc<Session>, credential: &Credential) -> Result<()> {
         let user_api = UserApiProvider::instance();
         match credential {

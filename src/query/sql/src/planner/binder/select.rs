@@ -73,6 +73,7 @@ pub struct SelectItem<'a> {
 }
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(super) async fn bind_select_stmt(
         &mut self,
         bind_context: &mut BindContext,
@@ -216,6 +217,7 @@ impl Binder {
     }
 
     #[async_recursion]
+    #[async_backtrace::framed]
     pub(crate) async fn bind_set_expr(
         &mut self,
         bind_context: &mut BindContext,
@@ -239,6 +241,7 @@ impl Binder {
     }
 
     #[async_recursion]
+    #[async_backtrace::framed]
     pub(crate) async fn bind_query(
         &mut self,
         bind_context: &mut BindContext,
@@ -300,6 +303,7 @@ impl Binder {
         Ok((s_expr, bind_context))
     }
 
+    #[async_backtrace::framed]
     pub(super) async fn bind_where(
         &mut self,
         bind_context: &mut BindContext,
@@ -330,6 +334,7 @@ impl Binder {
         Ok(new_expr)
     }
 
+    #[async_backtrace::framed]
     pub(super) async fn bind_set_operator(
         &mut self,
         bind_context: &mut BindContext,

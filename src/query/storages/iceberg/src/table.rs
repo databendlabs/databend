@@ -58,6 +58,7 @@ pub struct IcebergTable {
 
 impl IcebergTable {
     /// create a new table on the table directory
+    #[async_backtrace::framed]
     pub async fn try_create_table_from_read(
         catalog: &str,
         database: &str,
@@ -106,6 +107,7 @@ impl IcebergTable {
     /// version_detect figures out the manifest list version of the table
     /// and gives the relative path from table root directory
     /// to latest metadata json file
+    #[async_backtrace::framed]
     async fn version_detect(tbl_root: &Operator) -> Result<String> {
         // try Dremio's way
         // Dremio has an `version_hint.txt` file
@@ -163,6 +165,7 @@ impl Table for IcebergTable {
         &self.get_table_info().name
     }
 
+    #[async_backtrace::framed]
     async fn read_partitions(
         &self,
         _ctx: Arc<dyn TableContext>,

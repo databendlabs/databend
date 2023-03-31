@@ -45,6 +45,7 @@ impl Interpreter for CreateUserStageInterpreter {
     }
 
     #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.plan.clone();
         let user_mgr = UserApiProvider::instance();

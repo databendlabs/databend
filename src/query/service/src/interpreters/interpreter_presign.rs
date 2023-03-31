@@ -56,6 +56,7 @@ impl Interpreter for PresignInterpreter {
     }
 
     #[tracing::instrument(level = "debug", name = "presign_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let op = StageTable::get_op(&self.plan.stage)?;
         if !op.info().can_presign() {

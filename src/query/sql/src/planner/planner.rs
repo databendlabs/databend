@@ -58,6 +58,7 @@ impl Planner {
         Planner { ctx }
     }
 
+    #[async_backtrace::framed]
     pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, PlanExtras)> {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;

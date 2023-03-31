@@ -21,6 +21,7 @@ use common_meta_app::principal::GrantObject;
 use crate::procedures::ProcedureFactory;
 use crate::sessions::QueryContext;
 
+#[async_backtrace::framed]
 pub async fn validate_grant_object_exists(
     ctx: &Arc<QueryContext>,
     object: &GrantObject,

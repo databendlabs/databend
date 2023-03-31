@@ -87,6 +87,7 @@ impl BaseMutator {
             });
     }
 
+    #[async_backtrace::framed]
     pub async fn generate_segments(&self) -> Result<(Vec<Location>, Statistics, AbortOperation)> {
         let mut abort_operation = AbortOperation::default();
         let segments = self.base_snapshot.segments.clone();

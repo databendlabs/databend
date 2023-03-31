@@ -10,6 +10,7 @@ edition = { workspace = true }
 doctest = false
 
 [dependencies]
+async-backtrace = { workspace = true }
 common-base = { path = "../../common/base" }
 common-config = { path = "../../query/config" }
 common-exception = { path = "../../common/exception" }

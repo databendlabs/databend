@@ -78,6 +78,7 @@ impl SessionManager {
         GlobalInstance::get()
     }
 
+    #[async_backtrace::framed]
     pub async fn create_session(&self, typ: SessionType) -> Result<Arc<Session>> {
         {
             let sessions = self.active_sessions.read();

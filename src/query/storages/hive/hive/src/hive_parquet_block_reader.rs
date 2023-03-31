@@ -200,6 +200,7 @@ impl HiveBlockReader {
         Ok(column_meta[0])
     }
 
+    #[async_backtrace::framed]
     async fn read_column(
         op: Operator,
         path: String,
@@ -207,12 +208,13 @@ impl HiveBlockReader {
         length: u64,
         semaphore: Arc<Semaphore>,
     ) -> Result<Vec<u8>> {
-        let handler = common_base::base::tokio::spawn(async move {
-            let chunk = op.range_read(&path, offset..offset + length).await?;
+        let handler =
+            common_base::base::tokio::spawn(async_backtrace::location!().frame(async move {
+                let chunk = op.range_read(&path, offset..offset + length).await?;
 
-            let _semaphore_permit = semaphore.acquire().await.unwrap();
-            Ok(chunk)
-        });
+                let _semaphore_permit = semaphore.acquire().await.unwrap();
+                Ok(chunk)
+            }));
 
         match handler.await {
             Ok(Ok(data)) => Ok(data),
@@ -224,6 +226,7 @@ impl HiveBlockReader {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn read_meta_data(
         &self,
         dal: Operator,
@@ -242,6 +245,7 @@ impl HiveBlockReader {
         reader.read(&load_params).await
     }
 
+    #[async_backtrace::framed]
     pub async fn read_columns_data(
         &self,
         row_group: &RowGroupMetaData,

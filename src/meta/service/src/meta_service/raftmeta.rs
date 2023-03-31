@@ -663,6 +663,7 @@ impl MetaNode {
                 }
             }
         }
+
         Err(MetaManagementError::Join(AnyError::error(format!(
             "fail to join {} cluster via {:?}, caused by errors: {}",
             self.sto.id,

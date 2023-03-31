@@ -21,10 +21,14 @@ sleep 1
 echo " === start a single node databend-meta"
 # test export from grpc
 chmod +x ./target/${BUILD_PROFILE}/databend-meta
-./target/${BUILD_PROFILE}/databend-meta --single --raft-dir "$meta_dir" &
+
+# Give it a very big heartbeat interval to prevent election.
+# Election will change the `vote` in storage and thus fail the following `diff`
+# in this test.
+./target/${BUILD_PROFILE}/databend-meta --heartbeat-interval 100000 --single --raft-dir "$meta_dir" &
 METASRV_PID=$!
-echo $METASRV_PID
-sleep 3
+echo "meta-service pid:" $METASRV_PID
+sleep 10
 
 echo " === export data from a running databend-meta to $exported"
 ./target/${BUILD_PROFILE}/databend-metactl --export --grpc-api-address "localhost:9191" >$exported

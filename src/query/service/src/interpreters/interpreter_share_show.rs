@@ -50,6 +50,7 @@ impl Interpreter for ShowSharesInterpreter {
         self.plan.schema()
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let tenant = self.ctx.get_tenant();

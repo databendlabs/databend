@@ -77,6 +77,7 @@ impl SnapshotsIO {
         }
     }
 
+    #[async_backtrace::framed]
     async fn read_snapshot(
         snapshot_location: String,
         format_version: u64,
@@ -92,6 +93,7 @@ impl SnapshotsIO {
         reader.read(&load_params).await
     }
 
+    #[async_backtrace::framed]
     async fn read_snapshot_lite(
         snapshot_location: String,
         format_version: u64,
@@ -141,6 +143,7 @@ impl SnapshotsIO {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
+    #[async_backtrace::framed]
     async fn read_snapshot_lites(
         &self,
         snapshot_files: &[String],
@@ -175,6 +178,7 @@ impl SnapshotsIO {
 
     // Read all the table statistic files by the root file(exclude the root file).
     // limit: read how many table statistic files
+    #[async_backtrace::framed]
     pub async fn read_table_statistic_files(
         &self,
         root_ts_file: &str,
@@ -188,6 +192,7 @@ impl SnapshotsIO {
     }
 
     // read all the precedent snapshots of given `root_snapshot`
+    #[async_backtrace::framed]
     pub async fn read_chained_snapshot_lites(
         &self,
         location_generator: TableMetaLocationGenerator,
@@ -209,6 +214,7 @@ impl SnapshotsIO {
     // Read all the snapshots by the root file.
     // limit: limits the number of snapshot files listed
     // with_segment_locations: if true will get the segments of the snapshot
+    #[async_backtrace::framed]
     pub async fn read_snapshot_lites_ext<T>(
         &self,
         root_snapshot_file: String,
@@ -316,6 +322,7 @@ impl SnapshotsIO {
         (chained_snapshot_lites, snapshot_map.into_values().collect())
     }
 
+    #[async_backtrace::framed]
     async fn list_files(
         &self,
         prefix: &str,

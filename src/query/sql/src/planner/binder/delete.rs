@@ -28,6 +28,7 @@ use crate::BindContext;
 use crate::ScalarExpr;
 
 impl<'a> Binder {
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_delete(
         &mut self,
         bind_context: &mut BindContext,
