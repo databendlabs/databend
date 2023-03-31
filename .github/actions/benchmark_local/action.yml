@@ -51,9 +51,11 @@ runs:
             exit 1
         esac
         yq -i ".date = \"$(date -u +%Y-%m-%d)\"" result.json
-        yq -i '.machine = "c5.4xlarge"' result.json
+        token=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
+        instance_type=$(curl -H "X-aws-ec2-metadata-token: $token" http://169.254.169.254/latest/meta-data/instance-type)
+        yq -i ".machine = \"${instance_type}\"" result.json
         yq -i '.cluster_size = 1' result.json
-        yq -i '.comment = "commit:${{ inputs.sha }}"' result.json
+        yq -i '.comment = "commit: ${{ inputs.sha }}"' result.json
         yq -i '.tags = ["gp3"]' result.json
         yq -i '.extra.${{ inputs.source }} = "${{ inputs.source_id }}"' result.json
         mv result.json result-${{ inputs.dataset }}-local.json

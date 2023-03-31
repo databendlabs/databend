@@ -92,7 +92,7 @@ runs:
             exit 1
         esac
         yq -i '.tags = ["s3"]' result.json
-        yq -i '.comment = "commit:${{ inputs.sha }}"' result.json
+        yq -i '.comment = "commit: ${{ inputs.sha }}"' result.json
         mv result.json result-${{ inputs.dataset }}-cloud-${{ inputs.size }}.json
 
     - name: Upload artifact
