@@ -137,7 +137,6 @@ impl FileFormatOptionsExt {
 
     pub fn get_output_format(&mut self, schema: TableSchemaRef) -> Result<Box<dyn OutputFormat>> {
         self.check()?;
-        // println!("format {:?} {:?} {:?}", fmt, options, format_settings);
         let output: Box<dyn OutputFormat> = match &self.stage.format {
             StageFileFormatType::Csv => match self.headers {
                 0 => Box::new(CSVOutputFormat::create(schema, self)),

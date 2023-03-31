@@ -255,9 +255,9 @@ impl ScalarExpr {
             },
             ScalarExpr::WindowFunction(win) => RawExpr::ColumnRef {
                 span: None,
-                id: format!("{}-with-window", win.agg_func.display_name.clone()),
-                data_type: (*win.agg_func.return_type).clone(),
-                display_name: format!("{}-with-window", win.agg_func.display_name.clone()),
+                id: win.display_name.clone(),
+                data_type: win.func.return_type(),
+                display_name: win.display_name.clone(),
             },
             ScalarExpr::AggregateFunction(agg) => RawExpr::ColumnRef {
                 span: None,
@@ -366,8 +366,8 @@ impl ScalarExpr {
             ScalarExpr::WindowFunction(win) => RawExpr::ColumnRef {
                 span: None,
                 id: DUMMY_INDEX,
-                data_type: (*win.agg_func.return_type).clone(),
-                display_name: format!("{}-with-window", win.agg_func.display_name.clone()),
+                data_type: win.func.return_type(),
+                display_name: win.display_name.clone(),
             },
             ScalarExpr::AggregateFunction(agg) => RawExpr::ColumnRef {
                 span: None,

@@ -66,6 +66,7 @@ use common_sql::IndexType;
 use common_storage::DataOperator;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
 
+use super::processors::transforms::WindowFunctionInfo;
 use super::processors::ProfileWrapper;
 use super::processors::TransformExpandGroupingSets;
 use crate::api::DefaultExchangeInjector;
@@ -716,25 +717,40 @@ impl PipelineBuilder {
 
         let input_schema = window.input.output_schema()?;
 
-        if !window.partition_by.is_empty() || !window.order_by.is_empty() {
+        let partition_by = window
+            .partition_by
+            .iter()
+            .map(|p| {
+                let offset = input_schema.index_of(&p.to_string())?;
+                Ok(offset)
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let order_by = window
+            .order_by
+            .iter()
+            .map(|o| {
+                let offset = input_schema.index_of(&o.order_by.to_string())?;
+                Ok(offset)
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        if !partition_by.is_empty() || !order_by.is_empty() {
             let old_output_len = self.main_pipeline.output_len();
 
-            let mut sort_desc =
-                Vec::with_capacity(window.partition_by.len() + window.order_by.len());
+            let mut sort_desc = Vec::with_capacity(partition_by.len() + order_by.len());
 
-            for part in &window.partition_by {
-                let offset = input_schema.index_of(&part.to_string())?;
+            for offset in &partition_by {
                 sort_desc.push(SortColumnDescription {
-                    offset,
+                    offset: *offset,
                     asc: true,
                     nulls_first: true,
                 })
             }
 
-            for order_desc in &window.order_by {
-                let offset = input_schema.index_of(&order_desc.order_by.to_string())?;
+            for (order_desc, offset) in window.order_by.iter().zip(order_by.iter()) {
                 sort_desc.push(SortColumnDescription {
-                    offset,
+                    offset: *offset,
                     asc: order_desc.asc,
                     nulls_first: order_desc.nulls_first,
                 })
@@ -745,40 +761,15 @@ impl PipelineBuilder {
             self.main_pipeline.resize(old_output_len)?;
         }
 
-        // let input_schema = window.input.output_schema()?;
-        let agg_func = AggregateFunctionFactory::instance().get(
-            window.agg_func.sig.name.as_str(),
-            window.agg_func.sig.params.clone(),
-            window.agg_func.sig.args.clone(),
-        )?;
-
-        let arguments = window
-            .agg_func
-            .args
-            .iter()
-            .map(|p| {
-                let offset = input_schema.index_of(&p.to_string())?;
-                Ok(offset)
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        let partition_by = window
-            .partition_by
-            .iter()
-            .map(|p| {
-                let offset = input_schema.index_of(&p.to_string())?;
-                Ok(offset)
-            })
-            .collect::<Result<Vec<_>>>()?;
-
+        let func = WindowFunctionInfo::try_create(&window.func, &input_schema)?;
         // Window
         self.main_pipeline.add_transform(|input, output| {
             let transform = TransformWindow::try_create(
                 input,
                 output,
-                agg_func.clone(),
-                arguments.clone(),
+                func.clone(),
                 partition_by.clone(),
+                order_by.clone(),
                 window.window_frame.clone(),
             )?;
             Ok(ProcessorPtr::create(transform))
