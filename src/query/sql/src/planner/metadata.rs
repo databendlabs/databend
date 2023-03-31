@@ -81,8 +81,11 @@ impl Metadata {
         self.tables
             .iter()
             .find(|table| match database_name {
-                Some(database_name) => table.database == database_name && table.name == table_name,
-                None => table.name == table_name,
+                Some(database_name) => {
+                    table.database == database_name && table.name == table_name
+                        || table.alias_name == Some(table_name.to_string())
+                }
+                None => table.name == table_name || table.alias_name == Some(table_name.to_string()),
             })
             .map(|table| table.index)
     }

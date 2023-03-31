@@ -311,12 +311,21 @@ impl DPhpy {
     ) -> Result<bool> {
         debug_assert!(self.dp_table.contains_key(left));
         debug_assert!(self.dp_table.contains_key(right));
-        let mut left_join = self.dp_table.get(left).unwrap();
-        let mut right_join = self.dp_table.get(right).unwrap();
+        let mut left_join = self.dp_table.get_mut(left).unwrap();
+        let mut right_join = self.dp_table.get_mut(right).unwrap();
         let parent_set = union(left, right);
 
-        let left_cardinality = left_join.cardinality(self)?;
-        let right_cardinality = right_join.cardinality(self)?;
+        let left_cardinality = if let Some(c) = left_join.cardinality {
+            c
+        } else {
+            left_join.cardinality(self)?
+        };
+
+        let right_cardinality = if let Some(c) = right_join.cardinality {
+            c
+        } else {
+            right_join.cardinality(self)?
+        };
         if left_cardinality < right_cardinality {
             // swap left_join and right_join
             std::mem::swap(&mut left_join, &mut right_join);
