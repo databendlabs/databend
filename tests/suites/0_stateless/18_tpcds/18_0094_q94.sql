@@ -1,27 +1,26 @@
-select  
-   count(distinct ws_order_number) as "order count"
-  ,sum(ws_ext_ship_cost) as "total shipping cost"
-  ,sum(ws_net_profit) as "total net profit"
-from
-   web_sales ws1
-  ,date_dim
-  ,customer_address
-  ,web_site
-where
-    d_date between '1999-04-01'::date and 
-           ('1999-04-01'::date + 60)
-and ws1.ws_ship_date_sk = d_date_sk
-and ws1.ws_ship_addr_sk = ca_address_sk
-and ca_state = 'NE'
-and ws1.ws_web_site_sk = web_site_sk
-and web_company_name = 'pri'
-and exists (select *
-            from web_sales ws2
-            where ws1.ws_order_number = ws2.ws_order_number
-              and ws1.ws_warehouse_sk <> ws2.ws_warehouse_sk)
-and not exists(select *
-               from web_returns wr1
-               where ws1.ws_order_number = wr1.wr_order_number)
-order by count(distinct ws_order_number)
-limit 100;
+
+SELECT count(DISTINCT ws_order_number) AS "order count" ,
+       sum(ws_ext_ship_cost) AS "total shipping cost" ,
+       sum(ws_net_profit) AS "total net profit"
+FROM web_sales ws1 ,
+     date_dim ,
+     customer_address ,
+     web_site
+WHERE d_date BETWEEN '1999-02-01' AND cast('1999-04-02' AS date)
+  AND ws1.ws_ship_date_sk = d_date_sk
+  AND ws1.ws_ship_addr_sk = ca_address_sk
+  AND ca_state = 'IL'
+  AND ws1.ws_web_site_sk = web_site_sk
+  AND web_company_name = 'pri'
+  AND EXISTS
+    (SELECT *
+     FROM web_sales ws2
+     WHERE ws1.ws_order_number = ws2.ws_order_number
+       AND ws1.ws_warehouse_sk <> ws2.ws_warehouse_sk)
+  AND NOT exists
+    (SELECT *
+     FROM web_returns wr1
+     WHERE ws1.ws_order_number = wr1.wr_order_number)
+ORDER BY count(DISTINCT ws_order_number)
+LIMIT 100;
 

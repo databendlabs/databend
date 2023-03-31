@@ -1,105 +1,84 @@
-with frequent_ss_items as 
- (select substr(i_item_desc,1,30) itemdesc,i_item_sk item_sk,d_date solddate,count(*) cnt
-  from store_sales
-      ,date_dim 
-      ,item
-  where ss_sold_date_sk = d_date_sk
-    and ss_item_sk = i_item_sk 
-    and d_year in (2000,2000+1,2000+2,2000+3)
-  group by substr(i_item_desc,1,30),i_item_sk,d_date
-  having count(*) >4),
- max_store_sales as
- (select max(csales) tpcds_cmax 
-  from (select c_customer_sk,sum(ss_quantity*ss_sales_price) csales
-        from store_sales
-            ,customer
-            ,date_dim 
-        where ss_customer_sk = c_customer_sk
-         and ss_sold_date_sk = d_date_sk
-         and d_year in (2000,2000+1,2000+2,2000+3) 
-        group by c_customer_sk)),
- best_ss_customer as
- (select c_customer_sk,sum(ss_quantity*ss_sales_price) ssales
-  from store_sales
-      ,customer
-  where ss_customer_sk = c_customer_sk
-  group by c_customer_sk
-  having sum(ss_quantity*ss_sales_price) > (95/100.0) * (select
-  *
-from
- max_store_sales))
-  select  sum(sales)
- from (select cs_quantity*cs_list_price sales
-       from catalog_sales
-           ,date_dim 
-       where d_year = 2000 
-         and d_moy = 3 
-         and cs_sold_date_sk = d_date_sk 
-         and cs_item_sk in (select item_sk from frequent_ss_items)
-         and cs_bill_customer_sk in (select c_customer_sk from best_ss_customer)
-      union all
-      select ws_quantity*ws_list_price sales
-       from web_sales 
-           ,date_dim 
-       where d_year = 2000 
-         and d_moy = 3 
-         and ws_sold_date_sk = d_date_sk 
-         and ws_item_sk in (select item_sk from frequent_ss_items)
-         and ws_bill_customer_sk in (select c_customer_sk from best_ss_customer)) 
- limit 100;
-with frequent_ss_items as
- (select substr(i_item_desc,1,30) itemdesc,i_item_sk item_sk,d_date solddate,count(*) cnt
-  from store_sales
-      ,date_dim
-      ,item
-  where ss_sold_date_sk = d_date_sk
-    and ss_item_sk = i_item_sk
-    and d_year in (2000,2000 + 1,2000 + 2,2000 + 3)
-  group by substr(i_item_desc,1,30),i_item_sk,d_date
-  having count(*) >4),
- max_store_sales as
- (select max(csales) tpcds_cmax
-  from (select c_customer_sk,sum(ss_quantity*ss_sales_price) csales
-        from store_sales
-            ,customer
-            ,date_dim 
-        where ss_customer_sk = c_customer_sk
-         and ss_sold_date_sk = d_date_sk
-         and d_year in (2000,2000+1,2000+2,2000+3)
-        group by c_customer_sk)),
- best_ss_customer as
- (select c_customer_sk,sum(ss_quantity*ss_sales_price) ssales
-  from store_sales
-      ,customer
-  where ss_customer_sk = c_customer_sk
-  group by c_customer_sk
-  having sum(ss_quantity*ss_sales_price) > (95/100.0) * (select
-  *
- from max_store_sales))
-  select  c_last_name,c_first_name,sales
- from (select c_last_name,c_first_name,sum(cs_quantity*cs_list_price) sales
-        from catalog_sales
-            ,customer
-            ,date_dim 
-        where d_year = 2000 
-         and d_moy = 3 
-         and cs_sold_date_sk = d_date_sk 
-         and cs_item_sk in (select item_sk from frequent_ss_items)
-         and cs_bill_customer_sk in (select c_customer_sk from best_ss_customer)
-         and cs_bill_customer_sk = c_customer_sk 
-       group by c_last_name,c_first_name
-      union all
-      select c_last_name,c_first_name,sum(ws_quantity*ws_list_price) sales
-       from web_sales
-           ,customer
-           ,date_dim 
-       where d_year = 2000 
-         and d_moy = 3 
-         and ws_sold_date_sk = d_date_sk 
-         and ws_item_sk in (select item_sk from frequent_ss_items)
-         and ws_bill_customer_sk in (select c_customer_sk from best_ss_customer)
-         and ws_bill_customer_sk = c_customer_sk
-       group by c_last_name,c_first_name) 
-     order by c_last_name,c_first_name,sales
-  limit 100;
-
+WITH frequent_ss_items AS
+  (SELECT itemdesc,
+          i_item_sk item_sk,
+          d_date solddate,
+          count(*) cnt
+   FROM store_sales,
+        date_dim,
+     (SELECT SUBSTRING(i_item_desc, 1, 30) itemdesc,
+             *
+      FROM item) sq1
+   WHERE ss_sold_date_sk = d_date_sk
+     AND ss_item_sk = i_item_sk
+     AND d_year IN (2000,
+                    2000+1,
+                    2000+2,
+                    2000+3)
+   GROUP BY itemdesc,
+            i_item_sk,
+            d_date
+   HAVING count(*) >4),
+     max_store_sales AS
+  (SELECT max(csales) tpcds_cmax
+   FROM
+     (SELECT c_customer_sk,
+             sum(ss_quantity*ss_sales_price) csales
+      FROM store_sales,
+           customer,
+           date_dim
+      WHERE ss_customer_sk = c_customer_sk
+        AND ss_sold_date_sk = d_date_sk
+        AND d_year IN (2000,
+                       2000+1,
+                       2000+2,
+                       2000+3)
+      GROUP BY c_customer_sk) sq2),
+     best_ss_customer AS
+  (SELECT c_customer_sk,
+          sum(ss_quantity*ss_sales_price) ssales
+   FROM store_sales,
+        customer,
+        max_store_sales
+   WHERE ss_customer_sk = c_customer_sk
+   GROUP BY c_customer_sk
+   HAVING sum(ss_quantity*ss_sales_price) > (50/100.0) * max(tpcds_cmax))
+SELECT c_last_name,
+       c_first_name,
+       sales
+FROM
+  (SELECT c_last_name,
+          c_first_name,
+          sum(cs_quantity*cs_list_price) sales
+   FROM catalog_sales,
+        customer,
+        date_dim,
+        frequent_ss_items,
+        best_ss_customer
+   WHERE d_year = 2000
+     AND d_moy = 2
+     AND cs_sold_date_sk = d_date_sk
+     AND cs_item_sk = item_sk
+     AND cs_bill_customer_sk = best_ss_customer.c_customer_sk
+     AND cs_bill_customer_sk = customer.c_customer_sk
+   GROUP BY c_last_name,
+            c_first_name
+   UNION ALL SELECT c_last_name,
+                    c_first_name,
+                    sum(ws_quantity*ws_list_price) sales
+   FROM web_sales,
+        customer,
+        date_dim,
+        frequent_ss_items,
+        best_ss_customer
+   WHERE d_year = 2000
+     AND d_moy = 2
+     AND ws_sold_date_sk = d_date_sk
+     AND ws_item_sk = item_sk
+     AND ws_bill_customer_sk = best_ss_customer.c_customer_sk
+     AND ws_bill_customer_sk = customer.c_customer_sk
+   GROUP BY c_last_name,
+            c_first_name) sq3
+ORDER BY c_last_name NULLS FIRST,
+         c_first_name NULLS FIRST,
+         sales NULLS FIRST
+LIMIT 100;

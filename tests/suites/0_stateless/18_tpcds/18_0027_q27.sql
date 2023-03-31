@@ -1,21 +1,60 @@
-select  i_item_id,
-        s_state, grouping(s_state) g_state,
-        avg(ss_quantity) agg1,
-        avg(ss_list_price) agg2,
-        avg(ss_coupon_amt) agg3,
-        avg(ss_sales_price) agg4
- from store_sales, customer_demographics, date_dim, store, item
- where ss_sold_date_sk = d_date_sk and
-       ss_item_sk = i_item_sk and
-       ss_store_sk = s_store_sk and
-       ss_cdemo_sk = cd_demo_sk and
-       cd_gender = 'F' and
-       cd_marital_status = 'U' and
-       cd_education_status = '2 yr Degree' and
-       d_year = 2000 and
-       s_state in ('AL','IN', 'SC', 'NY', 'OH', 'FL')
- group by rollup (i_item_id, s_state)
- order by i_item_id
-         ,s_state
- limit 100;
-
+WITH results AS
+  (SELECT i_item_id,
+          s_state,
+          0 AS g_state,
+          ss_quantity agg1,
+          ss_list_price agg2,
+          ss_coupon_amt agg3,
+          ss_sales_price agg4
+   FROM store_sales,
+        customer_demographics,
+        date_dim,
+        store,
+        item
+   WHERE ss_sold_date_sk = d_date_sk
+     AND ss_item_sk = i_item_sk
+     AND ss_store_sk = s_store_sk
+     AND ss_cdemo_sk = cd_demo_sk
+     AND cd_gender = 'M'
+     AND cd_marital_status = 'S'
+     AND cd_education_status = 'College'
+     AND d_year = 2002
+     AND s_state = 'TN' )
+SELECT i_item_id,
+       s_state,
+       g_state,
+       agg1,
+       agg2,
+       agg3,
+       agg4
+FROM
+  ( SELECT i_item_id,
+           s_state,
+           0 AS g_state,
+           avg(agg1) agg1,
+           avg(agg2) agg2,
+           avg(agg3) agg3,
+           avg(agg4) agg4
+   FROM results
+   GROUP BY i_item_id ,
+            s_state
+   UNION ALL SELECT i_item_id,
+                    NULL AS s_state,
+                    1 AS g_state,
+                    avg(agg1) agg1,
+                    avg(agg2) agg2,
+                    avg(agg3) agg3,
+                    avg(agg4) agg4
+   FROM results
+   GROUP BY i_item_id
+   UNION ALL SELECT NULL AS i_item_id,
+                    NULL AS s_state,
+                    1 AS g_state,
+                    avg(agg1) agg1,
+                    avg(agg2) agg2,
+                    avg(agg3) agg3,
+                    avg(agg4) agg4
+   FROM results ) foo
+ORDER BY i_item_id NULLS FIRST,
+         s_state NULLS FIRST
+LIMIT 100;
