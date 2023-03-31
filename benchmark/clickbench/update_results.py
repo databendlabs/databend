@@ -20,7 +20,7 @@ def update_results(dataset, title, url):
         for line in f:
             queries.append(line.strip())
     results = []
-    for result_file in glob.glob(f"results/{dataset}/*.json"):
+    for result_file in glob.glob(f"results/{dataset}/**/*.json", recursive=True):
         logger.info(f"reading result: {result_file}...")
         with open(result_file, "r") as f:
             results.append(json.load(f))
