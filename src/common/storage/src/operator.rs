@@ -249,6 +249,14 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         // Enable trust dns
         builder = builder.trust_dns(true);
 
+        // Pool max idle per host controls connection pool size.
+        // Default to no limit, set to `0` for disable it.
+        let pool_max_idle_per_host = env::var("_DATABEND_INTERNAL_POOL_MAX_IDLE_PER_HOST")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(usize::MAX);
+        builder = builder.pool_max_idle_per_host(pool_max_idle_per_host);
+
         // Connect timeout default to 30s.
         let connect_timeout = env::var("_DATABEND_INTERNAL_CONNECT_TIMEOUT")
             .ok()
