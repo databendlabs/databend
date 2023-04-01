@@ -183,12 +183,29 @@ sales -111.11111111111086
 sales 0.0
 sales 0.0
 
-statement ok
-DROP DATABASE test_window
-
-# aggregate functions in window functions
+# aggregate functions in window clause
 query TII
 select depname, sum(sum(salary)) over (), sum(salary) from empsalary group by depname;
+----
 develop 25100 25100
 sales 39700 14600
 personnel 47100 7400
+
+query III
+select grouping(salary), grouping(depname), sum(grouping(salary)) over (partition by grouping(salary) + grouping(depname) order by grouping(depname) desc) from empsalary group by rollup (depname, salary);
+----
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+1 0 1
+1 0 2
+1 0 3
+1 1 1
+
+statement ok
+DROP DATABASE test_window
