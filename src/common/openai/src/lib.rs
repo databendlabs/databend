@@ -19,5 +19,6 @@ mod openai;
 
 pub(crate) mod metrics;
 
+pub use completion::CompletionMode;
 pub use openai::AIModel;
 pub use openai::OpenAI;
