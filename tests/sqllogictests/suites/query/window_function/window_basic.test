@@ -191,6 +191,13 @@ develop 25100 25100
 sales 39700 14600
 personnel 47100 7400
 
+query TI
+select depname, sum(sum(salary)) over () from empsalary group by depname;
+----
+develop 25100
+sales 39700
+personnel 47100
+
 query III
 select grouping(salary), grouping(depname), sum(grouping(salary)) over (partition by grouping(salary) + grouping(depname) order by grouping(depname) desc) from empsalary group by rollup (depname, salary);
 ----
@@ -206,6 +213,21 @@ select grouping(salary), grouping(depname), sum(grouping(salary)) over (partitio
 1 0 2
 1 0 3
 1 1 1
+
+# Winodw func in subquery
+query I
+SELECT * FROM (SELECT row_number() OVER (PARTITION BY depname ORDER BY salary) rn FROM empsalary ORDER BY depname, rn)
+----
+1
+2
+3
+4
+5
+1
+2
+1
+2
+3
 
 statement ok
 DROP DATABASE test_window

@@ -154,14 +154,7 @@ impl<'a> AggregateRewriter<'a> {
             // TODO(leiysky): should we recursively process subquery here?
             ScalarExpr::SubqueryExpr(_) => Ok(scalar.clone()),
 
-            ScalarExpr::AggregateFunction(agg_func) => {
-                if self.in_window {
-                    // This will be processed later when analyzing window.
-                    Ok(scalar.clone())
-                } else {
-                    self.replace_aggregate_function(agg_func)
-                }
-            }
+            ScalarExpr::AggregateFunction(agg_func) => self.replace_aggregate_function(agg_func),
 
             ScalarExpr::WindowFunction(window) => {
                 self.in_window = true;
