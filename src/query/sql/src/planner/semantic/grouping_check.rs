@@ -26,7 +26,6 @@ use crate::plans::FunctionCall;
 use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
-use crate::plans::WindowFuncType;
 use crate::BindContext;
 
 /// Check validity of scalar expression in a grouping context.
@@ -151,22 +150,22 @@ impl<'a> GroupingChecker<'a> {
                     .window_functions_map
                     .get(&win.display_name)
                 {
+                    // The exprs in `win` has already been rewrittern to `BoundColumnRef` in `WindowRewriter`.
+                    // So we need to check the exprs in `bind_context.windows`
+                    let window_info = &self.bind_context.windows.window_functions[*column];
                     // Just check if the exprs are in grouping items.
-                    for part in win.partition_by.iter() {
-                        self.resolve(part, span)?;
+                    for part in window_info.partition_by_items.iter() {
+                        self.resolve(&part.scalar, span)?;
                     }
                     // Just check if the exprs are in grouping items.
-                    for order in win.order_by.iter() {
-                        self.resolve(&order.expr, span)?;
+                    for order in window_info.order_by_items.iter() {
+                        self.resolve(&order.order_by_item.scalar, span)?;
                     }
                     // Just check if the exprs are in grouping items.
-                    if let WindowFuncType::Aggregate(agg) = &win.func {
-                        for args in agg.args.iter() {
-                            self.resolve(args, span)?;
-                        }
+                    for arg in window_info.arguments.iter() {
+                        self.resolve(&arg.scalar, span)?;
                     }
 
-                    let window_info = &self.bind_context.windows.window_functions[*column];
                     let column_binding = ColumnBinding {
                         database_name: None,
                         table_name: None,
