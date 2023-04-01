@@ -183,5 +183,51 @@ sales -111.11111111111086
 sales 0.0
 sales 0.0
 
+# aggregate functions in window clause
+query TII
+select depname, sum(sum(salary)) over (partition by 1 order by sum(salary)), sum(salary) from empsalary group by depname;
+----
+personnel 7400 7400
+sales 22000 14600
+develop 47100 25100
+
+query TI
+select depname, sum(sum(salary)) over (partition by 1 order by sum(salary)) from empsalary group by depname;
+----
+personnel 7400
+sales 22000
+develop 47100
+
+query III
+select grouping(salary), grouping(depname), sum(grouping(salary)) over (partition by grouping(salary) + grouping(depname) order by grouping(depname) desc) from empsalary group by rollup (depname, salary);
+----
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+0 0 0
+1 0 1
+1 0 2
+1 0 3
+1 1 1
+
+# Winodw func in subquery
+query I
+SELECT * FROM (SELECT row_number() OVER (PARTITION BY depname ORDER BY salary) rn FROM empsalary ORDER BY depname, rn)
+----
+1
+2
+3
+4
+5
+1
+2
+1
+2
+3
+
 statement ok
 DROP DATABASE test_window

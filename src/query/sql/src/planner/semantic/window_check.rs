@@ -36,7 +36,7 @@ impl<'a> WindowChecker<'a> {
         Self { bind_context }
     }
 
-    pub fn resolve(&mut self, scalar: &ScalarExpr) -> Result<ScalarExpr> {
+    pub fn resolve(&self, scalar: &ScalarExpr) -> Result<ScalarExpr> {
         match scalar {
             ScalarExpr::BoundColumnRef(_)
             | ScalarExpr::BoundInternalColumnRef(_)
