@@ -34,7 +34,7 @@ use crate::plans::ScalarExpr;
 /// Fold simple `COUNT(*)` aggregate with statistics information.
 pub struct RuleFoldCountAggregate {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RuleFoldCountAggregate {
@@ -44,7 +44,7 @@ impl RuleFoldCountAggregate {
             //  Aggregate
             //  \
             //   *
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Aggregate,
                 }
@@ -55,7 +55,7 @@ impl RuleFoldCountAggregate {
                     }
                     .into(),
                 ),
-            ),
+            )],
         }
     }
 }
@@ -157,7 +157,7 @@ impl Rule for RuleFoldCountAggregate {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }

@@ -127,7 +127,6 @@ use crate::Visibility;
 
 pub struct RuleEagerAggregation {
     id: RuleID,
-    pattern: SExpr,
     patterns: Vec<SExpr>,
     metadata: MetadataRef,
 }
@@ -142,18 +141,6 @@ impl RuleEagerAggregation {
             // Expression
             //     |
             //     *
-            pattern: SExpr::create_unary(
-                PatternPlan {
-                    plan_type: RelOp::EvalScalar,
-                }
-                .into(),
-                SExpr::create_leaf(
-                    PatternPlan {
-                        plan_type: RelOp::Pattern,
-                    }
-                    .into(),
-                ),
-            ),
             patterns: vec![
                 //     Expression
                 //         |
@@ -426,8 +413,9 @@ impl Rule for RuleEagerAggregation {
         // Get all eager aggregate functions of the left child and right child.
         let function_factory = AggregateFunctionFactory::instance();
         let mut eager_aggregations = Vec::new();
-        for columns_set in columns_sets.iter() {
+        for (idx, columns_set) in columns_sets.iter().enumerate() {
             eager_aggregations.push(get_eager_aggregation_functions(
+                idx,
                 &final_agg,
                 columns_set,
                 &eval_scalar_items,
@@ -973,10 +961,16 @@ impl Rule for RuleEagerAggregation {
                         RelOperator::Aggregate(eager_group_by.clone()),
                         SExpr::create_unary(
                             RelOperator::Aggregate(eager_group_by_partial),
-                            SExpr::create_unary(
-                                RelOperator::EvalScalar(eager_extra_eval_scalar_expr[0].clone()),
-                                join_expr.child(0)?.clone(),
-                            ),
+                            if !eager_extra_eval_scalar_expr[0].items.is_empty() {
+                                SExpr::create_unary(
+                                    RelOperator::EvalScalar(
+                                        eager_extra_eval_scalar_expr[0].clone(),
+                                    ),
+                                    join_expr.child(0)?.clone(),
+                                )
+                            } else {
+                                join_expr.child(0)?.clone()
+                            },
                         ),
                     ),
                     join_expr.child(1)?.clone(),
@@ -988,10 +982,16 @@ impl Rule for RuleEagerAggregation {
                         RelOperator::Aggregate(eager_group_by.clone()),
                         SExpr::create_unary(
                             RelOperator::Aggregate(eager_group_by_partial),
-                            SExpr::create_unary(
-                                RelOperator::EvalScalar(eager_extra_eval_scalar_expr[1].clone()),
-                                join_expr.child(1)?.clone(),
-                            ),
+                            if !eager_extra_eval_scalar_expr[1].items.is_empty() {
+                                SExpr::create_unary(
+                                    RelOperator::EvalScalar(
+                                        eager_extra_eval_scalar_expr[1].clone(),
+                                    ),
+                                    join_expr.child(1)?.clone(),
+                                )
+                            } else {
+                                join_expr.child(1)?.clone()
+                            },
                         ),
                     ),
                 ])
@@ -1016,12 +1016,16 @@ impl Rule for RuleEagerAggregation {
                                 RelOperator::Aggregate(eager_count.clone()),
                                 SExpr::create_unary(
                                     RelOperator::Aggregate(eager_count_partial),
-                                    SExpr::create_unary(
-                                        RelOperator::EvalScalar(
-                                            eager_extra_eval_scalar_expr[1].clone(),
-                                        ),
-                                        join_expr.child(1)?.clone(),
-                                    ),
+                                    if !eager_extra_eval_scalar_expr[1].items.is_empty() {
+                                        SExpr::create_unary(
+                                            RelOperator::EvalScalar(
+                                                eager_extra_eval_scalar_expr[1].clone(),
+                                            ),
+                                            join_expr.child(1)?.clone(),
+                                        )
+                                    } else {
+                                        join_expr.child(1)?.clone()
+                                    },
                                 ),
                             ),
                         ])])
@@ -1033,12 +1037,16 @@ impl Rule for RuleEagerAggregation {
                                 RelOperator::Aggregate(eager_count.clone()),
                                 SExpr::create_unary(
                                     RelOperator::Aggregate(eager_count_partial),
-                                    SExpr::create_unary(
-                                        RelOperator::EvalScalar(
-                                            eager_extra_eval_scalar_expr[0].clone(),
-                                        ),
-                                        join_expr.child(0)?.clone(),
-                                    ),
+                                    if !eager_extra_eval_scalar_expr[0].items.is_empty() {
+                                        SExpr::create_unary(
+                                            RelOperator::EvalScalar(
+                                                eager_extra_eval_scalar_expr[0].clone(),
+                                            ),
+                                            join_expr.child(0)?.clone(),
+                                        )
+                                    } else {
+                                        join_expr.child(0)?.clone()
+                                    },
                                 ),
                             ),
                             join_expr.child(1)?.clone(),
@@ -1065,24 +1073,32 @@ impl Rule for RuleEagerAggregation {
                                 RelOperator::Aggregate(eager_group_by),
                                 SExpr::create_unary(
                                     RelOperator::Aggregate(eager_agg_partial),
-                                    SExpr::create_unary(
-                                        RelOperator::EvalScalar(
-                                            eager_extra_eval_scalar_expr[0].clone(),
-                                        ),
-                                        join_expr.child(0)?.clone(),
-                                    ),
+                                    if !eager_extra_eval_scalar_expr[0].items.is_empty() {
+                                        SExpr::create_unary(
+                                            RelOperator::EvalScalar(
+                                                eager_extra_eval_scalar_expr[0].clone(),
+                                            ),
+                                            join_expr.child(0)?.clone(),
+                                        )
+                                    } else {
+                                        join_expr.child(0)?.clone()
+                                    },
                                 ),
                             ),
                             SExpr::create_unary(
                                 RelOperator::Aggregate(eager_count),
                                 SExpr::create_unary(
                                     RelOperator::Aggregate(eager_count_partial),
-                                    SExpr::create_unary(
-                                        RelOperator::EvalScalar(
-                                            eager_extra_eval_scalar_expr[1].clone(),
-                                        ),
-                                        join_expr.child(1)?.clone(),
-                                    ),
+                                    if !eager_extra_eval_scalar_expr[1].items.is_empty() {
+                                        SExpr::create_unary(
+                                            RelOperator::EvalScalar(
+                                                eager_extra_eval_scalar_expr[1].clone(),
+                                            ),
+                                            join_expr.child(1)?.clone(),
+                                        )
+                                    } else {
+                                        join_expr.child(1)?.clone()
+                                    },
                                 ),
                             ),
                         ])])
@@ -1094,24 +1110,32 @@ impl Rule for RuleEagerAggregation {
                                 RelOperator::Aggregate(eager_count),
                                 SExpr::create_unary(
                                     RelOperator::Aggregate(eager_count_partial),
-                                    SExpr::create_unary(
-                                        RelOperator::EvalScalar(
-                                            eager_extra_eval_scalar_expr[0].clone(),
-                                        ),
-                                        join_expr.child(0)?.clone(),
-                                    ),
+                                    if !eager_extra_eval_scalar_expr[0].items.is_empty() {
+                                        SExpr::create_unary(
+                                            RelOperator::EvalScalar(
+                                                eager_extra_eval_scalar_expr[0].clone(),
+                                            ),
+                                            join_expr.child(0)?.clone(),
+                                        )
+                                    } else {
+                                        join_expr.child(0)?.clone()
+                                    },
                                 ),
                             ),
                             SExpr::create_unary(
                                 RelOperator::Aggregate(eager_group_by),
                                 SExpr::create_unary(
                                     RelOperator::Aggregate(eager_agg_partial),
-                                    SExpr::create_unary(
-                                        RelOperator::EvalScalar(
-                                            eager_extra_eval_scalar_expr[1].clone(),
-                                        ),
-                                        join_expr.child(1)?.clone(),
-                                    ),
+                                    if !eager_extra_eval_scalar_expr[1].items.is_empty() {
+                                        SExpr::create_unary(
+                                            RelOperator::EvalScalar(
+                                                eager_extra_eval_scalar_expr[1].clone(),
+                                            ),
+                                            join_expr.child(1)?.clone(),
+                                        )
+                                    } else {
+                                        join_expr.child(1)?.clone()
+                                    },
                                 ),
                             ),
                         ])])
@@ -1138,28 +1162,31 @@ impl Rule for RuleEagerAggregation {
                     .replace_children(vec![temp_final_agg_expr])
                     .replace_plan(final_eval_scalars[idx].clone().try_into()?)
             };
-            if idx == final_agg_finals.len() - 1 {
-                result.set_applied_rule(&self.id);
-                state.add_result(result);
-            }
+            // if idx == final_agg_finals.len() - 1 {
+            // dbg!("result = {:?}", &result);
+            dbg!("-------------------------------");
+            result.set_applied_rule(&self.id);
+            state.add_result(result);
+            // }
         }
 
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }
 
 // In the current implementation, if an aggregation function can be eager,
 // then it needs to satisfy the following constraints:
-// (1) The args.len() is equal to 1.
+// (1) The args.len() must equal to 1 if func_name is not "count".
 // (2) The aggregate function can be decomposed.
 // (3) The index of the aggregate function can be found in the column source of the eval scalar.
 // (4) The data type of the aggregate column is either Number or Nullable(Number).
 // Return the (Vec index, func index, func_name) for each eager aggregation function.
 fn get_eager_aggregation_functions(
+    idx: usize,
     agg_final: &Aggregate,
     columns_set: &ColumnSet,
     eval_scalar_items: &HashMap<usize, Vec<usize>>,
@@ -1171,34 +1198,39 @@ fn get_eager_aggregation_functions(
         .enumerate()
         .filter_map(|(index, aggregate_item)| {
             if let ScalarExpr::AggregateFunction(aggregate_function) = &aggregate_item.scalar {
+                let mut valid = false;
                 if aggregate_function.args.len() == 1
                     && function_factory.is_decomposable(&aggregate_function.func_name)
                     && eval_scalar_items.contains_key(&aggregate_item.index)
                 {
                     if let ScalarExpr::BoundColumnRef(column) = &aggregate_function.args[0] {
-                        match &*column.column.data_type {
-                            DataType::Number(_) if columns_set.contains(&column.column.index) => {
-                                return Some((
-                                    index,
-                                    aggregate_item.index,
-                                    aggregate_function.func_name.clone(),
-                                ));
-                            }
-                            DataType::Nullable(ty) => match **ty {
-                                DataType::Number(_)
-                                    if columns_set.contains(&column.column.index) =>
-                                {
-                                    return Some((
-                                        index,
-                                        aggregate_item.index,
-                                        aggregate_function.func_name.clone(),
-                                    ));
+                        if columns_set.contains(&column.column.index) {
+                            match &*column.column.data_type {
+                                DataType::Number(_) | DataType::Decimal(_) => {
+                                    valid = true;
+                                }
+                                DataType::Nullable(ty) => {
+                                    if let DataType::Number(_) | DataType::Decimal(_) = **ty {
+                                        valid = true;
+                                    }
                                 }
                                 _ => (),
-                            },
-                            _ => (),
+                            }
                         }
                     }
+                } else if idx == 1
+                    && aggregate_function.args.is_empty()
+                    && aggregate_function.func_name.as_str() == "count"
+                {
+                    // count(*) does not belong to the left or right child, so we push it down to the probe side.
+                    valid = true;
+                }
+                if valid {
+                    return Some((
+                        index,
+                        aggregate_item.index,
+                        aggregate_function.func_name.clone(),
+                    ));
                 }
             }
             None

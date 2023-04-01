@@ -29,7 +29,7 @@ pub trait Rule {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()>;
 
-    fn pattern(&self) -> &SExpr;
+    fn patterns(&self) -> &Vec<SExpr>;
 
     fn transformation(&self) -> bool {
         true
@@ -61,7 +61,6 @@ pub enum RuleID {
     MergeEvalScalar,
     MergeFilter,
     SplitAggregate,
-    EagerAggregation,
     FoldCountAggregate,
     PushDownPrewhere,
 
@@ -72,6 +71,7 @@ pub enum RuleID {
     ExchangeJoin,
     CommuteJoinBaseTable,
     LeftExchangeJoin,
+    EagerAggregation,
     RightExchangeJoin,
 }
 
@@ -97,7 +97,6 @@ impl Display for RuleID {
             RuleID::MergeFilter => write!(f, "MergeFilter"),
             RuleID::NormalizeScalarFilter => write!(f, "NormalizeScalarFilter"),
             RuleID::SplitAggregate => write!(f, "SplitAggregate"),
-            RuleID::EagerAggregation => write!(f, "EagerAggregation"),
             RuleID::NormalizeDisjunctiveFilter => write!(f, "NormalizeDisjunctiveFilter"),
             RuleID::FoldCountAggregate => write!(f, "FoldCountAggregate"),
             RuleID::PushDownPrewhere => write!(f, "PushDownPrewhere"),
@@ -107,6 +106,7 @@ impl Display for RuleID {
             RuleID::LeftAssociateJoin => write!(f, "LeftAssociateJoin"),
             RuleID::RightAssociateJoin => write!(f, "RightAssociateJoin"),
             RuleID::LeftExchangeJoin => write!(f, "LeftExchangeJoin"),
+            RuleID::EagerAggregation => write!(f, "EagerAggregation"),
             RuleID::RightExchangeJoin => write!(f, "RightExchangeJoin"),
             RuleID::ExchangeJoin => write!(f, "ExchangeJoin"),
         }

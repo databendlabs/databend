@@ -40,7 +40,7 @@ use crate::TableEntry;
 
 pub struct RulePushDownFilterScan {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
     metadata: MetadataRef,
 }
 
@@ -51,7 +51,7 @@ impl RulePushDownFilterScan {
             // Filter
             //  \
             //   LogicalGet
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Filter,
                 }
@@ -62,7 +62,7 @@ impl RulePushDownFilterScan {
                     }
                     .into(),
                 ),
-            ),
+            )],
             metadata,
         }
     }
@@ -292,7 +292,7 @@ impl Rule for RulePushDownFilterScan {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }

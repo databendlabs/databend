@@ -27,7 +27,7 @@ use crate::plans::RelOp;
 // Merge two adjacent `EvalScalar`s into one
 pub struct RuleMergeEvalScalar {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RuleMergeEvalScalar {
@@ -39,7 +39,7 @@ impl RuleMergeEvalScalar {
             //  EvalScalar
             //  \
             //   *
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::EvalScalar,
                 }
@@ -56,7 +56,7 @@ impl RuleMergeEvalScalar {
                         .into(),
                     ),
                 ),
-            ),
+            )],
         }
     }
 }
@@ -98,7 +98,7 @@ impl Rule for RuleMergeEvalScalar {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }

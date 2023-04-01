@@ -46,7 +46,7 @@ use crate::Visibility;
 // So it'll be efficient to push down `filter` to `union`, reduce the size of data to pull from table.
 pub struct RulePushDownFilterUnion {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RulePushDownFilterUnion {
@@ -58,7 +58,7 @@ impl RulePushDownFilterUnion {
             //   UnionAll
             //     /  \
             //   ...   ...
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Filter,
                 }
@@ -81,7 +81,7 @@ impl RulePushDownFilterUnion {
                         .into(),
                     ),
                 ),
-            ),
+            )],
         }
     }
 }
@@ -122,8 +122,8 @@ impl Rule for RulePushDownFilterUnion {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }
 

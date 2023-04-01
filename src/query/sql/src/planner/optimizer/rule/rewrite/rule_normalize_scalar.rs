@@ -74,7 +74,7 @@ fn normalize_falsy_predicate(predicates: Vec<ScalarExpr>) -> Vec<ScalarExpr> {
 /// whole filter with FALSE
 pub struct RuleNormalizeScalarFilter {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RuleNormalizeScalarFilter {
@@ -84,7 +84,7 @@ impl RuleNormalizeScalarFilter {
             // Filter
             //  \
             //   *
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Filter,
                 }
@@ -95,7 +95,7 @@ impl RuleNormalizeScalarFilter {
                     }
                     .into(),
                 ),
-            ),
+            )],
         }
     }
 }
@@ -125,7 +125,7 @@ impl Rule for RuleNormalizeScalarFilter {
         }
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }

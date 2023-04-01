@@ -28,7 +28,7 @@ use crate::plans::RelOp;
 /// In opposite to RuleCommuteJoin, this rule only applies to base tables.
 pub struct RuleCommuteJoinBaseTable {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RuleCommuteJoinBaseTable {
@@ -39,14 +39,14 @@ impl RuleCommuteJoinBaseTable {
             // LogicalJoin
             // | \
             // *  *
-            pattern: SExpr::create_binary(
+            patterns: vec![SExpr::create_binary(
                 PatternPlan {
                     plan_type: RelOp::Join,
                 }
                 .into(),
                 SExpr::create_pattern_leaf(),
                 SExpr::create_pattern_leaf(),
-            ),
+            )],
         }
     }
 }
@@ -100,8 +100,8 @@ impl Rule for RuleCommuteJoinBaseTable {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 
     fn transformation(&self) -> bool {

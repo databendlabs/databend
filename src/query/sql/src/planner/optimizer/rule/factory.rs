@@ -27,7 +27,6 @@ use super::rewrite::RulePushDownPrewhere;
 use super::transform::RuleCommuteJoin;
 use super::transform::RuleLeftAssociateJoin;
 use super::transform::RuleRightAssociateJoin;
-use crate::optimizer::rule::rewrite::RuleEagerAggregation;
 use crate::optimizer::rule::rewrite::RuleEliminateFilter;
 use crate::optimizer::rule::rewrite::RuleMergeEvalScalar;
 use crate::optimizer::rule::rewrite::RuleMergeFilter;
@@ -44,6 +43,7 @@ use crate::optimizer::rule::transform::RuleCommuteJoinBaseTable;
 use crate::optimizer::rule::transform::RuleExchangeJoin;
 use crate::optimizer::rule::transform::RuleLeftExchangeJoin;
 use crate::optimizer::rule::transform::RuleRightExchangeJoin;
+use crate::optimizer::rule::transform::RuleEagerAggregation;
 use crate::optimizer::rule::RuleID;
 use crate::optimizer::rule::RulePtr;
 use crate::MetadataRef;
@@ -72,7 +72,6 @@ impl RuleFactory {
             RuleID::MergeFilter => Ok(Box::new(RuleMergeFilter::new())),
             RuleID::NormalizeScalarFilter => Ok(Box::new(RuleNormalizeScalarFilter::new())),
             RuleID::SplitAggregate => Ok(Box::new(RuleSplitAggregate::new())),
-            RuleID::EagerAggregation => Ok(Box::new(RuleEagerAggregation::new(metadata))),
             RuleID::FoldCountAggregate => Ok(Box::new(RuleFoldCountAggregate::new())),
             RuleID::NormalizeDisjunctiveFilter => {
                 Ok(Box::new(RuleNormalizeDisjunctiveFilter::new()))
@@ -82,6 +81,7 @@ impl RuleFactory {
             RuleID::LeftAssociateJoin => Ok(Box::new(RuleLeftAssociateJoin::new())),
             RuleID::RightAssociateJoin => Ok(Box::new(RuleRightAssociateJoin::new())),
             RuleID::LeftExchangeJoin => Ok(Box::new(RuleLeftExchangeJoin::new())),
+            RuleID::EagerAggregation => Ok(Box::new(RuleEagerAggregation::new(metadata))),
             RuleID::RightExchangeJoin => Ok(Box::new(RuleRightExchangeJoin::new())),
             RuleID::ExchangeJoin => Ok(Box::new(RuleExchangeJoin::new())),
             RuleID::PushDownPrewhere => Ok(Box::new(RulePushDownPrewhere::new(metadata))),
