@@ -56,7 +56,7 @@ echo "Loading data..."
 load_start=$(date +%s)
 bendsql query <"${BENCHMARK_DATASET}/load.sql"
 load_end=$(date +%s)
-load_time=$(echo "$load_end - $load_start" | bc -l)
+load_time=$(python3 -c "print($load_end - $load_start)")
 echo "Data loaded in ${load_time}s."
 
 data_size=$(echo "select sum(data_compressed_size) from system.tables where database = '${BENCHMARK_DATASET}';" | bendsql query -f unaligned -t)
