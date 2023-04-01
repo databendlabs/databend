@@ -1,6 +1,6 @@
 SELECT promotions,
        total,
-       cast(promotions AS decimal(15,4))/cast(total AS decimal(15,4))*100
+       cast(promotions AS decimal(15,4) NULL)/cast(total AS decimal(15,4) NULL)*100
 FROM
   (SELECT sum(ss_ext_sales_price) promotions
    FROM store_sales,
