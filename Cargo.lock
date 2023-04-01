@@ -2253,7 +2253,9 @@ dependencies = [
  "futures",
  "opendal",
  "regex",
+ "reqwest",
  "serde",
+ "ureq",
 ]
 
 [[package]]
