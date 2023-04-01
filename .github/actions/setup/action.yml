@@ -16,8 +16,10 @@ runs:
       with:
         path: |
           ~/.cargo/registry/
-        key: ${{ runner.os }}-cargo-${{ inputs.cache-key }}
-        restore-keys: ${{ runner.os }}-cargo
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}-${{ inputs.cache-key }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+          ${{ runner.os }}-cargo
     - name: Setup rust related environment variables
       shell: bash
       run: |

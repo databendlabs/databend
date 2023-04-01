@@ -20,4 +20,4 @@ jobs:
       env:
         CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       run: |
-        cargo release publish --execute
+        cargo release publish --execute --no-confirm
