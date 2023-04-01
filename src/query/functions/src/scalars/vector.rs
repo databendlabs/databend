@@ -21,6 +21,7 @@ use common_expression::vectorize_with_builder_2_arg;
 use common_expression::FunctionDomain;
 use common_expression::FunctionRegistry;
 use common_openai::AIModel;
+use common_openai::CompletionMode;
 use common_openai::OpenAI;
 use common_vector::cosine_distance;
 
@@ -87,7 +88,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 let data = std::str::from_utf8(data).unwrap();
                 let api_key = std::str::from_utf8(api_key).unwrap();
                 let openai = OpenAI::create(api_key.to_string(), AIModel::TextDavinci003);
-                let result = openai.completion_request(data.to_string());
+                let result = openai.completion_request(data.to_string(), CompletionMode::Text);
                 match result {
                     Ok((resp, _)) => {
                         output.put_str(&resp);
