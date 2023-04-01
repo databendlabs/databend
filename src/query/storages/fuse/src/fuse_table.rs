@@ -638,7 +638,7 @@ impl Table for FuseTable {
         target: CompactTarget,
         limit: Option<usize>,
         pipeline: &mut Pipeline,
-    ) -> Result<bool> {
+    ) -> Result<()> {
         self.do_compact(ctx, target, limit, pipeline).await
     }
 
