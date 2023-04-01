@@ -114,9 +114,10 @@ download_query_config() {
 	local ver="$1"
 	local local_dir="$2"
 
-	echo " === Download query config.toml from $ver:$query_config_path"
+	config_dir="$(dirname $query_config_path)"
+	echo " === Download query config.toml from $ver:$config_dir"
 
-	git_partial_clone "$bend_repo_url" "v$ver-nightly" "$query_config_path" "$local_dir"
+	git_partial_clone "$bend_repo_url" "v$ver-nightly" "$config_dir" "$local_dir"
 }
 
 kill_proc() {

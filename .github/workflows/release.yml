@@ -153,7 +153,7 @@ jobs:
         arch:
           - x86_64
           - aarch64
-        platform:
+        libc:
           - gnu
           - musl
     steps:
@@ -166,7 +166,7 @@ jobs:
         run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
       - name: Get target
         id: target
-        run: echo 'target=${{ matrix.arch }}-unknown-linux-${{ matrix.platform }}' >> $GITHUB_OUTPUT
+        run: echo 'target=${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}' >> $GITHUB_OUTPUT
       - name: Build Release
         uses: ./.github/actions/build_linux
         with:
@@ -215,7 +215,7 @@ jobs:
       matrix:
         arch:
           - x86_64
-        platform:
+        libc:
           - gnu
     steps:
       - name: Checkout
@@ -227,7 +227,7 @@ jobs:
         run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
       - name: Get target
         id: target
-        run: echo 'target=${{ matrix.arch }}-unknown-linux-${{ matrix.platform }}' >> $GITHUB_OUTPUT
+        run: echo 'target=${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}' >> $GITHUB_OUTPUT
       - name: Setup Build Tool
         uses: ./.github/actions/setup_build_tool
         with:
@@ -236,7 +236,7 @@ jobs:
         run: |
           cargo build --release --target=${{ steps.target.outputs.target }} --features hive
       - name: Copyobj zlib for gnu binaries
-        if: matrix.platform == 'gnu'
+        if: matrix.libc == 'gnu'
         run: |
           target=${{ steps.target.outputs.target }}
           build-tool /usr/bin/${{ matrix.arch }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${target}/release/databend-query

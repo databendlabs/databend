@@ -339,7 +339,6 @@ Development tools (since -d was provided):
   * mysql client
   * python3 (boto3, black, yamllint, ...)
   * python database drivers (mysql-connector-python, pymysql, sqlalchemy, clickhouse_driver)
-  * sqllogic test dependencies (PyHamcrest, environs, fire, ...)
   * fuzz test dependencies (fuzzingbook)
 EOF
 	fi
@@ -505,7 +504,7 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	cargo version
 
 	# Install tools that needed in build
-	cargo install sccache@0.4.0-pre.7 --git https://github.com/mozilla/sccache --tag "v0.4.0-pre.7"
+	cargo install sccache
 fi
 
 if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then
@@ -544,14 +543,9 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 	# drivers
 	python3 -m pip install --quiet pymysql sqlalchemy clickhouse_driver
 	# sqllogic dependencies
-	python3 -m pip install --quiet mysql-connector-python==8.0.30 six PyHamcrest requests environs fire
+	python3 -m pip install --quiet mysql-connector-python==8.0.30
 	# fuzz dependencies
 	python3 -m pip install --quiet fuzzingbook
-
-	# sqllogic clickhouse dependencies
-	# a temp hack only to make logic test work on click house as quickly as possible
-	# we need another way to support session on clickhouse-sqlalchemy
-	python3 -m pip install https://github.com/youngsofun/clickhouse-sqlalchemy/archive/a116e3162c699c12e63a689385b547f639c13018.zip
 fi
 
 if [[ "$INSTALL_CODEGEN" == "true" ]]; then
