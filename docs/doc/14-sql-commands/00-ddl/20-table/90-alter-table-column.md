@@ -1,10 +1,17 @@
 ---
-title: ALTER Table Column
+title: ALTER TABLE
 description:
-  Add or drop column of a table.
+  Adds or drops a column of a table.
 ---
 
-Add or drop column of a table.
+Adds or drops a column of a table.
+
+:::tip
+ALTER TABLE can also handle table clustering. For more information, refer to the following pages:
+
+- [ALTER CLUSTER KEY](../70-clusterkey/dml-alter-cluster-key.md)
+- [RECLUSTER TABLE](../70-clusterkey/dml-recluster-table.md)
+:::
 
 ## Syntax
 
@@ -16,18 +23,30 @@ ALTER TABLE [IF EXISTS] <name> DROP COLUMN <column_name>
 ## Examples
 
 ```sql
--- Create table
-CREATE TABLE t(a int, b float);
-INSERT INTO t VALUES(1,2);
+DESC books;
 
--- Add a column
-ALTER TABLE t ADD COLUMN c float DEFAULT 10;
--- Should return `1 2 10.0`
-SELECT * FROM t;
+Field   |Type     |Null|Default     |Extra|
+--------+---------+----+------------+-----+
+price   |FLOAT    |NO  |0.00        |     |
+pub_time|TIMESTAMP|NO  |'1900-01-01'|     |
+author  |VARCHAR  |NO  |""          |     |
 
--- Drop a column
-ALTER TABLE t DROP COLUMN b;
--- Should return `1 10.0`
-SELECT * FROM t;
+ALTER TABLE books ADD COLUMN region varchar;
+DESC books;
 
+Field   |Type     |Null|Default     |Extra|
+--------+---------+----+------------+-----+
+price   |FLOAT    |NO  |0.00        |     |
+pub_time|TIMESTAMP|NO  |'1900-01-01'|     |
+author  |VARCHAR  |NO  |""          |     |
+region  |VARCHAR  |NO  |""          |     |
+
+ALTER TABLE books DROP COLUMN region;
+DESC books;
+
+Field   |Type     |Null|Default     |Extra|
+--------+---------+----+------------+-----+
+price   |FLOAT    |NO  |0.00        |     |
+pub_time|TIMESTAMP|NO  |'1900-01-01'|     |
+author  |VARCHAR  |NO  |""          |     |
 ```
