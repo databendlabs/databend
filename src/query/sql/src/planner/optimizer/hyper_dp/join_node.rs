@@ -27,12 +27,16 @@ pub struct JoinNode {
     pub children: Vec<JoinNode>,
     pub join_conditions: Vec<(ScalarExpr, ScalarExpr)>,
     pub cost: f64,
+    // Cache cardinality after computing.
+    pub cardinality: Option<f64>,
 }
 
 impl JoinNode {
-    pub fn cardinality(&self, dphpy: &DPhpy) -> Result<f64> {
-        let s_expr = dphpy.s_expr(self)?;
+    pub fn cardinality(&mut self, dphpy: &DPhpy) -> Result<f64> {
+        let s_expr = dphpy.s_expr(self);
         let rel_expr = RelExpr::with_s_expr(&s_expr);
-        Ok(rel_expr.derive_relational_prop()?.cardinality)
+        let card = rel_expr.derive_relational_prop()?.cardinality;
+        self.cardinality = Some(card);
+        Ok(card)
     }
 }

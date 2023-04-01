@@ -186,7 +186,6 @@ impl DPhpy {
             .get_relation_set(&(0..self.join_relations.len()).collect())?;
         if optimized {
             if let Some(final_plan) = self.dp_table.get(&all_relations) {
-                dbg!(final_plan);
                 self.join_reorder(final_plan, s_expr)
             } else {
                 // Maybe exist cross join, which make graph disconnected
@@ -209,6 +208,7 @@ impl DPhpy {
                 children: vec![],
                 join_conditions: vec![],
                 cost: relation.cardinality()?,
+                cardinality: Some(relation.cardinality()?),
             };
             let _ = self.dp_table.insert(nodes, join);
         }
@@ -284,6 +284,7 @@ impl DPhpy {
                 .get_relation_set_by_index(*neighbor)?;
             let merged_relation_set = union(nodes, &neighbor_relations);
             if self.dp_table.contains_key(&merged_relation_set)
+                && merged_relation_set.len() > nodes.len()
                 && !self.emit_csg(&merged_relation_set)?
             {
                 return Ok(false);
@@ -291,9 +292,8 @@ impl DPhpy {
             merged_sets.push(merged_relation_set);
         }
 
-        let mut new_forbidden_nodes;
+        let mut new_forbidden_nodes = forbidden_nodes.clone();
         for (idx, neighbor) in neighbors.iter().enumerate() {
-            new_forbidden_nodes = forbidden_nodes.clone();
             new_forbidden_nodes.insert(*neighbor);
             if !self.enumerate_csg_rec(&merged_sets[idx], &new_forbidden_nodes)? {
                 return Ok(false);
@@ -311,15 +311,26 @@ impl DPhpy {
     ) -> Result<bool> {
         debug_assert!(self.dp_table.contains_key(left));
         debug_assert!(self.dp_table.contains_key(right));
-        let mut left_join = self.dp_table.get(left).unwrap();
-        let mut right_join = self.dp_table.get(right).unwrap();
         let parent_set = union(left, right);
 
-        let left_cardinality = left_join.cardinality(self)?;
-        let right_cardinality = right_join.cardinality(self)?;
+        let mut left_join = self.dp_table.get(left).unwrap().clone();
+        let mut right_join = self.dp_table.get(right).unwrap().clone();
+        let left_cardinality = match left_join.cardinality {
+            Some(cardinality) => cardinality,
+            None => left_join.cardinality(self)?,
+        };
+        let right_cardinality = match right_join.cardinality {
+            Some(cardinality) => cardinality,
+            None => right_join.cardinality(self)?,
+        };
+
+        self.dp_table
+            .entry(left.to_vec())
+            .and_modify(|v| *v = left_join.clone());
+        self.dp_table
+            .entry(right.to_vec())
+            .and_modify(|v| *v = right_join.clone());
         if left_cardinality < right_cardinality {
-            // swap left_join and right_join
-            std::mem::swap(&mut left_join, &mut right_join);
             for join_condition in join_conditions.iter_mut() {
                 std::mem::swap(&mut join_condition.0, &mut join_condition.1);
             }
@@ -329,10 +340,15 @@ impl DPhpy {
             JoinNode {
                 join_type: JoinType::Inner,
                 leaves: parent_set.clone(),
-                children: vec![left_join.clone(), right_join.clone()],
+                children: if left_cardinality < right_cardinality {
+                    vec![right_join, left_join]
+                } else {
+                    vec![left_join, right_join]
+                },
                 cost: left_cardinality * COST_FACTOR_COMPUTE_PER_ROW
                     + right_cardinality * COST_FACTOR_HASH_TABLE_PER_ROW,
                 join_conditions,
+                cardinality: None,
             }
         } else {
             JoinNode {
@@ -341,6 +357,7 @@ impl DPhpy {
                 children: vec![left_join.clone(), right_join.clone()],
                 cost: left_cardinality * right_cardinality,
                 join_conditions: vec![],
+                cardinality: None,
             }
         };
 
@@ -372,7 +389,8 @@ impl DPhpy {
             let merged_relation_set = union(right, &neighbor_relations);
             let (connected, join_conditions) =
                 self.query_graph.is_connected(left, &merged_relation_set)?;
-            if self.dp_table.contains_key(&merged_relation_set)
+            if merged_relation_set.len() > right.len()
+                && self.dp_table.contains_key(&merged_relation_set)
                 && connected
                 && !self.emit_csg_cmp(left, &merged_relation_set, join_conditions)?
             {
@@ -381,9 +399,8 @@ impl DPhpy {
             merged_sets.push(merged_relation_set);
         }
         // Continue to enumerate cmp
-        let mut new_forbidden_nodes;
+        let mut new_forbidden_nodes = forbidden_nodes.clone();
         for (idx, neighbor) in neighbor_set.iter().enumerate() {
-            new_forbidden_nodes = forbidden_nodes.clone();
             new_forbidden_nodes.insert(*neighbor);
             if !self.enumerate_cmp_rec(left, &merged_sets[idx], &new_forbidden_nodes)? {
                 return Ok(false);
@@ -395,7 +412,7 @@ impl DPhpy {
     // Map join order in `JoinNode` to `SExpr`
     fn join_reorder(&self, final_plan: &JoinNode, s_expr: SExpr) -> Result<(SExpr, bool)> {
         // Convert `final_plan` to `SExpr`
-        let join_expr = self.s_expr(final_plan)?;
+        let join_expr = self.s_expr(final_plan);
         // Find first join node in `s_expr`, then replace it with `join_expr`
         let new_s_expr = self.replace_join_expr(&join_expr, &s_expr)?;
         Ok((new_s_expr, true))
@@ -417,13 +434,13 @@ impl DPhpy {
         Ok(new_s_expr)
     }
 
-    pub fn s_expr(&self, join_node: &JoinNode) -> Result<SExpr> {
+    pub fn s_expr(&self, join_node: &JoinNode) -> SExpr {
         // Traverse JoinNode
         if join_node.children.is_empty() {
             // The node is leaf, get relation for `join_relations`
             let idx = join_node.leaves[0];
             let relation = self.join_relations[idx].s_expr();
-            return Ok(relation);
+            return relation;
         }
 
         // The node is join
@@ -452,8 +469,7 @@ impl DPhpy {
             .children
             .iter()
             .map(|child| self.s_expr(child))
-            .collect::<Result<Vec<_>>>()?;
-        let join_expr = SExpr::create(rel_op, children, None, None);
-        Ok(join_expr)
+            .collect::<Vec<_>>();
+        SExpr::create(rel_op, children, None, None)
     }
 }
