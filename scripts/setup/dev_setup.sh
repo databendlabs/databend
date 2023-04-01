@@ -504,7 +504,7 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	cargo version
 
 	# Install tools that needed in build
-	cargo install sccache@0.4.0-pre.7 --git https://github.com/mozilla/sccache --tag "v0.4.0-pre.7"
+	cargo install sccache
 fi
 
 if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then
