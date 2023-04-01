@@ -208,16 +208,10 @@ impl UnusedColumnPruner {
             }
 
             RelOperator::ProjectSet(op) => {
-                let mut used = vec![];
-                // Only keep columns needed by parent plan.
+                // We can't prune SRFs because they may change the cardinality of result set,
+                // even if the result column of an SRF is not used by any following expression.
                 for s in op.srfs.iter() {
-                    if !required.contains(&s.index) {
-                        continue;
-                    }
-                    used.push(s.clone());
-                    s.scalar.used_columns().iter().for_each(|c| {
-                        required.insert(*c);
-                    })
+                    required.extend(s.scalar.used_columns().iter().copied());
                 }
 
                 Ok(SExpr::create_unary(
