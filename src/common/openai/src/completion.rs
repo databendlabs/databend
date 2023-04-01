@@ -22,8 +22,21 @@ use crate::metrics::metrics_completion_count;
 use crate::metrics::metrics_completion_token;
 use crate::OpenAI;
 
+pub enum CompletionMode {
+    // SQL translate:
+    // max_tokens: 150, stop: ['#', ';']
+    SQL,
+    // Text completion:
+    // max_tokens: 250, stop: none
+    Text,
+}
+
 impl OpenAI {
-    pub fn completion_request(&self, prompt: String) -> Result<(String, Option<u32>)> {
+    pub fn completion_request(
+        &self,
+        prompt: String,
+        mode: CompletionMode,
+    ) -> Result<(String, Option<u32>)> {
         let openai = openai_api_rust::OpenAI::new(
             Auth {
                 api_key: self.api_key.clone(),
@@ -31,18 +44,24 @@ impl OpenAI {
             },
             &self.api_base,
         );
+
+        let (max_tokens, stop) = match mode {
+            CompletionMode::SQL => (Some(150), Some(vec!["#".to_string(), ";".to_string()])),
+            CompletionMode::Text => (Some(250), None),
+        };
+
         let body = CompletionsBody {
             model: self.model.to_string(),
             prompt: Some(vec![prompt]),
             suffix: None,
-            max_tokens: Some(150),
+            max_tokens,
             temperature: Some(0_f32),
             top_p: Some(1_f32),
             n: Some(2),
             stream: Some(false),
             logprobs: None,
             echo: None,
-            stop: Some(vec!["#".to_string(), ";".to_string()]),
+            stop,
             presence_penalty: None,
             frequency_penalty: None,
             best_of: None,

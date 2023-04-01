@@ -42,6 +42,7 @@ use opendal::layers::LoggingLayer;
 use opendal::layers::MetricsLayer;
 use opendal::layers::RetryLayer;
 use opendal::layers::TracingLayer;
+use opendal::raw::HttpClient;
 use opendal::services;
 use opendal::Builder;
 use opendal::Operator;
@@ -233,6 +234,42 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
     if cfg.enable_virtual_host_style {
         builder.enable_virtual_host_style();
     }
+
+    let async_client = {
+        let mut builder = reqwest::ClientBuilder::new();
+
+        // Make sure we don't enable auto gzip decompress.
+        builder = builder.no_gzip();
+        // Make sure we don't enable auto brotli decompress.
+        builder = builder.no_brotli();
+        // Make sure we don't enable auto deflate decompress.
+        builder = builder.no_deflate();
+        // Redirect will be handled by ourselves.
+        builder = builder.redirect(reqwest::redirect::Policy::none());
+        // Enable trust dns
+        builder = builder.trust_dns(true);
+
+        // Connect timeout default to 30s.
+        let connect_timeout = env::var("_DATABEND_INTERNAL_CONNECT_TIMEOUT")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(30);
+        builder = builder.connect_timeout(Duration::from_secs(connect_timeout));
+
+        // Timeout default to 120s.
+        let timeout = env::var("_DATABEND_INTERNAL_TIMEOUT")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(120);
+        builder = builder.timeout(Duration::from_secs(timeout));
+
+        builder
+            .build()
+            .map_err(|err| Error::new(ErrorKind::Other, err))?
+    };
+
+    let client = HttpClient::with_client(async_client, ureq::Agent::new());
+    builder.http_client(client);
 
     Ok(builder)
 }

@@ -23,11 +23,6 @@ use super::table_test_fixture::execute_command;
 use super::table_test_fixture::history_should_have_item;
 use super::table_test_fixture::TestFixture;
 
-pub enum TestTableOperation {
-    Optimize(String),
-    Analyze,
-}
-
 pub async fn do_insertions(fixture: &TestFixture) -> Result<()> {
     fixture.create_default_table().await?;
     // ingests 1 block, 1 segment, 1 snapshot
@@ -39,21 +34,17 @@ pub async fn do_insertions(fixture: &TestFixture) -> Result<()> {
 
 pub async fn do_purge_test(
     case_name: &str,
-    operation: TestTableOperation,
+    op: &str,
     snapshot_count: u32,
     table_statistic_count: u32,
     segment_count: u32,
     block_count: u32,
     index_count: u32,
-    after_compact: Option<(u32, u32, u32, u32, u32)>,
 ) -> Result<()> {
     let fixture = TestFixture::new().await;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
-    let qry = match operation {
-        TestTableOperation::Optimize(op) => format!("optimize table {}.{} {}", db, tbl, op),
-        TestTableOperation::Analyze => format!("analyze table {}.{}", db, tbl),
-    };
+    let qry = format!("optimize table {}.{} {}", db, tbl, op);
 
     // insert, and then insert overwrite (1 snapshot, 1 segment, 1 data block, 1 index block for each insertion);
     do_insertions(&fixture).await?;
@@ -74,29 +65,5 @@ pub async fn do_purge_test(
         None,
     )
     .await?;
-    history_should_have_item(&fixture, case_name, snapshot_count).await?;
-
-    if let Some((snapshot_count, table_statistic_count, segment_count, block_count, index_count)) =
-        after_compact
-    {
-        let qry = format!("optimize table {}.{} all", db, tbl);
-        execute_command(fixture.ctx().clone(), &qry).await?;
-
-        check_data_dir(
-            &fixture,
-            case_name,
-            snapshot_count,
-            table_statistic_count,
-            segment_count,
-            block_count,
-            index_count,
-            Some(()),
-            None,
-        )
-        .await?;
-
-        history_should_have_item(&fixture, case_name, snapshot_count).await?;
-    };
-
-    Ok(())
+    history_should_have_item(&fixture, case_name, snapshot_count).await
 }
