@@ -14,8 +14,11 @@
 
 use std::sync::Arc;
 
-use arrow_flight::utils::batches_to_flight_data;
 use arrow_flight::FlightData;
+use arrow_flight::SchemaAsIpc;
+use arrow_ipc::writer;
+use arrow_ipc::writer::IpcWriteOptions;
+use arrow_schema::Schema as ArrowSchema;
 use async_stream::stream;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -35,16 +38,25 @@ use crate::interpreters::InterpreterFactory;
 use crate::sessions::Session;
 
 impl FlightSqlServiceImpl {
-    pub(super) fn block_to_flight_data(
-        block: DataBlock,
-        data_schema: &DataSchema,
-    ) -> Result<Vec<FlightData>> {
+    pub(crate) fn schema_to_flight_data(data_schema: DataSchema) -> FlightData {
+        let arrow_schema = ArrowSchema::from(&data_schema);
+        let options = IpcWriteOptions::default();
+        SchemaAsIpc::new(&arrow_schema, &options).into()
+    }
+
+    pub fn block_to_flight_data(block: DataBlock, data_schema: &DataSchema) -> Result<FlightData> {
         let batch = block
             .to_record_batch(data_schema)
             .map_err(|e| ErrorCode::Internal(format!("{e:?}")))?;
-        let schema = (*batch.schema()).clone();
-        let batches = vec![batch];
-        batches_to_flight_data(schema, batches).map_err(|e| ErrorCode::Internal(format!("{e:?}")))
+        let options = IpcWriteOptions::default();
+        let data_gen = writer::IpcDataGenerator::default();
+        let mut dictionary_tracker = writer::DictionaryTracker::new(false);
+
+        let (_encoded_dictionaries, encoded_batch) = data_gen
+            .encoded_batch(&batch, &mut dictionary_tracker, &options)
+            .map_err(|e| ErrorCode::Internal(format!("{e:?}")))?;
+
+        Ok(encoded_batch.into())
     }
 
     #[async_backtrace::framed]
@@ -101,18 +113,18 @@ impl FlightSqlServiceImpl {
         context.attach_query_str(plan.to_string(), plan_extras.stament.to_mask_sql());
         let interpreter = InterpreterFactory::get(context.clone(), plan).await?;
         let data_schema = interpreter.schema();
+        let schema_flight_data = Self::schema_to_flight_data((*data_schema).clone());
 
         let mut data_stream = interpreter.execute(context.clone()).await?;
 
         let stream = stream! {
+            yield Ok(schema_flight_data);
             while let Some(block) = data_stream.next().await {
                 match block {
                     Ok(block) => {
                         match Self::block_to_flight_data(block, &data_schema) {
-                            Ok(data) => {
-                                for d in data {
-                                   yield Ok(d)
-                                }
+                            Ok(flight_data) => {
+                               yield Ok(flight_data)
                             }
                             Err(err) => {
                                 yield Err(status!("Could not convert batches", err))
