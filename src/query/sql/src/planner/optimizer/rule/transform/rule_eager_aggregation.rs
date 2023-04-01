@@ -1162,12 +1162,8 @@ impl Rule for RuleEagerAggregation {
                     .replace_children(vec![temp_final_agg_expr])
                     .replace_plan(final_eval_scalars[idx].clone().try_into()?)
             };
-            // if idx == final_agg_finals.len() - 1 {
-            // dbg!("result = {:?}", &result);
-            dbg!("-------------------------------");
             result.set_applied_rule(&self.id);
             state.add_result(result);
-            // }
         }
 
         Ok(())
