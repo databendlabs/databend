@@ -1,10 +1,3 @@
-[workspace.package]
-version = "0.1.0"
-authors = ["Databend Cloud <cloud.dev@datafuselabs.com>"]
-license = "Apache-2.0"
-publish = false
-edition = "2021"
-
 [workspace]
 members = [
     "core",

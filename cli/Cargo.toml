@@ -1,6 +1,6 @@
 [package]
-name = "databend-cli"
-version = "0.1.3"
+name = "bendsql"
+version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
 description = "Databend Native Cli tool"
@@ -40,7 +40,7 @@ strum = "0.24"
 strum_macros = "0.24"
 
 [[bin]]
-name = "databend-cli"
+name = "bendsql"
 path = "src/main.rs"
 doctest = false
 test = false
