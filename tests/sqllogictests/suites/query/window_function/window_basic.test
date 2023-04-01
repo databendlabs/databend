@@ -185,18 +185,18 @@ sales 0.0
 
 # aggregate functions in window clause
 query TII
-select depname, sum(sum(salary)) over (), sum(salary) from empsalary group by depname;
+select depname, sum(sum(salary)) over (partition by 1 order by sum(salary)), sum(salary) from empsalary group by depname;
 ----
-develop 25100 25100
-sales 39700 14600
-personnel 47100 7400
+personnel 7400 7400
+sales 22000 14600
+develop 47100 25100
 
 query TI
-select depname, sum(sum(salary)) over () from empsalary group by depname;
+select depname, sum(sum(salary)) over (partition by 1 order by sum(salary)) from empsalary group by depname;
 ----
-develop 25100
-sales 39700
-personnel 47100
+personnel 7400
+sales 22000
+develop 47100
 
 query III
 select grouping(salary), grouping(depname), sum(grouping(salary)) over (partition by grouping(salary) + grouping(depname) order by grouping(depname) desc) from empsalary group by rollup (depname, salary);
