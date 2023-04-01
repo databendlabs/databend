@@ -40,12 +40,14 @@ impl UnionReceiveSink {
 impl AsyncSink for UnionReceiveSink {
     const NAME: &'static str = "UnionReceiveSink";
 
+    #[async_backtrace::framed]
     async fn on_finish(&mut self) -> Result<()> {
         drop(self.sender.take());
         Ok(())
     }
 
     #[unboxed_simple]
+    #[async_backtrace::framed]
     async fn consume(&mut self, data_block: DataBlock) -> Result<bool> {
         if let Some(sender) = self.sender.as_ref() {
             if sender.send(data_block).await.is_err() {

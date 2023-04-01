@@ -64,6 +64,7 @@ impl CopyInterpreter {
         Ok(CopyInterpreter { ctx, plan })
     }
 
+    #[async_backtrace::framed]
     async fn build_query(&self, query: &Plan) -> Result<(PipelineBuildResult, DataSchemaRef)> {
         let (s_expr, metadata, bind_context, formatted_ast) = match query {
             Plan::Query {
@@ -103,6 +104,7 @@ impl CopyInterpreter {
         Ok((build_res, data_schema))
     }
 
+    #[async_backtrace::framed]
     async fn build_copy_into_stage_pipeline(
         &self,
         stage: &StageInfo,
@@ -134,6 +136,7 @@ impl CopyInterpreter {
         Ok(build_res)
     }
 
+    #[async_backtrace::framed]
     async fn try_purge_files(
         ctx: Arc<QueryContext>,
         stage_info: &StageInfo,
@@ -159,6 +162,7 @@ impl CopyInterpreter {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[async_backtrace::framed]
     async fn build_copy_into_table_with_transform_pipeline(
         &self,
         catalog_name: &str,
@@ -223,6 +227,7 @@ impl CopyInterpreter {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[async_backtrace::framed]
     async fn build_copy_into_table_pipeline(
         &self,
         catalog_name: &str,
@@ -260,6 +265,10 @@ impl CopyInterpreter {
         info!("end to list files: got {} files", num_all_files);
 
         let need_copy_file_infos = if force {
+            info!(
+                "force mode, ignore file filtering. ({}.{})",
+                database_name, table_name
+            );
             all_source_file_infos
         } else {
             // Status.
@@ -429,13 +438,22 @@ impl CopyInterpreter {
             let table_id = to_table.get_id();
             let expire_hours = ctx.get_settings().get_load_file_metadata_expire_hours()?;
 
-            let fail_if_duplicated = !force;
-            let upsert_copied_files_request = Self::upsert_copied_files_request(
-                table_id,
-                expire_hours,
-                copied_file_tree,
-                fail_if_duplicated,
-            );
+            let upsert_copied_files_request = {
+                if stage_info.copy_options.purge && force {
+                    // if `purge-after-copy` is enabled, and in `force` copy mode,
+                    // we do not need to upsert copied files into meta server
+                    info!("[purge] and [force] are both enabled,  will not update copied-files set. ({})", &to_table.get_table_info().desc);
+                    None
+                } else {
+                    let fail_if_duplicated = !force;
+                    Self::upsert_copied_files_request(
+                        table_id,
+                        expire_hours,
+                        copied_file_tree,
+                        fail_if_duplicated,
+                    )
+                }
+            };
 
             {
                 let status = format!("begin commit, number of copied files:{}", num_copied_files);
@@ -522,6 +540,7 @@ impl Interpreter for CopyInterpreter {
     }
 
     #[tracing::instrument(level = "debug", name = "copy_interpreter_execute_v2", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         match &self.plan {
             CopyPlan::IntoTable {

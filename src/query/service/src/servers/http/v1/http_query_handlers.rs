@@ -273,6 +273,7 @@ async fn query_page_handler(
 }
 
 #[poem::handler]
+#[async_backtrace::framed]
 pub(crate) async fn query_handler(
     ctx: &HttpQueryContext,
     Json(req): Json<HttpQueryRequest>,

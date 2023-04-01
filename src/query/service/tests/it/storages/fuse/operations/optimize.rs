@@ -21,36 +21,15 @@ use futures_util::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
 use crate::storages::fuse::utils::do_purge_test;
-use crate::storages::fuse::utils::TestTableOperation;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_optimize_purge() -> Result<()> {
-    do_purge_test(
-        "explicit purge",
-        TestTableOperation::Optimize("purge".to_string()),
-        1,
-        0,
-        1,
-        1,
-        1,
-        None,
-    )
-    .await
+    do_purge_test("explicit purge", "purge", 1, 0, 1, 1, 1).await
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_optimize_all() -> Result<()> {
-    do_purge_test(
-        "explicit purge",
-        TestTableOperation::Optimize("all".to_string()),
-        1,
-        0,
-        1,
-        1,
-        1,
-        None,
-    )
-    .await
+    do_purge_test("explicit purge", "all", 1, 0, 1, 1, 1).await
 }
 
 #[tokio::test(flavor = "multi_thread")]

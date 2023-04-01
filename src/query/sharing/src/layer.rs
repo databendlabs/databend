@@ -135,6 +135,7 @@ impl Accessor for SharedAccessor {
         meta
     }
 
+    #[async_backtrace::framed]
     async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::Reader)> {
         let req: PresignedRequest =
             self.signer
@@ -167,6 +168,7 @@ impl Accessor for SharedAccessor {
         }
     }
 
+    #[async_backtrace::framed]
     async fn stat(&self, path: &str, _args: OpStat) -> Result<RpStat> {
         // Stat root always returns a DIR.
         if path == "/" {

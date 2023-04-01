@@ -137,6 +137,7 @@ impl StatisticsReceiver {
         })
     }
 
+    #[async_backtrace::framed]
     async fn fetch(
         ctx: &Arc<QueryContext>,
         tx: &FlightSender,

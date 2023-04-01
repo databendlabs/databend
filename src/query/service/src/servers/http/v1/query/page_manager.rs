@@ -97,6 +97,7 @@ impl PageManager {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn get_a_page(&mut self, page_no: usize, tp: &Wait) -> Result<Page> {
         let next_no = self.total_pages;
         if page_no == next_no && !self.end {
@@ -143,6 +144,7 @@ impl PageManager {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn collect_new_page(&mut self, tp: &Wait) -> Result<(JsonBlock, bool)> {
         let mut res: Vec<Vec<JsonValue>> = Vec::with_capacity(self.max_rows_per_page);
         while res.len() < self.max_rows_per_page {
@@ -207,6 +209,7 @@ impl PageManager {
         Ok((block, end))
     }
 
+    #[async_backtrace::framed]
     pub async fn detach(&self) {
         self.block_receiver.close();
     }

@@ -52,7 +52,6 @@ common-meta-stoerr = { path = "../meta/stoerr" }
 common-meta-store = { path = "../meta/store" }
 common-meta-types = { path = "../meta/types" }
 common-metrics = { path = "../common/metrics" }
-common-sharing = { path = "../query/sharing" }
 common-tracing = { path = "../common/tracing" }
 databend-meta = { path = "../meta/service" }
 databend-query = { path = "../query/service" }
@@ -61,6 +60,7 @@ sharing-endpoint = { path = "../query/sharing-endpoint" }
 # Crates.io dependencies
 anyerror = { workspace = true }
 anyhow = { workspace = true }
+async-backtrace = { workspace = true }
 clap = { workspace = true }
 comfy-table = "6.1.3"
 limits-rs = "0.2.0"

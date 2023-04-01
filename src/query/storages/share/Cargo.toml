@@ -17,6 +17,7 @@ common-meta-app = { path = "../../../meta/app" }
 
 storages-common-table-meta = { path = "../common/table-meta" }
 
+async-backtrace = { workspace = true }
 opendal = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

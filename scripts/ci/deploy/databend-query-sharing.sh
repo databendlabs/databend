@@ -23,4 +23,4 @@ export STORAGE_S3_ROOT=shared
 
 nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-shared.toml &
 
-python3 scripts/ci/wait_tcp.py --timeout 10 --port 53307
+python3 scripts/ci/wait_tcp.py --timeout 30 --port 53307

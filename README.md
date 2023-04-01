@@ -171,6 +171,15 @@ docker run --net=host  datafuselabs/databend
 - [How to Drop a View](https://databend.rs/doc/sql-commands/ddl/view/ddl-drop-view)
 - [How to Alter a View](https://databend.rs/doc/sql-commands/ddl/view/ddl-alter-view)
 
+
+## AI Functions
+
+- [Generating SQL with AI](https://databend.rs/doc/sql-functions/ai-functions/ai-to-sql)
+- [Creating Embedding Vectors](https://databend.rs/doc/sql-functions/ai-functions/ai-embedding-vector)
+- [Computing Text Similarities](https://databend.rs/doc/sql-functions/ai-functions/cosine-distance)
+- [Text Completion with AI](https://databend.rs/doc/sql-functions/ai-functions/ai-text-completion)
+
+
 ### Managing User-Defined Functions
 
 - [How to Create a User-Defined Function](https://databend.rs/doc/sql-commands/ddl/udf/ddl-create-function)

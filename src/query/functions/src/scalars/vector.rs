@@ -21,10 +21,13 @@ use common_expression::vectorize_with_builder_2_arg;
 use common_expression::FunctionDomain;
 use common_expression::FunctionRegistry;
 use common_openai::AIModel;
+use common_openai::CompletionMode;
 use common_openai::OpenAI;
 use common_vector::cosine_distance;
 
 pub fn register(registry: &mut FunctionRegistry) {
+    // cosine_distance
+    // This function takes two Float32 arrays as input and computes the cosine distance between them.
     registry.register_passthrough_nullable_2_arg::<ArrayType<Float32Type>, ArrayType<Float32Type>, Float32Type, _, _>(
         "cosine_distance",
         |_,  _| FunctionDomain::MayThrow,
@@ -48,6 +51,9 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
+    // embedding_vector
+    // This function takes two strings as input, sends an API request to OpenAI, and returns the Float32 array of embeddings.
+    // The OpenAI API key is pre-configured during the binder phase, so we rewrite this function and set the API key.
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, ArrayType<Float32Type>, _, _>(
         "embedding_vector",
         |_, _| FunctionDomain::MayThrow,
@@ -63,10 +69,39 @@ pub fn register(registry: &mut FunctionRegistry) {
                         output.push(result.into());
                     }
                     Err(e) => {
-                        ctx.set_error(output.len(), format!("openai request error:{:?}", e));
+                        ctx.set_error(output.len(), format!("openai embedding request error:{:?}", e));
                         output.push(vec![F32::from(0.0)].into());
                     }
                 }
+            },
+        ),
+    );
+
+    // text_completion
+    // This function takes two strings as input, sends an API request to OpenAI, and returns the AI-generated completion as a string.
+    // The OpenAI API key is pre-configured during the binder phase, so we rewrite this function and set the API key.
+    registry.register_passthrough_nullable_2_arg::<StringType, StringType, StringType, _, _>(
+        "text_completion",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<StringType, StringType, StringType>(
+            |data, api_key, output, ctx| {
+                let data = std::str::from_utf8(data).unwrap();
+                let api_key = std::str::from_utf8(api_key).unwrap();
+                let openai = OpenAI::create(api_key.to_string(), AIModel::TextDavinci003);
+                let result = openai.completion_request(data.to_string(), CompletionMode::Text);
+                match result {
+                    Ok((resp, _)) => {
+                        output.put_str(&resp);
+                    }
+                    Err(e) => {
+                        ctx.set_error(
+                            output.len(),
+                            format!("openai completion request error:{:?}", e),
+                        );
+                        output.put_str("");
+                    }
+                }
+                output.commit_row();
             },
         ),
     );

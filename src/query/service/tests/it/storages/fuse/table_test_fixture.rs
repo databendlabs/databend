@@ -395,6 +395,11 @@ pub async fn append_sample_data(num_blocks: usize, fixture: &TestFixture) -> Res
     append_sample_data_overwrite(num_blocks, false, fixture).await
 }
 
+pub async fn analyze_table(fixture: &TestFixture) -> Result<()> {
+    let table = fixture.latest_default_table().await?;
+    table.analyze(fixture.ctx.clone()).await
+}
+
 pub async fn append_sample_data_overwrite(
     num_blocks: usize,
     overwrite: bool,

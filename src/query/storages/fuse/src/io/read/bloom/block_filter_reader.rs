@@ -50,6 +50,7 @@ pub trait BloomBlockFilterReader {
 
 #[async_trait::async_trait]
 impl BloomBlockFilterReader for Location {
+    #[async_backtrace::framed]
     async fn read_block_filter(
         &self,
         dal: Operator,
@@ -184,6 +185,7 @@ where
     T: Future + Send + 'static,
     T::Output: Send + 'static,
 {
+    #[async_backtrace::framed]
     async fn execute_in_runtime(self, runtime: &Runtime) -> Result<T::Output> {
         runtime
             .try_spawn(self)?

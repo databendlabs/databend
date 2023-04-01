@@ -18,12 +18,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_core::Pipeline;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
 use crate::interpreters::Interpreter;
-use crate::pipelines::executor::ExecutorSettings;
-use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -55,6 +52,7 @@ impl Interpreter for DeleteInterpreter {
     }
 
     #[tracing::instrument(level = "debug", name = "delete_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let catalog_name = self.plan.catalog_name.as_str();
         let db_name = self.plan.database_name.as_str();
@@ -83,21 +81,15 @@ impl Interpreter for DeleteInterpreter {
             (None, vec![])
         };
 
-        let mut pipeline = Pipeline::create();
-        tbl.delete(self.ctx.clone(), filter, col_indices, &mut pipeline)
-            .await?;
-        if !pipeline.is_empty() {
-            let settings = self.ctx.get_settings();
-            pipeline.set_max_threads(settings.get_max_threads()? as usize);
-            let query_id = self.ctx.get_id();
-            let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
-            let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
+        let mut build_res = PipelineBuildResult::create();
+        tbl.delete(
+            self.ctx.clone(),
+            filter,
+            col_indices,
+            &mut build_res.main_pipeline,
+        )
+        .await?;
 
-            self.ctx.set_executor(Arc::downgrade(&executor.get_inner()));
-            executor.execute()?;
-            drop(executor);
-        }
-
-        Ok(PipelineBuildResult::create())
+        Ok(build_res)
     }
 }

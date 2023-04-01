@@ -38,6 +38,7 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_openai::AIModel;
+use common_openai::CompletionMode;
 use common_openai::OpenAI;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -118,6 +119,7 @@ impl Table for GPT2SQLTable {
         &self.table_info
     }
 
+    #[async_backtrace::framed]
     async fn read_partitions(
         &self,
         _: Arc<dyn TableContext>,
@@ -172,6 +174,7 @@ impl AsyncSource for GPT2SQLSource {
     const NAME: &'static str = "gpt_to_sql";
 
     #[async_trait::unboxed_simple]
+    #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.finished {
             return Ok(None);
@@ -217,7 +220,7 @@ impl AsyncSource for GPT2SQLSource {
         // Response.
         let api_key = GlobalConfig::instance().query.openai_api_key.clone();
         let openai = OpenAI::create(api_key, AIModel::TextDavinci003);
-        let (sql, _) = openai.completion_request(prompt)?;
+        let (sql, _) = openai.completion_request(prompt, CompletionMode::SQL)?;
 
         let sql = format!("SELECT{}", sql);
         info!("openai response sql: {}", sql);

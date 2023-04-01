@@ -50,6 +50,7 @@ use crate::FuseTable;
 
 impl FuseTable {
     #[tracing::instrument(level = "debug", name = "do_read_partitions", skip_all, fields(ctx.id = ctx.get_id().as_str()))]
+    #[async_backtrace::framed]
     pub async fn do_read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -98,6 +99,7 @@ impl FuseTable {
 
     #[allow(clippy::too_many_arguments)]
     #[tracing::instrument(level = "debug", name = "prune_snapshot_blocks", skip_all, fields(ctx.id = ctx.get_id().as_str()))]
+    #[async_backtrace::framed]
     pub async fn prune_snapshot_blocks(
         &self,
         ctx: Arc<dyn TableContext>,

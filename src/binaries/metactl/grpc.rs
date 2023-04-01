@@ -14,14 +14,22 @@
 
 use std::fs::File;
 use std::io::Write;
+use std::time::Duration;
 
 use common_meta_client::MetaGrpcClient;
 use common_meta_types::protobuf::Empty;
 use tokio_stream::StreamExt;
 
 pub async fn export_meta(addr: &str, save: String) -> anyhow::Result<()> {
-    let client =
-        MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None, None)?;
+    let client = MetaGrpcClient::try_create(
+        vec![addr.to_string()],
+        "root",
+        "xxx",
+        None,
+        None,
+        Duration::from_secs(10),
+        None,
+    )?;
 
     let mut grpc_client = client.make_client().await?;
 

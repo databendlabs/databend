@@ -39,6 +39,7 @@ impl<'a> SegmentWriter<'a> {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn write_segment(&self, segment: SegmentInfo) -> Result<Location> {
         let location = self.generate_location();
         segment
@@ -47,6 +48,7 @@ impl<'a> SegmentWriter<'a> {
         Ok(location)
     }
 
+    #[async_backtrace::framed]
     pub async fn write_segment_no_cache(&self, segment: &SegmentInfo) -> Result<Location> {
         let location = self.generate_location();
         segment

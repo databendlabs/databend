@@ -20,6 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use opendal::Operator;
 
+#[async_backtrace::framed]
 pub async fn read_parquet_schema_async(operator: &Operator, path: &str) -> Result<ArrowSchema> {
     let mut reader = operator.reader(path).await?;
     let meta = pread::read_metadata_async(&mut reader).await.map_err(|e| {
@@ -43,6 +44,7 @@ async fn read_parquet_metas_batch(
     Ok(metas)
 }
 
+#[async_backtrace::framed]
 pub async fn read_parquet_metas_in_parallel(
     op: Operator,
     file_infos: Vec<(String, u64)>,

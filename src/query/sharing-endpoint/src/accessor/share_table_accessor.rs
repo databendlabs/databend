@@ -25,6 +25,7 @@ use crate::models::SharedTableResponse;
 // Methods for access share table spec.
 impl SharingAccessor {
     // read share table spec from S3 and check whether requester has permission on the table
+    #[async_backtrace::framed]
     async fn get_shared_table_spec(
         &self,
         input: &models::LambdaInput,
@@ -39,6 +40,7 @@ impl SharingAccessor {
     // presign_file would be separated into two steps:
     // 1. fetch the table location
     // 2. form the final path and presign it
+    #[async_backtrace::framed]
     async fn share_table_spec_presign_file(
         &self,
         table: &SharedTableResponse,
@@ -66,6 +68,7 @@ impl SharingAccessor {
         )
     }
 
+    #[async_backtrace::framed]
     pub async fn get_share_table_spec_presigned_files(
         input: &models::LambdaInput,
     ) -> Result<Vec<PresignFileResponse>> {

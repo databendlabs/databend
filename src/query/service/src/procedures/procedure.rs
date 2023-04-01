@@ -152,6 +152,7 @@ mod impls {
             self.0.features()
         }
 
+        #[async_backtrace::framed]
         async fn eval(
             &self,
             ctx: Arc<QueryContext>,
@@ -195,6 +196,7 @@ mod impls {
             self.0.features()
         }
 
+        #[async_backtrace::framed]
         async fn eval(
             &self,
             ctx: Arc<QueryContext>,

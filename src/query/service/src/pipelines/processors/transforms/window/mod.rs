@@ -13,5 +13,7 @@
 // limitations under the License.
 
 mod transform_window;
+mod window_function;
 
 pub use transform_window::TransformWindow;
+pub use window_function::WindowFunctionInfo;

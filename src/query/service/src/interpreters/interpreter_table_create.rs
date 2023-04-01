@@ -60,6 +60,7 @@ impl Interpreter for CreateTableInterpreter {
         "CreateTableInterpreterV2"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.plan.tenant.clone();
         let quota_api = UserApiProvider::instance().get_tenant_quota_api_client(&tenant)?;
@@ -116,6 +117,7 @@ impl Interpreter for CreateTableInterpreter {
 }
 
 impl CreateTableInterpreter {
+    #[async_backtrace::framed]
     async fn create_table_as_select(&self, select_plan: Box<Plan>) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
@@ -150,6 +152,7 @@ impl CreateTableInterpreter {
             .await
     }
 
+    #[async_backtrace::framed]
     async fn create_table(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
         let mut stat = None;

@@ -155,6 +155,7 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
         &self.table_info
     }
 
+    #[async_backtrace::framed]
     async fn read_partitions(
         &self,
         _: Arc<dyn TableContext>,
@@ -203,6 +204,7 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
         )
     }
 
+    #[async_backtrace::framed]
     async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
         let log_queue = SystemLogQueue::<Event>::instance()?;
         let mut write_guard = log_queue.data.write();

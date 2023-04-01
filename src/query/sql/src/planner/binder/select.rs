@@ -73,6 +73,7 @@ pub struct SelectItem<'a> {
 }
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(super) async fn bind_select_stmt(
         &mut self,
         bind_context: &mut BindContext,
@@ -216,6 +217,7 @@ impl Binder {
     }
 
     #[async_recursion]
+    #[async_backtrace::framed]
     pub(crate) async fn bind_set_expr(
         &mut self,
         bind_context: &mut BindContext,
@@ -239,6 +241,7 @@ impl Binder {
     }
 
     #[async_recursion]
+    #[async_backtrace::framed]
     pub(crate) async fn bind_query(
         &mut self,
         bind_context: &mut BindContext,
@@ -300,6 +303,7 @@ impl Binder {
         Ok((s_expr, bind_context))
     }
 
+    #[async_backtrace::framed]
     pub(super) async fn bind_where(
         &mut self,
         bind_context: &mut BindContext,
@@ -330,6 +334,7 @@ impl Binder {
         Ok(new_expr)
     }
 
+    #[async_backtrace::framed]
     pub(super) async fn bind_set_operator(
         &mut self,
         bind_context: &mut BindContext,
@@ -352,13 +357,21 @@ impl Binder {
                 .zip(right_bind_context.columns.iter())
             {
                 if left_col.data_type != right_col.data_type {
-                    let data_type = common_super_type(
+                    if let Some(data_type) = common_super_type(
                         *left_col.data_type.clone(),
                         *right_col.data_type.clone(),
                         &BUILTIN_FUNCTIONS.default_cast_rules,
-                    )
-                    .expect("SetOperation's types cannot be matched");
-                    coercion_types.push(data_type);
+                    ) {
+                        coercion_types.push(data_type);
+                    } else {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "SetOperation's types cannot be matched, left column {:?}, type: {:?}, right column {:?}, type: {:?}",
+                            left_col.column_name,
+                            left_col.data_type,
+                            right_col.column_name,
+                            right_col.data_type
+                        )));
+                    }
                 } else {
                     coercion_types.push(*left_col.data_type.clone());
                 }

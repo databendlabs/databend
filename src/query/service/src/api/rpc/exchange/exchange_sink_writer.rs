@@ -42,12 +42,14 @@ impl ExchangeWriterSink {
 impl AsyncSink for ExchangeWriterSink {
     const NAME: &'static str = "ExchangeWriterSink";
 
+    #[async_backtrace::framed]
     async fn on_finish(&mut self) -> Result<()> {
         self.flight_sender.close();
         Ok(())
     }
 
     #[async_trait::unboxed_simple]
+    #[async_backtrace::framed]
     async fn consume(&mut self, mut data_block: DataBlock) -> Result<bool> {
         let mut serialize_meta = match data_block.take_meta() {
             None => Err(ErrorCode::Internal(

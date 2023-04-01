@@ -191,6 +191,7 @@ impl InputContext {
         })
     }
 
+    #[async_backtrace::framed]
     pub async fn try_create_from_insert_clickhouse(
         format_name: &str,
         stream_receiver: Receiver<Result<StreamingReadBatch>>,
@@ -233,6 +234,7 @@ impl InputContext {
         })
     }
 
+    #[async_backtrace::framed]
     pub async fn try_create_from_insert_file_format(
         stream_receiver: Receiver<Result<StreamingReadBatch>>,
         settings: Arc<Settings>,

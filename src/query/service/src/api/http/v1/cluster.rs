@@ -31,6 +31,7 @@ use crate::sessions::TableContext;
 // cluster_state: the shared in memory state which store all nodes known to current node
 // return: return a list of cluster node information
 #[poem::handler]
+#[async_backtrace::framed]
 pub async fn cluster_list_handler() -> poem::Result<impl IntoResponse> {
     let sessions = SessionManager::instance();
     let nodes = list_nodes(&sessions).await.map_err(|cause| {

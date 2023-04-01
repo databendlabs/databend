@@ -49,6 +49,7 @@ impl AsyncSystemTable for QueryCacheTable {
         &self.table_info
     }
 
+    #[async_backtrace::framed]
     async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let meta_client = UserApiProvider::instance().get_meta_store_client();
         let result_cache_mgr = ResultCacheMetaManager::create(meta_client, 0);

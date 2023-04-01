@@ -54,6 +54,7 @@ pub struct JoinConditions {
 
 impl Binder {
     #[async_recursion]
+    #[async_backtrace::framed]
     pub(super) async fn bind_join(
         &mut self,
         bind_context: &BindContext,
@@ -392,6 +393,7 @@ impl<'a> JoinConditionResolver<'a> {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn resolve(
         &mut self,
         left_join_conditions: &mut Vec<ScalarExpr>,
@@ -456,6 +458,7 @@ impl<'a> JoinConditionResolver<'a> {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn resolve_on(
         &mut self,
         condition: &Expr,
@@ -484,6 +487,7 @@ impl<'a> JoinConditionResolver<'a> {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn resolve_predicate(
         &self,
         predicate: &Expr,
@@ -534,6 +538,7 @@ impl<'a> JoinConditionResolver<'a> {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn resolve_using(
         &mut self,
         using_columns: Vec<(Span, String)>,
@@ -652,6 +657,7 @@ impl<'a> JoinConditionResolver<'a> {
         Ok(false)
     }
 
+    #[async_backtrace::framed]
     async fn add_other_conditions(
         &self,
         predicate: &Expr,

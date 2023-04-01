@@ -92,15 +92,15 @@ impl<'a> WindowChecker<'a> {
                     .bind_context
                     .windows
                     .window_functions_map
-                    .get(&win.agg_func.display_name)
+                    .get(&win.display_name)
                 {
                     let window_info = &self.bind_context.windows.window_functions[*column];
                     let column_binding = ColumnBinding {
                         database_name: None,
                         table_name: None,
-                        column_name: win.display_name(),
-                        index: window_info.aggregate_function.index,
-                        data_type: Box::new(window_info.aggregate_function.scalar.data_type()?),
+                        column_name: win.display_name.clone(),
+                        index: window_info.index,
+                        data_type: Box::new(window_info.func.return_type()),
                         visibility: Visibility::Visible,
                     };
                     return Ok(BoundColumnRef {

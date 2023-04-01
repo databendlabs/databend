@@ -14,15 +14,14 @@
 
 use std::sync::Arc;
 
+use common_base::runtime::GlobalIORuntime;
 use common_catalog::table::CompactTarget;
+use common_catalog::table::Table;
 use common_exception::Result;
 use common_sql::plans::OptimizeTableAction;
 use common_sql::plans::OptimizeTablePlan;
 
 use crate::interpreters::Interpreter;
-use crate::pipelines::executor::ExecutorSettings;
-use crate::pipelines::executor::PipelineCompleteExecutor;
-use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -44,85 +43,83 @@ impl Interpreter for OptimizeTableInterpreter {
         "OptimizeTableInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let plan = &self.plan;
+        let catalog_name = self.plan.catalog.clone();
+        let db_name = self.plan.database.clone();
+        let tbl_name = self.plan.table.clone();
         let ctx = self.ctx.clone();
-        let mut table = self
+        let table = self
             .ctx
-            .get_table(&plan.catalog, &plan.database, &plan.table)
+            .get_table(&catalog_name, &db_name, &tbl_name)
             .await?;
 
-        let action = &plan.action;
+        let action = self.plan.action.clone();
         let do_purge = matches!(
             action,
             OptimizeTableAction::Purge(_) | OptimizeTableAction::All
         );
-        let do_compact_blocks = matches!(
-            action,
-            OptimizeTableAction::CompactBlocks(_) | OptimizeTableAction::All
-        );
-
-        let do_compact_segments_only = matches!(action, OptimizeTableAction::CompactSegments(_));
 
         let limit_opt = match action {
-            OptimizeTableAction::CompactBlocks(limit_opt) => *limit_opt,
-            OptimizeTableAction::CompactSegments(limit_opt) => *limit_opt,
+            OptimizeTableAction::CompactBlocks(limit_opt) => limit_opt,
+            OptimizeTableAction::CompactSegments(limit_opt) => limit_opt,
             _ => None,
         };
 
-        if do_compact_segments_only {
-            let mut pipeline = Pipeline::create();
-            table
-                .compact(
-                    ctx.clone(),
-                    CompactTarget::Segments,
-                    limit_opt,
-                    &mut pipeline,
-                )
-                .await?;
-
-            return Ok(PipelineBuildResult::create());
-        }
-
-        if do_compact_blocks {
-            let mut pipeline = Pipeline::create();
-
-            if table
-                .compact(ctx.clone(), CompactTarget::Blocks, limit_opt, &mut pipeline)
-                .await?
-            {
-                let settings = ctx.get_settings();
-                pipeline.set_max_threads(settings.get_max_threads()? as usize);
-                let query_id = ctx.get_id();
-                let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
-                let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
-
-                ctx.set_executor(Arc::downgrade(&executor.get_inner()));
-                executor.execute()?;
-                drop(executor);
+        let compact_target = match action {
+            OptimizeTableAction::CompactBlocks(_) | OptimizeTableAction::All => {
+                CompactTarget::Blocks
             }
+            OptimizeTableAction::CompactSegments(_) => CompactTarget::Segments,
+            _ => CompactTarget::None,
+        };
 
-            if do_purge {
-                // currently, context caches the table, we have to "refresh"
-                // the table by using the catalog API directly
-                table = self
-                    .ctx
-                    .get_catalog(&plan.catalog)?
-                    .get_table(ctx.get_tenant().as_str(), &plan.database, &plan.table)
-                    .await?;
-            }
-        }
+        let mut build_res = PipelineBuildResult::create();
+        table
+            .compact(
+                ctx.clone(),
+                compact_target,
+                limit_opt,
+                &mut build_res.main_pipeline,
+            )
+            .await?;
 
         if do_purge {
-            let table = if let OptimizeTableAction::Purge(Some(point)) = action {
-                table.navigate_to(point).await?
+            if build_res.main_pipeline.is_empty() {
+                purge(ctx, table, &action).await?;
             } else {
-                table
-            };
-            let keep_latest = true;
-            table.purge(self.ctx.clone(), keep_latest).await?;
+                build_res.main_pipeline.set_on_finished(move |may_error| {
+                    if may_error.is_none() {
+                        return GlobalIORuntime::instance().block_on(async move {
+                            // currently, context caches the table, we have to "refresh"
+                            // the table by using the catalog API directly
+                            let table = ctx
+                                .get_catalog(&catalog_name)?
+                                .get_table(ctx.get_tenant().as_str(), &db_name, &tbl_name)
+                                .await?;
+                            purge(ctx, table, &action).await
+                        });
+                    }
+
+                    Err(may_error.as_ref().unwrap().clone())
+                });
+            }
         }
 
-        Ok(PipelineBuildResult::create())
+        Ok(build_res)
     }
+}
+
+async fn purge(
+    ctx: Arc<QueryContext>,
+    origin: Arc<dyn Table>,
+    action: &OptimizeTableAction,
+) -> Result<()> {
+    let table = if let OptimizeTableAction::Purge(Some(point)) = action {
+        origin.navigate_to(point).await?
+    } else {
+        origin
+    };
+    let keep_latest = true;
+    table.purge(ctx, keep_latest).await
 }

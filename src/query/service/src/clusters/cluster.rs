@@ -102,6 +102,7 @@ impl ClusterHelper for Cluster {
         self.local_id.clone()
     }
 
+    #[async_backtrace::framed]
     async fn create_node_conn(&self, name: &str, config: &InnerConfig) -> Result<FlightClient> {
         for node in &self.nodes {
             if node.id == name {
@@ -140,6 +141,7 @@ impl ClusterHelper for Cluster {
 impl ClusterDiscovery {
     const METRIC_LABEL_FUNCTION: &'static str = "function";
 
+    #[async_backtrace::framed]
     pub async fn create_meta_client(cfg: &InnerConfig) -> Result<MetaStore> {
         let meta_api_provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf());
         match meta_api_provider.create_meta_store().await {
@@ -150,6 +152,7 @@ impl ClusterDiscovery {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn init(cfg: InnerConfig) -> Result<()> {
         let metastore = ClusterDiscovery::create_meta_client(&cfg).await?;
         GlobalInstance::set(Self::try_create(&cfg, metastore).await?);
@@ -157,6 +160,7 @@ impl ClusterDiscovery {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     pub async fn try_create(
         cfg: &InnerConfig,
         metastore: MetaStore,
@@ -195,6 +199,7 @@ impl ClusterDiscovery {
         Ok((lift_time, Arc::new(cluster_manager)))
     }
 
+    #[async_backtrace::framed]
     pub async fn discover(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
         match self.api_provider.get_nodes().await {
             Err(cause) => {
@@ -271,6 +276,7 @@ impl ClusterDiscovery {
         }
     }
 
+    #[async_backtrace::framed]
     async fn drop_invalid_nodes(self: &Arc<Self>, node_info: &NodeInfo) -> Result<()> {
         let current_nodes_info = match self.api_provider.get_nodes().await {
             Ok(nodes) => nodes,
@@ -320,6 +326,7 @@ impl ClusterDiscovery {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     pub async fn unregister_to_metastore(self: &Arc<Self>, signal: &mut SignalStream) {
         let mut heartbeat = self.heartbeat.lock().await;
 
@@ -354,6 +361,7 @@ impl ClusterDiscovery {
         };
     }
 
+    #[async_backtrace::framed]
     pub async fn register_to_metastore(self: &Arc<Self>, cfg: &InnerConfig) -> Result<()> {
         let cpus = cfg.query.num_cpus;
         let mut address = cfg.query.flight_api_address.clone();
@@ -391,6 +399,7 @@ impl ClusterDiscovery {
         }
     }
 
+    #[async_backtrace::framed]
     async fn start_heartbeat(self: &Arc<Self>, node_info: NodeInfo) -> Result<()> {
         let mut heartbeat = self.heartbeat.lock().await;
         heartbeat.start(node_info);
@@ -488,9 +497,12 @@ impl ClusterHeartbeat {
     }
 
     pub fn start(&mut self, node_info: NodeInfo) {
-        self.shutdown_handler = Some(tokio::spawn(self.heartbeat_loop(node_info)));
+        self.shutdown_handler = Some(tokio::spawn(
+            async_backtrace::location!().frame(self.heartbeat_loop(node_info)),
+        ));
     }
 
+    #[async_backtrace::framed]
     pub async fn shutdown(&mut self) -> Result<()> {
         if let Some(shutdown_handler) = self.shutdown_handler.take() {
             self.shutdown.store(true, Ordering::Relaxed);
@@ -506,6 +518,7 @@ impl ClusterHeartbeat {
     }
 }
 
+#[async_backtrace::framed]
 pub async fn create_client(config: &InnerConfig, address: &str) -> Result<FlightClient> {
     match config.tls_query_cli_enabled() {
         true => Ok(FlightClient::new(FlightServiceClient::new(

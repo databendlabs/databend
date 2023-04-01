@@ -44,6 +44,7 @@ use crate::plans::Sort;
 use crate::plans::SortItem;
 use crate::BindContext;
 use crate::IndexType;
+use crate::WindowChecker;
 
 #[derive(Debug)]
 pub struct OrderItems {
@@ -60,6 +61,7 @@ pub struct OrderItem {
 }
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(super) async fn analyze_order_items(
         &mut self,
         from_context: &BindContext,
@@ -229,6 +231,7 @@ impl Binder {
         Ok(OrderItems { items: order_items })
     }
 
+    #[async_backtrace::framed]
     pub(super) async fn bind_order_by(
         &mut self,
         from_context: &BindContext,
@@ -281,6 +284,9 @@ impl Binder {
                     if from_context.in_grouping || need_group_check {
                         let mut group_checker = GroupingChecker::new(from_context);
                         scalar = group_checker.resolve(&scalar, None)?;
+                    } else if !from_context.windows.window_functions.is_empty() {
+                        let mut window_checker = WindowChecker::new(from_context);
+                        scalar = window_checker.resolve(&scalar)?;
                     }
                     scalars.push(ScalarItem { scalar, index });
                 }
@@ -318,6 +324,7 @@ impl Binder {
         Ok(new_expr)
     }
 
+    #[async_backtrace::framed]
     pub(crate) async fn bind_order_by_for_set_operation(
         &mut self,
         bind_context: &mut BindContext,

@@ -91,6 +91,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         "mysql_native_password"
     }
 
+    #[async_backtrace::framed]
     async fn auth_plugin_for_username(&self, _user: &[u8]) -> &str {
         "mysql_native_password"
     }
@@ -99,6 +100,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         self.salt
     }
 
+    #[async_backtrace::framed]
     async fn authenticate(
         &self,
         _auth_plugin: &str,
@@ -126,6 +128,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         }
     }
 
+    #[async_backtrace::framed]
     async fn on_prepare<'a>(
         &'a mut self,
         query: &'a str,
@@ -147,6 +150,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         self.base.do_prepare(query, writer).await
     }
 
+    #[async_backtrace::framed]
     async fn on_execute<'a>(
         &'a mut self,
         id: u32,
@@ -170,11 +174,13 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
     }
 
     /// https://dev.mysql.com/doc/internals/en/com-stmt-close.html
+    #[async_backtrace::framed]
     async fn on_close<'a>(&'a mut self, stmt_id: u32)
     where W: 'async_trait {
         self.base.do_close(stmt_id).await;
     }
 
+    #[async_backtrace::framed]
     async fn on_query<'a>(
         &'a mut self,
         query: &'a str,
@@ -218,6 +224,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         write_result
     }
 
+    #[async_backtrace::framed]
     async fn on_init<'a>(
         &'a mut self,
         database_name: &'a str,
@@ -243,6 +250,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
 }
 
 impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
+    #[async_backtrace::framed]
     async fn authenticate(&self, salt: &[u8], info: CertifiedInfo) -> Result<bool> {
         let user_name = &info.user_name;
         let client_ip = info.user_client_address.split(':').collect::<Vec<_>>()[0];
@@ -259,6 +267,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         Ok(authed)
     }
 
+    #[async_backtrace::framed]
     async fn do_prepare(&mut self, _: &str, writer: StatementMetaWriter<'_, W>) -> Result<()> {
         writer
             .error(
@@ -269,6 +278,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn do_execute(
         &mut self,
         _: u32,
@@ -284,6 +294,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn do_close(&mut self, _: u32) {}
 
     // Check the query is a federated or driver setup command.
@@ -298,6 +309,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
+    #[async_backtrace::framed]
     async fn do_query(&mut self, query: &str) -> Result<QueryResult> {
         match self.federated_server_command_check(query) {
             Some((schema, data_block)) => {
@@ -348,6 +360,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
     }
 
     #[tracing::instrument(level = "debug", skip(interpreter, context))]
+    #[async_backtrace::framed]
     async fn exec_query(
         interpreter: Arc<dyn Interpreter>,
         context: &Arc<QueryContext>,
@@ -388,6 +401,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         query_result.map(|data| (data, Some(reporter)))
     }
 
+    #[async_backtrace::framed]
     async fn do_init(&mut self, database_name: &str) -> Result<()> {
         if database_name.is_empty() {
             return Ok(());

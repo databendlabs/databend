@@ -232,15 +232,22 @@ impl RaftStorage<TypeConfig> for RaftStoreBare {
     }
 
     #[tracing::instrument(level = "debug", skip(self, entries), fields(id=self.id))]
-    async fn append_to_log(&mut self, entries: &[&Entry]) -> Result<(), StorageError> {
-        for ent in entries {
-            info!("append_to_log: {}", ent.log_id);
-        }
+    async fn append_to_log<I: IntoIterator<Item = Entry> + Send>(
+        &mut self,
+        entries: I,
+    ) -> Result<(), StorageError> {
+        // TODO: it is bad: allocates a new vec.
+        let entries = entries
+            .into_iter()
+            .map(|x| {
+                info!("append_to_log: {}", x.log_id);
+                x
+            })
+            .collect::<Vec<_>>();
 
-        let entries = entries.iter().map(|x| (*x).clone()).collect::<Vec<_>>();
         match self
             .log
-            .append(&entries)
+            .append(entries)
             .await
             .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Write)
         {
@@ -255,7 +262,7 @@ impl RaftStorage<TypeConfig> for RaftStoreBare {
     #[tracing::instrument(level = "debug", skip(self, entries), fields(id=self.id))]
     async fn apply_to_state_machine(
         &mut self,
-        entries: &[&Entry],
+        entries: &[Entry],
     ) -> Result<Vec<AppliedState>, StorageError> {
         for ent in entries {
             info!("apply_to_state_machine: {}", ent.log_id);

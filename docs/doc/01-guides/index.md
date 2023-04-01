@@ -81,6 +81,14 @@ These tutorials are intended to help you get started with Databend:
 * [How to Drop a User-Defined Function](../14-sql-commands/00-ddl/50-udf/ddl-drop-function.md)
 * [How to Alter a User-Defined Function](../14-sql-commands/00-ddl/50-udf/ddl-alter-function.md)
 
+
+## AI Functions
+
+* [Generating SQL with AI](../15-sql-functions/61-ai-functions/01-ai-to-sql.md)
+* [Creating Embedding Vectors](../15-sql-functions/61-ai-functions/02-ai-embedding-vector.md)
+* [Computing Text Similarities](../15-sql-functions/61-ai-functions/03-ai-cosine-distance.md)
+* [Text Completion with AI](../15-sql-functions/61-ai-functions/04-ai-text-completion.md)
+
 ## Backup & Restore
 
 * [How to Back Up Meta Data](../10-deploy/06-metasrv/30-metasrv-backup-restore.md)

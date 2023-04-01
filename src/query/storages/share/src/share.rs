@@ -35,6 +35,7 @@ pub fn share_table_info_location(tenant: &str, share_name: &str) -> String {
     )
 }
 
+#[async_backtrace::framed]
 pub async fn save_share_spec(
     tenant: &String,
     operator: Operator,

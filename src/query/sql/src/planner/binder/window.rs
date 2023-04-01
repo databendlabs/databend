@@ -21,20 +21,23 @@ use crate::plans::EvalScalar;
 use crate::plans::ScalarItem;
 use crate::plans::Window;
 use crate::plans::WindowFuncFrame;
+use crate::plans::WindowFuncType;
 use crate::Binder;
+use crate::IndexType;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(super) async fn bind_window_function(
         &mut self,
-        window_info: &WindowFunctionInto,
+        window_info: &WindowFunctionInfo,
         child: SExpr,
     ) -> Result<SExpr> {
         let mut scalar_items: Vec<ScalarItem> = Vec::with_capacity(
-            window_info.aggregate_arguments.len()
+            window_info.arguments.len()
                 + window_info.partition_by_items.len()
                 + window_info.order_by_items.len(),
         );
-        for arg in window_info.aggregate_arguments.iter() {
+        for arg in window_info.arguments.iter() {
             scalar_items.push(arg.clone());
         }
         for part in window_info.partition_by_items.iter() {
@@ -53,7 +56,8 @@ impl Binder {
         }
 
         let window_plan = Window {
-            aggregate_function: window_info.aggregate_function.clone(),
+            index: window_info.index,
+            function: window_info.func.clone(),
             partition_by: window_info.partition_by_items.clone(),
             order_by: window_info.order_by_items.clone(),
             frame: window_info.frame.clone(),
@@ -66,14 +70,15 @@ impl Binder {
 
 #[derive(Default, Clone, PartialEq, Eq, Debug)]
 pub struct WindowInfo {
-    pub window_functions: Vec<WindowFunctionInto>,
+    pub window_functions: Vec<WindowFunctionInfo>,
     pub window_functions_map: HashMap<String, usize>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct WindowFunctionInto {
-    pub aggregate_function: ScalarItem,
-    pub aggregate_arguments: Vec<ScalarItem>,
+pub struct WindowFunctionInfo {
+    pub index: IndexType,
+    pub func: WindowFuncType,
+    pub arguments: Vec<ScalarItem>,
     pub partition_by_items: Vec<ScalarItem>,
     pub order_by_items: Vec<WindowOrderByInfo>,
     pub frame: WindowFuncFrame,

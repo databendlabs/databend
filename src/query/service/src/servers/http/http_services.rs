@@ -88,6 +88,7 @@ impl HttpHandler {
         ep.with(session_middleware).boxed()
     }
 
+    #[async_backtrace::framed]
     async fn build_router(&self, sock: SocketAddr) -> impl Endpoint {
         let ep_v1 = Route::new()
             .nest("/query", query_route())
@@ -138,6 +139,7 @@ impl HttpHandler {
         Ok(cfg)
     }
 
+    #[async_backtrace::framed]
     async fn start_with_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr, HttpError> {
         info!("Http Handler TLS enabled");
 
@@ -152,6 +154,7 @@ impl HttpHandler {
             .await
     }
 
+    #[async_backtrace::framed]
     async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr, HttpError> {
         let router = self.build_router(listening).await;
         self.shutdown_handler
@@ -162,10 +165,12 @@ impl HttpHandler {
 
 #[async_trait::async_trait]
 impl Server for HttpHandler {
+    #[async_backtrace::framed]
     async fn shutdown(&mut self, graceful: bool) {
         self.shutdown_handler.shutdown(graceful).await;
     }
 
+    #[async_backtrace::framed]
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr, ErrorCode> {
         let config = GlobalConfig::instance();
 

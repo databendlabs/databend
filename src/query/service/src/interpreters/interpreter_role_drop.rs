@@ -43,6 +43,7 @@ impl Interpreter for DropRoleInterpreter {
     }
 
     #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         // TODO: add privilege check about DROP role
         let plan = self.plan.clone();

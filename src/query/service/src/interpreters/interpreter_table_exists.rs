@@ -46,6 +46,7 @@ impl Interpreter for ExistsTableInterpreter {
         "ExistsTableInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let catalog = self.plan.catalog.as_str();
         let database = self.plan.database.as_str();

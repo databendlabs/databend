@@ -107,7 +107,6 @@ pub async fn do_deletion(
         let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
         ctx.set_executor(Arc::downgrade(&executor.get_inner()));
         executor.execute()?;
-        drop(executor);
     }
     Ok(())
 }

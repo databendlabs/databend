@@ -72,6 +72,7 @@ impl StageTable {
         init_stage_operator(stage)
     }
 
+    #[async_backtrace::framed]
     pub async fn list_files(
         stage_info: &StageTableInfo,
         max_files: Option<usize>,
@@ -110,6 +111,7 @@ impl Table for StageTable {
         DataSourceInfo::StageSource(self.table_info.clone())
     }
 
+    #[async_backtrace::framed]
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -236,6 +238,7 @@ impl Table for StageTable {
     }
 
     // TODO use tmp file_name & rename to have atomic commit
+    #[async_backtrace::framed]
     async fn commit_insertion(
         &self,
         _ctx: Arc<dyn TableContext>,
@@ -247,6 +250,7 @@ impl Table for StageTable {
     }
 
     // Truncate the stage file.
+    #[async_backtrace::framed]
     async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
         Err(ErrorCode::Unimplemented(
             "S3 external table truncate() unimplemented yet!",

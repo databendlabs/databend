@@ -44,6 +44,7 @@ impl Interpreter for DropTableColumnInterpreter {
         "DropTableColumnInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let catalog_name = self.plan.catalog.as_str();
         let db_name = self.plan.database.as_str();

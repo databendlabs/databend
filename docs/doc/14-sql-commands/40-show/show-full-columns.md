@@ -11,7 +11,10 @@ Shows information about the columns in a given table.
 ## Syntax
 
 ```sql
-SHOW [FULL] COLUMNS FROM table_name [IN database_name];
+SHOW  [FULL] COLUMNS
+    {FROM | IN} tbl_name
+    [{FROM | IN} db_name]
+    [LIKE 'pattern' | WHERE expr]
 ```
 
 When the optional keyword FULL is included, Databend will add the collation, privileges, and comment information for each column in the table to the result.
@@ -26,7 +29,7 @@ CREATE TABLE books
      author VARCHAR
   ); 
 
-SHOW COLUMNS FROM books;
+SHOW COLUMNS FROM books FROM default;
 
 Field   |Type     |Null|Default     |Extra|Key|
 --------+---------+----+------------+-----+---+
@@ -36,9 +39,15 @@ pub_time|TIMESTAMP|NO  |'1900-01-01'|     |   |
 
 SHOW FULL COLUMNS FROM books;
 
-Field   |Type     |Null|Default     |Extra|Key|Collation|Privileges|comment|
+Field   |Type     |Null|Default     |Extra|Key|Collation|Privileges|Comment|
 --------+---------+----+------------+-----+---+---------+----------+-------+
 author  |VARCHAR  |NO  |            |     |   |         |          |       |
 price   |FLOAT    |NO  |0.00        |     |   |         |          |       |
 pub_time|TIMESTAMP|NO  |'1900-01-01'|     |   |         |          |       | 
+
+SHOW FULL COLUMNS FROM books LIKE 'a%'
+
+Field |Type   |Null|Default|Extra|Key|Collation|Privileges|Comment|
+------+-------+----+-------+-----+---+---------+----------+-------+
+author|VARCHAR|NO  |       |     |   |         |          |       |
 ```

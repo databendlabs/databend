@@ -25,9 +25,28 @@ if [[ -z "${CLOUD_EMAIL}" || -z "${CLOUD_PASSWORD}" || -z "${CLOUD_ORG}" ]]; the
 fi
 
 echo "Checking script dependencies..."
-bc --version
+python3 --version
 yq --version
 bendsql version
+
+echo "Preparing benchmark metadata..."
+echo '{}' >result.json
+yq -i ".date = \"$(date -u +%Y-%m-%d)\"" result.json
+yq -i '.tags = ["s3"]' result.json
+case ${BENCHMARK_SIZE} in
+Medium)
+    yq -i '.cluster_size = "16"' result.json
+    yq -i '.machine = "16×Medium"' result.json
+    ;;
+Large)
+    yq -i '.cluster_size = "64"' result.json
+    yq -i '.machine = "64×Large"' result.json
+    ;;
+*)
+    echo "Unspported benchmark size: ${BENCHMARK_SIZE}"
+    exit 1
+    ;;
+esac
 
 echo "#######################################################"
 echo "Running benchmark for Databend Cloud with S3 storage..."
@@ -44,10 +63,8 @@ bendsql cloud warehouse ls
 bendsql cloud warehouse create "${CLOUD_WAREHOUSE}" --size "${BENCHMARK_SIZE}" --tag "${BENCHMARK_IMAGE_TAG}"
 bendsql cloud warehouse ls
 bendsql cloud warehouse resume "${CLOUD_WAREHOUSE}" --wait
-
 bendsql cloud warehouse use "${CLOUD_WAREHOUSE}"
 
-echo '{}' >result.json
 echo "Running queries..."
 
 function run_query() {
@@ -60,7 +77,7 @@ function run_query() {
     q_start=$(date +%s.%N)
     if echo "$query" | bendsql query --format csv --rows-only >/dev/null; then
         q_end=$(date +%s.%N)
-        q_time=$(echo "$q_end - $q_start" | bc -l)
+        q_time=$(python3 -c "print($q_end - $q_start)")
         echo "Q${query_num}[$seq] succeeded in $q_time seconds"
         yq -i ".result[${query_num}] += [${q_time}]" result.json
     else

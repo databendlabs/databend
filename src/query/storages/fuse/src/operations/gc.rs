@@ -66,6 +66,7 @@ impl From<Arc<SegmentInfo>> for LocationTuple {
 }
 
 impl FuseTable {
+    #[async_backtrace::framed]
     pub async fn do_purge(
         &self,
         ctx: &Arc<dyn TableContext>,
@@ -178,6 +179,8 @@ impl FuseTable {
         // 3. Find.
         let mut snapshots_to_be_purged = HashSet::new();
         let mut segments_to_be_purged = HashSet::new();
+        // Todo(zhyass): exists bug, the ts_to_be_purged is empty, cannot be purged.
+        // We will do the fix in the purge refactoring.
         let ts_to_be_purged: Vec<String> = vec![];
 
         // 3.1 Find all the snapshots need to be deleted.
@@ -212,6 +215,8 @@ impl FuseTable {
                     self.operator.clone(),
                     self.snapshot_format_version().await?,
                 );
+                // Todo(zhyass): exists bug, we need to filter out some table statistic files
+                // based on the snapshots just like the segments.
                 let ts_to_be_purged = snapshots_io
                     .read_table_statistic_files(&root_ts_location, None)
                     .await?;
@@ -416,6 +421,7 @@ impl FuseTable {
     }
 
     // Purge file by location chunks.
+    #[async_backtrace::framed]
     async fn try_purge_location_files(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -427,6 +433,7 @@ impl FuseTable {
     }
 
     // Purge file by location chunks.
+    #[async_backtrace::framed]
     async fn try_purge_location_files_and_cache<T>(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -444,6 +451,7 @@ impl FuseTable {
             .await
     }
 
+    #[async_backtrace::framed]
     async fn get_block_locations(
         &self,
         ctx: Arc<dyn TableContext>,

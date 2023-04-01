@@ -72,6 +72,11 @@ You can find [sample configuration files](https://github.com/datafuselabs/databe
 * This setting only takes effect when Databend-query works with remote meta service(`endpoints` is not empty). You don't need to configure it for standalone Databend.
 * Default: 60
 
+### unhealth_endpoint_evict_time
+
+* Internal(in seconds) time that not querying an unhealth meta node endpoint.
+* Default: 120
+
 ## 3. Query config
 
 ### admin_api_address

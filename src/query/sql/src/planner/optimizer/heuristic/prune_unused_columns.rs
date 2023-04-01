@@ -20,6 +20,7 @@ use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::EvalScalar;
 use crate::plans::RelOperator;
+use crate::plans::WindowFuncType;
 use crate::MetadataRef;
 
 pub struct UnusedColumnPruner {
@@ -157,19 +158,19 @@ impl UnusedColumnPruner {
                 ))
             }
             RelOperator::Window(p) => {
-                if required.contains(&p.aggregate_function.index) {
-                    for c in p.aggregate_function.scalar.used_columns() {
-                        required.insert(c);
+                if required.contains(&p.index) {
+                    if let WindowFuncType::Aggregate(agg) = &p.function {
+                        agg.args.iter().for_each(|item| {
+                            required.extend(item.used_columns());
+                        });
                     }
+                    p.partition_by.iter().for_each(|item| {
+                        required.insert(item.index);
+                    });
+                    p.order_by.iter().for_each(|item| {
+                        required.insert(item.order_by_item.index);
+                    });
                 }
-
-                p.partition_by.iter().for_each(|item| {
-                    required.insert(item.index);
-                });
-
-                p.order_by.iter().for_each(|item| {
-                    required.insert(item.order_by_item.index);
-                });
 
                 Ok(SExpr::create_unary(
                     RelOperator::Window(p.clone()),
@@ -207,16 +208,10 @@ impl UnusedColumnPruner {
             }
 
             RelOperator::ProjectSet(op) => {
-                let mut used = vec![];
-                // Only keep columns needed by parent plan.
+                // We can't prune SRFs because they may change the cardinality of result set,
+                // even if the result column of an SRF is not used by any following expression.
                 for s in op.srfs.iter() {
-                    if !required.contains(&s.index) {
-                        continue;
-                    }
-                    used.push(s.clone());
-                    s.scalar.used_columns().iter().for_each(|c| {
-                        required.insert(*c);
-                    })
+                    required.extend(s.scalar.used_columns().iter().copied());
                 }
 
                 Ok(SExpr::create_unary(

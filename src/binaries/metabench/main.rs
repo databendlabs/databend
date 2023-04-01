@@ -17,6 +17,7 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
 use clap::Parser;
@@ -82,8 +83,15 @@ async fn main() {
         let prefix = config.prefix;
 
         let handle = tokio::spawn(async move {
-            let client =
-                MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None, None);
+            let client = MetaGrpcClient::try_create(
+                vec![addr.to_string()],
+                "root",
+                "xxx",
+                None,
+                None,
+                Duration::from_secs(10),
+                None,
+            );
 
             let client = match client {
                 Ok(client) => client,
