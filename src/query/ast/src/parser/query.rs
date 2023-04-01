@@ -579,6 +579,7 @@ pub enum SetOperationElement {
         selection: Box<Option<Expr>>,
         group_by: Option<GroupBy>,
         having: Box<Option<Expr>>,
+        window_list: Option<Vec<WindowDefinition>>,
     },
     SetOperation {
         op: SetOperator,
@@ -614,6 +615,77 @@ pub fn group_by_items(i: Input) -> IResult<GroupBy> {
     rule!(#group_sets | #cube | #rollup | #normal)(i)
 }
 
+pub fn window_frame_bound(i: Input) -> IResult<WindowFrameBound> {
+    alt((
+        value(WindowFrameBound::CurrentRow, rule! { CURRENT ~ ROW }),
+        map(rule! { #subexpr(0) ~ PRECEDING }, |(expr, _)| {
+            WindowFrameBound::Preceding(Some(Box::new(expr)))
+        }),
+        value(
+            WindowFrameBound::Preceding(None),
+            rule! { UNBOUNDED ~ PRECEDING },
+        ),
+        map(rule! { #subexpr(0) ~ FOLLOWING }, |(expr, _)| {
+            WindowFrameBound::Following(Some(Box::new(expr)))
+        }),
+        value(
+            WindowFrameBound::Following(None),
+            rule! { UNBOUNDED ~ FOLLOWING },
+        ),
+    ))(i)
+}
+
+pub fn window_frame_between(i: Input) -> IResult<(WindowFrameBound, WindowFrameBound)> {
+    alt((
+        map(
+            rule! { BETWEEN ~ #window_frame_bound ~ AND ~ #window_frame_bound },
+            |(_, s, _, e)| (s, e),
+        ),
+        map(rule! {#window_frame_bound}, |s| {
+            (s, WindowFrameBound::CurrentRow)
+        }),
+    ))(i)
+}
+
+pub fn window_spec(i: Input) -> IResult<WindowSpec> {
+    map(
+        rule! {
+            (PARTITION ~ ^BY ~ #comma_separated_list1(subexpr(0)))?
+            ~ ( ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) )?
+            ~ ((ROWS | RANGE) ~ #window_frame_between)?
+        },
+        |(opt_partition, opt_order, between)| WindowSpec {
+            partition_by: opt_partition.map(|x| x.2).unwrap_or_default(),
+            order_by: opt_order.map(|x| x.2).unwrap_or_default(),
+            window_frame: between.map(|x| {
+                let unit = match x.0.kind {
+                    ROWS => WindowFrameUnits::Rows,
+                    RANGE => WindowFrameUnits::Range,
+                    _ => unreachable!(),
+                };
+                let bw = x.1;
+                WindowFrame {
+                    units: unit,
+                    start_bound: bw.0,
+                    end_bound: bw.1,
+                }
+            }),
+        },
+    )(i)
+}
+
+pub fn window_clause(i: Input) -> IResult<WindowDefinition> {
+    map(
+        rule! {
+            #ident ~ (AS ~ "(" ~ #window_spec ~ ")")
+        },
+        |(ident, window)| WindowDefinition {
+            name: ident,
+            window: window.2,
+        },
+    )(i)
+}
+
 pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>> {
     let set_operator = map(
         rule! {
@@ -639,6 +711,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
                 ~ ( WHERE ~ ^#expr )?
                 ~ ( GROUP ~ ^BY ~ ^#group_by_items )?
                 ~ ( HAVING ~ ^#expr )?
+                ~ ( WINDOW ~ ^#comma_separated_list1(window_clause) )?
         },
         |(
             _select,
@@ -648,6 +721,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
             opt_where_block,
             opt_group_by_block,
             opt_having_block,
+            opt_window_block,
         )| {
             SetOperationElement::SelectStmt {
                 distinct: opt_distinct.is_some(),
@@ -660,6 +734,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
                 selection: Box::new(opt_where_block.map(|(_, selection)| selection)),
                 group_by: opt_group_by_block.map(|(_, _, group_by)| group_by),
                 having: Box::new(opt_having_block.map(|(_, having)| having)),
+                window_list: opt_window_block.map(|(_, windows)| windows),
             }
         },
     );
@@ -706,6 +781,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 selection,
                 group_by,
                 having,
+                window_list,
             } => SetExpr::Select(Box::new(SelectStmt {
                 span: transform_span(input.span.0),
                 distinct,
@@ -714,6 +790,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 selection: *selection,
                 group_by,
                 having: *having,
+                window_list,
             })),
             _ => unreachable!(),
         };

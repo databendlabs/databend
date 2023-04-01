@@ -155,7 +155,7 @@ pub enum Expr {
         name: Identifier,
         args: Vec<Expr>,
         params: Vec<Literal>,
-        window: Option<WindowSpec>,
+        window: Option<Window>,
     },
     /// `CASE ... WHEN ... ELSE ...` expression
     Case {
@@ -456,6 +456,23 @@ pub enum TrimWhere {
     Both,
     Leading,
     Trailing,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Window {
+    WindowReference(WindowRef),
+    WindowSpec(WindowSpec),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct WindowDefinition {
+    pub name: Identifier,
+    pub window: WindowSpec,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct WindowRef {
+    pub name: Identifier,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -952,28 +969,22 @@ impl Display for WindowSpec {
                     write!(f, "RANGE")?;
                 }
             }
-            match (&frame.start_bound, &frame.end_bound) {
-                (WindowFrameBound::CurrentRow, WindowFrameBound::CurrentRow) => {
-                    write!(f, " CURRENT ROW")?
+
+            let format_frame = |frame: &WindowFrameBound| -> String {
+                match frame {
+                    WindowFrameBound::CurrentRow => "CURRENT ROW".to_string(),
+                    WindowFrameBound::Preceding(None) => "UNBOUNDED PRECEDING".to_string(),
+                    WindowFrameBound::Following(None) => "UNBOUNDED FOLLOWING".to_string(),
+                    WindowFrameBound::Preceding(Some(n)) => format!("{} PRECEDING", n),
+                    WindowFrameBound::Following(Some(n)) => format!("{} FOLLOWING", n),
                 }
-                _ => {
-                    let format_frame = |frame: &WindowFrameBound| -> String {
-                        match frame {
-                            WindowFrameBound::CurrentRow => "CURRENT ROW".to_string(),
-                            WindowFrameBound::Preceding(None) => "UNBOUNDED PRECEDING".to_string(),
-                            WindowFrameBound::Following(None) => "UNBOUNDED FOLLOWING".to_string(),
-                            WindowFrameBound::Preceding(Some(n)) => format!("{} PRECEDING", n),
-                            WindowFrameBound::Following(Some(n)) => format!("{} FOLLOWING", n),
-                        }
-                    };
-                    write!(
-                        f,
-                        " BETWEEN {} AND {}",
-                        format_frame(&frame.start_bound),
-                        format_frame(&frame.end_bound)
-                    )?
-                }
-            }
+            };
+            write!(
+                f,
+                " BETWEEN {} AND {}",
+                format_frame(&frame.start_bound),
+                format_frame(&frame.end_bound)
+            )?
         }
         Ok(())
     }
