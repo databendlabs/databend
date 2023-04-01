@@ -90,7 +90,7 @@ jobs:
 
   build_hive:
     timeout-minutes: 30
-    runs-on: [self-hosted, X64, Linux, 16c32g]
+    runs-on: [self-hosted, X64, Linux, 8c16g]
     steps:
       - uses: actions/checkout@v3
         with:
