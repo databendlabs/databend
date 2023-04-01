@@ -118,3 +118,13 @@ async fn select_array() {
     // TODO: fix parse to real array
     assert_eq!(val, "[1,2,3,4,5]");
 }
+
+#[tokio::test]
+async fn select_sleep() {
+    let conn = prepare();
+    let row = conn.query_row("select SLEEP(2);").await.unwrap();
+    assert!(row.is_some());
+    let row = row.unwrap();
+    let (val,): (u8,) = row.try_into().unwrap();
+    assert_eq!(val, 0);
+}

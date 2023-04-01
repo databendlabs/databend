@@ -17,7 +17,7 @@ use databend_client::APIClient;
 use crate::common::DEFAULT_DSN;
 
 #[tokio::test]
-async fn simple_select() {
+async fn select_simple() {
     let dsn = option_env!("TEST_DATABEND_DSN").unwrap_or(DEFAULT_DSN);
     let client = APIClient::from_dsn(dsn).unwrap();
     let resp = client.query("select 15532").await.unwrap();

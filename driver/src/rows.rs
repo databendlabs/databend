@@ -116,11 +116,14 @@ impl_tuple_from_row!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14
 impl_tuple_from_row!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15);
 impl_tuple_from_row!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16);
 
+type PageFut = Pin<Box<dyn Future<Output = Result<QueryResponse>>>>;
+
 pub struct RowIterator {
     client: Arc<APIClient>,
-    next_uri: Option<String>,
     schema: Vec<DataType>,
     data: Vec<Vec<String>>,
+    next_uri: Option<String>,
+    next_page: Option<PageFut>,
 }
 
 impl Stream for RowIterator {
@@ -133,23 +136,30 @@ impl Stream for RowIterator {
                 self.data.remove(0),
             ))?)));
         }
-        if self.next_uri.is_none() {
-            return Poll::Ready(None);
-        }
-        let next_uri = self.next_uri.take().unwrap();
-        let client = self.client.clone();
-        let mut resp = Box::pin(client.query_page(&next_uri));
-        match Pin::new(&mut resp).poll(cx) {
-            Poll::Ready(Ok(resp)) => {
-                self.next_uri = resp.next_uri;
-                self.data = resp.data;
-                self.poll_next(cx)
-            }
-            Poll::Ready(Err(e)) => Poll::Ready(Some(Err(e))),
-            Poll::Pending => {
-                cx.waker().wake_by_ref();
-                Poll::Pending
-            }
+        match self.next_page {
+            Some(ref mut next_page) => match Pin::new(next_page).poll(cx) {
+                Poll::Ready(Ok(resp)) => {
+                    self.data = resp.data;
+                    self.next_uri = resp.next_uri;
+                    self.next_page = None;
+                    self.poll_next(cx)
+                }
+                Poll::Ready(Err(e)) => Poll::Ready(Some(Err(e))),
+                Poll::Pending => {
+                    cx.waker().wake_by_ref();
+                    Poll::Pending
+                }
+            },
+            None => match self.next_uri {
+                Some(ref next_uri) => {
+                    let client = self.client.clone();
+                    let next_uri = next_uri.clone();
+                    self.next_page =
+                        Some(Box::pin(async move { client.query_page(&next_uri).await }));
+                    self.poll_next(cx)
+                }
+                None => Poll::Ready(None),
+            },
         }
     }
 }
@@ -164,6 +174,7 @@ impl TryFrom<(Arc<APIClient>, QueryResponse)> for RowIterator {
             next_uri: resp.next_uri,
             schema,
             data: resp.data,
+            next_page: None,
         })
     }
 }

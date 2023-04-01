@@ -110,3 +110,15 @@ async fn select_iter() {
         row_count += 1;
     }
 }
+
+#[tokio::test]
+async fn select_sleep() {
+    let (conn, _) = prepare("select_sleep");
+    let mut rows = conn.query_iter("select SLEEP(2);").await.unwrap();
+    let mut result = vec![];
+    while let Some(row) = rows.next().await {
+        let row: (u8,) = row.unwrap().try_into().unwrap();
+        result.push(row.0);
+    }
+    assert_eq!(result, vec![0]);
+}
