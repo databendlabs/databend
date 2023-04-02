@@ -57,6 +57,8 @@ impl Operator for ProjectSet {
             child_prop.output_columns.insert(srf.index);
         }
 
+        // ProjectSet is set-returning functions, precise_cardinality set None
+        child_prop.statistics.precise_cardinality = None;
         Ok(child_prop)
     }
 
