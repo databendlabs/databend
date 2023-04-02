@@ -54,8 +54,8 @@ Typically, embedding vectors are stored in specialized vector databases like mil
 Databend provides built-in AI functions for various natural language processing tasks. The main functions covered in this document are:
 
 - [ai_embedding_vector](./02-ai-embedding-vector.md): Generates embeddings for text documents.
-- [cosine_distance](./03-ai-cosine-distance.md): Calculates the cosine distance between two embeddings.
-- [ai_text_completion](./04-ai-text-completion.md): Generates text completions based on a given prompt.
+- [ai_text_completion](./03-ai-text-completion.md): Generates text completions based on a given prompt.
+- [cosine_distance](./04-ai-cosine-distance.md): Calculates the cosine distance between two embeddings.
 
 ## Creating and storing embeddings using Databend
 
