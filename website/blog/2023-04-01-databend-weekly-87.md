@@ -64,7 +64,7 @@ Databend supports all aggregate functions as aggregate window functions.
 
 ### Suggest Function Name on Typos
 
-Databend has added an intelligent feature that automatically provide the closest matching item when you enter an incorrect function name.
+Databend has added an intelligent feature that automatically provides the closest matching item when you enter an incorrect function name.
 
 ```sql
 #> select base64(1);
@@ -87,14 +87,16 @@ Databend now supports dumping the running async task stacks. Simply visit `http:
 
 ![Dump Running Async Task Stack](https://user-images.githubusercontent.com/8087042/228602725-a0440e39-3a65-4939-8826-3b92d381cb39.png)
 
-It is worth noting that this feature does not interfere with the performance of Query during normal operation before accessing the dump address.
+Calling the `async_backtrace::taskdump_tree` function can obtain information about the asynchronous task tree (collected by `#[async_backtrace::framed]`).
 
 ```rust
     let tree =
         async_backtrace::taskdump_tree(req.map(|x| x.wait_for_running_tasks).unwrap_or(false));
+```
 
-    ...
+Tasks are divided into regular tasks and polling tasks (marked with `[POLLING]`). Record the stack information for each task, and output it to a string sorted by stack depth.
 
+```rust
     for mut tasks in [tasks, polling_tasks] {
         tasks.sort_by(|l, r| Ord::cmp(&l.stack_frames.len(), &r.stack_frames.len()));
 
@@ -108,13 +110,11 @@ It is worth noting that this feature does not interfere with the performance of 
     }
 ```
 
-Calling the `async_backtrace::taskdump_tree` function can obtain information about the asynchronous task tree (collected by `#[async_backtrace::framed]`). Tasks are divided into regular tasks and polling tasks (marked with `[POLLING]`). Record the stack information for each task, and output it to a string sorted by stack depth.
-
 To learn more about how it works, refer to the following link:
 
 - [PR | feat(query): try support dump running async task stack](https://github.com/datafuselabs/databend/pull/10830)
 
-### Meet Databend in Jupyter Notebook
+### New Way to Integrate with Jupyter Notebook
 
 As described in [Doc | Visualization Databend Data in Jupyter Notebook](https://databend.rs/doc/integrations/gui-tool/jupyter), we can use Jupyter Notebook to explore data in Databend.
 
@@ -158,7 +158,7 @@ Here are some noteworthy items recorded here, perhaps you can find something tha
 
 We're always open to cutting-edge technologies and innovative ideas. You're more than welcome to join the community and bring them to Databend.
 
-### Collect Sled Metrics
+### Collect Metrics from Sled
 
 [sled](https://github.com/spacejam/sled) is an embedded database. It has a metrics feature that exposed some metrics.
 
