@@ -217,12 +217,7 @@ where T: Number + AsPrimitive<f64>
     }
 
     fn need_manual_drop_state(&self) -> bool {
-        true
-    }
-
-    unsafe fn drop_state(&self, place: StateAddr) {
-        let state = place.get::<SkewnessState>();
-        std::ptr::drop_in_place(state);
+        false
     }
 }
 
