@@ -298,6 +298,35 @@ pub fn walk_cte<'a, V: Visitor<'a>>(visitor: &mut V, cte: &'a CTE) {
     visitor.visit_query(query);
 }
 
+pub fn walk_window_definition<'a, V: Visitor<'a>>(
+    visitor: &mut V,
+    window_definition: &'a WindowDefinition,
+) {
+    let WindowDefinition { name, window } = window_definition;
+
+    visitor.visit_identifier(name);
+
+    let WindowSpec {
+        partition_by,
+        order_by,
+        window_frame,
+        ..
+    } = window;
+
+    for expr in partition_by {
+        visitor.visit_expr(expr);
+    }
+
+    for order_by in order_by {
+        visitor.visit_order_by(order_by);
+    }
+
+    if let Some(frame) = window_frame {
+        visitor.visit_frame_bound(&frame.start_bound);
+        visitor.visit_frame_bound(&frame.end_bound);
+    }
+}
+
 pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statement) {
     match statement {
         Statement::Explain { kind, query } => visitor.visit_explain(kind, query),

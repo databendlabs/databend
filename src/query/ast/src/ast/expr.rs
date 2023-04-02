@@ -929,6 +929,28 @@ impl Display for Literal {
     }
 }
 
+impl Display for WindowDefinition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "WINDOW {} {}", self.name, self.window)
+    }
+}
+
+impl Display for Window {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let window_fmt = match *self {
+            Window::WindowSpec(ref window_spec) => format!("{}", window_spec),
+            Window::WindowReference(ref window_ref) => format!("{}", window_ref),
+        };
+        write!(f, "{}", window_fmt)
+    }
+}
+
+impl Display for WindowRef {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "WINDOW {}", self.name)
+    }
+}
+
 impl Display for WindowSpec {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut first = true;

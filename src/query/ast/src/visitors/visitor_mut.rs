@@ -208,23 +208,30 @@ pub trait VisitorMut: Sized {
         _name: &mut Identifier,
         args: &mut [Expr],
         _params: &mut [Literal],
-        over: &mut Option<WindowSpec>,
+        over: &mut Option<Window>,
     ) {
         for arg in args.iter_mut() {
             walk_expr_mut(self, arg);
         }
 
         if let Some(over) = over {
-            over.partition_by
-                .iter_mut()
-                .for_each(|expr| walk_expr_mut(self, expr));
-            over.order_by
-                .iter_mut()
-                .for_each(|expr| walk_expr_mut(self, &mut expr.expr));
+            match over {
+                Window::WindowReference(reference) => {
+                    self.visit_identifier(&mut reference.name);
+                }
+                Window::WindowSpec(spec) => {
+                    spec.partition_by
+                        .iter_mut()
+                        .for_each(|expr| walk_expr_mut(self, expr));
+                    spec.order_by
+                        .iter_mut()
+                        .for_each(|expr| walk_expr_mut(self, &mut expr.expr));
 
-            if let Some(frame) = &mut over.window_frame {
-                self.visit_frame_bound(&mut frame.start_bound);
-                self.visit_frame_bound(&mut frame.end_bound);
+                    if let Some(frame) = &mut spec.window_frame {
+                        self.visit_frame_bound(&mut frame.start_bound);
+                        self.visit_frame_bound(&mut frame.end_bound);
+                    }
+                }
             }
         }
     }
