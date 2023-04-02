@@ -86,8 +86,8 @@ These tutorials are intended to help you get started with Databend:
 
 * [Generating SQL with AI](../15-sql-functions/61-ai-functions/01-ai-to-sql.md)
 * [Creating Embedding Vectors](../15-sql-functions/61-ai-functions/02-ai-embedding-vector.md)
-* [Computing Text Similarities](../15-sql-functions/61-ai-functions/03-ai-cosine-distance.md)
-* [Text Completion with AI](../15-sql-functions/61-ai-functions/04-ai-text-completion.md)
+* [Text Completion with AI](../15-sql-functions/61-ai-functions/03-ai-text-completion.md)
+* [Computing Text Similarities](../15-sql-functions/61-ai-functions/04-ai-cosine-distance.md)
 
 ## Backup & Restore
 
