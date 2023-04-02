@@ -3,7 +3,18 @@ title: 'AI_TEXT_COMPLETION'
 description: 'Generating text completions using the ai_text_completion function in Databend'
 ---
 
-This document provides an overview of the ai_text_completion function in Databend and demonstrates how to generate text completions using this function.
+This document provides an overview of the `ai_text_completion` function in Databend and demonstrates how to generate text completions using this function.
+
+The main code implementation can be found [here](https://github.com/datafuselabs/databend/blob/1e93c5b562bd159ecb0f336bb88fd1b7f9dc4a62/src/common/openai/src/completion.rs).
+
+:::caution
+Databend relies on OpenAI for `AI_TEXT_COMPLETION` and sends the completion prompt data to OpenAI.
+
+They will only work when the Databend configuration includes the `openai_api_key`, otherwise they will be inactive.
+
+This function is available by default on [Databend Cloud](https://databend.com) using our self OpenAI key. If you use them, you acknowledge that your table schema will be sent to OpenAI by us.
+:::
+
 
 ## Overview of ai_text_completion
 
@@ -27,4 +38,4 @@ Result:
 +--------------------------------------------------------------------------------------------------------------------+
 ```
 
-In this example, we provide the prompt "What is artificial intelligence?" to the ai_text_completion function, and it returns a generated completion that briefly describes artificial intelligence.
+In this example, we provide the prompt "What is artificial intelligence?" to the `ai_text_completion` function, and it returns a generated completion that briefly describes artificial intelligence.

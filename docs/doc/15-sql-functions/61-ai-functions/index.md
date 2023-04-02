@@ -1,20 +1,53 @@
 ---
 title: 'AI Functions'
-description: 'SQL-based Knowledge Base Search and Completion using Databend'
+description: 'Using SQL-based AI Functions for Knowledge Base Search and Text Completion'
 ---
 
-This document demonstrates how to leverage Databend's built-in AI functions for creating document embeddings, searching for similar documents, and generating text completions based on context. 
+This document demonstrates how to leverage Databend's built-in AI functions for creating document embeddings, searching for similar documents, and generating text completions based on context. We will guide you through a simple example that shows how to create and store embeddings, find related documents, and generate completions using various AI functions.
 
-We will guide you through a simple example that shows how to create and store embeddings using the `ai_embedding_vector` function, find related documents with the `cosine_distance` function, and generate completions using the `ai_text_completion` function.
+:::caution
+
+Databend relies on OpenAI for embeddings and text completions, which means your data will be sent to OpenAI. Exercise caution when using these functions.
+
+They will only work when the Databend configuration includes the `openai_api_key`, otherwise they will be inactive.
+
+These functions are available by default on [Databend Cloud](https://databend.com) using our self OpenAI key. If you use them, you acknowledge that your data will be sent to OpenAI by us.
+
+:::
 
 ## Introduction to embeddings
 
-Embeddings are vector representations of text data that capture the semantic meaning and context of the original text. They can be used to compare and analyze text in various natural language processing tasks, such as document similarity, clustering, and recommendation.
+Embeddings are vector representations of text data that capture the semantic meaning and context of the original text. They can be used to compare and analyze text in various natural language processing tasks, such as document similarity, clustering, and recommendation systems.
 
 ## How do embeddings work?
 
-Embeddings work by converting text into high-dimensional vectors in such a way that similar texts are closer together in the vector space. This is achieved by training a model on a large corpus of text, which learns to represent the words and phrases in a continuous space that captures their semantic relationships.
-Embeddings are vector representations of text data that capture the semantic meaning and context of the original text. They are widely used in various natural language processing tasks, such as document similarity, clustering, and recommendation systems.
+Embeddings work by converting text into high-dimensional vectors in such a way that similar texts are closer together in the vector space.
+
+This is achieved by training a model on a large corpus of text, which learns to represent the words and phrases in a continuous space that captures their semantic relationships.
+
+To illustrate how embeddings work, let's consider a simple example. Suppose we have the following sentences:
+1. `"The cat sat on the mat."`
+2. `"The dog sat on the rug."`
+3. `"The quick brown fox jumped over the lazy dog."`
+
+When creating embeddings for these sentences, the model will convert the text into high-dimensional vectors in such a way that similar sentences are closer together in the vector space.
+
+For instance, the embeddings of sentences 1 and 2 will be closer to each other because they share a similar structure and meaning (both involve an animal sitting on something). On the other hand, the embedding of sentence 3 will be farther from the embeddings of sentences 1 and 2 because it has a different structure and meaning.
+
+The embeddings could look like this (simplified for illustration purposes):
+
+1. `[0.2, 0.3, 0.1, 0.7, 0.4]`
+2. `[0.25, 0.29, 0.11, 0.71, 0.38]`
+3. `[-0.1, 0.5, 0.6, -0.3, 0.8]`
+
+In this simplified example, you can see that the embeddings of sentences 1 and 2 are closer to each other in the vector space, while the embedding of sentence 3 is farther away. This illustrates how embeddings can capture semantic relationships and be used to compare and analyze text data.
+
+
+## What is a Vector Database?
+
+A vector database is a specialized database designed to store, manage, and search high-dimensional vector data efficiently. These databases are optimized for similarity search operations, such as finding the nearest neighbors of a given vector. They are particularly useful in scenarios where the data has high dimensionality, like embeddings in natural language processing tasks, image feature vectors, and more.
+
+Typically, embedding vectors are stored in specialized vector databases like milvus, pinecone, qdrant, or weaviate. Databend can also store embedding vectors using the ARRAY(FLOAT32) data type and perform similarity computations with the cosine_distance function in SQL. To create embeddings for a text document using Databend, you can use the built-in ai_embedding_vector function directly in your SQL query.
 
 ## Databend AI Functions
 
@@ -23,12 +56,11 @@ Databend provides built-in AI functions for various natural language processing 
 - [ai_embedding_vector](./02-ai-embedding-vector.md): Generates embeddings for text documents.
 - [cosine_distance](./03-ai-cosine-distance.md): Calculates the cosine distance between two embeddings.
 - [ai_text_completion](./04-ai-text-completion.md): Generates text completions based on a given prompt.
-These functions are powered by open-source natural language processing models and can be used directly within SQL queries.
 
 ## Creating and storing embeddings using Databend
 
-To create embeddings for a text document using Databend, you can use the built-in ai_embedding_vector function directly in your SQL query. Here's an example:
 
+Here's an example:
 ```sql
 CREATE TABLE documents (
     doc_id INT,
@@ -52,11 +84,11 @@ SELECT doc_id, text_content, ai_embedding_vector(text_content)
 FROM documents;
 ```
 
-This SQL script creates a documents table, inserts the example documents, and then generates embeddings using the ai_embedding_vector function. The embeddings are stored in the embeddings table with the ARRAY(FLOAT32) column type.
+This SQL script creates a `documents` table, inserts the example documents, and then generates embeddings using the `ai_embedding_vector` function. The embeddings are stored in the embeddings table with the `ARRAY(FLOAT32)` column type.
 
-## Searching for related documents using cosine distance
+## Searching for similarity documents using cosine distance
 
-Suppose you have a question, "What is a subfield of artificial intelligence?", and you want to find the most related document from the stored embeddings. First, generate an embedding for the question using the ai_embedding_vector function:
+Suppose you have a question, "What is a subfield of artificial intelligence?", and you want to find the most related document from the stored embeddings. First, generate an embedding for the question using the `ai_embedding_vector` function:
 ```sql
 SELECT doc_id, text_content, cosine_distance(embedding, ai_embedding_vector('What is a subfield of artificial intelligence?')) AS distance
 FROM embeddings

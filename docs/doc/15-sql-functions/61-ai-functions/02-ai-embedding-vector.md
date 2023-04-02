@@ -5,6 +5,16 @@ description: 'Creating embeddings using the ai_embedding_vector function in Data
 
 This document provides an overview of the ai_embedding_vector function in Databend and demonstrates how to create document embeddings using this function.
 
+The main code implementation can be found [here](https://github.com/datafuselabs/databend/blob/1e93c5b562bd159ecb0f336bb88fd1b7f9dc4a62/src/common/openai/src/embedding.rs).
+
+:::caution
+Databend relies on OpenAI for `AI_EMBEDDING_VECTOR` and sends the embedding column data to OpenAI.
+
+They will only work when the Databend configuration includes the `openai_api_key`, otherwise they will be inactive.
+
+This function is available by default on [Databend Cloud](https://databend.com) using our self OpenAI key. If you use them, you acknowledge that your table schema will be sent to OpenAI by us.
+:::
+
 ## Overview of ai_embedding_vector
 
 

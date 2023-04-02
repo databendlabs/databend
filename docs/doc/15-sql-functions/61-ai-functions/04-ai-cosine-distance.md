@@ -5,6 +5,10 @@ description: 'Measuring document similarity using the cosine_distance function i
 
 This document provides an overview of the `cosine_distance` function in Databend and demonstrates how to measure document similarity using this function.
 
+:::info
+The `cosine_distance` function performs vector computations within Databend and does not rely on the OpenAI API.
+:::
+
 ## Overview of cosine_distance
 
 The `cosine_distance` function in Databend is a built-in function that calculates the cosine distance between two vectors. It is commonly used in natural language processing tasks, such as document similarity and recommendation systems.
