@@ -11,9 +11,10 @@ repository = "https://github.com/datafuselabs/databend-client"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-arrow = "35.0.0"
-arrow-cast = { version = "35.0.0", features = ["prettyprint"] }
-arrow-flight = { version = "35.0.0", features = ["flight-sql-experimental"] }
+arrow = { git = "https://github.com/apache/arrow-rs", rev = "ecd44fd" }
+arrow-cast = { git = "https://github.com/apache/arrow-rs", rev = "ecd44fd", features = ["prettyprint"] }
+arrow-flight = { git = "https://github.com/apache/arrow-rs", rev = "ecd44fd", features = ["flight-sql-experimental"] }
+
 atty = "0.2.14"
 futures = { version = "0.3", default-features = false, features = ["alloc"] }
 rustyline = "11.0.0"
@@ -26,18 +27,21 @@ tokio = { version = "1.26", features = [
     "parking_lot",
 ] }
 
+async-trait = "0.1.68"
 clap = { version = "4.1.0", features = ["derive"] }
 comfy-table = "6.1.4"
+indicatif = "0.17.3"
+logos = "0.12.1"
+serde = "1.0.159"
+serde_json = "1.0.95"
+strum = "0.24"
+strum_macros = "0.24"
 tonic = { version = "0.8", default-features = false, features = [
     "transport",
     "codegen",
     "tls",
     "prost",
 ] }
-
-logos = "0.12.1"
-strum = "0.24"
-strum_macros = "0.24"
 
 [[bin]]
 name = "bendsql"

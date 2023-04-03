@@ -1,23 +1,23 @@
-# databend-cli &emsp; 
+# bendsql &emsp; 
 
 ## Install 
 
 ```sh
-cargo install databend-cli
+cargo install bendsql
 ```
 
 ## Usage
 
 ```
-> databend-cli --help
-Usage: databend-cli <--user <USER>|--password <PASSWORD>|--host <HOST>|--port <PORT>>
+> bendsql --help
+Usage: bendsql <--user <USER>|--password <PASSWORD>|--host <HOST>|--port <PORT>>
 ```
 
 ## Examples
 
 ### REPL
 ```sql
-❯ databend-cli -h arch -u sundy -p abc --port 8900
+❯ bendsql -h arch -u sundy -p abc --port 8900
 Welcome to Arrow CLI.
 Connecting to http://arch:8900/ as user sundy.
 
@@ -52,7 +52,7 @@ Bye
 ### StdIn Pipe
 
 ```bash
-❯ echo "select number from numbers(3)" | databend-cli -h arch -u sundy -p abc --port 8900
+❯ echo "select number from numbers(3)" | bendsql -h arch -u sundy -p abc --port 8900
 0
 1
 2
