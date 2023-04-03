@@ -148,9 +148,9 @@ During the binding procedure, we need to track the state of binding. The state m
 
 To maintain the state, we propose a data structure `BindContext`(this name is inspired by `BinderContext` from CMU Peloton, which is a very appropriate name in my mind).
 
-`BindContext` is a stack-like structure, each `BindContext` node in the stack records state of corresponding syntactic context. SQL binding is a bottom-up procedure, which means it will process AST recursively, add columns produced by data source(e.g. table scan, join, subquery) into 
+`BindContext` is a stack-like structure, each `BindContext` node in the stack records state of corresponding syntactic context. SQL binding is a bottom-up procedure, which means it will process AST recursively, add columns produced by data source(e.g. table scan, join, subquery) into
 
-Briefly, `BindContext` is a set of column references. To be clear, we will use diagram to explain hwo this mechanism works.
+Briefly, `BindContext` is a set of column references. To be clear, we will use diagram to explain how this mechanism works.
 
 Take this example:
 
