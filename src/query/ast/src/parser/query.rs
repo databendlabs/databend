@@ -185,15 +185,6 @@ pub fn table_alias(i: Input) -> IResult<TableAlias> {
     )(i)
 }
 
-pub fn parenthesized_query(i: Input) -> IResult<Query> {
-    map(
-        rule! {
-            "(" ~ ( #parenthesized_query | #query ) ~ ")"
-        },
-        |(_, query, _)| query,
-    )(i)
-}
-
 pub fn join_operator(i: Input) -> IResult<JoinOperator> {
     alt((
         value(JoinOperator::Inner, rule! { INNER }),
@@ -367,7 +358,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let subquery = map(
         rule! {
-            #parenthesized_query ~ #table_alias?
+            #query ~ #table_alias?
         },
         |(subquery, alias)| TableReferenceElement::Subquery {
             subquery: Box::new(subquery),
