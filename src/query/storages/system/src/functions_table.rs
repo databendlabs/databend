@@ -83,7 +83,7 @@ impl AsyncSystemTable for FunctionsTable {
             })
             .collect::<Vec<&str>>();
 
-        let categorys = (0..names.len())
+        let categories = (0..names.len())
             .map(|i| if i < builtin_func_len { "" } else { "UDF" })
             .collect::<Vec<&str>>();
 
@@ -116,7 +116,7 @@ impl AsyncSystemTable for FunctionsTable {
             BooleanType::from_data(is_builtin),
             BooleanType::from_data(is_aggregate),
             StringType::from_data(definitions),
-            StringType::from_data(categorys),
+            StringType::from_data(categories),
             StringType::from_data(descriptions),
             StringType::from_data(syntaxs),
             StringType::from_data(examples),
