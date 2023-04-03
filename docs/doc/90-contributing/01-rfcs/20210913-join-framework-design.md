@@ -395,7 +395,7 @@ for s <- outerTable.fetchBlock():
             insert(result, row)
 ```
 
-In vetorized execution, we can use a bit map to indicate whether a row should be return to result set or not. Then we can materialize the result later.
+In vectorized execution, we can use a bit map to indicate whether a row should be return to result set or not. Then we can materialize the result later.
 
 For example, assume we have following SQL query:
 
