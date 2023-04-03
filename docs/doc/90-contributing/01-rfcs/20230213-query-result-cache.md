@@ -13,7 +13,7 @@ Support query result cache for faster query response.
 
 For some expensive queries with data that doesn't change frequently, we can cache the results to speed up the query response. For the same query with the same underlying data, we can return the cached result directly which improves the query efficiency greatly.
 
-For example, if we want to execute the following query to get the top 5 well-saled products everyt 10 seconds:
+For example, if we want to execute the following query to get the top 5 well-saled products every 10 seconds:
 
 ```sql
 SELECT product, count(product) AS sales_count
