@@ -198,7 +198,7 @@ If we find the column in parent context, then we can confirm that this subquery 
 The procedure can be summarized as follows:
 
 1. Create an empty `BindContext` context 1 for table `t`, and fill it with columns from `t`
-2. Create an empty `BindContext` context 2 for table `t` with context 1 as its parent cotext, fill it with columns from `t`, and rename the table to `t1`
+2. Create an empty `BindContext` context 2 for table `t` with context 1 as its parent context, fill it with columns from `t`, and rename the table to `t1`
 3. Perform name resolution for predicate `t1.a = t.a`
 4. Lookup context 2, and find the corresponding `ColumnEntry` for variable `t1.a`, but can not find `t.a`. So we will keep going through step 5
 5. Lookup parent of context 2(context 1), and find the corresponding `ColumnEntry` for variable `t.a`. Since the variable is found in outer context, it will be marked as correlated column reference, and the subquery will be marked as correlated
