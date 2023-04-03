@@ -132,7 +132,7 @@ external I/O path:   /tmp/cockroach-v22.1.4.linux-amd64/cockroach-data/extern
 store[0]:            path=/tmp/cockroach-v22.1.4.linux-amd64/cockroach-data
 storage engine:      pebble
 clusterID:           e1ab003d-7eba-48cd-b635-7a51f40269c2
-status:              restarted pre-existing node
+status:              restarted preexisting node
 nodeID:              1
 ```
 
