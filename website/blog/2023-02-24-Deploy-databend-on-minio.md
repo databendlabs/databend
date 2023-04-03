@@ -188,7 +188,7 @@ You're all set up now. Use Databend as you're with MySQL.
 
 ## Other Resources
 - Loading data to Databend: https://databend.rs/doc/load-data/
-- Databend k8s opterator: https://github.com/datafuselabs/helm-charts
+- Databend k8s operator: https://github.com/datafuselabs/helm-charts
 - bendsql: https://github.com/databendcloud/bendsql
 - Databend drivers:
   - Java Driver: https://github.com/databendcloud/databend-jdbc
