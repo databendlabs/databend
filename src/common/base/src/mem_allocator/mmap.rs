@@ -248,10 +248,10 @@ pub mod linux {
     fn page_size() -> usize {
         use std::sync::atomic::AtomicUsize;
         use std::sync::atomic::Ordering;
-        const INVAILED: usize = 0;
-        static CACHE: AtomicUsize = AtomicUsize::new(INVAILED);
+        const INVALID: usize = 0;
+        static CACHE: AtomicUsize = AtomicUsize::new(INVALID);
         let fetch = CACHE.load(Ordering::Relaxed);
-        if fetch == INVAILED {
+        if fetch == INVALID {
             let result = unsafe { libc::sysconf(libc::_SC_PAGE_SIZE) as usize };
             debug_assert_eq!(result.count_ones(), 1);
             CACHE.store(result, Ordering::Relaxed);
@@ -265,10 +265,10 @@ pub mod linux {
     fn linux_kernel_version() -> (u16, u8, u8) {
         use std::sync::atomic::AtomicU32;
         use std::sync::atomic::Ordering;
-        const INVAILED: u32 = 0;
-        static CACHE: AtomicU32 = AtomicU32::new(INVAILED);
+        const INVALID: u32 = 0;
+        static CACHE: AtomicU32 = AtomicU32::new(INVALID);
         let fetch = CACHE.load(Ordering::Relaxed);
-        let code = if fetch == INVAILED {
+        let code = if fetch == INVALID {
             let mut uname = unsafe { std::mem::zeroed::<libc::utsname>() };
             assert_ne!(-1, unsafe { libc::uname(&mut uname) });
             let mut length = 0usize;
