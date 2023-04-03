@@ -51,7 +51,7 @@ SELECT * FROM BookSold;
 If we use the aggregate function (AVG) to calculate the average amount of books sold for each branch, the result will be grouped by date:
 
 ```sql
--- use aggrerate function with GROUP BY
+-- use aggregate function with GROUP BY
 SELECT date, AVG(amount) AS avg_amount_for_branch
 FROM BookSold
 GROUP BY date;
@@ -61,10 +61,10 @@ June 22|454.5
 June 23|643.0
 ```
 
-If we use the aggrerate window function, the result will include all the rows:
+If we use the aggregate window function, the result will include all the rows:
 
 ```sql
--- use aggrerate window function 
+-- use aggregate window function 
 SELECT date, AVG(amount) over (partition by date) 
 FROM BookSold
 
@@ -78,7 +78,7 @@ June 23|643.0
 If we leave the OVER clause empty, it calculates the average of the total amount of three days.
 
 ```sql
--- use aggrerate window function without PARTITION BY in the OVER clause
+-- use aggregate window function without PARTITION BY in the OVER clause
 SELECT date, AVG(amount) over () 
 FROM BookSold
 

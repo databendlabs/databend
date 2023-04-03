@@ -45,7 +45,7 @@ Stay connected with the latest news about Databend.
 Aggregate window functions can operate on a group of rows and return a single value for each row in the underlying query. The `OVER` clause specifies how to partition the rows in the result set. When used with `GROUP BY`, aggregate window functions do not collapse rows but instead return all rows in the result set.
 
 ```sql
--- use aggrerate window function
+-- use aggregate window function
 SELECT date, AVG(amount) over (partition by date)
 FROM BookSold
 
