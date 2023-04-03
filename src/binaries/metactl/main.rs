@@ -121,7 +121,7 @@ pub struct RaftConfig {
     /// The interval in milli seconds at which a leader send heartbeat message to followers.
     /// Different value of this setting on leader and followers may cause unexpected behavior.
     #[clap(long, default_value = "1000")]
-    #[serde(alias = "kvsrv_heartbeat_intervalt")]
+    #[serde(alias = "kvsrv_heartbeat_interval")]
     pub heartbeat_interval: u64,
 
     /// The max time in milli seconds that a leader wait for install-snapshot ack from a follower or non-voter.
