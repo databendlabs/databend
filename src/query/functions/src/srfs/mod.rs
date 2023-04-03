@@ -42,7 +42,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 | DataType::Array(_)),
             ] => Some(build_unnest(ty, Box::new(|ty| ty))),
             _ => {
-                // Generate a fake function with signature `unnset(Array(T0 NULL))` to have a better error message.
+                // Generate a fake function with signature `unset(Array(T0 NULL))` to have a better error message.
                 Some(build_unnest(
                     &DataType::Array(Box::new(DataType::Boolean)),
                     Box::new(|ty| ty),
