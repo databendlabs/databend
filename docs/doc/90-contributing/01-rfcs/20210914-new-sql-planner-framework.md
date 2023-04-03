@@ -62,7 +62,7 @@ Each `DataField` inside a `DataSchema` is identified with a unique `name` string
 
 The second problem is about semantic check.
 
-Take type check as an example, each variable(e.g. column reference, constant value) inside an expression has it's own data type. And each scalar expresiion has requirement of data type for its arguments, for instance, a `+` expression requires its arguments to be numeric.
+Take type check as an example, each variable(e.g. column reference, constant value) inside an expression has it's own data type. And each scalar expression has requirement of data type for its arguments, for instance, a `+` expression requires its arguments to be numeric.
 
 To make sure that the query is valid and correct, we need to do type checking before executing the query.
 
@@ -207,7 +207,7 @@ The procedure can be summarized as follows:
 
 ### A brief introduction to Cascades optimizer
 
-SQL optimization is based on the equivalence of relational algebra. There are a bunch of different thereoms and lemmas can help us identify if two relational algebra trees are logically equivalent. With a set of equivalent relational expressions, we can evaluate them with a cost model and find the optimal exprssion.
+SQL optimization is based on the equivalence of relational algebra. There are a bunch of different thereoms and lemmas can help us identify if two relational algebra trees are logically equivalent. With a set of equivalent relational expressions, we can evaluate them with a cost model and find the optimal expression.
 
 Cascades optimizer is a framework of query optimization introduced by Goetz Graefe in his [paper](https://www.cse.iitb.ac.in/infolab/Data/Courses/CS632/Papers/Cascades-graefe.pdf).
 
