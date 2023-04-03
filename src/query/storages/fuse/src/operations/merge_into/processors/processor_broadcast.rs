@@ -77,6 +77,8 @@ impl Processor for BroadcastProcessor {
 
         if self.input_port.has_data() && self.input_data.is_none() {
             self.input_data = Some(self.input_port.pull_data().unwrap());
+            // reset output index
+            self.output_index = 0;
         }
 
         if let Some(data) = &self.input_data {
