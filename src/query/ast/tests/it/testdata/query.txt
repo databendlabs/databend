@@ -4047,7 +4047,7 @@ Query {
                         window: Some(
                             WindowReference(
                                 WindowRef {
-                                    name: Identifier {
+                                    window_name: Identifier {
                                         name: "w",
                                         quote: None,
                                         span: Some(
@@ -4094,7 +4094,7 @@ Query {
                                 42..43,
                             ),
                         },
-                        window: WindowSpec {
+                        spec: WindowSpec {
                             partition_by: [
                                 ColumnRef {
                                     span: Some(
