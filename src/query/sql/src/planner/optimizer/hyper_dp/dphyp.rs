@@ -46,7 +46,6 @@ pub struct DPhpy {
     dp_table: HashMap<Vec<IndexType>, JoinNode>,
     query_graph: QueryGraph,
     relation_set_tree: RelationSetTree,
-    test_map: HashMap<(Vec<IndexType>, Vec<IndexType>), usize>,
 }
 
 impl DPhpy {
@@ -58,7 +57,6 @@ impl DPhpy {
             dp_table: Default::default(),
             query_graph: QueryGraph::new(),
             relation_set_tree: Default::default(),
-            test_map: Default::default(),
         }
     }
 
@@ -182,7 +180,6 @@ impl DPhpy {
             }
         }
         let optimized = self.solve()?;
-        dbg!(&self.test_map);
         // Get all join relations in `relation_set_tree`
         let all_relations = self
             .relation_set_tree
@@ -295,7 +292,7 @@ impl DPhpy {
             merged_sets.push(merged_relation_set);
         }
 
-        let mut new_forbidden_nodes = forbidden_nodes.clone();
+        let mut new_forbidden_nodes;
         for (idx, neighbor) in neighbors.iter().enumerate() {
             new_forbidden_nodes = forbidden_nodes.clone();
             new_forbidden_nodes.insert(*neighbor);
@@ -316,7 +313,6 @@ impl DPhpy {
         debug_assert!(self.dp_table.contains_key(left));
         debug_assert!(self.dp_table.contains_key(right));
         let parent_set = union(left, right);
-        self.test_map.entry((left.to_vec(), right.to_vec())).and_modify(|val| *val += 1).or_insert(1);
         let mut left_join = self.dp_table.get(left).unwrap().clone();
         let mut right_join = self.dp_table.get(right).unwrap().clone();
         let left_cardinality = match left_join.cardinality {
