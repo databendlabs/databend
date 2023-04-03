@@ -53,7 +53,7 @@ impl HivePartitionFiller {
                 Some(v) => partition_values.push(v.to_string()),
                 None => {
                     return Err(ErrorCode::TableInfoError(format!(
-                        "could't find hive partition info :{}, hive partition maps:{:?}",
+                        "couldn't find hive partition info :{}, hive partition maps:{:?}",
                         field.name(),
                         partition_map
                     )));
