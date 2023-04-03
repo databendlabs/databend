@@ -173,17 +173,17 @@ impl TransformWindow {
     }
 
     #[inline(always)]
-    fn block_rows(&self, index: RowPtr) -> usize {
+    fn block_rows(&self, index: &RowPtr) -> usize {
         self.block_at(index).num_rows()
     }
 
     #[inline(always)]
-    fn block_at(&self, index: RowPtr) -> &DataBlock {
+    fn block_at(&self, index: &RowPtr) -> &DataBlock {
         &self.blocks[index.block - self.first_block].block
     }
 
     #[inline(always)]
-    fn column_at(&self, index: RowPtr, column_index: usize) -> &Column {
+    fn column_at(&self, index: &RowPtr, column_index: usize) -> &Column {
         self.block_at(index)
             .get_by_offset(column_index)
             .value
@@ -196,7 +196,7 @@ impl TransformWindow {
 
         let end = &self.partition_end;
         while cur.block < end.block {
-            let rows = self.block_rows(cur);
+            let rows = self.block_rows(&cur);
             if cur.row + n < rows {
                 cur.row += n;
                 return cur;
@@ -227,19 +227,23 @@ impl TransformWindow {
             return;
         }
 
+        debug_assert!(end.block == self.partition_end.block + 1);
+
         let partition_by_columns = self.partition_indices.len();
         if partition_by_columns == 0 {
             self.partition_end = end;
             return;
         }
 
-        let block_rows = self.block_rows(self.partition_end);
+        debug_assert!(self.partition_start <= self.prev_frame_start);
+
+        let block_rows = self.block_rows(&self.partition_end);
 
         while self.partition_end.row < block_rows {
             let mut i = 0;
             while i < partition_by_columns {
-                let start_column = self.column_at(self.partition_start, self.partition_indices[i]);
-                let compare_column = self.column_at(self.partition_end, self.partition_indices[i]);
+                let start_column = self.column_at(&self.partition_start, self.partition_indices[i]);
+                let compare_column = self.column_at(&self.partition_end, self.partition_indices[i]);
 
                 if start_column.index(self.partition_start.row)
                     != compare_column.index(self.partition_end.row)
@@ -346,10 +350,12 @@ impl TransformWindow {
     // Advance the current row to the next row
     // if the current row is the last row of the current block, advance the current block and row = 0
     fn advance_row(&mut self, mut row: RowPtr) -> RowPtr {
+        debug_assert!(row.block >= self.first_block);
+
         if row == self.blocks_end() {
             return row;
         }
-        if row.row < self.block_rows(row) - 1 {
+        if row.row < self.block_rows(&row) - 1 {
             row.row += 1;
         } else {
             row.block += 1;
@@ -359,10 +365,10 @@ impl TransformWindow {
     }
 
     #[inline]
-    fn is_order_by_keys_equal(&self, lhs: RowPtr, rhs: RowPtr) -> bool {
+    fn is_order_by_keys_equal(&self, lhs: &RowPtr, rhs: &RowPtr) -> bool {
         debug_assert!({
             let end = self.blocks_end();
-            lhs < end && rhs < end
+            *lhs < end && *rhs < end
         });
         for offset in &self.order_by_indices {
             let lhs_column = self.column_at(lhs, *offset);
@@ -410,14 +416,27 @@ impl TransformWindow {
             // 1.
             self.advance_partition();
 
+            debug_assert!(self.partition_ended || self.partition_end == self.blocks_end());
+            debug_assert!({
+                if self.partition_ended && self.partition_end == self.blocks_end() {
+                    self.input_is_finished
+                } else {
+                    true
+                }
+            });
+
             while self.current_row < self.partition_end {
                 // 2.
                 self.advance_frame_start();
                 if !self.frame_started {
+                    debug_assert!(!self.input_is_finished);
+                    debug_assert!(!self.partition_ended);
                     break;
                 }
                 self.advance_frame_end();
                 if !self.frame_ended {
+                    debug_assert!(!self.input_is_finished);
+                    debug_assert!(!self.partition_ended);
                     break;
                 }
 
@@ -433,7 +452,7 @@ impl TransformWindow {
                 if next_row < self.partition_end {
                     // Compute rank.
                     if self.needs_rank() {
-                        if !self.is_order_by_keys_equal(self.current_row, next_row) {
+                        if !self.is_order_by_keys_equal(&self.current_row, &next_row) {
                             // advance rank
                             self.current_rank += self.current_rank_count;
                             self.current_dense_rank += 1;
@@ -457,6 +476,7 @@ impl TransformWindow {
 
             // 4.
             if !self.partition_ended {
+                debug_assert!(self.partition_end == self.blocks_end());
                 break;
             }
 
@@ -468,6 +488,8 @@ impl TransformWindow {
             // reset frames
             self.frame_start = self.partition_start;
             self.frame_end = self.partition_start;
+            self.prev_frame_start = self.frame_start;
+            self.prev_frame_end = self.frame_end;
 
             self.current_row_in_partition = 1;
             self.current_rank = 1;
@@ -556,7 +578,7 @@ impl TransformWindow {
             self.apply_aggregate_common(agg)
         } else if self.frame_end != self.prev_frame_end {
             let row = self.prev_frame_end.row;
-            let data = self.block_at(self.prev_frame_end);
+            let data = self.block_at(&self.prev_frame_end);
             let columns = agg.arg_columns(data);
             agg.accumulate_row(&columns, row)
         } else {
@@ -582,10 +604,10 @@ impl TransformWindow {
             let block_row_end = if block == row_end.block {
                 row_end.row
             } else {
-                self.block_rows(RowPtr { block, row: 0 })
+                self.block_rows(&RowPtr { block, row: 0 })
             };
 
-            let data = self.block_at(RowPtr { block, row: 0 });
+            let data = self.block_at(&RowPtr { block, row: 0 });
             let columns = agg.arg_columns(data);
 
             for row in block_row_start..block_row_end {
