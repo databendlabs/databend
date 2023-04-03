@@ -1,6 +1,6 @@
 [package]
 name = "bendsql"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "Apache-2.0"
 description = "Databend Native Cli tool"
@@ -11,9 +11,13 @@ repository = "https://github.com/datafuselabs/databend-client"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-arrow = { git = "https://github.com/apache/arrow-rs", rev = "ecd44fd" }
-arrow-cast = { git = "https://github.com/apache/arrow-rs", rev = "ecd44fd", features = ["prettyprint"] }
-arrow-flight = { git = "https://github.com/apache/arrow-rs", rev = "ecd44fd", features = ["flight-sql-experimental"] }
+arrow = { version = "36.0.0", git = "https://github.com/apache/arrow-rs", rev = "ecd44fd" }
+arrow-cast = { version = "36.0.0", git = "https://github.com/apache/arrow-rs", rev = "ecd44fd", features = [
+    "prettyprint",
+] }
+arrow-flight = { version = "36.0.0", git = "https://github.com/apache/arrow-rs", rev = "ecd44fd", features = [
+    "flight-sql-experimental",
+] }
 
 atty = "0.2.14"
 futures = { version = "0.3", default-features = false, features = ["alloc"] }
@@ -32,7 +36,7 @@ clap = { version = "4.1.0", features = ["derive"] }
 comfy-table = "6.1.4"
 indicatif = "0.17.3"
 logos = "0.12.1"
-serde = "1.0.159"
+serde = { version = "1.0.159", features = ["derive"] }
 serde_json = "1.0.95"
 strum = "0.24"
 strum_macros = "0.24"
