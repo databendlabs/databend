@@ -29,7 +29,7 @@ function HomepageHeader() {
         'link': 'https://twitter.com/DatabendLabs'
       },
       {
-        'icon':'Youtube',
+        'icon':'YouTube',
         'title': 'YouTube',
         'link': 'https://www.youtube.com/@DatabendLabs'
       },
