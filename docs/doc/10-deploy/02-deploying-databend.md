@@ -165,7 +165,7 @@ chmod +x server.sh
 ./server.sh
 ```
 
-e. In your browser, go to <http://127.0.0.1:9900> and enter the credentials (`minioadmin` / `minioadmin`) to log in to the MinIO Console.
+e. In your browser, go to <http://127.0.0.1:9900> and enter the credentials (`minioadmin` / `minioadmin`) to log into the MinIO Console.
 
 f. In the MinIO Console, create a bucket named `databend`.
 

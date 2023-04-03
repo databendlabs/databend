@@ -74,7 +74,7 @@ docker-compose up
 
 3. Configure your Databend data source.
 
-    - Username: `root`. No password is required if you log in to a local instance of Databend with `root`.
+    - Username: `root`. No password is required if you log into a local instance of Databend with `root`.
     - Host: `host.docker.internal`
     - Port: `8000`
     - Database: `default`
