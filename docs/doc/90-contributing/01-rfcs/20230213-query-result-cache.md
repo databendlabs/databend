@@ -35,7 +35,7 @@ Besides TTL, when the underlying data is changed (we can infer this by snapshot 
 
 ### Result cache storage
 
-Databend uses key-value pairs to record query result caches. For every query, Databend will construct a key to represent the query, and store ralated information in the value.
+Databend uses key-value pairs to record query result caches. For every query, Databend will construct a key to represent the query, and store related information in the value.
 
 Databend will not store the query result directly in the key-value storage. Instead, Databend only stores the location of the result cache file in the value. The actual result cache will be stored in the storage layer (local fs, s3, ...).
 
