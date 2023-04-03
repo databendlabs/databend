@@ -18,7 +18,7 @@ use std::fmt::Formatter;
 use common_exception::Span;
 
 // Identifier of table name or column name.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Identifier {
     pub name: String,
     pub quote: Option<char>,
