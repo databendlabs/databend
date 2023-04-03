@@ -674,6 +674,20 @@ pub fn window_spec(i: Input) -> IResult<WindowSpec> {
     )(i)
 }
 
+pub fn window_spec_ident(i: Input) -> IResult<Window> {
+    alt((
+        map(
+            rule! {
+               ("(" ~ #window_spec ~ ")")
+            },
+            |(_, spec, _)| Window::WindowSpec(spec),
+        ),
+        map(rule! {#ident}, |window_name| {
+            Window::WindowReference(WindowRef { window_name })
+        }),
+    ))(i)
+}
+
 pub fn window_clause(i: Input) -> IResult<WindowDefinition> {
     map(
         rule! {

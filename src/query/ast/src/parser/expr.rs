@@ -862,38 +862,20 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
 
-    let function_call_with_window = alt((
-        map(
-            rule! {
-                #function_name
-                ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
-                ~ (OVER ~ "(" ~ #window_spec ~ ")")
-            },
-            |(name, _, opt_distinct, opt_args, _, inline_window)| ExprElement::FunctionCall {
-                distinct: opt_distinct.is_some(),
-                name,
-                args: opt_args.unwrap_or_default(),
-                params: vec![],
-                window: Some(Window::WindowSpec(inline_window.2)),
-            },
-        ),
-        map(
-            rule! {
-                #function_name
-                ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
-                ~ (OVER  ~ #ident)
-            },
-            |(name, _, opt_distinct, opt_args, _, named_window)| ExprElement::FunctionCall {
-                distinct: opt_distinct.is_some(),
-                name,
-                args: opt_args.unwrap_or_default(),
-                params: vec![],
-                window: Some(Window::WindowReference(WindowRef {
-                    window_name: named_window.1,
-                })),
-            },
-        ),
-    ));
+    let function_call_with_window = map(
+        rule! {
+            #function_name
+            ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
+            ~ (OVER ~ #window_spec_ident)
+        },
+        |(name, _, opt_distinct, opt_args, _, window)| ExprElement::FunctionCall {
+            distinct: opt_distinct.is_some(),
+            name,
+            args: opt_args.unwrap_or_default(),
+            params: vec![],
+            window: Some(window.1),
+        },
+    );
 
     let function_call_with_params = map(
         rule! {
