@@ -26,8 +26,8 @@ These functions help you extract and summarize data from databases to gain valua
 | [MEDIAN](aggregate-median.md)                               | Calculates the median value of a specific column            | 
 | [MIN_IF](aggregate-min-if.md)                               | Finds the minimum value for rows meeting a condition        | 
 | [MIN](aggregate-min.md)                                     | Finds the smallest value in a specific column               | 
-| [QUANTILE](aggregate-quantile.md)                           | Calculates the quantile for a specific column               | 
 | [QUANTILE_CONT](aggregate-quantile-cont.md)                 | Calculates the interpolated quantile for a specific column  |
+| [QUANTILE](aggregate-quantile.md)                           | Calculates the quantile for a specific column               | 
 | [RETENTION](aggregate-retention.md)                         | Calculates retention for a set of events                    | 
 | [SKEWNESS](aggregate-skewness.md)                           | Calculates the skewness of a set of values                  | 
 | [STDDEV_POP](aggregate-stddev-pop.md)                       | Calculates the population standard deviation of a column    | 
