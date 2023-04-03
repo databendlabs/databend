@@ -98,7 +98,7 @@ impl AsyncSystemTable for FunctionsTable {
             })
             .collect::<Vec<&str>>();
 
-        let syntaxs = (0..names.len())
+        let syntaxes = (0..names.len())
             .map(|i| {
                 if i < builtin_func_len {
                     ""
@@ -118,7 +118,7 @@ impl AsyncSystemTable for FunctionsTable {
             StringType::from_data(definitions),
             StringType::from_data(categories),
             StringType::from_data(descriptions),
-            StringType::from_data(syntaxs),
+            StringType::from_data(syntaxes),
             StringType::from_data(examples),
         ]))
     }
