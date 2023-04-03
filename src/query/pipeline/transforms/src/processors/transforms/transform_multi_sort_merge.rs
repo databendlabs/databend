@@ -412,7 +412,7 @@ where
 
         // Clear no need data.
         self.in_progress_rows.clear();
-        // A cursor pointing to a new block is created onlyh if the previous block is finished.
+        // A cursor pointing to a new block is created only if the previous block is finished.
         // This means that all blocks except the last one for each input port are drained into the output block.
         // Therefore, the previous blocks can be cleared.
         for blocks in self.blocks.iter_mut() {
