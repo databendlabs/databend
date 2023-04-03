@@ -217,7 +217,7 @@ Detailed and default values are available at [documentation](https://github.com/
 replicaCount: 3
 config:
   query:
-    clsuterId: example_cluster
+    clusterId: example_cluster
     # add builtin user
     users:
       - name: databend
@@ -481,7 +481,7 @@ replicaCount: 3
 +   tag: "v0.8.123-nightly"
 config:
   query:
-    clsuterId: example_cluster
+    clusterId: example_cluster
 ```
 
 then just run again helm upgrade
