@@ -27,7 +27,7 @@ pub enum CompletionMode {
     // max_tokens: 150, stop: ['#', ';']
     SQL,
     // Text completion:
-    // max_tokens: 250, stop: none
+    // max_tokens: 512, stop: none
     Text,
 }
 
@@ -47,7 +47,7 @@ impl OpenAI {
 
         let (max_tokens, stop) = match mode {
             CompletionMode::SQL => (Some(150), Some(vec!["#".to_string(), ";".to_string()])),
-            CompletionMode::Text => (Some(250), None),
+            CompletionMode::Text => (Some(512), None),
         };
 
         let body = CompletionsBody {

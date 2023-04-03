@@ -195,6 +195,21 @@ pub fn check_function<Index: ColumnIndex>(
         );
     }
 
+    // Do not check grouping
+    if name == "grouping" {
+        debug_assert!(candidates.len() == 1);
+        let (id, function) = candidates.into_iter().next().unwrap();
+        let return_type = function.signature.return_type.clone();
+        return Ok(Expr::FunctionCall {
+            span,
+            id,
+            function,
+            generics: vec![],
+            args: args.to_vec(),
+            return_type,
+        });
+    }
+
     let auto_cast_rules = fn_registry.get_auto_cast_rules(name);
 
     let mut fail_resaons = Vec::with_capacity(candidates.len());

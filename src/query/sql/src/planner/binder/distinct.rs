@@ -43,7 +43,7 @@ impl Binder {
             .drain()
             .map(|(_, item)| {
                 if bind_context.in_grouping {
-                    let mut group_checker = GroupingChecker::new(bind_context);
+                    let group_checker = GroupingChecker::new(bind_context);
                     let scalar = group_checker.resolve(&item.scalar, None)?;
                     Ok(ScalarItem {
                         scalar,
