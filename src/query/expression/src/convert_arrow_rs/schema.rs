@@ -229,7 +229,7 @@ impl TryFrom<&ArrowField> for DataType {
                 }))
             }
             _ => Err(ArrowError::CastError(format!(
-                "cast {ty} to DataType not not implemented yet"
+                "cast {ty} to DataType not implemented yet"
             )))?,
         };
         Ok(data_type)
