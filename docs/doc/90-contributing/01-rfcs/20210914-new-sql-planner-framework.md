@@ -79,7 +79,7 @@ A typical Cascades optimizer consists of independent modules:
 - Exploration engine
 - Cost model
 
-What's insteresting is that, the rule system(transformation and implementation) is decoupled with exploration engine and cost model, which means it's easy to build a heuristic optimizer without CBO(cost based optimization). And as soon as we're going to implement CBO, the rule system can be reused.
+What's interesting is that, the rule system(transformation and implementation) is decoupled with exploration engine and cost model, which means it's easy to build a heuristic optimizer without CBO(cost based optimization). And as soon as we're going to implement CBO, the rule system can be reused.
 
 Actually, this is the practical way. In some industrial Cascades implementation(e.g. SQL Server and CockroachDB), there is always a heuristic optimization phase, for example `pre-exploration` in SQL Server and `normalization` in CockroachDB, which generally shares a same rule system with exploration engine.
 
