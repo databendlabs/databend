@@ -23,6 +23,7 @@ use crate::ast::Expr;
 use crate::ast::FileLocation;
 use crate::ast::Identifier;
 use crate::ast::SelectStageOptions;
+use crate::ast::WindowDefinition;
 
 /// Root node of a query tree
 #[derive(Debug, Clone, PartialEq)]
@@ -85,6 +86,8 @@ pub struct SelectStmt {
     pub group_by: Option<GroupBy>,
     // `HAVING` clause
     pub having: Option<Expr>,
+    // `WINDOW` clause
+    pub window_list: Option<Vec<WindowDefinition>>,
 }
 
 /// Group by Clause.

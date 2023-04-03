@@ -32,6 +32,7 @@ impl VisitorMut for DistinctToGroupBy {
             selection,
             group_by,
             having,
+            window_list,
             ..
         } = stmt;
 
@@ -63,6 +64,7 @@ impl VisitorMut for DistinctToGroupBy {
                             selection: selection.clone(),
                             group_by: Some(GroupBy::Normal(args.clone())),
                             having: None,
+                            window_list: None,
                         })),
                         order_by: vec![],
                         limit: vec![],
@@ -96,6 +98,7 @@ impl VisitorMut for DistinctToGroupBy {
                         selection: None,
                         group_by: None,
                         having: having.clone(),
+                        window_list: window_list.clone(),
                     };
 
                     *stmt = new_stmt;
