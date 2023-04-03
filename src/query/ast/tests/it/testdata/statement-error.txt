@@ -179,13 +179,13 @@ error:
 
 
 ---------- Input ----------
-alter user 'test-e'@'localhost' identifie by 'new-password';
+alter user 'test-e'@'localhost' identifies by 'new-password';
 ---------- Output ---------
 error: 
   --> SQL:1:33
   |
-1 | alter user 'test-e'@'localhost' identifie by 'new-password';
-  |                                 ^^^^^^^^^ expected `IDENTIFIED`, `WITH`, `FORMAT`, or `;`
+1 | alter user 'test-e'@'localhost' identifies by 'new-password';
+  |                                 ^^^^^^^^^^ expected `IDENTIFIED`, `WITH`, `FORMAT`, or `;`
 
 
 ---------- Input ----------
