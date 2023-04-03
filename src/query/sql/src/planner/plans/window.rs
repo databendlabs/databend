@@ -22,6 +22,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use enum_as_inner::EnumAsInner;
+use serde::Deserialize;
+use serde::Serialize;
 
 use super::AggregateFunction;
 use crate::binder::WindowOrderByInfo;
@@ -162,7 +165,7 @@ impl Operator for Window {
     }
 }
 
-#[derive(Default, Clone, PartialEq, Eq, Hash, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Default, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct WindowFuncFrame {
     pub units: WindowFuncFrameUnits,
     pub start_bound: WindowFuncFrameBound,
@@ -179,14 +182,14 @@ impl Display for WindowFuncFrame {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, EnumAsInner)]
 pub enum WindowFuncFrameUnits {
     #[default]
     Rows,
     Range,
 }
 
-#[derive(Default, Clone, PartialEq, Eq, Hash, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Default, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub enum WindowFuncFrameBound {
     /// `CURRENT ROW`
     #[default]

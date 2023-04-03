@@ -100,6 +100,11 @@ pub struct TransformWindow {
 
     current_row: RowPtr,
 
+    /// The start of current peer group.
+    /// For ROWS frame, it is the same as `current_row`.
+    /// For RANGE frame, `peer_group_start` <= `current_row`
+    peer_group_start: RowPtr,
+
     // Used for row_number
     current_row_in_partition: usize,
     // used for dense_rank and rank
@@ -158,6 +163,7 @@ impl TransformWindow {
             frame_ended: false,
             prev_frame_start: RowPtr::default(),
             prev_frame_end: RowPtr::default(),
+            peer_group_start: RowPtr::default(),
             current_row: RowPtr::default(),
             current_row_in_partition: 1,
             current_rank: 1,
@@ -245,9 +251,10 @@ impl TransformWindow {
                 let start_column = self.column_at(&self.partition_start, self.partition_indices[i]);
                 let compare_column = self.column_at(&self.partition_end, self.partition_indices[i]);
 
-                if start_column.index(self.partition_start.row)
-                    != compare_column.index(self.partition_end.row)
-                {
+                if unsafe {
+                    start_column.index_unchecked(self.partition_start.row)
+                        != compare_column.index_unchecked(self.partition_end.row)
+                } {
                     break;
                 }
                 i += 1;
@@ -364,28 +371,31 @@ impl TransformWindow {
         row
     }
 
-    #[inline]
-    fn is_order_by_keys_equal(&self, lhs: &RowPtr, rhs: &RowPtr) -> bool {
-        debug_assert!({
-            let end = self.blocks_end();
-            *lhs < end && *rhs < end
-        });
-        for offset in &self.order_by_indices {
-            let lhs_column = self.column_at(lhs, *offset);
-            let rhs_column = self.column_at(rhs, *offset);
-            if lhs_column.index(lhs.row) != rhs_column.index(rhs.row) {
+    /// If the two rows are within the same peer group.
+    fn are_peers(&self, lhs: &RowPtr, rhs: &RowPtr) -> bool {
+        if lhs == rhs {
+            return true;
+        }
+        if self.frame_kind.units.is_rows() {
+            // For ROWS frame, the row's peer is only the row itself.
+            return false;
+        }
+
+        if self.order_by_indices.is_empty() {
+            return true;
+        }
+
+        let mut i = 0;
+        while i < self.order_by_indices.len() {
+            let lhs_col = self.column_at(lhs, self.order_by_indices[i]);
+            let rhs_col = self.column_at(rhs, self.order_by_indices[i]);
+
+            if unsafe { lhs_col.index_unchecked(lhs.row) != rhs_col.index_unchecked(rhs.row) } {
                 return false;
             }
+            i += 1;
         }
         true
-    }
-
-    #[inline(always)]
-    fn needs_rank(&self) -> bool {
-        matches!(
-            self.func,
-            WindowFunctionImpl::Rank | WindowFunctionImpl::DenseRank
-        )
     }
 
     /// When adding a [`DataBlock`], we compute the aggregations to the end.
@@ -426,6 +436,12 @@ impl TransformWindow {
             });
 
             while self.current_row < self.partition_end {
+                if !self.are_peers(&self.peer_group_start, &self.current_row) {
+                    self.peer_group_start = self.current_row;
+                    self.current_dense_rank += 1;
+                    self.current_rank = self.current_row_in_partition;
+                }
+
                 // 2.
                 self.advance_frame_start();
                 if !self.frame_started {
@@ -449,18 +465,6 @@ impl TransformWindow {
 
                 // 3.2
                 let next_row = self.advance_row(self.current_row);
-                if next_row < self.partition_end {
-                    // Compute rank.
-                    if self.needs_rank() {
-                        if !self.is_order_by_keys_equal(&self.current_row, &next_row) {
-                            // advance rank
-                            self.current_rank += self.current_rank_count;
-                            self.current_dense_rank += 1;
-                            self.current_rank_count = 0;
-                        }
-                        self.current_rank_count += 1;
-                    }
-                }
 
                 self.current_row = next_row;
                 self.current_row_in_partition += 1;
@@ -491,6 +495,10 @@ impl TransformWindow {
             self.prev_frame_start = self.frame_start;
             self.prev_frame_end = self.frame_end;
 
+            // reset peer group
+            self.peer_group_start = self.partition_start;
+
+            // reset row number, rank, ...
             self.current_row_in_partition = 1;
             self.current_rank = 1;
             self.current_rank_count = 1;

@@ -1019,7 +1019,7 @@ impl<'a> TypeChecker<'a> {
             };
             (units, start, end)
         } else {
-            let units = WindowFuncFrameUnits::Rows;
+            let units = WindowFuncFrameUnits::Range;
             let start = WindowFuncFrameBound::Preceding(None);
             let end = WindowFuncFrameBound::CurrentRow;
             (units, start, end)
