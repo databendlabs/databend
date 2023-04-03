@@ -33,8 +33,8 @@ use common_sql::resolve_type_name_by_str;
 
 use crate::hive_catalog::HIVE_CATALOG;
 use crate::hive_database::HiveDatabase;
-use crate::hive_database::HIVE_DATABASE_ENGIE;
-use crate::hive_table::HIVE_TABLE_ENGIE;
+use crate::hive_database::HIVE_DATABASE_ENGINE;
+use crate::hive_table::HIVE_TABLE_ENGINE;
 use crate::hive_table_options::HiveTableOptions;
 
 /// ! Skeleton of mappers
@@ -48,7 +48,7 @@ impl From<hms::Database> for HiveDatabase {
                     db_name: hms_database.name.unwrap_or_default(),
                 },
                 meta: DatabaseMeta {
-                    engine: HIVE_DATABASE_ENGIE.to_owned(),
+                    engine: HIVE_DATABASE_ENGINE.to_owned(),
                     created_on: Utc::now(),
                     ..Default::default()
                 },
@@ -89,7 +89,7 @@ pub fn try_into_table_info(
     let meta = TableMeta {
         schema,
         catalog: HIVE_CATALOG.to_string(),
-        engine: HIVE_TABLE_ENGIE.to_owned(),
+        engine: HIVE_TABLE_ENGINE.to_owned(),
         engine_options: table_options.into(),
         created_on: Utc::now(),
         ..Default::default()
