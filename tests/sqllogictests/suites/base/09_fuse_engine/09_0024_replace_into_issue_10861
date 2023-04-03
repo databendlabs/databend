@@ -1,0 +1,55 @@
+statement ok
+DROP DATABASE IF EXISTS issue_10861
+
+statement ok
+CREATE DATABASE issue_10861
+
+statement ok
+USE issue_10861
+
+statement ok
+create table s(id int);
+
+statement ok
+insert into s values(1);
+
+statement ok
+insert into s values(2);
+
+statement ok
+insert into s values(3);
+
+statement ok
+create table t(id int);
+
+statement ok
+replace into t on(id) select * from s;
+
+query I
+select * from t order by id;
+----
+1
+2
+3
+
+# replace into again, with the same source data set, multiple blocks
+statement ok
+replace into t on(id) select * from s;
+
+# expect no lost or duplications
+query I
+select * from t order by id;
+----
+1
+2
+3
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP TABLE s;
+
+statement ok
+DROP DATABASE issue_10861;
+

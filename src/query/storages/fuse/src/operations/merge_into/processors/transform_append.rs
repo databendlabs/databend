@@ -162,6 +162,12 @@ impl AsyncAccumulatingTransform for AppendTransform {
 
     #[async_backtrace::framed]
     async fn transform(&mut self, data_block: DataBlock) -> Result<Option<DataBlock>> {
+        if data_block.is_empty() {
+            // data source like
+            //  `select number from numbers(3000000) where number >=2000000 and number < 3000000`
+            // may generate empty data blocks
+            return Ok(None);
+        }
         // 1. serialize block and index
         let block_builder = self.block_builder.clone();
         let serialized_block_state =
