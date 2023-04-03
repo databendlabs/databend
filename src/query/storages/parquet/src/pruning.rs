@@ -290,8 +290,8 @@ pub fn build_column_page_pruners(
     let mut results = vec![];
     for (column, _) in filter.column_refs() {
         let col_idx = schema.index_of(&column)?;
-        let range_prunner = RangePrunerCreator::try_create(func_ctx, schema, Some(filter))?;
-        results.push((col_idx, range_prunner));
+        let range_pruner = RangePrunerCreator::try_create(func_ctx, schema, Some(filter))?;
+        results.push((col_idx, range_pruner));
     }
     Ok(results)
 }
