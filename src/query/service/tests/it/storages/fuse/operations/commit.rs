@@ -371,6 +371,14 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn incr_total_scan_value(&self, _value: ProgressValues) {
+        todo!()
+    }
+
+    fn get_total_scan_value(&self) -> ProgressValues {
+        todo!()
+    }
+
     fn get_scan_progress(&self) -> Arc<Progress> {
         todo!()
     }

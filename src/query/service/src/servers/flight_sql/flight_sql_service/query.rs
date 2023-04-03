@@ -195,10 +195,7 @@ impl FlightSqlServiceImpl {
             receiver: tokio::sync::mpsc::Receiver<T>,
         ) -> impl Stream<Item = T> {
             futures::stream::unfold(receiver, |mut receiver| async {
-                match receiver.recv().await {
-                    Some(value) => Some((value, receiver)),
-                    None => None,
-                }
+                receiver.recv().await.map(|value| (value, receiver))
             })
         }
 
