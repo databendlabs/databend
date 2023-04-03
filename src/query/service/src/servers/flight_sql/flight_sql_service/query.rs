@@ -86,7 +86,7 @@ impl FlightSqlServiceImpl {
             .await
             .map_err(|e| status!("Could not create_query_context", e))?;
 
-        context.attach_query_str(plan.to_string(), plan_extras.stament.to_mask_sql());
+        context.attach_query_str(plan.to_string(), plan_extras.statement.to_mask_sql());
         let interpreter = InterpreterFactory::get(context.clone(), plan).await?;
 
         let mut blocks = interpreter.execute(context.clone()).await?;
@@ -110,7 +110,7 @@ impl FlightSqlServiceImpl {
             .await
             .map_err(|e| status!("Could not create_query_context", e))?;
 
-        context.attach_query_str(plan.to_string(), plan_extras.stament.to_mask_sql());
+        context.attach_query_str(plan.to_string(), plan_extras.statement.to_mask_sql());
         let interpreter = InterpreterFactory::get(context.clone(), plan).await?;
         let data_schema = interpreter.schema();
         let schema_flight_data = Self::schema_to_flight_data((*data_schema).clone());
