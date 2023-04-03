@@ -47,7 +47,7 @@ runs:
             yq -i '.system = "Databend(Release@${{ inputs.source_id }})"' result.json
             ;;
           *)
-            echo "Unspported benchmark source: ${{ inputs.source }}"
+            echo "Unsupported benchmark source: ${{ inputs.source }}"
             exit 1
         esac
         yq -i '.comment = "commit: ${{ inputs.sha }}"' result.json
