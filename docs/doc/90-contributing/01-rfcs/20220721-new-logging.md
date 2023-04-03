@@ -60,7 +60,7 @@ metasrv: embed
 Connection
 
 MySQL:             mysql://root@localhost:3307/xxxx
-clickhouse:        clickhouse://root@locahost:9000/xxxx
+clickhouse:        clickhouse://root@localhost:9000/xxxx
 clickhouse (HTTP): http://root:@localhost:9001
 
 Useful Links
