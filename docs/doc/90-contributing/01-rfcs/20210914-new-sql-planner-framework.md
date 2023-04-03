@@ -207,7 +207,7 @@ The procedure can be summarized as follows:
 
 ### A brief introduction to Cascades optimizer
 
-SQL optimization is based on the equivalence of relational algebra. There are a bunch of different thereoms and lemmas can help us identify if two relational algebra trees are logically equivalent. With a set of equivalent relational expressions, we can evaluate them with a cost model and find the optimal expression.
+SQL optimization is based on the equivalence of relational algebra. There are a bunch of different theorems and lemmas can help us identify if two relational algebra trees are logically equivalent. With a set of equivalent relational expressions, we can evaluate them with a cost model and find the optimal expression.
 
 Cascades optimizer is a framework of query optimization introduced by Goetz Graefe in his [paper](https://www.cse.iitb.ac.in/infolab/Data/Courses/CS632/Papers/Cascades-graefe.pdf).
 
