@@ -11,11 +11,11 @@ repository = "https://github.com/datafuselabs/databend-client"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-arrow = { version = "36.0.0", git = "https://github.com/apache/arrow-rs" }
-arrow-cast = { version = "36.0.0", git = "https://github.com/apache/arrow-rs", features = [
+arrow = { version = "36.0.0" }
+arrow-cast = { version = "36.0.0", features = [
     "prettyprint",
 ] }
-arrow-flight = { version = "36.0.0", git = "https://github.com/apache/arrow-rs", features = [
+arrow-flight = { version = "36.0.0", features = [
     "flight-sql-experimental",
 ] }
 

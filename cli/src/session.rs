@@ -25,14 +25,14 @@ use rustyline::{CompletionType, Editor};
 use std::io::BufRead;
 
 use tokio::time::Instant;
-use tonic::transport::{Channel, Endpoint};
+use tonic::transport::Endpoint;
 
 use crate::display::{format_error, ChunkDisplay, FormatDisplay, ReplDisplay};
 use crate::helper::CliHelper;
 use crate::token::{TokenKind, Tokenizer};
 
 pub struct Session {
-    client: FlightSqlServiceClient<Channel>,
+    client: FlightSqlServiceClient,
     is_repl: bool,
     prompt: String,
 }
