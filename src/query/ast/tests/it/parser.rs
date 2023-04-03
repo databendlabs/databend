@@ -494,6 +494,7 @@ fn test_query() {
         r#"select * from monthly_sales pivot(sum(amount) for month in ('JAN', 'FEB', 'MAR', 'APR')) order by empid"#,
         r#"select * from monthly_sales_1 unpivot(sales for month in (jan, feb, mar, april)) order by empid"#,
         r#"select * from range(1, 2)"#,
+        r#"select sum(a) over w from customer window w as (partition by a order by b)"#,
     ];
 
     for case in cases {

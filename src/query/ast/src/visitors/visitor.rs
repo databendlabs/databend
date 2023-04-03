@@ -28,6 +28,7 @@ use super::walk::walk_statement;
 use super::walk::walk_table_reference;
 use super::walk_time_travel_point;
 use crate::ast::*;
+use crate::visitors::walk_window_definition;
 
 pub trait Visitor<'ast>: Sized {
     fn visit_expr(&mut self, expr: &'ast Expr) {
@@ -207,23 +208,34 @@ pub trait Visitor<'ast>: Sized {
         _name: &'ast Identifier,
         args: &'ast [Expr],
         _params: &'ast [Literal],
-        over: &'ast Option<WindowSpec>,
+        over: &'ast Option<Window>,
     ) {
         for arg in args {
             walk_expr(self, arg);
         }
 
         if let Some(over) = over {
-            over.partition_by
-                .iter()
-                .for_each(|expr| walk_expr(self, expr));
-            over.order_by
-                .iter()
-                .for_each(|expr| walk_expr(self, &expr.expr));
+            self.visit_window(over);
+        }
+    }
 
-            if let Some(frame) = &over.window_frame {
-                self.visit_frame_bound(&frame.start_bound);
-                self.visit_frame_bound(&frame.end_bound);
+    fn visit_window(&mut self, window: &'ast Window) {
+        match window {
+            Window::WindowReference(reference) => {
+                self.visit_identifier(&reference.window_name);
+            }
+            Window::WindowSpec(spec) => {
+                spec.partition_by
+                    .iter()
+                    .for_each(|expr| walk_expr(self, expr));
+                spec.order_by
+                    .iter()
+                    .for_each(|expr| walk_expr(self, &expr.expr));
+
+                if let Some(frame) = &spec.window_frame {
+                    self.visit_frame_bound(&frame.start_bound);
+                    self.visit_frame_bound(&frame.end_bound);
+                }
             }
         }
     }
@@ -621,5 +633,8 @@ pub trait Visitor<'ast>: Sized {
         walk_table_reference(self, right);
 
         walk_join_condition(self, condition);
+    }
+    fn visit_window_definition(&mut self, window_definition: &'ast WindowDefinition) {
+        walk_window_definition(self, window_definition);
     }
 }
