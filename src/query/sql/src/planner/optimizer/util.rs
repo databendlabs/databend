@@ -32,12 +32,12 @@ pub fn contains_local_table_scan(s_expr: &SExpr, metadata: &MetadataRef) -> bool
 }
 
 /// Check the expr contains ProjectSet op.
-pub fn contaions_project_set(s_expr: &SExpr) -> bool {
+pub fn contains_project_set(s_expr: &SExpr) -> bool {
     if let Some(child) = s_expr.children().iter().next() {
         // Check children
         return match child.plan.rel_op() {
             RelOp::ProjectSet => true,
-            _ => contaions_project_set(child),
+            _ => contains_project_set(child),
         };
     }
 
