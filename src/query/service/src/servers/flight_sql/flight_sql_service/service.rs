@@ -120,6 +120,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         Status,
     > {
         let remote_addr = request.remote_addr();
+
         let (user, password) = FlightSqlServiceImpl::get_user_password(request.metadata())
             .map_err(Status::invalid_argument)?;
         let session = FlightSqlServiceImpl::auth_user_password(user, password, remote_addr).await?;
@@ -136,6 +137,10 @@ impl FlightSqlService for FlightSqlServiceImpl {
         let metadata = MetadataValue::try_from(str)
             .map_err(|_| Status::internal("authorization not parsable"))?;
         resp.metadata_mut().insert("authorization", metadata);
+
+        session.get_status().write().is_native_client =
+            FlightSqlServiceImpl::get_header_value(request.metadata(), "Bendsql").is_some();
+
         self.sessions.insert(token, session);
         Ok(resp)
     }

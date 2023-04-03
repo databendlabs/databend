@@ -236,6 +236,14 @@ impl TableContext for QueryContext {
         }
     }
 
+    fn incr_total_scan_value(&self, value: ProgressValues) {
+        self.shared.total_scan_values.as_ref().incr(&value);
+    }
+
+    fn get_total_scan_value(&self) -> ProgressValues {
+        self.shared.total_scan_values.as_ref().get_values()
+    }
+
     fn get_scan_progress(&self) -> Arc<Progress> {
         self.shared.scan_progress.clone()
     }
