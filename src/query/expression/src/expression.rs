@@ -36,7 +36,7 @@ impl ColumnIndex for usize {}
 impl ColumnIndex for String {}
 
 /// An unchecked expression that is directly discarded from SQL or constructed by the planner.
-/// It can be type-checked and then converted to an evaluatable [`Expr`].
+/// It can be type-checked and then converted to an evaluable [`Expr`].
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum RawExpr<Index: ColumnIndex = usize> {
     Constant {
