@@ -47,18 +47,18 @@ SELECT sum(salary) OVER w ss FROM empsalary WINDOW w AS (PARTITION BY depname OR
 
 # row_number
 query I
-SELECT row_number() OVER w rn FROM empsalary WINDOW w AS (PARTITION BY depname ORDER BY salary) ORDER BY depname, rn
+SELECT row_number() OVER w1 rn1, dense_rank() OVER w2 rn2 FROM empsalary WINDOW w1 AS (PARTITION BY depname ORDER BY salary), w2 AS (PARTITION BY depname ORDER BY salary DESC) ORDER BY depname, rn1
 ----
-1
-2
-3
-4
-5
-1
-2
-1
-2
-3
+1 4
+2 3
+3 2
+4 2
+5 1
+1 2
+2 1
+1 2
+2 2
+3 1
 
 # rank_dense
 query TII
