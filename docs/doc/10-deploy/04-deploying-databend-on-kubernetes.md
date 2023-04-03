@@ -574,7 +574,7 @@ SELECT count(*) FROM t1;
 Note the `serviceMonitor` should be enabled when deploying meta and query cluster.
 :::
 
-* Download the grafana dashaboard files from: [datafuselabs/helm-charts](https://github.com/datafuselabs/helm-charts/tree/main/dashboards).
+* Download the grafana dashboard files from: [datafuselabs/helm-charts](https://github.com/datafuselabs/helm-charts/tree/main/dashboards).
 
 * Open grafana web for your cluster.
 
