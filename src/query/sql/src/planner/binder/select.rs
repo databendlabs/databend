@@ -590,6 +590,7 @@ impl Binder {
                 let column_binding = ColumnBinding {
                     database_name: None,
                     table_name: None,
+                    table_index: None,
                     column_name: left_col.column_name.clone(),
                     index: new_column_index,
                     data_type: Box::new(coercion_types[idx].clone()),

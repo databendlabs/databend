@@ -277,6 +277,7 @@ fn remove_column_nullable(
                 column: ColumnBinding {
                     database_name: column.column.database_name.clone(),
                     table_name: column.column.table_name.clone(),
+                    table_index: column.column.table_index.clone(),
                     column_name: column.column.column_name.clone(),
                     index: column.column.index,
                     data_type,

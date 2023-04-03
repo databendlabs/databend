@@ -153,6 +153,7 @@ pub fn optimize_query(
     if ctx.get_settings().get_enable_dphyp()? {
         let (dp_res, optimized) = DPhpy::new(metadata.clone()).optimize(result.clone())?;
         result = dp_res;
+        dbg!(optimized);
         if !optimized {
             // Callback to CascadesOptimizer
             let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata)?;

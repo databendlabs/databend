@@ -58,7 +58,13 @@ impl Binder {
                 column_binding.column_name = item.alias.clone();
                 column_binding
             } else {
-                self.create_column_binding(None, None, item.alias.clone(), item.scalar.data_type()?)
+                self.create_column_binding(
+                    None,
+                    None,
+                    None,
+                    item.alias.clone(),
+                    item.scalar.data_type()?,
+                )
             };
             let scalar = if let ScalarExpr::SubqueryExpr(SubqueryExpr {
                 span,

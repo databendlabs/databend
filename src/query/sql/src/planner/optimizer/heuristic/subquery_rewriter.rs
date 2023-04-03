@@ -333,6 +333,7 @@ impl SubqueryRewriter {
                     column: ColumnBinding {
                         database_name: None,
                         table_name: None,
+                        table_index: None,
                         column_name: name,
                         index,
                         data_type,
@@ -458,6 +459,7 @@ impl SubqueryRewriter {
                             column: ColumnBinding {
                                 database_name: None,
                                 table_name: None,
+                                table_index: None,
                                 column_name: "count(*)".to_string(),
                                 index: agg_func_index,
                                 data_type: Box::new(agg_func.return_type()?),
@@ -509,6 +511,7 @@ impl SubqueryRewriter {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name,
                             index: output_column.index,
                             data_type: output_column.data_type,
