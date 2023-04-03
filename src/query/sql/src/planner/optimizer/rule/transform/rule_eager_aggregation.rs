@@ -375,11 +375,15 @@ impl Rule for RuleEagerAggregation {
             columns_sets.push(prop.output_columns.clone());
         }
 
+        let extra_eval_scalar = if has_extra_eval {
+            extra_eval_scalar_expr.plan().clone().try_into()?
+        } else {
+            EvalScalar { items: vec![] }
+        };
         // Check if all extra eval scalars can be solved by one of the children.
         let mut eager_extra_eval_scalar_expr =
             [EvalScalar { items: vec![] }, EvalScalar { items: vec![] }];
         if has_extra_eval {
-            let extra_eval_scalar: EvalScalar = extra_eval_scalar_expr.plan().clone().try_into()?;
             for eval_item in extra_eval_scalar.items.iter() {
                 let eval_used_columns = eval_item.scalar.used_columns();
                 let mut resolved_by_one_child = false;
@@ -683,6 +687,7 @@ impl Rule for RuleEagerAggregation {
                             .push(create_eager_count_multiply_scalar_item(
                                 aggregate_function,
                                 eager_count_indexes[func_from[&agg.index] ^ 1],
+                                &extra_eval_scalar,
                                 self.metadata.clone(),
                             )?);
                     }
@@ -948,6 +953,7 @@ impl Rule for RuleEagerAggregation {
                                 .push(create_eager_count_multiply_scalar_item(
                                     aggregate_function,
                                     eager_count_index,
+                                    &extra_eval_scalar,
                                     self.metadata.clone(),
                                 )?);
                             need_eager_count = true;
@@ -1062,16 +1068,7 @@ impl Rule for RuleEagerAggregation {
                                 RelOperator::Aggregate(eager_count.clone()),
                                 SExpr::create_unary(
                                     RelOperator::Aggregate(eager_count_partial),
-                                    if !eager_extra_eval_scalar_expr[1].items.is_empty() {
-                                        SExpr::create_unary(
-                                            RelOperator::EvalScalar(
-                                                eager_extra_eval_scalar_expr[1].clone(),
-                                            ),
-                                            join_expr.child(1)?.clone(),
-                                        )
-                                    } else {
-                                        join_expr.child(1)?.clone()
-                                    },
+                                    join_expr.child(1)?.clone(),
                                 ),
                             ),
                         ])])
@@ -1083,16 +1080,7 @@ impl Rule for RuleEagerAggregation {
                                 RelOperator::Aggregate(eager_count.clone()),
                                 SExpr::create_unary(
                                     RelOperator::Aggregate(eager_count_partial),
-                                    if !eager_extra_eval_scalar_expr[0].items.is_empty() {
-                                        SExpr::create_unary(
-                                            RelOperator::EvalScalar(
-                                                eager_extra_eval_scalar_expr[0].clone(),
-                                            ),
-                                            join_expr.child(0)?.clone(),
-                                        )
-                                    } else {
-                                        join_expr.child(0)?.clone()
-                                    },
+                                    join_expr.child(0)?.clone(),
                                 ),
                             ),
                             join_expr.child(1)?.clone(),
@@ -1100,7 +1088,7 @@ impl Rule for RuleEagerAggregation {
                         .replace_plan(eager_count_sum.try_into()?)
                 });
 
-                // Apply double eager count on d and d^1.
+                // Apply double eager on d and d^1.
                 let mut final_double_eager_partial = final_double_eager.clone();
                 final_double_eager_partial.mode = AggregateMode::Partial;
 
@@ -1135,16 +1123,7 @@ impl Rule for RuleEagerAggregation {
                                 RelOperator::Aggregate(eager_count),
                                 SExpr::create_unary(
                                     RelOperator::Aggregate(eager_count_partial),
-                                    if !eager_extra_eval_scalar_expr[1].items.is_empty() {
-                                        SExpr::create_unary(
-                                            RelOperator::EvalScalar(
-                                                eager_extra_eval_scalar_expr[1].clone(),
-                                            ),
-                                            join_expr.child(1)?.clone(),
-                                        )
-                                    } else {
-                                        join_expr.child(1)?.clone()
-                                    },
+                                    join_expr.child(1)?.clone(),
                                 ),
                             ),
                         ])])
@@ -1156,16 +1135,7 @@ impl Rule for RuleEagerAggregation {
                                 RelOperator::Aggregate(eager_count),
                                 SExpr::create_unary(
                                     RelOperator::Aggregate(eager_count_partial),
-                                    if !eager_extra_eval_scalar_expr[0].items.is_empty() {
-                                        SExpr::create_unary(
-                                            RelOperator::EvalScalar(
-                                                eager_extra_eval_scalar_expr[0].clone(),
-                                            ),
-                                            join_expr.child(0)?.clone(),
-                                        )
-                                    } else {
-                                        join_expr.child(0)?.clone()
-                                    },
+                                    join_expr.child(0)?.clone(),
                                 ),
                             ),
                             SExpr::create_unary(
@@ -1547,19 +1517,37 @@ fn update_aggregate_and_eval(
 fn create_eager_count_multiply_scalar_item(
     aggregate_function: &mut AggregateFunction,
     eager_count_index: IndexType,
+    extra_eval_scalar: &EvalScalar,
     metadata: MetadataRef,
 ) -> common_exception::Result<ScalarItem> {
     let new_index = metadata.write().add_derived_column(
         format!("{} * _eager_count", aggregate_function.display_name),
         aggregate_function.args[0].data_type()?,
     );
+
+    let new_scalar = if let ScalarExpr::BoundColumnRef(column) = &aggregate_function.args[0] {
+        let mut scalar_idx = extra_eval_scalar.items.len();
+        for (idx, eval_scalar) in extra_eval_scalar.items.iter().enumerate() {
+            if eval_scalar.index == column.column.index {
+                scalar_idx = idx;
+            }
+        }
+        if scalar_idx != extra_eval_scalar.items.len() {
+            extra_eval_scalar.items[scalar_idx].scalar.clone()
+        } else {
+            aggregate_function.args[0].clone()
+        }
+    } else {
+        unreachable!()
+    };
+
     let new_scalar_item = ScalarItem {
         scalar: ScalarExpr::FunctionCall(FunctionCall {
             span: None,
             func_name: "multiply".to_string(),
             params: vec![],
             arguments: vec![
-                aggregate_function.args[0].clone(),
+                new_scalar,
                 cast_expr_if_needed(
                     ScalarExpr::BoundColumnRef(BoundColumnRef {
                         span: None,
