@@ -31,6 +31,8 @@ use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
 use common_ast::ast::SetOperator;
 use common_ast::ast::TableReference;
+use common_ast::ast::Window;
+use common_ast::ast::WindowSpec;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
@@ -781,6 +783,7 @@ impl<'a> SelectRewriter<'a> {
     }
 
     fn rewrite(&mut self, stmt: &SelectStmt) -> Result<Option<SelectStmt>> {
+        self.rewrite_window_references(stmt)?;
         self.rewrite_pivot(stmt)?;
         self.rewrite_unpivot(stmt)?;
         Ok(self.new_stmt.take())
@@ -893,5 +896,67 @@ impl<'a> SelectRewriter<'a> {
             });
         };
         Ok(())
+    }
+
+    fn rewrite_window_references(&mut self, stmt: &SelectStmt) -> Result<()> {
+        if stmt.window_list.is_none() {
+            return Ok(());
+        }
+        let window_definitions = self.extract_window_definitions(stmt);
+
+        let mut new_select_list = stmt.select_list.clone();
+        for target in &mut new_select_list {
+            match target {
+                SelectTarget::AliasedExpr { expr, .. } => match expr {
+                    box Expr::FunctionCall { window, .. } => {
+                        if let Some(window) = window {
+                            match window {
+                                Window::WindowReference(reference) => {
+                                    let window_spec = window_definitions
+                                        .get(&reference.window_name.name)
+                                        .ok_or_else(|| {
+                                            ErrorCode::SyntaxException("Window not found")
+                                        })?;
+                                    *window = Window::WindowSpec(WindowSpec {
+                                        partition_by: window_spec.partition_by.clone(),
+                                        order_by: window_spec.order_by.clone(),
+                                        window_frame: window_spec.window_frame.clone(),
+                                    });
+                                }
+                                Window::WindowSpec(_) => continue,
+                            }
+                        }
+                    }
+                    _ => continue,
+                },
+                SelectTarget::QualifiedName { .. } => {}
+            }
+        }
+
+        if let Some(ref mut new_stmt) = self.new_stmt {
+            new_stmt.select_list = new_select_list;
+        } else {
+            self.new_stmt = Some(SelectStmt {
+                select_list: new_select_list,
+                ..stmt.clone()
+            });
+        };
+        Ok(())
+    }
+
+    fn extract_window_definitions(&mut self, stmt: &SelectStmt) -> HashMap<String, WindowSpec> {
+        let mut window_definitions = HashMap::new();
+        for window in stmt.window_list.as_ref().unwrap() {
+            window_definitions.insert(window.name.name.clone(), window.spec.clone());
+        }
+        if let Some(ref mut new_stmt) = self.new_stmt {
+            new_stmt.window_list = None;
+        } else {
+            self.new_stmt = Some(SelectStmt {
+                window_list: None,
+                ..stmt.clone()
+            });
+        };
+        window_definitions
     }
 }
