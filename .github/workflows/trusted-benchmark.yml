@@ -278,7 +278,7 @@ jobs:
     if: needs.metadata.outputs.source == 'pr'
     steps:
       - uses: actions/checkout@v3
-      - name: Install Depencencies
+      - name: Install Dependencies
         run: |
           sudo apt update -y
           sudo apt install -y python3-jinja2
@@ -342,7 +342,7 @@ jobs:
           - "hits"
     steps:
       - uses: actions/checkout@v3
-      - name: Install Depencencies
+      - name: Install Dependencies
         run: |
           sudo apt update -y
           sudo apt install -y python3-jinja2
