@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use arrow_flight::FlightData;
@@ -19,7 +21,7 @@ use arrow_flight::SchemaAsIpc;
 use arrow_ipc::writer;
 use arrow_ipc::writer::IpcWriteOptions;
 use arrow_schema::Schema as ArrowSchema;
-use async_stream::stream;
+use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -28,7 +30,10 @@ use common_sql::plans::Plan;
 use common_sql::PlanExtras;
 use common_sql::Planner;
 use common_storages_fuse::TableContext;
-use futures_util::StreamExt;
+use futures::Stream;
+use futures::StreamExt;
+use serde::Deserialize;
+use serde::Serialize;
 use tonic::Status;
 
 use super::status;
@@ -36,6 +41,9 @@ use super::DoGetStream;
 use super::FlightSqlServiceImpl;
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::Session;
+
+/// A app_metakey which indicates the data is a progress type
+static H_PROGRESS: u8 = 0x01;
 
 impl FlightSqlServiceImpl {
     pub(crate) fn schema_to_flight_data(data_schema: DataSchema) -> FlightData {
@@ -98,13 +106,14 @@ impl FlightSqlServiceImpl {
         Ok(affected_rows as i64)
     }
 
-    #[async_backtrace::framed]
     pub(super) async fn execute_query(
         &self,
         session: Arc<Session>,
         plan: &Plan,
         plan_extras: &PlanExtras,
     ) -> Result<DoGetStream> {
+        let is_native_client = session.get_status().read().is_native_client;
+
         let context = session
             .create_query_context()
             .await
@@ -112,35 +121,94 @@ impl FlightSqlServiceImpl {
 
         context.attach_query_str(plan.to_string(), plan_extras.stament.to_mask_sql());
         let interpreter = InterpreterFactory::get(context.clone(), plan).await?;
+
         let data_schema = interpreter.schema();
-        let schema_flight_data = Self::schema_to_flight_data((*data_schema).clone());
+        let data_stream = interpreter.execute(context.clone()).await?;
 
-        let mut data_stream = interpreter.execute(context.clone()).await?;
+        let is_finished = Arc::new(AtomicBool::new(false));
+        let is_finished_clone = is_finished.clone();
+        let (sender, receiver) = tokio::sync::mpsc::channel(2);
+        let _ = sender
+            .send(Ok(Self::schema_to_flight_data((*data_schema).clone())))
+            .await;
 
-        let stream = stream! {
-            yield Ok(schema_flight_data);
+        let s1 = sender.clone();
+        tokio::spawn(async move {
+            let mut data_stream = data_stream;
+
             while let Some(block) = data_stream.next().await {
                 match block {
                     Ok(block) => {
-                        match Self::block_to_flight_data(block, &data_schema) {
-                            Ok(flight_data) => {
-                               yield Ok(flight_data)
-                            }
-                            Err(err) => {
-                                yield Err(status!("Could not convert batches", err))
-                            }
-                        }
+                        let res =
+                            match FlightSqlServiceImpl::block_to_flight_data(block, &data_schema) {
+                                Ok(flight_data) => Ok(flight_data),
+                                Err(err) => Err(status!("Could not convert batches", err)),
+                            };
+
+                        let _ = s1.send(res).await;
                     }
                     Err(err) => {
-                        yield Err(status!("Could not convert batches", err))
+                        let _ = s1
+                            .send(Err(status!("Could not convert batches", err)))
+                            .await;
                     }
-                };
+                }
             }
+            is_finished_clone.store(true, Ordering::SeqCst);
+        });
 
-            // to hold session ref until stream is all consumed
-            let _ = session.get_id();
-        };
+        if is_native_client {
+            tokio::spawn(async move {
+                let total_scan_value = context.get_total_scan_value();
+                let mut current_scan_value = context.get_scan_progress_value();
 
-        Ok(Box::pin(stream))
+                let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(20));
+                while !is_finished.load(Ordering::SeqCst) {
+                    interval.tick().await;
+
+                    let progress = context.get_scan_progress_value();
+                    if progress.rows == current_scan_value.rows {
+                        continue;
+                    }
+                    current_scan_value = progress;
+
+                    let progress = ProgressValue {
+                        total_rows: total_scan_value.rows,
+                        total_bytes: total_scan_value.bytes,
+
+                        read_rows: current_scan_value.rows,
+                        read_bytes: current_scan_value.bytes,
+                    };
+
+                    let progress = serde_json::to_vec(&progress).unwrap();
+                    let progress_flight_data = FlightData {
+                        app_metadata: vec![H_PROGRESS].into(),
+                        data_body: progress.into(),
+                        ..Default::default()
+                    };
+                    let _ = sender.send(Ok(progress_flight_data)).await;
+                }
+            });
+        }
+
+        fn receiver_to_stream<T>(
+            receiver: tokio::sync::mpsc::Receiver<T>,
+        ) -> impl Stream<Item = T> {
+            futures::stream::unfold(receiver, |mut receiver| async {
+                receiver.recv().await.map(|value| (value, receiver))
+            })
+        }
+
+        let st = receiver_to_stream(receiver);
+        Ok(Box::pin(st))
     }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct ProgressValue {
+    pub total_rows: usize,
+    pub total_bytes: usize,
+
+    pub read_rows: usize,
+    pub read_bytes: usize,
 }

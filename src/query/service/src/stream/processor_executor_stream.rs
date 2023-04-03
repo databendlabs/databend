@@ -36,6 +36,7 @@ impl PullingExecutorStream {
 impl Stream for PullingExecutorStream {
     type Item = Result<DataBlock>;
 
+    // The ctx can't be wake up, so we can't return Poll::Pending here
     fn poll_next(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let self_ = Pin::get_mut(self);
         match self_.executor.pull_data() {
