@@ -229,7 +229,7 @@ The alternations of an `Expression` are generated during the transformation proc
 SELECT * FROM t INNER JOIN t1 ON t.a = t1.a;
 ```
 
-With `JoinCommutivity` rule, the above SQL can be transformed into a equivalent SQL:
+With `JoinCommutativity` rule, the above SQL can be transformed into a equivalent SQL:
 
 ```sql
 SELECT * FROM t1 INNER JOIN t ON t.a = t1.a;
@@ -241,7 +241,7 @@ A structure `Memo` is introduced to store the alternations. Each `Memo` consists
 
 Different from the `Expression` we mentioned above, the `Expression` inside `Group` take `Group`s as its children instead of `Expression`s, so that equivalent `Expression`s can share the children candidates.
 
-Take the `JoinCommutivity` example, the `Memo` of original SQL can be represented as:
+Take the `JoinCommutativity` example, the `Memo` of original SQL can be represented as:
 ```
 Group 1: [Get(t)]
 
@@ -250,7 +250,7 @@ Group 2: [Get(t1)]
 Group 3: [Join(1, 2, "t.a = t1.a")]
 ```
 
-After applying `JoinCommutivity` transformation, the `Memo` will become:
+After applying `JoinCommutativity` transformation, the `Memo` will become:
 ```
 Group 1: [Get(t)]
 
