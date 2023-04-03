@@ -42,6 +42,9 @@ use super::FlightSqlServiceImpl;
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::Session;
 
+/// A app_metakey which indicates the data is a progress type
+static H_PROGRESS: u8 = 0x01;
+
 impl FlightSqlServiceImpl {
     pub(crate) fn schema_to_flight_data(data_schema: DataSchema) -> FlightData {
         let arrow_schema = ArrowSchema::from(&data_schema);
@@ -179,7 +182,7 @@ impl FlightSqlServiceImpl {
 
                     let progress = serde_json::to_vec(&progress).unwrap();
                     let progress_flight_data = FlightData {
-                        app_metadata: vec![0x01].into(),
+                        app_metadata: vec![H_PROGRESS].into(),
                         data_body: progress.into(),
                         ..Default::default()
                     };

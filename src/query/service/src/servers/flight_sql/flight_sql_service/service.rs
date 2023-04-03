@@ -139,7 +139,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         resp.metadata_mut().insert("authorization", metadata);
 
         session.get_status().write().is_native_client =
-            FlightSqlServiceImpl::get_header_value(request.metadata(), "Bendsql").is_some();
+            FlightSqlServiceImpl::get_header_value(request.metadata(), "bendsql").is_some();
 
         self.sessions.insert(token, session);
         Ok(resp)
