@@ -28,6 +28,7 @@ use common_ast::ast::SubqueryModifier;
 use common_ast::ast::TrimWhere;
 use common_ast::ast::TypeName;
 use common_ast::ast::UnaryOperator;
+use common_ast::ast::Window;
 use common_ast::ast::WindowFrame;
 use common_ast::ast::WindowFrameBound;
 use common_ast::ast::WindowFrameUnits;
@@ -677,6 +678,10 @@ impl<'a> TypeChecker<'a> {
                         )));
                     }
                     let window = window.as_ref().unwrap();
+                    let window = match window {
+                        Window::WindowReference(_) => unreachable!(),
+                        Window::WindowSpec(spec) => spec,
+                    };
                     let display_name = format!("{:#}", expr);
                     let func = WindowFuncType::from_name(&name)?;
                     self.resolve_window(*span, display_name, window, func)
@@ -692,6 +697,10 @@ impl<'a> TypeChecker<'a> {
                         // aggregate window function
                         let display_name = format!("{:#}", expr);
                         let func = WindowFuncType::Aggregate(new_agg_func);
+                        let window = match window {
+                            Window::WindowReference(_) => unreachable!(),
+                            Window::WindowSpec(spec) => spec,
+                        };
                         self.resolve_window(*span, display_name, window, func)
                             .await?
                     } else {

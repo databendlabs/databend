@@ -217,7 +217,7 @@ pub trait VisitorMut: Sized {
         if let Some(over) = over {
             match over {
                 Window::WindowReference(reference) => {
-                    self.visit_identifier(&mut reference.name);
+                    self.visit_identifier(&mut reference.window_name);
                 }
                 Window::WindowSpec(spec) => {
                     spec.partition_by

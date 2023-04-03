@@ -2261,7 +2261,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_window_definition(&mut self, window: &'ast WindowDefinition) {
         self.visit_identifier(&window.name);
         let window_name = self.children.pop().unwrap();
-        self.visit_window(&Window::WindowSpec(window.window.clone()));
+        self.visit_window(&Window::WindowSpec(window.spec.clone()));
         let window = self.children.pop().unwrap();
         let name = "Window".to_string();
         let format_ctx = AstFormatContext::with_children(name, 2);

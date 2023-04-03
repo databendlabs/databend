@@ -681,7 +681,7 @@ pub fn window_clause(i: Input) -> IResult<WindowDefinition> {
         },
         |(ident, window)| WindowDefinition {
             name: ident,
-            window: window.2,
+            spec: window.2,
         },
     )(i)
 }

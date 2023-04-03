@@ -302,7 +302,7 @@ pub fn walk_window_definition<'a, V: Visitor<'a>>(
     visitor: &mut V,
     window_definition: &'a WindowDefinition,
 ) {
-    let WindowDefinition { name, window } = window_definition;
+    let WindowDefinition { name, spec: window } = window_definition;
 
     visitor.visit_identifier(name);
 

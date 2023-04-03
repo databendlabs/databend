@@ -467,12 +467,12 @@ pub enum Window {
 #[derive(Debug, Clone, PartialEq)]
 pub struct WindowDefinition {
     pub name: Identifier,
-    pub window: WindowSpec,
+    pub spec: WindowSpec,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct WindowRef {
-    pub name: Identifier,
+    pub window_name: Identifier,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -931,7 +931,7 @@ impl Display for Literal {
 
 impl Display for WindowDefinition {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "WINDOW {} {}", self.name, self.window)
+        write!(f, "WINDOW {} {}", self.name, self.spec)
     }
 }
 
@@ -947,7 +947,7 @@ impl Display for Window {
 
 impl Display for WindowRef {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "WINDOW {}", self.name)
+        write!(f, "WINDOW {}", self.window_name)
     }
 }
 

@@ -889,7 +889,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 args: opt_args.unwrap_or_default(),
                 params: vec![],
                 window: Some(Window::WindowReference(WindowRef {
-                    name: named_window.1,
+                    window_name: named_window.1,
                 })),
             },
         ),

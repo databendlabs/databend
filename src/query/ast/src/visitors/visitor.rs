@@ -222,7 +222,7 @@ pub trait Visitor<'ast>: Sized {
     fn visit_window(&mut self, window: &'ast Window) {
         match window {
             Window::WindowReference(reference) => {
-                self.visit_identifier(&reference.name);
+                self.visit_identifier(&reference.window_name);
             }
             Window::WindowSpec(spec) => {
                 spec.partition_by

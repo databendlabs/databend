@@ -115,7 +115,7 @@ impl<'ast> Visitor<'ast> for UDFValidator {
                     }
                 }
                 Window::WindowReference(reference) => {
-                    self.visit_identifier(&reference.name);
+                    self.visit_identifier(&reference.window_name);
                 }
             }
         }
