@@ -1,4 +1,4 @@
-export { default as Github } from './Github';
+export { default as GitHub } from './GitHub';
 export { default as Slack } from './Slack';
 export { default as Twitter } from './Twitter';
 export { default as Youtube } from './Youtube';

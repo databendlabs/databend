@@ -19,8 +19,8 @@ For example:
 
 For every release, we will:
 
-- Create a new release on Github.
+- Create a new release on GitHub.
 - Build binaries and pack them on Linux and MacOS.
-- Upload built packages to Github Releases, AWS S3 bucket and Docker Registry.
+- Upload built packages to GitHub Releases, AWS S3 bucket and Docker Registry.
 
 We are adopting github native release notes generation which controlled by [release.yml](./release.yml).

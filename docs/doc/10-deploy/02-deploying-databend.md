@@ -190,7 +190,7 @@ For information about how to enable and manage WebHDFS on Apache Hadoop, please 
 
 a. Create a folder named `databend` in the directory `/usr/local`.
 
-b. Download and extract the latest Databend release for your platform from [Github Release](https://github.com/datafuselabs/databend/releases):
+b. Download and extract the latest Databend release for your platform from [GitHub Release](https://github.com/datafuselabs/databend/releases):
 
 <Tabs groupId="operating-systems">
 <TabItem value="linux-x86_64" label="Linux(x86)">
