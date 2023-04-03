@@ -47,8 +47,11 @@ fn test_agg() {
     test_agg_covar_pop(file, eval_aggr);
     test_agg_retention(file, eval_aggr);
     test_agg_stddev(file, eval_aggr);
+    test_agg_kurtosis(file, eval_aggr);
+    test_agg_skewness(file, eval_aggr);
     test_agg_window_funnel(file, eval_aggr);
     test_agg_approx_count_distinct(file, eval_aggr);
+    test_agg_quantile_disc(file, eval_aggr);
     test_agg_quantile_cont(file, eval_aggr);
     test_agg_median(file, eval_aggr);
     test_agg_list(file, eval_aggr);
@@ -74,6 +77,9 @@ fn test_agg_group_by() {
     test_agg_covar_pop(file, simulate_two_groups_group_by);
     test_agg_retention(file, simulate_two_groups_group_by);
     test_agg_stddev(file, simulate_two_groups_group_by);
+    test_agg_kurtosis(file, simulate_two_groups_group_by);
+    test_agg_skewness(file, simulate_two_groups_group_by);
+    test_agg_quantile_disc(file, simulate_two_groups_group_by);
     test_agg_quantile_cont(file, simulate_two_groups_group_by);
     test_agg_median(file, simulate_two_groups_group_by);
     test_agg_window_funnel(file, simulate_two_groups_group_by);
@@ -339,6 +345,41 @@ fn test_agg_stddev(file: &mut impl Write, simulator: impl AggregationSimulator) 
     run_agg_ast(
         file,
         "stddev_samp(x_null)",
+        get_example().as_slice(),
+        simulator,
+    );
+}
+
+fn test_agg_kurtosis(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(file, "kurtosis(a)", get_example().as_slice(), simulator);
+    run_agg_ast(
+        file,
+        "kurtosis(x_null)",
+        get_example().as_slice(),
+        simulator,
+    );
+}
+
+fn test_agg_skewness(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(file, "skewness(a)", get_example().as_slice(), simulator);
+    run_agg_ast(
+        file,
+        "skewness(x_null)",
+        get_example().as_slice(),
+        simulator,
+    );
+}
+
+fn test_agg_quantile_disc(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(
+        file,
+        "quantile_cont(0.8)(a)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "quantile_cont(0.8)(x_null)",
         get_example().as_slice(),
         simulator,
     );

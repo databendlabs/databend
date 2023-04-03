@@ -312,8 +312,8 @@ jobs:
       - name: Generate clickbench report
         working-directory: benchmark/clickbench
         run: |
-          ./update_results.py --dataset hits --pr {{ needs.metadata.outputs.source_id }}
-          ./update_results.py --dataset tpch --pr {{ needs.metadata.outputs.source_id }}
+          ./update_results.py --dataset hits --pr ${{ needs.metadata.outputs.source_id }}
+          ./update_results.py --dataset tpch --pr ${{ needs.metadata.outputs.source_id }}
       - name: Upload PR clickbench report to repo.databend.rs
         working-directory: benchmark/clickbench
         run: |
@@ -360,7 +360,7 @@ jobs:
         working-directory: benchmark/clickbench
         run: |
           aws s3 sync ${{ env.BENCHMARK_S3_PREFIX }}/release/${{ matrix.dataset }}/$(date -u +%Y)/$(date -u +%m)/ ./results/${{ matrix.dataset }}/ --no-progress
-          ./update_results.py --dataset ${{ matrix.dataset }} --release {{ needs.metadata.outputs.source_id }}
+          ./update_results.py --dataset ${{ matrix.dataset }} --release ${{ needs.metadata.outputs.source_id }}
       - name: Upload nightly results to repo.databend.rs
         working-directory: benchmark/clickbench/
         run: |

@@ -116,6 +116,10 @@ pub struct TypeChecker<'a> {
     // true if current expr is inside an aggregate function.
     // This is used to check if there is nested aggregate function.
     in_aggregate_function: bool,
+
+    // true if current expr is inside an window function.
+    // This is used to allow aggregation function in window's aggregate function.
+    in_window_function: bool,
 }
 
 impl<'a> TypeChecker<'a> {
@@ -133,6 +137,7 @@ impl<'a> TypeChecker<'a> {
             metadata,
             aliases,
             in_aggregate_function: false,
+            in_window_function: false,
         }
     }
 
@@ -677,9 +682,12 @@ impl<'a> TypeChecker<'a> {
                     self.resolve_window(*span, display_name, window, func)
                         .await?
                 } else if AggregateFunctionFactory::instance().contains(&name) {
+                    let in_window = self.in_window_function;
+                    self.in_window_function = self.in_window_function || window.is_some();
                     let (new_agg_func, data_type) = self
                         .resolve_aggregate_function(*span, &name, expr, *distinct, params, &args)
                         .await?;
+                    self.in_window_function = in_window;
                     if let Some(window) = window {
                         // aggregate window function
                         let display_name = format!("{:#}", expr);
@@ -895,6 +903,7 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
+    #[async_backtrace::framed]
     async fn resolve_window(
         &mut self,
         span: Span,
@@ -902,12 +911,20 @@ impl<'a> TypeChecker<'a> {
         window: &WindowSpec,
         func: WindowFuncType,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let mut partitions = vec![];
+        if self.in_window_function {
+            // Reset the state
+            self.in_window_function = false;
+            return Err(ErrorCode::SemanticError(
+                "window function calls cannot be nested".to_string(),
+            )
+            .set_span(span));
+        }
+        let mut partitions = Vec::with_capacity(window.partition_by.len());
         for p in window.partition_by.iter() {
             let box (part, _part_type) = self.resolve(p).await?;
             partitions.push(part);
         }
-        let mut order_by = vec![];
+        let mut order_by = Vec::with_capacity(window.order_by.len());
         for o in window.order_by.iter() {
             let box (order, _) = self.resolve(&o.expr).await?;
             order_by.push(WindowOrderBy {
@@ -1009,6 +1026,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     /// Resolve aggregation function call.
+    #[async_backtrace::framed]
     async fn resolve_aggregate_function(
         &mut self,
         span: Span,
@@ -1019,12 +1037,20 @@ impl<'a> TypeChecker<'a> {
         args: &[&Expr],
     ) -> Result<(AggregateFunction, DataType)> {
         if self.in_aggregate_function {
-            // Reset the state
-            self.in_aggregate_function = false;
-            return Err(ErrorCode::SemanticError(
-                "aggregate function calls cannot be nested".to_string(),
-            )
-            .set_span(expr.span()));
+            if self.in_window_function {
+                // The aggregate function can be in window function call,
+                // but it cannot be nested.
+                // E.g. `select sum(sum(x)) over (partition by y) from t group by y;` is allowed.
+                // But `select sum(sum(sum(x))) from t;` is not allowed.
+                self.in_window_function = false;
+            } else {
+                // Reset the state
+                self.in_aggregate_function = false;
+                return Err(ErrorCode::SemanticError(
+                    "aggregate function calls cannot be nested".to_string(),
+                )
+                .set_span(expr.span()));
+            }
         }
 
         // Check aggregate function

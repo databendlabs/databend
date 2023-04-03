@@ -735,9 +735,8 @@ impl PipelineBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
+        let old_output_len = self.main_pipeline.output_len();
         if !partition_by.is_empty() || !order_by.is_empty() {
-            let old_output_len = self.main_pipeline.output_len();
-
             let mut sort_desc = Vec::with_capacity(partition_by.len() + order_by.len());
 
             for offset in &partition_by {
@@ -757,10 +756,9 @@ impl PipelineBuilder {
             }
 
             self.build_sort_pipeline(input_schema.clone(), sort_desc, window.plan_id, None)?;
-
-            self.main_pipeline.resize(old_output_len)?;
         }
-
+        // `TransformWindow` is a pipeline breaker.
+        self.main_pipeline.resize(1)?;
         let func = WindowFunctionInfo::try_create(&window.func, &input_schema)?;
         // Window
         self.main_pipeline.add_transform(|input, output| {
@@ -773,7 +771,9 @@ impl PipelineBuilder {
                 window.window_frame.clone(),
             )?;
             Ok(ProcessorPtr::create(transform))
-        })
+        })?;
+
+        self.main_pipeline.resize(old_output_len)
     }
 
     fn build_sort(&mut self, sort: &Sort) -> Result<()> {

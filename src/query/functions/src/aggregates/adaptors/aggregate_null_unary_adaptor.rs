@@ -166,9 +166,31 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         Ok(())
     }
 
-    /// we already have accumulate_keys, so we don't need to implement this
-    fn accumulate_row(&self, _place: StateAddr, _columns: &[Column], _row: usize) -> Result<()> {
-        unreachable!()
+    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
+        let col = &columns[0];
+        let validity = column_merge_validity(col, None);
+        let not_null_columns = vec![col.remove_nullable()];
+        let not_null_columns = &not_null_columns;
+
+        match validity {
+            Some(v) if v.unset_bits() > 0 => {
+                // all nulls
+                if v.unset_bits() == v.len() {
+                    return Ok(());
+                }
+
+                if unsafe { v.get_bit_unchecked(row) } {
+                    self.set_flag(place, 1);
+                    self.nested.accumulate_row(place, not_null_columns, row)?;
+                }
+            }
+            _ => {
+                self.nested.accumulate_row(place, not_null_columns, row)?;
+                self.set_flag(place, 1);
+            }
+        }
+
+        Ok(())
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
