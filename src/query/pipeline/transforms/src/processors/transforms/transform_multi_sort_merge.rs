@@ -399,7 +399,7 @@ where
             .iter()
             .enumerate()
             .map(|(col_id, _)| {
-                // Collect all rows for a ceterain column out of all preserved chunks.
+                // Collect all rows for a certain column out of all preserved chunks.
                 let candidate_cols = self
                     .blocks
                     .iter()
