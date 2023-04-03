@@ -679,6 +679,7 @@ impl<'a> TypeChecker<'a> {
                     }
                     let window = window.as_ref().unwrap();
                     let window = match window {
+                        // WindowReference already rewritten by `SelectRewriter` before.
                         Window::WindowReference(_) => unreachable!(),
                         Window::WindowSpec(spec) => spec,
                     };
@@ -698,6 +699,7 @@ impl<'a> TypeChecker<'a> {
                         let display_name = format!("{:#}", expr);
                         let func = WindowFuncType::Aggregate(new_agg_func);
                         let window = match window {
+                            // WindowReference already rewritten by `SelectRewriter` before.
                             Window::WindowReference(_) => unreachable!(),
                             Window::WindowSpec(spec) => spec,
                         };
