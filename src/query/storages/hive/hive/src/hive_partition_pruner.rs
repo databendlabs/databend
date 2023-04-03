@@ -96,7 +96,7 @@ impl HivePartitionPruner {
                 filtered_partitions.push(partitions[idx].clone());
             }
         }
-        tracing::debug!("hive pruned partitinos: {:?}", filtered_partitions);
+        tracing::debug!("hive pruned partitions: {:?}", filtered_partitions);
         Ok(filtered_partitions)
     }
 }
