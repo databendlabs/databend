@@ -24,6 +24,16 @@ use bytes::Buf;
 use bytes::Bytes;
 use common_base::base::tokio::runtime::Handle;
 use common_base::base::tokio::task::JoinHandle;
+use std::env;
+use std::sync::Arc;
+use std::sync::LazyLock;
+use std::time::Duration;
+
+use async_trait::async_trait;
+use common_base::base::tokio::pin;
+use common_base::base::tokio::runtime::Handle;
+use common_base::base::tokio::select;
+use common_base::base::tokio::time;
 use common_base::runtime::TrackedFuture;
 use futures::ready;
 use futures::Future;
@@ -40,7 +50,16 @@ use opendal::raw::RpRead;
 use opendal::raw::RpScan;
 use opendal::raw::RpStat;
 use opendal::raw::RpWrite;
+use opendal::Error;
+use opendal::ErrorKind;
 use opendal::Result;
+
+static READ_TIMEOUT: LazyLock<u64> = LazyLock::new(|| {
+    env::var("_DATABEND_INTERNAL_READ_TIMEOUT")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(30)
+});
 
 /// # TODO
 ///
@@ -105,7 +124,24 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
     async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::Reader)> {
         let op = self.inner.clone();
         let path = path.to_string();
-        let future = async move { op.read(&path, args).await };
+
+        let future = async move {
+            let sleep = time::sleep(Duration::from_secs(*READ_TIMEOUT));
+            pin!(sleep);
+
+            #[allow(unused_assignments)]
+            let mut res = None;
+            select! {
+                _ = &mut sleep => {
+                    res = Some(Err(Error::new(ErrorKind::Unexpected, "operation timed out while reading").set_temporary()));
+                }
+                v = op.read(&path, args) => {
+                    res = Some(v);
+                }
+            }
+            res.unwrap()
+        };
+
         let future = TrackedFuture::create(future);
         self.runtime
             .spawn(future)
