@@ -12,12 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::SeekFrom;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::Context;
+use std::task::Poll;
 
 use async_trait::async_trait;
+use bytes::Buf;
+use bytes::Bytes;
 use common_base::base::tokio::runtime::Handle;
+use common_base::base::tokio::task::JoinHandle;
 use common_base::runtime::TrackedFuture;
+use futures::ready;
+use futures::Future;
 use opendal::ops::*;
+use opendal::raw::oio;
+use opendal::raw::oio::ReadExt;
 use opendal::raw::Accessor;
 use opendal::raw::Layer;
 use opendal::raw::LayeredAccessor;
@@ -69,7 +80,7 @@ pub struct RuntimeAccessor<A> {
 #[async_trait]
 impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
     type Inner = A;
-    type Reader = A::Reader;
+    type Reader = RuntimeIO<A::Reader>;
     type BlockingReader = A::BlockingReader;
     type Writer = A::Writer;
     type BlockingWriter = A::BlockingWriter;
@@ -95,7 +106,14 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
         let path = path.to_string();
         let future = async move { op.read(&path, args).await };
         let future = TrackedFuture::create(future);
-        self.runtime.spawn(future).await.expect("join must success")
+        self.runtime
+            .spawn(future)
+            .await
+            .expect("join must success")
+            .map(|(rp, r)| {
+                let r = RuntimeIO::new(r, self.runtime.clone());
+                (rp, r)
+            })
     }
 
     #[async_backtrace::framed]
@@ -157,5 +175,119 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
 
     fn blocking_scan(&self, path: &str, args: OpScan) -> Result<(RpScan, Self::BlockingPager)> {
         self.inner.blocking_scan(path, args)
+    }
+}
+
+pub struct RuntimeIO<R: 'static> {
+    runtime: Handle,
+    state: State<R>,
+    buf: bytes::Bytes,
+}
+
+impl<R> RuntimeIO<R> {
+    fn new(inner: R, runtime: Handle) -> Self {
+        Self {
+            runtime,
+            state: State::Idle(Some(inner)),
+            buf: Bytes::new(),
+        }
+    }
+}
+
+pub enum State<R: 'static> {
+    Idle(Option<R>),
+    Seek(JoinHandle<(R, Result<u64>)>),
+    Next(JoinHandle<(R, Option<Result<Bytes>>)>),
+}
+
+/// Safety: State will only be accessed under &mut.
+unsafe impl<R> Sync for State<R> {}
+
+impl<R: oio::Read> oio::Read for RuntimeIO<R> {
+    /// TODO: the performance of `read` could be affected, we will improve it later.
+    fn poll_read(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<Result<usize>> {
+        if buf.is_empty() {
+            return Poll::Ready(Ok(0));
+        }
+
+        // Read from buf is there are content.
+        if !self.buf.is_empty() {
+            let size = std::cmp::min(buf.len(), self.buf.len());
+            buf[..size].copy_from_slice(&self.buf[..size]);
+            self.buf.advance(size);
+            return Poll::Ready(Ok(size));
+        }
+
+        // Try read from underlying.
+        match ready!(self.poll_next(cx)?) {
+            Some(bytes) => {
+                self.buf = bytes;
+
+                self.poll_read(cx, buf)
+            }
+            // All data has been read.
+            None => Poll::Ready(Ok(0)),
+        }
+    }
+
+    fn poll_seek(&mut self, cx: &mut Context<'_>, pos: SeekFrom) -> Poll<Result<u64>> {
+        match &mut self.state {
+            State::Idle(r) => {
+                let mut r = r.take().expect("Idle must have a valid reader");
+                let future = async move {
+                    let res = r.seek(pos).await;
+                    (r, res)
+                };
+                let future = TrackedFuture::create(future);
+                self.state = State::Seek(self.runtime.spawn(future));
+
+                self.poll_seek(cx, pos)
+            }
+            State::Seek(future) => {
+                let (r, res) = ready!(Pin::new(future).poll(cx)).expect("join must success");
+                self.state = State::Idle(Some(r));
+
+                Poll::Ready(res)
+            }
+            State::Next(future) => {
+                let (r, _) = ready!(Pin::new(future).poll(cx)).expect("join must success");
+                self.state = State::Idle(Some(r));
+
+                self.poll_seek(cx, pos)
+            }
+        }
+    }
+
+    fn poll_next(&mut self, cx: &mut Context<'_>) -> Poll<Option<Result<bytes::Bytes>>> {
+        debug_assert!(
+            self.buf.is_empty(),
+            "dirty buf means reader's state is wrong, must be a bug"
+        );
+
+        match &mut self.state {
+            State::Idle(r) => {
+                let mut r = r.take().expect("Idle must have a valid reader");
+                let future = async move {
+                    let res = r.next().await;
+                    (r, res)
+                };
+                let future = TrackedFuture::create(future);
+                self.state = State::Next(self.runtime.spawn(future));
+
+                self.poll_next(cx)
+            }
+            State::Seek(future) => {
+                let (r, _) = ready!(Pin::new(future).poll(cx)).expect("join must success");
+                self.state = State::Idle(Some(r));
+
+                self.poll_next(cx)
+            }
+            State::Next(future) => {
+                let (r, res) = ready!(Pin::new(future).poll(cx)).expect("join must success");
+                self.state = State::Idle(Some(r));
+
+                Poll::Ready(res)
+            }
+        }
     }
 }
