@@ -47,7 +47,7 @@ Determine if a set period of time is enough for the user to SELECT a phone and p
 
 Set the following chain of events:
 
-1. The user logged in to their account on the store (`event_name = 'login'`).
+1. The user logged into their account on the store (`event_name = 'login'`).
 2. The user land the page (`event_name = 'visit'`).
 3. The user add to the shopping cart(`event_name = 'cart'`).
 4. The user complete the purchase (`event_name = 'purchase'`).

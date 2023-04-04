@@ -14,7 +14,7 @@ cat $CURDIR/../ddl/on_error_test.sql | $MYSQL_CLIENT_CONNECT
 # Should be <root>/tests/data/
 DATADIR=$(realpath $CURDIR/../../../data/)
 
-# This line is kept for debuging.
+# This line is kept for debugging.
 # echo "Current data dir: ${DATADIR}"
 
 # copy wrong files on_error=continue

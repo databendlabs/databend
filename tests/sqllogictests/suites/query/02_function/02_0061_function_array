@@ -149,7 +149,7 @@ statement error 1005
 select array_sort(col1, 'asc', 'nulls fir') from t;
 
 statement error 1005
-select array_sort(col1, 'asca', 'nulls firt') from t;
+select array_sort(col1, 'asca', 'nulls first') from t;
 
 statement ok
 DROP DATABASE array_func_test

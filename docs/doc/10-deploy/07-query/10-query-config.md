@@ -285,7 +285,7 @@ For ease of experience, set all hosts to 0.0.0.0. Exercise caution when setting 
 # Logging
 [log.file]
 on = true
-dir = "./.datanend/logs"
+dir = "./.databend/logs"
 level = "INFO"
 format = "json"
 

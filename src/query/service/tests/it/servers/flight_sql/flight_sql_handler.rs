@@ -115,6 +115,9 @@ async fn test_query() -> Result<()> {
         debug!("Auth succeeded with token: {:?}", token);
         let cases = [
             "select 1, 'abc', 1.1, 1.1::float32, 1::nullable(int)",
+            "select [1, 2]",
+            "select (1, 1.1)",
+            "select {1: 11, 2: 22}",
             "show tables",
             // "drop table if exists test1",
             // "create table test1(a int, b string)",

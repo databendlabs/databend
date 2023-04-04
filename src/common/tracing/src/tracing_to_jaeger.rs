@@ -58,7 +58,7 @@ impl<'a> Extractor for MetadataMapExtractor<'a> {
 ///
 /// A tonic client should call this function just before sending out the request.
 ///
-/// The global propagater must be installed, e.g. by calling: TODO
+/// The global propagator must be installed, e.g. by calling: TODO
 pub fn inject_span_to_tonic_request<T>(mes: impl tonic::IntoRequest<T>) -> tonic::Request<T> {
     let curr = tracing::Span::current();
     let cx = curr.context();
@@ -78,7 +78,7 @@ pub fn inject_span_to_tonic_request<T>(mes: impl tonic::IntoRequest<T>) -> tonic
 ///
 /// A tonic request handler should call this before doing anything else.
 ///
-/// The global propagater must be installed, e.g. by calling: TODO
+/// The global propagator must be installed, e.g. by calling: TODO
 pub fn extract_remote_span_as_parent<T>(request: &tonic::Request<T>) {
     let parent_cx = global::get_text_map_propagator(|prop| {
         prop.extract(&MetadataMapExtractor(request.metadata()))

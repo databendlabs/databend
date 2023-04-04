@@ -224,7 +224,7 @@ impl ExecuteState {
     ) -> Result<()> {
         let mut planner = Planner::new(ctx.clone());
         let (plan, extras) = planner.plan_sql(sql).await?;
-        ctx.attach_query_str(plan.to_string(), extras.stament.to_mask_sql());
+        ctx.attach_query_str(plan.to_string(), extras.statement.to_mask_sql());
 
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let running_state = ExecuteRunning {

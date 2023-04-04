@@ -24,7 +24,7 @@ use crate::plans::Operator;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 
-/// Rule to apply commutivity of join operator.
+/// Rule to apply commutativity of join operator.
 /// In opposite to RuleCommuteJoin, this rule only applies to base tables.
 pub struct RuleCommuteJoinBaseTable {
     id: RuleID,

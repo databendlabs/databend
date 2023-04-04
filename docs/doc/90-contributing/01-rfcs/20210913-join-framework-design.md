@@ -378,7 +378,7 @@ The comparison above is much biased, in fact it can hardly say that which algori
 
 Since we don't have infrastructure(planner, optimizer) for choosing join algorithm for now, I suggest to only implement block nested-loop join at present so we can build a complete prototype.
 
-We'are going to introduce a vectorized block nested-loop join algorithm.
+We're going to introduce a vectorized block nested-loop join algorithm.
 
 Pseudo code of naive nested-loop join has been introduced in [Background](#Background) section. As we know, nested-loop join will fetch only one row from outer table in each loop, which doesn't have good locality. Block nested-loop join is a nested-loop join that will fetch a block of data in each loop. Here we introduce the naive block nested-loop join.
 
@@ -395,7 +395,7 @@ for s <- outerTable.fetchBlock():
             insert(result, row)
 ```
 
-In vetorized execution, we can use a bit map to indicate whether a row should be return to result set or not. Then we can materialize the result later.
+In vectorized execution, we can use a bit map to indicate whether a row should be return to result set or not. Then we can materialize the result later.
 
 For example, assume we have following SQL query:
 

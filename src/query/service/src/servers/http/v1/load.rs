@@ -124,7 +124,7 @@ pub async fn streaming_load(
         .await
         .map_err(|err| err.display_with_sql(insert_sql))
         .map_err(InternalServerError)?;
-    context.attach_query_str(plan.to_string(), extras.stament.to_mask_sql());
+    context.attach_query_str(plan.to_string(), extras.statement.to_mask_sql());
 
     let schema = plan.schema();
     match &mut plan {

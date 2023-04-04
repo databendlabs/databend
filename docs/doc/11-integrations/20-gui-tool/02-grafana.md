@@ -120,7 +120,7 @@ CREATE TABLE `access_logs` (
     ```
 
     :::tip
-    You can click `Show Help` for available macros, some frequenetly used are:
+    You can click `Show Help` for available macros, some frequently used are:
 
     * `$interval` replaced with selected "Group by time interval" value (as a number of seconds)
     * `$table` replaced with selected table name from Query Builder

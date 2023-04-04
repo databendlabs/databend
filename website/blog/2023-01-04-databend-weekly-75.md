@@ -46,7 +46,7 @@ Check out what we've done this week to make Databend even better for you.
 
 - add `to_bytes` and `from_bytes` for `CachedObject` ([#9439](https://github.com/datafuselabs/databend/pull/9439))
 - better table-meta and parquet reader function ([#9434](https://github.com/datafuselabs/databend/pull/9434))
-- convert fuse_snapshot unit tests to sqlloigc test ([#9428](https://github.com/datafuselabs/databend/pull/9428))
+- convert fuse_snapshot unit tests to sqllogic test ([#9428](https://github.com/datafuselabs/databend/pull/9428))
 
 ### Bug Fixes :wrench:
 

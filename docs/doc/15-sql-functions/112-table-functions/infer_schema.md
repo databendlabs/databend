@@ -16,7 +16,7 @@ Automatically detects the file metadata schema and retrieves the column definiti
 ```sql
 INFER_SCHEMA(
   LOCATION => '{ internalStage | externalStage }'
-  [ PARTTERN => '<regex_pattern>']
+  [ PATTERN => '<regex_pattern>']
 )
 ```
 
