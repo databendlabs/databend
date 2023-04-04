@@ -92,17 +92,24 @@ impl<'a> ChunkDisplay for ReplDisplay<'a> {
                             .map_err(|err| ArrowError::ExternalError(Box::new(err)))?;
                         if self.progress.as_mut().is_none() {
                             let pb = ProgressBar::new(progress.total_bytes as u64);
-                            pb.set_style(ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] {msg} {wide_bar:.cyan/blue} ({eta})")
-                                .unwrap()
-                                .with_key("eta", |state: &ProgressState, w: &mut dyn Write| write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap())
-                                .progress_chars("█▓▒░ "));
+                            let progress_color = &self.config.settings.progress_color;
+                            let template = "{spinner:.${progress_color}} [{elapsed_precise}] {msg} {wide_bar:.${progress_color}/blue} ({eta})".replace("${progress_color}", progress_color);
+
+                            pb.set_style(
+                                ProgressStyle::with_template(&template)
+                                    .unwrap()
+                                    .with_key("eta", |state: &ProgressState, w: &mut dyn Write| {
+                                        write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap()
+                                    })
+                                    .progress_chars("█▓▒░ "),
+                            );
                             self.progress = Some(pb);
                         }
 
                         let pb = self.progress.as_mut().unwrap();
                         pb.set_position(progress.read_bytes as u64);
                         pb.set_message(format!(
-                            "{}/{} ({} rows/s), {}/{} ({} /s)",
+                            "Processing {}/{} ({} rows/s), {}/{} ({}/s)",
                             humanize_count(progress.read_rows as f64),
                             humanize_count(progress.total_rows as f64),
                             humanize_count(progress.read_rows as f64 / pb.elapsed().as_secs_f64()),
@@ -139,9 +146,11 @@ impl<'a> ChunkDisplay for ReplDisplay<'a> {
 
         println!();
 
+        let rows_str = if self.rows > 1 { "rows" } else { "row" };
         println!(
-            "{} rows result set in {:.3} sec. Processed {} rows, {} ({} rows/s, {}/s)",
+            "{} {} in {:.3} sec. Processed {} rows, {} ({} rows/s, {}/s)",
             self.rows,
+            rows_str,
             self.start.elapsed().as_secs_f64(),
             humanize_count(progress.total_rows as f64),
             HumanBytes(progress.total_rows as u64),

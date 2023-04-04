@@ -29,6 +29,7 @@ pub struct Config {
 pub struct Settings {
     pub display_pretty_sql: bool,
     pub prompt: String,
+    pub progress_color: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -74,7 +75,8 @@ impl Default for Settings {
     fn default() -> Self {
         Settings {
             display_pretty_sql: true,
-            prompt: "bendsql :) ".to_string(),
+            progress_color: "cyan".to_string(),
+            prompt: "bendsql> ".to_string(),
         }
     }
 }
