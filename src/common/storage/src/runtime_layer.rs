@@ -23,7 +23,6 @@ use std::task::Poll;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use bytes::Buf;
 use bytes::Bytes;
 use common_base::base::tokio::pin;
 use common_base::base::tokio::runtime::Handle;
@@ -214,8 +213,7 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
 pub struct RuntimeIO<R: 'static> {
     runtime: Handle,
     state: State<R>,
-    cur: u64,
-    buf: bytes::Bytes,
+    buf: Vec<u8>,
 }
 
 impl<R> RuntimeIO<R> {
@@ -223,14 +221,14 @@ impl<R> RuntimeIO<R> {
         Self {
             runtime,
             state: State::Idle(Some(inner)),
-            cur: 0,
-            buf: Bytes::new(),
+            buf: vec![],
         }
     }
 }
 
 pub enum State<R: 'static> {
     Idle(Option<R>),
+    Read(JoinHandle<(R, Result<Vec<u8>>)>),
     Seek(JoinHandle<(R, Result<u64>)>),
     Next(JoinHandle<(R, Option<Result<Bytes>>)>),
 }
@@ -241,55 +239,67 @@ unsafe impl<R> Sync for State<R> {}
 impl<R: oio::Read> oio::Read for RuntimeIO<R> {
     /// TODO: the performance of `read` could be affected, we will improve it later.
     fn poll_read(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<Result<usize>> {
-        if buf.is_empty() {
-            return Poll::Ready(Ok(0));
-        }
+        match &mut self.state {
+            State::Idle(r) => {
+                let mut r = r.take().expect("Idle must have a valid reader");
+                let mut buffer = mem::take(&mut self.buf);
 
-        // Read from buf is there are content.
-        if !self.buf.is_empty() {
-            let size = std::cmp::min(buf.len(), self.buf.len());
-            buf[..size].copy_from_slice(&self.buf[..size]);
-            self.buf.advance(size);
-            self.cur += size as u64;
-            return Poll::Ready(Ok(size));
-        }
+                buffer.reserve(buf.len());
+                // Safety: buffer is reserved with buf.len() bytes.
+                #[allow(clippy::uninit_vec)]
+                unsafe {
+                    buffer.set_len(buf.len())
+                }
 
-        // Try read from underlying.
-        match ready!(self.poll_next(cx)?) {
-            Some(bytes) => {
-                self.buf = bytes;
+                let future = async move {
+                    let mut buffer = buffer;
+                    let res = r.read(&mut buffer).await;
+                    match res {
+                        Ok(size) => {
+                            // Safety: we trust our reader, the returning size is correct.
+                            unsafe { buffer.set_len(size) }
+                            (r, Ok(buffer))
+                        }
+                        Err(err) => (r, Err(err)),
+                    }
+                };
+                let future = TrackedFuture::create(future);
+                self.state = State::Read(self.runtime.spawn(future));
 
                 self.poll_read(cx, buf)
             }
-            // All data has been read.
-            None => Poll::Ready(Ok(0)),
+            State::Read(future) => {
+                let (r, res) = ready!(Pin::new(future).poll(cx)).expect("join must success");
+                self.state = State::Idle(Some(r));
+                match res {
+                    Ok(mut buffer) => {
+                        let size = buffer.len();
+                        buf[..size].copy_from_slice(&buffer);
+                        // Safety: set length to 0 as we don't care the remaining content.
+                        unsafe { buffer.set_len(0) }
+                        // Always reuse the same buffer
+                        self.buf = buffer;
+                        Poll::Ready(Ok(size))
+                    }
+                    Err(err) => Poll::Ready(Err(err)),
+                }
+            }
+            State::Seek(future) => {
+                let (r, _) = ready!(Pin::new(future).poll(cx)).expect("join must success");
+                self.state = State::Idle(Some(r));
+
+                self.poll_read(cx, buf)
+            }
+            State::Next(future) => {
+                let (r, _) = ready!(Pin::new(future).poll(cx)).expect("join must success");
+                self.state = State::Idle(Some(r));
+
+                self.poll_read(cx, buf)
+            }
         }
     }
 
     fn poll_seek(&mut self, cx: &mut Context<'_>, pos: SeekFrom) -> Poll<Result<u64>> {
-        let pos = if self.buf.is_empty() {
-            // buf is empty, we can seek from underlying directly.
-            pos
-        } else {
-            match pos {
-                // NOTE: we should seek from the current position instead of underlying's real position.
-                SeekFrom::Current(n) => {
-                    // If we are seeking inside buf, we can do it directly without extra call.
-                    if n > 0 && n < (self.buf.len() as i64) {
-                        self.buf.advance(n as usize);
-                        self.cur += n as u64;
-                        return Poll::Ready(Ok(self.cur));
-                    }
-                    SeekFrom::Start((self.cur as i64 + n) as u64)
-                }
-                v => {
-                    // drop buf if we are seeking from start or end.
-                    let _ = mem::replace(&mut self.buf, Bytes::new());
-                    v
-                }
-            }
-        };
-
         match &mut self.state {
             State::Idle(r) => {
                 let mut r = r.take().expect("Idle must have a valid reader");
@@ -302,12 +312,14 @@ impl<R: oio::Read> oio::Read for RuntimeIO<R> {
 
                 self.poll_seek(cx, pos)
             }
+            State::Read(future) => {
+                let (r, _) = ready!(Pin::new(future).poll(cx)).expect("join must success");
+                self.state = State::Idle(Some(r));
+
+                self.poll_seek(cx, pos)
+            }
             State::Seek(future) => {
                 let (r, res) = ready!(Pin::new(future).poll(cx)).expect("join must success");
-                // Update pos if seek success.
-                if let Ok(pos) = res {
-                    self.cur = pos;
-                }
                 self.state = State::Idle(Some(r));
 
                 Poll::Ready(res)
@@ -322,12 +334,6 @@ impl<R: oio::Read> oio::Read for RuntimeIO<R> {
     }
 
     fn poll_next(&mut self, cx: &mut Context<'_>) -> Poll<Option<Result<bytes::Bytes>>> {
-        // If there are buf the not consumed, return it first.
-        if !self.buf.is_empty() {
-            let buf = mem::replace(&mut self.buf, Bytes::new());
-            return Poll::Ready(Some(Ok(buf)));
-        }
-
         match &mut self.state {
             State::Idle(r) => {
                 let mut r = r.take().expect("Idle must have a valid reader");
@@ -337,6 +343,12 @@ impl<R: oio::Read> oio::Read for RuntimeIO<R> {
                 };
                 let future = TrackedFuture::create(future);
                 self.state = State::Next(self.runtime.spawn(future));
+
+                self.poll_next(cx)
+            }
+            State::Read(future) => {
+                let (r, _) = ready!(Pin::new(future).poll(cx)).expect("join must success");
+                self.state = State::Idle(Some(r));
 
                 self.poll_next(cx)
             }
