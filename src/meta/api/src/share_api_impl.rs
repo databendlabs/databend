@@ -336,9 +336,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
 
             let mut add_share_account_keys = vec![];
             for account in req.accounts.iter() {
-                if account == &name_key.tenant {
-                    continue;
-                }
                 if !share_meta.has_account(account) {
                     add_share_account_keys.push(ShareAccountNameIdent {
                         account: account.clone(),
