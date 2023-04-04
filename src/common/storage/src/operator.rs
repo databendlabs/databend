@@ -85,6 +85,12 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
     let ob = Operator::new(builder)?;
 
     let op = ob
+        // NOTE
+        //
+        // Magic happens here. We will add a layer upon original
+        // storage operator so that all underlying storage operations
+        // will send to storage runtime.
+        .layer(RuntimeLayer::new(GlobalIORuntime::instance().inner()))
         // Add retry
         .layer(RetryLayer::new().with_jitter())
         // Add metrics
@@ -93,12 +99,6 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         .layer(LoggingLayer::default())
         // Add tracing
         .layer(TracingLayer)
-        // NOTE
-        //
-        // Magic happens here. We will add a layer upon original
-        // storage operator so that all underlying storage operations
-        // will send to storage runtime.
-        .layer(RuntimeLayer::new(GlobalIORuntime::instance().inner()))
         .finish();
 
     Ok(op)
