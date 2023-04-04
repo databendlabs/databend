@@ -6,7 +6,7 @@ ADD_NODES ?= 0
 NUM_CPUS ?= 2
 TENANT_ID ?= "tenant"
 CLUSTER_ID ?= "test"
-
+TARGET ?= x86_64-unknown-linux-gnu
 CARGO_TARGET_DIR ?= $(CURDIR)/target
 
 # Setup dev toolchain
@@ -62,6 +62,9 @@ endif
 build-native:
 	bash ./scripts/build/build-native.sh
 
+build-in-docker:
+	bash ./scripts/setup/run_build_tool.sh cargo build --target $(TARGET)
+
 unit-test:
 	ulimit -n 10000;ulimit -s 16384; RUST_LOG="ERROR" bash ./scripts/ci/ci-run-unit-tests.sh
 
@@ -111,4 +114,4 @@ clean:
 	rm -rf ./src/common/base/_logs*/ ./src/meta/raft-store/_logs*/ ./src/meta/sled-store/_logs*/
 	rm -rf ./.databend ./query/service/.databend ./meta/service/.databend
 
-.PHONY: setup test run build fmt lint docker clean docs
+.PHONY: setup test run build fmt lint clean docs
