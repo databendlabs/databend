@@ -13,13 +13,6 @@ ENV LANGUAGE en_US
 ENV LANG en_US.UTF-8
 ENV LC_ALL en_US.UTF-8
 
-RUN groupdel dialout && groupdel staff && \
-    groupadd -g 20 staff && groupadd -g 121 docker && \
-    useradd -u 1000 -g 100 builder && \
-    useradd -u 1001 -g 121 runner && \
-    useradd -u 501 -g 20 macos && \
-    printf "builder,runner,macos ALL=(ALL:ALL) NOPASSWD:ALL\n" > /etc/sudoers.d/databend
-
 COPY rust-toolchain.toml /build/rust-toolchain.toml
 COPY dev_setup.sh /build/scripts/setup/dev_setup.sh
 RUN chmod +x /build/scripts/setup/dev_setup.sh && \
