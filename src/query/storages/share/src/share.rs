@@ -187,6 +187,9 @@ mod ext {
                     presigned_url_timeout: "100s".to_string(),
                 }],
                 tenants: vec!["test_tenant".to_owned()],
+                comment: None,
+                share_on: None,
+                db_privileges: None,
             };
             let tmp_dir = tempfile::tempdir()?;
             let test_root = tmp_dir.path().join("test_cluster_id/test_tenant_id");
@@ -201,11 +204,12 @@ mod ext {
             let spec_json_value = serde_json::to_value(share_spec_ext).unwrap();
 
             use serde_json::json;
+            use serde_json::Value::Null;
 
             let expected = json!({
               "name": "test_share_name",
-              "version": 1,
               "share_id": 1,
+              "version": 1,
               "database": {
                 "location": format!("{}/1/", test_root_str),
                 "name": "share_database",
@@ -222,7 +226,10 @@ mod ext {
               ],
               "tenants": [
                 "test_tenant"
-              ]
+              ],
+              "db_privileges": Null,
+              "comment": Null,
+              "share_on": Null
             });
 
             assert_eq!(expected, spec_json_value);
