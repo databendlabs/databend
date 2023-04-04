@@ -100,6 +100,12 @@ pub enum Expr<Index: ColumnIndex = usize> {
     },
 }
 
+impl<Index: ColumnIndex> Hash for Expr<Index> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.sql_display().hash(state);
+    }
+}
+
 /// Serializable expression used to share executable expression between nodes.
 ///
 /// The remote node will recover the `Arc` pointer within `FunctionCall` by looking

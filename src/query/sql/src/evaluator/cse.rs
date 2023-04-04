@@ -36,8 +36,8 @@ pub fn apply_cse(
 
                 let mut cse_candidates: Vec<Expr> = cse_counter
                     .iter()
-                    .filter(|(_, (_, count))| *count > 1)
-                    .map(|(_, (expr, _))| expr.clone())
+                    .filter(|(_, count)| **count > 1)
+                    .map(|(expr, _)| expr.clone())
                     .collect();
 
                 // Make sure the smaller expr goes firstly
@@ -99,13 +99,11 @@ pub fn apply_cse(
     results
 }
 
-fn count_expressions(expr: &Expr, counter: &mut HashMap<String, (Expr, usize)>) {
+fn count_expressions(expr: &Expr, counter: &mut HashMap<Expr, usize>) {
     match expr {
         Expr::FunctionCall { args, .. } => {
-            let entry = counter
-                .entry(expr.sql_display())
-                .or_insert((expr.clone(), 0));
-            entry.1 += 1;
+            let entry = counter.entry(expr.clone()).or_insert(0);
+            *entry += 1;
 
             for arg in args {
                 count_expressions(arg, counter);
@@ -114,10 +112,8 @@ fn count_expressions(expr: &Expr, counter: &mut HashMap<String, (Expr, usize)>) 
         Expr::Cast {
             expr: inner_expr, ..
         } => {
-            let entry = counter
-                .entry(expr.sql_display())
-                .or_insert((expr.clone(), 0));
-            entry.1 += 1;
+            let entry = counter.entry(expr.clone()).or_insert(0);
+            *entry += 1;
 
             count_expressions(inner_expr, counter);
         }
