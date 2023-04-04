@@ -111,7 +111,7 @@ impl RulePushDownPrewhere {
         let mut prewhere_columns = ColumnSet::new();
         let mut prewhere_pred = Vec::new();
 
-        // filter.predicates are already splited by AND
+        // filter.predicates are already split by AND
         for pred in filter.predicates.iter() {
             match Self::collect_columns(pred) {
                 Some(columns) => {

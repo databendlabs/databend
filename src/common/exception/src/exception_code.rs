@@ -72,7 +72,7 @@ build_exceptions! {
     ///
     /// # Notes
     ///
-    /// It's OK to use this error code for not implemetned feature in
+    /// It's OK to use this error code for not implemented feature in
     /// our dependences. For example, in arrow.
     Unimplemented(1002),
 

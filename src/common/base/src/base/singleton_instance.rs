@@ -129,7 +129,7 @@ impl GlobalInstance {
     /// Should only be used in testing code.
     #[cfg(debug_assertions)]
     pub fn drop_testing(thread_name: &str) {
-        // Make sure the write lock is released before alling drop.
+        // Make sure the write lock is released before calling drop.
         let _ = { LOCAL.wait().write().remove(thread_name) };
     }
 

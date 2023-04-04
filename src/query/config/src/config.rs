@@ -103,7 +103,7 @@ pub struct Config {
 
     /// Note: Legacy Config API
     ///
-    /// When setting its all feilds to empty strings, it will be ignored
+    /// When setting its all fields to empty strings, it will be ignored
     ///
     /// external catalog config.
     /// - Later, catalog information SHOULD be kept in KV Service

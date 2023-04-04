@@ -218,4 +218,4 @@ Please check the [Release proposal: Nightly v0.9](https://github.com/datafuselab
 
 ## Get going now!
 
-Visit the [release log](https://github.com/datafuselabs/databend/releases/tag/v0.8.0-nightly) and [download the latest version](https://github.com/datafuselabs/databend/releases/tag/v0.8.0-nightly) to learn more, and feel free to submit feedback using [Github Issues](https://github.com/datafuselabs/databend/issues) if you encounter problems!
+Visit the [release log](https://github.com/datafuselabs/databend/releases/tag/v0.8.0-nightly) and [download the latest version](https://github.com/datafuselabs/databend/releases/tag/v0.8.0-nightly) to learn more, and feel free to submit feedback using [GitHub Issues](https://github.com/datafuselabs/databend/issues) if you encounter problems!

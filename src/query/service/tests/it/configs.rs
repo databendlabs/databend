@@ -728,7 +728,7 @@ type = "s3"
 num_cpus = 0
 
 [storage.fs]
-data_path = "./.datebend/data"
+data_path = "./.databend/data"
 
 [storage.s3]
 region = ""

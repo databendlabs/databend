@@ -99,7 +99,7 @@ impl FlightService for DatabendQueryFlightService {
 
     #[async_backtrace::framed]
     async fn do_put(&self, _req: StreamReq<FlightData>) -> Response<Self::DoPutStream> {
-        Err(Status::unimplemented("unimplement do_put"))
+        Err(Status::unimplemented("unimplemented do_put"))
     }
 
     type DoExchangeStream = FlightStream<FlightData>;
@@ -137,7 +137,7 @@ impl FlightService for DatabendQueryFlightService {
 
     #[async_backtrace::framed]
     async fn do_exchange(&self, _: StreamReq<FlightData>) -> Response<Self::DoExchangeStream> {
-        Err(Status::unimplemented("unimplement do_exchange"))
+        Err(Status::unimplemented("unimplemented do_exchange"))
     }
 
     type DoActionStream = FlightStream<FlightResult>;

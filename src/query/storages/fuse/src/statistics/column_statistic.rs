@@ -252,7 +252,7 @@ impl Trim for Scalar {
                         // if number of bytes is lesser, just return
                         Some(Scalar::String(v.into_bytes()))
                     } else {
-                        // no need to trim, less than STRING_RREFIX_LEN chars
+                        // no need to trim, less than STRING_PREFIX_LEN chars
                         let number_of_chars = v.as_str().chars().count();
                         if number_of_chars <= STATS_STRING_PREFIX_LEN {
                             return Some(Scalar::String(v.into_bytes()));

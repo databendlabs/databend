@@ -229,7 +229,7 @@ async fn test_return_when_finish() -> Result<()> {
     Ok(())
 }
 
-// ref: query_log not recored correctly.
+// ref: query_log not recorded correctly.
 // It could be uncommented when we remove SEE_YOU_AGAIN stmt
 
 // #[tokio::test(flavor = "current_thread")]

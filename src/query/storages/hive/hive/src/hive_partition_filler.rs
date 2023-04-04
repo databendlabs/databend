@@ -53,7 +53,7 @@ impl HivePartitionFiller {
                 Some(v) => partition_values.push(v.to_string()),
                 None => {
                     return Err(ErrorCode::TableInfoError(format!(
-                        "could't find hive partition info :{}, hive partition maps:{:?}",
+                        "couldn't find hive partition info :{}, hive partition maps:{:?}",
                         field.name(),
                         partition_map
                     )));
@@ -71,7 +71,7 @@ impl HivePartitionFiller {
     ) -> Result<DataBlock> {
         let data_values = self.extract_partition_values(part)?;
 
-        // create column, create datafiled
+        // create column, create datafield
         let mut num_rows = data_block.num_rows();
         if num_rows == 0 {
             num_rows = origin_num_rows;

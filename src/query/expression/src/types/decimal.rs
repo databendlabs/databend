@@ -695,7 +695,7 @@ impl DecimalDataType {
         Self::from_size(DecimalSize { precision, scale })
     }
 
-    // Decimal X Number or Nunmber X Decimal
+    // Decimal X Number or Number X Decimal
     pub fn binary_upgrade_to_max_precision(&self) -> Result<DecimalDataType> {
         let scale = self.scale();
         let precision = self.max_precision();

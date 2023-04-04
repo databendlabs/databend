@@ -1348,8 +1348,8 @@ output         : 2022-01-02 00:00:00.000000
 error: 
   --> SQL:1:1
   |
-1 | TO_TIMESTAMP('A NON-TIMESTMAP STR')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP` while evaluating function `to_timestamp("A NON-TIMESTMAP STR")`
+1 | TO_TIMESTAMP('A NON-TIMESTAMP STR')
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP` while evaluating function `to_timestamp("A NON-TIMESTAMP STR")`
 
 
 
@@ -3307,9 +3307,9 @@ output domain  : {1641081600000000..=1641081600000000}
 output         : 2022-01-02 00:00:00.000000
 
 
-ast            : TRY_TO_TIMESTAMP('A NON-TIMESTMAP STR')
-raw expr       : TRY_TO_TIMESTAMP("A NON-TIMESTMAP STR")
-checked expr   : try_to_timestamp<String>("A NON-TIMESTMAP STR")
+ast            : TRY_TO_TIMESTAMP('A NON-TIMESTAMP STR')
+raw expr       : TRY_TO_TIMESTAMP("A NON-TIMESTAMP STR")
+checked expr   : try_to_timestamp<String>("A NON-TIMESTAMP STR")
 optimized expr : NULL
 output type    : Timestamp NULL
 output domain  : {NULL}

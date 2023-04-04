@@ -268,7 +268,7 @@ impl BlockReader {
                     return Err(ErrorCode::StorageOther("unexpected: column data not found"));
                 }
             } else {
-                // no column meta of given colmun id
+                // no column meta of given column id
                 break;
             }
         }

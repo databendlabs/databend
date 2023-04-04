@@ -81,7 +81,7 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
-    // create orphan snapshot, its timestamp is larger then then the current one
+    // create orphan snapshot, its timestamp is larger than the current one
     {
         let current_snapshot = fuse_table.read_table_snapshot().await?.unwrap();
         let operator = fuse_table.get_operator();
