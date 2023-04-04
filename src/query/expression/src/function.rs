@@ -405,6 +405,13 @@ impl FunctionID {
             FunctionID::Factory { name, .. } => name,
         }
     }
+
+    pub fn params(&self) -> &[usize] {
+        match self {
+            FunctionID::Builtin { .. } => &[],
+            FunctionID::Factory { params, .. } => params.as_slice(),
+        }
+    }
 }
 
 impl<'a> EvalContext<'a> {

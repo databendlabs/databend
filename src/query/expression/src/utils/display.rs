@@ -558,6 +558,7 @@ impl<Index: ColumnIndex> Display for Expr<Index> {
                 function,
                 args,
                 generics,
+                id,
                 ..
             } => {
                 write!(f, "{}", function.signature.name)?;
@@ -579,6 +580,19 @@ impl<Index: ColumnIndex> Display for Expr<Index> {
                     write!(f, "{ty}")?;
                 }
                 write!(f, ">")?;
+
+                let params = id.params();
+                if !params.is_empty() {
+                    write!(f, "(")?;
+                    for (i, ty) in params.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{ty}")?;
+                    }
+                    write!(f, ")")?;
+                }
+
                 write!(f, "(")?;
                 for (i, arg) in args.iter().enumerate() {
                     if i > 0 {
@@ -645,68 +659,81 @@ impl<Index: ColumnIndex> Expr<Index> {
                         format!("CAST({} AS {dest_type})", expr.sql_display())
                     }
                 }
-                Expr::FunctionCall { function, args, .. } => {
-                    match (function.signature.name.as_str(), args.as_slice()) {
-                        ("and", [ref lhs, ref rhs]) => {
-                            write_binary_op("AND", lhs, rhs, 10, min_precedence)
-                        }
-                        ("or", [ref lhs, ref rhs]) => {
-                            write_binary_op("OR", lhs, rhs, 5, min_precedence)
-                        }
-                        ("not", [ref expr]) => write_unary_op("NOT", expr, 15, min_precedence),
-                        ("gte", [ref lhs, ref rhs]) => {
-                            write_binary_op(">=", lhs, rhs, 20, min_precedence)
-                        }
-                        ("gt", [ref lhs, ref rhs]) => {
-                            write_binary_op(">", lhs, rhs, 20, min_precedence)
-                        }
-                        ("lte", [ref lhs, ref rhs]) => {
-                            write_binary_op("<=", lhs, rhs, 20, min_precedence)
-                        }
-                        ("lt", [ref lhs, ref rhs]) => {
-                            write_binary_op("<", lhs, rhs, 20, min_precedence)
-                        }
-                        ("eq", [ref lhs, ref rhs]) => {
-                            write_binary_op("=", lhs, rhs, 20, min_precedence)
-                        }
-                        ("noteq", [ref lhs, ref rhs]) => {
-                            write_binary_op("<>", lhs, rhs, 20, min_precedence)
-                        }
-                        ("plus", [ref expr]) => write_unary_op("+", expr, 50, min_precedence),
-                        ("minus", [ref expr]) => write_unary_op("-", expr, 50, min_precedence),
-                        ("plus", [ref lhs, ref rhs]) => {
-                            write_binary_op("+", lhs, rhs, 30, min_precedence)
-                        }
-                        ("minus", [ref lhs, ref rhs]) => {
-                            write_binary_op("-", lhs, rhs, 30, min_precedence)
-                        }
-                        ("multiply", [ref lhs, ref rhs]) => {
-                            write_binary_op("*", lhs, rhs, 40, min_precedence)
-                        }
-                        ("divide", [ref lhs, ref rhs]) => {
-                            write_binary_op("/", lhs, rhs, 40, min_precedence)
-                        }
-                        ("div", [ref lhs, ref rhs]) => {
-                            write_binary_op("DIV", lhs, rhs, 40, min_precedence)
-                        }
-                        ("modulo", [ref lhs, ref rhs]) => {
-                            write_binary_op("%", lhs, rhs, 40, min_precedence)
-                        }
-                        _ => {
-                            let mut s = String::new();
-                            s += &function.signature.name;
+                Expr::FunctionCall {
+                    function, args, id, ..
+                } => match (function.signature.name.as_str(), args.as_slice()) {
+                    ("and", [ref lhs, ref rhs]) => {
+                        write_binary_op("AND", lhs, rhs, 10, min_precedence)
+                    }
+                    ("or", [ref lhs, ref rhs]) => {
+                        write_binary_op("OR", lhs, rhs, 5, min_precedence)
+                    }
+                    ("not", [ref expr]) => write_unary_op("NOT", expr, 15, min_precedence),
+                    ("gte", [ref lhs, ref rhs]) => {
+                        write_binary_op(">=", lhs, rhs, 20, min_precedence)
+                    }
+                    ("gt", [ref lhs, ref rhs]) => {
+                        write_binary_op(">", lhs, rhs, 20, min_precedence)
+                    }
+                    ("lte", [ref lhs, ref rhs]) => {
+                        write_binary_op("<=", lhs, rhs, 20, min_precedence)
+                    }
+                    ("lt", [ref lhs, ref rhs]) => {
+                        write_binary_op("<", lhs, rhs, 20, min_precedence)
+                    }
+                    ("eq", [ref lhs, ref rhs]) => {
+                        write_binary_op("=", lhs, rhs, 20, min_precedence)
+                    }
+                    ("noteq", [ref lhs, ref rhs]) => {
+                        write_binary_op("<>", lhs, rhs, 20, min_precedence)
+                    }
+                    ("plus", [ref expr]) => write_unary_op("+", expr, 50, min_precedence),
+                    ("minus", [ref expr]) => write_unary_op("-", expr, 50, min_precedence),
+                    ("plus", [ref lhs, ref rhs]) => {
+                        write_binary_op("+", lhs, rhs, 30, min_precedence)
+                    }
+                    ("minus", [ref lhs, ref rhs]) => {
+                        write_binary_op("-", lhs, rhs, 30, min_precedence)
+                    }
+                    ("multiply", [ref lhs, ref rhs]) => {
+                        write_binary_op("*", lhs, rhs, 40, min_precedence)
+                    }
+                    ("divide", [ref lhs, ref rhs]) => {
+                        write_binary_op("/", lhs, rhs, 40, min_precedence)
+                    }
+                    ("div", [ref lhs, ref rhs]) => {
+                        write_binary_op("DIV", lhs, rhs, 40, min_precedence)
+                    }
+                    ("modulo", [ref lhs, ref rhs]) => {
+                        write_binary_op("%", lhs, rhs, 40, min_precedence)
+                    }
+                    _ => {
+                        let mut s = String::new();
+                        s += &function.signature.name;
+
+                        let params = id.params();
+                        if !params.is_empty() {
                             s += "(";
-                            for (i, arg) in args.iter().enumerate() {
+                            for (i, ty) in params.iter().enumerate() {
                                 if i > 0 {
                                     s += ", ";
                                 }
-                                s += &arg.sql_display();
+                                s += &ty.to_string();
                             }
                             s += ")";
-                            s
                         }
+
+                        s += "(";
+                        for (i, arg) in args.iter().enumerate() {
+                            if i > 0 {
+                                s += ", ";
+                            }
+                            s += &arg.sql_display();
+                        }
+                        s += ")";
+                        s
                     }
-                }
+                },
             }
         }
 
