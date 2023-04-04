@@ -254,15 +254,25 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
 }
 
 pub fn aggregate_min_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(
-        try_create_aggregate_min_max_any_function::<TYPE_MIN>,
-    ))
+    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+        is_decomposable: true,
+        ..Default::default()
+    };
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_aggregate_min_max_any_function::<TYPE_MIN>),
+        features,
+    )
 }
 
 pub fn aggregate_max_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(
-        try_create_aggregate_min_max_any_function::<TYPE_MAX>,
-    ))
+    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+        is_decomposable: true,
+        ..Default::default()
+    };
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_aggregate_min_max_any_function::<TYPE_MAX>),
+        features,
+    )
 }
 
 pub fn aggregate_any_function_desc() -> AggregateFunctionDescription {
