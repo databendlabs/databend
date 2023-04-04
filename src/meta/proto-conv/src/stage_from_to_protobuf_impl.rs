@@ -52,107 +52,6 @@ impl FromToProto for mt::principal::StageParams {
     }
 }
 
-impl FromToProto for mt::principal::FileFormatOptions {
-    type PB = pb::FileFormatOptions;
-    fn get_pb_ver(p: &Self::PB) -> u64 {
-        p.ver
-    }
-    fn from_pb(p: pb::FileFormatOptions) -> Result<Self, Incompatible>
-    where Self: Sized {
-        reader_check_msg(p.ver, p.min_reader_ver)?;
-
-        let format = mt::principal::StageFileFormatType::from_pb(
-            FromPrimitive::from_i32(p.format).ok_or_else(|| Incompatible {
-                reason: format!("invalid StageFileFormatType: {}", p.format),
-            })?,
-        )?;
-
-        let compression = mt::principal::StageFileCompression::from_pb(
-            FromPrimitive::from_i32(p.compression).ok_or_else(|| Incompatible {
-                reason: format!("invalid StageFileCompression: {}", p.compression),
-            })?,
-        )?;
-
-        let nan_display = if p.nan_display.is_empty() {
-            "".to_string()
-        } else {
-            p.nan_display
-        };
-
-        Ok(mt::principal::FileFormatOptions {
-            format,
-            skip_header: p.skip_header,
-            field_delimiter: p.field_delimiter.clone(),
-            record_delimiter: p.record_delimiter,
-            nan_display,
-            escape: p.escape,
-            compression,
-            row_tag: p.row_tag,
-            quote: p.quote,
-            name: None,
-        })
-    }
-
-    fn to_pb(&self) -> Result<pb::FileFormatOptions, Incompatible> {
-        let format = mt::principal::StageFileFormatType::to_pb(&self.format)? as i32;
-        let compression = mt::principal::StageFileCompression::to_pb(&self.compression)? as i32;
-        Ok(pb::FileFormatOptions {
-            ver: VER,
-            min_reader_ver: MIN_READER_VER,
-            format,
-            skip_header: self.skip_header,
-            field_delimiter: self.field_delimiter.clone(),
-            record_delimiter: self.record_delimiter.clone(),
-            nan_display: self.nan_display.clone(),
-            compression,
-            row_tag: self.row_tag.clone(),
-            escape: self.escape.clone(),
-            quote: self.quote.clone(),
-        })
-    }
-}
-
-impl FromToProto for mt::principal::UserDefinedFileFormat {
-    type PB = pb::UserDefinedFileFormat;
-    fn get_pb_ver(p: &Self::PB) -> u64 {
-        p.ver
-    }
-    fn from_pb(p: pb::UserDefinedFileFormat) -> Result<Self, Incompatible>
-    where Self: Sized {
-        reader_check_msg(p.ver, p.min_reader_ver)?;
-
-        let file_format_options =
-            mt::principal::FileFormatOptions::from_pb(p.file_format_options.ok_or_else(|| {
-                Incompatible {
-                    reason: "StageInfo.file_format_options cannot be None".to_string(),
-                }
-            })?)?;
-        let creator =
-            mt::principal::UserIdentity::from_pb(p.creator.ok_or_else(|| Incompatible {
-                reason: "StageInfo.file_format_options cannot be None".to_string(),
-            })?)?;
-
-        Ok(mt::principal::UserDefinedFileFormat {
-            name: p.name,
-            file_format_options,
-            creator,
-        })
-    }
-
-    fn to_pb(&self) -> Result<pb::UserDefinedFileFormat, Incompatible> {
-        let file_format_options =
-            mt::principal::FileFormatOptions::to_pb(&self.file_format_options)?;
-        let creator = mt::principal::UserIdentity::to_pb(&self.creator)?;
-        Ok(pb::UserDefinedFileFormat {
-            ver: VER,
-            min_reader_ver: MIN_READER_VER,
-            name: self.name.clone(),
-            file_format_options: Some(file_format_options),
-            creator: Some(creator),
-        })
-    }
-}
-
 impl FromToProto for mt::principal::OnErrorMode {
     type PB = pb::stage_info::OnErrorMode;
     fn get_pb_ver(_p: &Self::PB) -> u64 {
@@ -360,5 +259,34 @@ impl FromToProto for mt::principal::StageFile {
             },
             etag: self.etag.clone(),
         })
+    }
+}
+
+impl FromToProto for mt::principal::StageType {
+    type PB = pb::stage_info::StageType;
+    fn get_pb_ver(_p: &Self::PB) -> u64 {
+        0
+    }
+    fn from_pb(p: pb::stage_info::StageType) -> Result<Self, Incompatible>
+    where Self: Sized {
+        match p {
+            pb::stage_info::StageType::LegacyInternal => {
+                Ok(mt::principal::StageType::LegacyInternal)
+            }
+            pb::stage_info::StageType::External => Ok(mt::principal::StageType::External),
+            pb::stage_info::StageType::Internal => Ok(mt::principal::StageType::Internal),
+            pb::stage_info::StageType::User => Ok(mt::principal::StageType::User),
+        }
+    }
+
+    fn to_pb(&self) -> Result<pb::stage_info::StageType, Incompatible> {
+        match *self {
+            mt::principal::StageType::LegacyInternal => {
+                Ok(pb::stage_info::StageType::LegacyInternal)
+            }
+            mt::principal::StageType::External => Ok(pb::stage_info::StageType::External),
+            mt::principal::StageType::Internal => Ok(pb::stage_info::StageType::Internal),
+            mt::principal::StageType::User => Ok(pb::stage_info::StageType::User),
+        }
     }
 }
