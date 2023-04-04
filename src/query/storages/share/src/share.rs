@@ -14,6 +14,8 @@
 
 use std::collections::BTreeMap;
 
+use chrono::DateTime;
+use chrono::Utc;
 use common_exception::Result;
 use common_meta_app::share::ShareDatabaseSpec;
 use common_meta_app::share::ShareSpec;
@@ -77,6 +79,8 @@ pub async fn save_share_spec(
 }
 
 mod ext {
+    use common_meta_app::share::ShareGrantObjectPrivilege;
+    use enumflags2::BitFlags;
     use storages_common_table_meta::table::database_storage_prefix;
     use storages_common_table_meta::table::table_storage_prefix;
 
@@ -99,6 +103,9 @@ mod ext {
         database: Option<WithLocation<ShareDatabaseSpec>>,
         tables: Vec<WithLocation<ShareTableSpec>>,
         tenants: Vec<String>,
+        db_privileges: Option<BitFlags<ShareGrantObjectPrivilege>>,
+        comment: Option<String>,
+        share_on: Option<DateTime<Utc>>,
     }
 
     impl ShareSpecExt {
@@ -124,6 +131,9 @@ mod ext {
                     })
                     .collect(),
                 tenants: spec.tenants,
+                db_privileges: spec.db_privileges.clone(),
+                comment: spec.comment.clone(),
+                share_on: spec.share_on,
             }
         }
     }

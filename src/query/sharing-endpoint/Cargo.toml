@@ -18,6 +18,7 @@ common-meta-app = { path = "../../meta/app" }
 common-storage = { path = "../../common/storage" }
 common-storages-share = { path = "../storages/share" }
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
+chrono = { workspace = true }
 
 time = { version = "0.3", features = ["serde"] }
 
@@ -25,6 +26,7 @@ base64 = "0.21.0"
 clap = { workspace = true }
 opendal = { workspace = true }
 poem = { version = "1", features = ["rustls", "multipart", "compression"] }
+enumflags2 = { version = "0.7.5", features = ["serde"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serfig = "0.1.0"

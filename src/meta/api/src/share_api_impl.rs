@@ -1782,25 +1782,28 @@ async fn convert_share_meta_to_spec(
     share_id: u64,
     share_meta: ShareMeta,
 ) -> Result<ShareSpec, KVAppError> {
-    let database = if let Some(database) = share_meta.database {
+    let (database, db_privileges) = if let Some(database) = share_meta.database {
         if let ShareGrantObject::Database(db_id) = database.object {
             let id_key = DatabaseIdToName { db_id };
 
             let (_db_meta_seq, db_name): (_, Option<DatabaseNameIdent>) =
                 get_pb_value(kv_api, &id_key).await?;
             if let Some(db_name) = db_name {
-                Some(ShareDatabaseSpec {
-                    name: db_name.db_name,
-                    id: db_id,
-                })
+                (
+                    Some(ShareDatabaseSpec {
+                        name: db_name.db_name,
+                        id: db_id,
+                    }),
+                    Some(database.privileges.clone()),
+                )
             } else {
-                None
+                (None, None)
             }
         } else {
-            None
+            (None, None)
         }
     } else {
-        None
+        (None, None)
     };
 
     let mut tables = vec![];
@@ -1826,6 +1829,9 @@ async fn convert_share_meta_to_spec(
         database,
         tables,
         tenants: Vec::from_iter(share_meta.accounts.into_iter()),
+        db_privileges,
+        comment: share_meta.comment.clone(),
+        share_on: Some(share_meta.share_on),
     })
 }
 
