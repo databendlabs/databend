@@ -1443,6 +1443,7 @@ dependencies = [
  "common-io",
  "common-meta-app",
  "criterion",
+ "enum-as-inner",
  "ethnum",
  "fast-float",
  "goldenfile",

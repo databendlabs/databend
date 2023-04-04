@@ -15,7 +15,7 @@
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::optimizer::util::contaions_project_set;
+use crate::optimizer::util::contains_project_set;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
@@ -100,7 +100,7 @@ impl UnusedColumnPruner {
 
             RelOperator::EvalScalar(p) => {
                 let mut used = vec![];
-                if contaions_project_set(expr) {
+                if contains_project_set(expr) {
                     return Ok(SExpr::create_unary(
                         RelOperator::EvalScalar(EvalScalar {
                             items: p.items.clone(),

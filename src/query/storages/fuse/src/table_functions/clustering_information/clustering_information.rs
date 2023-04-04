@@ -197,7 +197,7 @@ impl<'a> ClusteringInformation<'a> {
         }
 
         // calculate overlaps and depth.
-        let mut statis = Vec::new();
+        let mut stats = Vec::new();
         // key: the block index.
         // value: (overlaps, depth).
         let mut unfinished_parts: HashMap<usize, (usize, usize)> = HashMap::new();
@@ -215,15 +215,15 @@ impl<'a> ClusteringInformation<'a> {
 
             end.iter().for_each(|&idx| {
                 let stat = unfinished_parts.remove(&idx).unwrap();
-                statis.push(stat);
+                stats.push(stat);
             });
         }
         assert_eq!(unfinished_parts.len(), 0);
 
         let mut sum_overlap = 0;
         let mut sum_depth = 0;
-        let length = statis.len();
-        let mp = statis
+        let length = stats.len();
+        let mp = stats
             .into_iter()
             .fold(BTreeMap::new(), |mut acc, (overlap, depth)| {
                 sum_overlap += overlap;

@@ -428,7 +428,7 @@ fn test_cast_between_string_and_timestamp(file: &mut impl Write, is_try: bool) {
     run_ast(file, format!("{prefix}TO_TIMESTAMP('2022-01-02')"), &[]);
     run_ast(
         file,
-        format!("{prefix}TO_TIMESTAMP('A NON-TIMESTMAP STR')"),
+        format!("{prefix}TO_TIMESTAMP('A NON-TIMESTAMP STR')"),
         &[],
     );
     run_ast(

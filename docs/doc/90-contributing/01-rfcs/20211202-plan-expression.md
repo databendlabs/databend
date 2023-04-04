@@ -183,7 +183,7 @@ The build process is
 - FilterPlan:  filter expression is  `(number + 3) > 0`, the schema keeps the same,  schema --> [number]
 - Expression: Before group by  `(number + 1):UInt64, (number + 2):UInt64, (number + 5):UInt64, (number + 4):UInt64 (Before GroupBy)`
 Before GroupBy, We must visit all the expression in `projections`, `having`, `group by` to collect the expressions and aggregate functions,  schema --> `[number, number + 1, number + 2, number + 4, number + 5]`
-- AggregatorPartial: `groupBy=[[(number + 1)]], aggr=[[sum((number + 2)), sum((number + 5)), sum((number + 4))]]`, note that: the expressions are already materialized in upstream, so we just conside all the arguments as columns.
+- AggregatorPartial: `groupBy=[[(number + 1)]], aggr=[[sum((number + 2)), sum((number + 5)), sum((number + 4))]]`, note that: the expressions are already materialized in upstream, so we just consider all the arguments as columns.
 - AggregatorFinal,  schema --> `[number + 1, sum((number + 2)), sum((number + 5)), sum((number + 4))]`
 - Expression:  schema --> `[number + 1, sum((number + 2)), sum((number + 5)), sum((number + 4)),  sum((number + 2)) + 4, sum((number + 5)) + 1]`
 - Sort: the schema keeps the same

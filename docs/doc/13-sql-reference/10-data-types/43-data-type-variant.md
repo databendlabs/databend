@@ -163,7 +163,7 @@ INSERT INTO employees VALUES (1, parse_json('{"Email": "amy@databend.com", "Name
 INSERT INTO employees VALUES (2, parse_json('{"Email": "bob@databend.com", "Name":"Bob"}'));
 ```
 
-The following statement lists all the Email addresses of the the employees with an ID smaller than 3:
+The following statement lists all the Email addresses of the employees with an ID smaller than 3:
 
 ```sql
 SELECT info:Email FROM employees WHERE id < 3;

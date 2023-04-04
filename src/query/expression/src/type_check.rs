@@ -212,7 +212,7 @@ pub fn check_function<Index: ColumnIndex>(
 
     let auto_cast_rules = fn_registry.get_auto_cast_rules(name);
 
-    let mut fail_resaons = Vec::with_capacity(candidates.len());
+    let mut fail_reasons = Vec::with_capacity(candidates.len());
     for (id, func) in &candidates {
         match try_check_function(args, &func.signature, auto_cast_rules, fn_registry) {
             Ok((checked_args, return_type, generics)) => {
@@ -225,7 +225,7 @@ pub fn check_function<Index: ColumnIndex>(
                     return_type,
                 });
             }
-            Err(err) => fail_resaons.push(err),
+            Err(err) => fail_reasons.push(err),
         }
     }
 
@@ -255,7 +255,7 @@ pub fn check_function<Index: ColumnIndex>(
 
         let candidates_fail_reason = candidates_sig
             .into_iter()
-            .zip(fail_resaons)
+            .zip(fail_reasons)
             .map(|(sig, err)| format!("  {sig:<max_len$}  : {}", err.message()))
             .join("\n");
 

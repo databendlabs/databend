@@ -333,7 +333,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                 let mut planner = Planner::new(context.clone());
                 let (plan, extras) = planner.plan_sql(query).await?;
 
-                context.attach_query_str(plan.to_string(), extras.stament.to_mask_sql());
+                context.attach_query_str(plan.to_string(), extras.statement.to_mask_sql());
                 let interpreter = InterpreterFactory::get(context.clone(), &plan).await;
                 let has_result_set = plan.has_result_set();
 

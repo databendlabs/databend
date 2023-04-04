@@ -117,7 +117,7 @@ Do you remember how to register scalar functions in Databend? You can check [Doc
 
 Here are some noteworthy items recorded here, perhaps you can find something that interests you.
 
-- Learn how to monitor Databend using Prometheus and Grafana: *[Doc | Monitor - Prometheus & Grafana](https://databend.rs/doc/monitor/prometheus-and-granafa)*
+- Learn how to monitor Databend using Prometheus and Grafana: *[Doc | Monitor - Prometheus & Grafana](https://databend.rs/doc/monitor/prometheus-and-granada)*
 - [Metabase Databend Driver](https://github.com/databendcloud/metabase-databend-driver/releases/latest) helps you connect Databend to Metabase and dashboard your data: *[Doc | Integrations - Metabase](https://databend.rs/doc/integrations/gui-tool/metabase)*
 - Databend now supports `PIVOT`, `UNPIVOT`, `GROUP BY CUBE` and `GROUP BY ROLLUP` query syntax. For more information, please see PR [#10676](https://github.com/datafuselabs/databend/pull/10676) and [#10601](https://github.com/datafuselabs/databend/pull/10601).
 

@@ -13,7 +13,7 @@ Support query result cache for faster query response.
 
 For some expensive queries with data that doesn't change frequently, we can cache the results to speed up the query response. For the same query with the same underlying data, we can return the cached result directly which improves the query efficiency greatly.
 
-For example, if we want to execute the following query to get the top 5 well-saled products everyt 10 seconds:
+For example, if we want to execute the following query to get the top 5 well-sold products every 10 seconds:
 
 ```sql
 SELECT product, count(product) AS sales_count
@@ -35,7 +35,7 @@ Besides TTL, when the underlying data is changed (we can infer this by snapshot 
 
 ### Result cache storage
 
-Databend uses key-value pairs to record query result caches. For every query, Databend will construct a key to represent the query, and store ralated information in the value.
+Databend uses key-value pairs to record query result caches. For every query, Databend will construct a key to represent the query, and store related information in the value.
 
 Databend will not store the query result directly in the key-value storage. Instead, Databend only stores the location of the result cache file in the value. The actual result cache will be stored in the storage layer (local fs, s3, ...).
 

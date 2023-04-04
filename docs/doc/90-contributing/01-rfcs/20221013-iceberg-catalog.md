@@ -15,7 +15,7 @@ This RFC describes how the iceberg external catalog will behave and how we will 
 
 The [Apache Iceberg](https://iceberg.apache.org) is a table format widely used in data lake-houses, it offers a more complete logical view of databases and has much higher performance of accessing as external tables, since users don't need to know about partitions and less indexing through files when accessing is required comparing to `Hive`.
 
-The split and well-defined structure of `Iceberg` also makes concurrent accesssing and version managementing on data sources safer, saver and convenient.
+The split and well-defined structure of `Iceberg` also makes concurrent accessing and version managementing on data sources safer, saver and convenient.
 
 ![stack of Apache Iceberg](https://iceberg.apache.org/img/iceberg-metadata.png)
 

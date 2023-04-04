@@ -62,7 +62,7 @@ cp ./target/release/examples/addr2line <your-addr2line-find-with-whereis-addr2li
 
 ### 4. Upgrade jeprof to the Latest Version
 
-`jeprof` needs an upgrade because the old version doesn't support some parameters for creating flamegraphs. `jeporf` is a perl script, so the way to upgrade it is a little bit rough-and-ready.
+`jeprof` needs an upgrade because the old version doesn't support some parameters for creating flamegraphs. `jeprof` is a perl script, so the way to upgrade it is a little bit rough-and-ready.
 
 First, find out the path of your local `jeprof` file:
 

@@ -37,7 +37,7 @@ pub struct IcebergDatabase {
     ctl_name: String,
     /// operator pointing to the directory holding iceberg tables
     db_root: DataOperator,
-    /// database infomations
+    /// database information
     info: DatabaseInfo,
 }
 

@@ -84,7 +84,7 @@ ls
 :::tip
 
 Standalone mode should **NEVER** be used in production.
-But do not worry. Anytime when needed, a standalone `databand-meta` can be extended to a cluster of 3 or 5 nodes with [Cluster management API](20-metasrv-add-remove-node.md).
+But do not worry. Anytime when needed, a standalone `databend-meta` can be extended to a cluster of 3 or 5 nodes with [Cluster management API](20-metasrv-add-remove-node.md).
 
 :::
 

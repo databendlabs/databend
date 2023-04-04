@@ -78,6 +78,9 @@ pub trait TableContext: Send + Sync {
     /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
     fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>>;
 
+    fn incr_total_scan_value(&self, value: ProgressValues);
+    fn get_total_scan_value(&self) -> ProgressValues;
+
     fn get_scan_progress(&self) -> Arc<Progress>;
     fn get_scan_progress_value(&self) -> ProgressValues;
     fn get_write_progress(&self) -> Arc<Progress>;

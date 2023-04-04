@@ -261,7 +261,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                         )));
                     }
 
-                    // check if the the share has granted a database
+                    // check if the share has granted a database
                     let (share_from_db_id, privileges) =
                         get_share_database_id_and_privilege(from_share, &share_meta)?;
                     if !privileges.contains(ShareGrantObjectPrivilege::Usage) {
@@ -615,14 +615,14 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 get_pb_value(self, &dbid_idlist).await?;
             let mut db_id_list: DbIdList;
             if db_id_list_seq == 0 {
-                // may the the database is created before add db_id_list, so we just add the id into the list.
+                // may the database is created before add db_id_list, so we just add the id into the list.
                 db_id_list = DbIdList::new();
                 db_id_list.append(old_db_id);
             } else {
                 match db_id_list_opt {
                     Some(list) => db_id_list = list,
                     None => {
-                        // may the the database is created before add db_id_list, so we just add the id into the list.
+                        // may the database is created before add db_id_list, so we just add the id into the list.
                         db_id_list = DbIdList::new();
                         db_id_list.append(old_db_id);
                     }
@@ -1271,14 +1271,14 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
 
             let mut tb_id_list: TableIdList;
             if tb_id_list_seq == 0 {
-                // may the the table is created before add db_id_list, so we just add the id into the list.
+                // may the table is created before add db_id_list, so we just add the id into the list.
                 tb_id_list = TableIdList::new();
                 tb_id_list.append(table_id);
             } else {
                 match tb_id_list_opt {
                     Some(list) => tb_id_list = list,
                     None => {
-                        // may the the table is created before add db_id_list, so we just add the id into the list.
+                        // may the table is created before add db_id_list, so we just add the id into the list.
                         tb_id_list = TableIdList::new();
                         tb_id_list.append(table_id);
                     }

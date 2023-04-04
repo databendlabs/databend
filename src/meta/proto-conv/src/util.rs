@@ -22,7 +22,7 @@ use crate::Incompatible;
 ///
 /// Every time fields are added/removed into/from data types in this crate:
 /// - Add a new line to this list to describe what changed.
-/// - Add a test case to ensure protobuf message serialized by this this version can be loaded,
+/// - Add a test case to ensure protobuf message serialized by this version can be loaded,
 ///   similar to: test_user_stage_fs_v6() in tests/it/user_stage.rs;
 ///
 /// `VER` is the current metadata version and is automatically set to the last version.

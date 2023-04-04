@@ -63,7 +63,7 @@ runs:
           s3://databend-ci/${{ inputs.profile }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ \
           ${{ steps.info.outputs.path }}/ --exclude "*" --include "open-sharing" --no-progress || true
 
-    - name: make artifacts excutable
+    - name: make artifacts executable
       shell: bash
       run: |
         chmod +x ${{ steps.info.outputs.path }}/databend-*

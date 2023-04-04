@@ -655,7 +655,7 @@ impl TableSchema {
             return Ok(field.clone());
         }
 
-        // If the data type is Tuple, we can read the innner columns directly.
+        // If the data type is Tuple, we can read the inner columns directly.
         // For example, `select t:a from table`, we can only read column t:a.
         // So we can project the inner field as a independent field (`inner_project` and `traverse_paths` will be called).
         //

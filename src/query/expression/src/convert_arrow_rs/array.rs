@@ -21,6 +21,7 @@ use arrow_array::BooleanArray;
 use arrow_array::LargeBinaryArray;
 use arrow_array::NullArray;
 use arrow_array::PrimitiveArray;
+use arrow_array::StructArray;
 use arrow_buffer::buffer::BooleanBuffer;
 use arrow_buffer::buffer::NullBuffer;
 use arrow_buffer::ArrowNativeType;
@@ -64,6 +65,7 @@ fn numbers_into<TN: ArrowNativeType + NativeType, TA: ArrowPrimitiveType>(
 
 impl Column {
     pub fn into_arrow_rs(self) -> Result<Arc<dyn Array>, ArrowError> {
+        let data_type = DataType::from(&self.data_type());
         let array: Arc<dyn Array> = match self {
             Column::Null { len } => Arc::new(NullArray::new(len)),
             Column::EmptyArray { len } => Arc::new(NullArray::new(len)),
@@ -175,12 +177,64 @@ impl Column {
                     .build()?;
                 make_array(data)
             }
-            _ => {
-                let data_type = self.data_type();
-                Err(ArrowError::NotYetImplemented(format!(
-                    "Column::into_arrow_rs() for {data_type} not implemented yet"
-                )))?
+            Column::Array(col) => {
+                let len = col.len();
+                let offsets = Buffer::from(col.offsets);
+                let values = col.values.into_arrow_rs()?.into_data();
+                let field = Field::new("_array", values.data_type().clone(), false);
+                let array_data = ArrayData::builder(DataType::LargeList(Box::new(field)))
+                    .len(len)
+                    .add_buffer(offsets)
+                    .child_data(vec![values]);
+                let array_data = unsafe { array_data.build_unchecked() };
+                make_array(array_data)
             }
+            Column::Tuple(cols) => match data_type {
+                DataType::Struct(fields) => {
+                    let cols = cols
+                        .into_iter()
+                        .map(|col| col.into_arrow_rs())
+                        .collect::<Result<Vec<_>, ArrowError>>()?;
+                    let data = fields.into_iter().zip(cols).collect::<Vec<_>>();
+                    Arc::new(StructArray::from(data))
+                }
+                _ => unreachable!(),
+            },
+            Column::Map(col) => match data_type {
+                DataType::Map(field, _) => {
+                    let len = col.len();
+                    let offsets: Buffer2<i32> = col
+                        .offsets
+                        .iter()
+                        .map(|x| *x as i32)
+                        .collect::<Vec<_>>()
+                        .into();
+                    let offsets = Buffer::from(offsets);
+                    match col.values {
+                        Column::Tuple(cols) => {
+                            let cols = cols
+                                .into_iter()
+                                .map(|col| col.into_arrow_rs())
+                                .collect::<Result<Vec<_>, ArrowError>>()?;
+                            let data = vec!["key", "value"]
+                                .into_iter()
+                                .zip(cols)
+                                .collect::<Vec<_>>();
+                            let array = StructArray::try_from(data)?;
+
+                            let array_data =
+                                ArrayData::builder(DataType::Map(Box::new(*field), false))
+                                    .len(len)
+                                    .add_buffer(offsets)
+                                    .child_data(vec![array.into_data()]);
+                            let array_data = unsafe { array_data.build_unchecked() };
+                            make_array(array_data)
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+                _ => unreachable!(),
+            },
         };
         Ok(array)
     }

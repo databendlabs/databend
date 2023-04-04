@@ -2,7 +2,7 @@ name: "Create Check Status"
 description: "Create check status on github commit"
 inputs:
   github_token:
-    description: "Github Token"
+    description: "GitHub Token"
     required: true
   sha:
     description: "commit sha"

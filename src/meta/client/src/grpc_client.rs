@@ -250,7 +250,7 @@ impl ClientHandle {
 /// We expect meta-client should be cloneable.
 /// But the underlying hyper client has a worker that runs in its creating tokio-runtime.
 /// Thus a cloned meta client may try to talk to a destroyed hyper worker if the creating tokio-runtime is dropped.
-/// Thus we have to guarantee that as long as there is a meta-client, the huper worker runtime must not be dropped.
+/// Thus we have to guarantee that as long as there is a meta-client, the hyper worker runtime must not be dropped.
 /// Thus a meta client creates a runtime then spawn a MetaGrpcClientWorker.
 pub struct MetaGrpcClient {
     conn_pool: Pool<MetaChannelManager>,

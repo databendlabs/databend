@@ -26,7 +26,7 @@ use crate::plans::ScalarItem;
 
 pub struct RuleEliminateEvalScalar {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RuleEliminateEvalScalar {
@@ -36,7 +36,7 @@ impl RuleEliminateEvalScalar {
             // EvalScalar
             //  \
             //   *
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::EvalScalar,
                 }
@@ -47,7 +47,7 @@ impl RuleEliminateEvalScalar {
                     }
                     .into(),
                 ),
-            ),
+            )],
         }
     }
 }
@@ -86,7 +86,7 @@ impl Rule for RuleEliminateEvalScalar {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }

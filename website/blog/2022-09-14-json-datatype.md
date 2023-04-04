@@ -4,7 +4,7 @@ description: JSON
 slug: json-datatypes
 date: 2022-09-14
 tags: [databend, JSON]
-cover_url: desiging-querying-json.png
+cover_url: design-querying-json.png
 authors:
 - name: baishen
   url: https://github.com/b41sh
@@ -212,7 +212,7 @@ LIMIT    10;
 | "JusticeNX"                       | 13        |
 | "RyK-eR"                          | 12        |
 | "DroneMad"                        | 10        |
-| "UnqulifiedEngineer"              | 9         |
+| "UnqualifiedEngineer"             | 9         |
 | "PeterZs"                         | 8         |
 | "lgq2015"                         | 8         |
 +-----------------------------------+-----------+

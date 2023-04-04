@@ -35,7 +35,7 @@ common-storages-view = { path = "../storages/view" }
 common-users = { path = "../users" }
 storages-common-table-meta = { path = "../storages/common/table-meta" }
 
-# Github dependencies
+# GitHub dependencies
 
 # Crates.io dependencies
 ahash = { version = "0.8.2", features = ["no-rng"] }

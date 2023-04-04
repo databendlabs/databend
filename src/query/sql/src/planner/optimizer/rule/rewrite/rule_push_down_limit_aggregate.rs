@@ -39,14 +39,14 @@ use crate::plans::RelOperator;
 ///               *
 pub struct RulePushDownLimitAggregate {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RulePushDownLimitAggregate {
     pub fn new() -> Self {
         Self {
             id: RuleID::PushDownLimitAggregate,
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Limit,
                 }
@@ -58,7 +58,7 @@ impl RulePushDownLimitAggregate {
                     .into(),
                     SExpr::create_leaf(PatternPlan { plan_type: Pattern }.into()),
                 ),
-            ),
+            )],
         }
     }
 }
@@ -85,7 +85,7 @@ impl Rule for RulePushDownLimitAggregate {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }
