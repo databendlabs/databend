@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::io::SeekFrom;
+use std::mem;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Context;
@@ -259,10 +260,11 @@ impl<R: oio::Read> oio::Read for RuntimeIO<R> {
     }
 
     fn poll_next(&mut self, cx: &mut Context<'_>) -> Poll<Option<Result<bytes::Bytes>>> {
-        debug_assert!(
-            self.buf.is_empty(),
-            "dirty buf means reader's state is wrong, must be a bug"
-        );
+        // If there are buf the not consumed, return it first.
+        if !self.buf.is_empty() {
+            let buf = mem::replace(&mut self.buf, Bytes::new());
+            return Poll::Ready(Some(Ok(buf)));
+        }
 
         match &mut self.state {
             State::Idle(r) => {
