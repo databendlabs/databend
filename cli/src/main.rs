@@ -14,16 +14,16 @@
 
 #![allow(clippy::upper_case_acronyms)]
 
+mod ast;
+mod config;
 mod display;
 mod helper;
 mod session;
-mod token;
-
-use std::time::Duration;
 
 use arrow::error::ArrowError;
 
 use clap::Parser;
+use config::{Config, Connection};
 use tonic::transport::{ClientTlsConfig, Endpoint};
 
 #[derive(Debug, Parser, PartialEq)]
@@ -65,14 +65,16 @@ pub async fn main() -> Result<(), ArrowError> {
         return Ok(());
     }
 
+    let config = Config::load();
+
     let protocol = if args.tls { "https" } else { "http" };
     // Authenticate
     let url = format!("{protocol}://{}:{}", args.host, args.port);
-    let endpoint = endpoint(&args, url)?;
+    let endpoint = endpoint(&config.connection, &args, url)?;
     let is_repl = atty::is(atty::Stream::Stdin);
 
     let mut session =
-        session::Session::try_new(endpoint, &args.user, &args.password, is_repl).await?;
+        session::Session::try_new(config, endpoint, &args.user, &args.password, is_repl).await?;
 
     session.handle().await;
     Ok(())
@@ -83,16 +85,16 @@ fn print_usage() {
     println!("{}", msg);
 }
 
-fn endpoint(args: &Args, addr: String) -> Result<Endpoint, ArrowError> {
+fn endpoint(conn: &Connection, args: &Args, addr: String) -> Result<Endpoint, ArrowError> {
     let mut endpoint = Endpoint::new(addr)
         .map_err(|_| ArrowError::IoError("Cannot create endpoint".to_string()))?
-        .connect_timeout(Duration::from_secs(20))
-        .timeout(Duration::from_secs(20))
-        .tcp_nodelay(true) // Disable Nagle's Algorithm since we don't want packets to wait
-        .tcp_keepalive(Option::Some(Duration::from_secs(3600)))
-        .http2_keep_alive_interval(Duration::from_secs(300))
-        .keep_alive_timeout(Duration::from_secs(20))
-        .keep_alive_while_idle(true);
+        .connect_timeout(conn.connect_timeout)
+        .timeout(conn.query_timeout)
+        .tcp_nodelay(conn.tcp_nodelay) // Disable Nagle's Algorithm since we don't want packets to wait
+        .tcp_keepalive(conn.tcp_keepalive)
+        .http2_keep_alive_interval(conn.http2_keep_alive_interval)
+        .keep_alive_timeout(conn.keep_alive_timeout)
+        .keep_alive_while_idle(conn.keep_alive_while_idle);
 
     if args.tls {
         let tls_config = ClientTlsConfig::new();

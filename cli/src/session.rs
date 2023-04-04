@@ -27,18 +27,21 @@ use std::io::BufRead;
 use tokio::time::Instant;
 use tonic::transport::Endpoint;
 
+use crate::ast::{TokenKind, Tokenizer};
+use crate::config::Config;
 use crate::display::{format_error, ChunkDisplay, FormatDisplay, ReplDisplay};
 use crate::helper::CliHelper;
-use crate::token::{TokenKind, Tokenizer};
 
 pub struct Session {
     client: FlightSqlServiceClient,
     is_repl: bool,
+    config: Config,
     prompt: String,
 }
 
 impl Session {
     pub async fn try_new(
+        config: Config,
         endpoint: Endpoint,
         user: &str,
         password: &str,
@@ -61,8 +64,15 @@ impl Session {
         client.set_header("bendsql", "1");
         let _token = client.handshake(user, password).await.unwrap();
 
-        let prompt = format!("{} :) ", endpoint.uri().host().unwrap());
+        let mut prompt = config.settings.prompt.clone();
+
+        {
+            prompt = prompt.replace("{host}", endpoint.uri().host().unwrap());
+            prompt = prompt.replace("{user}", user);
+        }
+
         Ok(Self {
+            config,
             client,
             is_repl,
             prompt,
@@ -141,11 +151,8 @@ impl Session {
     }
 
     pub async fn handle_query(&mut self, is_repl: bool, query: &str) -> Result<bool, ArrowError> {
-        if is_repl {
-            if query == "exit" || query == "quit" {
-                return Ok(true);
-            }
-            println!("\n{}\n", query);
+        if is_repl && (query == "exit" || query == "quit") {
+            return Ok(true);
         }
 
         let start = Instant::now();
@@ -184,7 +191,7 @@ impl Session {
         let schema = fb_to_schema(ipc_schema);
 
         if is_repl {
-            let mut displayer = ReplDisplay::new(schema, start, flight_data);
+            let mut displayer = ReplDisplay::new(&self.config, query, &schema, start, flight_data);
             displayer.display().await?;
         } else {
             let mut displayer = FormatDisplay::new(schema, flight_data);

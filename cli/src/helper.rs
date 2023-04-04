@@ -27,9 +27,9 @@ use rustyline::Context;
 use rustyline::Helper;
 use rustyline::Result;
 
-use crate::token::all_reserved_keywords;
-use crate::token::tokenize_sql;
-use crate::token::TokenKind;
+use crate::ast::all_reserved_keywords;
+use crate::ast::tokenize_sql;
+use crate::ast::TokenKind;
 
 pub struct CliHelper {
     completer: FilenameCompleter,

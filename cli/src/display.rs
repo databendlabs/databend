@@ -26,11 +26,14 @@ use comfy_table::{Cell, CellAlignment, Table};
 
 use arrow_cast::display::{ArrayFormatter, FormatOptions};
 use futures::StreamExt;
+use rustyline::highlight::Highlighter;
 use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
 use tonic::Streaming;
 
 use indicatif::{HumanBytes, ProgressBar, ProgressState, ProgressStyle};
+
+use crate::{ast::format_query, config::Config, helper::CliHelper};
 
 #[async_trait::async_trait]
 pub trait ChunkDisplay {
@@ -38,8 +41,10 @@ pub trait ChunkDisplay {
     fn total_rows(&self) -> usize;
 }
 
-pub struct ReplDisplay {
-    schema: Schema,
+pub struct ReplDisplay<'a> {
+    config: &'a Config,
+    query: &'a str,
+    schema: &'a Schema,
     stream: Streaming<FlightData>,
 
     rows: usize,
@@ -47,9 +52,17 @@ pub struct ReplDisplay {
     start: Instant,
 }
 
-impl ReplDisplay {
-    pub fn new(schema: Schema, start: Instant, stream: Streaming<FlightData>) -> Self {
+impl<'a> ReplDisplay<'a> {
+    pub fn new(
+        config: &'a Config,
+        query: &'a str,
+        schema: &'a Schema,
+        start: Instant,
+        stream: Streaming<FlightData>,
+    ) -> Self {
         Self {
+            config,
+            query,
             schema,
             stream,
             rows: 0,
@@ -60,10 +73,16 @@ impl ReplDisplay {
 }
 
 #[async_trait::async_trait]
-impl ChunkDisplay for ReplDisplay {
+impl<'a> ChunkDisplay for ReplDisplay<'a> {
     async fn display(&mut self) -> Result<(), ArrowError> {
         let mut batches = Vec::new();
         let mut progress = ProgressValue::default();
+
+        if self.config.settings.display_pretty_sql {
+            let format_sql = format_query(self.query);
+            let format_sql = CliHelper::new().highlight(&format_sql, format_sql.len());
+            println!("\n{}\n", format_sql);
+        }
 
         while let Some(datum) = self.stream.next().await {
             match datum {
