@@ -3675,7 +3675,7 @@ Query {
                     ),
                     subquery: Query {
                         span: Some(
-                            14..44,
+                            15..43,
                         ),
                         with: None,
                         body: SetOperation(
@@ -3747,6 +3747,132 @@ Query {
                                 quote: None,
                                 span: Some(
                                     45..48,
+                                ),
+                            },
+                            columns: [],
+                        },
+                    ),
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+SELECT * FROM (((SELECT *) EXCEPT (SELECT *))) foo
+---------- Output ---------
+SELECT * FROM (SELECT * EXCEPT SELECT *) AS foo
+---------- AST ------------
+Query {
+    span: Some(
+        0..50,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..50,
+            ),
+            distinct: false,
+            select_list: [
+                QualifiedName {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    exclude: None,
+                },
+            ],
+            from: [
+                Subquery {
+                    span: Some(
+                        14..50,
+                    ),
+                    subquery: Query {
+                        span: Some(
+                            15..45,
+                        ),
+                        with: None,
+                        body: SetOperation(
+                            SetOperation {
+                                span: Some(
+                                    27..33,
+                                ),
+                                op: Except,
+                                all: false,
+                                left: Select(
+                                    SelectStmt {
+                                        span: Some(
+                                            17..25,
+                                        ),
+                                        distinct: false,
+                                        select_list: [
+                                            QualifiedName {
+                                                qualified: [
+                                                    Star(
+                                                        Some(
+                                                            24..25,
+                                                        ),
+                                                    ),
+                                                ],
+                                                exclude: None,
+                                            },
+                                        ],
+                                        from: [],
+                                        selection: None,
+                                        group_by: None,
+                                        having: None,
+                                    },
+                                ),
+                                right: Select(
+                                    SelectStmt {
+                                        span: Some(
+                                            35..43,
+                                        ),
+                                        distinct: false,
+                                        select_list: [
+                                            QualifiedName {
+                                                qualified: [
+                                                    Star(
+                                                        Some(
+                                                            42..43,
+                                                        ),
+                                                    ),
+                                                ],
+                                                exclude: None,
+                                            },
+                                        ],
+                                        from: [],
+                                        selection: None,
+                                        group_by: None,
+                                        having: None,
+                                    },
+                                ),
+                            },
+                        ),
+                        order_by: [],
+                        limit: [],
+                        offset: None,
+                        ignore_result: false,
+                    },
+                    alias: Some(
+                        TableAlias {
+                            name: Identifier {
+                                name: "foo",
+                                quote: None,
+                                span: Some(
+                                    47..50,
                                 ),
                             },
                             columns: [],
