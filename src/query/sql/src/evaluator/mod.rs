@@ -15,6 +15,7 @@
 // TODO(leiysky): move this crate to common-pipeline-core
 
 mod block_operator;
+mod cse;
 
 pub use block_operator::BlockOperator;
 pub use block_operator::CompoundBlockOperator;

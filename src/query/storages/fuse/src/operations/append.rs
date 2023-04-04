@@ -178,10 +178,12 @@ impl FuseTable {
 
         let func_ctx = ctx.get_function_context()?;
         if !exprs.is_empty() {
+            let num_input_columns = input_schema.fields().len();
             pipeline.add_transform(move |input, output| {
                 Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                     input,
                     output,
+                    num_input_columns,
                     func_ctx,
                     vec![BlockOperator::Map {
                         exprs: exprs.clone(),

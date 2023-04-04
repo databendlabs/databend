@@ -162,7 +162,7 @@ impl FlightSqlServiceImpl {
                 let total_scan_value = context.get_total_scan_value();
                 let mut current_scan_value = context.get_scan_progress_value();
 
-                let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(20));
+                let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(50));
                 while !is_finished.load(Ordering::SeqCst) {
                     interval.tick().await;
 

@@ -68,7 +68,7 @@ pub enum RawExpr<Index: ColumnIndex = usize> {
 /// A type-checked and ready to be evaluated expression, having all overloads chosen for function calls.
 /// It is .
 #[derive(Debug, Clone, Educe, EnumAsInner)]
-#[educe(PartialEq)]
+#[educe(PartialEq, Eq)]
 pub enum Expr<Index: ColumnIndex = usize> {
     Constant {
         span: Span,
