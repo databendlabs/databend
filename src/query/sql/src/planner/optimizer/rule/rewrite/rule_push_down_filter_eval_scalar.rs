@@ -40,7 +40,7 @@ use crate::plans::WindowOrderBy;
 
 pub struct RulePushDownFilterEvalScalar {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RulePushDownFilterEvalScalar {
@@ -52,7 +52,7 @@ impl RulePushDownFilterEvalScalar {
             //   EvalScalar
             //    \
             //     *
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Filter,
                 }
@@ -69,7 +69,7 @@ impl RulePushDownFilterEvalScalar {
                         .into(),
                     ),
                 ),
-            ),
+            )],
         }
     }
 
@@ -358,7 +358,7 @@ impl Rule for RulePushDownFilterEvalScalar {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }

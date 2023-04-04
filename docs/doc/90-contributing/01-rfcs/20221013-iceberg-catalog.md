@@ -47,7 +47,12 @@ SELECT * FROM my_iceberg.iceberg_db.iceberg_tbl;
 Joint query on normal table and Iceberg Table:
 
 ```sql
-SELECT normal_tbl.book_name, my_iceberg.iceberg_db.iceberg_tbl.author FROM normal_tbl, iceberg_tbl WHERE normal_tbl.isbn = my_iceberg.iceberg_db.iceberg_tbl.isbn AND iceberg_tbl.sales > 100000;
+SELECT normal_tbl.book_name,
+       my_iceberg.iceberg_db.iceberg_tbl.author
+FROM normal_tbl,
+     iceberg_tbl
+WHERE normal_tbl.isbn = my_iceberg.iceberg_db.iceberg_tbl.isbn
+  AND iceberg_tbl.sales > 100000;
 ```
 
 On operating the table, all data remains still on the user-provided ends.

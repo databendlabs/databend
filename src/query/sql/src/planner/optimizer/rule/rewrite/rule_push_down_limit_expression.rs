@@ -36,14 +36,14 @@ use crate::plans::RelOperator;
 ///               *
 pub struct RulePushDownLimitExpression {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RulePushDownLimitExpression {
     pub fn new() -> Self {
         Self {
             id: RuleID::RulePushDownLimitExpression,
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Limit,
                 }
@@ -55,7 +55,7 @@ impl RulePushDownLimitExpression {
                     .into(),
                     SExpr::create_leaf(PatternPlan { plan_type: Pattern }.into()),
                 ),
-            ),
+            )],
         }
     }
 }
@@ -79,7 +79,7 @@ impl Rule for RulePushDownLimitExpression {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }
