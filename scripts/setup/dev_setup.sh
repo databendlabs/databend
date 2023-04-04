@@ -321,7 +321,7 @@ Build tools (since -b or no option was provided):
   * protobuf-compiler
   * thrift-compiler
   * openjdk
-  * python3
+  * python3-dev
 EOF
 	fi
 
@@ -499,7 +499,7 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	install_pkg cmake "$PACKAGE_MANAGER"
 	install_pkg clang "$PACKAGE_MANAGER"
 	install_pkg llvm "$PACKAGE_MANAGER"
-	install_pkg python3 "$PACKAGE_MANAGER"
+	install_pkg python3-dev "$PACKAGE_MANAGER"
 
 	# Any call to cargo will make rustup install the correct toolchain
 	cargo version
