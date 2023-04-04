@@ -431,6 +431,11 @@ impl Binder {
             scalar_items.push(arg.clone());
         }
         for item in agg_info.group_items.iter() {
+            if let ScalarExpr::BoundColumnRef(col) = &item.scalar {
+                if col.column.column_name.eq("_grouping_id") {
+                    continue;
+                }
+            }
             scalar_items.push(item.clone());
         }
 
