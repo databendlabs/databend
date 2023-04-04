@@ -39,7 +39,7 @@ pub enum Recursion<V: ScalarVisitor> {
 /// recursively on all nodes of an scalar tree. See the comments
 /// on `Scalar::accept` for details on its use
 pub trait ScalarVisitor: Sized {
-    /// Invoked before any children of `expr` are visisted.
+    /// Invoked before any children of `expr` are visited.
     fn pre_visit(self, scalar: &ScalarExpr) -> Result<Recursion<Self>>;
 
     fn visit(mut self, predecessor_scalar: &ScalarExpr) -> Result<Self> {

@@ -62,7 +62,7 @@ Each `DataField` inside a `DataSchema` is identified with a unique `name` string
 
 The second problem is about semantic check.
 
-Take type check as an example, each variable(e.g. column reference, constant value) inside an expression has it's own data type. And each scalar expresiion has requirement of data type for its arguments, for instance, a `+` expression requires its arguments to be numeric.
+Take type check as an example, each variable(e.g. column reference, constant value) inside an expression has it's own data type. And each scalar expression has requirement of data type for its arguments, for instance, a `+` expression requires its arguments to be numeric.
 
 To make sure that the query is valid and correct, we need to do type checking before executing the query.
 
@@ -79,7 +79,7 @@ A typical Cascades optimizer consists of independent modules:
 - Exploration engine
 - Cost model
 
-What's insteresting is that, the rule system(transformation and implementation) is decoupled with exploration engine and cost model, which means it's easy to build a heuristic optimizer without CBO(cost based optimization). And as soon as we're going to implement CBO, the rule system can be reused.
+What's interesting is that, the rule system(transformation and implementation) is decoupled with exploration engine and cost model, which means it's easy to build a heuristic optimizer without CBO(cost based optimization). And as soon as we're going to implement CBO, the rule system can be reused.
 
 Actually, this is the practical way. In some industrial Cascades implementation(e.g. SQL Server and CockroachDB), there is always a heuristic optimization phase, for example `pre-exploration` in SQL Server and `normalization` in CockroachDB, which generally shares a same rule system with exploration engine.
 
@@ -148,9 +148,9 @@ During the binding procedure, we need to track the state of binding. The state m
 
 To maintain the state, we propose a data structure `BindContext`(this name is inspired by `BinderContext` from CMU Peloton, which is a very appropriate name in my mind).
 
-`BindContext` is a stack-like structure, each `BindContext` node in the stack records state of corresponding syntactic context. SQL binding is a bottom-up procedure, which means it will process AST recursively, add columns produced by data source(e.g. table scan, join, subquery) into 
+`BindContext` is a stack-like structure, each `BindContext` node in the stack records state of corresponding syntactic context. SQL binding is a bottom-up procedure, which means it will process AST recursively, add columns produced by data source(e.g. table scan, join, subquery) into
 
-Briefly, `BindContext` is a set of column references. To be clear, we will use diagram to explain hwo this mechanism works.
+Briefly, `BindContext` is a set of column references. To be clear, we will use diagram to explain how this mechanism works.
 
 Take this example:
 
@@ -198,7 +198,7 @@ If we find the column in parent context, then we can confirm that this subquery 
 The procedure can be summarized as follows:
 
 1. Create an empty `BindContext` context 1 for table `t`, and fill it with columns from `t`
-2. Create an empty `BindContext` context 2 for table `t` with context 1 as its parent cotext, fill it with columns from `t`, and rename the table to `t1`
+2. Create an empty `BindContext` context 2 for table `t` with context 1 as its parent context, fill it with columns from `t`, and rename the table to `t1`
 3. Perform name resolution for predicate `t1.a = t.a`
 4. Lookup context 2, and find the corresponding `ColumnEntry` for variable `t1.a`, but can not find `t.a`. So we will keep going through step 5
 5. Lookup parent of context 2(context 1), and find the corresponding `ColumnEntry` for variable `t.a`. Since the variable is found in outer context, it will be marked as correlated column reference, and the subquery will be marked as correlated
@@ -207,7 +207,7 @@ The procedure can be summarized as follows:
 
 ### A brief introduction to Cascades optimizer
 
-SQL optimization is based on the equivalence of relational algebra. There are a bunch of different thereoms and lemmas can help us identify if two relational algebra trees are logically equivalent. With a set of equivalent relational expressions, we can evaluate them with a cost model and find the optimal exprssion.
+SQL optimization is based on the equivalence of relational algebra. There are a bunch of different theorems and lemmas can help us identify if two relational algebra trees are logically equivalent. With a set of equivalent relational expressions, we can evaluate them with a cost model and find the optimal expression.
 
 Cascades optimizer is a framework of query optimization introduced by Goetz Graefe in his [paper](https://www.cse.iitb.ac.in/infolab/Data/Courses/CS632/Papers/Cascades-graefe.pdf).
 
@@ -229,7 +229,7 @@ The alternations of an `Expression` are generated during the transformation proc
 SELECT * FROM t INNER JOIN t1 ON t.a = t1.a;
 ```
 
-With `JoinCommutivity` rule, the above SQL can be transformed into a equivalent SQL:
+With `JoinCommutativity` rule, the above SQL can be transformed into a equivalent SQL:
 
 ```sql
 SELECT * FROM t1 INNER JOIN t ON t.a = t1.a;
@@ -241,7 +241,7 @@ A structure `Memo` is introduced to store the alternations. Each `Memo` consists
 
 Different from the `Expression` we mentioned above, the `Expression` inside `Group` take `Group`s as its children instead of `Expression`s, so that equivalent `Expression`s can share the children candidates.
 
-Take the `JoinCommutivity` example, the `Memo` of original SQL can be represented as:
+Take the `JoinCommutativity` example, the `Memo` of original SQL can be represented as:
 ```
 Group 1: [Get(t)]
 
@@ -250,7 +250,7 @@ Group 2: [Get(t1)]
 Group 3: [Join(1, 2, "t.a = t1.a")]
 ```
 
-After applying `JoinCommutivity` transformation, the `Memo` will become:
+After applying `JoinCommutativity` transformation, the `Memo` will become:
 ```
 Group 1: [Get(t)]
 

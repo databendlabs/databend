@@ -46,6 +46,6 @@ Set `SENTRY_TRACES_SAMPLE_RATE` to a small value in production.
 
 Follow the [Deployment Guide](https://databend.rs/doc/deploy) to deploy Databend.
 
-You're all set now. Check the pages on Sentry for alerts and performce information.
+You're all set now. Check the pages on Sentry for alerts and performance information.
 
 ![Alt text](../../public/img/tracing/sentry-done.png)

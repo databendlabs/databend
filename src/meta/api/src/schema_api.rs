@@ -98,7 +98,7 @@ pub trait SchemaApi: Send + Sync {
     /// List all tables belonging to every db and every tenant.
     ///
     /// I.e.: all tables found in key-space: `__fd_table_by_id/`.
-    /// Notice that this key space includes both deleted and non-deleted table-metas. `TableMeta.drop_on.is_some()` indicates it's a deleted(but not yet gargbage collected) one.
+    /// Notice that this key space includes both deleted and non-deleted table-metas. `TableMeta.drop_on.is_some()` indicates it's a deleted(but not yet garbage collected) one.
     ///
     /// It returns a list of (table-id, table-meta-seq, table-meta).
     async fn list_all_tables(&self) -> Result<Vec<(TableId, u64, TableMeta)>, KVAppError>;

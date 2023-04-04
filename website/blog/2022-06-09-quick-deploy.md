@@ -19,7 +19,7 @@ Now let's get started!
 
 :::tip
 
-Databend requires a scalabe storage (for example, object storage) to work. This blog uses local file system to provide you a hands-on experience. Never use a local file system as storage for production purposes.
+Databend requires a scalable storage (for example, object storage) to work. This blog uses local file system to provide you a hands-on experience. Never use a local file system as storage for production purposes.
 
 :::
 

@@ -18,7 +18,7 @@ use super::expr::pretty_expr;
 use crate::ast::format::syntax::inline_comma;
 use crate::ast::format::syntax::inline_dot;
 use crate::ast::format::syntax::interweave_comma;
-use crate::ast::format::syntax::parenthenized;
+use crate::ast::format::syntax::parenthesized;
 use crate::ast::format::syntax::NEST_FACTOR;
 use crate::ast::Expr;
 use crate::ast::GroupBy;
@@ -66,7 +66,7 @@ fn pretty_with(with: Option<With>) -> RcDoc<'static> {
 fn pretty_cte(cte: CTE) -> RcDoc<'static> {
     RcDoc::text(format!("{} AS", cte.alias))
         .append(RcDoc::softline())
-        .append(parenthenized(pretty_query(cte.query)))
+        .append(parenthesized(pretty_query(cte.query)))
 }
 
 fn pretty_body(body: SetExpr) -> RcDoc<'static> {
@@ -81,7 +81,7 @@ fn pretty_body(body: SetExpr) -> RcDoc<'static> {
         .append(pretty_selection(select_stmt.selection))
         .append(pretty_group_by(select_stmt.group_by))
         .append(pretty_having(select_stmt.having)),
-        SetExpr::Query(query) => parenthenized(pretty_query(*query)),
+        SetExpr::Query(query) => parenthesized(pretty_query(*query)),
         SetExpr::SetOperation(set_operation) => pretty_body(*set_operation.left)
             .append(
                 RcDoc::line()
@@ -314,7 +314,7 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             span: _,
             subquery,
             alias,
-        } => parenthenized(pretty_query(*subquery)).append(if let Some(alias) = alias {
+        } => parenthesized(pretty_query(*subquery)).append(if let Some(alias) = alias {
             RcDoc::text(format!(" AS {alias}"))
         } else {
             RcDoc::nil()

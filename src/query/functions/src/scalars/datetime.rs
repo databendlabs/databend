@@ -80,7 +80,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_to_number(registry);
 
     // [add | subtract]_[years | months | days | hours | minutes | seconds]([date | timestamp], number)
-    // date_[add | sub]([year | quarter | month | week | day | hour | minute | second], [date | timstamp], number)
+    // date_[add | sub]([year | quarter | month | week | day | hour | minute | second], [date | timestamp], number)
     // [date | timestamp] [+ | -] interval number [year | quarter | month | week | day | hour | minute | second]
     register_add_functions(registry);
     register_sub_functions(registry);

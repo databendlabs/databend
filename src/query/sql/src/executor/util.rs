@@ -52,7 +52,7 @@ pub fn decode_field_name(field_name: &str) -> Result<(String, IndexType)> {
     }
 }
 
-/// Wrap the expreesion into `is_true(try_cast(<expr> as boolean))` to make sure the expression
+/// Wrap the expression into `is_true(try_cast(<expr> as boolean))` to make sure the expression
 /// will always return a boolean value.
 pub fn cast_expr_to_non_null_boolean<Index: ColumnIndex>(expr: Expr<Index>) -> Result<Expr<Index>> {
     if expr.data_type() == &DataType::Boolean {

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! this module is used for converting iceberg data types, shemas and other metadata
+//! this module is used for converting iceberg data types, schemas and other metadata
 //! to databend
 
 use chrono::Utc;
