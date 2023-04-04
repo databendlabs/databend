@@ -214,6 +214,7 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
 pub struct RuntimeIO<R: 'static> {
     runtime: Handle,
     state: State<R>,
+    cur: u64,
     buf: bytes::Bytes,
 }
 
@@ -222,6 +223,7 @@ impl<R> RuntimeIO<R> {
         Self {
             runtime,
             state: State::Idle(Some(inner)),
+            cur: 0,
             buf: Bytes::new(),
         }
     }
@@ -248,6 +250,7 @@ impl<R: oio::Read> oio::Read for RuntimeIO<R> {
             let size = std::cmp::min(buf.len(), self.buf.len());
             buf[..size].copy_from_slice(&self.buf[..size]);
             self.buf.advance(size);
+            self.cur += size as u64;
             return Poll::Ready(Ok(size));
         }
 
@@ -264,6 +267,29 @@ impl<R: oio::Read> oio::Read for RuntimeIO<R> {
     }
 
     fn poll_seek(&mut self, cx: &mut Context<'_>, pos: SeekFrom) -> Poll<Result<u64>> {
+        let pos = if self.buf.is_empty() {
+            // buf is empty, we can seek from underlying directly.
+            pos
+        } else {
+            match pos {
+                // NOTE: we should seek from the current position instead of underlying's real position.
+                SeekFrom::Current(n) => {
+                    // If we are seeking inside buf, we can do it directly without extra call.
+                    if n > 0 && n < (self.buf.len() as i64) {
+                        self.buf.advance(n as usize);
+                        self.cur += n as u64;
+                        return Poll::Ready(Ok(self.cur));
+                    }
+                    SeekFrom::Start((self.cur as i64 + n) as u64)
+                }
+                v => {
+                    // drop buf if we are seeking from start or end.
+                    let _ = mem::replace(&mut self.buf, Bytes::new());
+                    v
+                }
+            }
+        };
+
         match &mut self.state {
             State::Idle(r) => {
                 let mut r = r.take().expect("Idle must have a valid reader");
@@ -278,6 +304,10 @@ impl<R: oio::Read> oio::Read for RuntimeIO<R> {
             }
             State::Seek(future) => {
                 let (r, res) = ready!(Pin::new(future).poll(cx)).expect("join must success");
+                // Update pos if seek success.
+                if let Ok(pos) = res {
+                    self.cur = pos;
+                }
                 self.state = State::Idle(Some(r));
 
                 Poll::Ready(res)
