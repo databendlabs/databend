@@ -241,6 +241,16 @@ impl Metadata {
 
         table_index
     }
+
+    pub fn change_derived_column_alias(&mut self, index: IndexType, alias: String) {
+        let derived_column = self
+            .columns
+            .get_mut(index)
+            .expect("metadata must contain column");
+        if let ColumnEntry::DerivedColumn(column) = derived_column {
+            column.alias = alias;
+        }
+    }
 }
 
 #[derive(Clone)]

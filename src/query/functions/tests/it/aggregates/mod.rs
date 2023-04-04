@@ -158,7 +158,7 @@ pub fn run_scalar_expr(
 }
 
 /// Simulate group-by aggregation.
-/// Rows are ditributed into two group-by keys.
+/// Rows are distributed into two group-by keys.
 ///
 /// Example:
 ///

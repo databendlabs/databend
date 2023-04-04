@@ -677,6 +677,8 @@ impl<'a> TypeChecker<'a> {
                         )));
                     }
                     let window = window.as_ref().unwrap();
+                    // WindowReference already rewritten by `SelectRewriter` before.
+                    let window = window.as_window_spec().unwrap();
                     let display_name = format!("{:#}", expr);
                     let func = WindowFuncType::from_name(&name)?;
                     self.resolve_window(*span, display_name, window, func)
@@ -692,6 +694,8 @@ impl<'a> TypeChecker<'a> {
                         // aggregate window function
                         let display_name = format!("{:#}", expr);
                         let func = WindowFuncType::Aggregate(new_agg_func);
+                        // WindowReference already rewritten by `SelectRewriter` before.
+                        let window = window.as_window_spec().unwrap();
                         self.resolve_window(*span, display_name, window, func)
                             .await?
                     } else {
@@ -933,7 +937,7 @@ impl<'a> TypeChecker<'a> {
                 nulls_first: o.nulls_first,
             })
         }
-        let frame = Self::check_frame_bound(span, window.window_frame.clone())?;
+        let frame = Self::check_frame_bound(span, order_by.len(), window.window_frame.clone())?;
         let data_type = func.return_type();
         let window_func = WindowFunc {
             display_name,
@@ -957,8 +961,19 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    fn check_frame_bound(span: Span, window_frame: Option<WindowFrame>) -> Result<WindowFuncFrame> {
+    fn check_frame_bound(
+        span: Span,
+        order_by_len: usize,
+        window_frame: Option<WindowFrame>,
+    ) -> Result<WindowFuncFrame> {
         let (units, start, end) = if let Some(frame) = window_frame {
+            if let WindowFrameUnits::Range = frame.units {
+                if order_by_len != 1 {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "The RANGE OFFSET window frame requires exactly one ORDER BY column, {order_by_len} given."
+                    )));
+                }
+            }
             let units = match frame.units {
                 WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,
                 WindowFrameUnits::Range => WindowFuncFrameUnits::Range,

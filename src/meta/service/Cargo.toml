@@ -43,7 +43,7 @@ common-meta-types = { path = "../types" }
 common-metrics = { path = "../../common/metrics" }
 common-tracing = { path = "../../common/tracing" }
 
-# Github dependencies
+# GitHub dependencies
 sled = { workspace = true }
 
 # Crates.io dependencies

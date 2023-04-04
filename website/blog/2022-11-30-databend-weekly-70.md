@@ -25,7 +25,7 @@ Check out what we've done this week to make Databend even better for you.
 **Query**
 
 - QualifiedName support 'db.table.*' and 'table.*' ([#8965](https://github.com/datafuselabs/databend/pull/8965))
-- support bulk insert without exprssion ([#8966](https://github.com/datafuselabs/databend/pull/8966))
+- support bulk insert without expression ([#8966](https://github.com/datafuselabs/databend/pull/8966))
 
 **Storage**
 

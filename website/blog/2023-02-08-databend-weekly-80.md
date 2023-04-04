@@ -99,7 +99,7 @@ Stay connected with the latest news about Databend.
 
 ### Why You Should Try Sccache
 
-[Sccache](https://github.com/mozilla/sccache) is a [ccache](https://ccache.dev/)-like project started by the Mozilla team, supporting C/CPP, Rust and other languages, and storing caches locally or in a cloud storage backend. The community first added native support for the Github Action Cache Service to Sccache in version 0.3.3, then improved the functionality in [v0.4.0-pre.6](https://github.com/mozilla/sccache/releases/tag/v0.4.0-pre.6) so that the production CI can now use it.
+[Sccache](https://github.com/mozilla/sccache) is a [ccache](https://ccache.dev/)-like project started by the Mozilla team, supporting C/CPP, Rust and other languages, and storing caches locally or in a cloud storage backend. The community first added native support for the GitHub Action Cache Service to Sccache in version 0.3.3, then improved the functionality in [v0.4.0-pre.6](https://github.com/mozilla/sccache/releases/tag/v0.4.0-pre.6) so that the production CI can now use it.
 
 > Now, [opendal](https://github.com/datafuselabs/opendal), open-sourced by [Datafuse Labs](https://github.com/datafuselabs), acts as a storage access layer for sccache to interface with various storage services (s3/gcs/azlob etc.).
 

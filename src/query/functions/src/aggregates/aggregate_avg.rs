@@ -228,5 +228,12 @@ pub fn try_create_aggregate_avg_function(
 }
 
 pub fn aggregate_avg_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_avg_function))
+    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+        is_decomposable: true,
+        ..Default::default()
+    };
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_aggregate_avg_function),
+        features,
+    )
 }

@@ -208,7 +208,7 @@ impl SessionContext {
         *lock = Some(Box::new(f));
     }
 
-    //  Take the io_shutdown_tx and the self.io_shuttdown_tx is None.
+    //  Take the io_shutdown_tx and the self.io_shutdown_tx is None.
     pub fn take_io_shutdown_tx(&self) -> Option<Box<dyn FnOnce() + Send + Sync + 'static>> {
         let mut lock = self.io_shutdown_tx.write();
         lock.take()

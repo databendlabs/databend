@@ -15,7 +15,7 @@ common-arrow = { path = "../arrow" }
 common-meta-stoerr = { path = "../../meta/stoerr" }
 common-meta-types = { path = "../../meta/types" }
 
-# Github dependencies
+# GitHub dependencies
 # TODO: Use the version from crates.io once
 # https://github.com/brendanzab/codespan/pull/331 is released.
 codespan-reporting = { git = "https://github.com/brendanzab/codespan", rev = "c84116f5" }

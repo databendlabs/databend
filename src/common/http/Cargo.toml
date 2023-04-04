@@ -20,7 +20,7 @@ memory-profiling = ["tempfile"]
 common-base = { path = "../base" }
 common-exception = { path = "../exception" }
 
-# Github dependencies
+# GitHub dependencies
 
 # Crates.io dependencies
 anyerror = { workspace = true }

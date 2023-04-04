@@ -725,7 +725,7 @@ impl<'a> Evaluator<'a> {
     }
 
     // `if` is a special builtin function that could partially evaluate its arguments
-    // depending on the truthess of the condition. `if` should register it's signature
+    // depending on the truthiness of the condition. `if` should register it's signature
     // as other functions do in `FunctionRegistry`, but it's does not necessarily implement
     // the eval function because it will be evaluated here.
     fn eval_if(

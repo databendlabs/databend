@@ -66,7 +66,7 @@ where D: Iterator<Item = RcDoc<'a>> {
     RcDoc::intersperse(docs, RcDoc::text("."))
 }
 
-pub(crate) fn parenthenized(doc: RcDoc<'_>) -> RcDoc<'_> {
+pub(crate) fn parenthesized(doc: RcDoc<'_>) -> RcDoc<'_> {
     RcDoc::text("(")
         .append(RcDoc::line_())
         .append(doc)

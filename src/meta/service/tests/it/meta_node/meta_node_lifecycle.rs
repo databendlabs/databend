@@ -635,7 +635,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
 
     let mut log_index: u64 = 0;
     let (_id, tc) = start_meta_node_leader().await?;
-    // initial membeship, leader blank, add node
+    // initial membership, leader blank, add node
     log_index += 2;
 
     let want_hs;

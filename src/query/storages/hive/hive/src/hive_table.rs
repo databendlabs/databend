@@ -65,7 +65,7 @@ use crate::hive_table_source::HiveTableSource;
 use crate::HiveBlockFilter;
 use crate::HiveFileSplitter;
 
-pub const HIVE_TABLE_ENGIE: &str = "hive";
+pub const HIVE_TABLE_ENGINE: &str = "hive";
 pub const HIVE_DEFAULT_PARTITION: &str = "__HIVE_DEFAULT_PARTITION__";
 
 pub struct HiveTable {

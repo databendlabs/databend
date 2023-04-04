@@ -161,7 +161,7 @@ impl SessionManager {
         // stop tracking session
         {
             // Make sure this write lock has been released before dropping.
-            // Becuase dropping session could re-enter `destroy_session`.
+            // Because dropping session could re-enter `destroy_session`.
             let weak_session = { self.active_sessions.write().remove(session_id) };
             drop(weak_session);
         }
