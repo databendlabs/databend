@@ -37,14 +37,14 @@ use crate::plans::Sort;
 
 pub struct RulePushDownSortScan {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RulePushDownSortScan {
     pub fn new() -> Self {
         Self {
             id: RuleID::PushDownSortScan,
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Sort,
                 }
@@ -55,7 +55,7 @@ impl RulePushDownSortScan {
                     }
                     .into(),
                 ),
-            ),
+            )],
         }
     }
 }
@@ -83,7 +83,7 @@ impl Rule for RulePushDownSortScan {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }
