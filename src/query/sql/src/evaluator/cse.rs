@@ -18,7 +18,7 @@ use common_expression::Expr;
 
 use super::BlockOperator;
 
-/// Eliminate common expression in `Map` Opeartor
+/// Eliminate common expression in `Map` operator
 pub fn apply_cse(
     operators: Vec<BlockOperator>,
     mut input_num_columns: usize,
@@ -31,14 +31,17 @@ pub fn apply_cse(
                 // find common expression
                 let mut cse_counter = HashMap::new();
                 for expr in exprs.iter() {
-                    count_expressions(&expr, &mut cse_counter);
+                    count_expressions(expr, &mut cse_counter);
                 }
 
-                let cse_candidates: Vec<Expr> = cse_counter
+                let mut cse_candidates: Vec<Expr> = cse_counter
                     .iter()
                     .filter(|(_, (_, count))| *count > 1)
                     .map(|(_, (expr, _))| expr.clone())
-                    .collect::<Vec<_>>();
+                    .collect();
+
+                // Make sure the smaller expr goes firstly
+                cse_candidates.sort_by_key(|a| a.sql_display().len());
 
                 let mut temp_var_counter = input_num_columns;
                 if !cse_candidates.is_empty() {
@@ -53,15 +56,18 @@ pub fn apply_cse(
                             data_type: cse_candidate.data_type().clone(),
                             display_name: temp_var.clone(),
                         };
+
+                        let mut expr_cloned = cse_candidate.clone();
+                        perform_cse_replacement(&mut expr_cloned, &cse_replacements);
+
                         tracing::info!(
                             "cse_candidate: {}, temp_expr: {}",
-                            cse_candidate.sql_display(),
+                            expr_cloned.sql_display(),
                             temp_expr.sql_display()
                         );
 
-                        new_exprs.push(cse_candidate.clone());
+                        new_exprs.push(expr_cloned);
                         cse_replacements.insert(cse_candidate.sql_display(), temp_expr);
-
                         temp_var_counter += 1;
                     }
 
@@ -72,6 +78,10 @@ pub fn apply_cse(
 
                         output_indexes.push(temp_var_counter);
                         temp_var_counter += 1;
+                    }
+
+                    for n in new_exprs.iter() {
+                        tracing::info!("new_exprs: {}", n.sql_display());
                     }
 
                     results.push(BlockOperator::MapWithOutput {
@@ -113,7 +123,7 @@ fn count_expressions(expr: &Expr, counter: &mut HashMap<String, (Expr, usize)>) 
                 .or_insert((expr.clone(), 0));
             entry.1 += 1;
 
-            count_expressions(&inner_expr, counter);
+            count_expressions(inner_expr, counter);
         }
         // ignore constant and column ref
         Expr::Constant { .. } | Expr::ColumnRef { .. } => {}

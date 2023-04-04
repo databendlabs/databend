@@ -93,7 +93,7 @@ impl BlockOperator {
                     .iter()
                     .enumerate()
                     .filter(|(index, _)| {
-                        *index < original_num_columns || output_indexes.contains(&index)
+                        *index < original_num_columns || output_indexes.contains(index)
                     })
                     .map(|(_, col)| col.clone())
                     .collect();
