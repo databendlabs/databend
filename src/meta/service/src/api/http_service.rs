@@ -80,7 +80,7 @@ impl HttpService {
         #[cfg(feature = "memory-profiling")]
         {
             route = route.at(
-                // to follow the conversions of jepref, we arrange the path in
+                // to follow the conversions of jeprof, we arrange the path in
                 // this way, so that jeprof could be invoked like:
                 //   `jeprof ./target/debug/databend-meta http://localhost:28002/debug/mem`
                 // and jeprof will translate the above url into sth like:

@@ -23,7 +23,7 @@ use crate::plans::JoinType;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 
-/// Rule to apply commutivity of join operator.
+/// Rule to apply commutativity of join operator.
 /// Since we will always use the right child as build side, this
 /// rule will help us measure which child is the better one.
 ///

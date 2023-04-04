@@ -212,7 +212,7 @@ LIMIT    10;
 | "JusticeNX"                       | 13        |
 | "RyK-eR"                          | 12        |
 | "DroneMad"                        | 10        |
-| "UnqulifiedEngineer"              | 9         |
+| "UnqualifiedEngineer"             | 9         |
 | "PeterZs"                         | 8         |
 | "lgq2015"                         | 8         |
 +-----------------------------------+-----------+

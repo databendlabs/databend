@@ -43,7 +43,7 @@ Large)
     yq -i '.machine = "64×Large"' result.json
     ;;
 *)
-    echo "Unspported benchmark size: ${BENCHMARK_SIZE}"
+    echo "Unsupported benchmark size: ${BENCHMARK_SIZE}"
     exit 1
     ;;
 esac

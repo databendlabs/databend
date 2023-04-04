@@ -172,7 +172,7 @@ fn non_reserved_keyword(
     }
 }
 
-/// Parse one two two idents separated by a period, fulfilling from the right.
+/// Parse one to two idents separated by a period, fulfilling from the right.
 ///
 /// Example: `table.column`
 #[allow(clippy::needless_lifetimes)]

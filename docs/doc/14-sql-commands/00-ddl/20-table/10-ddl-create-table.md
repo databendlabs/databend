@@ -60,14 +60,24 @@ For detailed information about the CLUSTER BY clause, see [SET CLUSTER KEY](../7
 
 Creates a table with the same column definitions as an existing table. Column names, data types, and their non-NUll constraints of the existing will be copied to the new table.
 
-- This command does NOT copy any data from the existing table.
-- This command does NOT copy attributes of the existing table, such as `TRANSIENT` and `CLUSTER BY`, and creates the new table with system defaults. Some table attributes can be added using [ALTER TABLE](90-alter-table-column.md), for example, CLUSTER BY. See an example in [Examples](#create-table--like-1).
-
 Syntax:
 ```sql
 CREATE TABLE [IF NOT EXISTS] [db.]table_name
 LIKE [db.]origin_table_name
 ```
+
+This command does not include any data or attributes (such as CLUSTER BY, TRANSIENT, and COMPRESSION) from the original table, and instead creates a new table using the default system settings.
+
+:::note WORKAROUND
+- `CLUSTER BY` can be added back using [ALTER TABLE](90-alter-table-column.md). See [ALTER CLUSTER KEY](../../00-ddl/70-clusterkey/dml-alter-cluster-key.md) for details.
+- `TRANSIENT` and `COMPRESSION` can be explicitly specified when you create a new table with this command. For example,
+
+```sql
+create transient table t_new like t_old;
+
+create table t_new compression='lz4' like t_old;
+```
+:::
 
 ## CREATE TABLE ... AS
 
@@ -78,6 +88,19 @@ Syntax:
 CREATE TABLE [IF NOT EXISTS] [db.]table_name
 AS SELECT query
 ```
+
+This command does not include any attributes (such as CLUSTER BY, TRANSIENT, and COMPRESSION) from the original table, and instead creates a new table using the default system settings.
+
+:::note WORKAROUND
+- `CLUSTER BY` can be added back using [ALTER TABLE](90-alter-table-column.md). See [ALTER CLUSTER KEY](../../00-ddl/70-clusterkey/dml-alter-cluster-key.md) for details.
+- `TRANSIENT` and `COMPRESSION` can be explicitly specified when you create a new table with this command. For example,
+
+```sql
+create transient table t_new as select * from t_old;
+
+create table t_new compression='lz4' as select * from t_old;
+```
+:::
 
 ## CREATE TRANSIENT TABLE
 
@@ -324,7 +347,7 @@ Table|Create Table                                                              
 -----+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 tb_02|CREATE TABLE `tb_02` (¶  `id` INT,¶  `c1` VARCHAR¶) ENGINE=FUSE CLUSTER BY (id) COMPRESSION='lz4' SNAPSHOT_LOCATION='1/21465/_ss/6b4b16900a4c4134b7dab535b1c93546_v2.json' STORAGE_FORMAT='native'|
 
--- Not all the table attributes can be added using ALTER TABLE. See the ALTER TABLE page for which attributes can be changed.
+-- Not all the table attributes can be added using ALTER TABLE.
 
 ALTER TABLE tb_02 TRANSIENT='T';
 

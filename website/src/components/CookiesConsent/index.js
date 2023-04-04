@@ -30,7 +30,7 @@ function CookiesConsent() {
   return (
   <>
    {
-    !isHidden && <div className={clsx(styles.consenWrap)}>
+    !isHidden && <div className={clsx(styles.consentWrap)}>
       <p>
         <span>We use cookies on our site to provide you with better user experience. You can view our Cookies Policy in </span>
         <Link href="https://databend.com/privacy/"> Privacy Policy</Link> .

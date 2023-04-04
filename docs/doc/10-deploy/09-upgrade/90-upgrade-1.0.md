@@ -2,7 +2,7 @@
 title: Upgrade Databend to 1.0
 sidebar_label: Upgrade Databend to 1.0
 description:
-    Uprgade Databend to 1.0 from 0.8 or later
+    Upgrade Databend to 1.0 from 0.8 or later
 ---
 
 This topic explains how to upgrade Databend to version 1.0 from a version 0.8 or later.

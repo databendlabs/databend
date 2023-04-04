@@ -165,7 +165,7 @@ where
     /// # Safety
     ///
     /// `key` doesn't equal to zero.
-    /// The resulted `MaybeUninit` should be initialized immedidately.
+    /// The resulted `MaybeUninit` should be initialized immediately.
     ///
     /// # Panics
     ///
@@ -177,7 +177,7 @@ where
     /// # Safety
     ///
     /// `key` doesn't equal to zero.
-    /// The resulted `MaybeUninit` should be initialized immedidately.
+    /// The resulted `MaybeUninit` should be initialized immediately.
     /// Provided hash is correct.
     ///
     /// # Panics

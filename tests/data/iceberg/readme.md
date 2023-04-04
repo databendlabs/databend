@@ -32,7 +32,7 @@ INSERT INTO iceberg_ctl.iceberg_db.iceberg_tbl VALUES (4, 'd'), (5, 'e'), (6, 'd
 3. make a schema evolution
 
 ```sql
--- Add a colume to the table
+-- Add a column to the table
 ALTER TABLE iceberg_ctl.iceberg_db.iceberg_tbl ADD COLUMNS (comment STRING);
 ```
 
