@@ -455,7 +455,7 @@ fn test_statement_error() {
 fn test_query() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("query.txt").unwrap();
-    let cases = &[
+    let _cases = &[
         r#"select * exclude c1, b.* exclude (c2, c3, c4) from customer inner join orders on a = b limit 1"#,
         r#"select * from customer inner join orders"#,
         r#"select * from customer cross join orders"#,
@@ -495,6 +495,9 @@ fn test_query() {
         r#"select * from monthly_sales_1 unpivot(sales for month in (jan, feb, mar, april)) order by empid"#,
         r#"select * from range(1, 2)"#,
         r#"select sum(a) over w from customer window w as (partition by a order by b)"#,
+    ];
+    let cases = &[
+        r#"select a, sum(a) over w, sum(a) over w1, sum(a) over w2 from t1 window w as (partition by a), w2 as (w1 rows current row), w1 as (w order by a) order by a"#,
     ];
 
     for case in cases {
