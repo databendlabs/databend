@@ -60,9 +60,9 @@ INSERT INTO events SELECT number As user_id, '2022-05-17' FROM numbers(100000);
 
 ```sql
 SELECT
-    sum(r[0]) AS r1,
-    sum(r[1]) AS r2,
-    sum(r[2]) AS r3
+    sum(r[1]) AS r1,
+    sum(r[2]) AS r2,
+    sum(r[3]) AS r3
 FROM
 (
     SELECT
