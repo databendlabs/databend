@@ -3104,7 +3104,7 @@ impl SchemaApiTestSuite {
 
             let new_tb_info = mt.get_table((tenant, db_name, new_tbl_name).into()).await?;
 
-            // then drop drop table2
+            // then drop table2
             let drop_plan = DropTableByIdReq {
                 if_exists: false,
                 tb_id: new_tb_info.ident.table_id,

@@ -35,7 +35,7 @@ cat << EOF > /tmp/escape_slash2.csv
 EOF
 
 cat << EOF > /tmp/escape_slash3.csv
-"id","name","upadte_at","content"
+"id","name","update_at","content"
 1,"a","2022-10-25 10:51:14","{\"hello\":\"world\"}"
 2,"b","2022-10-25 10:51:28","{\"金角大王\":\"沙河\"}"
 3,"c","2022-10-25 10:51:50","{\"银角大王\":\"沙河\"}"

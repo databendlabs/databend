@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_exception::Span;
 use common_io::display_decimal_128;
 use common_io::display_decimal_256;
+use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 
 use super::OrderByExpr;
@@ -155,7 +156,7 @@ pub enum Expr {
         name: Identifier,
         args: Vec<Expr>,
         params: Vec<Literal>,
-        window: Option<WindowSpec>,
+        window: Option<Window>,
     },
     /// `CASE ... WHEN ... ELSE ...` expression
     Case {
@@ -456,6 +457,23 @@ pub enum TrimWhere {
     Both,
     Leading,
     Trailing,
+}
+
+#[derive(Debug, Clone, PartialEq, EnumAsInner)]
+pub enum Window {
+    WindowReference(WindowRef),
+    WindowSpec(WindowSpec),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct WindowDefinition {
+    pub name: Identifier,
+    pub spec: WindowSpec,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct WindowRef {
+    pub window_name: Identifier,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -912,6 +930,28 @@ impl Display for Literal {
     }
 }
 
+impl Display for WindowDefinition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "WINDOW {} {}", self.name, self.spec)
+    }
+}
+
+impl Display for Window {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let window_fmt = match *self {
+            Window::WindowSpec(ref window_spec) => format!("{}", window_spec),
+            Window::WindowReference(ref window_ref) => format!("{}", window_ref),
+        };
+        write!(f, "{}", window_fmt)
+    }
+}
+
+impl Display for WindowRef {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "WINDOW {}", self.window_name)
+    }
+}
+
 impl Display for WindowSpec {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut first = true;
@@ -952,28 +992,22 @@ impl Display for WindowSpec {
                     write!(f, "RANGE")?;
                 }
             }
-            match (&frame.start_bound, &frame.end_bound) {
-                (WindowFrameBound::CurrentRow, WindowFrameBound::CurrentRow) => {
-                    write!(f, " CURRENT ROW")?
+
+            let format_frame = |frame: &WindowFrameBound| -> String {
+                match frame {
+                    WindowFrameBound::CurrentRow => "CURRENT ROW".to_string(),
+                    WindowFrameBound::Preceding(None) => "UNBOUNDED PRECEDING".to_string(),
+                    WindowFrameBound::Following(None) => "UNBOUNDED FOLLOWING".to_string(),
+                    WindowFrameBound::Preceding(Some(n)) => format!("{} PRECEDING", n),
+                    WindowFrameBound::Following(Some(n)) => format!("{} FOLLOWING", n),
                 }
-                _ => {
-                    let format_frame = |frame: &WindowFrameBound| -> String {
-                        match frame {
-                            WindowFrameBound::CurrentRow => "CURRENT ROW".to_string(),
-                            WindowFrameBound::Preceding(None) => "UNBOUNDED PRECEDING".to_string(),
-                            WindowFrameBound::Following(None) => "UNBOUNDED FOLLOWING".to_string(),
-                            WindowFrameBound::Preceding(Some(n)) => format!("{} PRECEDING", n),
-                            WindowFrameBound::Following(Some(n)) => format!("{} FOLLOWING", n),
-                        }
-                    };
-                    write!(
-                        f,
-                        " BETWEEN {} AND {}",
-                        format_frame(&frame.start_bound),
-                        format_frame(&frame.end_bound)
-                    )?
-                }
-            }
+            };
+            write!(
+                f,
+                " BETWEEN {} AND {}",
+                format_frame(&frame.start_bound),
+                format_frame(&frame.end_bound)
+            )?
         }
         Ok(())
     }

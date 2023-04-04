@@ -246,35 +246,35 @@ impl FuseTable {
 
                 // 1. Try to purge block file chunks.
                 {
-                    let mut block_locations_to_be_pruged = HashSet::new();
+                    let mut block_locations_to_be_purged = HashSet::new();
                     for loc in &locations.block_location {
                         if keep_last_snapshot
                             && locations_referenced_by_root.block_location.contains(loc)
                         {
                             continue;
                         }
-                        block_locations_to_be_pruged.insert(loc.to_string());
+                        block_locations_to_be_purged.insert(loc.to_string());
                     }
-                    status_block_to_be_purged_count += block_locations_to_be_pruged.len();
-                    self.try_purge_location_files(ctx.clone(), block_locations_to_be_pruged)
+                    status_block_to_be_purged_count += block_locations_to_be_purged.len();
+                    self.try_purge_location_files(ctx.clone(), block_locations_to_be_purged)
                         .await?;
                 }
 
                 // 2. Try to purge bloom index file chunks.
                 {
-                    let mut bloom_locations_to_be_pruged = HashSet::new();
+                    let mut bloom_locations_to_be_purged = HashSet::new();
                     for loc in &locations.bloom_location {
                         if keep_last_snapshot
                             && locations_referenced_by_root.bloom_location.contains(loc)
                         {
                             continue;
                         }
-                        bloom_locations_to_be_pruged.insert(loc.to_string());
+                        bloom_locations_to_be_purged.insert(loc.to_string());
                     }
-                    status_bloom_to_be_purged_count += bloom_locations_to_be_pruged.len();
+                    status_bloom_to_be_purged_count += bloom_locations_to_be_purged.len();
                     self.try_purge_location_files_and_cache::<BloomIndexMeta>(
                         ctx.clone(),
-                        bloom_locations_to_be_pruged,
+                        bloom_locations_to_be_purged,
                     )
                     .await?;
                 }

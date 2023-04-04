@@ -29,7 +29,7 @@ use crate::MetadataRef;
 pub struct RulePushDownPrewhere {
     id: RuleID,
     metadata: MetadataRef,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RulePushDownPrewhere {
@@ -37,7 +37,7 @@ impl RulePushDownPrewhere {
         Self {
             id: RuleID::PushDownPrewhere,
             metadata,
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Filter,
                 }
@@ -48,7 +48,7 @@ impl RulePushDownPrewhere {
                     }
                     .into(),
                 ),
-            ),
+            )],
         }
     }
 
@@ -111,7 +111,7 @@ impl RulePushDownPrewhere {
         let mut prewhere_columns = ColumnSet::new();
         let mut prewhere_pred = Vec::new();
 
-        // filter.predicates are already splited by AND
+        // filter.predicates are already split by AND
         for pred in filter.predicates.iter() {
             match Self::collect_columns(pred) {
                 Some(columns) => {
@@ -143,8 +143,8 @@ impl Rule for RulePushDownPrewhere {
         self.id
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 
     fn apply(

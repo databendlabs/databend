@@ -67,7 +67,7 @@ impl<V, A: Allocator + Clone> TableEmpty<V, A> {
     }
     /// # Safety
     ///
-    /// The resulted `MaybeUninit` should be initialized immedidately.
+    /// The resulted `MaybeUninit` should be initialized immediately.
     pub fn insert(&mut self) -> Result<&mut Ent<V>, &mut Ent<V>> {
         if !self.has_zero {
             self.has_zero = true;

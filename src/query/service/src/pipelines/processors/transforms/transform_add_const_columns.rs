@@ -38,7 +38,7 @@ pub struct TransformAddConstColumns {
 impl TransformAddConstColumns
 where Self: Transform
 {
-    /// used in insert with with placeholder.
+    /// used in insert with placeholder.
     /// e.g. for `insert into t1 (a, b, c) values (?, 1, ?)`,
     /// output_schema has all 3 columns,
     /// input_schema has columns (a, c) to load data from attachment,

@@ -53,7 +53,7 @@ fn test_column_leaf_schema_from_struct() -> Result<()> {
     let column_6_ids = vec![9];
     let column_7_ids = vec![10];
     let column_8_ids = vec![11, 12];
-    let expeted_column_ids = vec![
+    let expected_column_ids = vec![
         ("u64", &column_1_ids),
         ("tuplearray", &column_2_ids),
         ("arraytuple", &column_3_ids),
@@ -65,9 +65,9 @@ fn test_column_leaf_schema_from_struct() -> Result<()> {
     ];
 
     for (i, column_leaf) in column_leaves.column_nodes.iter().enumerate() {
-        let expeted_column_id = expeted_column_ids[i];
-        assert_eq!(expeted_column_id.0.to_string(), column_leaf.field.name);
-        assert_eq!(*expeted_column_id.1, column_leaf.leaf_column_ids);
+        let expected_column_id = expected_column_ids[i];
+        assert_eq!(expected_column_id.0.to_string(), column_leaf.field.name);
+        assert_eq!(*expected_column_id.1, column_leaf.leaf_column_ids);
     }
 
     test_column_nodes_index_match_column_ids(&schema, &column_leaves);

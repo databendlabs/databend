@@ -39,14 +39,14 @@ use crate::plans::RelOperator;
 ///          *
 pub struct RulePushDownLimitOuterJoin {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RulePushDownLimitOuterJoin {
     pub fn new() -> Self {
         Self {
             id: RuleID::PushDownLimitOuterJoin,
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Limit,
                 }
@@ -69,7 +69,7 @@ impl RulePushDownLimitOuterJoin {
                         .into(),
                     ),
                 ),
-            ),
+            )],
         }
     }
 }
@@ -107,7 +107,7 @@ impl Rule for RulePushDownLimitOuterJoin {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }

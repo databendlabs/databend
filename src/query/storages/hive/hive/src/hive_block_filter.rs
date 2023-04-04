@@ -72,7 +72,7 @@ impl HiveBlockFilter {
                 if let Ok(meta) = column_meta {
                     let in_memory_size = meta.uncompressed_size();
                     if let Ok(stats) = meta.statistics().transpose() {
-                        // if stats is none, we could't make a decision whether the block should be filtered
+                        // if stats is none, we couldn't make a decision whether the block should be filtered
                         let stats = match stats {
                             None => return false,
                             Some(stats) => stats,

@@ -96,7 +96,7 @@ storages-common-cache-manager = { path = "../storages/common/cache-manager" }
 storages-common-index = { path = "../storages/common/index" }
 storages-common-table-meta = { path = "../storages/common/table-meta" }
 
-# Github dependencies
+# GitHub dependencies
 
 # Crates.io dependencies
 aho-corasick = { version = "0.7.20" }

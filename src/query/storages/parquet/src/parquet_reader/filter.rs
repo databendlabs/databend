@@ -46,7 +46,7 @@ impl FilterState {
         self.bitmap.null_count_range(self.pos, num) == num
     }
 
-    /// Convert the valditiy of [`self.pos`, `self.pos + num`) to [`Interval`]s.
+    /// Convert the validity of [`self.pos`, `self.pos + num`) to [`Interval`]s.
     pub fn convert_to_intervals(&self, num_rows: usize) -> Vec<Interval> {
         let mut res = vec![];
         let mut started = false;
