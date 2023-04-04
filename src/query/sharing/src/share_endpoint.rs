@@ -127,11 +127,9 @@ impl ShareEndpointManager {
                 let bs = resp.into_body().bytes().await?;
                 let table_info_map: TableInfoMap = serde_json::from_slice(&bs)?;
 
-                return Ok(table_info_map);
+                Ok(table_info_map)
             }
-            Err(err) => {
-                return Err(err.into());
-            }
+            Err(err) => Err(err.into()),
         }
     }
 
@@ -143,7 +141,7 @@ impl ShareEndpointManager {
         share_name: Option<ShareNameIdent>,
     ) -> Result<Vec<(String, ShareSpec)>> {
         match self.get_share_endpoint(from_tenant, to_tenant).await {
-            Err(_) => return Ok(vec![]),
+            Err(_) => Ok(vec![]),
             Ok(endpoint_meta_vec) => {
                 let mut share_spec_vec = vec![];
                 let share_names: Vec<String> = vec![];

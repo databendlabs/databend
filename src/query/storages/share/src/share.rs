@@ -131,7 +131,7 @@ mod ext {
                     })
                     .collect(),
                 tenants: spec.tenants,
-                db_privileges: spec.db_privileges.clone(),
+                db_privileges: spec.db_privileges,
                 comment: spec.comment.clone(),
                 share_on: spec.share_on,
             }

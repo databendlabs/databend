@@ -53,7 +53,7 @@ impl CreateDatabaseInterpreter {
             .await?;
         match share_specs.get(0) {
             Some((_, share_spec)) => {
-                if !share_spec.tenants.contains(&tenant) {
+                if !share_spec.tenants.contains(tenant) {
                     return Err(ErrorCode::UnknownShareAccounts(format!(
                         "share {} has not granted privilege to {}",
                         share_name, tenant

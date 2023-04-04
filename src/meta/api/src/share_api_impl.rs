@@ -1794,7 +1794,7 @@ async fn convert_share_meta_to_spec(
                         name: db_name.db_name,
                         id: db_id,
                     }),
-                    Some(database.privileges.clone()),
+                    Some(database.privileges),
                 )
             } else {
                 (None, None)
