@@ -2218,7 +2218,7 @@ Query {
                     ),
                     subquery: Query {
                         span: Some(
-                            125..506,
+                            147..488,
                         ),
                         with: None,
                         body: Select(
@@ -3707,6 +3707,155 @@ Query {
                                 quote: None,
                                 span: Some(
                                     45..48,
+                                ),
+                            },
+                            columns: [],
+                        },
+                    ),
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+SELECT * FROM (SELECT * FROM xyu ORDER BY x, y) AS xyu
+---------- Output ---------
+SELECT * FROM (SELECT * FROM xyu ORDER BY x, y) AS xyu
+---------- AST ------------
+Query {
+    span: Some(
+        0..54,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..54,
+            ),
+            distinct: false,
+            select_list: [
+                QualifiedName {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    exclude: None,
+                },
+            ],
+            from: [
+                Subquery {
+                    span: Some(
+                        14..54,
+                    ),
+                    subquery: Query {
+                        span: Some(
+                            15..46,
+                        ),
+                        with: None,
+                        body: Select(
+                            SelectStmt {
+                                span: Some(
+                                    15..32,
+                                ),
+                                distinct: false,
+                                select_list: [
+                                    QualifiedName {
+                                        qualified: [
+                                            Star(
+                                                Some(
+                                                    22..23,
+                                                ),
+                                            ),
+                                        ],
+                                        exclude: None,
+                                    },
+                                ],
+                                from: [
+                                    Table {
+                                        span: Some(
+                                            29..32,
+                                        ),
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            name: "xyu",
+                                            quote: None,
+                                            span: Some(
+                                                29..32,
+                                            ),
+                                        },
+                                        alias: None,
+                                        travel_point: None,
+                                        pivot: None,
+                                        unpivot: None,
+                                    },
+                                ],
+                                selection: None,
+                                group_by: None,
+                                having: None,
+                            },
+                        ),
+                        order_by: [
+                            OrderByExpr {
+                                expr: ColumnRef {
+                                    span: Some(
+                                        42..43,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "x",
+                                        quote: None,
+                                        span: Some(
+                                            42..43,
+                                        ),
+                                    },
+                                },
+                                asc: None,
+                                nulls_first: None,
+                            },
+                            OrderByExpr {
+                                expr: ColumnRef {
+                                    span: Some(
+                                        45..46,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "y",
+                                        quote: None,
+                                        span: Some(
+                                            45..46,
+                                        ),
+                                    },
+                                },
+                                asc: None,
+                                nulls_first: None,
+                            },
+                        ],
+                        limit: [],
+                        offset: None,
+                        ignore_result: false,
+                    },
+                    alias: Some(
+                        TableAlias {
+                            name: Identifier {
+                                name: "xyu",
+                                quote: None,
+                                span: Some(
+                                    51..54,
                                 ),
                             },
                             columns: [],
