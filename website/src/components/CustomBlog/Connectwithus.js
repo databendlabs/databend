@@ -1,14 +1,14 @@
 import React from "react";
 import styles from "./styles.module.scss";
 import clsx from "clsx";
-import { Github, Twitter, Slack } from "../Icons";
+import { GitHub, Twitter, Slack } from "../Icons";
 import Link from "@docusaurus/Link";
 
 const Connectwithus = () => {
   const items = [
     {
       name: "GitHub Discussions",
-      icon: <Github />,
+      icon: <GitHub />,
       des: "Feature requests, bug reports, and contributions",
       link: "https://github.com/datafuselabs/databend/discussions",
     },

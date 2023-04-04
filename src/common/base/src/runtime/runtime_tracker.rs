@@ -38,7 +38,7 @@
 //! A ThreadTracker that points to `GLOBAL_TRACKER` is installed automatically for every thread,
 //! unless an application replaced it via `ThreadTracker::swap_with()`.
 //!
-//! An `TrackedFuture` has a embedeed `ThreadTracker` installed for its inner `Future`.
+//! An `TrackedFuture` has a embedded `ThreadTracker` installed for its inner `Future`.
 //! When `TrackedFuture` is `poll()`ed, its `ThreadTracker` is installed to the running thread
 //! and will be restored when `poll()` returns.
 

@@ -16,7 +16,7 @@ test = false
 # Workspace dependencies
 common-exception = { path = "../exception" }
 
-# Github dependencies
+# GitHub dependencies
 
 # Crates.io dependencies
 metrics = "0.20.1"

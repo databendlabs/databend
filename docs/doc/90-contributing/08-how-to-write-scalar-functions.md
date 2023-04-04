@@ -94,7 +94,7 @@ Both `funcs` and `factories` store registered functions. `funcs` takes a fixed n
 
 In addition, there are different levels of register api depending on the function required.
 
-|                                     | Auto Vectorization | Access Output Column Builder | Auto Null Passthrough | Auto Combine Null | Auto Downcast | Throw Runtime Error | Varidic | Tuple |
+|                                     | Auto Vectorization | Access Output Column Builder | Auto Null Passthrough | Auto Combine Null | Auto Downcast | Throw Runtime Error | Variadic | Tuple |
 | ----------------------------------- | -- | -- | -- | -- | -- | -- | -- | -- |
 | register_n_arg                      | ✔️ | ❌ | ✔️ | ❌ | ✔️ | ✔️ | ❌ | ❌ |
 | register_passthrough_nullable_n_arg | ❌ | ✔️ | ✔️ | ❌ | ✔️ | ✔️ | ❌ | ❌ |

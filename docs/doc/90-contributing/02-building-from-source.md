@@ -98,7 +98,7 @@ $protoc --version
 libprotoc 3.15.6
 ```
 
-2. Coundn't connect to databend-meta in a forked Databend project.
+2. Couldn't connect to databend-meta in a forked Databend project.
 
 This issue is likely caused by a version check implemented in Databend-meta that is not being met by the forked project. 
 

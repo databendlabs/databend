@@ -14,7 +14,7 @@
 
 use common_exception::Result;
 
-/// bincode seralize_into wrap with optimized config
+/// bincode serialize_into wrap with optimized config
 #[inline]
 pub fn serialize_into_buf<W: std::io::Write, T: serde::Serialize>(
     writer: &mut W,

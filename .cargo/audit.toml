@@ -4,7 +4,7 @@ ignore = [
     # allows a use-after-free buffer access when a future is leaked
     "RUSTSEC-2020-0021",
     # time: Potential segfault in the time crate
-    # We are not accected by this CVE.
+    # We are not affected by this CVE.
     # And there is no actions we can take, waiting for upstream.
     "RUSTSEC-2020-0071",
     # hyper

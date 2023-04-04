@@ -24,7 +24,7 @@ common-meta-kvapi = { path = "../../meta/kvapi" }
 common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
 
-# Github dependencies
+# GitHub dependencies
 
 # Crates.io dependencies
 async-backtrace = { workspace = true }

@@ -485,7 +485,7 @@ impl Processor for NativeDeserializeDataTransform {
             }
 
             // Step 2: Read Prewhere columns and get the filter
-            let mut prewhere_default_val_indics = HashSet::new();
+            let mut prewhere_default_val_indices = HashSet::new();
             for index in self.prewhere_columns.iter() {
                 if self.read_columns.contains(index) {
                     continue;
@@ -505,7 +505,7 @@ impl Processor for NativeDeserializeDataTransform {
                         }
                     }
                 } else {
-                    prewhere_default_val_indics.insert(*index);
+                    prewhere_default_val_indices.insert(*index);
                     need_to_fill_data = true;
                 }
             }
@@ -519,7 +519,7 @@ impl Processor for NativeDeserializeDataTransform {
                     } else {
                         let prewhere_block = if arrays.len() < self.prewhere_columns.len() {
                             self.block_reader
-                                .build_block(arrays.clone(), Some(prewhere_default_val_indics))?
+                                .build_block(arrays.clone(), Some(prewhere_default_val_indices))?
                         } else {
                             self.block_reader.build_block(arrays.clone(), None)?
                         };

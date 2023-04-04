@@ -14,7 +14,7 @@
 
 use common_meta_app::schema::DatabaseInfo;
 
-pub const HIVE_DATABASE_ENGIE: &str = "hive";
+pub const HIVE_DATABASE_ENGINE: &str = "hive";
 use common_catalog::database::Database;
 
 #[derive(Clone)]

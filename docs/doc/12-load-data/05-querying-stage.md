@@ -12,7 +12,7 @@ The schema is automatically detected, same as [infer_schema](../15-sql-functions
 ```sql
 SELECT <columns> FROM
 {@<stage_name>[/<path>] | '<uri>'} [(
-  [ PARTTERN => '<regex_pattern>']
+  [ PATTERN => '<regex_pattern>']
   [ FILE_FORMAT => '<format_name>']
   [ FILES => ( 'file_name' [ , 'file_name' ... ] ) ]
   [ ENDPOINT_URL => <'url'> ]
