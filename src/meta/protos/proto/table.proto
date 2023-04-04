@@ -16,6 +16,7 @@ syntax = "proto3";
 
 package databend_proto;
 
+import "config.proto";
 import "user.proto";
 import "metadata.proto";
 
@@ -106,7 +107,7 @@ message TableMeta {
   repeated string field_comments = 25;
 
   // Table storage location connection info.
-  optional StageInfo.StageStorage storage_params = 26;
+  optional StorageConfig storage_params = 26;
 
   optional string part_prefix = 27;
 }
