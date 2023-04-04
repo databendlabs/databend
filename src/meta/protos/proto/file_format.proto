@@ -75,3 +75,65 @@ message FileFormatOptions {
 
   string quote = 9;
 }
+
+message FileFormatParams {
+  oneof format {
+    ParquetFileFormatParams parquet = 1;
+    CsvFileFormatParams csv = 2;
+    TsvFileFormatParams tsv = 3;
+    JsonFileFormatParams json = 4;
+    NdJsonFileFormatParams nd_json = 5;
+    XmlFileFormatParams xml = 6;
+  }
+}
+
+message ParquetFileFormatParams {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+}
+
+message CsvFileFormatParams {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  StageFileCompression compression =1;
+  uint64 headers = 2;
+  string field_delimiter = 3;
+  string record_delimiter = 4;
+  string nan_display = 5;
+  string escape = 6;
+  string quote = 7;
+}
+
+message TsvFileFormatParams {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  StageFileCompression compression = 1;
+  uint64 headers = 2;
+  string field_delimiter = 3;
+  string record_delimiter = 4;
+  string nan_display = 5;
+  string escape = 6;
+  string quote = 7;
+}
+
+message XmlFileFormatParams {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+  StageFileCompression compression = 1;
+  string row_tag = 2;
+}
+
+message NdJsonFileFormatParams {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+  StageFileCompression compression = 1;
+}
+
+message JsonFileFormatParams {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+  StageFileCompression compression = 1;
+
+}

@@ -204,3 +204,271 @@ impl FromToProto for mt::principal::UserDefinedFileFormat {
         })
     }
 }
+
+impl FromToProto for mt::principal::FileFormatParams {
+    type PB = pb::FileFormatParams;
+    fn get_pb_ver(_p: &Self::PB) -> u64 {
+        0
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        match p.format {
+            Some(pb::file_format_params::Format::Parquet(p)) => {
+                Ok(mt::principal::FileFormatParams::Parquet(
+                    mt::principal::ParquetFileFormatParams::from_pb(p)?,
+                ))
+            }
+            Some(pb::file_format_params::Format::NdJson(p)) => {
+                Ok(mt::principal::FileFormatParams::NdJson(
+                    mt::principal::NdJsonFileFormatParams::from_pb(p)?,
+                ))
+            }
+            Some(pb::file_format_params::Format::Csv(p)) => {
+                Ok(mt::principal::FileFormatParams::Csv(
+                    mt::principal::CsvFileFormatParams::from_pb(p)?,
+                ))
+            }
+            Some(pb::file_format_params::Format::Json(p)) => {
+                Ok(mt::principal::FileFormatParams::Json(
+                    mt::principal::JsonFileFormatParams::from_pb(p)?,
+                ))
+            }
+            Some(pb::file_format_params::Format::Tsv(p)) => {
+                Ok(mt::principal::FileFormatParams::Tsv(
+                    mt::principal::TsvFileFormatParams::from_pb(p)?,
+                ))
+            }
+            Some(pb::file_format_params::Format::Xml(p)) => {
+                Ok(mt::principal::FileFormatParams::Xml(
+                    mt::principal::XmlFileFormatParams::from_pb(p)?,
+                ))
+            }
+            None => Err(Incompatible {
+                reason: "FileFormatParams.format cannot be None".to_string(),
+            }),
+        }
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        match self {
+            Self::Parquet(p) => Ok(Self::PB {
+                format: Some(pb::file_format_params::Format::Parquet(
+                    mt::principal::ParquetFileFormatParams::to_pb(p)?,
+                )),
+            }),
+            Self::NdJson(p) => Ok(Self::PB {
+                format: Some(pb::file_format_params::Format::NdJson(
+                    mt::principal::NdJsonFileFormatParams::to_pb(p)?,
+                )),
+            }),
+            Self::Csv(p) => Ok(Self::PB {
+                format: Some(pb::file_format_params::Format::Csv(
+                    mt::principal::CsvFileFormatParams::to_pb(p)?,
+                )),
+            }),
+            Self::Json(p) => Ok(Self::PB {
+                format: Some(pb::file_format_params::Format::Json(
+                    mt::principal::JsonFileFormatParams::to_pb(p)?,
+                )),
+            }),
+            Self::Tsv(p) => Ok(Self::PB {
+                format: Some(pb::file_format_params::Format::Tsv(
+                    mt::principal::TsvFileFormatParams::to_pb(p)?,
+                )),
+            }),
+            Self::Xml(p) => Ok(Self::PB {
+                format: Some(pb::file_format_params::Format::Xml(
+                    mt::principal::XmlFileFormatParams::to_pb(p)?,
+                )),
+            }),
+        }
+    }
+}
+
+impl FromToProto for mt::principal::ParquetFileFormatParams {
+    type PB = pb::ParquetFileFormatParams;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: pb::ParquetFileFormatParams) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+        Ok(mt::principal::ParquetFileFormatParams {})
+    }
+
+    fn to_pb(&self) -> Result<pb::ParquetFileFormatParams, Incompatible> {
+        Ok(pb::ParquetFileFormatParams {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+        })
+    }
+}
+
+impl FromToProto for mt::principal::NdJsonFileFormatParams {
+    type PB = pb::NdJsonFileFormatParams;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: pb::NdJsonFileFormatParams) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+        let compression = mt::principal::StageFileCompression::from_pb(
+            FromPrimitive::from_i32(p.compression).ok_or_else(|| Incompatible {
+                reason: format!("invalid StageFileCompression: {}", p.compression),
+            })?,
+        )?;
+        Ok(mt::principal::NdJsonFileFormatParams { compression })
+    }
+
+    fn to_pb(&self) -> Result<pb::NdJsonFileFormatParams, Incompatible> {
+        let compression = mt::principal::StageFileCompression::to_pb(&self.compression)? as i32;
+        Ok(pb::NdJsonFileFormatParams {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            compression,
+        })
+    }
+}
+
+impl FromToProto for mt::principal::JsonFileFormatParams {
+    type PB = pb::JsonFileFormatParams;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+        let compression = mt::principal::StageFileCompression::from_pb(
+            FromPrimitive::from_i32(p.compression).ok_or_else(|| Incompatible {
+                reason: format!("invalid StageFileCompression: {}", p.compression),
+            })?,
+        )?;
+        Ok(Self { compression })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        let compression = mt::principal::StageFileCompression::to_pb(&self.compression)? as i32;
+        Ok(Self::PB {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            compression,
+        })
+    }
+}
+
+impl FromToProto for mt::principal::XmlFileFormatParams {
+    type PB = pb::XmlFileFormatParams;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+        let compression = mt::principal::StageFileCompression::from_pb(
+            FromPrimitive::from_i32(p.compression).ok_or_else(|| Incompatible {
+                reason: format!("invalid StageFileCompression: {}", p.compression),
+            })?,
+        )?;
+        Ok(Self {
+            compression,
+            row_tag: p.row_tag,
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        let compression = mt::principal::StageFileCompression::to_pb(&self.compression)? as i32;
+        Ok(Self::PB {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            compression,
+            row_tag: self.row_tag.clone(),
+        })
+    }
+}
+
+impl FromToProto for mt::principal::CsvFileFormatParams {
+    type PB = pb::CsvFileFormatParams;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+        let compression = mt::principal::StageFileCompression::from_pb(
+            FromPrimitive::from_i32(p.compression).ok_or_else(|| Incompatible {
+                reason: format!("invalid StageFileCompression: {}", p.compression),
+            })?,
+        )?;
+        Ok(Self {
+            compression,
+            headers: p.headers,
+            field_delimiter: p.field_delimiter,
+            record_delimiter: p.record_delimiter,
+            quote: p.quote,
+            escape: p.escape,
+            nan_display: p.nan_display,
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        let compression = mt::principal::StageFileCompression::to_pb(&self.compression)? as i32;
+        Ok(Self::PB {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            compression,
+            headers: self.headers,
+            field_delimiter: self.field_delimiter.clone(),
+            record_delimiter: self.record_delimiter.clone(),
+            quote: self.quote.clone(),
+            escape: self.escape.clone(),
+            nan_display: self.nan_display.clone(),
+        })
+    }
+}
+
+impl FromToProto for mt::principal::TsvFileFormatParams {
+    type PB = pb::TsvFileFormatParams;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+        let compression = mt::principal::StageFileCompression::from_pb(
+            FromPrimitive::from_i32(p.compression).ok_or_else(|| Incompatible {
+                reason: format!("invalid StageFileCompression: {}", p.compression),
+            })?,
+        )?;
+        Ok(Self {
+            compression,
+            headers: p.headers,
+            field_delimiter: p.field_delimiter,
+            record_delimiter: p.record_delimiter,
+            escape: p.escape,
+            nan_display: p.nan_display,
+            quote: p.quote,
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        let compression = mt::principal::StageFileCompression::to_pb(&self.compression)? as i32;
+        Ok(Self::PB {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            compression,
+            headers: self.headers,
+            field_delimiter: self.field_delimiter.clone(),
+            record_delimiter: self.record_delimiter.clone(),
+            escape: self.escape.clone(),
+            quote: self.quote.clone(),
+            nan_display: self.nan_display.clone(),
+        })
+    }
+}
