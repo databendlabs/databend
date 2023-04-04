@@ -80,10 +80,6 @@ pub fn apply_cse(
                         temp_var_counter += 1;
                     }
 
-                    for n in new_exprs.iter() {
-                        tracing::info!("new_exprs: {}", n.sql_display());
-                    }
-
                     results.push(BlockOperator::MapWithOutput {
                         exprs: new_exprs,
                         output_indexes,
