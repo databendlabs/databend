@@ -48,33 +48,39 @@ EvalScalar
 query T
 explain select number from numbers(10) where number > 5 and try_cast(get(try_parse_json(number::String),'xx') as varchar) < '10' and 1 = 0;
 ----
-Filter
-├── filters: [numbers.number (#0) > 5, is_true(TRY_CAST(get(try_parse_json(to_string(numbers.number (#0))), "xx") AS String NULL) < "10"), false]
+EvalScalar
+├── expressions: [numbers.number (#0)]
 ├── estimated rows: 0.37
-└── TableScan
-    ├── table: default.system.numbers
-    ├── read rows: 0
-    ├── read bytes: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [false], limit: NONE]
-    └── estimated rows: 10.00
+└── Filter
+    ├── filters: [numbers.number (#0) > 5, is_true(TRY_CAST(get(try_parse_json(to_string(numbers.number (#0))), "xx") AS String NULL) < "10"), false]
+    ├── estimated rows: 0.37
+    └── TableScan
+        ├── table: default.system.numbers
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [false], limit: NONE]
+        └── estimated rows: 10.00
 
 
 query T
 explain select number from numbers(10) where number > 5 and try_cast(get(try_parse_json(number::String),'xx') as varchar)   < '10' and 1 = 0;
 ----
-Filter
-├── filters: [numbers.number (#0) > 5, is_true(TRY_CAST(get(try_parse_json(to_string(numbers.number (#0))), "xx") AS String NULL) < "10"), false]
+EvalScalar
+├── expressions: [numbers.number (#0)]
 ├── estimated rows: 0.37
-└── TableScan
-    ├── table: default.system.numbers
-    ├── read rows: 0
-    ├── read bytes: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [false], limit: NONE]
-    └── estimated rows: 10.00
+└── Filter
+    ├── filters: [numbers.number (#0) > 5, is_true(TRY_CAST(get(try_parse_json(to_string(numbers.number (#0))), "xx") AS String NULL) < "10"), false]
+    ├── estimated rows: 0.37
+    └── TableScan
+        ├── table: default.system.numbers
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [false], limit: NONE]
+        └── estimated rows: 10.00
 
 statement ok
 drop table range_t
