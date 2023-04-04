@@ -28,6 +28,7 @@ use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
 use common_expression::ScalarRef;
+use common_expression::SortColumnDescription;
 use common_expression::Value;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
@@ -71,7 +72,7 @@ pub struct TransformWindow {
     func: WindowFunctionImpl,
 
     partition_indices: Vec<usize>,
-    order_by_indices: Vec<usize>,
+    order_by: Vec<SortColumnDescription>,
 
     /// A queue of data blocks that we need to process.
     /// If partition is ended, we may free the data block from front of the queue.
@@ -120,7 +121,7 @@ impl TransformWindow {
         output: Arc<OutputPort>,
         func: WindowFunctionInfo,
         partition_indices: Vec<usize>,
-        order_by_indices: Vec<usize>,
+        order_by_indices: Vec<SortColumnDescription>,
         frame_kind: WindowFuncFrame,
     ) -> Result<Box<dyn Processor>> {
         let transform = Self::create(
@@ -139,7 +140,7 @@ impl TransformWindow {
         output: Arc<OutputPort>,
         func: WindowFunctionInfo,
         partition_indices: Vec<usize>,
-        order_by_indices: Vec<usize>,
+        order_by_indices: Vec<SortColumnDescription>,
         frame_kind: WindowFuncFrame,
     ) -> Result<Self> {
         let func = WindowFunctionImpl::try_create(func)?;
@@ -149,7 +150,7 @@ impl TransformWindow {
             state: ProcessorState::Consume,
             func,
             partition_indices,
-            order_by_indices,
+            order_by: order_by_indices,
             blocks: VecDeque::new(),
             outputs: VecDeque::new(),
             first_block: 0,
@@ -248,7 +249,9 @@ impl TransformWindow {
         while self.partition_end.row < block_rows {
             let mut i = 0;
             while i < partition_by_columns {
-                let start_column = self.column_at(&self.partition_start, self.partition_indices[i]);
+                // Should use `prev_frame_start` because the block at `partition_start` may already be popped out of the buffer queue.
+                let start_column =
+                    self.column_at(&self.prev_frame_start, self.partition_indices[i]);
                 let compare_column = self.column_at(&self.partition_end, self.partition_indices[i]);
 
                 if unsafe {
@@ -274,35 +277,129 @@ impl TransformWindow {
         assert!(!self.partition_ended && self.partition_end == end);
     }
 
+    fn advance_frame_start_rows_preceding(&mut self, n: usize) {
+        if self.current_row_in_partition - 1 <= n {
+            self.frame_start = self.partition_start;
+        } else {
+            self.frame_start = self.advance_row(self.prev_frame_start);
+        }
+        self.frame_started = true;
+    }
+
+    fn advance_frame_start_rows_following(&mut self, n: usize) {
+        self.frame_start = if self.current_row_in_partition == 1 {
+            self.add_rows_within_partition(self.current_row, n)
+        } else {
+            self.advance_row(self.prev_frame_start)
+                .min(self.partition_end)
+        };
+        self.frame_started = self.partition_ended || self.frame_start < self.partition_end;
+    }
+
+    /// Used for `RANGE` frame to compare the value of the column at `cmp_row` with the value of the column at `ref_row` add/sub `offset`.
+    ///
+    /// Currently, order by column in `RANGE` frame will be cast to Int64 Column (CAST operator will be added in planner).
+    ///
+    /// Returns the ordering of the value at `cmp_row` with the value at `ref_row` add/sub `offset`.
+    ///
+    /// TODO: no need to cast to i64 and use generic type to support this logic.
+    fn compare_value_with_offset(
+        cmp_col: &[i64],
+        cmp_row: usize,
+        ref_col: &[i64],
+        ref_row: usize,
+        offset: i64,
+        is_preceding: bool,
+    ) -> Ordering {
+        let cmp_v = unsafe { *cmp_col.get_unchecked(cmp_row) };
+        let ref_v = unsafe { *ref_col.get_unchecked(ref_row) };
+
+        let res = if is_preceding {
+            ref_v.checked_sub(offset)
+        } else {
+            ref_v.checked_add(offset)
+        };
+
+        if let Some(res) = res {
+            // Not overflow
+            cmp_v.cmp(&res)
+        } else if is_preceding {
+            Ordering::Greater
+        } else {
+            Ordering::Less
+        }
+    }
+
+    fn advance_frame_start_range(&mut self, n: usize, is_preceding: bool) {
+        let ref_idx = self.order_by[0].offset;
+        let asc = self.order_by[0].asc;
+        let preceding = asc == is_preceding;
+        let ref_col = self
+            .column_at(&self.current_row, ref_idx)
+            .as_number()
+            .unwrap()
+            .as_int64()
+            .unwrap()
+            .clone();
+        while self.frame_start < self.partition_end {
+            let cmp_col = self
+                .column_at(&self.frame_start, ref_idx)
+                .as_number()
+                .unwrap()
+                .as_int64()
+                .unwrap();
+
+            let mut ordering = Self::compare_value_with_offset(
+                cmp_col,
+                self.frame_start.row,
+                &ref_col,
+                self.current_row.row,
+                n as i64,
+                preceding,
+            );
+            if !asc {
+                ordering = ordering.reverse();
+            }
+
+            if ordering.is_ge() {
+                self.frame_started = true;
+                return;
+            }
+
+            self.advance_row(self.frame_start);
+        }
+        self.frame_started = self.partition_ended;
+    }
+
     fn advance_frame_start(&mut self) {
         if self.frame_started {
             return;
         }
         match &self.frame_kind.start_bound {
             WindowFuncFrameBound::CurrentRow => {
+                debug_assert!(self.partition_end <= self.peer_group_start);
+                debug_assert!(self.peer_group_start < self.partition_end);
+                debug_assert!(self.peer_group_start <= self.current_row);
+
                 self.frame_started = true;
-                self.frame_start = self.current_row;
+                self.frame_start = self.peer_group_start;
             }
             WindowFuncFrameBound::Preceding(Some(n)) => {
-                self.frame_started = true;
-                if self.current_row_in_partition - 1 <= *n {
-                    self.frame_start = self.partition_start;
+                if self.frame_kind.units.is_rows() {
+                    self.advance_frame_start_rows_preceding(*n);
                 } else {
-                    self.frame_start = self.advance_row(self.prev_frame_start);
+                    self.advance_frame_start_range(*n, true);
                 }
             }
             WindowFuncFrameBound::Preceding(_) => {
                 self.frame_started = true;
-                self.frame_start = self.partition_start;
             }
             WindowFuncFrameBound::Following(Some(n)) => {
-                self.frame_start = if self.current_row_in_partition == 1 {
-                    self.add_rows_within_partition(self.current_row, *n)
+                if self.frame_kind.units.is_rows() {
+                    self.advance_frame_start_rows_following(*n);
                 } else {
-                    self.advance_row(self.prev_frame_start)
-                        .min(self.partition_end)
-                };
-                self.frame_started = self.partition_ended || self.frame_start < self.partition_end;
+                    self.advance_frame_start_range(*n, false);
+                }
             }
             WindowFuncFrameBound::Following(_) => {
                 unreachable!()
@@ -310,42 +407,137 @@ impl TransformWindow {
         }
     }
 
+    fn advance_frame_end_rows_preceding(&mut self, n: usize) {
+        match (self.current_row_in_partition - 1).cmp(&n) {
+            Ordering::Less => {
+                self.frame_end = self.partition_start;
+            }
+            Ordering::Equal => {
+                self.frame_end = self.advance_row(self.partition_start);
+            }
+            Ordering::Greater => {
+                self.frame_end = self.advance_row(self.prev_frame_end);
+            }
+        }
+        self.frame_ended = true;
+    }
+
+    fn advance_frame_end_rows_following(&mut self, n: usize) {
+        self.frame_end = if self.current_row_in_partition == 1 {
+            let next_end = self.add_rows_within_partition(self.current_row, n);
+            self.frame_ended = self.partition_ended || next_end < self.partition_end;
+            // `self.frame_end` is excluded.
+            self.advance_row(next_end)
+        } else {
+            self.frame_ended = self.partition_ended || self.prev_frame_end < self.partition_end;
+            self.advance_row(self.prev_frame_end)
+        }
+        .min(self.partition_end);
+    }
+
+    /// This function is used for both `ROWS` and `RANGE`.
+    fn advance_frame_end_current_row(&mut self) {
+        // Every frame must be processed to the end of the input block if the its partition is started.
+        debug_assert!(
+            self.frame_end.block == self.partition_end.block
+                || self.frame_end.block + 1 == self.partition_end.block
+        );
+
+        if self.frame_end == self.partition_end {
+            self.frame_ended = self.partition_ended;
+            return;
+        }
+
+        let rows_end = if self.partition_end.row == 0 {
+            debug_assert!(self.partition_end == self.blocks_end());
+            self.block_rows(&self.frame_end)
+        } else {
+            self.partition_end.row
+        };
+
+        debug_assert!(self.frame_end.row < rows_end);
+        while self.frame_end.row < rows_end {
+            if !self.are_peers(&self.current_row, &self.frame_end) {
+                self.frame_ended = true;
+                return;
+            }
+            self.frame_end.row += 1;
+        }
+
+        if self.frame_end.row == self.block_rows(&self.frame_end) {
+            self.frame_end.block += 1;
+            self.frame_end.row = 0;
+        }
+
+        debug_assert!(self.frame_end == self.partition_end);
+        self.frame_ended = self.partition_ended;
+    }
+
+    fn advance_frame_end_range(&mut self, n: usize, is_preceding: bool) {
+        let ref_idx = self.order_by[0].offset;
+        let asc = self.order_by[0].asc;
+        let preceding = asc == is_preceding;
+        let ref_col = self
+            .column_at(&self.current_row, ref_idx)
+            .as_number()
+            .unwrap()
+            .as_int64()
+            .unwrap()
+            .clone();
+        while self.frame_end < self.partition_end {
+            let cmp_col = self
+                .column_at(&self.frame_end, ref_idx)
+                .as_number()
+                .unwrap()
+                .as_int64()
+                .unwrap();
+
+            let mut ordering = Self::compare_value_with_offset(
+                cmp_col,
+                self.frame_end.row,
+                &ref_col,
+                self.current_row.row,
+                n as i64,
+                preceding,
+            );
+            if !asc {
+                ordering = ordering.reverse();
+            }
+
+            if ordering.is_gt() {
+                // `self.frame_end` is excluded when aggregating.
+                self.frame_ended = true;
+                return;
+            }
+
+            self.advance_row(self.frame_start);
+        }
+        self.frame_ended = self.partition_ended;
+    }
+
     fn advance_frame_end(&mut self) {
+        debug_assert!(!self.frame_ended);
+
         match &self.frame_kind.end_bound {
             WindowFuncFrameBound::CurrentRow => {
-                self.frame_ended = true;
-                // `self.frame_end` is excluded.
-                self.frame_end = self.advance_row(self.current_row);
+                self.advance_frame_end_current_row();
             }
             WindowFuncFrameBound::Preceding(Some(n)) => {
-                self.frame_ended = true;
-                match (self.current_row_in_partition - 1).cmp(n) {
-                    Ordering::Less => {
-                        self.frame_end = self.partition_start;
-                    }
-                    Ordering::Equal => {
-                        self.frame_end = self.advance_row(self.partition_start);
-                    }
-                    Ordering::Greater => {
-                        self.frame_end = self.advance_row(self.prev_frame_end);
-                    }
+                if self.frame_kind.units.is_rows() {
+                    self.advance_frame_end_rows_preceding(*n);
+                } else {
+                    self.advance_frame_end_range(*n, true)
                 }
             }
             WindowFuncFrameBound::Preceding(_) => {
                 unreachable!()
             }
             WindowFuncFrameBound::Following(Some(n)) => {
-                self.frame_end = if self.current_row_in_partition == 1 {
-                    let next_end = self.add_rows_within_partition(self.current_row, *n);
-                    self.frame_ended = self.partition_ended || next_end < self.partition_end;
-                    // `self.frame_end` is excluded.
-                    self.advance_row(next_end)
+                if self.frame_kind.units.is_rows() {
+                    self.advance_frame_end_rows_following(*n);
                 } else {
-                    self.frame_ended =
-                        self.partition_ended || self.prev_frame_end < self.partition_end;
-                    self.advance_row(self.prev_frame_end)
+                    self.advance_frame_end_range(*n, false);
                 }
-                .min(self.partition_end);
             }
             WindowFuncFrameBound::Following(_) => {
                 self.frame_ended = self.partition_ended;
@@ -381,14 +573,14 @@ impl TransformWindow {
             return false;
         }
 
-        if self.order_by_indices.is_empty() {
+        if self.order_by.is_empty() {
             return true;
         }
 
         let mut i = 0;
-        while i < self.order_by_indices.len() {
-            let lhs_col = self.column_at(lhs, self.order_by_indices[i]);
-            let rhs_col = self.column_at(rhs, self.order_by_indices[i]);
+        while i < self.order_by.len() {
+            let lhs_col = self.column_at(lhs, self.order_by[i].offset);
+            let rhs_col = self.column_at(rhs, self.order_by[i].offset);
 
             if unsafe { lhs_col.index_unchecked(lhs.row) != rhs_col.index_unchecked(rhs.row) } {
                 return false;
@@ -449,6 +641,11 @@ impl TransformWindow {
                     debug_assert!(!self.partition_ended);
                     break;
                 }
+
+                if self.frame_end < self.frame_start {
+                    self.frame_end = self.frame_start;
+                }
+
                 self.advance_frame_end();
                 if !self.frame_ended {
                     debug_assert!(!self.input_is_finished);

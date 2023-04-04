@@ -731,7 +731,11 @@ impl PipelineBuilder {
             .iter()
             .map(|o| {
                 let offset = input_schema.index_of(&o.order_by.to_string())?;
-                Ok(offset)
+                Ok(SortColumnDescription {
+                    offset,
+                    asc: o.asc,
+                    nulls_first: o.nulls_first,
+                })
             })
             .collect::<Result<Vec<_>>>()?;
 
@@ -747,13 +751,7 @@ impl PipelineBuilder {
                 })
             }
 
-            for (order_desc, offset) in window.order_by.iter().zip(order_by.iter()) {
-                sort_desc.push(SortColumnDescription {
-                    offset: *offset,
-                    asc: order_desc.asc,
-                    nulls_first: order_desc.nulls_first,
-                })
-            }
+            sort_desc.extend(order_by.clone());
 
             self.build_sort_pipeline(input_schema.clone(), sort_desc, window.plan_id, None)?;
         }

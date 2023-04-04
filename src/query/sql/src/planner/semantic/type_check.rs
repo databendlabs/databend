@@ -929,8 +929,27 @@ impl<'a> TypeChecker<'a> {
             partitions.push(part);
         }
         let mut order_by = Vec::with_capacity(window.order_by.len());
+
+        let is_range = window
+            .window_frame
+            .as_ref()
+            .map(|f| f.units.is_range())
+            .unwrap_or(false);
+
         for o in window.order_by.iter() {
-            let box (order, _) = self.resolve(&o.expr).await?;
+            let box (mut order, _) = self.resolve(&o.expr).await?;
+            if is_range {
+                // Change the item to Int64 type to compute offset for `RANGE`.
+                // TODO: find a better way. Maybe use generic in `TransformWindow` preocessor.
+                order = CastExpr {
+                    span: order.span(),
+                    is_try: false,
+                    argument: Box::new(order),
+                    target_type: Box::new(DataType::Number(NumberDataType::Int64)),
+                }
+                .into();
+            }
+
             order_by.push(WindowOrderBy {
                 expr: order,
                 asc: o.asc,
@@ -966,6 +985,14 @@ impl<'a> TypeChecker<'a> {
         order_by_len: usize,
         window_frame: Option<WindowFrame>,
     ) -> Result<WindowFuncFrame> {
+        if order_by_len == 0 && window_frame.is_none() {
+            return Ok(WindowFuncFrame {
+                units: WindowFuncFrameUnits::Range,
+                start_bound: WindowFuncFrameBound::Preceding(None),
+                end_bound: WindowFuncFrameBound::Following(None),
+            });
+        }
+
         let (units, start, end) = if let Some(frame) = window_frame {
             if let WindowFrameUnits::Range = frame.units {
                 if order_by_len != 1 {
