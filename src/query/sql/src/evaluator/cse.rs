@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -99,6 +99,8 @@ pub fn apply_cse(
     results
 }
 
+/// `count_expressions` recursively counts the occurrences of expressions in an expression tree
+/// and stores the count in a HashMap.
 fn count_expressions(expr: &Expr, counter: &mut HashMap<Expr, usize>) {
     match expr {
         Expr::FunctionCall { args, .. } => {
@@ -122,6 +124,8 @@ fn count_expressions(expr: &Expr, counter: &mut HashMap<Expr, usize>) {
     }
 }
 
+// `perform_cse_replacement` performs common subexpression elimination (CSE) on an expression tree
+// by replacing subexpressions that appear multiple times with a single shared expression.
 fn perform_cse_replacement(expr: &mut Expr, cse_replacements: &HashMap<String, Expr>) {
     // If expr itself is a key in cse_replacements, return the replaced expression.
     if let Some(replacement) = cse_replacements.get(&expr.sql_display()) {
