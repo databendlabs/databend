@@ -75,7 +75,7 @@ error:
 
 ast            : (NULL,).1
 raw expr       : get(1)(tuple(NULL))
-checked expr   : get<T0=NULL><Tuple(T0,)>(tuple<NULL>(NULL))
+checked expr   : get<T0=NULL><Tuple(T0,)>(1)(tuple<NULL>(NULL))
 optimized expr : NULL
 output type    : NULL
 output domain  : {NULL}
@@ -92,7 +92,7 @@ error:
 
 ast            : (1, 'a').1
 raw expr       : get(1)(tuple(1, "a"))
-checked expr   : get<T0=UInt8, T1=String><Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"))
+checked expr   : get<T0=UInt8, T1=String><Tuple(T0, T1)>(1)(tuple<UInt8, String>(1_u8, "a"))
 optimized expr : 1_u8
 output type    : UInt8
 output domain  : {1..=1}
@@ -101,7 +101,7 @@ output         : 1
 
 ast            : (1, 'a').2
 raw expr       : get(2)(tuple(1, "a"))
-checked expr   : get<T0=UInt8, T1=String><Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"))
+checked expr   : get<T0=UInt8, T1=String><Tuple(T0, T1)>(2)(tuple<UInt8, String>(1_u8, "a"))
 optimized expr : "a"
 output type    : String
 output domain  : {"a"..="a"}
@@ -110,7 +110,7 @@ output         : "a"
 
 ast            : (1, 2, ('a', 'b')).3
 raw expr       : get(3)(tuple(1, 2, tuple("a", "b")))
-checked expr   : get<T0=UInt8, T1=UInt8, T2=Tuple(String, String)><Tuple(T0, T1, T2)>(tuple<UInt8, UInt8, Tuple(String, String)>(1_u8, 2_u8, tuple<String, String>("a", "b")))
+checked expr   : get<T0=UInt8, T1=UInt8, T2=Tuple(String, String)><Tuple(T0, T1, T2)>(3)(tuple<UInt8, UInt8, Tuple(String, String)>(1_u8, 2_u8, tuple<String, String>("a", "b")))
 optimized expr : ("a", "b")
 output type    : Tuple(String, String)
 output domain  : ({"a"..="a"}, {"b"..="b"})
@@ -119,7 +119,7 @@ output         : ("a", "b")
 
 ast            : (1, 2, ('a', 'b')).3.1
 raw expr       : get(1)(get(3)(tuple(1, 2, tuple("a", "b"))))
-checked expr   : get<T0=String, T1=String><Tuple(T0, T1)>(get<T0=UInt8, T1=UInt8, T2=Tuple(String, String)><Tuple(T0, T1, T2)>(tuple<UInt8, UInt8, Tuple(String, String)>(1_u8, 2_u8, tuple<String, String>("a", "b"))))
+checked expr   : get<T0=String, T1=String><Tuple(T0, T1)>(1)(get<T0=UInt8, T1=UInt8, T2=Tuple(String, String)><Tuple(T0, T1, T2)>(3)(tuple<UInt8, UInt8, Tuple(String, String)>(1_u8, 2_u8, tuple<String, String>("a", "b"))))
 optimized expr : "a"
 output type    : String
 output domain  : {"a"..="a"}
@@ -128,7 +128,7 @@ output         : "a"
 
 ast            : (s, s).1
 raw expr       : get(1)(tuple(s::String NULL, s::String NULL))
-checked expr   : get<T0=String NULL, T1=String NULL><Tuple(T0, T1)>(tuple<String NULL, String NULL>(s, s))
+checked expr   : get<T0=String NULL, T1=String NULL><Tuple(T0, T1)>(1)(tuple<String NULL, String NULL>(s, s))
 evaluation:
 +--------+----------------------+----------------------+
 |        | s                    | Output               |
@@ -151,7 +151,7 @@ evaluation (internal):
 
 ast            : col.1
 raw expr       : get(1)(col::Tuple(String NULL,) NULL)
-checked expr   : get<T0=String><Tuple(T0 NULL,) NULL>(col)
+checked expr   : get<T0=String><Tuple(T0 NULL,) NULL>(1)(col)
 evaluation:
 +--------+---------------------------------+----------------------+
 |        | col                             | Output               |
