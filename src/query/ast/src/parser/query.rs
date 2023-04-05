@@ -618,20 +618,20 @@ pub fn group_by_items(i: Input) -> IResult<GroupBy> {
 pub fn window_frame_bound(i: Input) -> IResult<WindowFrameBound> {
     alt((
         value(WindowFrameBound::CurrentRow, rule! { CURRENT ~ ROW }),
-        map(rule! { #subexpr(0) ~ PRECEDING }, |(expr, _)| {
-            WindowFrameBound::Preceding(Some(Box::new(expr)))
-        }),
         value(
             WindowFrameBound::Preceding(None),
             rule! { UNBOUNDED ~ PRECEDING },
         ),
-        map(rule! { #subexpr(0) ~ FOLLOWING }, |(expr, _)| {
-            WindowFrameBound::Following(Some(Box::new(expr)))
+        map(rule! { #subexpr(0) ~ PRECEDING }, |(expr, _)| {
+            WindowFrameBound::Preceding(Some(Box::new(expr)))
         }),
         value(
             WindowFrameBound::Following(None),
             rule! { UNBOUNDED ~ FOLLOWING },
         ),
+        map(rule! { #subexpr(0) ~ FOLLOWING }, |(expr, _)| {
+            WindowFrameBound::Following(Some(Box::new(expr)))
+        }),
     ))(i)
 }
 

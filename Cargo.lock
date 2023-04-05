@@ -2268,6 +2268,7 @@ dependencies = [
  "ctor",
  "dashmap",
  "educe",
+ "enum-as-inner",
  "globiter",
  "itertools",
  "num-derive",
