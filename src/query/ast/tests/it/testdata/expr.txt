@@ -3350,22 +3350,7 @@ FunctionCall {
                     WindowFrame {
                         units: Rows,
                         start_bound: Preceding(
-                            Some(
-                                ColumnRef {
-                                    span: Some(
-                                        76..85,
-                                    ),
-                                    database: None,
-                                    table: None,
-                                    column: Identifier {
-                                        name: "UNBOUNDED",
-                                        quote: None,
-                                        span: Some(
-                                            76..85,
-                                        ),
-                                    },
-                                },
-                            ),
+                            None,
                         ),
                         end_bound: CurrentRow,
                     },
@@ -3593,22 +3578,7 @@ FunctionCall {
                     WindowFrame {
                         units: Rows,
                         start_bound: Preceding(
-                            Some(
-                                ColumnRef {
-                                    span: Some(
-                                        38..47,
-                                    ),
-                                    database: None,
-                                    table: None,
-                                    column: Identifier {
-                                        name: "UNBOUNDED",
-                                        quote: None,
-                                        span: Some(
-                                            38..47,
-                                        ),
-                                    },
-                                },
-                            ),
+                            None,
                         ),
                         end_bound: CurrentRow,
                     },
