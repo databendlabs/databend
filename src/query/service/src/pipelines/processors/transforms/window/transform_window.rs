@@ -366,7 +366,7 @@ impl TransformWindow {
                 return;
             }
 
-            self.advance_row(self.frame_start);
+            self.frame_start = self.advance_row(self.frame_start);
         }
         self.frame_started = self.partition_ended;
     }
@@ -510,7 +510,7 @@ impl TransformWindow {
                 return;
             }
 
-            self.advance_row(self.frame_start);
+            self.frame_end = self.advance_row(self.frame_end);
         }
         self.frame_ended = self.partition_ended;
     }
@@ -661,9 +661,7 @@ impl TransformWindow {
                 self.merge_result_of_current_row()?;
 
                 // 3.2
-                let next_row = self.advance_row(self.current_row);
-
-                self.current_row = next_row;
+                self.current_row = self.advance_row(self.current_row);
                 self.current_row_in_partition += 1;
                 self.prev_frame_start = self.frame_start;
                 self.prev_frame_end = self.frame_end;
@@ -682,24 +680,30 @@ impl TransformWindow {
             }
 
             // start to new partition
-            self.partition_start = self.partition_end;
-            self.partition_end = self.advance_row(self.partition_end);
-            self.partition_ended = false;
+            {
+                // reset function
+                self.func.reset();
 
-            // reset frames
-            self.frame_start = self.partition_start;
-            self.frame_end = self.partition_start;
-            self.prev_frame_start = self.frame_start;
-            self.prev_frame_end = self.frame_end;
+                // reset partition
+                self.partition_start = self.partition_end;
+                self.partition_end = self.advance_row(self.partition_end);
+                self.partition_ended = false;
 
-            // reset peer group
-            self.peer_group_start = self.partition_start;
+                // reset frames
+                self.frame_start = self.partition_start;
+                self.frame_end = self.partition_start;
+                self.prev_frame_start = self.frame_start;
+                self.prev_frame_end = self.frame_end;
 
-            // reset row number, rank, ...
-            self.current_row_in_partition = 1;
-            self.current_rank = 1;
-            self.current_rank_count = 1;
-            self.current_dense_rank = 1;
+                // reset peer group
+                self.peer_group_start = self.partition_start;
+
+                // reset row number, rank, ...
+                self.current_row_in_partition = 1;
+                self.current_rank = 1;
+                self.current_rank_count = 1;
+                self.current_dense_rank = 1;
+            }
         }
 
         Ok(())
@@ -723,20 +727,50 @@ impl TransformWindow {
     }
 
     fn apply_aggregate(&self, agg: &WindowFuncAggImpl) -> Result<()> {
-        let WindowFuncFrame {
-            start_bound,
-            end_bound,
-            ..
-        } = &self.frame_kind;
-        match (start_bound, end_bound) {
-            (WindowFuncFrameBound::Preceding(None), WindowFuncFrameBound::Following(None)) => {
-                self.apply_aggregate_for_unbounded_frame(agg)
-            }
-            (WindowFuncFrameBound::Preceding(None), _) => {
-                self.apply_aggregate_for_unbounded_preceding(agg)
-            }
-            (_, _) => self.apply_aggregate_common(agg),
+        debug_assert!(self.frame_started);
+        debug_assert!(self.frame_ended);
+        debug_assert!(self.frame_start <= self.frame_end);
+        debug_assert!(self.prev_frame_start <= self.prev_frame_end);
+        debug_assert!(self.prev_frame_start <= self.frame_start);
+        debug_assert!(self.prev_frame_end <= self.frame_end);
+        debug_assert!(self.partition_start <= self.frame_start);
+        debug_assert!(self.frame_end <= self.partition_end);
+
+        let (rows_start, rows_end, reset) = if self.frame_start == self.prev_frame_start {
+            (self.prev_frame_end, self.frame_end, false)
+        } else {
+            (self.frame_start, self.frame_end, true)
+        };
+
+        if reset {
+            agg.reset();
         }
+
+        let end_block = if rows_end.row == 0 {
+            rows_end.block
+        } else {
+            rows_end.block + 1
+        };
+
+        for block in rows_start.block..end_block {
+            let data = &self.blocks[block - self.first_block].block;
+            let start_row = if block == rows_start.block {
+                rows_start.row
+            } else {
+                0
+            };
+            let end_row = if block == rows_end.block {
+                rows_end.row
+            } else {
+                data.num_rows()
+            };
+            let cols = agg.arg_columns(data);
+            for row in start_row..end_row {
+                agg.accumulate_row(&cols, row)?;
+            }
+        }
+
+        Ok(())
     }
 
     #[inline]
@@ -763,62 +797,6 @@ impl TransformWindow {
                 )));
             }
         };
-
-        Ok(())
-    }
-
-    #[inline]
-    fn apply_aggregate_for_unbounded_frame(&self, agg: &WindowFuncAggImpl) -> Result<()> {
-        if self.current_row_in_partition == 1 {
-            self.apply_aggregate_common(agg)
-        } else {
-            // Else do nothing
-            Ok(())
-        }
-    }
-
-    #[inline]
-    fn apply_aggregate_for_unbounded_preceding(&self, agg: &WindowFuncAggImpl) -> Result<()> {
-        if self.current_row_in_partition == 1 {
-            self.apply_aggregate_common(agg)
-        } else if self.frame_end != self.prev_frame_end {
-            let row = self.prev_frame_end.row;
-            let data = self.block_at(&self.prev_frame_end);
-            let columns = agg.arg_columns(data);
-            agg.accumulate_row(&columns, row)
-        } else {
-            // Else do nothing
-            Ok(())
-        }
-    }
-
-    fn apply_aggregate_common(&self, agg: &WindowFuncAggImpl) -> Result<()> {
-        let block_end = self.blocks_end();
-        let row_start = self.frame_start;
-        let row_end = self.frame_end;
-
-        // Reset state
-        agg.reset();
-
-        for block in row_start.block..=row_end.block.min(block_end.block - 1) {
-            let block_row_start = if block == row_start.block {
-                row_start.row
-            } else {
-                0
-            };
-            let block_row_end = if block == row_end.block {
-                row_end.row
-            } else {
-                self.block_rows(&RowPtr { block, row: 0 })
-            };
-
-            let data = self.block_at(&RowPtr { block, row: 0 });
-            let columns = agg.arg_columns(data);
-
-            for row in block_row_start..block_row_end {
-                agg.accumulate_row(&columns, row)?;
-            }
-        }
 
         Ok(())
     }

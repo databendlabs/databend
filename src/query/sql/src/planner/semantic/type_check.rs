@@ -970,13 +970,16 @@ impl<'a> TypeChecker<'a> {
 
     // just support integer
     #[inline]
-    fn resolve_window_frame(expr: &Expr) -> Option<usize> {
+    fn resolve_window_frame(expr: &Expr) -> Result<usize> {
         match expr {
             Expr::Literal {
                 lit: Literal::UInt64(value),
                 ..
-            } => Some(*value as usize),
-            _ => None,
+            } => Ok(*value as usize),
+            _ => Err(ErrorCode::SemanticError(
+                "Only unsigned integer literals are allowed in window frame specification"
+                    .to_string(),
+            )),
         }
     }
 
@@ -1009,16 +1012,14 @@ impl<'a> TypeChecker<'a> {
                 WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
                 WindowFrameBound::Preceding(f) => {
                     if let Some(box expr) = f {
-                        let result = Self::resolve_window_frame(&expr);
-                        WindowFuncFrameBound::Preceding(result)
+                        WindowFuncFrameBound::Preceding(Some(Self::resolve_window_frame(&expr)?))
                     } else {
                         WindowFuncFrameBound::Preceding(None)
                     }
                 }
                 WindowFrameBound::Following(f) => {
                     if let Some(box expr) = f {
-                        let result = Self::resolve_window_frame(&expr);
-                        WindowFuncFrameBound::Following(result)
+                        WindowFuncFrameBound::Following(Some(Self::resolve_window_frame(&expr)?))
                     } else {
                         WindowFuncFrameBound::Following(None)
                     }
@@ -1029,16 +1030,14 @@ impl<'a> TypeChecker<'a> {
                 WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
                 WindowFrameBound::Preceding(f) => {
                     if let Some(box expr) = f {
-                        let result = Self::resolve_window_frame(&expr);
-                        WindowFuncFrameBound::Preceding(result)
+                        WindowFuncFrameBound::Preceding(Some(Self::resolve_window_frame(&expr)?))
                     } else {
                         WindowFuncFrameBound::Preceding(None)
                     }
                 }
                 WindowFrameBound::Following(f) => {
                     if let Some(box expr) = f {
-                        let result = Self::resolve_window_frame(&expr);
-                        WindowFuncFrameBound::Following(result)
+                        WindowFuncFrameBound::Following(Some(Self::resolve_window_frame(&expr)?))
                     } else {
                         WindowFuncFrameBound::Following(None)
                     }

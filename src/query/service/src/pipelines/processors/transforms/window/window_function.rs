@@ -128,12 +128,14 @@ impl WindowFunctionImpl {
                 let layout = get_layout_offsets(&[agg.clone()], &mut state_offset)?;
                 let place: StateAddr = arena.alloc_layout(layout).into();
                 let place = place.next(state_offset[0]);
-                Self::Aggregate(WindowFuncAggImpl {
+                let agg = WindowFuncAggImpl {
                     _arena: arena,
                     agg,
                     place,
                     args,
-                })
+                };
+                agg.reset();
+                Self::Aggregate(agg)
             }
             WindowFunctionInfo::RowNumber => Self::RowNumber,
             WindowFunctionInfo::Rank => Self::Rank,
@@ -148,5 +150,12 @@ impl WindowFunctionImpl {
                 DataType::Number(NumberDataType::UInt64)
             }
         })
+    }
+
+    #[inline]
+    pub fn reset(&self) {
+        if let Self::Aggregate(agg) = self {
+            agg.reset();
+        }
     }
 }
