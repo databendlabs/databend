@@ -3134,6 +3134,7 @@ FunctionCall {
     window: Some(
         WindowSpec(
             WindowSpec {
+                existing_window_name: None,
                 partition_by: [],
                 order_by: [
                     OrderByExpr {
@@ -3201,6 +3202,7 @@ FunctionCall {
     window: Some(
         WindowSpec(
             WindowSpec {
+                existing_window_name: None,
                 partition_by: [],
                 order_by: [],
                 window_frame: None,
@@ -3247,6 +3249,7 @@ FunctionCall {
     window: Some(
         WindowSpec(
             WindowSpec {
+                existing_window_name: None,
                 partition_by: [
                     ColumnRef {
                         span: Some(
@@ -3308,6 +3311,7 @@ FunctionCall {
     window: Some(
         WindowSpec(
             WindowSpec {
+                existing_window_name: None,
                 partition_by: [
                     ColumnRef {
                         span: Some(
@@ -3398,6 +3402,7 @@ FunctionCall {
     window: Some(
         WindowSpec(
             WindowSpec {
+                existing_window_name: None,
                 partition_by: [
                     ColumnRef {
                         span: Some(
@@ -3480,6 +3485,7 @@ FunctionCall {
     window: Some(
         WindowSpec(
             WindowSpec {
+                existing_window_name: None,
                 partition_by: [],
                 order_by: [
                     OrderByExpr {
@@ -3553,6 +3559,7 @@ FunctionCall {
     window: Some(
         WindowSpec(
             WindowSpec {
+                existing_window_name: None,
                 partition_by: [],
                 order_by: [
                     OrderByExpr {
@@ -3611,6 +3618,7 @@ FunctionCall {
     window: Some(
         WindowSpec(
             WindowSpec {
+                existing_window_name: None,
                 partition_by: [],
                 order_by: [
                     OrderByExpr {
@@ -3667,6 +3675,7 @@ FunctionCall {
     window: Some(
         WindowSpec(
             WindowSpec {
+                existing_window_name: None,
                 partition_by: [],
                 order_by: [
                     OrderByExpr {

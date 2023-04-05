@@ -1150,7 +1150,6 @@ impl TokenKind {
             // | TokenKind::REFERENCES
             | TokenKind::RIGHT
             | TokenKind::SELECT
-            | TokenKind::PIVOT
             | TokenKind::UNPIVOT
             // | TokenKind::SESSION_USER
             // | TokenKind::SIMILAR
@@ -1170,6 +1169,7 @@ impl TokenKind {
             | TokenKind::WHEN => true,
             | TokenKind::ARRAY
             | TokenKind::AS
+            | TokenKind::BETWEEN
             | TokenKind::CREATE
             | TokenKind::EXCEPT
             // | TokenKind::FETCH
@@ -1189,6 +1189,7 @@ impl TokenKind {
             | TokenKind::OF
             | TokenKind::ORDER
             | TokenKind::OVER
+            | TokenKind::PARTITION
             | TokenKind::ROWS
             | TokenKind::RANGE
             // | TokenKind::OVERLAPS
