@@ -491,7 +491,7 @@ pub struct WindowFrame {
     pub end_bound: WindowFrameBound,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, EnumAsInner)]
 pub enum WindowFrameUnits {
     Rows,
     Range,

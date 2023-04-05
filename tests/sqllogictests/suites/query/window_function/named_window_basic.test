@@ -1,8 +1,8 @@
 statement ok
-CREATE DATABASE IF NOT EXISTS test_window
+CREATE DATABASE IF NOT EXISTS test_named_window_basic
 
 statement ok
-USE test_window
+USE test_named_window_basic
 
 statement ok
 DROP TABLE IF EXISTS empsalary
@@ -29,19 +29,17 @@ sales 3 4800 9800
 sales 4 4800 14600
 
 # sum
-# TODO(window): Databend now only support ROWS frame,
-#               the test result will be changed if we support RANGE frame and set it as the default.
 query R
 SELECT sum(salary) OVER w ss FROM empsalary WINDOW w AS (PARTITION BY depname ORDER BY salary) ORDER BY depname, ss
 ----
 4200
 8700
-13900
+19100
 19100
 25100
 3500
 7400
-4800
+9600
 9600
 14600
 
@@ -208,8 +206,8 @@ select grouping(salary), grouping(depname), sum(grouping(salary)) over w from em
 0 0 0
 0 0 0
 0 0 0
-1 0 1
-1 0 2
+1 0 3
+1 0 3
 1 0 3
 1 1 1
 
@@ -229,4 +227,4 @@ SELECT * FROM (SELECT row_number() OVER w rn FROM empsalary WINDOW w AS (PARTITI
 3
 
 statement ok
-DROP DATABASE test_window
+DROP DATABASE test_named_window_basic
