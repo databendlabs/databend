@@ -7,7 +7,7 @@ data/tuple.parquet	431	NULL	NULL
 --- complex:
 data/complex.parquet	92762	NULL	NULL
 --- limit
-data/tuple.parquet	431	NULL	NULL
+data/complex.parquet	92762	NULL	NULL
 --- where
 data/tuple.parquet	431	NULL	NULL
 --- list files so far

@@ -34,7 +34,7 @@ cp "$CURDIR"/../../../../data/complex.parquet ${DATADIR_PATH}/data/complex.parqu
 echo "select name, size, md5, creator from list_stage(location => '@s7/data/', pattern => 'complex.*');" | $MYSQL_CLIENT_CONNECT
 
 echo "--- limit"
-echo "select name, size, md5, creator from list_stage(location => '@s7/data/', pattern => '.*parquet') limit 1;" | $MYSQL_CLIENT_CONNECT
+echo "select name, size, md5, creator from list_stage(location => '@s7/data/', pattern => '.*parquet') order by name limit 1;" | $MYSQL_CLIENT_CONNECT
 
 echo "--- where"
 echo "select name, size, md5, creator from list_stage(location => '@s7/data/', pattern => '.*parquet') where name = 'data/tuple.parquet';" | $MYSQL_CLIENT_CONNECT
