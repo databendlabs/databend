@@ -379,7 +379,7 @@ impl TransformWindow {
         }
         match &self.frame_kind.start_bound {
             WindowFuncFrameBound::CurrentRow => {
-                debug_assert!(self.partition_end <= self.peer_group_start);
+                debug_assert!(self.partition_start <= self.peer_group_start);
                 debug_assert!(self.peer_group_start < self.partition_end);
                 debug_assert!(self.peer_group_start <= self.current_row);
 
