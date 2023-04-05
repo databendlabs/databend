@@ -19,7 +19,6 @@ common-config = { path = "../config" }
 common-exception = { path = "../../common/exception" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
-common-storage = { path = "../../common/storage" }
 common-users = { path = "../users" }
 
 async-backtrace = { workspace = true }
@@ -27,7 +26,6 @@ http = "0.2"
 log = "0.4"
 moka = "0.10"
 opendal = { workspace = true }
-parking_lot = "0.12.1"
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -791,6 +791,9 @@ pub struct ShareSpec {
     pub database: Option<ShareDatabaseSpec>,
     pub tables: Vec<ShareTableSpec>,
     pub tenants: Vec<String>,
+    pub db_privileges: Option<BitFlags<ShareGrantObjectPrivilege>>,
+    pub comment: Option<String>,
+    pub share_on: Option<DateTime<Utc>>,
 }
 
 mod kvapi_key_impl {

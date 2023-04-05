@@ -23,6 +23,7 @@ use poem::web::Path;
 use crate::accessor::SharingAccessor;
 use crate::models;
 use crate::models::PresignFileResponse;
+use crate::models::ShareSpec;
 
 #[poem::handler]
 #[async_backtrace::framed]
@@ -62,6 +63,19 @@ pub async fn share_table_meta(
         None,
     );
     match SharingAccessor::get_share_table_meta(&input).await {
+        Ok(output) => Ok(Json(output)),
+        Err(e) => Err(BadRequest(e)),
+    }
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn share_spec(
+    _credentials: &Credentials,
+    Path(tenant_id): Path<String>,
+    Json(_request_tables): Json<Vec<String>>,
+) -> PoemResult<Json<Vec<ShareSpec>>> {
+    match SharingAccessor::get_share_spec(&tenant_id).await {
         Ok(output) => Ok(Json(output)),
         Err(e) => Err(BadRequest(e)),
     }
