@@ -656,11 +656,13 @@ impl Binder {
                     path_indices,
                     data_type,
                     leaf_index,
+                    table_index,
                     ..
                 }) => {
                     let column_binding = ColumnBinding {
                         database_name: Some(database_name.to_string()),
                         table_name: Some(table.name().to_string()),
+                        table_index: Some(*table_index),
                         column_name: column_name.clone(),
                         index: *column_index,
                         data_type: Box::new(DataType::from(data_type)),

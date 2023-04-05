@@ -96,6 +96,7 @@ impl RulePushDownFilterScan {
                         let column_binding = ColumnBinding {
                             database_name: Some(table_entry.database().to_string()),
                             table_name: Some(table_entry.name().to_string()),
+                            table_index: Some(table_entry.index()),
                             column_name: base_column.column_name.clone(),
                             index: base_column.column_index,
                             data_type: column.column.data_type.clone(),

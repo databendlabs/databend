@@ -62,12 +62,15 @@ impl QueryGraph {
         nodes: &[IndexType],
         neighbor: &[IndexType],
     ) -> Result<(bool, Vec<(ScalarExpr, ScalarExpr)>)> {
-        let mut edge = &self.root_edge;
-        for node in nodes.iter() {
-            if !edge.children.contains_key(node) {
-                continue;
+        let nodes_size = nodes.len();
+        for i in 0..nodes_size {
+            let mut edge = &self.root_edge;
+            for node in nodes.iter().take(nodes_size).skip(i) {
+                if !edge.children.contains_key(node) {
+                    break;
+                }
+                edge = edge.children.get(node).unwrap();
             }
-            edge = edge.children.get(node).unwrap();
             for neighbor_info in edge.neighbors.iter() {
                 if is_subset(&neighbor_info.neighbors, neighbor) {
                     return Ok((true, neighbor_info.join_conditions.clone()));
@@ -97,6 +100,7 @@ impl QueryGraph {
             for neighbor_info in edge.neighbors.iter() {
                 if !forbidden_nodes.contains(&neighbor_info.neighbors[0]) {
                     neighbors.push(neighbor_info.neighbors[0]);
+                    return Ok(neighbors);
                 }
             }
         }

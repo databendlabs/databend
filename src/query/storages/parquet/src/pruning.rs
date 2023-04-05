@@ -683,6 +683,7 @@ mod tests {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: "col1".to_string(),
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
@@ -713,6 +714,7 @@ mod tests {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: "col1".to_string(),
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
@@ -743,6 +745,7 @@ mod tests {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: "col1".to_string(),
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
@@ -783,6 +786,7 @@ mod tests {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: "col1".to_string(),
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
@@ -814,6 +818,7 @@ mod tests {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: "col1".to_string(),
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
@@ -845,6 +850,7 @@ mod tests {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: "col1".to_string(),
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
@@ -876,6 +882,7 @@ mod tests {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: "col1".to_string(),
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),

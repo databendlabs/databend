@@ -74,6 +74,8 @@ pub struct ColumnBinding {
     pub database_name: Option<String>,
     /// Table name of this `ColumnBinding` in current context
     pub table_name: Option<String>,
+    /// Table index of this `ColumnBinding` in current context
+    pub table_index: Option<IndexType>,
     /// Column name of this `ColumnBinding` in current context
     pub column_name: String,
     /// Column index of ColumnBinding
@@ -438,6 +440,7 @@ impl BindContext {
             self.columns.push(ColumnBinding {
                 database_name,
                 table_name,
+                table_index: Some(table_index),
                 column_name: column_binding.internal_column.column_name().clone(),
                 index: column_binding.index,
                 data_type: Box::new(column_binding.internal_column.data_type()),
