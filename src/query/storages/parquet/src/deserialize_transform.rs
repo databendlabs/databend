@@ -294,7 +294,7 @@ impl Processor for ParquetDeserializeTransform {
                         return Ok(());
                     }
 
-                    // Step 5 Remove columns that are not needed for output. Use dummy column to replce them.
+                    // Step 5 Remove columns that are not needed for output. Use dummy column to replace them.
                     let mut columns = prewhere_block.columns().to_vec();
                     for (col, f) in columns.iter_mut().zip(reader.output_schema.fields()) {
                         if !self.output_schema.has_field(f.name()) {

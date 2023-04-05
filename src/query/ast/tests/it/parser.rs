@@ -420,7 +420,7 @@ fn test_statement_error() {
         r#"alter database system x rename to db"#,
         r#"create user 'test-e'@'localhost' identified bi 'password';"#,
         r#"drop usar if exists 'test-j'@'localhost';"#,
-        r#"alter user 'test-e'@'localhost' identifie by 'new-password';"#,
+        r#"alter user 'test-e'@'localhost' identifies by 'new-password';"#,
         r#"create role 'test'@'localhost';"#,
         r#"drop role 'test'@'localhost';"#,
         r#"drop role role1;"#,
@@ -494,6 +494,7 @@ fn test_query() {
         r#"select * from monthly_sales pivot(sum(amount) for month in ('JAN', 'FEB', 'MAR', 'APR')) order by empid"#,
         r#"select * from monthly_sales_1 unpivot(sales for month in (jan, feb, mar, april)) order by empid"#,
         r#"select * from range(1, 2)"#,
+        r#"select sum(a) over w from customer window w as (partition by a order by b)"#,
     ];
 
     for case in cases {

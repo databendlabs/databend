@@ -472,19 +472,19 @@ fn register_like(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
         "regexp",
         |_, _| FunctionDomain::Full,
-        vectorize_regexp(|str, pat, builer, ctx, map, _| {
+        vectorize_regexp(|str, pat, builder, ctx, map, _| {
             if let Some(re) = map.get(pat) {
-                builer.push(re.is_match(str));
+                builder.push(re.is_match(str));
             } else {
                 // TODO error
                 match regexp::build_regexp_from_pattern("regexp", pat, None) {
                     Ok(re) => {
-                        builer.push(re.is_match(str));
+                        builder.push(re.is_match(str));
                         map.insert(pat.to_vec(), re);
                     }
                     Err(e) => {
-                        ctx.set_error(builer.len(), e);
-                        builer.push(false);
+                        ctx.set_error(builder.len(), e);
+                        builder.push(false);
                     }
                 }
             }

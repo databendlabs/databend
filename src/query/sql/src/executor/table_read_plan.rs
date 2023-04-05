@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use common_base::base::ProgressValues;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::InternalColumn;
 use common_catalog::plan::PartStatistics;
@@ -72,6 +73,11 @@ impl ToReadDataSourcePlan for dyn Table {
         } else {
             self.read_partitions(ctx.clone(), push_downs.clone()).await
         }?;
+
+        ctx.incr_total_scan_value(ProgressValues {
+            rows: statistics.read_rows,
+            bytes: statistics.read_bytes,
+        });
 
         // We need the partition sha256 to specify the result cache.
         if ctx.get_settings().get_enable_query_result_cache()? {

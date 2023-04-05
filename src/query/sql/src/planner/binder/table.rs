@@ -386,6 +386,7 @@ impl Binder {
                         selection: None,
                         group_by: None,
                         having: None,
+                        window_list: None,
                     };
                     self.bind_select_stmt(&mut bind_context, &stmt, &[]).await
                 } else {

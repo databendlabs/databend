@@ -16,9 +16,9 @@ sidebar_label: Databend Cloud
 
 Databend Cloud is now in private beta. To create a Databend Cloud account, go to https://www.databend.com/apply to apply for beta access.
 
-## Logging in to Your Account
+## Logging into Your Account
 
-To log in to your account, go to https://app.databend.com.
+To log into your account, go to https://app.databend.com.
 
 <img src="/img/cloud/databend-cloud-login.png"/>
 

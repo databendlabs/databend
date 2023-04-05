@@ -26,7 +26,7 @@ use crate::plans::RelOp;
 // Split `Aggregate` into `FinalAggregate` and `PartialAggregate`
 pub struct RuleSplitAggregate {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RuleSplitAggregate {
@@ -36,7 +36,7 @@ impl RuleSplitAggregate {
             //  Aggregate
             //  \
             //   *
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Aggregate,
                 }
@@ -47,7 +47,7 @@ impl RuleSplitAggregate {
                     }
                     .into(),
                 ),
-            ),
+            )],
         }
     }
 }
@@ -74,7 +74,7 @@ impl Rule for RuleSplitAggregate {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }

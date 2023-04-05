@@ -45,7 +45,7 @@ use crate::plans::RelOp;
 ///      t1  t3
 pub struct RuleRightExchangeJoin {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RuleRightExchangeJoin {
@@ -58,7 +58,7 @@ impl RuleRightExchangeJoin {
             // *  LogicalJoin
             //    | \
             //    *  *
-            pattern: SExpr::create_binary(
+            patterns: vec![SExpr::create_binary(
                 PatternPlan {
                     plan_type: RelOp::Join,
                 }
@@ -72,7 +72,7 @@ impl RuleRightExchangeJoin {
                     SExpr::create_pattern_leaf(),
                     SExpr::create_pattern_leaf(),
                 ),
-            ),
+            )],
         }
     }
 }
@@ -206,8 +206,8 @@ impl Rule for RuleRightExchangeJoin {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 
     fn transformation(&self) -> bool {

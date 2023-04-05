@@ -15,7 +15,7 @@
 use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
 use common_ast::ast::Literal;
-use common_ast::ast::WindowSpec;
+use common_ast::ast::Window;
 use common_ast::Visitor;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -49,7 +49,7 @@ impl<'a> Visitor<'a> for SrfCollector {
         name: &'a Identifier,
         args: &'a [Expr],
         params: &'a [Literal],
-        over: &'a Option<WindowSpec>,
+        over: &'a Option<Window>,
     ) {
         if BUILTIN_FUNCTIONS
             .get_property(&name.name)

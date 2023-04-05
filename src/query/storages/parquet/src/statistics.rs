@@ -29,7 +29,7 @@ use storages_common_table_meta::meta::StatisticsOfColumns;
 
 /// Collect statistics of a batch of row groups of the specified columns.
 ///
-/// The retuened vector's length is the same as `rgs`.
+/// The returned vector's length is the same as `rgs`.
 pub fn collect_row_group_stats(
     column_nodes: &ColumnNodes,
     rgs: &[RowGroupMetaData],

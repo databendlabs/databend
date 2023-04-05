@@ -228,8 +228,12 @@ impl TryFrom<&ArrowField> for DataType {
                     scale: (*s) as u8,
                 }))
             }
+            ArrowDataType::List(f) => DataType::Array(Box::new((&*(*f)).try_into()?)),
+            ArrowDataType::LargeList(f) => DataType::Array(Box::new((&*(*f)).try_into()?)),
+            ArrowDataType::FixedSizeList(f, _) => DataType::Array(Box::new((&*(*f)).try_into()?)),
+
             _ => Err(ArrowError::CastError(format!(
-                "cast {ty} to DataType not not implemented yet"
+                "cast {ty} to DataType not implemented yet"
             )))?,
         };
         Ok(data_type)

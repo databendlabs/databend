@@ -182,6 +182,10 @@ impl HistogramBucket {
     pub fn num_distinct(&self) -> f64 {
         self.num_distinct
     }
+
+    pub fn aggregate_values(&mut self) {
+        self.num_values = self.num_distinct;
+    }
 }
 
 trait SampleSet {

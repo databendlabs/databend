@@ -258,12 +258,12 @@ impl Processor for StageTableSink {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
-            State::NeedWrite(bytes, remainng_block) => {
+            State::NeedWrite(bytes, remaining_block) => {
                 let path = self.unload_path();
 
                 self.data_accessor.write(&path, bytes).await?;
 
-                match remainng_block {
+                match remaining_block {
                     Some(block) => self.state = State::NeedSerialize(block),
                     None => self.state = State::None,
                 }

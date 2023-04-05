@@ -319,6 +319,15 @@ async fn main_entrypoint() -> Result<()> {
             .parse()?
         )
     );
+    for (idx, (k, v)) in env::vars()
+        .filter(|(k, _)| k.starts_with("_DATABEND"))
+        .enumerate()
+    {
+        if idx == 0 {
+            println!("Databend Internal:");
+        }
+        println!("    {}={}", k, v);
+    }
 
     info!("Ready for connections.");
     shutdown_handle.wait_for_termination_request().await;

@@ -68,7 +68,7 @@ docker run  -d -p 3000:3000 --name metabase metabase/metabase
   - Database type: `Databend`
   - Host: `host.docker.internal`
   - Port: `8000`
-  - Username: `root`. No password is required if you log in to a local instance of Databend with `root`.
+  - Username: `root`. No password is required if you log into a local instance of Databend with `root`.
   - Database: `default`
 
 4. Click **Save changes**, then click **Exit admin**.

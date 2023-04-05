@@ -111,7 +111,7 @@ pub struct WindowOrderByInfo {
 pub(super) struct WindowRewriter<'a> {
     pub bind_context: &'a mut BindContext,
     pub metadata: MetadataRef,
-    // While analyzing in-window aggregate function, we can repalce it with a BoundColumnRef
+    // While analyzing in-window aggregate function, we can replace it with a BoundColumnRef
     in_window: bool,
 }
 

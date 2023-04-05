@@ -38,7 +38,7 @@ use crate::MetadataRef;
 
 pub struct RulePushDownFilterJoin {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
     metadata: MetadataRef,
 }
 
@@ -52,7 +52,7 @@ impl RulePushDownFilterJoin {
             //   | \
             //   |  *
             //   *
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Filter,
                 }
@@ -75,7 +75,7 @@ impl RulePushDownFilterJoin {
                         .into(),
                     ),
                 ),
-            ),
+            )],
             metadata,
         }
     }
@@ -125,8 +125,8 @@ impl Rule for RulePushDownFilterJoin {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }
 
