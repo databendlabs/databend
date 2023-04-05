@@ -1150,8 +1150,8 @@ impl TokenKind {
             // | TokenKind::REFERENCES
             | TokenKind::RIGHT
             | TokenKind::SELECT
-            | TokenKind::UNPIVOT
             | TokenKind::PIVOT
+            | TokenKind::UNPIVOT
             // | TokenKind::SESSION_USER
             // | TokenKind::SIMILAR
             | TokenKind::SOME
