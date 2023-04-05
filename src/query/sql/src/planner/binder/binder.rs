@@ -47,6 +47,7 @@ use crate::plans::ShowRolesPlan;
 use crate::plans::UseDatabasePlan;
 use crate::BindContext;
 use crate::ColumnBinding;
+use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::Visibility;
@@ -420,6 +421,7 @@ impl<'a> Binder {
         &mut self,
         database_name: Option<String>,
         table_name: Option<String>,
+        table_index: Option<IndexType>,
         column_name: String,
         data_type: DataType,
     ) -> ColumnBinding {
@@ -430,6 +432,7 @@ impl<'a> Binder {
         ColumnBinding {
             database_name,
             table_name,
+            table_index,
             column_name,
             index,
             data_type: Box::new(data_type),

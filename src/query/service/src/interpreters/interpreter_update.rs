@@ -81,6 +81,7 @@ impl Interpreter for UpdateInterpreter {
             column: ColumnBinding {
                 database_name: None,
                 table_name: None,
+                table_index: None,
                 column_name: "_predicate".to_string(),
                 index: tbl.schema().num_fields(),
                 data_type: Box::new(DataType::Boolean),

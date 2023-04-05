@@ -186,6 +186,7 @@ impl<'a> WindowRewriter<'a> {
                         let column_binding = ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: agg_func.display_name.clone(),
                             index: agg.index,
                             data_type: agg_func.return_type.clone(),
@@ -257,6 +258,7 @@ impl<'a> WindowRewriter<'a> {
                         let column_binding = ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: name,
                             index,
                             data_type: Box::new(arg.data_type()?),
@@ -308,6 +310,7 @@ impl<'a> WindowRewriter<'a> {
                 let column_binding = ColumnBinding {
                     database_name: None,
                     table_name: None,
+                    table_index: None,
                     column_name: name,
                     index,
                     data_type: Box::new(part.data_type()?),
@@ -356,6 +359,7 @@ impl<'a> WindowRewriter<'a> {
                 let column_binding = ColumnBinding {
                     database_name: None,
                     table_name: None,
+                    table_index: None,
                     column_name: name,
                     index,
                     data_type: Box::new(order_expr.data_type()?),

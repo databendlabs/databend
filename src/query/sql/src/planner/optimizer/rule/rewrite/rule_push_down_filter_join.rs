@@ -168,32 +168,41 @@ pub fn try_push_down_filter_join(
             }
             JoinPredicate::Other(_) => original_predicates.push(predicate),
 
-            JoinPredicate::Both { left, right } => {
-                let left_type = left.data_type()?;
-                let right_type = right.data_type()?;
-                let join_key_type =
-                    common_super_type(left_type, right_type, &BUILTIN_FUNCTIONS.default_cast_rules);
+            JoinPredicate::Both { left, right, equal } => {
+                if equal {
+                    let left_type = left.data_type()?;
+                    let right_type = right.data_type()?;
+                    let join_key_type = common_super_type(
+                        left_type,
+                        right_type,
+                        &BUILTIN_FUNCTIONS.default_cast_rules,
+                    );
 
-                // We have to check if left_type and right_type can be coerced to
-                // a super type. If the coercion is failed, we cannot push the
-                // predicate into join.
-                if let Some(join_key_type) = join_key_type {
-                    if join.join_type == JoinType::Cross {
-                        join.join_type = JoinType::Inner;
-                    }
-                    if join.join_type == JoinType::Inner {
-                        if left.data_type()? != right.data_type()? {
-                            let left = wrap_cast(left, &join_key_type);
-                            let right = wrap_cast(right, &join_key_type);
-                            join.left_conditions.push(left);
-                            join.right_conditions.push(right);
-                        } else {
-                            join.left_conditions.push(left.clone());
-                            join.right_conditions.push(right.clone());
+                    // We have to check if left_type and right_type can be coerced to
+                    // a super type. If the coercion is failed, we cannot push the
+                    // predicate into join.
+                    if let Some(join_key_type) = join_key_type {
+                        if join.join_type == JoinType::Cross {
+                            join.join_type = JoinType::Inner;
                         }
-                        need_push = true;
+                        if join.join_type == JoinType::Inner {
+                            if left.data_type()? != right.data_type()? {
+                                let left = wrap_cast(left, &join_key_type);
+                                let right = wrap_cast(right, &join_key_type);
+                                join.left_conditions.push(left);
+                                join.right_conditions.push(right);
+                            } else {
+                                join.left_conditions.push(left.clone());
+                                join.right_conditions.push(right.clone());
+                            }
+                            need_push = true;
+                        }
                     }
-                } else {
+                } else if matches!(join.join_type, JoinType::Inner) {
+                    join.non_equi_conditions.push(predicate.clone());
+                    need_push = true;
+                }
+                if !need_push {
                     original_predicates.push(predicate);
                 }
             }

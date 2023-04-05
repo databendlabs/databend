@@ -212,6 +212,7 @@ impl Binder {
                     let column_binding = self.create_column_binding(
                         None,
                         None,
+                        None,
                         format!("{:#}", order.expr),
                         rewrite_scalar.data_type()?,
                     );
