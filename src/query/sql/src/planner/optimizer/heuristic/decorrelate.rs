@@ -334,6 +334,7 @@ impl SubqueryRewriter {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name,
                             index: output_column.index,
                             data_type: output_column.data_type,
@@ -490,6 +491,7 @@ impl SubqueryRewriter {
                     let column_binding = ColumnBinding {
                         database_name: None,
                         table_name: None,
+                        table_index: None,
                         column_name: format!("subquery_{}", derived_column),
                         index: *derived_column,
                         data_type: Box::from(data_type.clone()),
@@ -610,6 +612,7 @@ impl SubqueryRewriter {
                         ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: format!("subquery_{}", derived_column),
                             index: *derived_column,
                             data_type: Box::from(data_type.clone()),
@@ -724,6 +727,7 @@ impl SubqueryRewriter {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: format!("subquery_{}", index),
                             index: *index,
                             data_type: column_binding.data_type.clone(),
@@ -830,6 +834,7 @@ impl SubqueryRewriter {
                 column: ColumnBinding {
                     database_name: None,
                     table_name: None,
+                    table_index: None,
                     column_name: format!("subquery_{}", correlated_column),
                     index: *correlated_column,
                     data_type: Box::from(data_type.clone()),
@@ -842,6 +847,7 @@ impl SubqueryRewriter {
                 column: ColumnBinding {
                     database_name: None,
                     table_name: None,
+                    table_index: None,
                     column_name: format!("subquery_{}", derive_column),
                     index: *derive_column,
                     data_type: Box::from(data_type.clone()),
