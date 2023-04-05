@@ -8,7 +8,7 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../.." || exit
 
 TARGET="${TARGET:-dev}"
-INTERACTIVE="${INTERACTIVE:-false}"
+INTERACTIVE="${INTERACTIVE:-true}"
 CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
 BYPASS_ENV_VARS="${BYPASS_ENV_VARS:-RUSTFLAGS,RUST_LOG}"
 ENABLE_SCCACHE="${ENABLE_SCCACHE:-false}"
@@ -25,9 +25,9 @@ else
 	IMAGE="${USER}/build-tool:${TARGET}-${TOOLCHAIN_VERSION}"
 
 	if [[ "$(docker image ls ${IMAGE} --format="true")" ]]; then
-		echo "image ${IMAGE} already exists, skip building..."
+		echo "==> build-tool using image ${IMAGE}"
 	else
-		echo "building temporary image ${IMAGE}..."
+		echo "==> preparing temporary build-tool image ${IMAGE} ..."
 		tmpdir=$(mktemp -d)
 		cat >"${tmpdir}/Dockerfile" <<EOF
 FROM datafuselabs/build-tool:${TARGET}-${TOOLCHAIN_VERSION}
@@ -44,7 +44,7 @@ mkdir -p "${CARGO_HOME}/git"
 mkdir -p "${CARGO_HOME}/registry"
 
 if [[ $INTERACTIVE == "true" ]]; then
-	echo "running interactive..." >&2
+	echo "==> building interactive..." >&2
 	EXTRA_ARGS="--interactive --env TERM=xterm-256color"
 fi
 

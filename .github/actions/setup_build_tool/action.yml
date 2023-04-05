@@ -28,6 +28,7 @@ runs:
         cat <<EOF >$BIN_LOCAL/build-tool
         #!/bin/bash
         script_name=\$(basename "\$0")
+        export INTERACTIVE=false
         export TARGET=${{ inputs.target }}
         export CARGO_INCREMENTAL=0
         export CARGO_TERM_COLOR=always
