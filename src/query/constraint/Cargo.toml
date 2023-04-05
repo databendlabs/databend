@@ -1,0 +1,16 @@
+[package]
+name = "common-constraint"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[lib]
+test = false
+
+[dependencies] # In alphabetical order
+# Workspace dependencies
+
+# Crates.io dependencies
+z3 = { version = "0.11.2", features = ["static-link-z3"] }
