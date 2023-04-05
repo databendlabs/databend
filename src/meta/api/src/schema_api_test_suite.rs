@@ -646,12 +646,11 @@ impl SchemaApiTestSuite {
         mt: &MT,
     ) -> anyhow::Result<()> {
         let tenant1 = "tenant1";
-        let tenant2 = "tenant2";
         let db1 = "db1";
         let db2 = "db2";
         let share = "share";
         let share_name = ShareNameIdent {
-            tenant: tenant2.to_string(),
+            tenant: tenant1.to_string(),
             share_name: share.to_string(),
         };
         let db_name1 = DatabaseNameIdent {
@@ -659,7 +658,7 @@ impl SchemaApiTestSuite {
             db_name: db1.to_string(),
         };
         let db_name2 = DatabaseNameIdent {
-            tenant: tenant2.to_string(),
+            tenant: tenant1.to_string(),
             db_name: db2.to_string(),
         };
         let db_id;
@@ -3509,7 +3508,7 @@ impl SchemaApiTestSuite {
         mt: &MT,
     ) -> anyhow::Result<()> {
         let tenant1 = "tenant1";
-        let tenant2 = "tenant2";
+        let tenant2 = "tenant1";
         let db1 = "db1";
         let db2 = "db2";
         let share = "share";
