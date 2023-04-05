@@ -102,7 +102,7 @@ pub struct EvalContext<'a> {
 
 /// `FunctionID` is a unique identifier for a function in the registry. It's used to
 /// construct the exactly same function in the remote execution nodes.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq, Serialize, Deserialize)]
 pub enum FunctionID {
     Builtin {
         name: String,
