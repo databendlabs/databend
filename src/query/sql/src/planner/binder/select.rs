@@ -909,7 +909,6 @@ impl<'a> SelectRewriter<'a> {
 
         for (name, spec) in window_specs.iter() {
             let new_spec = Self::rewrite_inherited_window_spec(
-                name,
                 spec,
                 &window_specs,
                 &mut resolved_window_specs,
@@ -982,7 +981,6 @@ impl<'a> SelectRewriter<'a> {
     }
 
     fn rewrite_inherited_window_spec(
-        window_name: &str,
         window_spec: &WindowSpec,
         window_list: &HashMap<String, WindowSpec>,
         resolved_window: &mut HashMap<String, WindowSpec>,
@@ -1003,61 +1001,63 @@ impl<'a> SelectRewriter<'a> {
                 )
             }
             .clone();
-            match referenced_window_spec.existing_window_name.clone() {
-                Some(_) => Self::rewrite_inherited_window_spec(
-                    &referenced_name,
-                    &referenced_window_spec,
-                    window_list,
-                    resolved_window,
-                ),
-                None => {
-                    // check semantic
-                    if !window_spec.partition_by.is_empty() {
-                        return Err(ErrorCode::SemanticError(
-                            "WINDOW specification with named WINDOW reference cannot specify PARTITION BY",
-                        ));
-                    }
-                    if !window_spec.order_by.is_empty()
-                        && !referenced_window_spec.order_by.is_empty()
-                    {
-                        return Err(ErrorCode::SemanticError(
-                            "Cannot specify ORDER BY if referenced named WINDOW specifies ORDER BY",
-                        ));
-                    }
-                    if referenced_window_spec.window_frame.is_some() {
-                        return Err(ErrorCode::SemanticError(
-                            "Cannot reference named WINDOW containing frame specification",
-                        ));
-                    }
 
-                    // resolve referenced window
-                    let mut partition_by = window_spec.partition_by.clone();
-                    if !referenced_window_spec.partition_by.is_empty() {
-                        partition_by = referenced_window_spec.partition_by.clone();
-                    }
-
-                    let mut order_by = window_spec.order_by.clone();
-                    if order_by.is_empty() && !referenced_window_spec.order_by.is_empty() {
-                        order_by = referenced_window_spec.order_by.clone();
-                    }
-
-                    let mut window_frame = window_spec.window_frame.clone();
-                    if window_frame.is_none() && referenced_window_spec.window_frame.is_some() {
-                        window_frame = referenced_window_spec.window_frame.clone();
-                    }
-
-                    // replace with new window spec
-                    let new_window_spec = WindowSpec {
-                        existing_window_name: None,
-                        partition_by,
-                        order_by,
-                        window_frame,
-                    };
-                    // add to resolved.
-                    resolved_window.insert(window_name.to_string(), new_window_spec.clone());
-                    Ok(new_window_spec)
+            let resolved_spec = match referenced_window_spec.existing_window_name.clone() {
+                Some(_) => {
+                    println!("call recursion:{:?}", referenced_name);
+                    Self::rewrite_inherited_window_spec(
+                        &referenced_window_spec,
+                        window_list,
+                        resolved_window,
+                    )?
                 }
+                None => referenced_window_spec.clone(),
+            };
+
+            // add to resolved.
+            resolved_window.insert(referenced_name, resolved_spec.clone());
+
+            // check semantic
+            if !window_spec.partition_by.is_empty() {
+                return Err(ErrorCode::SemanticError(
+                    "WINDOW specification with named WINDOW reference cannot specify PARTITION BY",
+                ));
             }
+            if !window_spec.order_by.is_empty() && !resolved_spec.order_by.is_empty() {
+                return Err(ErrorCode::SemanticError(
+                    "Cannot specify ORDER BY if referenced named WINDOW specifies ORDER BY",
+                ));
+            }
+            if resolved_spec.window_frame.is_some() {
+                return Err(ErrorCode::SemanticError(
+                    "Cannot reference named WINDOW containing frame specification",
+                ));
+            }
+
+            // resolve referenced window
+            let mut partition_by = window_spec.partition_by.clone();
+            if !resolved_spec.partition_by.is_empty() {
+                partition_by = resolved_spec.partition_by.clone();
+            }
+
+            let mut order_by = window_spec.order_by.clone();
+            if order_by.is_empty() && !resolved_spec.order_by.is_empty() {
+                order_by = resolved_spec.order_by.clone();
+            }
+
+            let mut window_frame = window_spec.window_frame.clone();
+            if window_frame.is_none() && resolved_spec.window_frame.is_some() {
+                window_frame = resolved_spec.window_frame;
+            }
+
+            // replace with new window spec
+            let new_window_spec = WindowSpec {
+                existing_window_name: None,
+                partition_by,
+                order_by,
+                window_frame,
+            };
+            Ok(new_window_spec)
         } else {
             Ok(window_spec.clone())
         }
