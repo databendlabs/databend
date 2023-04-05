@@ -25,6 +25,7 @@ use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::FunctionContext;
 use common_expression::HashMethodKind;
+use common_expression::RemoteExpr;
 use common_expression::SortColumnDescription;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
@@ -382,6 +383,12 @@ impl PipelineBuilder {
         let exprs = eval_scalar
             .exprs
             .iter()
+            .filter(|(scalar, idx)| {
+                if let RemoteExpr::ColumnRef { id, .. } = scalar {
+                    return idx != id;
+                }
+                true
+            })
             .map(|(scalar, _)| scalar.as_expr(&BUILTIN_FUNCTIONS))
             .collect::<Vec<_>>();
 
