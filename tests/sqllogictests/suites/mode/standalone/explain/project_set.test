@@ -33,7 +33,7 @@ EvalScalar
                 └── TableScan
                     ├── table: default.default.fold_count
                     ├── read rows: 1
-                    ├── read bytes: 76
+                    ├── read bytes: 87
                     ├── partitions total: 1
                     ├── partitions scanned: 1
                     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
