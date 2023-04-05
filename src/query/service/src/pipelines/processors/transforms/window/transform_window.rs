@@ -82,6 +82,7 @@ pub struct TransformWindow {
 
     /// monotonically increasing index of the current block in the queue.
     first_block: usize,
+    next_output_block: usize,
 
     // Partition: [`partition_start`, `partition_end`). `partition_end` is excluded.
     partition_start: RowPtr,
@@ -154,6 +155,7 @@ impl TransformWindow {
             blocks: VecDeque::new(),
             outputs: VecDeque::new(),
             first_block: 0,
+            next_output_block: 0,
             partition_start: RowPtr::default(),
             partition_end: RowPtr::default(),
             partition_ended: false,
@@ -710,19 +712,38 @@ impl TransformWindow {
     }
 
     fn check_outputs(&mut self) {
-        while let Some(WindowBlock { block, builder }) = self.blocks.front() {
-            if block.num_rows() == builder.len() {
-                let WindowBlock { mut block, builder } = self.blocks.pop_front().unwrap();
+        while self.next_output_block - self.first_block < self.blocks.len() {
+            let block = &mut self.blocks[self.next_output_block - self.first_block];
+
+            if block.block.num_rows() == block.builder.len() {
+                // Can output
+                let mut output = block.block.clone();
+                let data_type = block.builder.data_type();
+                // The memory of the builder can be released.
+                let builder = std::mem::replace(
+                    &mut block.builder,
+                    ColumnBuilder::with_capacity(&data_type, 0),
+                );
                 let new_column = builder.build();
-                block.add_column(BlockEntry {
+                output.add_column(BlockEntry {
                     data_type: new_column.data_type(),
                     value: Value::Column(new_column),
                 });
-                self.outputs.push_back(block);
-                self.first_block += 1;
+                self.outputs.push_back(output);
+                self.next_output_block += 1;
             } else {
                 break;
             }
+        }
+        // Release memory that is no longer needed.
+        let first_used_block = self
+            .next_output_block
+            .min(self.prev_frame_start.block)
+            .min(self.current_row.block);
+
+        if self.first_block < first_used_block {
+            self.blocks.drain(..first_used_block - self.first_block);
+            self.first_block = first_used_block;
         }
     }
 
@@ -843,7 +864,8 @@ impl Processor for TransformWindow {
                     (true, _) => {
                         // input_is_finished should be set after adding block.
                         self.input_is_finished = true;
-                        if !self.blocks.is_empty() {
+                        if self.next_output_block - self.first_block < self.blocks.len() {
+                            // There are still some blocks are not output.
                             self.state = ProcessorState::AddBlock(None);
                             Ok(Event::Sync)
                         } else {
@@ -1740,6 +1762,98 @@ mod tests {
                     "| 1        | 9        |",
                     "| 1        | 9        |",
                     "| 1        | 9        |",
+                    "+----------+----------+",
+                ],
+                &[block],
+            );
+            downstream_input.set_need_data();
+
+            assert!(matches!(transform.event()?, Event::Finished));
+        }
+
+        {
+            let upstream_output = OutputPort::create();
+            let downstream_input = InputPort::create();
+            let (mut transform, input, output) = get_transform_window_and_ports(WindowFuncFrame {
+                units: WindowFuncFrameUnits::Rows,
+                start_bound: WindowFuncFrameBound::Preceding(Some(3)),
+                end_bound: WindowFuncFrameBound::Preceding(Some(1)),
+            })?;
+
+            unsafe {
+                connect(&input, &upstream_output);
+                connect(&downstream_input, &output);
+            }
+
+            downstream_input.set_need_data();
+
+            assert!(matches!(transform.event()?, Event::NeedData));
+            upstream_output.push_data(Ok(DataBlock::new_from_columns(vec![Int32Type::from_data(
+                vec![1, 1, 1],
+            )])));
+
+            assert!(matches!(transform.event()?, Event::Sync));
+            transform.process()?;
+
+            assert!(matches!(transform.event()?, Event::NeedConsume));
+            let block = downstream_input.pull_data().unwrap()?;
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 1        | NULL     |",
+                    "| 1        | 1        |",
+                    "| 1        | 2        |",
+                    "+----------+----------+",
+                ],
+                &[block],
+            );
+            downstream_input.set_need_data();
+
+            assert!(matches!(transform.event()?, Event::NeedData));
+            upstream_output.push_data(Ok(DataBlock::new_from_columns(vec![Int32Type::from_data(
+                vec![1, 1, 1],
+            )])));
+
+            assert!(matches!(transform.event()?, Event::Sync));
+            transform.process()?;
+
+            assert!(matches!(transform.event()?, Event::NeedConsume));
+            let block = downstream_input.pull_data().unwrap()?;
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 1        | 3        |",
+                    "| 1        | 3        |",
+                    "| 1        | 3        |",
+                    "+----------+----------+",
+                ],
+                &[block],
+            );
+            downstream_input.set_need_data();
+
+            assert!(matches!(transform.event()?, Event::NeedData));
+            upstream_output.push_data(Ok(DataBlock::new_from_columns(vec![Int32Type::from_data(
+                vec![1, 1, 1],
+            )])));
+            upstream_output.finish();
+
+            assert!(matches!(transform.event()?, Event::Sync));
+            transform.process()?;
+
+            assert!(matches!(transform.event()?, Event::NeedConsume));
+            let block = downstream_input.pull_data().unwrap()?;
+            assert_blocks_eq(
+                vec![
+                    "+----------+----------+",
+                    "| Column 0 | Column 1 |",
+                    "+----------+----------+",
+                    "| 1        | 3        |",
+                    "| 1        | 3        |",
+                    "| 1        | 3        |",
                     "+----------+----------+",
                 ],
                 &[block],
