@@ -478,6 +478,7 @@ pub struct WindowRef {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct WindowSpec {
+    pub existing_window_name: Option<Identifier>,
     pub partition_by: Vec<Expr>,
     pub order_by: Vec<OrderByExpr>,
     pub window_frame: Option<WindowFrame>,
@@ -491,7 +492,7 @@ pub struct WindowFrame {
     pub end_bound: WindowFrameBound,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, EnumAsInner)]
 pub enum WindowFrameUnits {
     Rows,
     Range,

@@ -721,12 +721,35 @@ dependencies = [
 
 [[package]]
 name = "bindgen"
+version = "0.58.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f8523b410d7187a43085e7e064416ea32ded16bd0a4e6fc025e21616d01258f"
+dependencies = [
+ "bitflags 1.3.2",
+ "cexpr 0.4.0",
+ "clang-sys",
+ "clap 2.34.0",
+ "env_logger 0.8.4",
+ "lazy_static",
+ "lazycell",
+ "log",
+ "peeking_take_while",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "rustc-hash",
+ "shlex",
+ "which 3.1.1",
+]
+
+[[package]]
+name = "bindgen"
 version = "0.59.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2bd2a9a458e8f4304c52c43ebb0cfbd520289f8379a52e329a38afda99bf8eb8"
 dependencies = [
  "bitflags 1.3.2",
- "cexpr",
+ "cexpr 0.6.0",
  "clang-sys",
  "lazy_static",
  "lazycell",
@@ -1131,11 +1154,20 @@ dependencies = [
 
 [[package]]
 name = "cexpr"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4aedb84272dbe89af497cf81375129abda4fc0a9e7c5d317498c15cc30c0d27"
+dependencies = [
+ "nom 5.1.2",
+]
+
+[[package]]
+name = "cexpr"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6fac387a98bb7c37292057cffc56d62ecb629900026402633ae9160df93a8766"
 dependencies = [
- "nom",
+ "nom 7.1.3",
 ]
 
 [[package]]
@@ -1222,6 +1254,21 @@ dependencies = [
 
 [[package]]
 name = "clap"
+version = "2.34.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0610544180c38b88101fecf2dd634b174a62eef6946f84dfc6a7127512b381c"
+dependencies = [
+ "ansi_term",
+ "atty",
+ "bitflags 1.3.2",
+ "strsim 0.8.0",
+ "textwrap 0.11.0",
+ "unicode-width",
+ "vec_map",
+]
+
+[[package]]
+name = "clap"
 version = "3.2.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71655c45cb9845d3270c9d6df84ebe72b4dad3c2ba3f7023ad47c144e4e473a5"
@@ -1232,9 +1279,9 @@ dependencies = [
  "clap_lex 0.2.4",
  "indexmap",
  "once_cell",
- "strsim",
+ "strsim 0.10.0",
  "termcolor",
- "textwrap",
+ "textwrap 0.16.0",
 ]
 
 [[package]]
@@ -1248,7 +1295,7 @@ dependencies = [
  "clap_lex 0.3.3",
  "is-terminal",
  "once_cell",
- "strsim",
+ "strsim 0.10.0",
  "termcolor",
 ]
 
@@ -1402,7 +1449,7 @@ dependencies = [
  "goldenfile",
  "itertools",
  "logos",
- "nom",
+ "nom 7.1.3",
  "nom-rule",
  "pratt 0.4.0",
  "pretty",
@@ -1509,7 +1556,7 @@ version = "0.1.0"
 dependencies = [
  "async-compression-issue-150-workaround",
  "bytes",
- "env_logger",
+ "env_logger 0.10.0",
  "futures",
  "log",
  "pin-project",
@@ -1542,6 +1589,13 @@ dependencies = [
  "serfig",
  "strum",
  "tracing",
+]
+
+[[package]]
+name = "common-constraint"
+version = "0.1.0"
+dependencies = [
+ "z3",
 ]
 
 [[package]]
@@ -1727,7 +1781,7 @@ name = "common-hive-meta-store"
 version = "0.1.0"
 dependencies = [
  "databend-thrift",
- "which",
+ "which 4.4.0",
 ]
 
 [[package]]
@@ -2171,13 +2225,11 @@ dependencies = [
  "common-exception",
  "common-meta-api",
  "common-meta-app",
- "common-storage",
  "common-users",
  "http",
  "log",
  "moka",
  "opendal",
- "parking_lot 0.12.1",
  "reqwest",
  "serde",
  "serde_json",
@@ -2216,6 +2268,7 @@ dependencies = [
  "ctor",
  "dashmap",
  "educe",
+ "enum-as-inner",
  "globiter",
  "itertools",
  "num-derive",
@@ -2502,8 +2555,10 @@ name = "common-storages-share"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
+ "chrono",
  "common-exception",
  "common-meta-app",
+ "enumflags2",
  "goldenfile",
  "opendal",
  "serde",
@@ -3083,7 +3138,7 @@ dependencies = [
  "ident_case",
  "proc-macro2",
  "quote",
- "strsim",
+ "strsim 0.10.0",
  "syn",
 ]
 
@@ -3181,7 +3236,7 @@ dependencies = [
  "common-metrics",
  "common-tracing",
  "derive_more",
- "env_logger",
+ "env_logger 0.10.0",
  "futures",
  "itertools",
  "maplit",
@@ -3364,7 +3419,7 @@ dependencies = [
  "async-trait",
  "clap 4.1.11",
  "common-exception",
- "env_logger",
+ "env_logger 0.10.0",
  "futures-util",
  "lazy_static",
  "mysql_async",
@@ -3697,6 +3752,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "env_logger"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a19187fea3ac7e84da7dacf48de0c45d63c6a76f9490dae389aead16c243fce3"
+dependencies = [
+ "atty",
+ "humantime",
+ "log",
+ "regex",
+ "termcolor",
 ]
 
 [[package]]
@@ -4341,7 +4409,7 @@ dependencies = [
  "btoi",
  "gix-date",
  "itoa",
- "nom",
+ "nom 7.1.3",
  "quick-error 2.0.1",
 ]
 
@@ -4355,7 +4423,7 @@ dependencies = [
  "btoi",
  "gix-date",
  "itoa",
- "nom",
+ "nom 7.1.3",
  "thiserror",
 ]
 
@@ -4431,7 +4499,7 @@ dependencies = [
  "gix-ref 0.24.1",
  "gix-sec",
  "memchr",
- "nom",
+ "nom 7.1.3",
  "once_cell",
  "smallvec",
  "thiserror",
@@ -4452,7 +4520,7 @@ dependencies = [
  "gix-ref 0.27.1",
  "gix-sec",
  "memchr",
- "nom",
+ "nom 7.1.3",
  "once_cell",
  "smallvec",
  "thiserror",
@@ -4741,7 +4809,7 @@ dependencies = [
  "gix-validate",
  "hex",
  "itoa",
- "nom",
+ "nom 7.1.3",
  "smallvec",
  "thiserror",
 ]
@@ -4760,7 +4828,7 @@ dependencies = [
  "gix-validate",
  "hex",
  "itoa",
- "nom",
+ "nom 7.1.3",
  "smallvec",
  "thiserror",
 ]
@@ -4897,7 +4965,7 @@ dependencies = [
  "gix-tempfile 3.0.2",
  "gix-validate",
  "memmap2",
- "nom",
+ "nom 7.1.3",
  "thiserror",
 ]
 
@@ -4916,7 +4984,7 @@ dependencies = [
  "gix-tempfile 5.0.2",
  "gix-validate",
  "memmap2",
- "nom",
+ "nom 7.1.3",
  "thiserror",
 ]
 
@@ -5281,7 +5349,7 @@ dependencies = [
  "base64 0.13.1",
  "byteorder",
  "flate2",
- "nom",
+ "nom 7.1.3",
  "num-traits",
 ]
 
@@ -6522,7 +6590,7 @@ checksum = "9006c95034ccf7b903d955f210469119f6c3477fc9c9e7a7845ce38a3e665c2a"
 dependencies = [
  "base64 0.13.1",
  "bigdecimal",
- "bindgen",
+ "bindgen 0.59.2",
  "bitflags 1.3.2",
  "bitvec",
  "byteorder",
@@ -6585,6 +6653,16 @@ dependencies = [
 
 [[package]]
 name = "nom"
+version = "5.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ffb4262d26ed83a1c0a33a38fe2bb15797329c85770da05e6b828ddb782627af"
+dependencies = [
+ "memchr",
+ "version_check",
+]
+
+[[package]]
+name = "nom"
 version = "7.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d273983c5a657a70a3e8f2a01329822f3b8c8172b73826411a55751e404a0a4a"
@@ -6599,7 +6677,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea8dd3c6d80d1e61031aecc5fdfaf4b7d2324dbd94d575ac12f94e5d6856c2d4"
 dependencies = [
- "nom",
+ "nom 7.1.3",
  "pratt 0.3.0",
  "proc-macro-error 1.0.4",
  "proc-macro2",
@@ -6896,7 +6974,7 @@ dependencies = [
  "byteorder",
  "chrono",
  "mysql_common",
- "nom",
+ "nom 7.1.3",
  "pin-project-lite",
  "tokio",
  "tokio-rustls",
@@ -7730,7 +7808,7 @@ dependencies = [
  "regex",
  "syn",
  "tempfile",
- "which",
+ "which 4.4.0",
 ]
 
 [[package]]
@@ -8880,6 +8958,7 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "base64 0.21.0",
+ "chrono",
  "clap 3.2.23",
  "common-base",
  "common-config",
@@ -8887,6 +8966,7 @@ dependencies = [
  "common-meta-app",
  "common-storage",
  "common-storages-share",
+ "enumflags2",
  "opendal",
  "poem",
  "serde",
@@ -8996,7 +9076,7 @@ version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1649c86f6ff4bec1c5a96b834f1e0da09eff92d85e3963286a61f41afca65de5"
 dependencies = [
- "strsim",
+ "strsim 0.10.0",
  "triple_accel",
 ]
 
@@ -9317,6 +9397,12 @@ checksum = "fe895eb47f22e2ddd4dabc02bce419d2e643c8e3b585c78158b349195bc24d82"
 
 [[package]]
 name = "strsim"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ea5119cdb4c55b55d432abb513a0429384878c15dde60cc77b1c99de1a95a6a"
+
+[[package]]
+name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
@@ -9486,6 +9572,15 @@ name = "termtree"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3369f5ac52d5eb6ab48c6b4ffdc8efbcad6b89c765749064ba298f2c68a16a76"
+
+[[package]]
+name = "textwrap"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d326610f408c7a4eb6f51c37c330e496b08506c9457c9d34287ecc38809fb060"
+dependencies = [
+ "unicode-width",
+]
 
 [[package]]
 name = "textwrap"
@@ -10247,6 +10342,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
+name = "vec_map"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
+
+[[package]]
 name = "vergen"
 version = "8.0.0-beta.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10421,6 +10522,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6c71e40d7d2c34a5106301fb632274ca37242cd0c9d3e64dbece371a40a2d87"
 dependencies = [
  "webpki",
+]
+
+[[package]]
+name = "which"
+version = "3.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d011071ae14a2f6671d0b74080ae0cd8ebf3a6f8c9589a2cd45f23126fe29724"
+dependencies = [
+ "libc",
 ]
 
 [[package]]
@@ -10668,6 +10778,27 @@ name = "yansi"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09041cd90cf85f7f8b2df60c646f853b7f535ce68f85244eb6731cf89fa498ec"
+
+[[package]]
+name = "z3"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d25754b4bf4516a65d0e596ea9c1f0082224bdf20823a37fdd9111fa08d5bf48"
+dependencies = [
+ "lazy_static",
+ "log",
+ "z3-sys",
+]
+
+[[package]]
+name = "z3-sys"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c82dcbc58be4bf1994c520066cb2bd6c3d36aed0fdc57244f34d277421986a6"
+dependencies = [
+ "bindgen 0.58.1",
+ "cmake",
+]
 
 [[package]]
 name = "zeroize"

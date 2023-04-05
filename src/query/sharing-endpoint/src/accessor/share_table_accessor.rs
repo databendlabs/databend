@@ -61,7 +61,7 @@ impl SharingAccessor {
         Ok(PresignFileResponse::new(&s, input.file_name.clone()))
     }
 
-    fn get_share_spec_location(&self) -> String {
+    pub fn get_share_spec_location(&self) -> String {
         format!(
             "{}/{}/share_specs.json",
             self.config.tenant, SHARE_CONFIG_PREFIX

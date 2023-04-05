@@ -1,62 +1,100 @@
 query T
 explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = (select count(*) from numbers(1) as t2, numbers(1) as t3 where t.number = t2.number)
 ----
-Filter
-├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = if(CAST(is_not_null(scalar_subquery_5 (#5)) AS Boolean NULL), scalar_subquery_5 (#5), 0))]
+EvalScalar
+├── expressions: [t.number (#0)]
 ├── estimated rows: 0.33
-└── HashJoin
-    ├── join type: SINGLE
-    ├── build keys: [subquery_2 (#2)]
-    ├── probe keys: [subquery_0 (#0)]
-    ├── filters: []
-    ├── estimated rows: 1.00
-    ├── EvalScalar(Build)
-    │   ├── expressions: [COUNT(*) (#4)]
-    │   ├── estimated rows: 1.00
-    │   └── AggregateFinal
-    │       ├── group by: [number]
-    │       ├── aggregate functions: [count()]
-    │       ├── estimated rows: 1.00
-    │       └── AggregatePartial
-    │           ├── group by: [number]
-    │           ├── aggregate functions: [count()]
-    │           ├── estimated rows: 1.00
-    │           └── HashJoin
-    │               ├── join type: CROSS
-    │               ├── build keys: []
-    │               ├── probe keys: []
-    │               ├── filters: []
-    │               ├── estimated rows: 1.00
-    │               ├── TableScan(Build)
-    │               │   ├── table: default.system.numbers
-    │               │   ├── read rows: 1
-    │               │   ├── read bytes: 8
-    │               │   ├── partitions total: 1
-    │               │   ├── partitions scanned: 1
-    │               │   ├── push downs: [filters: [], limit: NONE]
-    │               │   └── estimated rows: 1.00
-    │               └── TableScan(Probe)
-    │                   ├── table: default.system.numbers
-    │                   ├── read rows: 1
-    │                   ├── read bytes: 8
-    │                   ├── partitions total: 1
-    │                   ├── partitions scanned: 1
-    │                   ├── push downs: [filters: [], limit: NONE]
-    │                   └── estimated rows: 1.00
-    └── HashJoin(Probe)
-        ├── join type: CROSS
-        ├── build keys: []
-        ├── probe keys: []
+└── Filter
+    ├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = if(CAST(is_not_null(scalar_subquery_5 (#5)) AS Boolean NULL), scalar_subquery_5 (#5), 0))]
+    ├── estimated rows: 0.33
+    └── HashJoin
+        ├── join type: SINGLE
+        ├── build keys: [subquery_2 (#2)]
+        ├── probe keys: [subquery_0 (#0)]
         ├── filters: []
         ├── estimated rows: 1.00
-        ├── TableScan(Build)
-        │   ├── table: default.system.numbers
-        │   ├── read rows: 1
-        │   ├── read bytes: 8
-        │   ├── partitions total: 1
-        │   ├── partitions scanned: 1
-        │   ├── push downs: [filters: [], limit: NONE]
-        │   └── estimated rows: 1.00
+        ├── EvalScalar(Build)
+        │   ├── expressions: [COUNT(*) (#4), subquery_2 (#2)]
+        │   ├── estimated rows: 1.00
+        │   └── AggregateFinal
+        │       ├── group by: [number]
+        │       ├── aggregate functions: [count()]
+        │       ├── estimated rows: 1.00
+        │       └── AggregatePartial
+        │           ├── group by: [number]
+        │           ├── aggregate functions: [count()]
+        │           ├── estimated rows: 1.00
+        │           └── HashJoin
+        │               ├── join type: CROSS
+        │               ├── build keys: []
+        │               ├── probe keys: []
+        │               ├── filters: []
+        │               ├── estimated rows: 1.00
+        │               ├── TableScan(Build)
+        │               │   ├── table: default.system.numbers
+        │               │   ├── read rows: 1
+        │               │   ├── read bytes: 8
+        │               │   ├── partitions total: 1
+        │               │   ├── partitions scanned: 1
+        │               │   ├── push downs: [filters: [], limit: NONE]
+        │               │   └── estimated rows: 1.00
+        │               └── TableScan(Probe)
+        │                   ├── table: default.system.numbers
+        │                   ├── read rows: 1
+        │                   ├── read bytes: 8
+        │                   ├── partitions total: 1
+        │                   ├── partitions scanned: 1
+        │                   ├── push downs: [filters: [], limit: NONE]
+        │                   └── estimated rows: 1.00
+        └── HashJoin(Probe)
+            ├── join type: CROSS
+            ├── build keys: []
+            ├── probe keys: []
+            ├── filters: []
+            ├── estimated rows: 1.00
+            ├── TableScan(Build)
+            │   ├── table: default.system.numbers
+            │   ├── read rows: 1
+            │   ├── read bytes: 8
+            │   ├── partitions total: 1
+            │   ├── partitions scanned: 1
+            │   ├── push downs: [filters: [], limit: NONE]
+            │   └── estimated rows: 1.00
+            └── TableScan(Probe)
+                ├── table: default.system.numbers
+                ├── read rows: 1
+                ├── read bytes: 8
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 1.00
+
+query T
+explain select t.number from numbers(1) as t where exists (select t1.number from numbers(1) as t1 where t.number = t1.number) or t.number > 1
+----
+EvalScalar
+├── expressions: [t.number (#0)]
+├── estimated rows: 1.00
+└── Filter
+    ├── filters: [is_true(2 (#2) OR CAST(t.number (#0) > 1 AS Boolean NULL))]
+    ├── estimated rows: 1.00
+    └── HashJoin
+        ├── join type: RIGHT MARK
+        ├── build keys: [subquery_1 (#1)]
+        ├── probe keys: [subquery_0 (#0)]
+        ├── filters: []
+        ├── estimated rows: 1.00
+        ├── EvalScalar(Build)
+        │   ├── expressions: [t1.number (#1), subquery_1 (#1)]
+        │   ├── estimated rows: 1.00
+        │   └── TableScan
+        │       ├── table: default.system.numbers
+        │       ├── read rows: 1
+        │       ├── read bytes: 8
+        │       ├── partitions total: 1
+        │       ├── partitions scanned: 1
+        │       ├── push downs: [filters: [], limit: NONE]
+        │       └── estimated rows: 1.00
         └── TableScan(Probe)
             ├── table: default.system.numbers
             ├── read rows: 1
@@ -67,25 +105,43 @@ Filter
             └── estimated rows: 1.00
 
 query T
-explain select t.number from numbers(1) as t where exists (select t1.number from numbers(1) as t1 where t.number = t1.number) or t.number > 1
+explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = 0)
 ----
-Filter
-├── filters: [is_true(2 (#2) OR CAST(t.number (#0) > 1 AS Boolean NULL))]
-├── estimated rows: 1.00
+EvalScalar
+├── expressions: [t.number (#0)]
+├── estimated rows: 0.33
 └── HashJoin
-    ├── join type: RIGHT MARK
-    ├── build keys: [subquery_1 (#1)]
-    ├── probe keys: [subquery_0 (#0)]
+    ├── join type: CROSS
+    ├── build keys: []
+    ├── probe keys: []
     ├── filters: []
-    ├── estimated rows: 1.00
-    ├── TableScan(Build)
-    │   ├── table: default.system.numbers
-    │   ├── read rows: 1
-    │   ├── read bytes: 8
-    │   ├── partitions total: 1
-    │   ├── partitions scanned: 1
-    │   ├── push downs: [filters: [], limit: NONE]
-    │   └── estimated rows: 1.00
+    ├── estimated rows: 0.33
+    ├── Filter(Build)
+    │   ├── filters: [count(*) (#2) = 1]
+    │   ├── estimated rows: 0.33
+    │   └── AggregateFinal
+    │       ├── group by: []
+    │       ├── aggregate functions: [count()]
+    │       ├── estimated rows: 1.00
+    │       └── AggregatePartial
+    │           ├── group by: []
+    │           ├── aggregate functions: [count()]
+    │           ├── estimated rows: 1.00
+    │           └── Limit
+    │               ├── limit: 1
+    │               ├── offset: 0
+    │               ├── estimated rows: 0.33
+    │               └── Filter
+    │                   ├── filters: [numbers.number (#1) = 0]
+    │                   ├── estimated rows: 0.33
+    │                   └── TableScan
+    │                       ├── table: default.system.numbers
+    │                       ├── read rows: 1
+    │                       ├── read bytes: 8
+    │                       ├── partitions total: 1
+    │                       ├── partitions scanned: 1
+    │                       ├── push downs: [filters: [numbers.number (#1) = 0], limit: NONE]
+    │                       └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.system.numbers
         ├── read rows: 1
@@ -96,71 +152,65 @@ Filter
         └── estimated rows: 1.00
 
 query T
-explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = 0)
-----
-HashJoin
-├── join type: CROSS
-├── build keys: []
-├── probe keys: []
-├── filters: []
-├── estimated rows: 0.33
-├── Filter(Build)
-│   ├── filters: [count(*) (#2) = 1]
-│   ├── estimated rows: 0.33
-│   └── AggregateFinal
-│       ├── group by: []
-│       ├── aggregate functions: [count()]
-│       ├── estimated rows: 1.00
-│       └── AggregatePartial
-│           ├── group by: []
-│           ├── aggregate functions: [count()]
-│           ├── estimated rows: 1.00
-│           └── Limit
-│               ├── limit: 1
-│               ├── offset: 0
-│               ├── estimated rows: 0.33
-│               └── Filter
-│                   ├── filters: [numbers.number (#1) = 0]
-│                   ├── estimated rows: 0.33
-│                   └── TableScan
-│                       ├── table: default.system.numbers
-│                       ├── read rows: 1
-│                       ├── read bytes: 8
-│                       ├── partitions total: 1
-│                       ├── partitions scanned: 1
-│                       ├── push downs: [filters: [numbers.number (#1) = 0], limit: NONE]
-│                       └── estimated rows: 1.00
-└── TableScan(Probe)
-    ├── table: default.system.numbers
-    ├── read rows: 1
-    ├── read bytes: 8
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 1.00
-
-query T
 explain select t.number from numbers(1) as t where number = (select * from numbers(1) where number = 0)
 ----
-Filter
-├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = scalar_subquery_1 (#1))]
+EvalScalar
+├── expressions: [t.number (#0)]
 ├── estimated rows: 0.33
+└── Filter
+    ├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = scalar_subquery_1 (#1))]
+    ├── estimated rows: 0.33
+    └── HashJoin
+        ├── join type: SINGLE
+        ├── build keys: []
+        ├── probe keys: []
+        ├── filters: []
+        ├── estimated rows: 1.00
+        ├── EvalScalar(Build)
+        │   ├── expressions: [numbers.number (#1)]
+        │   ├── estimated rows: 0.33
+        │   └── Filter
+        │       ├── filters: [numbers.number (#1) = 0]
+        │       ├── estimated rows: 0.33
+        │       └── TableScan
+        │           ├── table: default.system.numbers
+        │           ├── read rows: 1
+        │           ├── read bytes: 8
+        │           ├── partitions total: 1
+        │           ├── partitions scanned: 1
+        │           ├── push downs: [filters: [numbers.number (#1) = 0], limit: NONE]
+        │           └── estimated rows: 1.00
+        └── TableScan(Probe)
+            ├── table: default.system.numbers
+            ├── read rows: 1
+            ├── read bytes: 8
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 1.00
+
+query T
+explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number)
+----
+EvalScalar
+├── expressions: [t.number (#0)]
+├── estimated rows: 1.00
 └── HashJoin
-    ├── join type: SINGLE
-    ├── build keys: []
-    ├── probe keys: []
+    ├── join type: LEFT SEMI
+    ├── build keys: [numbers.number (#1)]
+    ├── probe keys: [t.number (#0)]
     ├── filters: []
     ├── estimated rows: 1.00
-    ├── Filter(Build)
-    │   ├── filters: [numbers.number (#1) = 0]
-    │   ├── estimated rows: 0.33
+    ├── EvalScalar(Build)
+    │   ├── expressions: [numbers.number (#1), numbers.number (#1)]
+    │   ├── estimated rows: 1.00
     │   └── TableScan
     │       ├── table: default.system.numbers
     │       ├── read rows: 1
     │       ├── read bytes: 8
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
-    │       ├── push downs: [filters: [numbers.number (#1) = 0], limit: NONE]
+    │       ├── push downs: [filters: [], limit: NONE]
     │       └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.system.numbers
@@ -172,252 +222,28 @@ Filter
         └── estimated rows: 1.00
 
 query T
-explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number)
-----
-HashJoin
-├── join type: LEFT SEMI
-├── build keys: [numbers.number (#1)]
-├── probe keys: [t.number (#0)]
-├── filters: []
-├── estimated rows: 1.00
-├── TableScan(Build)
-│   ├── table: default.system.numbers
-│   ├── read rows: 1
-│   ├── read bytes: 8
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
-│   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 1.00
-└── TableScan(Probe)
-    ├── table: default.system.numbers
-    ├── read rows: 1
-    ├── read bytes: 8
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 1.00
-
-query T
 explain select t.number from numbers(1) as t where not exists (select * from numbers(1) where number = t.number)
 ----
-HashJoin
-├── join type: LEFT ANTI
-├── build keys: [numbers.number (#1)]
-├── probe keys: [t.number (#0)]
-├── filters: []
+EvalScalar
+├── expressions: [t.number (#0)]
 ├── estimated rows: 1.00
-├── TableScan(Build)
-│   ├── table: default.system.numbers
-│   ├── read rows: 1
-│   ├── read bytes: 8
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
-│   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 1.00
-└── TableScan(Probe)
-    ├── table: default.system.numbers
-    ├── read rows: 1
-    ├── read bytes: 8
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 1.00
-
-query T
-explain select * from numbers(1) as t where exists (select number as a from numbers(1) where number = t.number)
-----
-HashJoin
-├── join type: LEFT SEMI
-├── build keys: [numbers.number (#1)]
-├── probe keys: [t.number (#0)]
-├── filters: []
-├── estimated rows: 1.00
-├── TableScan(Build)
-│   ├── table: default.system.numbers
-│   ├── read rows: 1
-│   ├── read bytes: 8
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
-│   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 1.00
-└── TableScan(Probe)
-    ├── table: default.system.numbers
-    ├── read rows: 1
-    ├── read bytes: 8
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 1.00
-
-query T
-explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number and number = 0 and t.number < 10)
-----
-HashJoin
-├── join type: LEFT SEMI
-├── build keys: [numbers.number (#1)]
-├── probe keys: [t.number (#0)]
-├── filters: []
-├── estimated rows: 0.33
-├── Filter(Build)
-│   ├── filters: [numbers.number (#1) = 0]
-│   ├── estimated rows: 0.33
-│   └── TableScan
-│       ├── table: default.system.numbers
-│       ├── read rows: 1
-│       ├── read bytes: 8
-│       ├── partitions total: 1
-│       ├── partitions scanned: 1
-│       ├── push downs: [filters: [numbers.number (#1) = 0], limit: NONE]
-│       └── estimated rows: 1.00
-└── Filter(Probe)
-    ├── filters: [t.number (#0) < 10]
-    ├── estimated rows: 0.33
-    └── TableScan
-        ├── table: default.system.numbers
-        ├── read rows: 1
-        ├── read bytes: 8
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── push downs: [filters: [t.number (#0) < 10], limit: NONE]
-        └── estimated rows: 1.00
-
-query T
-explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number and t.number < number)
-----
-HashJoin
-├── join type: LEFT SEMI
-├── build keys: [numbers.number (#1)]
-├── probe keys: [t.number (#0)]
-├── filters: [t.number (#0) < numbers.number (#1)]
-├── estimated rows: 1.00
-├── TableScan(Build)
-│   ├── table: default.system.numbers
-│   ├── read rows: 1
-│   ├── read bytes: 8
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
-│   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 1.00
-└── TableScan(Probe)
-    ├── table: default.system.numbers
-    ├── read rows: 1
-    ├── read bytes: 8
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 1.00
-
-query T
-explain select t.number from numbers(1) as t where exists (select number as a, number as b, number as c from numbers(1) where number = t.number)
-----
-HashJoin
-├── join type: LEFT SEMI
-├── build keys: [numbers.number (#1)]
-├── probe keys: [t.number (#0)]
-├── filters: []
-├── estimated rows: 1.00
-├── TableScan(Build)
-│   ├── table: default.system.numbers
-│   ├── read rows: 1
-│   ├── read bytes: 8
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
-│   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 1.00
-└── TableScan(Probe)
-    ├── table: default.system.numbers
-    ├── read rows: 1
-    ├── read bytes: 8
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 1.00
-
-query T
-explain select t.number from numbers(1) as t, numbers(1) as t1 where (select count(*) = 1 from numbers(1) where t.number = number) and t.number = t1.number
-----
-Filter
-├── filters: [is_true(try_to_boolean(if(CAST(is_not_null(scalar_subquery_4 (#4)) AS Boolean NULL), TRY_CAST(scalar_subquery_4 (#4) AS UInt64 NULL), 0)))]
-├── estimated rows: 0.33
 └── HashJoin
-    ├── join type: SINGLE
-    ├── build keys: [subquery_2 (#2)]
-    ├── probe keys: [subquery_0 (#0)]
+    ├── join type: LEFT ANTI
+    ├── build keys: [numbers.number (#1)]
+    ├── probe keys: [t.number (#0)]
     ├── filters: []
     ├── estimated rows: 1.00
     ├── EvalScalar(Build)
-    │   ├── expressions: [COUNT(*) (#3) = 1]
+    │   ├── expressions: [numbers.number (#1), numbers.number (#1)]
     │   ├── estimated rows: 1.00
-    │   └── AggregateFinal
-    │       ├── group by: [number]
-    │       ├── aggregate functions: [count()]
-    │       ├── estimated rows: 1.00
-    │       └── AggregatePartial
-    │           ├── group by: [number]
-    │           ├── aggregate functions: [count()]
-    │           ├── estimated rows: 1.00
-    │           └── TableScan
-    │               ├── table: default.system.numbers
-    │               ├── read rows: 1
-    │               ├── read bytes: 8
-    │               ├── partitions total: 1
-    │               ├── partitions scanned: 1
-    │               ├── push downs: [filters: [], limit: NONE]
-    │               └── estimated rows: 1.00
-    └── HashJoin(Probe)
-        ├── join type: INNER
-        ├── build keys: [t1.number (#1)]
-        ├── probe keys: [t.number (#0)]
-        ├── filters: []
-        ├── estimated rows: 1.00
-        ├── TableScan(Build)
-        │   ├── table: default.system.numbers
-        │   ├── read rows: 1
-        │   ├── read bytes: 8
-        │   ├── partitions total: 1
-        │   ├── partitions scanned: 1
-        │   ├── push downs: [filters: [], limit: NONE]
-        │   └── estimated rows: 1.00
-        └── TableScan(Probe)
-            ├── table: default.system.numbers
-            ├── read rows: 1
-            ├── read bytes: 8
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── push downs: [filters: [], limit: NONE]
-            └── estimated rows: 1.00
-
-query T
-explain select t.number from numbers(1) as t where exists(select * from numbers(1) as t1 where t.number > t1.number) and not exists(select * from numbers(1) as t1 where t.number < t1.number)
-----
-HashJoin
-├── join type: LEFT ANTI
-├── build keys: []
-├── probe keys: []
-├── filters: [t.number (#0) < t1.number (#2)]
-├── estimated rows: 1.00
-├── TableScan(Build)
-│   ├── table: default.system.numbers
-│   ├── read rows: 1
-│   ├── read bytes: 8
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
-│   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 1.00
-└── HashJoin(Probe)
-    ├── join type: LEFT SEMI
-    ├── build keys: []
-    ├── probe keys: []
-    ├── filters: [t.number (#0) > t1.number (#1)]
-    ├── estimated rows: 1.00
-    ├── TableScan(Build)
-    │   ├── table: default.system.numbers
-    │   ├── read rows: 1
-    │   ├── read bytes: 8
-    │   ├── partitions total: 1
-    │   ├── partitions scanned: 1
-    │   ├── push downs: [filters: [], limit: NONE]
-    │   └── estimated rows: 1.00
+    │   └── TableScan
+    │       ├── table: default.system.numbers
+    │       ├── read rows: 1
+    │       ├── read bytes: 8
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       ├── push downs: [filters: [], limit: NONE]
+    │       └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.system.numbers
         ├── read rows: 1
@@ -426,3 +252,243 @@ HashJoin
         ├── partitions scanned: 1
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 1.00
+
+query T
+explain select * from numbers(1) as t where exists (select number as a from numbers(1) where number = t.number)
+----
+EvalScalar
+├── expressions: [t.number (#0)]
+├── estimated rows: 1.00
+└── HashJoin
+    ├── join type: LEFT SEMI
+    ├── build keys: [numbers.number (#1)]
+    ├── probe keys: [t.number (#0)]
+    ├── filters: []
+    ├── estimated rows: 1.00
+    ├── EvalScalar(Build)
+    │   ├── expressions: [numbers.number (#1), numbers.number (#1)]
+    │   ├── estimated rows: 1.00
+    │   └── TableScan
+    │       ├── table: default.system.numbers
+    │       ├── read rows: 1
+    │       ├── read bytes: 8
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       ├── push downs: [filters: [], limit: NONE]
+    │       └── estimated rows: 1.00
+    └── TableScan(Probe)
+        ├── table: default.system.numbers
+        ├── read rows: 1
+        ├── read bytes: 8
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 1.00
+
+query T
+explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number and number = 0 and t.number < 10)
+----
+EvalScalar
+├── expressions: [t.number (#0)]
+├── estimated rows: 0.33
+└── HashJoin
+    ├── join type: LEFT SEMI
+    ├── build keys: [numbers.number (#1)]
+    ├── probe keys: [t.number (#0)]
+    ├── filters: []
+    ├── estimated rows: 0.33
+    ├── EvalScalar(Build)
+    │   ├── expressions: [numbers.number (#1), numbers.number (#1)]
+    │   ├── estimated rows: 0.33
+    │   └── Filter
+    │       ├── filters: [numbers.number (#1) = 0]
+    │       ├── estimated rows: 0.33
+    │       └── TableScan
+    │           ├── table: default.system.numbers
+    │           ├── read rows: 1
+    │           ├── read bytes: 8
+    │           ├── partitions total: 1
+    │           ├── partitions scanned: 1
+    │           ├── push downs: [filters: [numbers.number (#1) = 0], limit: NONE]
+    │           └── estimated rows: 1.00
+    └── Filter(Probe)
+        ├── filters: [t.number (#0) < 10]
+        ├── estimated rows: 0.33
+        └── TableScan
+            ├── table: default.system.numbers
+            ├── read rows: 1
+            ├── read bytes: 8
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── push downs: [filters: [t.number (#0) < 10], limit: NONE]
+            └── estimated rows: 1.00
+
+query T
+explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number and t.number < number)
+----
+EvalScalar
+├── expressions: [t.number (#0)]
+├── estimated rows: 1.00
+└── HashJoin
+    ├── join type: LEFT SEMI
+    ├── build keys: [numbers.number (#1)]
+    ├── probe keys: [t.number (#0)]
+    ├── filters: [t.number (#0) < numbers.number (#1)]
+    ├── estimated rows: 1.00
+    ├── EvalScalar(Build)
+    │   ├── expressions: [numbers.number (#1), numbers.number (#1)]
+    │   ├── estimated rows: 1.00
+    │   └── TableScan
+    │       ├── table: default.system.numbers
+    │       ├── read rows: 1
+    │       ├── read bytes: 8
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       ├── push downs: [filters: [], limit: NONE]
+    │       └── estimated rows: 1.00
+    └── TableScan(Probe)
+        ├── table: default.system.numbers
+        ├── read rows: 1
+        ├── read bytes: 8
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 1.00
+
+query T
+explain select t.number from numbers(1) as t where exists (select number as a, number as b, number as c from numbers(1) where number = t.number)
+----
+EvalScalar
+├── expressions: [t.number (#0)]
+├── estimated rows: 1.00
+└── HashJoin
+    ├── join type: LEFT SEMI
+    ├── build keys: [numbers.number (#1)]
+    ├── probe keys: [t.number (#0)]
+    ├── filters: []
+    ├── estimated rows: 1.00
+    ├── EvalScalar(Build)
+    │   ├── expressions: [numbers.number (#1), numbers.number (#1)]
+    │   ├── estimated rows: 1.00
+    │   └── TableScan
+    │       ├── table: default.system.numbers
+    │       ├── read rows: 1
+    │       ├── read bytes: 8
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       ├── push downs: [filters: [], limit: NONE]
+    │       └── estimated rows: 1.00
+    └── TableScan(Probe)
+        ├── table: default.system.numbers
+        ├── read rows: 1
+        ├── read bytes: 8
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 1.00
+
+query T
+explain select t.number from numbers(1) as t, numbers(1) as t1 where (select count(*) = 1 from numbers(1) where t.number = number) and t.number = t1.number
+----
+EvalScalar
+├── expressions: [t.number (#0)]
+├── estimated rows: 0.33
+└── Filter
+    ├── filters: [is_true(try_to_boolean(if(CAST(is_not_null(scalar_subquery_4 (#4)) AS Boolean NULL), TRY_CAST(scalar_subquery_4 (#4) AS UInt64 NULL), 0)))]
+    ├── estimated rows: 0.33
+    └── HashJoin
+        ├── join type: SINGLE
+        ├── build keys: [subquery_2 (#2)]
+        ├── probe keys: [subquery_0 (#0)]
+        ├── filters: []
+        ├── estimated rows: 1.00
+        ├── EvalScalar(Build)
+        │   ├── expressions: [COUNT(*) (#3) = 1, subquery_2 (#2)]
+        │   ├── estimated rows: 1.00
+        │   └── AggregateFinal
+        │       ├── group by: [number]
+        │       ├── aggregate functions: [count()]
+        │       ├── estimated rows: 1.00
+        │       └── AggregatePartial
+        │           ├── group by: [number]
+        │           ├── aggregate functions: [count()]
+        │           ├── estimated rows: 1.00
+        │           └── TableScan
+        │               ├── table: default.system.numbers
+        │               ├── read rows: 1
+        │               ├── read bytes: 8
+        │               ├── partitions total: 1
+        │               ├── partitions scanned: 1
+        │               ├── push downs: [filters: [], limit: NONE]
+        │               └── estimated rows: 1.00
+        └── HashJoin(Probe)
+            ├── join type: INNER
+            ├── build keys: [t1.number (#1)]
+            ├── probe keys: [t.number (#0)]
+            ├── filters: []
+            ├── estimated rows: 1.00
+            ├── TableScan(Build)
+            │   ├── table: default.system.numbers
+            │   ├── read rows: 1
+            │   ├── read bytes: 8
+            │   ├── partitions total: 1
+            │   ├── partitions scanned: 1
+            │   ├── push downs: [filters: [], limit: NONE]
+            │   └── estimated rows: 1.00
+            └── TableScan(Probe)
+                ├── table: default.system.numbers
+                ├── read rows: 1
+                ├── read bytes: 8
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 1.00
+
+query T
+explain select t.number from numbers(1) as t where exists(select * from numbers(1) as t1 where t.number > t1.number) and not exists(select * from numbers(1) as t1 where t.number < t1.number)
+----
+EvalScalar
+├── expressions: [t.number (#0)]
+├── estimated rows: 1.00
+└── HashJoin
+    ├── join type: LEFT ANTI
+    ├── build keys: []
+    ├── probe keys: []
+    ├── filters: [t.number (#0) < t1.number (#2)]
+    ├── estimated rows: 1.00
+    ├── EvalScalar(Build)
+    │   ├── expressions: [t1.number (#2), t1.number (#2)]
+    │   ├── estimated rows: 1.00
+    │   └── TableScan
+    │       ├── table: default.system.numbers
+    │       ├── read rows: 1
+    │       ├── read bytes: 8
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       ├── push downs: [filters: [], limit: NONE]
+    │       └── estimated rows: 1.00
+    └── HashJoin(Probe)
+        ├── join type: LEFT SEMI
+        ├── build keys: []
+        ├── probe keys: []
+        ├── filters: [t.number (#0) > t1.number (#1)]
+        ├── estimated rows: 1.00
+        ├── EvalScalar(Build)
+        │   ├── expressions: [t1.number (#1), t1.number (#1)]
+        │   ├── estimated rows: 1.00
+        │   └── TableScan
+        │       ├── table: default.system.numbers
+        │       ├── read rows: 1
+        │       ├── read bytes: 8
+        │       ├── partitions total: 1
+        │       ├── partitions scanned: 1
+        │       ├── push downs: [filters: [], limit: NONE]
+        │       └── estimated rows: 1.00
+        └── TableScan(Probe)
+            ├── table: default.system.numbers
+            ├── read rows: 1
+            ├── read bytes: 8
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 1.00

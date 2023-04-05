@@ -1170,6 +1170,7 @@ impl TokenKind {
             | TokenKind::WHEN => true,
             | TokenKind::ARRAY
             | TokenKind::AS
+            | TokenKind::BETWEEN
             | TokenKind::CREATE
             | TokenKind::EXCEPT
             // | TokenKind::FETCH
@@ -1189,6 +1190,7 @@ impl TokenKind {
             | TokenKind::OF
             | TokenKind::ORDER
             | TokenKind::OVER
+            | TokenKind::PARTITION
             | TokenKind::ROWS
             | TokenKind::RANGE
             // | TokenKind::OVERLAPS

@@ -11,6 +11,7 @@ doctest = false
 
 [dependencies]
 async-backtrace = { workspace = true }
+chrono = { workspace = true }
 common-base = { path = "../../common/base" }
 common-config = { path = "../../query/config" }
 common-exception = { path = "../../common/exception" }
@@ -23,6 +24,7 @@ time = { version = "0.3", features = ["serde"] }
 
 base64 = "0.21.0"
 clap = { workspace = true }
+enumflags2 = { version = "0.7.5", features = ["serde"] }
 opendal = { workspace = true }
 poem = { version = "1", features = ["rustls", "multipart", "compression"] }
 serde = { workspace = true }

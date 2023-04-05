@@ -162,14 +162,27 @@ impl FlightSqlServiceImpl {
                 let total_scan_value = context.get_total_scan_value();
                 let mut current_scan_value = context.get_scan_progress_value();
 
-                let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(20));
+                const TICK_MS: usize = 20;
+                const MAX_WAIT_MS: usize = 500;
+                const MIN_PERCENT_PROGRESS: usize = 3;
+
+                let mut interval =
+                    tokio::time::interval(tokio::time::Duration::from_millis(TICK_MS as u64));
+                let mut wait_times = 0;
                 while !is_finished.load(Ordering::SeqCst) {
                     interval.tick().await;
 
                     let progress = context.get_scan_progress_value();
-                    if progress.rows == current_scan_value.rows {
+                    // only send progress when the increment progress is more than 3% or MAX_WAIT_MS elapsed
+                    if progress.bytes - current_scan_value.bytes
+                        < total_scan_value.bytes * MIN_PERCENT_PROGRESS / 100
+                        && wait_times < MAX_WAIT_MS / TICK_MS
+                    {
+                        wait_times += 1;
                         continue;
                     }
+
+                    wait_times = 0;
                     current_scan_value = progress;
 
                     let progress = ProgressValue {

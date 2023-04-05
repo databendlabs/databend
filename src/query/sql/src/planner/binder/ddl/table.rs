@@ -987,6 +987,7 @@ impl Binder {
             let column = ColumnBinding {
                 database_name: None,
                 table_name: None,
+                table_index: None,
                 column_name: field.name().clone(),
                 index,
                 data_type: Box::new(DataType::from(field.data_type())),

@@ -1,51 +1,63 @@
 query T
 explain select * from numbers(10000) where number in (select number from numbers(1000))
 ----
-HashJoin
-├── join type: LEFT SEMI
-├── build keys: [subquery_1 (#1)]
-├── probe keys: [numbers.number (#0)]
-├── filters: []
+EvalScalar
+├── expressions: [numbers.number (#0)]
 ├── estimated rows: 10000.00
-├── TableScan(Build)
-│   ├── table: default.system.numbers
-│   ├── read rows: 1000
-│   ├── read bytes: 8000
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
-│   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 1000.00
-└── TableScan(Probe)
-    ├── table: default.system.numbers
-    ├── read rows: 10000
-    ├── read bytes: 80000
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 10000.00
+└── HashJoin
+    ├── join type: LEFT SEMI
+    ├── build keys: [subquery_1 (#1)]
+    ├── probe keys: [numbers.number (#0)]
+    ├── filters: []
+    ├── estimated rows: 10000.00
+    ├── EvalScalar(Build)
+    │   ├── expressions: [numbers.number (#1)]
+    │   ├── estimated rows: 1000.00
+    │   └── TableScan
+    │       ├── table: default.system.numbers
+    │       ├── read rows: 1000
+    │       ├── read bytes: 8000
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       ├── push downs: [filters: [], limit: NONE]
+    │       └── estimated rows: 1000.00
+    └── TableScan(Probe)
+        ├── table: default.system.numbers
+        ├── read rows: 10000
+        ├── read bytes: 80000
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 10000.00
 
 query T
 explain select * from numbers(1000) where number in (select number from numbers(10000))
 ----
-HashJoin
-├── join type: RIGHT SEMI
-├── build keys: [numbers.number (#0)]
-├── probe keys: [subquery_1 (#1)]
-├── filters: []
+EvalScalar
+├── expressions: [numbers.number (#0)]
 ├── estimated rows: 1000.00
-├── TableScan(Build)
-│   ├── table: default.system.numbers
-│   ├── read rows: 1000
-│   ├── read bytes: 8000
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
-│   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 1000.00
-└── TableScan(Probe)
-    ├── table: default.system.numbers
-    ├── read rows: 10000
-    ├── read bytes: 80000
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 10000.00
+└── HashJoin
+    ├── join type: RIGHT SEMI
+    ├── build keys: [numbers.number (#0)]
+    ├── probe keys: [subquery_1 (#1)]
+    ├── filters: []
+    ├── estimated rows: 1000.00
+    ├── TableScan(Build)
+    │   ├── table: default.system.numbers
+    │   ├── read rows: 1000
+    │   ├── read bytes: 8000
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   ├── push downs: [filters: [], limit: NONE]
+    │   └── estimated rows: 1000.00
+    └── EvalScalar(Probe)
+        ├── expressions: [numbers.number (#1)]
+        ├── estimated rows: 10000.00
+        └── TableScan
+            ├── table: default.system.numbers
+            ├── read rows: 10000
+            ├── read bytes: 80000
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 10000.00

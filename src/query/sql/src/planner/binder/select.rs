@@ -590,6 +590,7 @@ impl Binder {
                 let column_binding = ColumnBinding {
                     database_name: None,
                     table_name: None,
+                    table_index: None,
                     column_name: left_col.column_name.clone(),
                     index: new_column_index,
                     data_type: Box::new(coercion_types[idx].clone()),
@@ -902,7 +903,18 @@ impl<'a> SelectRewriter<'a> {
         if stmt.window_list.is_none() {
             return Ok(());
         }
-        let window_definitions = self.extract_window_definitions(stmt);
+        let (window_specs, mut resolved_window_specs) = self.extract_window_definitions(stmt)?;
+
+        let mut window_definitions = HashMap::with_capacity(window_specs.len());
+
+        for (name, spec) in window_specs.iter() {
+            let new_spec = Self::rewrite_inherited_window_spec(
+                spec,
+                &window_specs,
+                &mut resolved_window_specs,
+            )?;
+            window_definitions.insert(name.clone(), new_spec);
+        }
 
         let mut new_select_list = stmt.select_list.clone();
         for target in &mut new_select_list {
@@ -918,6 +930,7 @@ impl<'a> SelectRewriter<'a> {
                                             ErrorCode::SyntaxException("Window not found")
                                         })?;
                                     *window = Window::WindowSpec(WindowSpec {
+                                        existing_window_name: None,
                                         partition_by: window_spec.partition_by.clone(),
                                         order_by: window_spec.order_by.clone(),
                                         window_frame: window_spec.window_frame.clone(),
@@ -944,10 +957,17 @@ impl<'a> SelectRewriter<'a> {
         Ok(())
     }
 
-    fn extract_window_definitions(&mut self, stmt: &SelectStmt) -> HashMap<String, WindowSpec> {
-        let mut window_definitions = HashMap::new();
+    fn extract_window_definitions(
+        &mut self,
+        stmt: &SelectStmt,
+    ) -> Result<(HashMap<String, WindowSpec>, HashMap<String, WindowSpec>)> {
+        let mut window_specs = HashMap::new();
+        let mut resolved_window_specs = HashMap::new();
         for window in stmt.window_list.as_ref().unwrap() {
-            window_definitions.insert(window.name.name.clone(), window.spec.clone());
+            window_specs.insert(window.name.name.clone(), window.spec.clone());
+            if window.spec.existing_window_name.is_none() {
+                resolved_window_specs.insert(window.name.name.clone(), window.spec.clone());
+            }
         }
         if let Some(ref mut new_stmt) = self.new_stmt {
             new_stmt.window_list = None;
@@ -957,6 +977,89 @@ impl<'a> SelectRewriter<'a> {
                 ..stmt.clone()
             });
         };
-        window_definitions
+        Ok((window_specs, resolved_window_specs))
+    }
+
+    fn rewrite_inherited_window_spec(
+        window_spec: &WindowSpec,
+        window_list: &HashMap<String, WindowSpec>,
+        resolved_window: &mut HashMap<String, WindowSpec>,
+    ) -> Result<WindowSpec> {
+        if window_spec.existing_window_name.is_some() {
+            let referenced_name = window_spec
+                .existing_window_name
+                .as_ref()
+                .unwrap()
+                .name
+                .clone();
+            // check if spec is resolved first, so that we no need to resolve again.
+            let referenced_window_spec = {
+                resolved_window.get(&referenced_name).unwrap_or(
+                    window_list
+                        .get(&referenced_name)
+                        .ok_or_else(|| ErrorCode::SyntaxException("Referenced window not found"))?,
+                )
+            }
+            .clone();
+
+            let resolved_spec = match referenced_window_spec.existing_window_name.clone() {
+                Some(_) => {
+                    println!("call recursion:{:?}", referenced_name);
+                    Self::rewrite_inherited_window_spec(
+                        &referenced_window_spec,
+                        window_list,
+                        resolved_window,
+                    )?
+                }
+                None => referenced_window_spec.clone(),
+            };
+
+            // add to resolved.
+            resolved_window.insert(referenced_name, resolved_spec.clone());
+
+            // check semantic
+            if !window_spec.partition_by.is_empty() {
+                return Err(ErrorCode::SemanticError(
+                    "WINDOW specification with named WINDOW reference cannot specify PARTITION BY",
+                ));
+            }
+            if !window_spec.order_by.is_empty() && !resolved_spec.order_by.is_empty() {
+                return Err(ErrorCode::SemanticError(
+                    "Cannot specify ORDER BY if referenced named WINDOW specifies ORDER BY",
+                ));
+            }
+            if resolved_spec.window_frame.is_some() {
+                return Err(ErrorCode::SemanticError(
+                    "Cannot reference named WINDOW containing frame specification",
+                ));
+            }
+
+            // resolve referenced window
+            let mut partition_by = window_spec.partition_by.clone();
+            if !resolved_spec.partition_by.is_empty() {
+                partition_by = resolved_spec.partition_by.clone();
+            }
+
+            let mut order_by = window_spec.order_by.clone();
+            if order_by.is_empty() && !resolved_spec.order_by.is_empty() {
+                order_by = resolved_spec.order_by.clone();
+            }
+
+            let mut window_frame = window_spec.window_frame.clone();
+            if window_frame.is_none() && resolved_spec.window_frame.is_some() {
+                window_frame = resolved_spec.window_frame;
+            }
+
+            // replace with new window spec
+            let new_window_spec = WindowSpec {
+                existing_window_name: None,
+                partition_by,
+                order_by,
+                window_frame,
+            };
+            Ok(new_window_spec)
+        } else {
+            Ok(window_spec.clone())
+        }
     }
 }

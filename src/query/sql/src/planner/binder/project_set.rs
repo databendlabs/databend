@@ -151,6 +151,7 @@ impl Binder {
             let column = ColumnBinding {
                 database_name: None,
                 table_name: None,
+                table_index: None,
                 column_name: name.clone(),
                 index: column_index,
                 data_type: Box::new(srf_expr.data_type().clone()),

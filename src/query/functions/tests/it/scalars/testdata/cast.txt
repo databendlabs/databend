@@ -962,7 +962,7 @@ evaluation (internal):
 
 ast            : CAST('010.010' AS DECIMAL(5,3))
 raw expr       : CAST("010.010" AS Decimal(5, 3))
-checked expr   : to_decimal<String>("010.010")
+checked expr   : to_decimal<String>(5, 3)("010.010")
 optimized expr : 10.010_d128(5,3)
 output type    : Decimal(5, 3)
 output domain  : {10.010..=10.010}
@@ -979,7 +979,7 @@ error:
 
 ast            : CAST('010.010' AS DECIMAL(5,2))
 raw expr       : CAST("010.010" AS Decimal(5, 2))
-checked expr   : to_decimal<String>("010.010")
+checked expr   : to_decimal<String>(5, 2)("010.010")
 optimized expr : 10.01_d128(5,2)
 output type    : Decimal(5, 2)
 output domain  : {10.01..=10.01}
@@ -996,7 +996,7 @@ error:
 
 ast            : CAST('010.010' AS DECIMAL(4,2))
 raw expr       : CAST("010.010" AS Decimal(4, 2))
-checked expr   : to_decimal<String>("010.010")
+checked expr   : to_decimal<String>(4, 2)("010.010")
 optimized expr : 10.01_d128(4,2)
 output type    : Decimal(4, 2)
 output domain  : {10.01..=10.01}
@@ -1005,7 +1005,7 @@ output         : 10.01
 
 ast            : CAST('-1010.010' AS DECIMAL(7,3))
 raw expr       : CAST("-1010.010" AS Decimal(7, 3))
-checked expr   : to_decimal<String>("-1010.010")
+checked expr   : to_decimal<String>(7, 3)("-1010.010")
 optimized expr : -1010.010_d128(7,3)
 output type    : Decimal(7, 3)
 output domain  : {-1010.010..=-1010.010}
@@ -1014,7 +1014,7 @@ output         : -1010.010
 
 ast            : CAST('00' AS DECIMAL(2,1))
 raw expr       : CAST("00" AS Decimal(2, 1))
-checked expr   : to_decimal<String>("00")
+checked expr   : to_decimal<String>(2, 1)("00")
 optimized expr : 0.0_d128(2,1)
 output type    : Decimal(2, 1)
 output domain  : {0.0..=0.0}
@@ -1023,7 +1023,7 @@ output         : 0.0
 
 ast            : CAST('0.0' AS DECIMAL(2,0))
 raw expr       : CAST("0.0" AS Decimal(2, 0))
-checked expr   : to_decimal<String>("0.0")
+checked expr   : to_decimal<String>(2, 0)("0.0")
 optimized expr : 0_d128(2,0)
 output type    : Decimal(2, 0)
 output domain  : {0..=0}
@@ -1032,7 +1032,7 @@ output         : 0
 
 ast            : CAST('.0' AS DECIMAL(1,0))
 raw expr       : CAST(".0" AS Decimal(1, 0))
-checked expr   : to_decimal<String>(".0")
+checked expr   : to_decimal<String>(1, 0)(".0")
 optimized expr : 0_d128(1,0)
 output type    : Decimal(1, 0)
 output domain  : {0..=0}
@@ -1041,7 +1041,7 @@ output         : 0
 
 ast            : CAST('+1.0e-10' AS DECIMAL(11, 10))
 raw expr       : CAST("+1.0e-10" AS Decimal(11, 10))
-checked expr   : to_decimal<String>("+1.0e-10")
+checked expr   : to_decimal<String>(11, 10)("+1.0e-10")
 optimized expr : 0.0000000001_d128(11,10)
 output type    : Decimal(11, 10)
 output domain  : {0.0000000001..=0.0000000001}
@@ -1050,7 +1050,7 @@ output         : 0.0000000001
 
 ast            : CAST('-1.0e+10' AS DECIMAL(11, 0))
 raw expr       : CAST("-1.0e+10" AS Decimal(11, 0))
-checked expr   : to_decimal<String>("-1.0e+10")
+checked expr   : to_decimal<String>(11, 0)("-1.0e+10")
 optimized expr : -10000000000_d128(11,0)
 output type    : Decimal(11, 0)
 output domain  : {-10000000000..=-10000000000}

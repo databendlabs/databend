@@ -3134,6 +3134,7 @@ FunctionCall {
     window: Some(
         WindowSpec(
             WindowSpec {
+                existing_window_name: None,
                 partition_by: [],
                 order_by: [
                     OrderByExpr {
@@ -3201,6 +3202,7 @@ FunctionCall {
     window: Some(
         WindowSpec(
             WindowSpec {
+                existing_window_name: None,
                 partition_by: [],
                 order_by: [],
                 window_frame: None,
@@ -3247,6 +3249,7 @@ FunctionCall {
     window: Some(
         WindowSpec(
             WindowSpec {
+                existing_window_name: None,
                 partition_by: [
                     ColumnRef {
                         span: Some(
@@ -3308,6 +3311,7 @@ FunctionCall {
     window: Some(
         WindowSpec(
             WindowSpec {
+                existing_window_name: None,
                 partition_by: [
                     ColumnRef {
                         span: Some(
@@ -3350,22 +3354,7 @@ FunctionCall {
                     WindowFrame {
                         units: Rows,
                         start_bound: Preceding(
-                            Some(
-                                ColumnRef {
-                                    span: Some(
-                                        76..85,
-                                    ),
-                                    database: None,
-                                    table: None,
-                                    column: Identifier {
-                                        name: "UNBOUNDED",
-                                        quote: None,
-                                        span: Some(
-                                            76..85,
-                                        ),
-                                    },
-                                },
-                            ),
+                            None,
                         ),
                         end_bound: CurrentRow,
                     },
@@ -3413,6 +3402,7 @@ FunctionCall {
     window: Some(
         WindowSpec(
             WindowSpec {
+                existing_window_name: None,
                 partition_by: [
                     ColumnRef {
                         span: Some(
@@ -3495,6 +3485,7 @@ FunctionCall {
     window: Some(
         WindowSpec(
             WindowSpec {
+                existing_window_name: None,
                 partition_by: [],
                 order_by: [
                     OrderByExpr {
@@ -3568,6 +3559,7 @@ FunctionCall {
     window: Some(
         WindowSpec(
             WindowSpec {
+                existing_window_name: None,
                 partition_by: [],
                 order_by: [
                     OrderByExpr {
@@ -3593,22 +3585,7 @@ FunctionCall {
                     WindowFrame {
                         units: Rows,
                         start_bound: Preceding(
-                            Some(
-                                ColumnRef {
-                                    span: Some(
-                                        38..47,
-                                    ),
-                                    database: None,
-                                    table: None,
-                                    column: Identifier {
-                                        name: "UNBOUNDED",
-                                        quote: None,
-                                        span: Some(
-                                            38..47,
-                                        ),
-                                    },
-                                },
-                            ),
+                            None,
                         ),
                         end_bound: CurrentRow,
                     },
@@ -3641,6 +3618,7 @@ FunctionCall {
     window: Some(
         WindowSpec(
             WindowSpec {
+                existing_window_name: None,
                 partition_by: [],
                 order_by: [
                     OrderByExpr {
@@ -3697,6 +3675,7 @@ FunctionCall {
     window: Some(
         WindowSpec(
             WindowSpec {
+                existing_window_name: None,
                 partition_by: [],
                 order_by: [
                     OrderByExpr {

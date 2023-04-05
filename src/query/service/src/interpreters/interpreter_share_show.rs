@@ -21,6 +21,7 @@ use common_expression::DataSchemaRef;
 use common_expression::FromData;
 use common_meta_api::ShareApi;
 use common_meta_app::share::ShowSharesReq;
+use common_sharing::ShareEndpointManager;
 use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
@@ -58,9 +59,6 @@ impl Interpreter for ShowSharesInterpreter {
             tenant: tenant.clone(),
         };
         let resp = meta_api.show_shares(req).await?;
-        if resp.inbound_accounts.is_empty() && resp.outbound_accounts.is_empty() {
-            return Ok(PipelineBuildResult::create());
-        }
 
         let mut names: Vec<Vec<u8>> = vec![];
         let mut kinds: Vec<Vec<u8>> = vec![];
@@ -77,6 +75,34 @@ impl Interpreter for ShowSharesInterpreter {
             from.push(entry.share_name.tenant.clone().as_bytes().to_vec());
             to.push(tenant.clone().as_bytes().to_vec());
             comments.push(entry.comment.unwrap_or_default().as_bytes().to_vec());
+        }
+
+        // query all share endpoint for other tenant inbound shares
+        let share_specs = ShareEndpointManager::instance()
+            .get_inbound_shares(&tenant, None, None)
+            .await?;
+        for (from_tenant, share_spec) in share_specs {
+            names.push(share_spec.name.clone().as_bytes().to_vec());
+            kinds.push("INBOUND".to_string().as_bytes().to_vec());
+            created_owns.push(
+                share_spec
+                    .share_on
+                    .unwrap_or_default()
+                    .to_string()
+                    .as_bytes()
+                    .to_vec(),
+            );
+            database_names.push(
+                share_spec
+                    .database
+                    .unwrap_or_default()
+                    .name
+                    .as_bytes()
+                    .to_vec(),
+            );
+            from.push(from_tenant.as_bytes().to_vec());
+            to.push(tenant.clone().as_bytes().to_vec());
+            comments.push(share_spec.comment.unwrap_or_default().as_bytes().to_vec());
         }
 
         for entry in resp.outbound_accounts {

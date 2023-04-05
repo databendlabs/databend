@@ -1754,7 +1754,7 @@ output         : [20, 8, 7, 6, 5, 4, 3, 2, 1]
 
 ast            : array_sort([9.32, 0, 1.2, 3.4, 5.6, 7.8])
 raw expr       : array_sort_asc_null_first(array(9.32, 0, 1.2, 3.4, 5.6, 7.8))
-checked expr   : array_sort_asc_null_first<T0=Decimal(3, 2)><Array(T0)>(array<T0=Decimal(3, 2)><T0, T0, T0, T0, T0, T0>(9.32_d128(3,2), to_decimal<UInt8>(0_u8), to_decimal<Decimal(2, 1)>(1.2_d128(2,1)), to_decimal<Decimal(2, 1)>(3.4_d128(2,1)), to_decimal<Decimal(2, 1)>(5.6_d128(2,1)), to_decimal<Decimal(2, 1)>(7.8_d128(2,1))))
+checked expr   : array_sort_asc_null_first<T0=Decimal(3, 2)><Array(T0)>(array<T0=Decimal(3, 2)><T0, T0, T0, T0, T0, T0>(9.32_d128(3,2), to_decimal<UInt8>(3, 2)(0_u8), to_decimal<Decimal(2, 1)>(3, 2)(1.2_d128(2,1)), to_decimal<Decimal(2, 1)>(3, 2)(3.4_d128(2,1)), to_decimal<Decimal(2, 1)>(3, 2)(5.6_d128(2,1)), to_decimal<Decimal(2, 1)>(3, 2)(7.8_d128(2,1))))
 optimized expr : [0.00, 1.20, 3.40, 5.60, 7.80, 9.32]
 output type    : Array(Decimal(3, 2))
 output domain  : [{0.00..=9.32}]

@@ -41,6 +41,12 @@ pub enum BlockOperator {
     /// Batch mode of map which merges map operators into one.
     Map { exprs: Vec<Expr> },
 
+    MapWithOutput {
+        exprs: Vec<Expr>,
+        /// The index of the output columns, based on the exprs.
+        output_indexes: Vec<usize>,
+    },
+
     /// Filter the input [`DataBlock`] with the predicate `eval`.
     Filter { expr: Expr },
 
@@ -65,6 +71,37 @@ impl BlockOperator {
                     input.add_column(col);
                 }
                 Ok(input)
+            }
+
+            BlockOperator::MapWithOutput {
+                exprs,
+                output_indexes,
+            } => {
+                let original_num_columns = input.num_columns();
+                for expr in exprs {
+                    let evaluator = Evaluator::new(&input, *func_ctx, &BUILTIN_FUNCTIONS);
+                    let result = evaluator.run(expr)?;
+                    let col = BlockEntry {
+                        data_type: expr.data_type().clone(),
+                        value: result,
+                    };
+                    input.add_column(col);
+                }
+
+                let columns: Vec<BlockEntry> = input
+                    .columns()
+                    .iter()
+                    .enumerate()
+                    .filter(|(index, _)| {
+                        *index < original_num_columns || output_indexes.contains(index)
+                    })
+                    .map(|(_, col)| col.clone())
+                    .collect();
+
+                let rows = input.num_rows();
+                let meta = input.get_owned_meta();
+
+                Ok(DataBlock::new_with_meta(columns, rows, meta))
             }
 
             BlockOperator::Filter { expr } => {
@@ -193,14 +230,18 @@ impl CompoundBlockOperator {
     pub fn create(
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,
+        input_num_columns: usize,
         ctx: FunctionContext,
         operators: Vec<BlockOperator>,
     ) -> Box<dyn Processor> {
-        let operators = Self::compact_map(operators);
+        let operators = Self::compact_map(operators, input_num_columns);
         Transformer::<Self>::create(input_port, output_port, Self { operators, ctx })
     }
 
-    pub fn compact_map(operators: Vec<BlockOperator>) -> Vec<BlockOperator> {
+    pub fn compact_map(
+        operators: Vec<BlockOperator>,
+        input_num_columns: usize,
+    ) -> Vec<BlockOperator> {
         let mut results = Vec::with_capacity(operators.len());
 
         for op in operators {
@@ -215,17 +256,8 @@ impl CompoundBlockOperator {
                 _ => results.push(op),
             }
         }
-        results
-    }
 
-    #[allow(dead_code)]
-    pub fn merge(self, other: Self) -> Self {
-        let mut operators = self.operators;
-        operators.extend(other.operators);
-        Self {
-            operators,
-            ctx: self.ctx,
-        }
+        crate::evaluator::cse::apply_cse(results, input_num_columns)
     }
 }
 
@@ -249,6 +281,7 @@ impl Transform for CompoundBlockOperator {
                 .map(|op| {
                     match op {
                         BlockOperator::Map { .. } => "Map",
+                        BlockOperator::MapWithOutput { .. } => "MapWithOutput",
                         BlockOperator::Filter { .. } => "Filter",
                         BlockOperator::Project { .. } => "Project",
                         BlockOperator::FlatMap { .. } => "FlatMap",
