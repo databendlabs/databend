@@ -17,6 +17,7 @@ use std::time::Instant;
 pub struct SessionStatus {
     pub session_started_at: Instant,
     pub last_query_finished_at: Option<Instant>,
+    pub is_native_client: bool,
 }
 
 impl SessionStatus {
@@ -35,6 +36,7 @@ impl Default for SessionStatus {
         SessionStatus {
             session_started_at: Instant::now(),
             last_query_finished_at: None,
+            is_native_client: false,
         }
     }
 }

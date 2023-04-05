@@ -36,7 +36,7 @@ impl<'a> WindowChecker<'a> {
         Self { bind_context }
     }
 
-    pub fn resolve(&mut self, scalar: &ScalarExpr) -> Result<ScalarExpr> {
+    pub fn resolve(&self, scalar: &ScalarExpr) -> Result<ScalarExpr> {
         match scalar {
             ScalarExpr::BoundColumnRef(_)
             | ScalarExpr::BoundInternalColumnRef(_)
@@ -98,6 +98,7 @@ impl<'a> WindowChecker<'a> {
                     let column_binding = ColumnBinding {
                         database_name: None,
                         table_name: None,
+                        table_index: None,
                         column_name: win.display_name.clone(),
                         index: window_info.index,
                         data_type: Box::new(window_info.func.return_type()),

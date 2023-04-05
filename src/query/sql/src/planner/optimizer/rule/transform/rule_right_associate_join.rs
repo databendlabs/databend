@@ -45,7 +45,7 @@ use crate::plans::RelOp;
 ///  t1  t2
 pub struct RuleRightAssociateJoin {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RuleRightAssociateJoin {
@@ -58,7 +58,7 @@ impl RuleRightAssociateJoin {
             // *  LogicalJoin
             //    | \
             //    *  *
-            pattern: SExpr::create_binary(
+            patterns: vec![SExpr::create_binary(
                 PatternPlan {
                     plan_type: RelOp::Join,
                 }
@@ -72,7 +72,7 @@ impl RuleRightAssociateJoin {
                     SExpr::create_pattern_leaf(),
                     SExpr::create_pattern_leaf(),
                 ),
-            ),
+            )],
         }
     }
 }
@@ -142,7 +142,7 @@ impl Rule for RuleRightAssociateJoin {
                 JoinPredicate::Left(pred) => {
                     join_4_preds.push(pred.clone());
                 }
-                JoinPredicate::Both { left, right } => {
+                JoinPredicate::Both { left, right, .. } => {
                     join_3.left_conditions.push(left.clone());
                     join_3.right_conditions.push(right.clone());
                 }
@@ -164,7 +164,7 @@ impl Rule for RuleRightAssociateJoin {
                     // TODO(leiysky): push down the predicate
                     join_4.non_equi_conditions.push(predicate.clone());
                 }
-                JoinPredicate::Both { left, right } => {
+                JoinPredicate::Both { left, right, .. } => {
                     join_4.left_conditions.push(left.clone());
                     join_4.right_conditions.push(right.clone());
                 }
@@ -204,8 +204,8 @@ impl Rule for RuleRightAssociateJoin {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 
     fn transformation(&self) -> bool {

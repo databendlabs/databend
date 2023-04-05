@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use super::SExpr;
+use crate::plans::Operator;
+use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::MetadataRef;
 
@@ -27,4 +29,17 @@ pub fn contains_local_table_scan(s_expr: &SExpr, metadata: &MetadataRef) -> bool
         } else {
             false
         }
+}
+
+/// Check the expr contains ProjectSet op.
+pub fn contains_project_set(s_expr: &SExpr) -> bool {
+    if let Some(child) = s_expr.children().iter().next() {
+        // Check children
+        return match child.plan.rel_op() {
+            RelOp::ProjectSet => true,
+            _ => contains_project_set(child),
+        };
+    }
+
+    false
 }

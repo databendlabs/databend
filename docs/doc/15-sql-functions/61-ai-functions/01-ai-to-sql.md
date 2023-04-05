@@ -2,12 +2,22 @@
 title: 'AI_TO_SQL'
 ---
 
-Converts natural language instructions into SQL queries with the latest [Codex](https://platform.openai.com/docs/models/codex) model `code-davinci-002`.
+Converts natural language instructions into SQL queries with the latest model `text-davinci-003`.
 
 Databend offers an efficient solution for constructing SQL queries by incorporating OLAP and AI. Through this function, instructions written in a natural language can be converted into SQL query statements that align with the table schema. For example, the function can be provided with a sentence like "Get all items that cost 10 dollars or less" as an input and generate the corresponding SQL query "SELECT * FROM items WHERE price <= 10" as output.
 
+The main code implementation can be found [here](https://github.com/datafuselabs/databend/blob/1e93c5b562bd159ecb0f336bb88fd1b7f9dc4a62/src/query/service/src/table_functions/openai/ai_to_sql.rs).
+
 :::note
 The SQL query statements generated adhere to the PostgreSQL standards, so they might require manual revisions to align with the syntax of Databend.
+:::
+
+:::caution
+Databend relies on OpenAI for `AI_TO_SQL` but only sends the table schema to OpenAI, not the data.
+
+They will only work when the Databend configuration includes the `openai_api_key`, otherwise they will be inactive.
+
+This function is available by default on [Databend Cloud](https://databend.com) using our self OpenAI key. If you use them, you acknowledge that your table schema will be sent to OpenAI by us.
 :::
 
 ## Syntax

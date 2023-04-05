@@ -16,6 +16,7 @@ use std::collections::HashMap;
 
 use common_base::base::tokio;
 use common_exception::Result;
+use common_meta_app::share::ShareGrantObjectPrivilege;
 use sharing_endpoint::models::DatabaseSpec;
 use sharing_endpoint::models::LambdaInput;
 use sharing_endpoint::models::ShareSpec;
@@ -32,11 +33,11 @@ async fn test_get_tables() -> Result<()> {
         name: "share1".to_string(),
         share_id: 0,
         version: 0,
-        database: DatabaseSpec {
+        database: Some(DatabaseSpec {
             name: "db1".to_string(),
             location: "s3://db1".to_string(),
             id: 0,
-        },
+        }),
         tables: vec![
             TableSpec {
                 name: "table1".to_string(),
@@ -54,6 +55,9 @@ async fn test_get_tables() -> Result<()> {
             },
         ],
         tenants: vec!["t1".to_string()],
+        db_privileges: Some(ShareGrantObjectPrivilege::Usage.into()),
+        comment: None,
+        share_on: None,
     });
 
     let input = LambdaInput {

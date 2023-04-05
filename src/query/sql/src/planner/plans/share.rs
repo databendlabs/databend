@@ -237,10 +237,10 @@ pub struct ShowSharesPlan {}
 impl ShowSharesPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::new(vec![
-            DataField::new("Created_on", DataType::String),
+            DataField::new("Create On", DataType::String),
             DataField::new("Kind", DataType::String),
             DataField::new("Name", DataType::String),
-            DataField::new("Database_name", DataType::String),
+            DataField::new("Shared Database Name", DataType::String),
             DataField::new("From", DataType::String),
             DataField::new("To", DataType::String),
             DataField::new("Comment", DataType::String),

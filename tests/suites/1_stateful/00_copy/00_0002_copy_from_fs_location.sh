@@ -11,7 +11,7 @@ cat $CURDIR/../ddl/ontime.sql | sed 's/ontime/ontime200/g' | $MYSQL_CLIENT_CONNE
 # Should be <root>/tests/data/
 DATADIR=$(realpath $CURDIR/../../../data/)
 
-# This line is kept for debuging.
+# This line is kept for debugging.
 # echo "Current data dir: ${DATADIR}"
 
 copy_from_location_cases=(

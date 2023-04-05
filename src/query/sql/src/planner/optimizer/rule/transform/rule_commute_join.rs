@@ -23,7 +23,7 @@ use crate::plans::JoinType;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 
-/// Rule to apply commutivity of join operator.
+/// Rule to apply commutativity of join operator.
 /// Since we will always use the right child as build side, this
 /// rule will help us measure which child is the better one.
 ///
@@ -31,7 +31,7 @@ use crate::plans::RelOp;
 /// Other join types will be added as soon as we implement them in Processor.
 pub struct RuleCommuteJoin {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RuleCommuteJoin {
@@ -42,14 +42,14 @@ impl RuleCommuteJoin {
             // LogicalJoin
             // | \
             // *  *
-            pattern: SExpr::create_binary(
+            patterns: vec![SExpr::create_binary(
                 PatternPlan {
                     plan_type: RelOp::Join,
                 }
                 .into(),
                 SExpr::create_pattern_leaf(),
                 SExpr::create_pattern_leaf(),
-            ),
+            )],
         }
     }
 }
@@ -97,8 +97,8 @@ impl Rule for RuleCommuteJoin {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 
     fn transformation(&self) -> bool {

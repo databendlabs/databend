@@ -278,7 +278,7 @@ jobs:
     if: needs.metadata.outputs.source == 'pr'
     steps:
       - uses: actions/checkout@v3
-      - name: Install Depencencies
+      - name: Install Dependencies
         run: |
           sudo apt update -y
           sudo apt install -y python3-jinja2
@@ -312,8 +312,8 @@ jobs:
       - name: Generate clickbench report
         working-directory: benchmark/clickbench
         run: |
-          ./update_results.py --dataset hits --pr {{ needs.metadata.outputs.source_id }}
-          ./update_results.py --dataset tpch --pr {{ needs.metadata.outputs.source_id }}
+          ./update_results.py --dataset hits --pr ${{ needs.metadata.outputs.source_id }}
+          ./update_results.py --dataset tpch --pr ${{ needs.metadata.outputs.source_id }}
       - name: Upload PR clickbench report to repo.databend.rs
         working-directory: benchmark/clickbench
         run: |
@@ -342,7 +342,7 @@ jobs:
           - "hits"
     steps:
       - uses: actions/checkout@v3
-      - name: Install Depencencies
+      - name: Install Dependencies
         run: |
           sudo apt update -y
           sudo apt install -y python3-jinja2
@@ -360,14 +360,14 @@ jobs:
         working-directory: benchmark/clickbench
         run: |
           aws s3 sync ${{ env.BENCHMARK_S3_PREFIX }}/release/${{ matrix.dataset }}/$(date -u +%Y)/$(date -u +%m)/ ./results/${{ matrix.dataset }}/ --no-progress
-          ./update_results.py --dataset ${{ matrix.dataset }} --release {{ needs.metadata.outputs.source_id }}
+          ./update_results.py --dataset ${{ matrix.dataset }} --release ${{ needs.metadata.outputs.source_id }}
       - name: Upload nightly results to repo.databend.rs
         working-directory: benchmark/clickbench/
         run: |
-          RESULT_PEFIX="${{ env.BENCHMARK_S3_PREFIX }}/release/${{ matrix.dataset }}/$(date -u +%Y)/$(date -u +%m)/$(date -u +%Y-%m-%d)/${{ needs.metadata.outputs.source_id }}"
+          RESULT_PREFIX="${{ env.BENCHMARK_S3_PREFIX }}/release/${{ matrix.dataset }}/$(date -u +%Y)/$(date -u +%m)/$(date -u +%Y-%m-%d)/${{ needs.metadata.outputs.source_id }}"
           LATEST_PREFIX="${{ env.BENCHMARK_S3_PREFIX }}/release/${{ matrix.dataset }}/latest/latest"
           for file in ./results/${{ matrix.dataset }}/*.json; do
-            aws s3 cp $file "${RESULT_PEFIX}-$(basename $file)"
+            aws s3 cp $file "${RESULT_PREFIX}-$(basename $file)"
             aws s3 cp $file "${LATEST_PREFIX}-$(basename $file)"
           done
       - name: Upload PR clickbench report to repo.databend.rs

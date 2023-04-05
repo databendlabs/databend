@@ -283,7 +283,6 @@ impl ShareApiTestSuite {
             let res = mt.upsert_share_endpoint(upsert_req.clone()).await;
             assert!(res.is_ok());
             let upsert_share_endpoint_id = res.unwrap().share_endpoint_id;
-            println!("upsert_share_endpoint_id: {:?}", upsert_share_endpoint_id);
 
             let req = GetShareEndpointReq {
                 tenant: upsert_tenant.to_string(),
@@ -1352,7 +1351,7 @@ impl ShareApiTestSuite {
 
         info!("--- drop share1 and check objects");
         {
-            let tenant2 = "tenant2";
+            let tenant2 = "tenant1";
             let db2 = "db2";
 
             let db_name2 = DatabaseNameIdent {

@@ -89,7 +89,7 @@ impl FusePruner {
             .as_ref()
             .and_then(|extra| extra.filter.as_ref().map(|f| f.as_expr(&BUILTIN_FUNCTIONS)));
 
-        // Limit prunner.
+        // Limit pruner.
         // if there are ordering/filter clause, ignore limit, even it has been pushed down
         let limit = push_down
             .as_ref()

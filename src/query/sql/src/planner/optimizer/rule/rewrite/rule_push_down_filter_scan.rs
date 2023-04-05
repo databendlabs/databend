@@ -41,7 +41,7 @@ use crate::TableEntry;
 
 pub struct RulePushDownFilterScan {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
     metadata: MetadataRef,
 }
 
@@ -52,7 +52,7 @@ impl RulePushDownFilterScan {
             // Filter
             //  \
             //   LogicalGet
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Filter,
                 }
@@ -63,7 +63,7 @@ impl RulePushDownFilterScan {
                     }
                     .into(),
                 ),
-            ),
+            )],
             metadata,
         }
     }
@@ -96,6 +96,7 @@ impl RulePushDownFilterScan {
                         let column_binding = ColumnBinding {
                             database_name: Some(table_entry.database().to_string()),
                             table_name: Some(table_entry.name().to_string()),
+                            table_index: Some(table_entry.index()),
                             column_name: base_column.column_name.clone(),
                             index: base_column.column_index,
                             data_type: column.column.data_type.clone(),
@@ -300,7 +301,7 @@ impl Rule for RulePushDownFilterScan {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }

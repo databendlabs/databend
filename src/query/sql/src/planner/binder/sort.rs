@@ -212,6 +212,7 @@ impl Binder {
                     let column_binding = self.create_column_binding(
                         None,
                         None,
+                        None,
                         format!("{:#}", order.expr),
                         rewrite_scalar.data_type()?,
                     );
@@ -245,7 +246,7 @@ impl Binder {
 
         for order in order_by.items {
             if from_context.in_grouping {
-                let mut group_checker = GroupingChecker::new(from_context);
+                let group_checker = GroupingChecker::new(from_context);
                 // Perform grouping check on original scalar expression if order item is alias.
                 if let Some(scalar_item) = select_list
                     .items
@@ -282,10 +283,10 @@ impl Binder {
                         need_group_check = true;
                     }
                     if from_context.in_grouping || need_group_check {
-                        let mut group_checker = GroupingChecker::new(from_context);
+                        let group_checker = GroupingChecker::new(from_context);
                         scalar = group_checker.resolve(&scalar, None)?;
                     } else if !from_context.windows.window_functions.is_empty() {
-                        let mut window_checker = WindowChecker::new(from_context);
+                        let window_checker = WindowChecker::new(from_context);
                         scalar = window_checker.resolve(&scalar)?;
                     }
                     scalars.push(ScalarItem { scalar, index });

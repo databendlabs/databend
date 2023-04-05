@@ -12,7 +12,7 @@ Databend Sharing protocol is a RESTful protocol, which would understand database
 and provide short lived presigned url for data under the table.
 
 For detailed descriptions, please take a look at
-- [`protocol`](./protocol.md) -> provides detailed dscriptions on sharing protocol api
+- [`protocol`](./protocol.md) -> provides detailed descriptions on sharing protocol api
 
 ## How to build?
 

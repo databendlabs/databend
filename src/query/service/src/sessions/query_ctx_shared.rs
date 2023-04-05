@@ -55,6 +55,8 @@ type DatabaseAndTable = (String, String, String);
 ///     FROM table_name_4;
 /// For each subquery, they will share a runtime, session, progress, init_query_id
 pub struct QueryContextShared {
+    /// total_scan_values for scan stats
+    pub(in crate::sessions) total_scan_values: Arc<Progress>,
     /// scan_progress for scan metrics of datablocks (uncompressed)
     pub(in crate::sessions) scan_progress: Arc<Progress>,
     /// write_progress for write/commit metrics of datablocks (uncompressed)
@@ -96,6 +98,7 @@ impl QueryContextShared {
             catalog_manager: CatalogManager::instance(),
             data_operator: DataOperator::instance(),
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
+            total_scan_values: Arc::new(Progress::create()),
             scan_progress: Arc::new(Progress::create()),
             result_progress: Arc::new(Progress::create()),
             write_progress: Arc::new(Progress::create()),

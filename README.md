@@ -6,7 +6,7 @@
   <a href="https://databend.rs/doc/cloud">Databend Serverless Cloud (beta)</a>  |
   <a href="https://databend.rs/doc">Documentation</a>  |
   <a href="https://benchmark.clickhouse.com/">Benchmarking</a>  |
-  <a href="https://github.com/datafuselabs/databend/issues/9604">Roadmap (v1.0)</a>
+  <a href="https://github.com/datafuselabs/databend/issues/10334">Roadmap (v1.1)</a>
 
 </h4>
 
@@ -170,6 +170,15 @@ docker run --net=host  datafuselabs/databend
 - [How to Create a View](https://databend.rs/doc/sql-commands/ddl/view/ddl-create-view)
 - [How to Drop a View](https://databend.rs/doc/sql-commands/ddl/view/ddl-drop-view)
 - [How to Alter a View](https://databend.rs/doc/sql-commands/ddl/view/ddl-alter-view)
+
+
+## AI Functions
+
+- [Generating SQL with AI](https://databend.rs/doc/sql-functions/ai-functions/ai-to-sql)
+- [Creating Embedding Vectors](https://databend.rs/doc/sql-functions/ai-functions/ai-embedding-vector)
+- [Computing Text Similarities](https://databend.rs/doc/sql-functions/ai-functions/cosine-distance)
+- [Text Completion with AI](https://databend.rs/doc/sql-functions/ai-functions/ai-text-completion)
+
 
 ### Managing User-Defined Functions
 

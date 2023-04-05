@@ -841,6 +841,8 @@ pub enum TokenKind {
     WHEN,
     #[token("WHERE", ignore(ascii_case))]
     WHERE,
+    #[token("WINDOW", ignore(ascii_case))]
+    WINDOW,
     #[token("WITH", ignore(ascii_case))]
     WITH,
     #[token("XML", ignore(ascii_case))]
@@ -1197,7 +1199,7 @@ impl TokenKind {
             | TokenKind::TO
             | TokenKind::UNION
             | TokenKind::WHERE
-            // | TokenKind::WINDOW
+            | TokenKind::WINDOW
             | TokenKind::WITH
             | TokenKind::IGNORE_RESULT
             if !after_as => true,

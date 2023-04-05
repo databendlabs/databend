@@ -58,7 +58,13 @@ impl Binder {
                 column_binding.column_name = item.alias.clone();
                 column_binding
             } else {
-                self.create_column_binding(None, None, item.alias.clone(), item.scalar.data_type()?)
+                self.create_column_binding(
+                    None,
+                    None,
+                    None,
+                    item.alias.clone(),
+                    item.scalar.data_type()?,
+                )
             };
             let scalar = if let ScalarExpr::SubqueryExpr(SubqueryExpr {
                 span,
@@ -112,14 +118,14 @@ impl Binder {
             .iter()
             .map(|(_, item)| {
                 if bind_context.in_grouping {
-                    let mut grouping_checker = GroupingChecker::new(bind_context);
+                    let grouping_checker = GroupingChecker::new(bind_context);
                     let scalar = grouping_checker.resolve(&item.scalar, None)?;
                     Ok(ScalarItem {
                         scalar,
                         index: item.index,
                     })
                 } else {
-                    let mut window_checker = WindowChecker::new(bind_context);
+                    let window_checker = WindowChecker::new(bind_context);
                     let scalar = window_checker.resolve(&item.scalar)?;
                     Ok(ScalarItem {
                         scalar,

@@ -48,7 +48,7 @@ use crate::Visibility;
 // So it'll be efficient to push down `filter` to `union`, reduce the size of data to pull from table.
 pub struct RulePushDownFilterUnion {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RulePushDownFilterUnion {
@@ -60,7 +60,7 @@ impl RulePushDownFilterUnion {
             //   UnionAll
             //     /  \
             //   ...   ...
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Filter,
                 }
@@ -83,7 +83,7 @@ impl RulePushDownFilterUnion {
                         .into(),
                     ),
                 ),
-            ),
+            )],
         }
     }
 }
@@ -124,8 +124,8 @@ impl Rule for RulePushDownFilterUnion {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }
 
@@ -140,6 +140,7 @@ fn replace_column_binding(
                 let new_column = ColumnBinding {
                     database_name: None,
                     table_name: None,
+                    table_index: None,
                     column_name: column.column.column_name.clone(),
                     index: *index_pairs.get(&index).unwrap(),
                     data_type: column.column.data_type,

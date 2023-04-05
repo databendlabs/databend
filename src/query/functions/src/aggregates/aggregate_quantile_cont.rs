@@ -50,11 +50,11 @@ const MEDIAN: u8 = 0;
 const QUANTILE_CONT: u8 = 1;
 
 #[derive(Default, Serialize, Deserialize)]
-pub struct QuantileState {
+struct QuantileContState {
     pub value: Vec<OrderedFloat<f64>>,
 }
 
-impl QuantileState {
+impl QuantileContState {
     fn new() -> Self {
         Self::default()
     }
@@ -147,11 +147,11 @@ where T: Number + AsPrimitive<f64>
     }
 
     fn init_state(&self, place: StateAddr) {
-        place.write(QuantileState::new)
+        place.write(QuantileContState::new)
     }
 
     fn state_layout(&self) -> Layout {
-        Layout::new::<QuantileState>()
+        Layout::new::<QuantileContState>()
     }
 
     fn accumulate(
@@ -162,7 +162,7 @@ where T: Number + AsPrimitive<f64>
         _input_rows: usize,
     ) -> Result<()> {
         let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
-        let state = place.get::<QuantileState>();
+        let state = place.get::<QuantileContState>();
         match validity {
             Some(bitmap) => {
                 for (value, is_valid) in column.iter().zip(bitmap.iter()) {
@@ -184,7 +184,7 @@ where T: Number + AsPrimitive<f64>
     fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
         let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
 
-        let state = place.get::<QuantileState>();
+        let state = place.get::<QuantileContState>();
         let v: f64 = column[row].as_();
         state.add(v);
         Ok(())
@@ -201,7 +201,7 @@ where T: Number + AsPrimitive<f64>
 
         column.iter().zip(places.iter()).for_each(|(value, place)| {
             let place = place.next(offset);
-            let state = place.get::<QuantileState>();
+            let state = place.get::<QuantileContState>();
             let v: f64 = value.as_();
             state.add(v);
         });
@@ -209,25 +209,25 @@ where T: Number + AsPrimitive<f64>
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<QuantileState>();
+        let state = place.get::<QuantileContState>();
         serialize_into_buf(writer, state)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<QuantileState>();
+        let state = place.get::<QuantileContState>();
         *state = deserialize_from_slice(reader)?;
 
         Ok(())
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<QuantileState>();
-        let state = place.get::<QuantileState>();
+        let rhs = rhs.get::<QuantileContState>();
+        let state = place.get::<QuantileContState>();
         state.merge(rhs)
     }
 
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
-        let state = place.get::<QuantileState>();
+        let state = place.get::<QuantileContState>();
         state.merge_result(builder, self.levels.clone())
     }
 
@@ -236,7 +236,7 @@ where T: Number + AsPrimitive<f64>
     }
 
     unsafe fn drop_state(&self, place: StateAddr) {
-        let state = place.get::<QuantileState>();
+        let state = place.get::<QuantileContState>();
         std::ptr::drop_in_place(state);
     }
 }
@@ -318,7 +318,7 @@ where T: Number + AsPrimitive<f64>
     }
 }
 
-pub fn try_create_aggregate_quantile_function<const TYPE: u8>(
+pub fn try_create_aggregate_quantile_cont_function<const TYPE: u8>(
     display_name: &str,
     params: Vec<Scalar>,
     arguments: Vec<DataType>,
@@ -351,14 +351,14 @@ pub fn try_create_aggregate_quantile_function<const TYPE: u8>(
     })
 }
 
-pub fn aggregate_quantile_function_desc() -> AggregateFunctionDescription {
+pub fn aggregate_quantile_cont_function_desc() -> AggregateFunctionDescription {
     AggregateFunctionDescription::creator(Box::new(
-        try_create_aggregate_quantile_function::<QUANTILE_CONT>,
+        try_create_aggregate_quantile_cont_function::<QUANTILE_CONT>,
     ))
 }
 
 pub fn aggregate_median_function_desc() -> AggregateFunctionDescription {
     AggregateFunctionDescription::creator(Box::new(
-        try_create_aggregate_quantile_function::<MEDIAN>,
+        try_create_aggregate_quantile_cont_function::<MEDIAN>,
     ))
 }

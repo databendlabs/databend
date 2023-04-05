@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_meta_app as mt;
 use common_meta_app::storage::StorageFsConfig;
 use common_meta_app::storage::StorageGcsConfig;
 use common_meta_app::storage::StorageOssConfig;
@@ -24,6 +25,59 @@ use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::VER;
+
+impl FromToProto for mt::storage::StorageParams {
+    type PB = pb::StorageConfig;
+    fn get_pb_ver(_p: &Self::PB) -> u64 {
+        0
+    }
+    fn from_pb(p: pb::StorageConfig) -> Result<Self, Incompatible>
+    where Self: Sized {
+        match p.storage {
+            Some(pb::storage_config::Storage::S3(s)) => Ok(mt::storage::StorageParams::S3(
+                mt::storage::StorageS3Config::from_pb(s)?,
+            )),
+            Some(pb::storage_config::Storage::Fs(s)) => Ok(mt::storage::StorageParams::Fs(
+                mt::storage::StorageFsConfig::from_pb(s)?,
+            )),
+            Some(pb::storage_config::Storage::Gcs(s)) => Ok(mt::storage::StorageParams::Gcs(
+                mt::storage::StorageGcsConfig::from_pb(s)?,
+            )),
+            Some(pb::storage_config::Storage::Oss(s)) => Ok(mt::storage::StorageParams::Oss(
+                mt::storage::StorageOssConfig::from_pb(s)?,
+            )),
+            Some(pb::storage_config::Storage::Webhdfs(s)) => Ok(
+                mt::storage::StorageParams::Webhdfs(mt::storage::StorageWebhdfsConfig::from_pb(s)?),
+            ),
+            None => Err(Incompatible {
+                reason: "StageStorage.storage cannot be None".to_string(),
+            }),
+        }
+    }
+
+    fn to_pb(&self) -> Result<pb::StorageConfig, Incompatible> {
+        match self {
+            mt::storage::StorageParams::S3(v) => Ok(pb::StorageConfig {
+                storage: Some(pb::storage_config::Storage::S3(v.to_pb()?)),
+            }),
+            mt::storage::StorageParams::Fs(v) => Ok(pb::StorageConfig {
+                storage: Some(pb::storage_config::Storage::Fs(v.to_pb()?)),
+            }),
+            mt::storage::StorageParams::Gcs(v) => Ok(pb::StorageConfig {
+                storage: Some(pb::storage_config::Storage::Gcs(v.to_pb()?)),
+            }),
+            mt::storage::StorageParams::Oss(v) => Ok(pb::StorageConfig {
+                storage: Some(pb::storage_config::Storage::Oss(v.to_pb()?)),
+            }),
+            mt::storage::StorageParams::Webhdfs(v) => Ok(pb::StorageConfig {
+                storage: Some(pb::storage_config::Storage::Webhdfs(v.to_pb()?)),
+            }),
+            others => Err(Incompatible {
+                reason: format!("stage type: {} not supported", others),
+            }),
+        }
+    }
+}
 
 impl FromToProto for StorageS3Config {
     type PB = pb::S3StorageConfig;
