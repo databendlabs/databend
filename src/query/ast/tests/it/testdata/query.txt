@@ -2,11 +2,11 @@
 select a, sum(a) over w, sum(a) over w1, sum(a) over w2 from t1 window w as (partition by a), w2 as (w1 rows current row), w1 as (w order by a) order by a
 ---------- Output ---------
 error: 
-  --> SQL:1:102
+  --> SQL:1:88
   |
 1 | select a, sum(a) over w, sum(a) over w1, sum(a) over w2 from t1 window w as (partition by a), w2 as (w1 rows current row), w1 as (w order by a) order by a
-  | ------                                                                                               ^^ expected `)`, `PARTITION`, `ORDER`, `ROWS`, or `RANGE`
-  | |                                                                                                     
+  | ------                                                                                 ^^ expected `)`, `PARTITION`, `ORDER`, `ROWS`, or `RANGE`
+  | |                                                                                       
   | while parsing `SELECT ...`
 
 
