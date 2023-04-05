@@ -12,8 +12,10 @@ doctest = false
 test = false
 
 [dependencies]
+chrono = { workspace = true }
 common-exception = { path = "../../../common/exception" }
 common-meta-app = { path = "../../../meta/app" }
+enumflags2 = { version = "0.7.5", features = ["serde"] }
 
 storages-common-table-meta = { path = "../common/table-meta" }
 

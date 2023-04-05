@@ -20,6 +20,7 @@ use opendal::Operator;
 
 use crate::configs::Config;
 
+mod share_spec_accessor;
 mod share_table_accessor;
 mod share_table_meta_accessor;
 

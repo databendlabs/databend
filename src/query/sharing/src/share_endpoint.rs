@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use bytes::Bytes;
@@ -25,8 +24,9 @@ use common_meta_api::ShareApi;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::share::GetShareEndpointReq;
 use common_meta_app::share::ShareEndpointMeta;
+use common_meta_app::share::ShareNameIdent;
+use common_meta_app::share::ShareSpec;
 use common_meta_app::share::TableInfoMap;
-use common_storage::ShareTableConfig;
 use common_users::UserApiProvider;
 use http::header::AUTHORIZATION;
 use http::header::CONTENT_LENGTH;
@@ -34,9 +34,7 @@ use http::Method;
 use http::Request;
 use opendal::raw::AsyncBody;
 use opendal::raw::HttpClient;
-use parking_lot::RwLock;
 use tracing::error;
-use tracing::info;
 
 use crate::signer::TENANT_HEADER;
 
@@ -46,17 +44,14 @@ struct EndpointConfig {
 }
 
 pub struct ShareEndpointManager {
-    endpoint_map: Arc<RwLock<BTreeMap<String, ShareEndpointMeta>>>,
-
     client: HttpClient,
 }
 
 impl ShareEndpointManager {
     pub fn init() -> Result<()> {
-        GlobalInstance::set(ShareEndpointManager {
-            endpoint_map: Arc::new(RwLock::new(BTreeMap::new())),
+        GlobalInstance::set(Arc::new(ShareEndpointManager {
             client: HttpClient::new()?,
-        });
+        }));
         Ok(())
     }
 
@@ -68,37 +63,20 @@ impl ShareEndpointManager {
     async fn get_share_endpoint(
         &self,
         from_tenant: &str,
-        to_tenant: &str,
-    ) -> Result<ShareEndpointMeta> {
-        let endpoint_meta = {
-            let endpoint_map = self.endpoint_map.read();
-            endpoint_map.get(to_tenant).cloned()
+        to_tenant: Option<String>,
+    ) -> Result<Vec<ShareEndpointMeta>> {
+        let req = GetShareEndpointReq {
+            tenant: from_tenant.to_owned(),
+            endpoint: None,
+            to_tenant,
         };
-
-        match endpoint_meta {
-            Some(endpoint_meta) => {
-                return Ok(endpoint_meta);
-            }
-            None => {
-                let req = GetShareEndpointReq {
-                    tenant: from_tenant.to_owned(),
-                    endpoint: None,
-                    to_tenant: Some(to_tenant.to_owned()),
-                };
-                let meta_api = UserApiProvider::instance().get_meta_store_client();
-                let resp = meta_api.get_share_endpoint(req).await?;
-                if let Some((_, endpoint_meta)) = resp.share_endpoint_meta_vec.into_iter().next() {
-                    let mut endpoint_map = self.endpoint_map.write();
-                    endpoint_map.insert(to_tenant.to_owned(), endpoint_meta.clone());
-                    return Ok(endpoint_meta);
-                }
-            }
-        };
-
-        Err(ErrorCode::EmptyShareEndpointConfig(format!(
-            "No ShareEndpoint to tenant {:?}",
-            to_tenant
-        )))
+        let meta_api = UserApiProvider::instance().get_meta_store_client();
+        let resp = meta_api.get_share_endpoint(req).await?;
+        let mut share_endpoint_vec = Vec::with_capacity(resp.share_endpoint_meta_vec.len());
+        for (_, endpoint_meta) in resp.share_endpoint_meta_vec.iter() {
+            share_endpoint_vec.push(endpoint_meta.clone());
+        }
+        Ok(share_endpoint_vec)
     }
 
     #[async_backtrace::framed]
@@ -109,91 +87,106 @@ impl ShareEndpointManager {
         tables: Vec<String>,
     ) -> Result<TableInfoMap> {
         let to_tenant = &db_info.meta.from_share.as_ref().unwrap().tenant;
-        let is_same_tenant = from_tenant == to_tenant;
+        let share_name = &db_info.meta.from_share.as_ref().unwrap().share_name;
 
-        // fail to try again if there is some endpoint, cause endpoint may be changed.
-        let mut need_try_again = {
-            if is_same_tenant {
-                false
-            } else {
-                let endpoint_map = self.endpoint_map.read();
-                endpoint_map.contains_key(to_tenant)
+        let endpoint_config = {
+            let endpoint_meta_vec = self
+                .get_share_endpoint(from_tenant, Some(to_tenant.clone()))
+                .await?;
+            match endpoint_meta_vec.get(0) {
+                Some(endpoint_meta) => EndpointConfig {
+                    url: endpoint_meta.url.clone(),
+                    token: RefreshableToken::Direct(from_tenant.to_owned()),
+                },
+                None => {
+                    return Err(ErrorCode::UnknownShareEndpoint(format!(
+                        "UnknownShareEndpoint from {:?} to {:?}",
+                        from_tenant, to_tenant
+                    )));
+                }
             }
         };
-        let mut last_endpoint_meta = None;
-        let mut last_error = None;
 
-        loop {
-            let endpoint_config = if is_same_tenant {
-                // If share from the same tenant, query from share table config
-                let url = ShareTableConfig::share_endpoint_address();
-                match url {
-                    Some(url) => EndpointConfig {
-                        url,
-                        token: ShareTableConfig::share_endpoint_token(),
-                    },
-                    None => {
-                        return Err(ErrorCode::EmptyShareEndpointConfig(format!(
-                            "No ShareEndpoint to tenant {:?}",
-                            to_tenant
-                        )));
-                    }
-                }
-            } else {
-                // Else get share endpoint from meta API
-                let endpoint_meta = self.get_share_endpoint(from_tenant, to_tenant).await?;
-                match last_endpoint_meta {
-                    Some(ref last_endpoint_meta) => {
-                        if last_endpoint_meta == &endpoint_meta {
-                            // If endpoint meta is the same, no need to try again.
-                            return Err(ErrorCode::EmptyShareEndpointConfig(format!(
-                                "Query ShareEndpoint to tenant {:?} from endpoint {:?} fail: {:?}",
-                                to_tenant, endpoint_meta, last_error,
-                            )));
+        let url = format!(
+            "{}tenant/{}/{}/meta",
+            endpoint_config.url, to_tenant, share_name
+        );
+        let bs = Bytes::from(serde_json::to_vec(&tables)?);
+        let auth = endpoint_config.token.to_header().await?;
+        let requester = GlobalConfig::instance().as_ref().query.tenant_id.clone();
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri(&url)
+            .header(AUTHORIZATION, auth)
+            .header(CONTENT_LENGTH, bs.len())
+            .header(TENANT_HEADER, requester)
+            .body(AsyncBody::Bytes(bs))?;
+        let resp = self.client.send_async(req).await;
+        match resp {
+            Ok(resp) => {
+                let bs = resp.into_body().bytes().await?;
+                let table_info_map: TableInfoMap = serde_json::from_slice(&bs)?;
+
+                Ok(table_info_map)
+            }
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    #[async_backtrace::framed]
+    pub async fn get_inbound_shares(
+        &self,
+        from_tenant: &str,
+        to_tenant: Option<String>,
+        share_name: Option<ShareNameIdent>,
+    ) -> Result<Vec<(String, ShareSpec)>> {
+        match self.get_share_endpoint(from_tenant, to_tenant).await {
+            Err(_) => Ok(vec![]),
+            Ok(endpoint_meta_vec) => {
+                let mut share_spec_vec = vec![];
+                let share_names: Vec<String> = vec![];
+                for endpoint_meta in endpoint_meta_vec {
+                    let endpoint_config = EndpointConfig {
+                        url: endpoint_meta.url.clone(),
+                        token: RefreshableToken::Direct(from_tenant.to_owned()),
+                    };
+                    let url = format!("{}tenant/{}/share_spec", endpoint_meta.url, from_tenant);
+                    let bs = Bytes::from(serde_json::to_vec(&share_names)?);
+                    let auth = endpoint_config.token.to_header().await?;
+                    let requester = GlobalConfig::instance().as_ref().query.tenant_id.clone();
+                    let req = Request::builder()
+                        .method(Method::POST)
+                        .uri(&url)
+                        .header(AUTHORIZATION, auth)
+                        .header(CONTENT_LENGTH, bs.len())
+                        .header(TENANT_HEADER, requester)
+                        .body(AsyncBody::Bytes(bs))?;
+                    let resp = self.client.send_async(req).await;
+                    match resp {
+                        Ok(resp) => {
+                            let bs = resp.into_body().bytes().await?;
+                            let ret: Vec<ShareSpec> = serde_json::from_slice(&bs)?;
+                            for share_spec in ret {
+                                if let Some(ref share_name) = share_name {
+                                    if share_spec.name == share_name.share_name
+                                        && endpoint_meta.tenant == share_name.tenant
+                                    {
+                                        share_spec_vec
+                                            .push((endpoint_meta.tenant.clone(), share_spec));
+                                        return Ok(share_spec_vec);
+                                    }
+                                }
+                                share_spec_vec.push((endpoint_meta.tenant.clone(), share_spec));
+                            }
+                        }
+                        Err(err) => {
+                            error!("get_inbound_shares error: {:?}", err);
+                            continue;
                         }
                     }
-                    None => {
-                        last_endpoint_meta = Some(endpoint_meta.clone());
-                    }
                 }
 
-                EndpointConfig {
-                    url: endpoint_meta.url,
-                    token: RefreshableToken::Direct(from_tenant.to_owned()),
-                }
-            };
-
-            let bs = Bytes::from(serde_json::to_vec(&tables)?);
-            let auth = endpoint_config.token.to_header().await?;
-            let requester = GlobalConfig::instance().as_ref().query.tenant_id.clone();
-            let req = Request::builder()
-                .method(Method::POST)
-                .uri(&endpoint_config.url)
-                .header(AUTHORIZATION, auth)
-                .header(CONTENT_LENGTH, bs.len())
-                .header(TENANT_HEADER, requester)
-                .body(AsyncBody::Bytes(bs))?;
-            let resp = self.client.send_async(req).await;
-            match resp {
-                Ok(resp) => {
-                    let bs = resp.into_body().bytes().await?;
-                    let table_info_map: TableInfoMap = serde_json::from_slice(&bs)?;
-
-                    return Ok(table_info_map);
-                }
-                Err(err) => {
-                    if !need_try_again {
-                        error!("get_table_info_map error: {:?}", err);
-                        return Err(err.into());
-                    } else {
-                        info!("get_table_info_map error: {:?}, try again", err);
-                        last_error = Some(err);
-                        // endpoint may be changed, so cleanup endpoint and try again
-                        need_try_again = false;
-                        let mut endpoint_map = self.endpoint_map.write();
-                        endpoint_map.remove(to_tenant);
-                    }
-                }
+                Ok(share_spec_vec)
             }
         }
     }
