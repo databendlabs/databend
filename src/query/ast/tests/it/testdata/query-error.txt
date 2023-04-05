@@ -89,7 +89,7 @@ error:
   --> SQL:1:35
   |
 1 | SELECT * FROM ((SELECT * FROM xyu ORDER BY x, y)) AS xyu
-  | ------         -                  ^^^^^ expected `)`, `(`, `.`, `AT`, <Ident>, <QuotedString>, or 23 more ...
+  | ------         -                  ^^^^^ expected `)`, `(`, `.`, `AT`, <Ident>, <QuotedString>, or 24 more ...
   | |              |                   
   | |              while parsing `SELECT ...`
   | while parsing `SELECT ...`
