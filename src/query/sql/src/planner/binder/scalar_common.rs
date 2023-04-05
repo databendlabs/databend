@@ -106,6 +106,7 @@ pub enum JoinPredicate<'a> {
     Both {
         left: &'a ScalarExpr,
         right: &'a ScalarExpr,
+        equal: bool,
     },
     Other(&'a ScalarExpr),
 }
@@ -128,20 +129,22 @@ impl<'a> JoinPredicate<'a> {
         }
 
         if let ScalarExpr::ComparisonExpr(ComparisonExpr {
-            op: ComparisonOp::Equal,
-            left,
-            right,
-            ..
+            op, left, right, ..
         }) = scalar
         {
             if satisfied_by(left, left_prop) && satisfied_by(right, right_prop) {
-                return Self::Both { left, right };
+                return Self::Both {
+                    left,
+                    right,
+                    equal: op == &ComparisonOp::Equal,
+                };
             }
 
             if satisfied_by(right, left_prop) && satisfied_by(left, right_prop) {
                 return Self::Both {
                     left: right,
                     right: left,
+                    equal: op == &ComparisonOp::Equal,
                 };
             }
         }

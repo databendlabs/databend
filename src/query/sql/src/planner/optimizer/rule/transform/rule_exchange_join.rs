@@ -170,7 +170,7 @@ impl Rule for RuleExchangeJoin {
                 JoinPredicate::Right(pred) => {
                     join_6_preds.push(pred.clone());
                 }
-                JoinPredicate::Both { left, right } => {
+                JoinPredicate::Both { left, right, .. } => {
                     join_4.left_conditions.push(left.clone());
                     join_4.right_conditions.push(right.clone());
                 }
@@ -192,7 +192,7 @@ impl Rule for RuleExchangeJoin {
                     // TODO(leiysky): push down the predicate
                     join_5.non_equi_conditions.push(predicate.clone());
                 }
-                JoinPredicate::Both { left, right } => {
+                JoinPredicate::Both { left, right, .. } => {
                     join_5.left_conditions.push(left.clone());
                     join_5.right_conditions.push(right.clone());
                 }
@@ -211,7 +211,7 @@ impl Rule for RuleExchangeJoin {
                     // TODO(leiysky): push down the predicate
                     join_6.non_equi_conditions.push(predicate.clone());
                 }
-                JoinPredicate::Both { left, right } => {
+                JoinPredicate::Both { left, right, .. } => {
                     join_6.left_conditions.push(left.clone());
                     join_6.right_conditions.push(right.clone());
                 }
