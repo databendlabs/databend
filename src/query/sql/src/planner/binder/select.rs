@@ -994,7 +994,7 @@ impl<'a> SelectRewriter<'a> {
                 .unwrap()
                 .name
                 .clone();
-            // check is resolved first, so that we no need to check recursion.
+            // check if spec is resolved first, so that we no need to resolve again.
             let referenced_window_spec = {
                 resolved_window.get(&referenced_name).unwrap_or(
                     window_list
@@ -1053,6 +1053,7 @@ impl<'a> SelectRewriter<'a> {
                         order_by,
                         window_frame,
                     };
+                    // add to resolved.
                     resolved_window.insert(window_name.to_string(), new_window_spec.clone());
                     Ok(new_window_spec)
                 }

@@ -1151,6 +1151,7 @@ impl TokenKind {
             | TokenKind::RIGHT
             | TokenKind::SELECT
             | TokenKind::UNPIVOT
+            | TokenKind::PIVOT
             // | TokenKind::SESSION_USER
             // | TokenKind::SIMILAR
             | TokenKind::SOME

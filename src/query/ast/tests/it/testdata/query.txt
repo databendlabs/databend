@@ -3643,13 +3643,156 @@ Query {
 ---------- Input ----------
 select * from monthly_sales pivot(sum(amount) for month in ('JAN', 'FEB', 'MAR', 'APR')) order by empid
 ---------- Output ---------
-error: 
-  --> SQL:1:47
-  |
-1 | select * from monthly_sales pivot(sum(amount) for month in ('JAN', 'FEB', 'MAR', 'APR')) order by empid
-  | ------                                        ^^^ expected `)`, <Ident>, <QuotedString>, `AS`, `AtString`, `(`, or 11 more ...
-  | |                                              
-  | while parsing `SELECT ...`
+SELECT * FROM monthly_sales PIVOT(sum(amount) FOR month IN ('JAN', 'FEB', 'MAR', 'APR')) ORDER BY empid
+---------- AST ------------
+Query {
+    span: Some(
+        0..103,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..88,
+            ),
+            distinct: false,
+            select_list: [
+                QualifiedName {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    exclude: None,
+                },
+            ],
+            from: [
+                Table {
+                    span: Some(
+                        14..88,
+                    ),
+                    catalog: None,
+                    database: None,
+                    table: Identifier {
+                        name: "monthly_sales",
+                        quote: None,
+                        span: Some(
+                            14..27,
+                        ),
+                    },
+                    alias: None,
+                    travel_point: None,
+                    pivot: Some(
+                        Pivot {
+                            aggregate: FunctionCall {
+                                span: Some(
+                                    34..45,
+                                ),
+                                distinct: false,
+                                name: Identifier {
+                                    name: "sum",
+                                    quote: None,
+                                    span: Some(
+                                        34..37,
+                                    ),
+                                },
+                                args: [
+                                    ColumnRef {
+                                        span: Some(
+                                            38..44,
+                                        ),
+                                        database: None,
+                                        table: None,
+                                        column: Identifier {
+                                            name: "amount",
+                                            quote: None,
+                                            span: Some(
+                                                38..44,
+                                            ),
+                                        },
+                                    },
+                                ],
+                                params: [],
+                                window: None,
+                            },
+                            value_column: Identifier {
+                                name: "month",
+                                quote: None,
+                                span: Some(
+                                    50..55,
+                                ),
+                            },
+                            values: [
+                                Literal {
+                                    span: Some(
+                                        60..65,
+                                    ),
+                                    lit: String(
+                                        "JAN",
+                                    ),
+                                },
+                                Literal {
+                                    span: Some(
+                                        67..72,
+                                    ),
+                                    lit: String(
+                                        "FEB",
+                                    ),
+                                },
+                                Literal {
+                                    span: Some(
+                                        74..79,
+                                    ),
+                                    lit: String(
+                                        "MAR",
+                                    ),
+                                },
+                                Literal {
+                                    span: Some(
+                                        81..86,
+                                    ),
+                                    lit: String(
+                                        "APR",
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                    unpivot: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+        },
+    ),
+    order_by: [
+        OrderByExpr {
+            expr: ColumnRef {
+                span: Some(
+                    98..103,
+                ),
+                database: None,
+                table: None,
+                column: Identifier {
+                    name: "empid",
+                    quote: None,
+                    span: Some(
+                        98..103,
+                    ),
+                },
+            },
+            asc: None,
+            nulls_first: None,
+        },
+    ],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
 
 
 ---------- Input ----------
