@@ -36,7 +36,7 @@ impl OpenAI {
             &self.api_base,
         );
 
-        let (max_tokens, stop) = (Some(512), None);
+        let (max_tokens, stop) = (Some(1024), None);
 
         let body = ChatBody {
             model: AIModel::GPT35Turbo.to_string(),
