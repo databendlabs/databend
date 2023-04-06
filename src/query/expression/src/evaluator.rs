@@ -433,6 +433,12 @@ impl<'a> Evaluator<'a> {
             },
             (DataType::Map(inner_src_ty), DataType::Map(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Map(array)) => {
+                    let validity = validity.map(|validity| {
+                        let mut inner_validity = MutableBitmap::with_capacity(array.len());
+                        inner_validity.extend_constant(array.len(), validity.get_bit(0));
+                        inner_validity.into()
+                    });
+
                     let new_array = self
                         .run_cast(
                             span,
@@ -446,6 +452,12 @@ impl<'a> Evaluator<'a> {
                     Ok(Value::Scalar(Scalar::Map(new_array)))
                 }
                 Value::Column(Column::Map(col)) => {
+                    let validity = validity.map(|validity| {
+                        let mut inner_validity = MutableBitmap::with_capacity(col.len());
+                        inner_validity.extend_constant(col.len(), validity.get_bit(0));
+                        inner_validity.into()
+                    });
+
                     let new_col = self
                         .run_cast(
                             span,
