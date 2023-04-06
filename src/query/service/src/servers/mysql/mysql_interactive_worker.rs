@@ -468,7 +468,7 @@ impl ProgressReporter for ContextProgressReporter {
     }
 
     fn affected_rows(&self) -> u64 {
-        let progress = self.context.get_scan_progress_value();
+        let progress = self.context.get_write_progress_value();
         progress.rows as u64
     }
 }
