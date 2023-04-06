@@ -82,8 +82,8 @@ impl RulePushDownPrewhere {
             ScalarExpr::CastExpr(cast) => {
                 Self::collect_columns_impl(cast.argument.as_ref(), columns)
             }
-            // 1. ConstantExpr is not collected.
-            // 2. SubqueryExpr and AggregateFunction will not appear in Filter-LogicalGet
+            ScalarExpr::ConstantExpr(_) => Some(()),
+            // SubqueryExpr and AggregateFunction will not appear in Filter-LogicalGet
             _ => None,
         }
     }
@@ -92,11 +92,9 @@ impl RulePushDownPrewhere {
     fn collect_columns(expr: &ScalarExpr) -> Option<ColumnSet> {
         let mut columns = ColumnSet::new();
         // columns in subqueries are not considered
-        let _ = Self::collect_columns_impl(expr, &mut columns);
-        if !columns.is_empty() {
-            return Some(columns);
-        }
-        None
+        Self::collect_columns_impl(expr, &mut columns)?;
+
+        Some(columns)
     }
 
     pub fn prewhere_optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
