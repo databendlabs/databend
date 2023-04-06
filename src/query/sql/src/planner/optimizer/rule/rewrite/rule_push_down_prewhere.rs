@@ -82,8 +82,8 @@ impl RulePushDownPrewhere {
             ScalarExpr::CastExpr(cast) => {
                 Self::collect_columns_impl(cast.argument.as_ref(), columns)
             }
-            ScalarExpr::ConstantExpr(_) => Some(()),
-            // SubqueryExpr and AggregateFunction will not appear in Filter-LogicalGet
+            // 1. ConstantExpr is not collected.
+            // 2. SubqueryExpr and AggregateFunction will not appear in Filter-LogicalGet
             _ => None,
         }
     }
