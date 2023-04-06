@@ -491,6 +491,9 @@ fn test_query() {
         r#"select * from t1 union select * from t2 intersect select * from t3"#,
         r#"(select * from t1 union select * from t2) union select * from t3"#,
         r#"select * from t1 union (select * from t2 union select * from t3)"#,
+        r#"SELECT * FROM ((SELECT *) EXCEPT (SELECT *)) foo"#,
+        r#"SELECT * FROM (((SELECT *) EXCEPT (SELECT *))) foo"#,
+        r#"SELECT * FROM (SELECT * FROM xyu ORDER BY x, y) AS xyu"#,
         r#"select * from monthly_sales pivot(sum(amount) for month in ('JAN', 'FEB', 'MAR', 'APR')) order by empid"#,
         r#"select * from monthly_sales_1 unpivot(sales for month in (jan, feb, mar, april)) order by empid"#,
         r#"select * from range(1, 2)"#,
@@ -515,6 +518,7 @@ fn test_query_error() {
         r#"select * order"#,
         r#"select number + 5 as a, cast(number as float(255))"#,
         r#"select 1 1"#,
+        r#"SELECT * FROM ((SELECT * FROM xyu ORDER BY x, y)) AS xyu"#,
     ];
 
     for case in cases {
