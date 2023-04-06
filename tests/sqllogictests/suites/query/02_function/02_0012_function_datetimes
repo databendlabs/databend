@@ -117,9 +117,15 @@ select to_datetime('9999-12-31 23:59:')
 9999-12-31 23:59:00.000000
 
 query T
-select to_unix_timestamp('2023-04-06 04:06:23.231808')
+select to_unix_timestamp('2022-12-31T23:59:59+00:00')
 ----
-1680753983
+1672531199
+
+query T
+select to_unix_timestamp('2022-12-31T23:59:59-08:00')
+----
+1672559999
+
 
 statement error 1001
 select to_datetime('9999-01-01 00x')
