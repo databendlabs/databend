@@ -189,6 +189,23 @@ impl From<&TableSnapshot> for TableSnapshotLite {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct TableSnapshotLite2 {
+    pub format_version: FormatVersion,
+    pub snapshot_id: SnapshotId,
+    pub timestamp: Option<DateTime<Utc>>,
+}
+
+impl From<&TableSnapshot> for TableSnapshotLite2 {
+    fn from(value: &TableSnapshot) -> Self {
+        TableSnapshotLite2 {
+            format_version: value.format_version(),
+            snapshot_id: value.snapshot_id,
+            timestamp: value.timestamp,
+        }
+    }
+}
+
 mod util {
     use chrono::DateTime;
     use chrono::Datelike;

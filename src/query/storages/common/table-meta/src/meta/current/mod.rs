@@ -19,6 +19,7 @@ pub use v2::ColumnMeta;
 pub use v2::SegmentInfo;
 pub use v2::TableSnapshot;
 pub use v2::TableSnapshotLite;
+pub use v2::TableSnapshotLite2;
 
 use super::v0;
 use super::v1;
