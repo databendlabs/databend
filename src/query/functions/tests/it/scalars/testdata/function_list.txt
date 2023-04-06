@@ -3376,8 +3376,8 @@ Functions overloads:
 21 to_uint8(Float64 NULL) :: UInt8 NULL
 22 to_uint8(Boolean) :: UInt8
 23 to_uint8(Boolean NULL) :: UInt8 NULL
-24 to_unix_timestamp(Timestamp) :: Int64
-25 to_unix_timestamp(Timestamp NULL) :: Int64 NULL
+0 to_unix_timestamp(Timestamp) :: Int64
+1 to_unix_timestamp(Timestamp NULL) :: Int64 NULL
 0 to_variant(T0) :: Variant
 1 to_variant(T0 NULL) :: Variant NULL
 0 to_year(Date) :: UInt16
