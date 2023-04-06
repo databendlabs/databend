@@ -35,6 +35,10 @@ use crate::helper::CliHelper;
 pub struct Session {
     client: FlightSqlServiceClient,
     is_repl: bool,
+    endpoint: Endpoint,
+    user: String,
+    password: String,
+
     config: Config,
     prompt: String,
 }
@@ -47,18 +51,18 @@ impl Session {
         password: &str,
         is_repl: bool,
     ) -> Result<Self, ArrowError> {
+        if is_repl {
+            println!("Welcome to databend-cli.");
+            println!("Connecting to {} as user {}.", endpoint.uri(), user);
+            println!();
+        }
+
         let channel = endpoint
             .connect()
             .await
             .map_err(|err| ArrowError::IoError(err.to_string()))?;
 
         let mut client = FlightSqlServiceClient::new(channel);
-
-        if is_repl {
-            println!("Welcome to databend-cli.");
-            println!("Connecting to {} as user {}.", endpoint.uri(), user);
-            println!();
-        }
 
         // enable progress
         client.set_header("bendsql", "1");
@@ -76,6 +80,9 @@ impl Session {
             client,
             is_repl,
             prompt,
+            user: user.to_owned(),
+            password: password.to_owned(),
+            endpoint,
         })
     }
 
@@ -127,9 +134,16 @@ impl Session {
                         break;
                     }
                     Ok(false) => {}
-                    Err(e) => {
-                        eprintln!("{}", format_error(e));
-                    }
+                    Err(e) => match e {
+                        ArrowError::IoError(e) if e.contains("Unauthenticated") => {
+                            if let Err(e) = self.reconnect().await {
+                                eprintln!("Reconnect error: {}", format_error(e));
+                            } else if let Err(e) = self.handle_query(true, &query).await {
+                                eprintln!("{}", format_error(e));
+                            }
+                        }
+                        e => eprintln!("{}", format_error(e)),
+                    },
                 }
             }
             query.clear();
@@ -199,6 +213,33 @@ impl Session {
         }
 
         Ok(false)
+    }
+
+    async fn reconnect(&mut self) -> Result<(), ArrowError> {
+        if self.is_repl {
+            println!(
+                "Connecting to {} as user {}.",
+                self.endpoint.uri(),
+                self.user
+            );
+            println!();
+        }
+
+        let channel = self
+            .endpoint
+            .connect()
+            .await
+            .map_err(|err| ArrowError::IoError(err.to_string()))?;
+
+        self.client = FlightSqlServiceClient::new(channel);
+        // enable progress
+        self.client.set_header("bendsql", "1");
+        let _token = self
+            .client
+            .handshake(&self.user, &self.password)
+            .await
+            .unwrap();
+        Ok(())
     }
 }
 
