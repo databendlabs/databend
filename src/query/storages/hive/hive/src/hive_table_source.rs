@@ -32,7 +32,7 @@ use common_expression::DataSchemaRef;
 use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::Value;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -187,7 +187,7 @@ impl HiveTableSource {
         if let Some(filter) = self.prewhere_filter.as_ref() {
             // 2. do filter
             let (exists, valids) = self.exec_prewhere_filter(filter, &prewhere_datablocks)?;
-            // 3. if all data filter out, try next rowgroup, trans to prewehere data
+            // 3. if all data filter out, try next rowgroup, trans to prewhere data
             if !exists {
                 // all rows in this block are filtered out
                 // turn to begin the next state cycle.
@@ -349,6 +349,7 @@ impl Processor for HiveTableSource {
         }
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::ReadMeta(Some(part)) => {

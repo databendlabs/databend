@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::optimizer::util::contains_project_set;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
@@ -25,6 +26,7 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::VirtualColumnRef;
 use crate::IndexType;
+use crate::plans::WindowFuncType;
 use crate::MetadataRef;
 
 pub struct UnusedColumnPruner {
@@ -170,6 +172,14 @@ impl UnusedColumnPruner {
                 self.collect_virtual_columns(scalars);
 
                 let mut used = vec![];
+                if contains_project_set(expr) {
+                    return Ok(SExpr::create_unary(
+                        RelOperator::EvalScalar(EvalScalar {
+                            items: p.items.clone(),
+                        }),
+                        expr.child(0)?.clone(),
+                    ));
+                }
                 // Only keep columns needed by parent plan.
                 for s in p.items.iter() {
                     if !required.contains(&s.index) {
@@ -228,6 +238,26 @@ impl UnusedColumnPruner {
                     self.keep_required_columns(expr.child(0)?, required)?,
                 ))
             }
+            RelOperator::Window(p) => {
+                if required.contains(&p.index) {
+                    if let WindowFuncType::Aggregate(agg) = &p.function {
+                        agg.args.iter().for_each(|item| {
+                            required.extend(item.used_columns());
+                        });
+                    }
+                    p.partition_by.iter().for_each(|item| {
+                        required.insert(item.index);
+                    });
+                    p.order_by.iter().for_each(|item| {
+                        required.insert(item.order_by_item.index);
+                    });
+                }
+
+                Ok(SExpr::create_unary(
+                    RelOperator::Window(p.clone()),
+                    Self::keep_required_columns(expr.child(0)?, required)?,
+                ))
+            }
             RelOperator::Sort(p) => {
                 p.items.iter().for_each(|s| {
                     required.insert(s.index);
@@ -259,18 +289,10 @@ impl UnusedColumnPruner {
             }
 
             RelOperator::ProjectSet(op) => {
-                let mut used = vec![];
-                // Only keep columns needed by parent plan.
+                // We can't prune SRFs because they may change the cardinality of result set,
+                // even if the result column of an SRF is not used by any following expression.
                 for s in op.srfs.iter() {
-                    if !s.columns.iter().any(|c| required.contains(c)) {
-                        continue;
-                    }
-                    used.push(s.clone());
-                    s.args.iter().for_each(|scalar| {
-                        scalar.used_columns().iter().for_each(|c| {
-                            required.insert(*c);
-                        })
-                    })
+                    required.extend(s.scalar.used_columns().iter().copied());
                 }
 
                 Ok(SExpr::create_unary(

@@ -88,6 +88,7 @@ impl ReclusterMutator {
 
 #[async_trait::async_trait]
 impl TableMutator for ReclusterMutator {
+    #[async_backtrace::framed]
     async fn target_select(&mut self) -> Result<bool> {
         let blocks_map = self.blocks_map.clone();
         for (level, block_metas) in blocks_map.into_iter() {
@@ -205,6 +206,7 @@ impl TableMutator for ReclusterMutator {
         Ok(false)
     }
 
+    #[async_backtrace::framed]
     async fn try_commit(self: Box<Self>, table: Arc<dyn Table>) -> Result<()> {
         let ctx = &self.base_mutator.ctx;
         let (mut segments, mut summary, mut abort_operation) =

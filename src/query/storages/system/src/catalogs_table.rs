@@ -43,6 +43,7 @@ impl AsyncSystemTable for CatalogsTable {
         &self.table_info
     }
 
+    #[async_backtrace::framed]
     async fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let cm = CatalogManager::instance();
 

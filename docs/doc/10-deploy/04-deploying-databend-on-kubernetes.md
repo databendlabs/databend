@@ -217,7 +217,7 @@ Detailed and default values are available at [documentation](https://github.com/
 replicaCount: 3
 config:
   query:
-    clsuterId: example_cluster
+    clusterId: example_cluster
     # add builtin user
     users:
       - name: databend
@@ -481,7 +481,7 @@ replicaCount: 3
 +   tag: "v0.8.123-nightly"
 config:
   query:
-    clsuterId: example_cluster
+    clusterId: example_cluster
 ```
 
 then just run again helm upgrade
@@ -574,7 +574,7 @@ SELECT count(*) FROM t1;
 Note the `serviceMonitor` should be enabled when deploying meta and query cluster.
 :::
 
-* Download the grafana dashaboard files from: [datafuselabs/helm-charts](https://github.com/datafuselabs/helm-charts/tree/main/dashboards).
+* Download the grafana dashboard files from: [datafuselabs/helm-charts](https://github.com/datafuselabs/helm-charts/tree/main/dashboards).
 
 * Open grafana web for your cluster.
 

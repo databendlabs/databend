@@ -50,6 +50,7 @@ impl Interpreter for ShowFileFormatsInterpreter {
     }
 
     #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let user_mgr = UserApiProvider::instance();
         let tenant = self.ctx.get_tenant();

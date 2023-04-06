@@ -1,25 +1,25 @@
-ERROR 1105 (HY000) at line 1: Code: 1065, displayText = error: 
+ERROR 1105 (HY000) at line 1: Code: 1065, Text = error: 
   --> SQL:1:8
   |
 1 | select *
   |        ^ SELECT * with no tables specified is not valid
 
 .
-ERROR 1105 (HY000) at line 1: Code: 1025, displayText = error: 
+ERROR 1105 (HY000) at line 1: Code: 1025, Text = error: 
   --> SQL:1:15
   |
 1 | select * from t
   |               ^ Unknown table 't'
 
 .
-ERROR 1105 (HY000) at line 1: Code: 1008, displayText = error: 
+ERROR 1105 (HY000) at line 1: Code: 1008, Text = error: 
   --> SQL:1:8
   |
 1 | select base64(1)
-  |        ^^^^^^^^^ no function matches the given name: base64
+  |        ^^^^^^^^^ no function matches the given name: 'base64', do you mean 'to_base64'?
 
 .
-ERROR 1105 (HY000) at line 1: Code: 1065, displayText = error: 
+ERROR 1105 (HY000) at line 1: Code: 1065, Text = error: 
   --> SQL:1:8
   |
 1 | select to_base64(1)
@@ -30,21 +30,21 @@ has tried possible overloads:
   to_base64(String NULL) :: String NULL  : unable to unify `UInt8` with `String`
 
 .
-ERROR 1105 (HY000) at line 1: Code: 1001, displayText = error: 
+ERROR 1105 (HY000) at line 1: Code: 1001, Text = error: 
   --> SQL:1:12
   |
 1 | select 1 + 'a'
   |            ^^^ invalid digit found in string while evaluating function `to_uint8("a")`
 
 .
-ERROR 1105 (HY000) at line 1: Code: 1025, displayText = error: 
+ERROR 1105 (HY000) at line 1: Code: 1025, Text = error: 
   --> SQL:1:20
   |
 1 | select t1.a:z from t
   |                    ^ Unknown table 't'
 
 .
-ERROR 1105 (HY000) at line 1: Code: 1065, displayText = error: 
+ERROR 1105 (HY000) at line 1: Code: 1065, Text = error: 
   --> SQL:1:33
   |
 1 | select * from t2 join t3 using (c)

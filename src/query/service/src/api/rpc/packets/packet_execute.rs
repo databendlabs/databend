@@ -49,6 +49,7 @@ impl ExecutePartialQueryPacket {
 
 #[async_trait::async_trait]
 impl Packet for ExecutePartialQueryPacket {
+    #[async_backtrace::framed]
     async fn commit(&self, config: &InnerConfig, timeout: u64) -> Result<()> {
         if !self.executors_info.contains_key(&self.executor) {
             return Err(ErrorCode::ClusterUnknownNode(format!(

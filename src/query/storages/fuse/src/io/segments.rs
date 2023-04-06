@@ -44,10 +44,12 @@ impl SegmentsIO {
 
     // Read one segment file by location.
     // The index is the index of the segment_location in segment_locations.
+    #[async_backtrace::framed]
     async fn read_segment(
         dal: Operator,
         segment_location: Location,
         table_schema: TableSchemaRef,
+        put_cache: bool,
     ) -> Result<Arc<SegmentInfo>> {
         let (path, ver) = segment_location;
         let reader = MetaReaders::segment_info_reader(dal, table_schema);
@@ -57,7 +59,7 @@ impl SegmentsIO {
             location: path,
             len_hint: None,
             ver,
-            put_cache: true,
+            put_cache,
         };
 
         reader.read(&load_params).await
@@ -65,9 +67,11 @@ impl SegmentsIO {
 
     // Read all segments information from s3 in concurrently.
     #[tracing::instrument(level = "debug", skip_all)]
+    #[async_backtrace::framed]
     pub async fn read_segments(
         &self,
         segment_locations: &[Location],
+        put_cache: bool,
     ) -> Result<Vec<Result<Arc<SegmentInfo>>>> {
         if segment_locations.is_empty() {
             return Ok(vec![]);
@@ -80,7 +84,7 @@ impl SegmentsIO {
             if let Some(location) = iter.next() {
                 let location = location.clone();
                 Some(
-                    Self::read_segment(self.operator.clone(), location, schema.clone())
+                    Self::read_segment(self.operator.clone(), location, schema.clone(), put_cache)
                         .instrument(tracing::debug_span!("read_segment")),
                 )
             } else {
@@ -99,6 +103,7 @@ impl SegmentsIO {
         .await
     }
 
+    #[async_backtrace::framed]
     pub async fn read_segment_into<T>(
         dal: Operator,
         segment_location: Location,
@@ -124,6 +129,7 @@ impl SegmentsIO {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
+    #[async_backtrace::framed]
     pub async fn read_segments_into<T>(
         &self,
         segment_locations: &[Location],

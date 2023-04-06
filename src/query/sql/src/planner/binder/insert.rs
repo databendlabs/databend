@@ -32,6 +32,7 @@ use crate::plans::Plan;
 use crate::BindContext;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_insert(
         &mut self,
         bind_context: &mut BindContext,

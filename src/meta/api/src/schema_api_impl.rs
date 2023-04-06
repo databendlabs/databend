@@ -168,15 +168,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             )));
         }
 
-        // if create a database from a share, check if the share exists and grant access, update share_meta.
-        if let Some(from_share) = &req.meta.from_share {
-            if from_share.tenant == req.name_ident.tenant {
-                return Err(KVAppError::AppError(AppError::WrongShare(WrongShare::new(
-                    req.name_ident.to_string_key(),
-                ))));
-            }
-        }
-
         let mut retry = 0;
         while retry < TXN_MAX_RETRY_TIMES {
             retry += 1;
@@ -247,66 +238,73 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
 
                 // if create a database from a share, check if the share exists and grant access, update share_meta.
                 if let Some(from_share) = &req.meta.from_share {
-                    // get share by share_name
-                    let (share_id_seq, share_id, share_meta_seq, mut share_meta) =
-                        get_share_or_err(
-                            self,
-                            from_share,
-                            format!("create_database from share: {}", from_share),
-                        )
-                        .await?;
+                    // check only if tenant is the same
+                    if from_share.tenant == req.name_ident.tenant {
+                        // get share by share_name
+                        let (share_id_seq, share_id, share_meta_seq, mut share_meta) =
+                            get_share_or_err(
+                                self,
+                                from_share,
+                                format!("create_database from share: {}", from_share),
+                            )
+                            .await?;
 
-                    // check if the share has granted the account
-                    if !share_meta.has_account(&req.name_ident.tenant) {
-                        return Err(KVAppError::AppError(AppError::UnknownShareAccounts(
-                            UnknownShareAccounts::new(
-                                &[req.name_ident.tenant.clone()],
-                                share_id,
-                                format!(
-                                    "share {} has not granted privilege to {}",
-                                    from_share, req.name_ident.tenant
+                        // check if the share has granted the account
+                        if !share_meta.has_account(&req.name_ident.tenant) {
+                            return Err(KVAppError::AppError(AppError::UnknownShareAccounts(
+                                UnknownShareAccounts::new(
+                                    &[req.name_ident.tenant.clone()],
+                                    share_id,
+                                    format!(
+                                        "share {} has not granted privilege to {}",
+                                        from_share, req.name_ident.tenant
+                                    ),
                                 ),
-                            ),
-                        )));
+                            )));
+                        }
+
+                        // check if the share has granted a database
+                        let (share_from_db_id, privileges) =
+                            get_share_database_id_and_privilege(from_share, &share_meta)?;
+                        if !privileges.contains(ShareGrantObjectPrivilege::Usage) {
+                            return Err(KVAppError::AppError(
+                                AppError::ShareHasNoGrantedPrivilege(
+                                    ShareHasNoGrantedPrivilege::new(
+                                        &from_share.tenant,
+                                        &from_share.share_name,
+                                    ),
+                                ),
+                            ));
+                        }
+
+                        // check if the share database existed
+                        let db_id_key = DatabaseId {
+                            db_id: share_from_db_id,
+                        };
+                        let (db_seq, db_meta): (u64, Option<DatabaseMeta>) =
+                            get_pb_value(self, &db_id_key).await?;
+                        if db_seq == 0 || db_meta.is_none() {
+                            return Err(KVAppError::AppError(
+                                AppError::ShareHasNoGrantedPrivilege(
+                                    ShareHasNoGrantedPrivilege::new(
+                                        &from_share.tenant,
+                                        &from_share.share_name,
+                                    ),
+                                ),
+                            ));
+                        }
+
+                        // add share from database id
+                        share_meta.add_share_from_db_id(db_id);
+
+                        // All the checks have been done, add conditions and if_then
+                        let share_id_key = ShareId { share_id };
+                        condition.push(txn_cond_seq(from_share, Eq, share_id_seq)); // __fd_share/<tenant>/<share_name> -> <share_id>
+                        condition.push(txn_cond_seq(&share_id_key, Eq, share_meta_seq)); // __fd_share_id/<share_id> -> <share_meta>
+                        condition.push(txn_cond_seq(&db_id_key, Eq, db_seq)); // db_id -> <db_meta>
+
+                        if_then.push(txn_op_put(&share_id_key, serialize_struct(&share_meta)?)); /* (share_id) -> share_meta */
                     }
-
-                    // check if the the share has granted a database
-                    let (share_from_db_id, privileges) =
-                        get_share_database_id_and_privilege(from_share, &share_meta)?;
-                    if !privileges.contains(ShareGrantObjectPrivilege::Usage) {
-                        return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
-                            ShareHasNoGrantedPrivilege::new(
-                                &from_share.tenant,
-                                &from_share.share_name,
-                            ),
-                        )));
-                    }
-
-                    // check if the share database existed
-                    let db_id_key = DatabaseId {
-                        db_id: share_from_db_id,
-                    };
-                    let (db_seq, db_meta): (u64, Option<DatabaseMeta>) =
-                        get_pb_value(self, &db_id_key).await?;
-                    if db_seq == 0 || db_meta.is_none() {
-                        return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
-                            ShareHasNoGrantedPrivilege::new(
-                                &from_share.tenant,
-                                &from_share.share_name,
-                            ),
-                        )));
-                    }
-
-                    // add share from database id
-                    share_meta.add_share_from_db_id(db_id);
-
-                    // All the checks have been done, add conditions and if_then
-                    let share_id_key = ShareId { share_id };
-                    condition.push(txn_cond_seq(from_share, Eq, share_id_seq)); // __fd_share/<tenant>/<share_name> -> <share_id>
-                    condition.push(txn_cond_seq(&share_id_key, Eq, share_meta_seq)); // __fd_share_id/<share_id> -> <share_meta>
-                    condition.push(txn_cond_seq(&db_id_key, Eq, db_seq)); // db_id -> <db_meta>
-
-                    if_then.push(txn_op_put(&share_id_key, serialize_struct(&share_meta)?)); /* (share_id) -> share_meta */
                 }
 
                 let txn_req = TxnRequest {
@@ -624,14 +622,14 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 get_pb_value(self, &dbid_idlist).await?;
             let mut db_id_list: DbIdList;
             if db_id_list_seq == 0 {
-                // may the the database is created before add db_id_list, so we just add the id into the list.
+                // may the database is created before add db_id_list, so we just add the id into the list.
                 db_id_list = DbIdList::new();
                 db_id_list.append(old_db_id);
             } else {
                 match db_id_list_opt {
                     Some(list) => db_id_list = list,
                     None => {
-                        // may the the database is created before add db_id_list, so we just add the id into the list.
+                        // may the database is created before add db_id_list, so we just add the id into the list.
                         db_id_list = DbIdList::new();
                         db_id_list.append(old_db_id);
                     }
@@ -1280,14 +1278,14 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
 
             let mut tb_id_list: TableIdList;
             if tb_id_list_seq == 0 {
-                // may the the table is created before add db_id_list, so we just add the id into the list.
+                // may the table is created before add db_id_list, so we just add the id into the list.
                 tb_id_list = TableIdList::new();
                 tb_id_list.append(table_id);
             } else {
                 match tb_id_list_opt {
                     Some(list) => tb_id_list = list,
                     None => {
-                        // may the the table is created before add db_id_list, so we just add the id into the list.
+                        // may the table is created before add db_id_list, so we just add the id into the list.
                         tb_id_list = TableIdList::new();
                         tb_id_list.append(table_id);
                     }

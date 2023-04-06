@@ -23,7 +23,7 @@ use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 

@@ -167,6 +167,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if let Some(block_meta) = self.reading_meta.take() {
             match &block_meta {
@@ -198,25 +199,27 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                         if let AggregateMeta::Spilled(payload) = meta {
                             let location = payload.location.clone();
                             let operator = self.operator.clone();
-                            read_data.push(common_base::base::tokio::spawn(async move {
-                                let instant = Instant::now();
-                                let data = operator.read(&location).await?;
+                            read_data.push(common_base::base::tokio::spawn(
+                                async_backtrace::frame!(async move {
+                                    let instant = Instant::now();
+                                    let data = operator.read(&location).await?;
 
-                                if let Err(cause) = operator.delete(&location).await {
-                                    error!(
-                                        "Cannot delete spill file {}, cause: {:?}",
-                                        location, cause
+                                    if let Err(cause) = operator.delete(&location).await {
+                                        error!(
+                                            "Cannot delete spill file {}, cause: {:?}",
+                                            location, cause
+                                        );
+                                    }
+
+                                    info!(
+                                        "Read aggregate spill {} successfully, elapsed: {:?}",
+                                        location,
+                                        instant.elapsed()
                                     );
-                                }
 
-                                info!(
-                                    "Read aggregate spill {} successfully, elapsed: {:?}",
-                                    location,
-                                    instant.elapsed()
-                                );
-
-                                Ok(data)
-                            }));
+                                    Ok(data)
+                                }),
+                            ));
                         }
                     }
 

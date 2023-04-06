@@ -195,9 +195,24 @@ pub fn check_function<Index: ColumnIndex>(
         );
     }
 
+    // Do not check grouping
+    if name == "grouping" {
+        debug_assert!(candidates.len() == 1);
+        let (id, function) = candidates.into_iter().next().unwrap();
+        let return_type = function.signature.return_type.clone();
+        return Ok(Expr::FunctionCall {
+            span,
+            id,
+            function,
+            generics: vec![],
+            args: args.to_vec(),
+            return_type,
+        });
+    }
+
     let auto_cast_rules = fn_registry.get_auto_cast_rules(name);
 
-    let mut fail_resaons = Vec::with_capacity(candidates.len());
+    let mut fail_reasons = Vec::with_capacity(candidates.len());
     for (id, func) in &candidates {
         match try_check_function(args, &func.signature, auto_cast_rules, fn_registry) {
             Ok((checked_args, return_type, generics)) => {
@@ -210,7 +225,7 @@ pub fn check_function<Index: ColumnIndex>(
                     return_type,
                 });
             }
-            Err(err) => fail_resaons.push(err),
+            Err(err) => fail_reasons.push(err),
         }
     }
 
@@ -240,7 +255,7 @@ pub fn check_function<Index: ColumnIndex>(
 
         let candidates_fail_reason = candidates_sig
             .into_iter()
-            .zip(fail_resaons)
+            .zip(fail_reasons)
             .map(|(sig, err)| format!("  {sig:<max_len$}  : {}", err.message()))
             .join("\n");
 
@@ -361,7 +376,13 @@ pub fn try_unify_signature(
     dest_tys: impl IntoIterator<Item = &DataType> + ExactSizeIterator,
     auto_cast_rules: AutoCastRules,
 ) -> Result<Substitution> {
-    assert_eq!(src_tys.len(), dest_tys.len());
+    if src_tys.len() != dest_tys.len() {
+        return Err(ErrorCode::from_string_no_backtrace(format!(
+            "expected {} arguments, got {}",
+            dest_tys.len(),
+            src_tys.len()
+        )));
+    }
 
     let substs = src_tys
         .into_iter()

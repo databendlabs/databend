@@ -39,6 +39,7 @@ impl Interpreter for DropDatabaseInterpreter {
         "DropDatabaseInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
         catalog.drop_database(self.plan.clone().into()).await?;

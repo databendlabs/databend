@@ -23,10 +23,12 @@ INSERT INTO monthly_sales VALUES
 
 
 query IIIII
-SELECT *
-  FROM monthly_sales
-    PIVOT(SUM(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR'))
-  ORDER BY EMPID;
+SELECT empid,jan,feb,mar,apr FROM (
+    SELECT *
+        FROM monthly_sales
+            PIVOT(SUM(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR'))
+        ORDER BY EMPID
+);
 ----
 1	10400	8000	11000	18000
 2	39500	90700	12000	5300
@@ -46,4 +48,3 @@ SELECT EMPID,
 
 statement ok
 drop table if exists monthly_sales;
-

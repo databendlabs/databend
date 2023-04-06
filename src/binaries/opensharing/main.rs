@@ -18,6 +18,7 @@ use poem::EndpointExt;
 use poem::Route;
 use poem::Server;
 use sharing_endpoint::configs::Config;
+use sharing_endpoint::handlers::share_spec;
 use sharing_endpoint::handlers::share_table_meta;
 use sharing_endpoint::handlers::share_table_presign_files;
 use sharing_endpoint::middlewares::SharingAuth;
@@ -40,6 +41,8 @@ async fn main() -> Result<(), std::io::Error> {
             "/tenant/:tenant_id/:share_name/meta",
             poem::post(share_table_meta),
         )
+        // handler for accessing share spec
+        .at("/tenant/:tenant_id/share_spec", poem::post(share_spec))
         .with(SharingAuth);
 
     Server::new(TcpListener::bind(config.share_endpoint_address))

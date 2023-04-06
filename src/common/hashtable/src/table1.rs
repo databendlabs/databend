@@ -65,7 +65,7 @@ impl<V, A: Allocator + Clone> Table1<V, A> {
     }
     /// # Safety
     ///
-    /// The resulted `MaybeUninit` should be initialized immedidately.
+    /// The resulted `MaybeUninit` should be initialized immediately.
     pub fn insert(&mut self, key: [u8; 2]) -> Result<&mut Ent<V>, &mut Ent<V>> {
         let e = &mut self.data[key[1] as usize * 256 + key[0] as usize];
         if unsafe { e.key.assume_init() } == key {

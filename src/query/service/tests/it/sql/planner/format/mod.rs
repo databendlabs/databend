@@ -114,6 +114,7 @@ fn test_format() {
                             column: ColumnBinding {
                                 database_name: None,
                                 table_name: None,
+                                table_index: None,
                                 column_name: "col1".to_string(),
                                 index: col1,
                                 data_type: Box::new(DataType::Boolean),
@@ -136,6 +137,7 @@ fn test_format() {
                     column: ColumnBinding {
                         database_name: None,
                         table_name: None,
+                        table_index: None,
                         column_name: "col2".to_string(),
                         index: col2,
                         data_type: Box::new(DataType::Boolean),

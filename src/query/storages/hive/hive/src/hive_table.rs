@@ -39,7 +39,7 @@ use common_expression::DataSchemaRefExt;
 use common_expression::Expr;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::processors::port::OutputPort;
@@ -65,7 +65,7 @@ use crate::hive_table_source::HiveTableSource;
 use crate::HiveBlockFilter;
 use crate::HiveFileSplitter;
 
-pub const HIVE_TABLE_ENGIE: &str = "hive";
+pub const HIVE_TABLE_ENGINE: &str = "hive";
 pub const HIVE_DEFAULT_PARTITION: &str = "__HIVE_DEFAULT_PARTITION__";
 
 pub struct HiveTable {
@@ -379,6 +379,7 @@ impl HiveTable {
         Ok(Arc::new(TableSchema::new(fields)))
     }
 
+    #[async_backtrace::framed]
     async fn get_query_locations_from_partition_table(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -438,6 +439,7 @@ impl HiveTable {
     }
 
     // return items: (hdfs_location, option<part info>) where part info likes 'c_region=Asia/c_nation=China'
+    #[async_backtrace::framed]
     async fn get_query_locations(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -476,6 +478,7 @@ impl HiveTable {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
+    #[async_backtrace::framed]
     async fn list_files_from_dirs(
         &self,
         dirs: Vec<(String, Option<String>)>,
@@ -487,8 +490,10 @@ impl HiveTable {
             let sem_t = sem.clone();
             let operator_t = self.dal.clone();
             let dir_t = dir.to_string();
-            let task =
-                tokio::spawn(async move { list_files_from_dir(operator_t, dir_t, sem_t).await });
+            let task = tokio::spawn(
+                async_backtrace::location!()
+                    .frame(async move { list_files_from_dir(operator_t, dir_t, sem_t).await }),
+            );
             tasks.push((task, partition));
         }
 
@@ -505,6 +510,7 @@ impl HiveTable {
     }
 
     #[tracing::instrument(level = "info", skip(self, ctx))]
+    #[async_backtrace::framed]
     async fn do_read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -559,6 +565,7 @@ impl Table for HiveTable {
         false
     }
 
+    #[async_backtrace::framed]
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -580,6 +587,7 @@ impl Table for HiveTable {
         self.do_read2(ctx, plan, pipeline)
     }
 
+    #[async_backtrace::framed]
     async fn commit_insertion(
         &self,
         _ctx: Arc<dyn TableContext>,
@@ -594,6 +602,7 @@ impl Table for HiveTable {
         )))
     }
 
+    #[async_backtrace::framed]
     async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(
             "truncate for table {} is not implemented",
@@ -601,6 +610,7 @@ impl Table for HiveTable {
         )))
     }
 
+    #[async_backtrace::framed]
     async fn purge(&self, _ctx: Arc<dyn TableContext>, _keep_last_snapshot: bool) -> Result<()> {
         Ok(())
     }
@@ -746,7 +756,10 @@ async fn list_files_from_dir(
     for dir in dirs {
         let sem_t = sem.clone();
         let operator_t = operator.clone();
-        let task = tokio::spawn(async move { list_files_from_dir(operator_t, dir, sem_t).await });
+        let task = tokio::spawn(
+            async_backtrace::location!()
+                .frame(async move { list_files_from_dir(operator_t, dir, sem_t).await }),
+        );
         tasks.push(task);
     }
 

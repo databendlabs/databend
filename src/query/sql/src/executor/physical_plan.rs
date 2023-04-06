@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::fmt::Display;
 
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::InternalColumn;
@@ -26,14 +27,14 @@ use common_expression::DataSchemaRefExt;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
-use common_functions::srfs::RemoteSrfExpr;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::optimizer::ColumnSet;
 use crate::plans::JoinType;
 use crate::plans::RuntimeFilterId;
+use crate::plans::WindowFuncFrame;
 use crate::ColumnBinding;
 use crate::IndexType;
 
@@ -132,6 +133,11 @@ impl EvalScalar {
         let input_schema = self.input.output_schema()?;
         let mut fields = input_schema.fields().clone();
         for (expr, index) in self.exprs.iter() {
+            if let RemoteExpr::ColumnRef { id, .. } = expr {
+                if index == id {
+                    continue;
+                }
+            }
             let name = index.to_string();
             let data_type = expr.as_expr(&BUILTIN_FUNCTIONS).data_type().clone();
             fields.push(DataField::new(&name, data_type));
@@ -148,7 +154,7 @@ pub struct ProjectSet {
 
     pub input: Box<PhysicalPlan>,
 
-    pub srf_exprs: Vec<(RemoteSrfExpr<IndexType>, Vec<IndexType>)>,
+    pub srf_exprs: Vec<(RemoteExpr, IndexType)>,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -158,11 +164,11 @@ impl ProjectSet {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         let mut fields = input_schema.fields().clone();
-        fields.extend(self.srf_exprs.iter().flat_map(|(srf, indices)| {
-            srf.return_types
-                .iter()
-                .zip(indices.iter())
-                .map(|(data_type, index)| DataField::new(&index.to_string(), data_type.clone()))
+        fields.extend(self.srf_exprs.iter().map(|(srf, index)| {
+            DataField::new(
+                &index.to_string(),
+                srf.as_expr(&BUILTIN_FUNCTIONS).data_type().clone(),
+            )
         }));
         Ok(DataSchemaRefExt::create(fields))
     }
@@ -279,6 +285,60 @@ impl AggregateFinal {
                 .clone();
             fields.push(DataField::new(&id.to_string(), data_type));
         }
+        Ok(DataSchemaRefExt::create(fields))
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub enum WindowFunction {
+    Aggregate(AggregateFunctionDesc),
+    RowNumber,
+    Rank,
+    DenseRank,
+}
+
+impl WindowFunction {
+    fn data_type(&self) -> DataType {
+        match self {
+            WindowFunction::Aggregate(agg) => agg.sig.return_type.clone(),
+            WindowFunction::RowNumber | WindowFunction::Rank | WindowFunction::DenseRank => {
+                DataType::Number(NumberDataType::UInt64)
+            }
+        }
+    }
+}
+
+impl Display for WindowFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WindowFunction::Aggregate(agg) => write!(f, "{}", agg.sig.name),
+            WindowFunction::RowNumber => write!(f, "row_number"),
+            WindowFunction::Rank => write!(f, "rank"),
+            WindowFunction::DenseRank => write!(f, "dense_rank"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct Window {
+    pub plan_id: u32,
+    pub index: IndexType,
+    pub input: Box<PhysicalPlan>,
+    pub func: WindowFunction,
+    pub partition_by: Vec<IndexType>,
+    pub order_by: Vec<SortDesc>,
+    pub window_frame: WindowFuncFrame,
+}
+
+impl Window {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        let input_schema = self.input.output_schema()?;
+        let mut fields = Vec::with_capacity(input_schema.fields().len() + 1);
+        fields.extend_from_slice(input_schema.fields());
+        fields.push(DataField::new(
+            &self.index.to_string(),
+            self.func.data_type(),
+        ));
         Ok(DataSchemaRefExt::create(fields))
     }
 }
@@ -560,6 +620,7 @@ pub enum PhysicalPlan {
     AggregateExpand(AggregateExpand),
     AggregatePartial(AggregatePartial),
     AggregateFinal(AggregateFinal),
+    Window(Window),
     Sort(Sort),
     Limit(Limit),
     HashJoin(HashJoin),
@@ -593,6 +654,7 @@ impl PhysicalPlan {
             PhysicalPlan::AggregateExpand(plan) => plan.output_schema(),
             PhysicalPlan::AggregatePartial(plan) => plan.output_schema(),
             PhysicalPlan::AggregateFinal(plan) => plan.output_schema(),
+            PhysicalPlan::Window(plan) => plan.output_schema(),
             PhysicalPlan::Sort(plan) => plan.output_schema(),
             PhysicalPlan::Limit(plan) => plan.output_schema(),
             PhysicalPlan::HashJoin(plan) => plan.output_schema(),
@@ -615,6 +677,7 @@ impl PhysicalPlan {
             PhysicalPlan::AggregateExpand(_) => "AggregateExpand".to_string(),
             PhysicalPlan::AggregatePartial(_) => "AggregatePartial".to_string(),
             PhysicalPlan::AggregateFinal(_) => "AggregateFinal".to_string(),
+            PhysicalPlan::Window(_) => "Window".to_string(),
             PhysicalPlan::Sort(_) => "Sort".to_string(),
             PhysicalPlan::Limit(_) => "Limit".to_string(),
             PhysicalPlan::HashJoin(_) => "HashJoin".to_string(),
@@ -637,6 +700,7 @@ impl PhysicalPlan {
             PhysicalPlan::AggregateExpand(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AggregatePartial(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AggregateFinal(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::Window(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Sort(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Limit(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::HashJoin(plan) => Box::new(

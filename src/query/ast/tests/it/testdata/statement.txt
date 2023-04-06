@@ -139,6 +139,108 @@ ShowTables(
 
 
 ---------- Input ----------
+show full columns in t in db
+---------- Output ---------
+SHOW FULL COLUMNS FROM t FROM db
+---------- AST ------------
+ShowColumns(
+    ShowColumnsStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "db",
+                quote: None,
+                span: Some(
+                    26..28,
+                ),
+            },
+        ),
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                21..22,
+            ),
+        },
+        full: true,
+        limit: None,
+    },
+)
+
+
+---------- Input ----------
+show columns in t from ctl.db
+---------- Output ---------
+SHOW COLUMNS FROM t FROM ctl.db
+---------- AST ------------
+ShowColumns(
+    ShowColumnsStmt {
+        catalog: Some(
+            Identifier {
+                name: "ctl",
+                quote: None,
+                span: Some(
+                    23..26,
+                ),
+            },
+        ),
+        database: Some(
+            Identifier {
+                name: "db",
+                quote: None,
+                span: Some(
+                    27..29,
+                ),
+            },
+        ),
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                16..17,
+            ),
+        },
+        full: false,
+        limit: None,
+    },
+)
+
+
+---------- Input ----------
+show full columns from t from db like 'id%'
+---------- Output ---------
+SHOW FULL COLUMNS FROM t FROM db LIKE 'id%'
+---------- AST ------------
+ShowColumns(
+    ShowColumnsStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "db",
+                quote: None,
+                span: Some(
+                    30..32,
+                ),
+            },
+        ),
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                23..24,
+            ),
+        },
+        full: true,
+        limit: Some(
+            Like {
+                pattern: "id%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
 show processlist;
 ---------- Output ---------
 SHOW PROCESSLIST
@@ -267,6 +369,7 @@ Explain {
                     selection: None,
                     group_by: None,
                     having: None,
+                    window_list: None,
                 },
             ),
             order_by: [],
@@ -559,6 +662,7 @@ CreateTable(
                         selection: None,
                         group_by: None,
                         having: None,
+                        window_list: None,
                     },
                 ),
                 order_by: [],
@@ -1347,6 +1451,7 @@ CreateView(
                     selection: None,
                     group_by: None,
                     having: None,
+                    window_list: None,
                 },
             ),
             order_by: [],
@@ -1456,6 +1561,7 @@ AlterView(
                     selection: None,
                     group_by: None,
                     having: None,
+                    window_list: None,
                 },
             ),
             order_by: [],
@@ -1595,6 +1701,7 @@ CreateView(
                     selection: None,
                     group_by: None,
                     having: None,
+                    window_list: None,
                 },
             ),
             order_by: [],
@@ -1712,6 +1819,7 @@ AlterView(
                     selection: None,
                     group_by: None,
                     having: None,
+                    window_list: None,
                 },
             ),
             order_by: [],
@@ -2384,6 +2492,7 @@ Query(
                         },
                     },
                 ),
+                window_list: None,
             },
         ),
         order_by: [],
@@ -2446,6 +2555,7 @@ Query(
                 selection: None,
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -2516,6 +2626,7 @@ Query(
                 selection: None,
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -2614,6 +2725,7 @@ Query(
                 selection: None,
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -2712,6 +2824,7 @@ Query(
                 selection: None,
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [
@@ -2893,6 +3006,7 @@ Query(
                 selection: None,
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -3033,6 +3147,7 @@ Query(
                 selection: None,
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -3173,6 +3288,7 @@ Query(
                 selection: None,
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -3313,6 +3429,7 @@ Query(
                 selection: None,
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -3453,6 +3570,7 @@ Query(
                 selection: None,
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -3593,6 +3711,7 @@ Query(
                 selection: None,
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -3733,6 +3852,7 @@ Query(
                 selection: None,
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -3873,6 +3993,7 @@ Query(
                 selection: None,
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -4013,6 +4134,7 @@ Query(
                 selection: None,
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -4153,6 +4275,7 @@ Query(
                 selection: None,
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -4293,6 +4416,7 @@ Query(
                 selection: None,
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -4392,6 +4516,7 @@ Query(
                 selection: None,
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -4491,6 +4616,7 @@ Query(
                 selection: None,
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -4590,6 +4716,7 @@ Query(
                 selection: None,
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -4689,6 +4816,7 @@ Query(
                 selection: None,
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -4844,6 +4972,7 @@ Query(
                                         selection: None,
                                         group_by: None,
                                         having: None,
+                                        window_list: None,
                                     },
                                 ),
                                 order_by: [],
@@ -4856,6 +4985,7 @@ Query(
                 ),
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -5011,6 +5141,7 @@ Query(
                                         selection: None,
                                         group_by: None,
                                         having: None,
+                                        window_list: None,
                                     },
                                 ),
                                 order_by: [],
@@ -5023,6 +5154,7 @@ Query(
                 ),
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -5178,6 +5310,7 @@ Query(
                                         selection: None,
                                         group_by: None,
                                         having: None,
+                                        window_list: None,
                                     },
                                 ),
                                 order_by: [],
@@ -5190,6 +5323,7 @@ Query(
                 ),
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -5343,6 +5477,7 @@ Query(
                                         selection: None,
                                         group_by: None,
                                         having: None,
+                                        window_list: None,
                                     },
                                 ),
                                 order_by: [],
@@ -5355,6 +5490,7 @@ Query(
                 ),
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -5461,6 +5597,7 @@ Query(
                 ),
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -5568,6 +5705,7 @@ Query(
                 selection: None,
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -5709,6 +5847,7 @@ Insert(
                         selection: None,
                         group_by: None,
                         having: None,
+                        window_list: None,
                     },
                 ),
                 order_by: [],
@@ -5802,6 +5941,7 @@ Query(
                 selection: None,
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -7060,6 +7200,7 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7079,10 +7220,11 @@ COPY INTO mytable
                     record_delimiter = '\n'
                     skip_header = 1
                 )
-                size_limit=10;
+                size_limit=10
+                max_files=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 MAX_FILES = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7119,6 +7261,7 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_files: 10,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7183,6 +7326,7 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7247,6 +7391,7 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7293,6 +7438,7 @@ Copy(
         file_format: {},
         validation_mode: "",
         size_limit: 0,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7339,6 +7485,7 @@ Copy(
         file_format: {},
         validation_mode: "",
         size_limit: 0,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7392,6 +7539,7 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7451,6 +7599,7 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7504,6 +7653,7 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7570,6 +7720,7 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7623,6 +7774,7 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7676,6 +7828,7 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7729,6 +7882,7 @@ Copy(
         },
         validation_mode: "",
         size_limit: 0,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7788,6 +7942,7 @@ Copy(
         },
         validation_mode: "",
         size_limit: 10,
+        max_files: 0,
         max_file_size: 0,
         split_size: 0,
         single: false,
@@ -7979,6 +8134,49 @@ Presign(
         expire: 7200s,
         content_type: Some(
             "application/octet-stream",
+        ),
+    },
+)
+
+
+---------- Input ----------
+CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';
+---------- Output ---------
+CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1/' TENANT=x ARGS=(jwks_key_file=https://eks.public/keys,ssl_cert=cert.pem,) COMMENT = 'share endpoint comment'
+---------- AST ------------
+CreateShareEndpoint(
+    CreateShareEndpointStmt {
+        if_not_exists: true,
+        endpoint: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                36..37,
+            ),
+        },
+        url: UriLocation {
+            protocol: "http",
+            name: "127.0.0.1",
+            path: "/",
+            part_prefix: "",
+            connection: Connection {
+                visited_keys: {},
+                conns: {},
+            },
+        },
+        tenant: Identifier {
+            name: "x",
+            quote: None,
+            span: Some(
+                68..69,
+            ),
+        },
+        args: {
+            "jwks_key_file": "https://eks.public/keys",
+            "ssl_cert": "cert.pem",
+        },
+        comment: Some(
+            "share endpoint comment",
         ),
     },
 )
@@ -8671,6 +8869,7 @@ Query(
                 selection: None,
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -8820,6 +9019,7 @@ Query(
                 selection: None,
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -8901,6 +9101,7 @@ Query(
                 selection: None,
                 group_by: None,
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -9075,6 +9276,7 @@ Query(
                     ),
                 ),
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -9204,6 +9406,7 @@ Query(
                     ),
                 ),
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -9347,6 +9550,7 @@ Query(
                     ),
                 ),
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -9475,6 +9679,7 @@ Query(
                     ),
                 ),
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -9584,6 +9789,7 @@ Query(
                     ),
                 ),
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],
@@ -9693,6 +9899,7 @@ Query(
                     ),
                 ),
                 having: None,
+                window_list: None,
             },
         ),
         order_by: [],

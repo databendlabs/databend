@@ -22,7 +22,6 @@ use common_meta_types::MetaId;
 use itertools::Itertools;
 use parking_lot::RwLock;
 
-use super::UnnestTable;
 use crate::catalogs::SYS_TBL_FUC_ID_END;
 use crate::catalogs::SYS_TBL_FUNC_ID_BEGIN;
 use crate::storages::fuse::table_functions::ClusteringInformationTable;
@@ -34,6 +33,7 @@ use crate::table_functions::async_crash_me::AsyncCrashMeTable;
 use crate::table_functions::infer_schema::InferSchemaTable;
 use crate::table_functions::list_stage::ListStageTable;
 use crate::table_functions::numbers::NumbersTable;
+use crate::table_functions::srf::RangeTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
 use crate::table_functions::GPT2SQLTable;
 use crate::table_functions::TableFunction;
@@ -146,8 +146,13 @@ impl TableFunctionFactory {
         );
 
         creators.insert(
-            "unnest".to_string(),
-            (next_id(), Arc::new(UnnestTable::create)),
+            "generate_series".to_string(),
+            (next_id(), Arc::new(RangeTable::create)),
+        );
+
+        creators.insert(
+            "range".to_string(),
+            (next_id(), Arc::new(RangeTable::create)),
         );
 
         creators.insert(

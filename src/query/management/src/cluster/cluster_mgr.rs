@@ -80,6 +80,7 @@ impl ClusterMgr {
 
 #[async_trait::async_trait]
 impl ClusterApi for ClusterMgr {
+    #[async_backtrace::framed]
     async fn add_node(&self, node: NodeInfo) -> Result<u64> {
         // Only when there are no record, i.e. seq=0
         let seq = MatchSeq::Exact(0);
@@ -100,6 +101,7 @@ impl ClusterApi for ClusterMgr {
         Ok(res.seq)
     }
 
+    #[async_backtrace::framed]
     async fn get_nodes(&self) -> Result<Vec<NodeInfo>> {
         let values = self.metastore.prefix_list_kv(&self.cluster_prefix).await?;
 
@@ -114,6 +116,7 @@ impl ClusterApi for ClusterMgr {
         Ok(nodes_info)
     }
 
+    #[async_backtrace::framed]
     async fn drop_node(&self, node_id: String, seq: MatchSeq) -> Result<()> {
         let node_key = format!("{}/{}", self.cluster_prefix, escape_for_key(&node_id)?);
         let upsert_node =
@@ -133,6 +136,7 @@ impl ClusterApi for ClusterMgr {
         }
     }
 
+    #[async_backtrace::framed]
     async fn heartbeat(&self, node: &NodeInfo, seq: MatchSeq) -> Result<u64> {
         let meta = Some(self.new_lift_time());
         let node_key = format!("{}/{}", self.cluster_prefix, escape_for_key(&node.id)?);
@@ -151,6 +155,7 @@ impl ClusterApi for ClusterMgr {
         }
     }
 
+    #[async_backtrace::framed]
     async fn get_local_addr(&self) -> Result<Option<String>> {
         Ok(self.metastore.get_local_addr().await?)
     }

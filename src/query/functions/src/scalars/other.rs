@@ -49,6 +49,7 @@ use common_expression::Domain;
 use common_expression::EvalContext;
 use common_expression::Function;
 use common_expression::FunctionDomain;
+use common_expression::FunctionEval;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
@@ -73,9 +74,13 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_run_diff(registry);
     register_grouping(registry);
 
+    registry.properties.insert(
+        "rand".to_string(),
+        FunctionProperty::default().non_deterministic(),
+    );
+
     registry.register_passthrough_nullable_1_arg::<Float64Type, StringType, _, _>(
         "humanize_size",
-        FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<Float64Type, StringType>(move |val, output, _| {
             let new_val = convert_byte_size(val.into());
@@ -86,7 +91,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<Float64Type, StringType, _, _>(
         "humanize_number",
-        FunctionProperty::default(),
         |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<Float64Type, StringType>(move |val, output, _| {
             let new_val = convert_number_size(val.into());
@@ -97,7 +101,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_1_arg_core::<Float64Type, UInt8Type, _, _>(
         "sleep",
-        FunctionProperty::default(),
         |_| FunctionDomain::MayThrow,
         |a, ctx| {
             if let Some(val) = a.as_scalar() {
@@ -128,7 +131,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_0_arg_core::<NumberType<F64>, _, _>(
         "rand",
-        FunctionProperty::default().non_deterministic(),
         || {
             FunctionDomain::Domain(SimpleDomain {
                 min: OrderedFloat(0.0),
@@ -146,7 +148,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_1_arg::<NumberType<u64>, NumberType<F64>, _, _>(
         "rand",
-        FunctionProperty::default().non_deterministic(),
         |_| {
             FunctionDomain::Domain(SimpleDomain {
                 min: OrderedFloat(0.0),
@@ -161,7 +162,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_1_arg_core::<GenericType<0>, StringType, _, _>(
         "typeof",
-        FunctionProperty::default(),
         |_| FunctionDomain::Full,
         |_, ctx| Value::Scalar(ctx.generics[0].sql_name().into_bytes()),
     );
@@ -172,21 +172,21 @@ pub fn register(registry: &mut FunctionRegistry) {
                 name: "ignore".to_string(),
                 args_type: (0..args_type.len()).map(DataType::Generic).collect(),
                 return_type: DataType::Boolean,
-                property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| {
-                FunctionDomain::Domain(Domain::Boolean(BooleanDomain {
-                    has_true: false,
-                    has_false: true,
-                }))
-            }),
-            eval: Box::new(|_, _| Value::Scalar(Scalar::Boolean(false))),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_| {
+                    FunctionDomain::Domain(Domain::Boolean(BooleanDomain {
+                        has_true: false,
+                        has_false: true,
+                    }))
+                }),
+                eval: Box::new(|_, _| Value::Scalar(Scalar::Boolean(false))),
+            },
         }))
     });
 
     registry.register_1_arg_core::<NullableType<GenericType<0>>, GenericType<0>, _, _>(
         "assume_not_null",
-        FunctionProperty::default(),
         |domain| {
             domain
                 .value
@@ -203,7 +203,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_1_arg_core::<NullType, NullType, _, _>(
         "to_nullable",
-        FunctionProperty::default(),
         |_| FunctionDomain::Domain(()),
         |val, _| val.to_owned(),
     );
@@ -211,14 +210,12 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry
         .register_1_arg_core::<NullableType<GenericType<0>>, NullableType<GenericType<0>>, _, _>(
             "to_nullable",
-            FunctionProperty::default(),
             |domain| FunctionDomain::Domain(domain.clone()),
             |val, _| val.to_owned(),
         );
 
     registry.register_0_arg_core::<StringType, _, _>(
         "gen_random_uuid",
-        FunctionProperty::default(),
         || FunctionDomain::Full,
         |ctx| {
             let mut values: Vec<u8> = Vec::with_capacity(ctx.num_rows * 36);
@@ -243,14 +240,12 @@ pub fn register(registry: &mut FunctionRegistry) {
 fn register_inet_aton(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<StringType, UInt32Type, _, _>(
         "inet_aton",
-        FunctionProperty::default(),
         |_| FunctionDomain::MayThrow,
         eval_inet_aton,
     );
 
     registry.register_combine_nullable_1_arg::<StringType, UInt32Type, _, _>(
         "try_inet_aton",
-        FunctionProperty::default(),
         |_| FunctionDomain::Full,
         error_to_null(eval_inet_aton),
     );
@@ -275,14 +270,12 @@ fn register_inet_aton(registry: &mut FunctionRegistry) {
 fn register_inet_ntoa(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<Int64Type, StringType, _, _>(
         "inet_ntoa",
-        FunctionProperty::default(),
         |_| FunctionDomain::MayThrow,
         eval_inet_ntoa,
     );
 
     registry.register_combine_nullable_1_arg::<Int64Type, StringType, _, _>(
         "try_inet_ntoa",
-        FunctionProperty::default(),
         |_| FunctionDomain::Full,
         error_to_null(eval_inet_ntoa),
     );
@@ -311,7 +304,6 @@ macro_rules! register_simple_domain_type_run_diff {
     ($registry:ident, $T:ty, $O:ty, $source_primitive_type:ty, $zero:expr) => {
         $registry.register_passthrough_nullable_1_arg::<$T, $O, _, _>(
             "running_difference",
-            FunctionProperty::default(),
             |_| FunctionDomain::MayThrow,
             move |arg1, ctx| match arg1 {
                 ValueRef::Scalar(_val) => {
@@ -365,22 +357,23 @@ fn register_grouping(registry: &mut FunctionRegistry) {
                 name: "grouping".to_string(),
                 args_type: vec![DataType::Number(NumberDataType::UInt32)],
                 return_type: DataType::Number(NumberDataType::UInt32),
-                property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| FunctionDomain::Full),
-            eval: Box::new(move |args, _| match &args[0] {
-                ValueRef::Scalar(ScalarRef::Number(NumberScalar::UInt32(v))) => Value::Scalar(
-                    Scalar::Number(NumberScalar::UInt32(compute_grouping(&params, *v))),
-                ),
-                ValueRef::Column(Column::Number(NumberColumn::UInt32(col))) => {
-                    let output = col
-                        .iter()
-                        .map(|v| compute_grouping(&params, *v))
-                        .collect::<Vec<_>>();
-                    Value::Column(Column::Number(NumberColumn::UInt32(output.into())))
-                }
-                _ => unreachable!(),
-            }),
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_| FunctionDomain::Full),
+                eval: Box::new(move |args, _| match &args[0] {
+                    ValueRef::Scalar(ScalarRef::Number(NumberScalar::UInt32(v))) => Value::Scalar(
+                        Scalar::Number(NumberScalar::UInt32(compute_grouping(&params, *v))),
+                    ),
+                    ValueRef::Column(Column::Number(NumberColumn::UInt32(col))) => {
+                        let output = col
+                            .iter()
+                            .map(|v| compute_grouping(&params, *v))
+                            .collect::<Vec<_>>();
+                        Value::Column(Column::Number(NumberColumn::UInt32(output.into())))
+                    }
+                    _ => unreachable!(),
+                }),
+            },
         }))
     })
 }

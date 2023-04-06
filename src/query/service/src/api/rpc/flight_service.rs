@@ -31,6 +31,8 @@ use common_arrow::arrow_format::flight::data::Ticket;
 use common_arrow::arrow_format::flight::service::flight_service_server::FlightService;
 use common_base::match_join_handle;
 use common_base::runtime::TrySpawn;
+use common_config::GlobalConfig;
+use common_settings::Settings;
 use tokio_stream::Stream;
 use tonic::Request;
 use tonic::Response as RawResponse;
@@ -61,6 +63,7 @@ type StreamReq<T> = Request<Streaming<T>>;
 impl FlightService for DatabendQueryFlightService {
     type HandshakeStream = FlightStream<HandshakeResponse>;
 
+    #[async_backtrace::framed]
     async fn handshake(&self, _: StreamReq<HandshakeRequest>) -> Response<Self::HandshakeStream> {
         Result::Err(Status::unimplemented(
             "DatabendQuery does not implement handshake.",
@@ -69,18 +72,21 @@ impl FlightService for DatabendQueryFlightService {
 
     type ListFlightsStream = FlightStream<FlightInfo>;
 
+    #[async_backtrace::framed]
     async fn list_flights(&self, _: Request<Criteria>) -> Response<Self::ListFlightsStream> {
         Result::Err(Status::unimplemented(
             "DatabendQuery does not implement list_flights.",
         ))
     }
 
+    #[async_backtrace::framed]
     async fn get_flight_info(&self, _: Request<FlightDescriptor>) -> Response<FlightInfo> {
         Err(Status::unimplemented(
             "DatabendQuery does not implement get_flight_info.",
         ))
     }
 
+    #[async_backtrace::framed]
     async fn get_schema(&self, _: Request<FlightDescriptor>) -> Response<SchemaResult> {
         Err(Status::unimplemented(
             "DatabendQuery does not implement get_schema.",
@@ -91,13 +97,15 @@ impl FlightService for DatabendQueryFlightService {
 
     type DoPutStream = FlightStream<PutResult>;
 
+    #[async_backtrace::framed]
     async fn do_put(&self, _req: StreamReq<FlightData>) -> Response<Self::DoPutStream> {
-        Err(Status::unimplemented("unimplement do_put"))
+        Err(Status::unimplemented("unimplemented do_put"))
     }
 
     type DoExchangeStream = FlightStream<FlightData>;
 
     #[tracing::instrument(level = "debug", skip_all)]
+    #[async_backtrace::framed]
     async fn do_get(&self, request: Request<Ticket>) -> Response<Self::DoGetStream> {
         match request.get_metadata("x-type")?.as_str() {
             "request_server_exchange" => {
@@ -127,13 +135,15 @@ impl FlightService for DatabendQueryFlightService {
         }
     }
 
+    #[async_backtrace::framed]
     async fn do_exchange(&self, _: StreamReq<FlightData>) -> Response<Self::DoExchangeStream> {
-        Err(Status::unimplemented("unimplement do_exchange"))
+        Err(Status::unimplemented("unimplemented do_exchange"))
     }
 
     type DoActionStream = FlightStream<FlightResult>;
 
     #[tracing::instrument(level = "debug", skip_all)]
+    #[async_backtrace::framed]
     async fn do_action(&self, request: Request<Action>) -> Response<Self::DoActionStream> {
         common_tracing::extract_remote_span_as_parent(&request);
 
@@ -142,9 +152,21 @@ impl FlightService for DatabendQueryFlightService {
 
         let action_result = match flight_action {
             FlightAction::InitQueryFragmentsPlan(init_query_fragments_plan) => {
-                let session = SessionManager::instance()
-                    .create_session(SessionType::FlightRPC)
-                    .await?;
+                let config = GlobalConfig::instance();
+                let session_manager = SessionManager::instance();
+                let settings = Settings::create(config.query.tenant_id.clone());
+                unsafe {
+                    // Keep settings
+                    settings.unchecked_apply_changes(
+                        init_query_fragments_plan
+                            .executor_packet
+                            .changed_settings
+                            .clone(),
+                    );
+                }
+                let session =
+                    session_manager.create_with_settings(SessionType::FlightRPC, settings)?;
+
                 let ctx = session.create_query_context().await?;
                 // Keep query id
                 ctx.set_id(init_query_fragments_plan.executor_packet.query_id.clone());
@@ -181,6 +203,7 @@ impl FlightService for DatabendQueryFlightService {
     type ListActionsStream = FlightStream<ActionType>;
 
     #[tracing::instrument(level = "debug", skip_all)]
+    #[async_backtrace::framed]
     async fn list_actions(&self, request: Request<Empty>) -> Response<Self::ListActionsStream> {
         common_tracing::extract_remote_span_as_parent(&request);
         Result::Ok(RawResponse::new(

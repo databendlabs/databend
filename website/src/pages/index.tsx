@@ -9,11 +9,11 @@ import useGetReleases from '@site/src/hooks/useGetReleases';
 
 function HomepageHeader() {
     const {siteConfig} = useDocusaurusContext();
-    const { Github,Getstart,Book } = icons;
+    const { GitHub,Getstart,Book } = icons;
     const { formatStargazersCount } = useGetReleases();
     const community = [
       {
-        'icon':'Github',
+        'icon':'GitHub',
         'star': formatStargazersCount,
         'title': 'GitHub',
         'link': 'https://github.com/datafuselabs/databend'
@@ -29,7 +29,7 @@ function HomepageHeader() {
         'link': 'https://twitter.com/DatabendLabs'
       },
       {
-        'icon':'Youtube',
+        'icon':'YouTube',
         'title': 'YouTube',
         'link': 'https://www.youtube.com/@DatabendLabs'
       },
@@ -39,7 +39,7 @@ function HomepageHeader() {
       <div className={clsx('home-page', styles.homePage)}>
         <section className={clsx(styles.heroBanner, styles.bannerItemHeight)}>
           <div className={clsx('hero-container', styles.heroContainer)}>
-            <Github size={48} color='var(--color-text-0)'/>
+            <GitHub size={48} color='var(--color-text-0)'/>
             <h2 className={clsx('title', styles.title)}>The Future of <br/> <span>Cloud Data Analytics</span></h2>
             <p className={clsx('subtitle', styles.subtitle)}>{siteConfig.tagline}</p>
             <div className={clsx('action-group', styles.actionGroup)}>

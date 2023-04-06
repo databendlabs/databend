@@ -14,7 +14,7 @@
 
 //! This is the Iceberg catalog support for databend.
 //! Iceberg offered support for tables, that meaning the catalog and database data
-//! should be managered by ourselves.
+//! should be managed by ourselves.
 //!
 //! # Note
 //! The Iceberg catalog does not support standalone iceberg databases or iceberg tables,

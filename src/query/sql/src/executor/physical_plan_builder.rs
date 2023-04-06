@@ -35,9 +35,7 @@ use common_expression::DataSchemaRefExt;
 use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
-use common_functions::srfs::check_srf;
-use common_functions::srfs::BUILTIN_SET_RETURNING_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 
 use super::cast_expr_to_non_null_boolean;
 use super::AggregateExpand;
@@ -52,6 +50,7 @@ use super::Limit;
 use super::ProjectSet;
 use super::Sort;
 use super::TableScan;
+use super::WindowFunction;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::EvalScalar;
@@ -60,6 +59,7 @@ use crate::executor::PhysicalPlan;
 use crate::executor::RuntimeFilterSource;
 use crate::executor::SortDesc;
 use crate::executor::UnionAll;
+use crate::executor::Window;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
@@ -70,6 +70,7 @@ use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::Scan;
+use crate::plans::WindowFuncType;
 use crate::BaseTableColumn;
 use crate::ColumnEntry;
 use crate::DerivedColumn;
@@ -164,6 +165,7 @@ impl PhysicalPlanBuilder {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     pub async fn build(&mut self, s_expr: &SExpr) -> Result<PhysicalPlan> {
         // Build stat info
         let stat_info = self.build_plan_stat_info(s_expr)?;
@@ -174,6 +176,7 @@ impl PhysicalPlanBuilder {
                 let mut name_mapping = BTreeMap::new();
                 let mut project_internal_columns = BTreeMap::new();
                 let metadata = self.metadata.read().clone();
+
                 for index in scan.columns.iter() {
                     let column = metadata.column(*index);
                     if let ColumnEntry::BaseTableColumn(BaseTableColumn { path_indices, .. }) =
@@ -525,8 +528,13 @@ impl PhysicalPlanBuilder {
                             }
                         }).collect::<Result<_>>()?;
 
+                        let settings = self.ctx.get_settings();
+                        let group_by_shuffle_mode = settings.get_group_by_shuffle_mode()?;
+
                         match input {
-                            PhysicalPlan::Exchange(PhysicalExchange { input, kind, .. }) => {
+                            PhysicalPlan::Exchange(PhysicalExchange { input, kind, .. })
+                                if group_by_shuffle_mode == "before_merge" =>
+                            {
                                 let aggregate_partial = if !agg.grouping_sets.is_empty() {
                                     let expand = AggregateExpand {
                                         plan_id: self.next_plan_id(),
@@ -711,7 +719,62 @@ impl PhysicalPlanBuilder {
 
                 Ok(result)
             }
+            RelOperator::Window(w) => {
+                let input = self.build(s_expr.child(0)?).await?;
+                let partition_items = w.partition_by.iter().map(|v| v.index).collect::<Vec<_>>();
+                let order_by_items = w
+                    .order_by
+                    .iter()
+                    .map(|v| SortDesc {
+                        asc: v.asc.unwrap_or(true),
+                        nulls_first: v.nulls_first.unwrap_or(false),
+                        order_by: v.order_by_item.index,
+                    })
+                    .collect::<Vec<_>>();
 
+                let func = match &w.function {
+                    WindowFuncType::Aggregate(agg) => {
+                        WindowFunction::Aggregate(AggregateFunctionDesc {
+                            sig: AggregateFunctionSignature {
+                                name: agg.func_name.clone(),
+                                args: agg.args.iter().map(|s| s.data_type()).collect::<Result<_>>()?,
+                                params: agg.params.clone(),
+                                return_type: *agg.return_type.clone(),
+                            },
+                            output_column: w.index,
+                            args: agg.args.iter().map(|arg| {
+                                if let ScalarExpr::BoundColumnRef(col) = arg {
+                                    Ok(col.column.index)
+                                } else {
+                                    Err(ErrorCode::Internal("Window's aggregate function argument must be a BoundColumnRef".to_string()))
+                                }
+                            }).collect::<Result<_>>()?,
+                            arg_indices: agg.args.iter().map(|arg| {
+                                if let ScalarExpr::BoundColumnRef(col) = arg {
+                                    Ok(col.column.index)
+                                } else {
+                                    Err(ErrorCode::Internal(
+                                        "Aggregate function argument must be a BoundColumnRef".to_string()
+                                    ))
+                                }
+                            }).collect::<Result<_>>()?,
+                        })
+                    }
+                    WindowFuncType::RowNumber => WindowFunction::RowNumber,
+                    WindowFuncType::Rank => WindowFunction::Rank,
+                    WindowFuncType::DenseRank => WindowFunction::DenseRank,
+                };
+
+                Ok(PhysicalPlan::Window(Window {
+                    plan_id: self.next_plan_id(),
+                    index: w.index,
+                    input: Box::new(input),
+                    func,
+                    partition_by: partition_items,
+                    order_by: order_by_items,
+                    window_frame: w.frame.clone(),
+                }))
+            }
             RelOperator::Sort(sort) => Ok(PhysicalPlan::Sort(Sort {
                 plan_id: self.next_plan_id(),
                 input: Box::new(self.build(s_expr.child(0)?).await?),
@@ -840,34 +903,21 @@ impl PhysicalPlanBuilder {
                 let srf_exprs = project_set
                     .srfs
                     .iter()
-                    .map(|srf_item| {
-                        let args = srf_item
-                            .args
-                            .iter()
-                            .map(|arg| {
-                                let expr = arg
-                                    .resolve_and_check(input_schema.as_ref())?
-                                    .project_column_ref(|index| {
-                                        input_schema.index_of(&index.to_string()).unwrap()
-                                    });
-                                let (expr, _) = ConstantFolder::fold(
-                                    &expr,
-                                    self.ctx.get_function_context()?,
-                                    &BUILTIN_FUNCTIONS,
-                                );
-                                Ok(expr)
-                            })
-                            .collect::<Result<Vec<_>>>()?;
-
-                        let srf = check_srf(
-                            srf_item.srf_name.as_str(),
-                            &args,
-                            &BUILTIN_SET_RETURNING_FUNCTIONS,
-                        )?;
-                        Ok((srf.into_remote_srf_expr(), srf_item.columns.clone()))
+                    .map(|item| {
+                        let expr = item
+                            .scalar
+                            .resolve_and_check(input_schema.as_ref())?
+                            .project_column_ref(|index| {
+                                input_schema.index_of(&index.to_string()).unwrap()
+                            });
+                        let (expr, _) = ConstantFolder::fold(
+                            &expr,
+                            self.ctx.get_function_context()?,
+                            &BUILTIN_FUNCTIONS,
+                        );
+                        Ok((expr.as_remote_expr(), item.index))
                     })
                     .collect::<Result<Vec<_>>>()?;
-
                 Ok(PhysicalPlan::ProjectSet(ProjectSet {
                     plan_id: self.next_plan_id(),
                     input: Box::new(input),
@@ -915,7 +965,8 @@ impl PhysicalPlanBuilder {
                 let expr = predicates
                     .into_iter()
                     .reduce(|lhs, rhs| {
-                        check_function(None, "and", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS).unwrap()
+                        check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
+                            .unwrap()
                     })
                     .unwrap();
 

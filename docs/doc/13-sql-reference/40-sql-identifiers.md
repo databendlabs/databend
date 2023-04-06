@@ -89,7 +89,7 @@ desc "BigTable";
 +-------+------+------+---------+-------+
     
 desc BigTable;
-ERROR 1105 (HY000): Code: 1025, displayText = Unknown table 'bigtable'.
+ERROR 1105 (HY000): Code: 1025, Text = Unknown table 'bigtable'.
 ```
 
 ## Identifier Resolution
@@ -186,7 +186,7 @@ select 'demo';
 +--------+
 
 select "demo";
-ERROR 1105 (HY000): Code: 1065, displayText = error:
+ERROR 1105 (HY000): Code: 1065, Text = error:
   --> SQL:1:8
   |
 1 | select "demo"

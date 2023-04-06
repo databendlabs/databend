@@ -39,10 +39,11 @@ use common_expression::Column;
 use common_expression::EvalContext;
 use common_expression::Function;
 use common_expression::FunctionDomain;
-use common_expression::FunctionProperty;
+use common_expression::FunctionEval;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
 use common_expression::ScalarRef;
+use common_expression::SimpleDomainCmp;
 use common_expression::ValueRef;
 use memchr::memmem;
 use regex::bytes::Regex;
@@ -77,7 +78,6 @@ const ALL_FALSE_DOMAIN: BooleanDomain = BooleanDomain {
 fn register_variant_cmp(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
         "eq",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         |lhs, rhs, _| {
             jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") == Ordering::Equal
@@ -85,7 +85,6 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
     );
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
         "noteq",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         |lhs, rhs, _| {
             jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") != Ordering::Equal
@@ -93,7 +92,6 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
     );
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
         "gt",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         |lhs, rhs, _| {
             jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") == Ordering::Greater
@@ -101,7 +99,6 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
     );
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
         "gte",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         |lhs, rhs, _| {
             jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") != Ordering::Less
@@ -109,7 +106,6 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
     );
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
         "lt",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         |lhs, rhs, _| {
             jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") == Ordering::Less
@@ -117,7 +113,6 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
     );
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
         "lte",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         |lhs, rhs, _| {
             jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") != Ordering::Greater
@@ -125,128 +120,43 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
     );
 }
 
-fn register_string_cmp(registry: &mut FunctionRegistry) {
-    registry.register_2_arg::<StringType, StringType, BooleanType, _, _>(
-        "eq",
-        FunctionProperty::default(),
-        |_, _| FunctionDomain::Full,
-        |lhs, rhs, _| lhs == rhs,
-    );
-    registry.register_2_arg::<StringType, StringType, BooleanType, _, _>(
-        "noteq",
-        FunctionProperty::default(),
-        |_, _| FunctionDomain::Full,
-        |lhs, rhs, _| lhs != rhs,
-    );
-    registry.register_2_arg::<StringType, StringType, BooleanType, _, _>(
-        "gt",
-        FunctionProperty::default(),
-        |_, _| FunctionDomain::Full,
-        |lhs, rhs, _| lhs > rhs,
-    );
-    registry.register_2_arg::<StringType, StringType, BooleanType, _, _>(
-        "gte",
-        FunctionProperty::default(),
-        |_, _| FunctionDomain::Full,
-        |lhs, rhs, _| lhs >= rhs,
-    );
-    registry.register_2_arg::<StringType, StringType, BooleanType, _, _>(
-        "lt",
-        FunctionProperty::default(),
-        |_, _| FunctionDomain::Full,
-        |lhs, rhs, _| lhs < rhs,
-    );
-    registry.register_2_arg::<StringType, StringType, BooleanType, _, _>(
-        "lte",
-        FunctionProperty::default(),
-        |_, _| FunctionDomain::Full,
-        |lhs, rhs, _| lhs <= rhs,
-    );
-}
-
 macro_rules! register_simple_domain_type_cmp {
     ($registry:ident, $T:ty) => {
         $registry.register_2_arg::<$T, $T, BooleanType, _, _>(
             "eq",
-            FunctionProperty::default(),
-            |d1, d2| {
-                if d1.min > d2.max || d1.max < d2.min {
-                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
-                } else {
-                    FunctionDomain::Full
-                }
-            },
+            |d1, d2| d1.domain_eq(d2),
             |lhs, rhs, _| lhs == rhs,
         );
         $registry.register_2_arg::<$T, $T, BooleanType, _, _>(
             "noteq",
-            FunctionProperty::default(),
-            |d1, d2| {
-                if d1.min > d2.max || d1.max < d2.min {
-                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
-                } else {
-                    FunctionDomain::Full
-                }
-            },
+            |d1, d2| d1.domain_noteq(d2),
             |lhs, rhs, _| lhs != rhs,
         );
         $registry.register_2_arg::<$T, $T, BooleanType, _, _>(
             "gt",
-            FunctionProperty::default(),
-            |d1, d2| {
-                if d1.min > d2.max {
-                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
-                } else if d1.max <= d2.min {
-                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
-                } else {
-                    FunctionDomain::Full
-                }
-            },
+            |d1, d2| d1.domain_gt(d2),
             |lhs, rhs, _| lhs > rhs,
         );
         $registry.register_2_arg::<$T, $T, BooleanType, _, _>(
             "gte",
-            FunctionProperty::default(),
-            |d1, d2| {
-                if d1.min >= d2.max {
-                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
-                } else if d1.max < d2.min {
-                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
-                } else {
-                    FunctionDomain::Full
-                }
-            },
+            |d1, d2| d1.domain_gte(d2),
             |lhs, rhs, _| lhs >= rhs,
         );
         $registry.register_2_arg::<$T, $T, BooleanType, _, _>(
             "lt",
-            FunctionProperty::default(),
-            |d1, d2| {
-                if d1.max < d2.min {
-                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
-                } else if d1.min >= d2.max {
-                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
-                } else {
-                    FunctionDomain::Full
-                }
-            },
+            |d1, d2| d1.domain_lt(d2),
             |lhs, rhs, _| lhs < rhs,
         );
         $registry.register_2_arg::<$T, $T, BooleanType, _, _>(
             "lte",
-            FunctionProperty::default(),
-            |d1, d2| {
-                if d1.max <= d2.min {
-                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
-                } else if d1.min > d2.max {
-                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
-                } else {
-                    FunctionDomain::Full
-                }
-            },
+            |d1, d2| d1.domain_lte(d2),
             |lhs, rhs, _| lhs <= rhs,
         );
     };
+}
+
+fn register_string_cmp(registry: &mut FunctionRegistry) {
+    register_simple_domain_type_cmp!(registry, StringType);
 }
 
 fn register_date_cmp(registry: &mut FunctionRegistry) {
@@ -260,7 +170,6 @@ fn register_timestamp_cmp(registry: &mut FunctionRegistry) {
 fn register_boolean_cmp(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "eq",
-        FunctionProperty::default(),
         |d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
             (true, false, true, false) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
             (false, true, false, true) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
@@ -272,7 +181,6 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
     );
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "noteq",
-        FunctionProperty::default(),
         |d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
             (true, false, true, false) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
             (false, true, false, true) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
@@ -284,7 +192,6 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
     );
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "gt",
-        FunctionProperty::default(),
         |d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
             (true, false, false, true) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
             (false, true, _, _) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
@@ -294,7 +201,6 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
     );
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "gte",
-        FunctionProperty::default(),
         |d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
             (true, false, _, _) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
             (_, _, false, true) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
@@ -305,7 +211,6 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
     );
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "lt",
-        FunctionProperty::default(),
         |d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
             (false, true, true, false) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
             (_, _, false, true) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
@@ -315,7 +220,6 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
     );
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "lte",
-        FunctionProperty::default(),
         |d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
             (false, true, _, _) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
             (_, _, true, false) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
@@ -345,37 +249,31 @@ fn register_number_cmp(registry: &mut FunctionRegistry) {
 fn register_array_cmp(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _, _>(
         "eq",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::Domain(ALL_TRUE_DOMAIN),
         |_, _, _| true,
     );
     registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _, _>(
         "noteq",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::Domain(ALL_FALSE_DOMAIN),
         |_, _, _| false,
     );
     registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _, _>(
         "gt",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::Domain(ALL_FALSE_DOMAIN),
         |_, _, _| false,
     );
     registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _, _>(
         "gte",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::Domain(ALL_TRUE_DOMAIN),
         |_, _, _| true,
     );
     registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _, _>(
         "lt",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::Domain(ALL_FALSE_DOMAIN),
         |_, _, _| false,
     );
     registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _, _>(
         "lte",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::Domain(ALL_TRUE_DOMAIN),
         |_, _, _| true,
     );
@@ -383,42 +281,36 @@ fn register_array_cmp(registry: &mut FunctionRegistry) {
     registry
         .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _, _>(
             "eq",
-            FunctionProperty::default(),
             |_, _| FunctionDomain::Full,
             |lhs, rhs, _| lhs == rhs,
         );
     registry
         .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _, _>(
             "noteq",
-            FunctionProperty::default(),
             |_, _| FunctionDomain::Full,
             |lhs, rhs, _| lhs != rhs,
         );
     registry
         .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _, _>(
             "gt",
-            FunctionProperty::default(),
             |_, _| FunctionDomain::Full,
             |lhs, rhs, _| lhs > rhs,
         );
     registry
         .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _, _>(
             "gte",
-            FunctionProperty::default(),
             |_, _| FunctionDomain::Full,
             |lhs, rhs, _| lhs >= rhs,
         );
     registry
         .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _, _>(
             "lt",
-            FunctionProperty::default(),
             |_, _| FunctionDomain::Full,
             |lhs, rhs, _| lhs < rhs,
         );
     registry
         .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _, _>(
             "lte",
-            FunctionProperty::default(),
             |_, _| FunctionDomain::Full,
             |lhs, rhs, _| lhs <= rhs,
         );
@@ -449,60 +341,61 @@ fn register_tuple_cmp(registry: &mut FunctionRegistry) {
                         DataType::Tuple(fields_generics),
                     ],
                     return_type: DataType::Boolean,
-                    property: FunctionProperty::default(),
                 },
-                calc_domain: Box::new(move |_| FunctionDomain::Full),
-                eval: Box::new(move |args, _| {
-                    let len = args.iter().find_map(|arg| match arg {
-                        ValueRef::Column(col) => Some(col.len()),
-                        _ => None,
-                    });
+                eval: FunctionEval::Scalar {
+                    calc_domain: Box::new(move |_| FunctionDomain::Full),
+                    eval: Box::new(move |args, _| {
+                        let len = args.iter().find_map(|arg| match arg {
+                            ValueRef::Column(col) => Some(col.len()),
+                            _ => None,
+                        });
 
-                    let lhs_fields: Vec<ValueRef<AnyType>> = match &args[0] {
-                        ValueRef::Scalar(ScalarRef::Tuple(fields)) => {
-                            fields.iter().cloned().map(ValueRef::Scalar).collect()
-                        }
-                        ValueRef::Column(Column::Tuple(fields)) => {
-                            fields.iter().cloned().map(ValueRef::Column).collect()
-                        }
-                        _ => unreachable!(),
-                    };
-                    let rhs_fields: Vec<ValueRef<AnyType>> = match &args[1] {
-                        ValueRef::Scalar(ScalarRef::Tuple(fields)) => {
-                            fields.iter().cloned().map(ValueRef::Scalar).collect()
-                        }
-                        ValueRef::Column(Column::Tuple(fields)) => {
-                            fields.iter().cloned().map(ValueRef::Column).collect()
-                        }
-                        _ => unreachable!(),
-                    };
-
-                    let size = len.unwrap_or(1);
-                    let mut builder = BooleanType::create_builder(size, &[]);
-
-                    'outer: for row in 0..size {
-                        for (lhs_field, rhs_field) in lhs_fields.iter().zip(&rhs_fields) {
-                            let lhs = lhs_field.index(row).unwrap();
-                            let rhs = rhs_field.index(row).unwrap();
-                            if let Some(result) = cmp_op(lhs, rhs) {
-                                builder.push(result);
-                                continue 'outer;
+                        let lhs_fields: Vec<ValueRef<AnyType>> = match &args[0] {
+                            ValueRef::Scalar(ScalarRef::Tuple(fields)) => {
+                                fields.iter().cloned().map(ValueRef::Scalar).collect()
                             }
-                        }
-                        builder.push(default_result);
-                    }
+                            ValueRef::Column(Column::Tuple(fields)) => {
+                                fields.iter().cloned().map(ValueRef::Column).collect()
+                            }
+                            _ => unreachable!(),
+                        };
+                        let rhs_fields: Vec<ValueRef<AnyType>> = match &args[1] {
+                            ValueRef::Scalar(ScalarRef::Tuple(fields)) => {
+                                fields.iter().cloned().map(ValueRef::Scalar).collect()
+                            }
+                            ValueRef::Column(Column::Tuple(fields)) => {
+                                fields.iter().cloned().map(ValueRef::Column).collect()
+                            }
+                            _ => unreachable!(),
+                        };
 
-                    match len {
-                        Some(_) => {
-                            let col =
-                                BooleanType::upcast_column(BooleanType::build_column(builder));
-                            Value::Column(col)
+                        let size = len.unwrap_or(1);
+                        let mut builder = BooleanType::create_builder(size, &[]);
+
+                        'outer: for row in 0..size {
+                            for (lhs_field, rhs_field) in lhs_fields.iter().zip(&rhs_fields) {
+                                let lhs = lhs_field.index(row).unwrap();
+                                let rhs = rhs_field.index(row).unwrap();
+                                if let Some(result) = cmp_op(lhs, rhs) {
+                                    builder.push(result);
+                                    continue 'outer;
+                                }
+                            }
+                            builder.push(default_result);
                         }
-                        _ => Value::Scalar(BooleanType::upcast_scalar(BooleanType::build_scalar(
-                            builder,
-                        ))),
-                    }
-                }),
+
+                        match len {
+                            Some(_) => {
+                                let col =
+                                    BooleanType::upcast_column(BooleanType::build_column(builder));
+                                Value::Column(col)
+                            }
+                            _ => Value::Scalar(BooleanType::upcast_scalar(
+                                BooleanType::build_scalar(builder),
+                            )),
+                        }
+                    }),
+                },
             }))
         });
     }
@@ -548,7 +441,6 @@ fn register_like(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
         "like",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
         vectorize_like(|str, pat, _, pattern_type| {
             match pattern_type {
@@ -579,21 +471,20 @@ fn register_like(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
         "regexp",
-        FunctionProperty::default(),
         |_, _| FunctionDomain::Full,
-        vectorize_regexp(|str, pat, builer, ctx, map, _| {
+        vectorize_regexp(|str, pat, builder, ctx, map, _| {
             if let Some(re) = map.get(pat) {
-                builer.push(re.is_match(str));
+                builder.push(re.is_match(str));
             } else {
                 // TODO error
                 match regexp::build_regexp_from_pattern("regexp", pat, None) {
                     Ok(re) => {
-                        builer.push(re.is_match(str));
+                        builder.push(re.is_match(str));
                         map.insert(pat.to_vec(), re);
                     }
                     Err(e) => {
-                        ctx.set_error(builer.len(), e);
-                        builer.push(false);
+                        ctx.set_error(builder.len(), e);
+                        builder.push(false);
                     }
                 }
             }

@@ -29,7 +29,7 @@ use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::Scalar;
 use common_expression::Value;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::HashtableLike;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 

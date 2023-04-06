@@ -16,7 +16,10 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::share::ShareGrantObjectPrivilege;
+use common_meta_app::share::ShareNameIdent;
 use common_meta_types::MatchSeq;
+use common_sharing::ShareEndpointManager;
 use common_sql::plans::CreateDatabasePlan;
 use common_users::UserApiProvider;
 
@@ -35,6 +38,53 @@ impl CreateDatabaseInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: CreateDatabasePlan) -> Result<Self> {
         Ok(CreateDatabaseInterpreter { ctx, plan })
     }
+
+    async fn check_create_database_from_share(
+        &self,
+        tenant: &String,
+        share_name: &ShareNameIdent,
+    ) -> Result<()> {
+        let share_specs = ShareEndpointManager::instance()
+            .get_inbound_shares(
+                tenant,
+                Some(share_name.tenant.clone()),
+                Some(share_name.clone()),
+            )
+            .await?;
+        match share_specs.get(0) {
+            Some((_, share_spec)) => {
+                if !share_spec.tenants.contains(tenant) {
+                    return Err(ErrorCode::UnknownShareAccounts(format!(
+                        "share {} has not granted privilege to {}",
+                        share_name, tenant
+                    )));
+                }
+                match share_spec.db_privileges {
+                    Some(db_privileges) => {
+                        if !db_privileges.contains(ShareGrantObjectPrivilege::Usage) {
+                            return Err(ErrorCode::ShareHasNoGrantedPrivilege(format!(
+                                "share {} has not granted privilege to {}",
+                                share_name, tenant
+                            )));
+                        }
+                    }
+                    None => {
+                        return Err(ErrorCode::ShareHasNoGrantedPrivilege(format!(
+                            "share {} has not granted privilege to {}",
+                            share_name, tenant
+                        )));
+                    }
+                }
+            }
+            None => {
+                return Err(ErrorCode::UnknownShare(format!(
+                    "UnknownShare {:?}",
+                    share_name
+                )));
+            }
+        }
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -44,6 +94,7 @@ impl Interpreter for CreateDatabaseInterpreter {
     }
 
     #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.plan.tenant.clone();
         let quota_api = UserApiProvider::instance().get_tenant_quota_api_client(&tenant)?;
@@ -56,6 +107,13 @@ impl Interpreter for CreateDatabaseInterpreter {
                 quota.max_databases
             )));
         };
+        // if create from other tenant, check from share endpoint
+        if let Some(ref share_name) = self.plan.meta.from_share {
+            if share_name.tenant != tenant {
+                self.check_create_database_from_share(&tenant, share_name)
+                    .await?;
+            }
+        }
         catalog.create_database(self.plan.clone().into()).await?;
 
         Ok(PipelineBuildResult::create())

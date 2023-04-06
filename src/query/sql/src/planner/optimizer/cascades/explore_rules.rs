@@ -37,5 +37,9 @@ fn rule_set_rs_b2() -> RuleSet {
 /// Get rule set of join order RS-L1, which will only generate left-deep trees.
 /// Read paper "The Complexity of Transformation-Based Join Enumeration" for more details.
 fn rule_set_rs_l1() -> RuleSet {
-    RuleSet::create_with_ids(vec![RuleID::CommuteJoinBaseTable, RuleID::LeftExchangeJoin])
+    RuleSet::create_with_ids(vec![
+        RuleID::CommuteJoinBaseTable,
+        RuleID::LeftExchangeJoin,
+        RuleID::EagerAggregation,
+    ])
 }

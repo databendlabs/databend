@@ -33,6 +33,7 @@ async fn test_get_client_info() -> anyhow::Result<()> {
         "xxx",
         None,
         Some(Duration::from_secs(10)),
+        Duration::from_secs(10),
         None,
     )?;
 

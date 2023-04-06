@@ -177,7 +177,7 @@ async fn register_node(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), a
         "Register node to update raft_api_advertise_host_endpoint and grpc_api_advertise_address"
     );
 
-    let wait_leader_timeout = Duration::from_millis(conf.raft_config.election_timeout().1 * 10);
+    let wait_leader_timeout = Duration::from_millis(conf.raft_config.wait_leader_timeout);
     info!(
         "Wait {:?} for active leader to register node, raft election timeouts: {:?}",
         wait_leader_timeout,

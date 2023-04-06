@@ -70,7 +70,7 @@ async fn test_raft_log_append_and_range_get() -> anyhow::Result<()> {
         },
     ];
 
-    rl.append(&logs).await?;
+    rl.append(logs.clone()).await?;
 
     let got = rl.range_values(0..)?;
     assert_eq!(logs, got);
@@ -131,7 +131,7 @@ async fn test_raft_log_insert() -> anyhow::Result<()> {
         },
     ];
 
-    rl.append(&logs).await?;
+    rl.append(logs.clone()).await?;
 
     assert_eq!(logs, rl.range_values(..)?);
 
@@ -165,7 +165,7 @@ async fn test_raft_log_get() -> anyhow::Result<()> {
         },
     ];
 
-    rl.append(&logs).await?;
+    rl.append(logs.clone()).await?;
 
     assert_eq!(None, rl.logs().get(&1)?);
     assert_eq!(Some(logs[0].clone()), rl.logs().get(&2)?);
@@ -203,7 +203,7 @@ async fn test_raft_log_last() -> anyhow::Result<()> {
         },
     ];
 
-    rl.append(&logs).await?;
+    rl.append(logs.clone()).await?;
     assert_eq!(Some((4, logs[1].clone())), rl.logs().last()?);
 
     Ok(())
@@ -246,19 +246,19 @@ async fn test_raft_log_range_remove() -> anyhow::Result<()> {
         },
     ];
 
-    rl.append(&logs).await?;
+    rl.append(logs.clone()).await?;
     rl.range_remove(0..).await?;
     assert_eq!(logs[5..], rl.range_values(0..)?);
 
-    rl.append(&logs).await?;
+    rl.append(logs.clone()).await?;
     rl.range_remove(1..).await?;
     assert_eq!(logs[5..], rl.range_values(0..)?);
 
-    rl.append(&logs).await?;
+    rl.append(logs.clone()).await?;
     rl.range_remove(3..).await?;
     assert_eq!(logs[0..1], rl.range_values(0..)?);
 
-    rl.append(&logs).await?;
+    rl.append(logs.clone()).await?;
     rl.range_remove(3..10).await?;
     assert_eq!(logs[0..1], rl.range_values(0..5)?);
     assert_eq!(logs[3..], rl.range_values(5..)?);

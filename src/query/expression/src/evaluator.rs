@@ -17,6 +17,7 @@ use std::ops::Not;
 
 use common_arrow::arrow::bitmap;
 use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
@@ -31,11 +32,13 @@ use crate::type_check::check_function;
 use crate::type_check::get_simple_cast_function;
 use crate::types::any::AnyType;
 use crate::types::array::ArrayColumn;
+use crate::types::boolean::BooleanDomain;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::NullableType;
+use crate::types::ValueType;
 use crate::utils::arrow::constant_bitmap;
 use crate::values::Column;
 use crate::values::ColumnBuilder;
@@ -45,6 +48,7 @@ use crate::BlockEntry;
 use crate::ColumnIndex;
 use crate::FunctionContext;
 use crate::FunctionDomain;
+use crate::FunctionEval;
 use crate::FunctionRegistry;
 
 pub struct Evaluator<'a> {
@@ -118,12 +122,12 @@ impl<'a> Evaluator<'a> {
     }
 
     pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
-        self.run_partially(expr, None)
+        self.partial_run(expr, None)
     }
 
     /// Run an expression partially, only the rows that are valid in the validity bitmap
     /// will be evaluated, the rest will be default values and should not throw any error.
-    fn run_partially(&self, expr: &Expr, validity: Option<Bitmap>) -> Result<Value<AnyType>> {
+    fn partial_run(&self, expr: &Expr, validity: Option<Bitmap>) -> Result<Value<AnyType>> {
         debug_assert!(
             validity.is_none() || validity.as_ref().unwrap().len() == self.input_columns.num_rows()
         );
@@ -140,7 +144,7 @@ impl<'a> Evaluator<'a> {
                 expr,
                 dest_type,
             } => {
-                let value = self.run_partially(expr, validity.clone())?;
+                let value = self.partial_run(expr, validity.clone())?;
                 if *is_try {
                     self.run_try_cast(*span, expr.data_type(), dest_type, value)
                 } else {
@@ -153,6 +157,13 @@ impl<'a> Evaluator<'a> {
                 generics,
                 ..
             } if function.signature.name == "if" => self.eval_if(args, generics, validity),
+
+            Expr::FunctionCall { function, args, .. }
+                if function.signature.name == "and_filters" =>
+            {
+                self.eval_and_filters(args, validity)
+            }
+
             Expr::FunctionCall {
                 span,
                 function,
@@ -162,7 +173,7 @@ impl<'a> Evaluator<'a> {
             } => {
                 let args = args
                     .iter()
-                    .map(|expr| self.run_partially(expr, validity.clone()))
+                    .map(|expr| self.partial_run(expr, validity.clone()))
                     .collect::<Result<Vec<_>>>()?;
                 assert!(
                     args.iter()
@@ -180,7 +191,8 @@ impl<'a> Evaluator<'a> {
                     errors: None,
                     tz: self.func_ctx.tz,
                 };
-                let result = (function.eval)(cols_ref.as_slice(), &mut ctx);
+                let (_, eval) = function.eval.as_scalar().unwrap();
+                let result = (eval)(cols_ref.as_slice(), &mut ctx);
                 ctx.render_error(*span, &args, &function.signature.name)?;
                 Ok(result)
             }
@@ -358,6 +370,12 @@ impl<'a> Evaluator<'a> {
             },
             (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Array(array)) => {
+                    let validity = validity.map(|validity| {
+                        let mut inner_validity = MutableBitmap::with_capacity(array.len());
+                        inner_validity.extend_constant(array.len(), validity.get_bit(0));
+                        inner_validity.into()
+                    });
+
                     let new_array = self
                         .run_cast(
                             span,
@@ -371,6 +389,17 @@ impl<'a> Evaluator<'a> {
                     Ok(Value::Scalar(Scalar::Array(new_array)))
                 }
                 Value::Column(Column::Array(col)) => {
+                    let validity = validity.map(|validity| {
+                        let mut inner_validity = MutableBitmap::with_capacity(col.len());
+                        for (index, offsets) in col.offsets.windows(2).enumerate() {
+                            inner_validity.extend_constant(
+                                (offsets[1] - offsets[0]) as usize,
+                                validity.get_bit(index),
+                            );
+                        }
+                        inner_validity.into()
+                    });
+
                     let new_col = self
                         .run_cast(
                             span,
@@ -404,6 +433,12 @@ impl<'a> Evaluator<'a> {
             },
             (DataType::Map(inner_src_ty), DataType::Map(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Map(array)) => {
+                    let validity = validity.map(|validity| {
+                        let mut inner_validity = MutableBitmap::with_capacity(array.len());
+                        inner_validity.extend_constant(array.len(), validity.get_bit(0));
+                        inner_validity.into()
+                    });
+
                     let new_array = self
                         .run_cast(
                             span,
@@ -417,6 +452,12 @@ impl<'a> Evaluator<'a> {
                     Ok(Value::Scalar(Scalar::Map(new_array)))
                 }
                 Value::Column(Column::Map(col)) => {
+                    let validity = validity.map(|validity| {
+                        let mut inner_validity = MutableBitmap::with_capacity(col.len());
+                        inner_validity.extend_constant(col.len(), validity.get_bit(0));
+                        inner_validity.into()
+                    });
+
                     let new_col = self
                         .run_cast(
                             span,
@@ -710,11 +751,11 @@ impl<'a> Evaluator<'a> {
             num_rows,
         );
         let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-        Ok(Some(evaluator.run_partially(&cast_expr, validity)?))
+        Ok(Some(evaluator.partial_run(&cast_expr, validity)?))
     }
 
     // `if` is a special builtin function that could partially evaluate its arguments
-    // depending on the truthess of the condition. `if` should register it's signature
+    // depending on the truthiness of the condition. `if` should register it's signature
     // as other functions do in `FunctionRegistry`, but it's does not necessarily implement
     // the eval function because it will be evaluated here.
     fn eval_if(
@@ -743,30 +784,29 @@ impl<'a> Evaluator<'a> {
         let mut flags = Vec::new();
         let mut results = Vec::new();
         for cond_idx in (0..args.len() - 1).step_by(2) {
-            let cond = self.run_partially(&args[cond_idx], Some(validity.clone()))?;
+            let cond = self.partial_run(&args[cond_idx], Some(validity.clone()))?;
             match cond.try_downcast::<NullableType<BooleanType>>().unwrap() {
                 Value::Scalar(None | Some(false)) => {
                     results.push(Value::Scalar(Scalar::default_value(&generics[0])));
                     flags.push(constant_bitmap(false, len.unwrap_or(1)).into());
                 }
                 Value::Scalar(Some(true)) => {
-                    results.push(self.run_partially(&args[cond_idx + 1], Some(validity.clone()))?);
+                    results.push(self.partial_run(&args[cond_idx + 1], Some(validity.clone()))?);
                     validity = constant_bitmap(false, num_rows).into();
                     flags.push(constant_bitmap(true, len.unwrap_or(1)).into());
                     break;
                 }
                 Value::Column(cond) => {
                     let flag = (&cond.column) & (&cond.validity);
-                    results.push(
-                        self.run_partially(&args[cond_idx + 1], Some((&validity) & (&flag)))?,
-                    );
+                    results
+                        .push(self.partial_run(&args[cond_idx + 1], Some((&validity) & (&flag)))?);
                     validity = (&validity) & (&flag.not());
                     flags.push(flag);
                 }
             };
             conds.push(cond);
         }
-        let else_result = self.run_partially(&args[args.len() - 1], Some(validity))?;
+        let else_result = self.partial_run(&args[args.len() - 1], Some(validity))?;
 
         // Assert that all the arguments have the same length.
         assert!(
@@ -797,6 +837,69 @@ impl<'a> Evaluator<'a> {
             Some(_) => Ok(Value::Column(output_builder.build())),
             None => Ok(Value::Scalar(output_builder.build_scalar())),
         }
+    }
+
+    // `and_filters` is a special builtin function similar to `if` that conditionally evaluate its arguments.
+    fn eval_and_filters(
+        &self,
+        args: &[Expr],
+        mut validity: Option<Bitmap>,
+    ) -> Result<Value<AnyType>> {
+        assert!(args.len() >= 2);
+
+        for arg in args {
+            let cond = self.partial_run(arg, validity.clone())?;
+            match cond.try_downcast::<NullableType<BooleanType>>().unwrap() {
+                Value::Scalar(None | Some(false)) => {
+                    return Ok(Value::Scalar(Scalar::Boolean(false)));
+                }
+                Value::Scalar(Some(true)) => {
+                    continue;
+                }
+                Value::Column(cond) => {
+                    let flag = (&cond.column) & (&cond.validity);
+                    match &validity {
+                        Some(v) => {
+                            validity = Some(v & (&flag));
+                        }
+                        None => {
+                            validity = Some(flag);
+                        }
+                    }
+                }
+            };
+        }
+
+        match validity {
+            Some(bitmap) => Ok(Value::Column(Column::Boolean(bitmap))),
+            None => Ok(Value::Scalar(Scalar::Boolean(true))),
+        }
+    }
+
+    /// Evaluate a set-returning-function. Return multiple sets of results
+    /// for each input row, along with the number of rows in each set.
+    pub fn run_srf(&self, expr: &Expr) -> Result<Vec<(Value<AnyType>, usize)>> {
+        if let Expr::FunctionCall {
+            function,
+            args,
+            return_type,
+            ..
+        } = expr
+        {
+            if let FunctionEval::SRF { eval } = &function.eval {
+                assert!(return_type.as_tuple().is_some());
+                let args = args
+                    .iter()
+                    .map(|expr| self.run(expr))
+                    .collect::<Result<Vec<_>>>()?;
+                let cols_ref = args.iter().map(Value::as_ref).collect::<Vec<_>>();
+                let result = (eval)(&cols_ref, self.input_columns.num_rows());
+                assert_eq!(result.len(), self.input_columns.num_rows());
+                return Ok(result);
+            }
+        }
+
+        unreachable!("expr is not a set returning function: {expr}")
     }
 }
 
@@ -931,7 +1034,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                                 scalar,
                                 data_type: dest_type.clone(),
                             },
-                            new_domain,
+                            None,
                         );
                     }
                 }
@@ -956,35 +1059,83 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 generics,
                 args,
                 return_type,
-            } => {
-                let (mut args_expr, mut args_domain) = (Vec::new(), Some(Vec::new()));
+            } if function.signature.name == "and_filters" => {
+                let mut args_expr = Vec::new();
+                let mut result_domain = Some(BooleanDomain {
+                    has_true: true,
+                    has_false: true,
+                });
+
+                type DomainType = NullableType<BooleanType>;
                 for arg in args {
                     let (expr, domain) = self.fold_once(arg);
+                    // A temporary hack to make `and_filters` shortcut on false.
+                    // TODO(andylokandy): make it a rule in the optimizer.
+                    if let Expr::Constant {
+                        scalar: Scalar::Boolean(false),
+                        ..
+                    } = &expr
+                    {
+                        return (
+                            Expr::Constant {
+                                span: *span,
+                                scalar: Scalar::Boolean(false),
+                                data_type: DataType::Boolean,
+                            },
+                            None,
+                        );
+                    }
                     args_expr.push(expr);
-                    args_domain = args_domain.zip(domain).map(|(mut domains, domain)| {
-                        domains.push(domain);
-                        domains
+
+                    result_domain = result_domain.zip(domain).map(|(func_domain, domain)| {
+                        let domain = DomainType::try_downcast_domain(&domain).unwrap();
+                        let (domain_has_true, domain_has_false) = match &domain {
+                            NullableDomain {
+                                has_null,
+                                value:
+                                    Some(box BooleanDomain {
+                                        has_true,
+                                        has_false,
+                                    }),
+                            } => (*has_true, *has_null || *has_false),
+                            NullableDomain { value: None, .. } => (false, true),
+                        };
+                        BooleanDomain {
+                            has_true: func_domain.has_true && domain_has_true,
+                            has_false: func_domain.has_false || domain_has_false,
+                        }
                     });
+
+                    if let Some(Scalar::Boolean(false)) = result_domain
+                        .as_ref()
+                        .and_then(|domain| Domain::Boolean(*domain).as_singleton())
+                    {
+                        return (
+                            Expr::Constant {
+                                span: *span,
+                                scalar: Scalar::Boolean(false),
+                                data_type: DataType::Boolean,
+                            },
+                            None,
+                        );
+                    }
                 }
 
-                let func_domain =
-                    args_domain.and_then(|domains| match (function.calc_domain)(&domains) {
-                        FunctionDomain::MayThrow => None,
-                        FunctionDomain::Full => Some(Domain::full(return_type)),
-                        FunctionDomain::Domain(domain) => Some(domain),
-                    });
-                let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());
-
-                if let Some(scalar) = func_domain.as_ref().and_then(Domain::as_singleton) {
+                if let Some(scalar) = result_domain
+                    .as_ref()
+                    .and_then(|domain| Domain::Boolean(*domain).as_singleton())
+                {
                     return (
                         Expr::Constant {
                             span: *span,
                             scalar,
-                            data_type: return_type.clone(),
+                            data_type: DataType::Boolean,
                         },
-                        func_domain,
+                        None,
                     );
                 }
+
+                let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());
 
                 let func_expr = Expr::FunctionCall {
                     span: *span,
@@ -1007,7 +1158,78 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                                 scalar,
                                 data_type: return_type.clone(),
                             },
-                            func_domain,
+                            None,
+                        );
+                    }
+                }
+
+                (func_expr, result_domain.map(Domain::Boolean))
+            }
+            Expr::FunctionCall {
+                span,
+                id,
+                function,
+                generics,
+                args,
+                return_type,
+            } => {
+                let (mut args_expr, mut args_domain) = (Vec::new(), Some(Vec::new()));
+                for arg in args {
+                    let (expr, domain) = self.fold_once(arg);
+                    args_expr.push(expr);
+                    args_domain = args_domain.zip(domain).map(|(mut domains, domain)| {
+                        domains.push(domain);
+                        domains
+                    });
+                }
+                let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());
+
+                let func_expr = Expr::FunctionCall {
+                    span: *span,
+                    id: id.clone(),
+                    function: function.clone(),
+                    generics: generics.clone(),
+                    args: args_expr,
+                    return_type: return_type.clone(),
+                };
+
+                let calc_domain = match &function.eval {
+                    FunctionEval::Scalar { calc_domain, .. } => calc_domain,
+                    FunctionEval::SRF { .. } => {
+                        return (func_expr, None);
+                    }
+                };
+
+                let func_domain = args_domain.and_then(|domains| match (calc_domain)(&domains) {
+                    FunctionDomain::MayThrow => None,
+                    FunctionDomain::Full => Some(Domain::full(return_type)),
+                    FunctionDomain::Domain(domain) => Some(domain),
+                });
+
+                if let Some(scalar) = func_domain.as_ref().and_then(Domain::as_singleton) {
+                    return (
+                        Expr::Constant {
+                            span: *span,
+                            scalar,
+                            data_type: return_type.clone(),
+                        },
+                        None,
+                    );
+                }
+
+                if all_args_is_scalar {
+                    let block = DataBlock::empty();
+                    let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
+                    // Since we know the expression is constant, it'll be safe to change its column index type.
+                    let func_expr = func_expr.project_column_ref(|_| unreachable!());
+                    if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
+                        return (
+                            Expr::Constant {
+                                span: *span,
+                                scalar,
+                                data_type: return_type.clone(),
+                            },
+                            None,
                         );
                     }
                 }

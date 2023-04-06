@@ -26,7 +26,7 @@ use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_expression::TableSchemaRef;
 use common_expression::TopKSorter;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
 use storages_common_index::Index;
 use storages_common_index::RangeIndex;

@@ -42,6 +42,7 @@ use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::IndexType;
+use crate::WindowChecker;
 
 impl Binder {
     pub(super) fn analyze_projection(
@@ -57,7 +58,13 @@ impl Binder {
                 column_binding.column_name = item.alias.clone();
                 column_binding
             } else {
-                self.create_column_binding(None, None, item.alias.clone(), item.scalar.data_type()?)
+                self.create_column_binding(
+                    None,
+                    None,
+                    None,
+                    item.alias.clone(),
+                    item.scalar.data_type()?,
+                )
             };
             let scalar = if let ScalarExpr::SubqueryExpr(SubqueryExpr {
                 span,
@@ -111,14 +118,19 @@ impl Binder {
             .iter()
             .map(|(_, item)| {
                 if bind_context.in_grouping {
-                    let mut grouping_checker = GroupingChecker::new(bind_context);
+                    let grouping_checker = GroupingChecker::new(bind_context);
                     let scalar = grouping_checker.resolve(&item.scalar, None)?;
                     Ok(ScalarItem {
                         scalar,
                         index: item.index,
                     })
                 } else {
-                    Ok(item.clone())
+                    let window_checker = WindowChecker::new(bind_context);
+                    let scalar = window_checker.resolve(&item.scalar)?;
+                    Ok(ScalarItem {
+                        scalar,
+                        index: item.index,
+                    })
                 }
             })
             .collect::<Result<Vec<_>>>()?;
@@ -151,6 +163,7 @@ impl Binder {
     /// For scalar expressions and aggregate expressions, we will register new columns for
     /// them in `Metadata`. And notice that, the semantic of aggregate expressions won't be checked
     /// in this function.
+    #[async_backtrace::framed]
     pub(super) async fn normalize_select_list<'a>(
         &mut self,
         input_context: &mut BindContext,

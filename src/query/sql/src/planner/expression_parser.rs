@@ -22,7 +22,6 @@ use common_base::base::tokio::task::block_in_place;
 use common_catalog::catalog::CATALOG_DEFAULT;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -33,7 +32,7 @@ use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::TableField;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 use common_settings::Settings;
 use parking_lot::RwLock;
@@ -52,7 +51,7 @@ pub fn parse_exprs(
     table_meta: Arc<dyn Table>,
     sql: &str,
 ) -> Result<Vec<Expr>> {
-    let settings = Settings::default_settings("", GlobalConfig::instance())?;
+    let settings = Settings::create("".to_string());
     let mut bind_context = BindContext::new();
     let metadata = Arc::new(RwLock::new(Metadata::default()));
     let table_index = metadata.write().add_table(
@@ -75,6 +74,7 @@ pub fn parse_exprs(
             }) => ColumnBinding {
                 database_name: Some("default".to_string()),
                 table_name: Some(table.name().to_string()),
+                table_index: Some(table.index()),
                 column_name: column_name.clone(),
                 index,
                 data_type: Box::new(data_type.into()),

@@ -158,6 +158,8 @@ impl StoreInner {
     pub(crate) async fn do_build_snapshot(&self) -> Result<Snapshot, StorageError> {
         // NOTE: building snapshot is guaranteed to be serialized called by RaftCore.
 
+        info!("log compaction start");
+
         // 1. Take a serialized snapshot
 
         let (snap, last_applied_log, last_membership, snapshot_id) = match self
@@ -173,6 +175,8 @@ impl StoreInner {
             }
             Ok(r) => r,
         };
+
+        info!("log compaction serialization start");
 
         let data = serde_json::to_vec(&snap)
             .map_err(MetaStorageError::from)

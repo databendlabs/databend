@@ -22,6 +22,7 @@ use crate::UserApiProvider;
 /// user file_format operations.
 impl UserApiProvider {
     // Add a new file_format.
+    #[async_backtrace::framed]
     pub async fn add_file_format(
         &self,
         tenant: &str,
@@ -43,6 +44,7 @@ impl UserApiProvider {
     }
 
     // Get one file_format from by tenant.
+    #[async_backtrace::framed]
     pub async fn get_file_format(
         &self,
         tenant: &str,
@@ -55,6 +57,7 @@ impl UserApiProvider {
     }
 
     // Get the tenant all file_format list.
+    #[async_backtrace::framed]
     pub async fn get_file_formats(&self, tenant: &str) -> Result<Vec<UserDefinedFileFormat>> {
         let file_format_api_provider = self.get_file_format_api_client(tenant)?;
         let get_file_formats = file_format_api_provider.get_file_formats();
@@ -66,6 +69,7 @@ impl UserApiProvider {
     }
 
     // Drop a file_format by name.
+    #[async_backtrace::framed]
     pub async fn drop_file_format(&self, tenant: &str, name: &str, if_exists: bool) -> Result<()> {
         let file_format_api_provider = self.get_file_format_api_client(tenant)?;
         let drop_file_format = file_format_api_provider.drop_file_format(name, MatchSeq::GE(1));

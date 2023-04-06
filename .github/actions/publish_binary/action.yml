@@ -2,7 +2,7 @@ name: "Publish Binary"
 description: "Publish releases binaries"
 inputs:
   github_token:
-    description: "Github token"
+    description: "GitHub token"
     required: true
   version:
     description: "Release version"

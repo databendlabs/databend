@@ -32,6 +32,8 @@ use crate::plans::JoinType;
 use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::WindowFunc;
+use crate::plans::WindowFuncType;
+use crate::plans::WindowOrderBy;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::ColumnSet;
@@ -278,6 +280,7 @@ fn remove_column_nullable(
                 column: ColumnBinding {
                     database_name: column.column.database_name.clone(),
                     table_name: column.column.table_name.clone(),
+                    table_index: column.column.table_index,
                     column_name: column.column.column_name.clone(),
                     index: column.column.index,
                     data_type,
@@ -344,9 +347,36 @@ fn remove_column_nullable(
             })
         }
         ScalarExpr::WindowFunction(expr) => {
-            let mut args = Vec::with_capacity(expr.agg_func.args.len());
-            for arg in expr.agg_func.args.iter() {
-                args.push(remove_column_nullable(
+            let func = match &expr.func {
+                WindowFuncType::Aggregate(agg) => {
+                    let args = agg
+                        .args
+                        .iter()
+                        .map(|arg| {
+                            remove_column_nullable(
+                                arg,
+                                left_prop,
+                                right_prop,
+                                join_type,
+                                metadata.clone(),
+                            )
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+
+                    WindowFuncType::Aggregate(AggregateFunction {
+                        display_name: agg.display_name.clone(),
+                        func_name: agg.func_name.clone(),
+                        distinct: agg.distinct,
+                        params: agg.params.clone(),
+                        args,
+                        return_type: agg.return_type.clone(),
+                    })
+                }
+                func => func.clone(),
+            };
+            let mut partition_by = Vec::with_capacity(expr.partition_by.len());
+            for arg in expr.partition_by.iter() {
+                partition_by.push(remove_column_nullable(
                     arg,
                     left_prop,
                     right_prop,
@@ -354,16 +384,26 @@ fn remove_column_nullable(
                     metadata.clone(),
                 )?);
             }
+            let mut order_by = Vec::with_capacity(expr.order_by.len());
+            for arg in expr.order_by.iter() {
+                let new_expr = remove_column_nullable(
+                    &arg.expr,
+                    left_prop,
+                    right_prop,
+                    join_type,
+                    metadata.clone(),
+                )?;
+                order_by.push(WindowOrderBy {
+                    expr: new_expr,
+                    nulls_first: arg.nulls_first,
+                    asc: arg.asc,
+                });
+            }
             ScalarExpr::WindowFunction(WindowFunc {
-                agg_func: AggregateFunction {
-                    display_name: expr.agg_func.display_name.clone(),
-                    func_name: expr.agg_func.func_name.clone(),
-                    distinct: expr.agg_func.distinct,
-                    params: expr.agg_func.params.clone(),
-                    args,
-                    return_type: expr.agg_func.return_type.clone(),
-                },
-                partition_by: expr.partition_by.clone(),
+                display_name: expr.display_name.clone(),
+                func,
+                partition_by,
+                order_by,
                 frame: expr.frame.clone(),
             })
         }

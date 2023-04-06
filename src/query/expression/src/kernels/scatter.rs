@@ -229,7 +229,7 @@ impl Column {
             }
             Column::Nullable(c) => {
                 let columns = c.column.scatter(data_type, indices, scatter_size);
-                let validitys = Self::scatter_scalars::<BooleanType, _>(
+                let validities = Self::scatter_scalars::<BooleanType, _>(
                     &c.validity,
                     MutableBitmap::with_capacity(length),
                     indices,
@@ -237,7 +237,7 @@ impl Column {
                 );
                 columns
                     .iter()
-                    .zip(&validitys)
+                    .zip(&validities)
                     .map(|(column, validity)| {
                         Column::Nullable(Box::new(NullableColumn {
                             column: column.clone(),

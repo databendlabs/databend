@@ -116,6 +116,7 @@ impl<I: InputFormatPipe> Processor for DeserializeSource<I> {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         assert!(self.input_buffer.is_none() && !self.input_finished);
         match self.input_rx.recv().await {

@@ -446,7 +446,7 @@ output         : 100
 
 ast            : truncate(10.28*100, 0)
 raw expr       : truncate(multiply(10.28, 100), 0)
-checked expr   : truncate<Float32, Int64>(to_float32<Decimal(38, 2)>(multiply<Decimal(38, 2), Decimal(38, 2)>(to_decimal<Decimal(4, 2)>(10.28_d128(4,2)), to_decimal<UInt8>(100_u8))), to_int64<UInt8>(0_u8))
+checked expr   : truncate<Float32, Int64>(to_float32<Decimal(38, 2)>(multiply<Decimal(38, 2), Decimal(38, 2)>(to_decimal<Decimal(4, 2)>(38, 2)(10.28_d128(4,2)), to_decimal<UInt8>(38, 2)(100_u8))), to_int64<UInt8>(0_u8))
 optimized expr : 1028_f64
 output type    : Float64
 output domain  : {1028..=1028}

@@ -63,7 +63,7 @@ It also gives the user specific and precise information about the error.
 
 ```sql
 MySQL [(none)]> select number from numbers(10) as t inner join numbers(30) as t1 using(number);
-ERROR 1105 (HY000): Code: 1065, displayText = error:
+ERROR 1105 (HY000): Code: 1065, Text = error:
   --> SQL:1:8
   |
 1 | select number from numbers(10) as t inner join numbers(30) as t1 using(number)
@@ -143,7 +143,7 @@ select * from demo at (TIMESTAMP => '2022-06-22 08:58:54.509008'::TIMESTAMP);
 DROP TABLE test;
 
 SELECT * FROM test;
-ERROR 1105 (HY000): Code: 1025, displayText = Unknown table 'test'.
+ERROR 1105 (HY000): Code: 1025, Text = Unknown table 'test'.
 
 -- un-drop table
 UNDROP TABLE test;
@@ -218,4 +218,4 @@ Please check the [Release proposal: Nightly v0.9](https://github.com/datafuselab
 
 ## Get going now!
 
-Visit the [release log](https://github.com/datafuselabs/databend/releases/tag/v0.8.0-nightly) and [download the latest version](https://github.com/datafuselabs/databend/releases/tag/v0.8.0-nightly) to learn more, and feel free to submit feedback using [Github Issues](https://github.com/datafuselabs/databend/issues) if you encounter problems!
+Visit the [release log](https://github.com/datafuselabs/databend/releases/tag/v0.8.0-nightly) and [download the latest version](https://github.com/datafuselabs/databend/releases/tag/v0.8.0-nightly) to learn more, and feel free to submit feedback using [GitHub Issues](https://github.com/datafuselabs/databend/issues) if you encounter problems!

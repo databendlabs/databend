@@ -48,6 +48,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::plans::WindowFuncType;
 use crate::IndexType;
 use crate::MetadataRef;
 
@@ -113,6 +114,33 @@ impl SubqueryRewriter {
                     let res = self.try_rewrite_subquery(&item.scalar, &input, false)?;
                     input = res.1;
                     item.scalar = res.0;
+                }
+
+                Ok(SExpr::create_unary(plan.into(), input))
+            }
+
+            RelOperator::Window(mut plan) => {
+                let mut input = self.rewrite(s_expr.child(0)?)?;
+
+                for item in plan.partition_by.iter_mut() {
+                    let res = self.try_rewrite_subquery(&item.scalar, &input, false)?;
+                    input = res.1;
+                    item.scalar = res.0;
+                }
+
+                for item in plan.order_by.iter_mut() {
+                    let res =
+                        self.try_rewrite_subquery(&item.order_by_item.scalar, &input, false)?;
+                    input = res.1;
+                    item.order_by_item.scalar = res.0;
+                }
+
+                if let WindowFuncType::Aggregate(agg) = &mut plan.function {
+                    for item in agg.args.iter_mut() {
+                        let res = self.try_rewrite_subquery(item, &input, false)?;
+                        input = res.1;
+                        *item = res.0;
+                    }
                 }
 
                 Ok(SExpr::create_unary(plan.into(), input))
@@ -306,6 +334,7 @@ impl SubqueryRewriter {
                     column: ColumnBinding {
                         database_name: None,
                         table_name: None,
+                        table_index: None,
                         column_name: name,
                         index,
                         data_type,
@@ -431,6 +460,7 @@ impl SubqueryRewriter {
                             column: ColumnBinding {
                                 database_name: None,
                                 table_name: None,
+                                table_index: None,
                                 column_name: "count(*)".to_string(),
                                 index: agg_func_index,
                                 data_type: Box::new(agg_func.return_type()?),
@@ -482,6 +512,7 @@ impl SubqueryRewriter {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name,
                             index: output_column.index,
                             data_type: output_column.data_type,

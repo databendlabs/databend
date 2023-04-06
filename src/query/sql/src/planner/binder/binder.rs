@@ -47,6 +47,7 @@ use crate::plans::ShowRolesPlan;
 use crate::plans::UseDatabasePlan;
 use crate::BindContext;
 use crate::ColumnBinding;
+use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::Visibility;
@@ -80,12 +81,14 @@ impl<'a> Binder {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {
         let mut init_bind_context = BindContext::new();
         self.bind_statement(&mut init_bind_context, stmt).await
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     pub(crate) async fn bind_statement(
         &mut self,
         bind_context: &mut BindContext,
@@ -167,6 +170,8 @@ impl<'a> Binder {
                     database: database.name.clone(),
                 }))
             }
+            // Columns
+            Statement::ShowColumns(stmt) => self.bind_show_columns(bind_context, stmt).await?,
             // Tables
             Statement::ShowTables(stmt) => self.bind_show_tables(bind_context, stmt).await?,
             Statement::ShowCreateTable(stmt) => self.bind_show_create_table(stmt).await?,
@@ -354,6 +359,15 @@ impl<'a> Binder {
             }
 
             // share statements
+            Statement::CreateShareEndpoint(stmt) => {
+                self.bind_create_share_endpoint(stmt).await?
+            }
+                        Statement::ShowShareEndpoint(stmt) => {
+                self.bind_show_share_endpoint(stmt).await?
+            }
+                                    Statement::DropShareEndpoint(stmt) => {
+                self.bind_drop_share_endpoint(stmt).await?
+            }
             Statement::CreateShare(stmt) => {
                 self.bind_create_share(stmt).await?
             }
@@ -385,6 +399,7 @@ impl<'a> Binder {
         Ok(plan)
     }
 
+    #[async_backtrace::framed]
     pub(crate) async fn bind_rewrite_to_query(
         &mut self,
         bind_context: &mut BindContext,
@@ -406,6 +421,7 @@ impl<'a> Binder {
         &mut self,
         database_name: Option<String>,
         table_name: Option<String>,
+        table_index: Option<IndexType>,
         column_name: String,
         data_type: DataType,
     ) -> ColumnBinding {
@@ -416,6 +432,7 @@ impl<'a> Binder {
         ColumnBinding {
             database_name,
             table_name,
+            table_index,
             column_name,
             index,
             data_type: Box::new(data_type),

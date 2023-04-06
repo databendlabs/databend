@@ -179,13 +179,13 @@ error:
 
 
 ---------- Input ----------
-alter user 'test-e'@'localhost' identifie by 'new-password';
+alter user 'test-e'@'localhost' identifies by 'new-password';
 ---------- Output ---------
 error: 
   --> SQL:1:33
   |
-1 | alter user 'test-e'@'localhost' identifie by 'new-password';
-  |                                 ^^^^^^^^^ expected `IDENTIFIED`, `WITH`, `FORMAT`, or `;`
+1 | alter user 'test-e'@'localhost' identifies by 'new-password';
+  |                                 ^^^^^^^^^^ expected `IDENTIFIED`, `WITH`, `FORMAT`, or `;`
 
 
 ---------- Input ----------
@@ -275,7 +275,7 @@ error:
   --> SQL:1:6
   |
 1 | SHOW GRANT FOR ROLE role1;
-  |      ^^^^^ expected `SETTINGS`, `STAGES`, `ENGINES`, `PROCESSLIST`, `METRICS`, `FUNCTIONS`, or 14 more ...
+  |      ^^^^^ expected `SETTINGS`, `STAGES`, `ENGINES`, `PROCESSLIST`, `METRICS`, `FUNCTIONS`, or 16 more ...
 
 
 ---------- Input ----------
@@ -310,7 +310,7 @@ error:
   --> SQL:1:38
   |
 1 | COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();
-  |                                      ^^^^^^^^^^ expected `CONNECTION`, `CREDENTIALS`, `LOCATION_PREFIX`, `FILES`, `PATTERN`, `FILE_FORMAT`, or 10 more ...
+  |                                      ^^^^^^^^^^ expected `CONNECTION`, `CREDENTIALS`, `LOCATION_PREFIX`, `FILES`, `PATTERN`, `FILE_FORMAT`, or 11 more ...
 
 
 ---------- Input ----------
@@ -320,7 +320,7 @@ error:
   --> SQL:1:33
   |
 1 | COPY INTO mytable FROM @mystage CREDENTIALS = ();
-  |                                 ^^^^^^^^^^^ expected `FILES`, `PATTERN`, `FILE_FORMAT`, `VALIDATION_MODE`, `SIZE_LIMIT`, `MAX_FILE_SIZE`, or 7 more ...
+  |                                 ^^^^^^^^^^^ expected `FILES`, `PATTERN`, `FILE_FORMAT`, `VALIDATION_MODE`, `SIZE_LIMIT`, `MAX_FILES`, or 8 more ...
 
 
 ---------- Input ----------
@@ -376,7 +376,7 @@ error:
   --> SQL:1:35
   |
 1 | SELECT * FROM t GROUP BY GROUPING SETS a, b
-  |                                   ^^^^ expected `,`, `HAVING`, `(`, `UNION`, `EXCEPT`, `INTERSECT`, or 7 more ...
+  |                                   ^^^^ expected `,`, `HAVING`, `WINDOW`, `(`, `UNION`, `EXCEPT`, or 8 more ...
 
 
 ---------- Input ----------

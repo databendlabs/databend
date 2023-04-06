@@ -31,6 +31,8 @@ use crate::BindContext;
 /// Check validity of scalar expression in a grouping context.
 /// The matched grouping item will be replaced with a BoundColumnRef
 /// to corresponding grouping item column.
+///
+/// Also replaced the matched window function with a BoundColumnRef.
 pub struct GroupingChecker<'a> {
     bind_context: &'a BindContext,
 }
@@ -40,7 +42,7 @@ impl<'a> GroupingChecker<'a> {
         Self { bind_context }
     }
 
-    pub fn resolve(&mut self, scalar: &ScalarExpr, span: Span) -> Result<ScalarExpr> {
+    pub fn resolve(&self, scalar: &ScalarExpr, span: Span) -> Result<ScalarExpr> {
         if let Some(index) = self.bind_context.aggregate_info.group_items_map.get(scalar) {
             let column = &self.bind_context.aggregate_info.group_items[*index];
             let mut column_binding = if let ScalarExpr::BoundColumnRef(column_ref) = &column.scalar
@@ -50,6 +52,7 @@ impl<'a> GroupingChecker<'a> {
                 ColumnBinding {
                     database_name: None,
                     table_name: None,
+                    table_index: None,
                     column_name: "group_item".to_string(),
                     index: column.index,
                     data_type: Box::new(column.scalar.data_type()?),
@@ -72,6 +75,15 @@ impl<'a> GroupingChecker<'a> {
 
         match scalar {
             ScalarExpr::BoundColumnRef(column) => {
+                if self
+                    .bind_context
+                    .aggregate_info
+                    .aggregate_functions_map
+                    .contains_key(&column.column.column_name)
+                {
+                    // Be replaced by `WindowRewriter`.
+                    return Ok(scalar.clone());
+                }
                 // If this is a group item, then it should have been replaced with `group_items_map`
                 Err(ErrorCode::SemanticError(format!(
                     "column \"{}\" must appear in the GROUP BY clause or be used in an aggregate function",
@@ -142,26 +154,43 @@ impl<'a> GroupingChecker<'a> {
             ScalarExpr::WindowFunction(win) => {
                 if let Some(column) = self
                     .bind_context
-                    .aggregate_info
-                    .aggregate_functions_map
-                    .get(&win.agg_func.display_name)
+                    .windows
+                    .window_functions_map
+                    .get(&win.display_name)
                 {
-                    let agg_func = &self.bind_context.aggregate_info.aggregate_functions[*column];
+                    // The exprs in `win` has already been rewrittern to `BoundColumnRef` in `WindowRewriter`.
+                    // So we need to check the exprs in `bind_context.windows`
+                    let window_info = &self.bind_context.windows.window_functions[*column];
+                    // Just check if the exprs are in grouping items.
+                    for part in window_info.partition_by_items.iter() {
+                        self.resolve(&part.scalar, span)?;
+                    }
+                    // Just check if the exprs are in grouping items.
+                    for order in window_info.order_by_items.iter() {
+                        self.resolve(&order.order_by_item.scalar, span)?;
+                    }
+                    // Just check if the exprs are in grouping items.
+                    for arg in window_info.arguments.iter() {
+                        self.resolve(&arg.scalar, span)?;
+                    }
+
                     let column_binding = ColumnBinding {
                         database_name: None,
                         table_name: None,
-                        column_name: win.agg_func.display_name.clone(),
-                        index: agg_func.index,
-                        data_type: Box::new(agg_func.scalar.data_type()?),
+                        table_index: None,
+                        column_name: win.display_name.clone(),
+                        index: window_info.index,
+                        data_type: Box::new(window_info.func.return_type()),
                         visibility: Visibility::Visible,
                     };
-                    return Ok(BoundColumnRef {
+                    Ok(BoundColumnRef {
                         span: None,
                         column: column_binding,
                     }
-                    .into());
+                    .into())
+                } else {
+                    Err(ErrorCode::Internal("Invalid window function"))
                 }
-                Err(ErrorCode::Internal("Invalid aggregate function"))
             }
 
             ScalarExpr::AggregateFunction(agg) => {
@@ -175,6 +204,7 @@ impl<'a> GroupingChecker<'a> {
                     let column_binding = ColumnBinding {
                         database_name: None,
                         table_name: None,
+                        table_index: None,
                         column_name: agg.display_name.clone(),
                         index: agg_func.index,
                         data_type: Box::new(agg_func.scalar.data_type()?),

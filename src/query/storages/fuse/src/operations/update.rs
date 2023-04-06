@@ -24,7 +24,7 @@ use common_expression::RemoteExpr;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::TableSnapshot;
 
@@ -39,6 +39,7 @@ use crate::FuseTable;
 impl FuseTable {
     /// UPDATE column = expression WHERE condition
     /// The flow of Pipeline is the same as that of deletion.
+    #[async_backtrace::framed]
     pub async fn do_update(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -102,6 +103,7 @@ impl FuseTable {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn try_add_update_source(
         &self,
         ctx: Arc<dyn TableContext>,

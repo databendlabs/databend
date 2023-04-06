@@ -12,6 +12,7 @@ test = false
 ignored = ["xml-rs"]
 
 [dependencies]
+async-backtrace = { workspace = true }
 async-channel = "1.7.1"
 common-arrow = { path = "../../../common/arrow" }
 common-base = { path = "../../../common/base" }

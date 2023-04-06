@@ -85,6 +85,7 @@ impl DatabaseCatalog {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn try_create_with_config(conf: InnerConfig) -> Result<DatabaseCatalog> {
         let immutable_catalog = ImmutableCatalog::try_create_with_config(&conf).await?;
         let mutable_catalog = MutableCatalog::try_create_with_config(conf).await?;
@@ -104,6 +105,7 @@ impl Catalog for DatabaseCatalog {
         self
     }
 
+    #[async_backtrace::framed]
     async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
         if tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
@@ -124,6 +126,7 @@ impl Catalog for DatabaseCatalog {
         }
     }
 
+    #[async_backtrace::framed]
     async fn list_databases(&self, tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
         if tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
@@ -137,6 +140,7 @@ impl Catalog for DatabaseCatalog {
         Ok(dbs)
     }
 
+    #[async_backtrace::framed]
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
         if req.name_ident.tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
@@ -159,6 +163,7 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog.create_database(req).await
     }
 
+    #[async_backtrace::framed]
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<()> {
         if req.name_ident.tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
@@ -178,6 +183,7 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog.drop_database(req).await
     }
 
+    #[async_backtrace::framed]
     async fn rename_database(&self, req: RenameDatabaseReq) -> Result<RenameDatabaseReply> {
         if req.name_ident.tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
@@ -215,6 +221,7 @@ impl Catalog for DatabaseCatalog {
         }
     }
 
+    #[async_backtrace::framed]
     async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
         let res = self.immutable_catalog.get_table_meta_by_id(table_id).await;
 
@@ -225,6 +232,7 @@ impl Catalog for DatabaseCatalog {
         }
     }
 
+    #[async_backtrace::framed]
     async fn get_table(
         &self,
         tenant: &str,
@@ -255,6 +263,7 @@ impl Catalog for DatabaseCatalog {
         }
     }
 
+    #[async_backtrace::framed]
     async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         if tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
@@ -275,6 +284,7 @@ impl Catalog for DatabaseCatalog {
         }
     }
 
+    #[async_backtrace::framed]
     async fn list_tables_history(
         &self,
         tenant: &str,
@@ -304,6 +314,7 @@ impl Catalog for DatabaseCatalog {
         }
     }
 
+    #[async_backtrace::framed]
     async fn create_table(&self, req: CreateTableReq) -> Result<()> {
         if req.tenant().is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
@@ -322,11 +333,13 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog.create_table(req).await
     }
 
+    #[async_backtrace::framed]
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply> {
         let res = self.mutable_catalog.drop_table_by_id(req).await?;
         Ok(res)
     }
 
+    #[async_backtrace::framed]
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
         if req.tenant().is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
@@ -345,6 +358,7 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog.undrop_table(req).await
     }
 
+    #[async_backtrace::framed]
     async fn undrop_database(&self, req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
         if req.tenant().is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
@@ -363,6 +377,7 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog.undrop_database(req).await
     }
 
+    #[async_backtrace::framed]
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
         if req.tenant().is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
@@ -388,6 +403,7 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog.rename_table(req).await
     }
 
+    #[async_backtrace::framed]
     async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply> {
         if req.tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
@@ -400,6 +416,7 @@ impl Catalog for DatabaseCatalog {
         Ok(res)
     }
 
+    #[async_backtrace::framed]
     async fn get_table_copied_file_info(
         &self,
         tenant: &str,
@@ -411,6 +428,7 @@ impl Catalog for DatabaseCatalog {
             .await
     }
 
+    #[async_backtrace::framed]
     async fn truncate_table(
         &self,
         table_info: &TableInfo,
@@ -419,6 +437,7 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog.truncate_table(table_info, req).await
     }
 
+    #[async_backtrace::framed]
     async fn upsert_table_option(
         &self,
         tenant: &str,
@@ -430,6 +449,7 @@ impl Catalog for DatabaseCatalog {
             .await
     }
 
+    #[async_backtrace::framed]
     async fn update_table_meta(
         &self,
         table_info: &TableInfo,

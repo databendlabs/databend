@@ -35,6 +35,7 @@ use databend_query::api::HttpService;
 use databend_query::api::RpcService;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::metrics::MetricService;
+use databend_query::servers::FlightSQLServer;
 use databend_query::servers::HttpHandler;
 use databend_query::servers::HttpHandlerKind;
 use databend_query::servers::MySQLHandler;
@@ -53,7 +54,7 @@ fn main() {
             std::process::exit(cause.code() as i32);
         }
         Ok(rt) => {
-            if let Err(cause) = rt.block_on(main_entrypoint()) {
+            if let Err(cause) = rt.block_on(async_backtrace::location!().frame(main_entrypoint())) {
                 eprintln!("Databend Query start failure, cause: {:?}", cause);
                 std::process::exit(cause.code() as i32);
             }
@@ -193,6 +194,18 @@ async fn main_entrypoint() -> Result<()> {
         info!("Listening for Admin HTTP API: {}", listening);
     }
 
+    // FlightSQL API service.
+    {
+        let address = format!(
+            "{}:{}",
+            conf.query.flight_sql_handler_host, conf.query.flight_sql_handler_port
+        );
+        let mut srv = FlightSQLServer::create(conf.clone())?;
+        let listening = srv.start(address.parse()?).await?;
+        shutdown_handle.add_service(srv);
+        info!("Listening for FlightSQL API: {}", listening);
+    }
+
     // RPC API service.
     {
         let address = conf.query.flight_api_address.clone();
@@ -306,6 +319,15 @@ async fn main_entrypoint() -> Result<()> {
             .parse()?
         )
     );
+    for (idx, (k, v)) in env::vars()
+        .filter(|(k, _)| k.starts_with("_DATABEND"))
+        .enumerate()
+    {
+        if idx == 0 {
+            println!("Databend Internal:");
+        }
+        println!("    {}={}", k, v);
+    }
 
     info!("Ready for connections.");
     shutdown_handle.wait_for_termination_request().await;

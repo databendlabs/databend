@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use chrono::Utc;
 use common_exception::ErrorCode;
 use common_meta_app::schema::CreateDatabaseReq;
@@ -114,6 +116,9 @@ impl ShareApiTestSuite {
         let suite = ShareApiTestSuite {};
 
         suite.share_create_show_drop(&b.build().await).await?;
+        suite
+            .share_endpoint_create_show_drop(&b.build().await)
+            .await?;
         suite.share_add_remove_account(&b.build().await).await?;
         suite.share_grant_revoke_object(&b.build().await).await?;
         suite.get_share_grant_objects(&b.build().await).await?;
@@ -188,6 +193,196 @@ impl ShareApiTestSuite {
             assert_eq!(resp.outbound_accounts.len(), 1);
         }
 
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn share_endpoint_create_show_drop<MT: ShareApi + kvapi::AsKVApi<Error = MetaError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let tenant2 = "tenant2";
+        let tenant3 = "tenant3";
+        let endpoint1 = "endpoint1";
+        let endpoint2 = "endpoint2";
+
+        info!("--- create share endpoints");
+        let create_on = Utc::now();
+        {
+            let req = CreateShareEndpointReq {
+                if_not_exists: false,
+                endpoint: ShareEndpointIdent {
+                    tenant: tenant.to_string(),
+                    endpoint: endpoint1.to_string(),
+                },
+                url: "http://127.0.0.1:22222".to_string(),
+                tenant: tenant2.to_string(),
+                comment: None,
+                create_on,
+                args: BTreeMap::new(),
+            };
+
+            let res = mt.create_share_endpoint(req).await;
+            info!("create create_share_endpoint res: {:?}", res);
+            assert!(res.is_ok());
+
+            let req = CreateShareEndpointReq {
+                if_not_exists: false,
+                endpoint: ShareEndpointIdent {
+                    tenant: tenant.to_string(),
+                    endpoint: endpoint1.to_string(),
+                },
+                url: "http://127.0.0.1:21111".to_string(),
+                tenant: tenant2.to_string(),
+                comment: None,
+                args: BTreeMap::new(),
+                create_on,
+            };
+
+            let res = mt.create_share_endpoint(req).await;
+            info!("create create_share_endpoint res: {:?}", res);
+            assert!(res.is_err());
+            let err = res.unwrap_err();
+            assert_eq!(
+                ErrorCode::ShareEndpointAlreadyExists("").code(),
+                ErrorCode::from(err).code()
+            );
+
+            let req = CreateShareEndpointReq {
+                if_not_exists: false,
+                endpoint: ShareEndpointIdent {
+                    tenant: tenant.to_string(),
+                    endpoint: endpoint2.to_string(),
+                },
+                url: "http://127.0.0.1:21111".to_string(),
+                tenant: tenant3.to_string(),
+                comment: None,
+                create_on,
+                args: BTreeMap::new(),
+            };
+
+            let res = mt.create_share_endpoint(req).await;
+            info!("create create_share_endpoint res: {:?}", res);
+            assert!(res.is_ok());
+        }
+
+        info!("--- upsert share endpoints");
+        {
+            let upsert_tenant = "upsert_tenant";
+            let upsert_req = UpsertShareEndpointReq {
+                endpoint: ShareEndpointIdent {
+                    tenant: upsert_tenant.to_string(),
+                    endpoint: endpoint2.to_string(),
+                },
+                url: "http://127.0.0.1:21111".to_string(),
+                tenant: tenant3.to_string(),
+                create_on,
+                args: BTreeMap::new(),
+            };
+            let res = mt.upsert_share_endpoint(upsert_req.clone()).await;
+            assert!(res.is_ok());
+            let upsert_share_endpoint_id = res.unwrap().share_endpoint_id;
+
+            let req = GetShareEndpointReq {
+                tenant: upsert_tenant.to_string(),
+                endpoint: None,
+                to_tenant: None,
+            };
+            let res = mt.get_share_endpoint(req).await;
+            assert!(res.is_ok());
+            assert_eq!(res.clone().unwrap().share_endpoint_meta_vec.len(), 1);
+            assert_eq!(
+                res.unwrap().share_endpoint_meta_vec[0].1.url,
+                "http://127.0.0.1:21111".to_string()
+            );
+
+            let res = mt.upsert_share_endpoint(upsert_req).await;
+            assert!(res.is_ok());
+            assert_eq!(upsert_share_endpoint_id, res.unwrap().share_endpoint_id);
+
+            let upsert_req = UpsertShareEndpointReq {
+                endpoint: ShareEndpointIdent {
+                    tenant: upsert_tenant.to_string(),
+                    endpoint: endpoint2.to_string(),
+                },
+                url: "http://127.0.0.1:22222".to_string(),
+                tenant: tenant3.to_string(),
+                create_on,
+                args: BTreeMap::new(),
+            };
+            let res = mt.upsert_share_endpoint(upsert_req).await;
+            assert!(res.is_ok());
+            assert_eq!(upsert_share_endpoint_id, res.unwrap().share_endpoint_id);
+
+            let req = GetShareEndpointReq {
+                tenant: upsert_tenant.to_string(),
+                endpoint: None,
+                to_tenant: None,
+            };
+            let res = mt.get_share_endpoint(req).await;
+            assert!(res.is_ok());
+            assert_eq!(res.clone().unwrap().share_endpoint_meta_vec.len(), 1);
+            assert_eq!(
+                res.unwrap().share_endpoint_meta_vec[0].1.url,
+                "http://127.0.0.1:22222".to_string()
+            );
+        }
+        info!("--- get share endpoints");
+        {
+            let req = GetShareEndpointReq {
+                tenant: tenant.to_string(),
+                endpoint: None,
+                to_tenant: None,
+            };
+
+            let res = mt.get_share_endpoint(req).await;
+            assert!(res.is_ok());
+            assert_eq!(res.unwrap().share_endpoint_meta_vec.len(), 2);
+
+            let req = GetShareEndpointReq {
+                tenant: tenant.to_string(),
+                endpoint: Some(endpoint1.to_string()),
+                to_tenant: None,
+            };
+
+            let res = mt.get_share_endpoint(req).await;
+            assert!(res.is_ok());
+            assert_eq!(res.unwrap().share_endpoint_meta_vec.len(), 1);
+        }
+
+        info!("--- drop share endpoints");
+        {
+            let req = DropShareEndpointReq {
+                if_exists: true,
+                endpoint: ShareEndpointIdent {
+                    tenant: tenant.to_string(),
+                    endpoint: endpoint1.to_string(),
+                },
+            };
+            let res = mt.drop_share_endpoint(req).await;
+            assert!(res.is_ok());
+
+            let req = GetShareEndpointReq {
+                tenant: tenant.to_string(),
+                endpoint: None,
+                to_tenant: None,
+            };
+
+            let res = mt.get_share_endpoint(req).await;
+            assert!(res.is_ok());
+            assert_eq!(res.unwrap().share_endpoint_meta_vec.len(), 1);
+
+            let req = GetShareEndpointReq {
+                tenant: tenant.to_string(),
+                endpoint: Some(endpoint1.to_string()),
+                to_tenant: None,
+            };
+
+            let res = mt.get_share_endpoint(req).await;
+            assert!(res.is_ok());
+            assert_eq!(res.unwrap().share_endpoint_meta_vec.len(), 0);
+        }
         Ok(())
     }
 
@@ -1156,7 +1351,7 @@ impl ShareApiTestSuite {
 
         info!("--- drop share1 and check objects");
         {
-            let tenant2 = "tenant2";
+            let tenant2 = "tenant1";
             let db2 = "db2";
 
             let db_name2 = DatabaseNameIdent {

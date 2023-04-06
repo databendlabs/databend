@@ -17,9 +17,13 @@ common-exception = { path = "../../common/exception" }
 common-hashtable = { path = "../../common/hashtable" }
 common-io = { path = "../../common/io" }
 
-# Github dependencies
+# GitHub dependencies
 
 # Crates.io dependencies
+arrow-array = "35.0.0"
+arrow-buffer = "35.0.0"
+arrow-data = "35.0.0"
+arrow-schema = "35.0.0"
 base64 = "0.21.0"
 chrono = { workspace = true }
 chrono-tz = { workspace = true }

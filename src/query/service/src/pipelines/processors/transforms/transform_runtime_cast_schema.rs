@@ -21,7 +21,7 @@ use common_expression::DataSchemaRef;
 use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FunctionContext;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;

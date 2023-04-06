@@ -37,7 +37,7 @@ pub struct IcebergDatabase {
     ctl_name: String,
     /// operator pointing to the directory holding iceberg tables
     db_root: DataOperator,
-    /// database infomations
+    /// database information
     info: DatabaseInfo,
 }
 
@@ -98,6 +98,7 @@ impl Database for IcebergDatabase {
         &self.info
     }
 
+    #[async_backtrace::framed]
     async fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
         let path = format!("{table_name}/");
         let op = self.db_root.operator();
@@ -121,6 +122,7 @@ impl Database for IcebergDatabase {
         return Ok(Arc::new(tbl) as Arc<dyn Table>);
     }
 
+    #[async_backtrace::framed]
     async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
         let mut tables = vec![];
         let op = self.db_root.operator();

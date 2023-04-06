@@ -47,10 +47,7 @@ If you want to run test files in parallel, please add the following args:
 databend-sqllogictest --enable_sandbox --parallel <number>
 ```
 
-When start databend query, please add `--internal-enable-sandbox-tenant`, such as:
-```shell
-./target/debug/databend-query --meta-embedded-dir ./.databend/meta_embedded --internal-enable-sandbox-tenant
-```
+When start databend query, please add `--internal-enable-sandbox-tenant` config.
 
 ### Sqllogictest
 Most records are either a statement or a query. A statement is an SQL command that is to be evaluated but from which we do not expect to get results (other than success or failure). A statement might be a CREATE TABLE or an INSERT or an UPDATE or a DROP INDEX. A query is an SQL command from which we expect to receive results. The result set might be empty.

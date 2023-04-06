@@ -25,7 +25,7 @@ use crate::plans::RelOp;
 // Merge two adjacent `Filter`s into one
 pub struct RuleMergeFilter {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RuleMergeFilter {
@@ -37,7 +37,7 @@ impl RuleMergeFilter {
             //  Filter
             //  \
             //   *
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Filter,
                 }
@@ -54,7 +54,7 @@ impl RuleMergeFilter {
                         .into(),
                     ),
                 ),
-            ),
+            )],
         }
     }
 }
@@ -83,7 +83,7 @@ impl Rule for RuleMergeFilter {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }

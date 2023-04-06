@@ -1,156 +1,111 @@
 query T
 explain select * from (select a from (select number as a, number + 1 as b from numbers(1)))
 ----
-TableScan
-├── table: default.system.numbers
-├── read rows: 1
-├── read bytes: 8
-├── partitions total: 1
-├── partitions scanned: 1
-├── push downs: [filters: [], limit: NONE]
-└── estimated rows: 1.00
+EvalScalar
+├── expressions: [numbers.a (#0), numbers.a (#0), numbers.number (#0)]
+├── estimated rows: 1.00
+└── TableScan
+    ├── table: default.system.numbers
+    ├── read rows: 1
+    ├── read bytes: 8
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 1.00
 
 query T
 explain select a from (select number as a, count(*) as b from numbers(1) group by a)
 ----
-AggregateFinal
-├── group by: [number]
-├── aggregate functions: []
+EvalScalar
+├── expressions: [numbers.a (#0), numbers.number (#0)]
 ├── estimated rows: 1.00
-└── AggregatePartial
+└── AggregateFinal
     ├── group by: [number]
     ├── aggregate functions: []
     ├── estimated rows: 1.00
-    └── TableScan
-        ├── table: default.system.numbers
-        ├── read rows: 1
-        ├── read bytes: 8
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 1.00
+    └── AggregatePartial
+        ├── group by: [number]
+        ├── aggregate functions: []
+        ├── estimated rows: 1.00
+        └── EvalScalar
+            ├── expressions: [numbers.number (#0)]
+            ├── estimated rows: 1.00
+            └── TableScan
+                ├── table: default.system.numbers
+                ├── read rows: 1
+                ├── read bytes: 8
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 1.00
 
 query T
 explain select a from (select number as a, number b, sum(number) as c, number as d, number as e from numbers(1) group by a, b, d, e) where b > 1 order by d limit 1
 ----
-Limit
-├── limit: 1
-├── offset: 0
+EvalScalar
+├── expressions: [numbers.a (#0)]
 ├── estimated rows: 0.33
-└── Sort
-    ├── sort keys: [number ASC NULLS LAST]
+└── Limit
+    ├── limit: 1
+    ├── offset: 0
     ├── estimated rows: 0.33
-    └── Filter
-        ├── filters: [numbers.b (#0) > 1]
+    └── Sort
+        ├── sort keys: [number ASC NULLS LAST]
         ├── estimated rows: 0.33
-        └── AggregateFinal
-            ├── group by: [number, number, number, number]
-            ├── aggregate functions: []
-            ├── estimated rows: 1.00
-            └── AggregatePartial
-                ├── group by: [number, number, number, number]
-                ├── aggregate functions: []
-                ├── estimated rows: 1.00
-                └── TableScan
-                    ├── table: default.system.numbers
-                    ├── read rows: 1
-                    ├── read bytes: 8
-                    ├── partitions total: 1
-                    ├── partitions scanned: 1
-                    ├── push downs: [filters: [], limit: NONE]
-                    └── estimated rows: 1.00
+        └── EvalScalar
+            ├── expressions: [numbers.number (#0)]
+            ├── estimated rows: 0.33
+            └── Filter
+                ├── filters: [numbers.b (#0) > 1]
+                ├── estimated rows: 0.33
+                └── AggregateFinal
+                    ├── group by: [number, number, number, number]
+                    ├── aggregate functions: []
+                    ├── estimated rows: 1.00
+                    └── AggregatePartial
+                        ├── group by: [number, number, number, number]
+                        ├── aggregate functions: []
+                        ├── estimated rows: 1.00
+                        └── EvalScalar
+                            ├── expressions: [numbers.number (#0), numbers.number (#0), numbers.number (#0), numbers.number (#0), numbers.number (#0)]
+                            ├── estimated rows: 1.00
+                            └── TableScan
+                                ├── table: default.system.numbers
+                                ├── read rows: 1
+                                ├── read bytes: 8
+                                ├── partitions total: 1
+                                ├── partitions scanned: 1
+                                ├── push downs: [filters: [], limit: NONE]
+                                └── estimated rows: 1.00
 
 query T
 explain select * from (select t1.a from (select number + 1 as a, number + 1 as b, number + 1 as c, number + 1 as d from numbers(1)) as t1, (select number + 1 as a, number + 1 as b, number + 1 as c from numbers(1)) as t2 where t1.b = t2.b and t1.c = 1)
 ----
-HashJoin
-├── join type: INNER
-├── build keys: [t1.b (#2)]
-├── probe keys: [t2.b (#7)]
-├── filters: []
-├── estimated rows: 0.33
-├── EvalScalar(Build)
-│   ├── expressions: [numbers.number (#0) + 1, numbers.number (#0) + 1]
-│   ├── estimated rows: 0.33
-│   └── Filter
-│       ├── filters: [numbers.number (#0) + 1 = 1]
-│       ├── estimated rows: 0.33
-│       └── TableScan
-│           ├── table: default.system.numbers
-│           ├── read rows: 1
-│           ├── read bytes: 8
-│           ├── partitions total: 1
-│           ├── partitions scanned: 1
-│           ├── push downs: [filters: [numbers.number (#0) + 1 = 1], limit: NONE]
-│           └── estimated rows: 1.00
-└── EvalScalar(Probe)
-    ├── expressions: [numbers.number (#5) + 1]
-    ├── estimated rows: 1.00
-    └── TableScan
-        ├── table: default.system.numbers
-        ├── read rows: 1
-        ├── read bytes: 8
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 1.00
-
-query T
-explain select t1.a from (select number + 1 as a, number + 1 as b from numbers(1)) as t1 where t1.a = (select count(*) from (select t2.a, t3.a from (select number + 1 as a, number + 1 as b, number + 1 as c, number + 1 as d from numbers(1)) as t2, (select number + 1 as a, number + 1 as b, number + 1 as c from numbers(1)) as t3 where t2.b = t3.b and t2.c = 1))
-----
-Filter
-├── filters: [is_true(CAST(t1.a (#1) AS UInt64 NULL) = scalar_subquery_13 (#13))]
+EvalScalar
+├── expressions: [t1.a (#1), t1.a (#1)]
 ├── estimated rows: 0.33
 └── HashJoin
-    ├── join type: SINGLE
-    ├── build keys: []
-    ├── probe keys: []
+    ├── join type: INNER
+    ├── build keys: [t1.b (#2)]
+    ├── probe keys: [t2.b (#7)]
     ├── filters: []
-    ├── estimated rows: 1.00
+    ├── estimated rows: 0.33
     ├── EvalScalar(Build)
-    │   ├── expressions: [COUNT(*) (#12)]
-    │   ├── estimated rows: 1.00
-    │   └── AggregateFinal
-    │       ├── group by: []
-    │       ├── aggregate functions: [count()]
-    │       ├── estimated rows: 1.00
-    │       └── AggregatePartial
-    │           ├── group by: []
-    │           ├── aggregate functions: [count()]
-    │           ├── estimated rows: 1.00
-    │           └── HashJoin
-    │               ├── join type: INNER
-    │               ├── build keys: [t2.b (#5)]
-    │               ├── probe keys: [t3.b (#10)]
-    │               ├── filters: []
-    │               ├── estimated rows: 0.33
-    │               ├── EvalScalar(Build)
-    │               │   ├── expressions: [numbers.number (#3) + 1]
-    │               │   ├── estimated rows: 0.33
-    │               │   └── Filter
-    │               │       ├── filters: [numbers.number (#3) + 1 = 1]
-    │               │       ├── estimated rows: 0.33
-    │               │       └── TableScan
-    │               │           ├── table: default.system.numbers
-    │               │           ├── read rows: 1
-    │               │           ├── read bytes: 8
-    │               │           ├── partitions total: 1
-    │               │           ├── partitions scanned: 1
-    │               │           ├── push downs: [filters: [numbers.number (#3) + 1 = 1], limit: NONE]
-    │               │           └── estimated rows: 1.00
-    │               └── EvalScalar(Probe)
-    │                   ├── expressions: [numbers.number (#8) + 1]
-    │                   ├── estimated rows: 1.00
-    │                   └── TableScan
-    │                       ├── table: default.system.numbers
-    │                       ├── read rows: 1
-    │                       ├── read bytes: 8
-    │                       ├── partitions total: 1
-    │                       ├── partitions scanned: 1
-    │                       ├── push downs: [filters: [], limit: NONE]
-    │                       └── estimated rows: 1.00
+    │   ├── expressions: [numbers.number (#0) + 1, numbers.number (#0) + 1]
+    │   ├── estimated rows: 0.33
+    │   └── Filter
+    │       ├── filters: [numbers.number (#0) + 1 = 1]
+    │       ├── estimated rows: 0.33
+    │       └── TableScan
+    │           ├── table: default.system.numbers
+    │           ├── read rows: 1
+    │           ├── read bytes: 8
+    │           ├── partitions total: 1
+    │           ├── partitions scanned: 1
+    │           ├── push downs: [filters: [numbers.number (#0) + 1 = 1], limit: NONE]
+    │           └── estimated rows: 1.00
     └── EvalScalar(Probe)
-        ├── expressions: [numbers.number (#0) + 1]
+        ├── expressions: [numbers.number (#5) + 1]
         ├── estimated rows: 1.00
         └── TableScan
             ├── table: default.system.numbers
@@ -162,60 +117,135 @@ Filter
             └── estimated rows: 1.00
 
 query T
+explain select t1.a from (select number + 1 as a, number + 1 as b from numbers(1)) as t1 where t1.a = (select count(*) from (select t2.a, t3.a from (select number + 1 as a, number + 1 as b, number + 1 as c, number + 1 as d from numbers(1)) as t2, (select number + 1 as a, number + 1 as b, number + 1 as c from numbers(1)) as t3 where t2.b = t3.b and t2.c = 1))
+----
+EvalScalar
+├── expressions: [t1.a (#1)]
+├── estimated rows: 0.33
+└── Filter
+    ├── filters: [is_true(CAST(t1.a (#1) AS UInt64 NULL) = scalar_subquery_13 (#13))]
+    ├── estimated rows: 0.33
+    └── HashJoin
+        ├── join type: SINGLE
+        ├── build keys: []
+        ├── probe keys: []
+        ├── filters: []
+        ├── estimated rows: 1.00
+        ├── EvalScalar(Build)
+        │   ├── expressions: [COUNT(*) (#12)]
+        │   ├── estimated rows: 1.00
+        │   └── AggregateFinal
+        │       ├── group by: []
+        │       ├── aggregate functions: [count()]
+        │       ├── estimated rows: 1.00
+        │       └── AggregatePartial
+        │           ├── group by: []
+        │           ├── aggregate functions: [count()]
+        │           ├── estimated rows: 1.00
+        │           └── HashJoin
+        │               ├── join type: INNER
+        │               ├── build keys: [t2.b (#5)]
+        │               ├── probe keys: [t3.b (#10)]
+        │               ├── filters: []
+        │               ├── estimated rows: 0.33
+        │               ├── EvalScalar(Build)
+        │               │   ├── expressions: [numbers.number (#3) + 1]
+        │               │   ├── estimated rows: 0.33
+        │               │   └── Filter
+        │               │       ├── filters: [numbers.number (#3) + 1 = 1]
+        │               │       ├── estimated rows: 0.33
+        │               │       └── TableScan
+        │               │           ├── table: default.system.numbers
+        │               │           ├── read rows: 1
+        │               │           ├── read bytes: 8
+        │               │           ├── partitions total: 1
+        │               │           ├── partitions scanned: 1
+        │               │           ├── push downs: [filters: [numbers.number (#3) + 1 = 1], limit: NONE]
+        │               │           └── estimated rows: 1.00
+        │               └── EvalScalar(Probe)
+        │                   ├── expressions: [numbers.number (#8) + 1]
+        │                   ├── estimated rows: 1.00
+        │                   └── TableScan
+        │                       ├── table: default.system.numbers
+        │                       ├── read rows: 1
+        │                       ├── read bytes: 8
+        │                       ├── partitions total: 1
+        │                       ├── partitions scanned: 1
+        │                       ├── push downs: [filters: [], limit: NONE]
+        │                       └── estimated rows: 1.00
+        └── EvalScalar(Probe)
+            ├── expressions: [numbers.number (#0) + 1]
+            ├── estimated rows: 1.00
+            └── TableScan
+                ├── table: default.system.numbers
+                ├── read rows: 1
+                ├── read bytes: 8
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 1.00
+
+query T
 explain select name from system.functions order by example
 ----
-Sort
-├── sort keys: [example ASC NULLS LAST]
+EvalScalar
+├── expressions: [functions.name (#0)]
 ├── estimated rows: 0.00
-└── TableScan
-    ├── table: default.system.functions
-    ├── read rows: 0
-    ├── read bytes: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 0.00
+└── Sort
+    ├── sort keys: [example ASC NULLS LAST]
+    ├── estimated rows: 0.00
+    └── TableScan
+        ├── table: default.system.functions
+        ├── read rows: 0
+        ├── read bytes: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 0.00
 
 query T
 explain select t.number from numbers(10) t where exists(select * from numbers(10))
 ----
-HashJoin
-├── join type: CROSS
-├── build keys: []
-├── probe keys: []
-├── filters: []
+EvalScalar
+├── expressions: [t.number (#0)]
 ├── estimated rows: 3.33
-├── Filter(Build)
-│   ├── filters: [count(*) (#2) = 1]
-│   ├── estimated rows: 0.33
-│   └── AggregateFinal
-│       ├── group by: []
-│       ├── aggregate functions: [count()]
-│       ├── estimated rows: 1.00
-│       └── AggregatePartial
-│           ├── group by: []
-│           ├── aggregate functions: [count()]
-│           ├── estimated rows: 1.00
-│           └── Limit
-│               ├── limit: 1
-│               ├── offset: 0
-│               ├── estimated rows: 1.00
-│               └── TableScan
-│                   ├── table: default.system.numbers
-│                   ├── read rows: 1
-│                   ├── read bytes: 8
-│                   ├── partitions total: 1
-│                   ├── partitions scanned: 1
-│                   ├── push downs: [filters: [], limit: 1]
-│                   └── estimated rows: 10.00
-└── TableScan(Probe)
-    ├── table: default.system.numbers
-    ├── read rows: 10
-    ├── read bytes: 80
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 10.00
+└── HashJoin
+    ├── join type: CROSS
+    ├── build keys: []
+    ├── probe keys: []
+    ├── filters: []
+    ├── estimated rows: 3.33
+    ├── Filter(Build)
+    │   ├── filters: [count(*) (#2) = 1]
+    │   ├── estimated rows: 0.33
+    │   └── AggregateFinal
+    │       ├── group by: []
+    │       ├── aggregate functions: [count()]
+    │       ├── estimated rows: 1.00
+    │       └── AggregatePartial
+    │           ├── group by: []
+    │           ├── aggregate functions: [count()]
+    │           ├── estimated rows: 1.00
+    │           └── Limit
+    │               ├── limit: 1
+    │               ├── offset: 0
+    │               ├── estimated rows: 1.00
+    │               └── TableScan
+    │                   ├── table: default.system.numbers
+    │                   ├── read rows: 1
+    │                   ├── read bytes: 8
+    │                   ├── partitions total: 1
+    │                   ├── partitions scanned: 1
+    │                   ├── push downs: [filters: [], limit: 1]
+    │                   └── estimated rows: 10.00
+    └── TableScan(Probe)
+        ├── table: default.system.numbers
+        ├── read rows: 10
+        ├── read bytes: 80
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 10.00
 
 
 statement ok

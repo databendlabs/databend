@@ -294,6 +294,7 @@ impl Processor for FuseTableSink {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::Serialized {

@@ -214,6 +214,7 @@ impl ParquetReader {
         Ok(readers)
     }
 
+    #[async_backtrace::framed]
     pub async fn readers_from_non_blocking_io(&self, part: PartInfoPtr) -> Result<IndexedReaders> {
         let part = ParquetRowGroupPart::from_part(&part)?;
 

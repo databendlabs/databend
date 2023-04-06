@@ -34,4 +34,3 @@ query I
 SELECT try_cast(try_cast(try_cast as integer) as integer) FROM try_cast
 ----
 3
-

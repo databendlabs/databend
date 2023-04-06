@@ -29,9 +29,10 @@ use crate::ScalarExpr;
 /// Contains definition of srf and its output columns.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SrfItem {
-    pub srf_name: String,
-    pub args: Vec<ScalarExpr>,
-    pub columns: Vec<IndexType>,
+    pub scalar: ScalarExpr,
+    // pub srf_name: String,
+    // pub args: Vec<ScalarExpr>,
+    pub index: IndexType,
 }
 
 /// `ProjectSet` is a plan that evaluate a series of
@@ -53,9 +54,11 @@ impl Operator for ProjectSet {
     ) -> common_exception::Result<RelationalProperty> {
         let mut child_prop = rel_expr.derive_relational_prop_child(0)?;
         for srf in &self.srfs {
-            child_prop.output_columns.extend(srf.columns.iter());
+            child_prop.output_columns.insert(srf.index);
         }
 
+        // ProjectSet is set-returning functions, precise_cardinality set None
+        child_prop.statistics.precise_cardinality = None;
         Ok(child_prop)
     }
 

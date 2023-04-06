@@ -19,6 +19,8 @@ use grpc::export_meta;
 
 mod snapshot;
 
+use std::time::Duration;
+
 use clap::Parser;
 use common_base::base::tokio;
 use common_meta_client::MetaGrpcClient;
@@ -119,7 +121,7 @@ pub struct RaftConfig {
     /// The interval in milli seconds at which a leader send heartbeat message to followers.
     /// Different value of this setting on leader and followers may cause unexpected behavior.
     #[clap(long, default_value = "1000")]
-    #[serde(alias = "kvsrv_heartbeat_intervalt")]
+    #[serde(alias = "kvsrv_heartbeat_interval")]
     pub heartbeat_interval: u64,
 
     /// The max time in milli seconds that a leader wait for install-snapshot ack from a follower or non-voter.
@@ -263,8 +265,15 @@ async fn bench_client_num_conn(conf: &Config) -> anyhow::Result<()> {
 
     loop {
         i += 1;
-        let client =
-            MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None, None)?;
+        let client = MetaGrpcClient::try_create(
+            vec![addr.to_string()],
+            "root",
+            "xxx",
+            None,
+            None,
+            Duration::from_secs(10),
+            None,
+        )?;
 
         let res = client.get_kv("foo").await;
         println!("{}-th: get_kv(foo): {:?}", i, res);

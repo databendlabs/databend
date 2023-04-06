@@ -53,7 +53,7 @@ jobs:
         arch:
           - x86_64
           - aarch64
-        platform:
+        libc:
           - gnu
           - musl
     steps:
@@ -79,12 +79,12 @@ jobs:
           pull: true
           push: true
           tags: |
-            ${{ steps.login.outputs.dockerhub_repo }}:${{ matrix.arch }}-unknown-linux-${{ matrix.platform }}
-            ${{ steps.login.outputs.dockerhub_repo }}:${{ matrix.arch }}-unknown-linux-${{ matrix.platform }}-${{ steps.toolchain.outputs.TOOLCHAIN }}
-            ${{ steps.login.outputs.ecr_repo }}:${{ matrix.arch }}-unknown-linux-${{ matrix.platform }}
-            ${{ steps.login.outputs.ecr_repo }}:${{ matrix.arch }}-unknown-linux-${{ matrix.platform }}-${{ steps.toolchain.outputs.TOOLCHAIN }}
-          context: ./docker/build-tool/${{ matrix.platform }}/
-          file: ./docker/build-tool/${{ matrix.platform }}/Dockerfile
+            ${{ steps.login.outputs.dockerhub_repo }}:${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
+            ${{ steps.login.outputs.dockerhub_repo }}:${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}-${{ steps.toolchain.outputs.TOOLCHAIN }}
+            ${{ steps.login.outputs.ecr_repo }}:${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
+            ${{ steps.login.outputs.ecr_repo }}:${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}-${{ steps.toolchain.outputs.TOOLCHAIN }}
+          context: ./docker/build-tool/${{ matrix.libc }}/
+          file: ./docker/build-tool/${{ matrix.libc }}/Dockerfile
           build-args: |
             ARCH=${{ matrix.arch }}
             RUST_TOOLCHAIN=${{ steps.toolchain.outputs.TOOLCHAIN }}

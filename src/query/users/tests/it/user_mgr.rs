@@ -291,7 +291,7 @@ async fn test_user_manager_with_root_user() -> Result<()> {
             .await;
         assert!(res.is_err());
         assert_eq!(
-            "Code: 2201, displayText = only accept root from localhost, current: 'default'@'otherhost'.",
+            "Code: 2201, Text = only accept root from localhost, current: 'default'@'otherhost'.",
             res.err().unwrap().to_string()
         );
     }
@@ -333,7 +333,7 @@ async fn test_user_manager_with_root_user() -> Result<()> {
             .await;
         assert!(res.is_err());
         assert_eq!(
-            "Code: 2201, displayText = only accept root from localhost, current: 'root'@'otherhost'.",
+            "Code: 2201, Text = only accept root from localhost, current: 'root'@'otherhost'.",
             res.err().unwrap().to_string()
         );
     }

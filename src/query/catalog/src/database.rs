@@ -68,6 +68,7 @@ pub trait Database: DynClone + Sync + Send {
     }
 
     // Initial a database.
+    #[async_backtrace::framed]
     async fn init_database(&self, _tenant: &str) -> Result<()> {
         Ok(())
     }
@@ -81,6 +82,7 @@ pub trait Database: DynClone + Sync + Send {
     }
 
     // Get one table by db and table name.
+    #[async_backtrace::framed]
     async fn get_table(&self, _table_name: &str) -> Result<Arc<dyn Table>> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement get_table in {} Database",
@@ -88,6 +90,7 @@ pub trait Database: DynClone + Sync + Send {
         )))
     }
 
+    #[async_backtrace::framed]
     async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement list_tables in {} Database",
@@ -95,6 +98,7 @@ pub trait Database: DynClone + Sync + Send {
         )))
     }
 
+    #[async_backtrace::framed]
     async fn list_tables_history(&self) -> Result<Vec<Arc<dyn Table>>> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement list_tables_history in {} Database",
@@ -102,6 +106,7 @@ pub trait Database: DynClone + Sync + Send {
         )))
     }
 
+    #[async_backtrace::framed]
     async fn create_table(&self, _req: CreateTableReq) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement create_table in {} Database",
@@ -109,6 +114,7 @@ pub trait Database: DynClone + Sync + Send {
         )))
     }
 
+    #[async_backtrace::framed]
     async fn drop_table_by_id(&self, _req: DropTableByIdReq) -> Result<DropTableReply> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement drop_table_by_id in {} Database",
@@ -116,6 +122,7 @@ pub trait Database: DynClone + Sync + Send {
         )))
     }
 
+    #[async_backtrace::framed]
     async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement undrop_table in {} Database",
@@ -123,6 +130,7 @@ pub trait Database: DynClone + Sync + Send {
         )))
     }
 
+    #[async_backtrace::framed]
     async fn rename_table(&self, _req: RenameTableReq) -> Result<RenameTableReply> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement rename_table in {} Database",
@@ -130,6 +138,7 @@ pub trait Database: DynClone + Sync + Send {
         )))
     }
 
+    #[async_backtrace::framed]
     async fn upsert_table_option(
         &self,
         _req: UpsertTableOptionReq,
@@ -140,6 +149,7 @@ pub trait Database: DynClone + Sync + Send {
         )))
     }
 
+    #[async_backtrace::framed]
     async fn update_table_meta(&self, _req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement update_table_meta in {} Database",
@@ -147,6 +157,7 @@ pub trait Database: DynClone + Sync + Send {
         )))
     }
 
+    #[async_backtrace::framed]
     async fn get_table_copied_file_info(
         &self,
         _req: GetTableCopiedFileReq,
@@ -157,6 +168,7 @@ pub trait Database: DynClone + Sync + Send {
         )))
     }
 
+    #[async_backtrace::framed]
     async fn upsert_table_copied_file_info(
         &self,
         _req: UpsertTableCopiedFileReq,
@@ -167,6 +179,7 @@ pub trait Database: DynClone + Sync + Send {
         )))
     }
 
+    #[async_backtrace::framed]
     async fn truncate_table(&self, _req: TruncateTableReq) -> Result<TruncateTableReply> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement truncate_table in {} Database",

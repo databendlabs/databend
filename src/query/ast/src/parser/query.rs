@@ -188,7 +188,7 @@ pub fn table_alias(i: Input) -> IResult<TableAlias> {
 pub fn parenthesized_query(i: Input) -> IResult<Query> {
     map(
         rule! {
-            "(" ~ ( #parenthesized_query | #query ) ~ ")"
+            "(" ~ #query ~ ")"
         },
         |(_, query, _)| query,
     )(i)
@@ -332,25 +332,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
             }
         },
     );
-    let table_function = map(
-        rule! {
-            #ident ~ "(" ~ #comma_separated_list0(table_function_param) ~ ")" ~ #table_alias?
-        },
-        |(name, _, params, _, alias)| TableReferenceElement::TableFunction {
-            name,
-            params,
-            alias,
-        },
-    );
-    let subquery = map(
-        rule! {
-            ( #parenthesized_query | #query ) ~ #table_alias?
-        },
-        |(subquery, alias)| TableReferenceElement::Subquery {
-            subquery: Box::new(subquery),
-            alias,
-        },
-    );
+
     let join = map(
         rule! {
             NATURAL? ~ #join_operator? ~ JOIN
@@ -372,6 +354,27 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         },
         |(_, _, idents, _)| TableReferenceElement::JoinCondition(JoinCondition::Using(idents)),
     );
+
+    let table_function = map(
+        rule! {
+            #function_name ~ "(" ~ #comma_separated_list0(table_function_param) ~ ")" ~ #table_alias?
+        },
+        |(name, _, params, _, alias)| TableReferenceElement::TableFunction {
+            name,
+            params,
+            alias,
+        },
+    );
+    let subquery = map(
+        rule! {
+            #parenthesized_query ~ #table_alias?
+        },
+        |(subquery, alias)| TableReferenceElement::Subquery {
+            subquery: Box::new(subquery),
+            alias,
+        },
+    );
+
     let group = map(
         rule! {
            "(" ~ #table_reference ~ ^")"
@@ -379,24 +382,8 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         |(_, table_ref, _)| TableReferenceElement::Group(table_ref),
     );
 
-    let stage_location = |i| {
-        map_res(
-            rule! {
-                #stage_location
-            },
-            |v| Ok(FileLocation::Stage(v)),
-        )(i)
-    };
-
-    let uri_location = |i| {
-        map_res(
-            rule! {
-                #literal_string
-            },
-            |v| Ok(FileLocation::Uri(v)),
-        )(i)
-    };
-
+    let stage_location = |i| map(stage_location, FileLocation::Stage)(i);
+    let uri_location = |i| map(literal_string, FileLocation::Uri)(i);
     let aliased_stage = map(
         rule! {
             (#stage_location | #uri_location) ~  ("(" ~ ^#comma_separated_list1(select_stage_option) ~")")? ~ #table_alias?
@@ -415,10 +402,10 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
 
     let (rest, (span, elem)) = consumed(rule! {
-        #subquery
-        | #aliased_stage
+        #aliased_stage
         | #table_function
         | #aliased_table
+        | #subquery
         | #group
         | #join
         | #join_condition_on
@@ -592,6 +579,7 @@ pub enum SetOperationElement {
         selection: Box<Option<Expr>>,
         group_by: Option<GroupBy>,
         having: Box<Option<Expr>>,
+        window_list: Option<Vec<WindowDefinition>>,
     },
     SetOperation {
         op: SetOperator,
@@ -627,6 +615,91 @@ pub fn group_by_items(i: Input) -> IResult<GroupBy> {
     rule!(#group_sets | #cube | #rollup | #normal)(i)
 }
 
+pub fn window_frame_bound(i: Input) -> IResult<WindowFrameBound> {
+    alt((
+        value(WindowFrameBound::CurrentRow, rule! { CURRENT ~ ROW }),
+        value(
+            WindowFrameBound::Preceding(None),
+            rule! { UNBOUNDED ~ PRECEDING },
+        ),
+        map(rule! { #subexpr(0) ~ PRECEDING }, |(expr, _)| {
+            WindowFrameBound::Preceding(Some(Box::new(expr)))
+        }),
+        value(
+            WindowFrameBound::Following(None),
+            rule! { UNBOUNDED ~ FOLLOWING },
+        ),
+        map(rule! { #subexpr(0) ~ FOLLOWING }, |(expr, _)| {
+            WindowFrameBound::Following(Some(Box::new(expr)))
+        }),
+    ))(i)
+}
+
+pub fn window_frame_between(i: Input) -> IResult<(WindowFrameBound, WindowFrameBound)> {
+    alt((
+        map(
+            rule! { BETWEEN ~ #window_frame_bound ~ AND ~ #window_frame_bound },
+            |(_, s, _, e)| (s, e),
+        ),
+        map(rule! {#window_frame_bound}, |s| {
+            (s, WindowFrameBound::CurrentRow)
+        }),
+    ))(i)
+}
+
+pub fn window_spec(i: Input) -> IResult<WindowSpec> {
+    map(
+        rule! {
+            (#ident )? ~ (PARTITION ~ ^BY ~ #comma_separated_list1(subexpr(0)))?
+            ~ ( ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) )?
+            ~ ((ROWS | RANGE) ~ #window_frame_between)?
+        },
+        |(existing_window_name, opt_partition, opt_order, between)| WindowSpec {
+            existing_window_name,
+            partition_by: opt_partition.map(|x| x.2).unwrap_or_default(),
+            order_by: opt_order.map(|x| x.2).unwrap_or_default(),
+            window_frame: between.map(|x| {
+                let unit = match x.0.kind {
+                    ROWS => WindowFrameUnits::Rows,
+                    RANGE => WindowFrameUnits::Range,
+                    _ => unreachable!(),
+                };
+                let bw = x.1;
+                WindowFrame {
+                    units: unit,
+                    start_bound: bw.0,
+                    end_bound: bw.1,
+                }
+            }),
+        },
+    )(i)
+}
+pub fn window_spec_ident(i: Input) -> IResult<Window> {
+    alt((
+        map(
+            rule! {
+               ("(" ~ #window_spec ~ ")")
+            },
+            |(_, spec, _)| Window::WindowSpec(spec),
+        ),
+        map(rule! {#ident}, |window_name| {
+            Window::WindowReference(WindowRef { window_name })
+        }),
+    ))(i)
+}
+
+pub fn window_clause(i: Input) -> IResult<WindowDefinition> {
+    map(
+        rule! {
+            #ident ~ (AS ~ "(" ~ #window_spec ~ ")")
+        },
+        |(ident, window)| WindowDefinition {
+            name: ident,
+            spec: window.2,
+        },
+    )(i)
+}
+
 pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>> {
     let set_operator = map(
         rule! {
@@ -652,6 +725,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
                 ~ ( WHERE ~ ^#expr )?
                 ~ ( GROUP ~ ^BY ~ ^#group_by_items )?
                 ~ ( HAVING ~ ^#expr )?
+                ~ ( WINDOW ~ ^#comma_separated_list1(window_clause) )?
         },
         |(
             _select,
@@ -661,6 +735,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
             opt_where_block,
             opt_group_by_block,
             opt_having_block,
+            opt_window_block,
         )| {
             SetOperationElement::SelectStmt {
                 distinct: opt_distinct.is_some(),
@@ -673,6 +748,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
                 selection: Box::new(opt_where_block.map(|(_, selection)| selection)),
                 group_by: opt_group_by_block.map(|(_, _, group_by)| group_by),
                 having: Box::new(opt_having_block.map(|(_, having)| having)),
+                window_list: opt_window_block.map(|(_, windows)| windows),
             }
         },
     );
@@ -719,6 +795,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 selection,
                 group_by,
                 having,
+                window_list,
             } => SetExpr::Select(Box::new(SelectStmt {
                 span: transform_span(input.span.0),
                 distinct,
@@ -727,6 +804,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 selection: *selection,
                 group_by,
                 having: *having,
+                window_list,
             })),
             _ => unreachable!(),
         };

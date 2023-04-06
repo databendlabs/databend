@@ -25,7 +25,7 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
 use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::UserDefinedFunction;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
@@ -47,6 +47,7 @@ impl AsyncSystemTable for FunctionsTable {
         &self.table_info
     }
 
+    #[async_backtrace::framed]
     async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         // TODO(andylokandy): add rewritable function names, e.g. database()
         let func_names = BUILTIN_FUNCTIONS.registered_names();
@@ -82,7 +83,7 @@ impl AsyncSystemTable for FunctionsTable {
             })
             .collect::<Vec<&str>>();
 
-        let categorys = (0..names.len())
+        let categories = (0..names.len())
             .map(|i| if i < builtin_func_len { "" } else { "UDF" })
             .collect::<Vec<&str>>();
 
@@ -97,7 +98,7 @@ impl AsyncSystemTable for FunctionsTable {
             })
             .collect::<Vec<&str>>();
 
-        let syntaxs = (0..names.len())
+        let syntaxes = (0..names.len())
             .map(|i| {
                 if i < builtin_func_len {
                     ""
@@ -115,9 +116,9 @@ impl AsyncSystemTable for FunctionsTable {
             BooleanType::from_data(is_builtin),
             BooleanType::from_data(is_aggregate),
             StringType::from_data(definitions),
-            StringType::from_data(categorys),
+            StringType::from_data(categories),
             StringType::from_data(descriptions),
-            StringType::from_data(syntaxs),
+            StringType::from_data(syntaxes),
             StringType::from_data(examples),
         ]))
     }
@@ -152,6 +153,7 @@ impl FunctionsTable {
         AsyncOneBlockSystemTable::create(FunctionsTable { table_info })
     }
 
+    #[async_backtrace::framed]
     async fn get_udfs(ctx: Arc<dyn TableContext>) -> Result<Vec<UserDefinedFunction>> {
         let tenant = ctx.get_tenant();
         UserApiProvider::instance().get_udfs(&tenant).await

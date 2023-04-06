@@ -169,6 +169,7 @@ impl Processor for TransformHashJoinProbe {
         }
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if let HashJoinStep::Build = &self.step {
             self.join_state.wait_finish().await?;

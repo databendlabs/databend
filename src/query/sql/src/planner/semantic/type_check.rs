@@ -31,10 +31,12 @@ use common_ast::ast::UnaryOperator;
 use common_ast::ast::WindowFrame;
 use common_ast::ast::WindowFrameBound;
 use common_ast::ast::WindowFrameUnits;
+use common_ast::ast::WindowSpec;
 use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
@@ -48,16 +50,18 @@ use common_expression::types::decimal::DecimalSize;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
+use common_expression::FunctionKind;
 use common_expression::RawExpr;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_functions::aggregates::AggregateCountFunction;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::is_builtin_function;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
-use common_functions::srfs::BUILTIN_SET_RETURNING_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
+use common_functions::GENERAL_WINDOW_FUNCTIONS;
 use common_users::UserApiProvider;
 use jsonb::JsonPath;
+use simsearch::SimSearch;
 
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
@@ -86,6 +90,8 @@ use crate::plans::WindowFunc;
 use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncFrameUnits;
+use crate::plans::WindowFuncType;
+use crate::plans::WindowOrderBy;
 use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnBinding;
@@ -113,6 +119,10 @@ pub struct TypeChecker<'a> {
     // true if current expr is inside an aggregate function.
     // This is used to check if there is nested aggregate function.
     in_aggregate_function: bool,
+
+    // true if current expr is inside an window function.
+    // This is used to allow aggregation function in window's aggregate function.
+    in_window_function: bool,
 }
 
 impl<'a> TypeChecker<'a> {
@@ -130,6 +140,7 @@ impl<'a> TypeChecker<'a> {
             metadata,
             aliases,
             in_aggregate_function: false,
+            in_window_function: false,
         }
     }
 
@@ -143,22 +154,18 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     pub async fn resolve(&mut self, expr: &Expr) -> Result<Box<(ScalarExpr, DataType)>> {
-        if let Some(column_binding) = self.bind_context.srfs.get(&expr.to_string()) {
+        if let Some(scalar) = self.bind_context.srfs.get(&expr.to_string()) {
             if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
                 return Err(ErrorCode::SemanticError(
                     "set-returning functions are only allowed in SELECT clause",
-                ));
+                )
+                .set_span(expr.span()));
             }
             // Found a SRF, return it directly.
             // See `Binder::bind_project_set` for more details.
-            return Ok(Box::new((
-                ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    span: expr.span(),
-                    column: column_binding.clone(),
-                }),
-                *column_binding.data_type.clone(),
-            )));
+            return Ok(Box::new((scalar.clone(), scalar.data_type()?)));
         }
 
         let box (scalar, data_type): Box<(ScalarExpr, DataType)> = match expr {
@@ -592,12 +599,52 @@ impl<'a> TypeChecker<'a> {
                 if !is_builtin_function(func_name)
                     && !Self::all_rewritable_scalar_function().contains(&func_name)
                 {
-                    return self.resolve_udf(*span, func_name, args).await;
+                    if let Some(udf) = self.resolve_udf(*span, func_name, args).await? {
+                        return Ok(udf);
+                    } else {
+                        // Function not found, try to find and suggest similar function name.
+                        let all_funcs = BUILTIN_FUNCTIONS
+                            .all_function_names()
+                            .into_iter()
+                            .chain(AggregateFunctionFactory::instance().registered_names())
+                            .chain(
+                                Self::all_rewritable_scalar_function()
+                                    .iter()
+                                    .cloned()
+                                    .map(str::to_string),
+                            );
+                        let mut engine: SimSearch<String> = SimSearch::new();
+                        for func_name in all_funcs {
+                            engine.insert(func_name.clone(), &func_name);
+                        }
+                        let possible_funcs = engine
+                            .search(func_name)
+                            .iter()
+                            .map(|name| format!("'{name}'"))
+                            .collect::<Vec<_>>();
+                        if possible_funcs.is_empty() {
+                            return Err(ErrorCode::UnknownFunction(format!(
+                                "no function matches the given name: {func_name}"
+                            ))
+                            .set_span(*span));
+                        } else {
+                            return Err(ErrorCode::UnknownFunction(format!(
+                                "no function matches the given name: '{func_name}', do you mean {}?",
+                                possible_funcs.join(", ")
+                            ))
+                            .set_span(*span));
+                        }
+                    }
                 }
 
                 let args: Vec<&Expr> = args.iter().collect();
 
-                if BUILTIN_SET_RETURNING_FUNCTIONS.contains(func_name) {
+                // Check assumptions if it is a set returning function
+                if BUILTIN_FUNCTIONS
+                    .get_property(&name.name)
+                    .map(|property| property.kind == FunctionKind::SRF)
+                    .unwrap_or(false)
+                {
                     if matches!(
                         self.bind_context.expr_context,
                         ExprContext::InSetReturningFunction
@@ -605,98 +652,57 @@ impl<'a> TypeChecker<'a> {
                         return Err(ErrorCode::SemanticError(
                             "set-returning functions cannot be nested".to_string(),
                         )
-                        .set_span(expr.span()));
+                        .set_span(*span));
                     }
 
                     if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
                         return Err(ErrorCode::SemanticError(
                             "set-returning functions can only be used in SELECT".to_string(),
                         )
-                        .set_span(expr.span()));
+                        .set_span(*span));
                     }
 
                     // Should have been handled with `BindContext::srfs`
                     return Err(ErrorCode::Internal("Logical error, there is a bug!"));
                 }
 
-                if AggregateFunctionFactory::instance().contains(func_name) {
-                    if self.in_aggregate_function {
-                        // Reset the state
-                        self.in_aggregate_function = false;
-                        return Err(ErrorCode::SemanticError(
-                            "aggregate function calls cannot be nested".to_string(),
-                        )
-                        .set_span(expr.span()));
+                let name = func_name.to_lowercase();
+                if GENERAL_WINDOW_FUNCTIONS.contains(&name.as_str()) {
+                    // general window function
+                    if window.is_none() {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "window function {name} can only be used in window clause"
+                        )));
                     }
-
-                    // Check aggregate function
-                    let params = params
-                        .iter()
-                        .map(|literal| self.resolve_literal(literal).map(|box (value, _)| value))
-                        .collect::<Result<Vec<_>>>()?;
-
-                    self.in_aggregate_function = true;
-                    let mut arguments = vec![];
-                    let mut arg_types = vec![];
-                    for arg in args.iter() {
-                        let box (argument, arg_type) = self.resolve(arg).await?;
-                        arguments.push(argument);
-                        arg_types.push(arg_type);
+                    if !args.is_empty() {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "window function {name} does not have any argument"
+                        )));
                     }
-                    self.in_aggregate_function = false;
-
-                    // Rewrite `xxx(distinct)` to `xxx_distinct(...)`
-                    let (func_name, distinct) =
-                        if func_name.eq_ignore_ascii_case("count") && *distinct {
-                            ("count_distinct", false)
-                        } else {
-                            (func_name, *distinct)
-                        };
-
-                    let func_name = if distinct {
-                        format!("{}_distinct", func_name)
-                    } else {
-                        func_name.to_string()
-                    };
-
-                    let agg_func = AggregateFunctionFactory::instance()
-                        .get(&func_name, params.clone(), arg_types)
-                        .map_err(|e| e.set_span(*span))?;
-
-                    let args = if optimize_remove_count_args(&func_name, distinct, args.as_slice())
-                    {
-                        vec![]
-                    } else {
-                        arguments
-                    };
-
-                    let new_agg_func = AggregateFunction {
-                        display_name: format!("{:#}", expr),
-                        func_name,
-                        distinct: false,
-                        params,
-                        args,
-                        return_type: Box::new(agg_func.return_type()?),
-                    };
-
-                    let data_type = agg_func.return_type()?;
-
-                    if let Some(window) = window {
-                        // window function
-                        let mut partitions = vec![];
-                        for p in window.partition_by.iter() {
-                            let box (part, _part_type) = self.resolve(p).await?;
-                            partitions.push(part);
-                        }
-                        self.resolve_window(
-                            *span,
-                            new_agg_func.clone(),
-                            partitions,
-                            window.window_frame.clone(),
-                            data_type.clone(),
-                        )
+                    let window = window.as_ref().unwrap();
+                    // WindowReference already rewritten by `SelectRewriter` before.
+                    let window = window.as_window_spec().unwrap();
+                    let display_name = format!("{:#}", expr);
+                    let func = WindowFuncType::from_name(&name)?;
+                    self.resolve_window(*span, display_name, window, func)
                         .await?
+                } else if AggregateFunctionFactory::instance().contains(&name) {
+                    let in_window = self.in_window_function;
+                    self.in_window_function = self.in_window_function || window.is_some();
+                    let (new_agg_func, data_type) = self
+                        .resolve_aggregate_function(*span, &name, expr, *distinct, params, &args)
+                        .await?;
+                    self.in_window_function = in_window;
+                    if let Some(window) = window {
+                        // aggregate window function
+                        let display_name = format!("{:#}", expr);
+                        let func = WindowFuncType::Aggregate(new_agg_func);
+                        // WindowReference already rewritten by `SelectRewriter` before.
+                        let window = window.as_window_spec().unwrap();
+                        self.resolve_window(*span, display_name, window, func)
+                            .await?
                     } else {
+                        // aggregate function
                         Box::new((new_agg_func.into(), data_type))
                     }
                 } else {
@@ -706,7 +712,7 @@ impl<'a> TypeChecker<'a> {
                         .map(|literal| match literal {
                             Literal::UInt64(n) => Ok(*n as usize),
                             lit => Err(ErrorCode::SemanticError(format!(
-                                "Invalid parameter {lit} for scalar function"
+                                "invalid parameter {lit} for scalar function"
                             ))
                             .set_span(*span)),
                         })
@@ -904,71 +910,249 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    #[async_recursion::async_recursion]
-    pub async fn resolve_window(
+    #[async_backtrace::framed]
+    async fn resolve_window(
         &mut self,
-        _span: Span,
-        agg_func: AggregateFunction,
-        partitions: Vec<ScalarExpr>,
-        window_frame: Option<WindowFrame>,
-        return_type: DataType,
+        span: Span,
+        display_name: String,
+        window: &WindowSpec,
+        func: WindowFuncType,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let frame = window_frame.unwrap();
-        let units = match frame.units.clone() {
-            WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,
-            WindowFrameUnits::Range => WindowFuncFrameUnits::Range,
-        };
-        let start = match frame.start_bound {
-            WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
-            WindowFrameBound::Preceding(f) => {
-                if let Some(box expr) = f {
-                    let box (result_expr, _) = self.resolve(&expr).await?;
-                    WindowFuncFrameBound::Preceding(Some(Box::new(result_expr)))
-                } else {
-                    WindowFuncFrameBound::Preceding(None)
-                }
-            }
-            WindowFrameBound::Following(f) => {
-                if let Some(box expr) = f {
-                    let box (result_expr, _) = self.resolve(&expr).await?;
-                    WindowFuncFrameBound::Following(Some(Box::new(result_expr)))
-                } else {
-                    WindowFuncFrameBound::Following(None)
-                }
-            }
-        };
+        if self.in_window_function {
+            // Reset the state
+            self.in_window_function = false;
+            return Err(ErrorCode::SemanticError(
+                "window function calls cannot be nested".to_string(),
+            )
+            .set_span(span));
+        }
+        let mut partitions = Vec::with_capacity(window.partition_by.len());
+        for p in window.partition_by.iter() {
+            let box (part, _part_type) = self.resolve(p).await?;
+            partitions.push(part);
+        }
+        let mut order_by = Vec::with_capacity(window.order_by.len());
 
-        let end = match frame.end_bound {
-            WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
-            WindowFrameBound::Preceding(f) => {
-                if let Some(box expr) = f {
-                    let box (result_expr, _) = self.resolve(&expr).await?;
-                    WindowFuncFrameBound::Preceding(Some(Box::new(result_expr)))
-                } else {
-                    WindowFuncFrameBound::Preceding(None)
-                }
-            }
-            WindowFrameBound::Following(f) => {
-                if let Some(box expr) = f {
-                    let box (result_expr, _) = self.resolve(&expr).await?;
-                    WindowFuncFrameBound::Following(Some(Box::new(result_expr)))
-                } else {
-                    WindowFuncFrameBound::Following(None)
-                }
-            }
-        };
+        let is_range = window
+            .window_frame
+            .as_ref()
+            .map(|f| f.units.is_range())
+            .unwrap_or(false);
 
+        for o in window.order_by.iter() {
+            let box (mut order, _) = self.resolve(&o.expr).await?;
+            if is_range {
+                // Change the item to Int64 type to compute offset for `RANGE`.
+                // TODO: find a better way. Maybe use generic in `TransformWindow` preocessor.
+                order = CastExpr {
+                    span: order.span(),
+                    is_try: false,
+                    argument: Box::new(order),
+                    target_type: Box::new(DataType::Number(NumberDataType::Int64)),
+                }
+                .into();
+            }
+
+            order_by.push(WindowOrderBy {
+                expr: order,
+                asc: o.asc,
+                nulls_first: o.nulls_first,
+            })
+        }
+        let frame = Self::check_frame_bound(span, order_by.len(), window.window_frame.clone())?;
+        let data_type = func.return_type();
         let window_func = WindowFunc {
-            agg_func,
+            display_name,
+            func,
             partition_by: partitions,
-            frame: WindowFuncFrame { units, start, end },
+            order_by,
+            frame,
+        };
+        Ok(Box::new((window_func.into(), data_type)))
+    }
+
+    // just support integer
+    #[inline]
+    fn resolve_window_frame(expr: &Expr) -> Result<usize> {
+        match expr {
+            Expr::Literal {
+                lit: Literal::UInt64(value),
+                ..
+            } => Ok(*value as usize),
+            _ => Err(ErrorCode::SemanticError(
+                "Only unsigned integer literals are allowed in window frame specification"
+                    .to_string(),
+            )),
+        }
+    }
+
+    fn check_frame_bound(
+        span: Span,
+        order_by_len: usize,
+        window_frame: Option<WindowFrame>,
+    ) -> Result<WindowFuncFrame> {
+        if order_by_len == 0 && window_frame.is_none() {
+            return Ok(WindowFuncFrame {
+                units: WindowFuncFrameUnits::Range,
+                start_bound: WindowFuncFrameBound::Preceding(None),
+                end_bound: WindowFuncFrameBound::Following(None),
+            });
+        }
+
+        let (units, start, end) = if let Some(frame) = window_frame {
+            if let WindowFrameUnits::Range = frame.units {
+                if order_by_len != 1 {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "The RANGE OFFSET window frame requires exactly one ORDER BY column, {order_by_len} given."
+                    )));
+                }
+            }
+            let units = match frame.units {
+                WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,
+                WindowFrameUnits::Range => WindowFuncFrameUnits::Range,
+            };
+            let start = match frame.start_bound {
+                WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
+                WindowFrameBound::Preceding(f) => {
+                    if let Some(box expr) = f {
+                        WindowFuncFrameBound::Preceding(Some(Self::resolve_window_frame(&expr)?))
+                    } else {
+                        WindowFuncFrameBound::Preceding(None)
+                    }
+                }
+                WindowFrameBound::Following(f) => {
+                    if let Some(box expr) = f {
+                        WindowFuncFrameBound::Following(Some(Self::resolve_window_frame(&expr)?))
+                    } else {
+                        WindowFuncFrameBound::Following(None)
+                    }
+                }
+            };
+
+            let end = match frame.end_bound {
+                WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
+                WindowFrameBound::Preceding(f) => {
+                    if let Some(box expr) = f {
+                        WindowFuncFrameBound::Preceding(Some(Self::resolve_window_frame(&expr)?))
+                    } else {
+                        WindowFuncFrameBound::Preceding(None)
+                    }
+                }
+                WindowFrameBound::Following(f) => {
+                    if let Some(box expr) = f {
+                        WindowFuncFrameBound::Following(Some(Self::resolve_window_frame(&expr)?))
+                    } else {
+                        WindowFuncFrameBound::Following(None)
+                    }
+                }
+            };
+            (units, start, end)
+        } else {
+            let units = WindowFuncFrameUnits::Range;
+            let start = WindowFuncFrameBound::Preceding(None);
+            let end = WindowFuncFrameBound::CurrentRow;
+            (units, start, end)
         };
 
-        Ok(Box::new((window_func.into(), return_type)))
+        if start > end {
+            return Err(ErrorCode::SemanticError(format!(
+                "frame semantic error, start:{:?}, end:{:?}",
+                start, end
+            ))
+            .set_span(span));
+        }
+
+        Ok(WindowFuncFrame {
+            units,
+            start_bound: start,
+            end_bound: end,
+        })
+    }
+
+    /// Resolve aggregation function call.
+    #[async_backtrace::framed]
+    async fn resolve_aggregate_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        expr: &Expr,
+        distinct: bool,
+        params: &[Literal],
+        args: &[&Expr],
+    ) -> Result<(AggregateFunction, DataType)> {
+        if self.in_aggregate_function {
+            if self.in_window_function {
+                // The aggregate function can be in window function call,
+                // but it cannot be nested.
+                // E.g. `select sum(sum(x)) over (partition by y) from t group by y;` is allowed.
+                // But `select sum(sum(sum(x))) from t;` is not allowed.
+                self.in_window_function = false;
+            } else {
+                // Reset the state
+                self.in_aggregate_function = false;
+                return Err(ErrorCode::SemanticError(
+                    "aggregate function calls cannot be nested".to_string(),
+                )
+                .set_span(expr.span()));
+            }
+        }
+
+        // Check aggregate function
+        let params = params
+            .iter()
+            .map(|literal| self.resolve_literal(literal).map(|box (value, _)| value))
+            .collect::<Result<Vec<_>>>()?;
+
+        self.in_aggregate_function = true;
+        let mut arguments = vec![];
+        let mut arg_types = vec![];
+        for arg in args.iter() {
+            let box (argument, arg_type) = self.resolve(arg).await?;
+            arguments.push(argument);
+            arg_types.push(arg_type);
+        }
+        self.in_aggregate_function = false;
+
+        // Rewrite `xxx(distinct)` to `xxx_distinct(...)`
+        let (func_name, distinct) = if func_name.eq_ignore_ascii_case("count") && distinct {
+            ("count_distinct", false)
+        } else {
+            (func_name, distinct)
+        };
+
+        let func_name = if distinct {
+            format!("{}_distinct", func_name)
+        } else {
+            func_name.to_string()
+        };
+
+        let agg_func = AggregateFunctionFactory::instance()
+            .get(&func_name, params.clone(), arg_types)
+            .map_err(|e| e.set_span(span))?;
+
+        let args = if optimize_remove_count_args(&func_name, distinct, args) {
+            vec![]
+        } else {
+            arguments
+        };
+
+        let display_name = format!("{:#}", expr);
+        let new_agg_func = AggregateFunction {
+            display_name,
+            func_name,
+            distinct: false,
+            params,
+            args,
+            return_type: Box::new(agg_func.return_type()?),
+        };
+
+        let data_type = agg_func.return_type()?;
+
+        Ok((new_agg_func, data_type))
     }
 
     /// Resolve function call.
-    #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     pub async fn resolve_function(
         &mut self,
         span: Span,
@@ -1036,7 +1220,7 @@ impl<'a> TypeChecker<'a> {
             .await
     }
 
-    #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     pub async fn resolve_scalar_function_call(
         &mut self,
         span: Span,
@@ -1058,7 +1242,7 @@ impl<'a> TypeChecker<'a> {
         let registry = &BUILTIN_FUNCTIONS;
         let expr = type_check::check(&raw_expr, registry)?;
 
-        if !expr.is_deterministic() {
+        if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
             self.ctx.set_cacheable(false);
         }
 
@@ -1078,6 +1262,7 @@ impl<'a> TypeChecker<'a> {
     /// would be transformed into `FunctionCall`, except comparison
     /// expressions, conjunction(`AND`) and disjunction(`OR`).
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     pub async fn resolve_binary_op(
         &mut self,
         span: Span,
@@ -1178,6 +1363,7 @@ impl<'a> TypeChecker<'a> {
 
     /// Resolve unary expressions.
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     pub async fn resolve_unary_op(
         &mut self,
         span: Span,
@@ -1215,6 +1401,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     pub async fn resolve_extract_expr(
         &mut self,
         span: Span,
@@ -1256,6 +1443,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     pub async fn resolve_date_add(
         &mut self,
         span: Span,
@@ -1282,6 +1470,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     pub async fn resolve_date_trunc(
         &mut self,
         span: Span,
@@ -1349,6 +1538,7 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn resolve_subquery(
         &mut self,
         typ: SubqueryType,
@@ -1440,11 +1630,13 @@ impl<'a> TypeChecker<'a> {
             "is_null",
             "coalesce",
             "last_query_id",
-            "unnest",
+            "ai_embedding_vector",
+            "ai_text_completion",
         ]
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     async fn try_rewrite_scalar_function(
         &mut self,
         span: Span,
@@ -1638,11 +1830,56 @@ impl<'a> TypeChecker<'a> {
                     Err(e) => Err(e),
                 })
             }
+            ("ai_embedding_vector", args) => {
+                // ai_embedding_vector(prompt) -> embedding_vector(prompt, api_key)
+                if args.len() != 1 {
+                    return Some(Err(ErrorCode::BadArguments(
+                        "ai_embedding_vector(STRING) only accepts one STRING argument",
+                    )
+                    .set_span(span)));
+                }
+
+                // Prompt.
+                let arg1 = args[0];
+                // API key.
+                let arg2 = &Expr::Literal {
+                    span,
+                    lit: Literal::String(GlobalConfig::instance().query.openai_api_key.clone()),
+                };
+
+                Some(
+                    self.resolve_function(span, "embedding_vector", vec![], &[arg1, arg2])
+                        .await,
+                )
+            }
+            ("ai_text_completion", args) => {
+                // ai_text_completion(prompt) -> text_completion(prompt, api_key)
+                if args.len() != 1 {
+                    return Some(Err(ErrorCode::BadArguments(
+                        "ai_text_completion(STRING) only accepts one STRING argument",
+                    )
+                    .set_span(span)));
+                }
+
+                // Prompt.
+                let arg1 = args[0];
+                // API key.
+                let arg2 = &Expr::Literal {
+                    span,
+                    lit: Literal::String(GlobalConfig::instance().query.openai_api_key.clone()),
+                };
+
+                Some(
+                    self.resolve_function(span, "text_completion", vec![], &[arg1, arg2])
+                        .await,
+                )
+            }
             _ => None,
         }
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     async fn resolve_trim_function(
         &mut self,
         span: Span,
@@ -1735,6 +1972,7 @@ impl<'a> TypeChecker<'a> {
     // TODO(leiysky): use an array builder function instead, since we should allow declaring
     // an array with variable as element.
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     async fn resolve_array(
         &mut self,
         span: Span,
@@ -1751,6 +1989,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     async fn resolve_array_sort(
         &mut self,
         span: Span,
@@ -1770,6 +2009,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     async fn resolve_map(
         &mut self,
         span: Span,
@@ -1796,6 +2036,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     async fn resolve_tuple(
         &mut self,
         span: Span,
@@ -1812,55 +2053,58 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     async fn resolve_udf(
         &mut self,
         span: Span,
         func_name: &str,
         arguments: &[Expr],
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
+    ) -> Result<Option<Box<(ScalarExpr, DataType)>>> {
         let udf = UserApiProvider::instance()
             .get_udf(self.ctx.get_tenant().as_str(), func_name)
             .await;
-        if let Ok(udf) = udf {
-            let parameters = udf.parameters;
-            if parameters.len() != arguments.len() {
-                return Err(ErrorCode::SyntaxException(format!(
-                    "Require {} parameters, but got: {}",
-                    parameters.len(),
-                    arguments.len()
-                ))
-                .set_span(span));
-            }
-            let settings = self.ctx.get_settings();
-            let sql_dialect = settings.get_sql_dialect()?;
-            let sql_tokens = tokenize_sql(udf.definition.as_str())?;
-            let expr = parse_expr(&sql_tokens, sql_dialect)?;
-            let mut args_map = HashMap::new();
-            arguments.iter().enumerate().for_each(|(idx, argument)| {
-                if let Some(parameter) = parameters.get(idx) {
-                    args_map.insert(parameter, (*argument).clone());
-                }
-            });
-            let udf_expr = self
-                .clone_expr_with_replacement(&expr, &|nest_expr| {
-                    if let Expr::ColumnRef { column, .. } = nest_expr {
-                        if let Some(arg) = args_map.get(&column.name) {
-                            return Ok(Some(arg.clone()));
-                        }
-                    }
-                    Ok(None)
-                })
-                .map_err(|e| e.set_span(span))?;
-            self.resolve(&udf_expr).await
+
+        let udf = if let Ok(udf) = udf {
+            udf
         } else {
-            Err(ErrorCode::UnknownFunction(format!(
-                "no function matches the given name: {func_name}"
+            return Ok(None);
+        };
+
+        let parameters = udf.parameters;
+        if parameters.len() != arguments.len() {
+            return Err(ErrorCode::SyntaxException(format!(
+                "Require {} parameters, but got: {}",
+                parameters.len(),
+                arguments.len()
             ))
-            .set_span(span))
+            .set_span(span));
         }
+        let settings = self.ctx.get_settings();
+        let sql_dialect = settings.get_sql_dialect()?;
+        let sql_tokens = tokenize_sql(udf.definition.as_str())?;
+        let expr = parse_expr(&sql_tokens, sql_dialect)?;
+        let mut args_map = HashMap::new();
+        arguments.iter().enumerate().for_each(|(idx, argument)| {
+            if let Some(parameter) = parameters.get(idx) {
+                args_map.insert(parameter, (*argument).clone());
+            }
+        });
+        let udf_expr = self
+            .clone_expr_with_replacement(&expr, &|nest_expr| {
+                if let Expr::ColumnRef { column, .. } = nest_expr {
+                    if let Some(arg) = args_map.get(&column.name) {
+                        return Ok(Some(arg.clone()));
+                    }
+                }
+                Ok(None)
+            })
+            .map_err(|e| e.set_span(span))?;
+
+        Ok(Some(self.resolve(&udf_expr).await?))
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     async fn resolve_map_access(
         &mut self,
         expr: &Expr,
@@ -1966,6 +2210,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     async fn resolve_tuple_map_access_pushdown(
         &mut self,
         span: Span,

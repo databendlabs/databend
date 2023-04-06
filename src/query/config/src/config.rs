@@ -103,7 +103,7 @@ pub struct Config {
 
     /// Note: Legacy Config API
     ///
-    /// When setting its all feilds to empty strings, it will be ignored
+    /// When setting its all fields to empty strings, it will be ignored
     ///
     /// external catalog config.
     /// - Later, catalog information SHOULD be kept in KV Service
@@ -1151,6 +1151,12 @@ pub struct QueryConfig {
     #[clap(long, default_value = "60")]
     pub http_handler_result_timeout_secs: u64,
 
+    #[clap(long, default_value = "127.0.0.1")]
+    pub flight_sql_handler_host: String,
+
+    #[clap(long, default_value = "8900")]
+    pub flight_sql_handler_port: u16,
+
     #[clap(long, default_value = "127.0.0.1:9090")]
     pub flight_api_address: String,
 
@@ -1168,6 +1174,12 @@ pub struct QueryConfig {
 
     #[clap(long, default_value_t)]
     pub http_handler_tls_server_root_ca_cert: String,
+
+    #[clap(long, default_value_t)]
+    pub flight_sql_tls_server_cert: String,
+
+    #[clap(long, default_value_t)]
+    pub flight_sql_tls_server_key: String,
 
     #[clap(long, default_value_t)]
     pub api_tls_server_cert: String,
@@ -1327,6 +1339,8 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             http_handler_port: self.http_handler_port,
             http_handler_result_timeout_secs: self.http_handler_result_timeout_secs,
             flight_api_address: self.flight_api_address,
+            flight_sql_handler_host: self.flight_sql_handler_host,
+            flight_sql_handler_port: self.flight_sql_handler_port,
             admin_api_address: self.admin_api_address,
             metric_api_address: self.metric_api_address,
             http_handler_tls_server_cert: self.http_handler_tls_server_cert,
@@ -1335,6 +1349,8 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             api_tls_server_cert: self.api_tls_server_cert,
             api_tls_server_key: self.api_tls_server_key,
             api_tls_server_root_ca_cert: self.api_tls_server_root_ca_cert,
+            flight_sql_tls_server_cert: self.flight_sql_tls_server_cert,
+            flight_sql_tls_server_key: self.flight_sql_tls_server_key,
             rpc_tls_server_cert: self.rpc_tls_server_cert,
             rpc_tls_server_key: self.rpc_tls_server_key,
             rpc_tls_query_server_root_ca_cert: self.rpc_tls_query_server_root_ca_cert,
@@ -1386,6 +1402,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             http_handler_port: inner.http_handler_port,
             http_handler_result_timeout_secs: inner.http_handler_result_timeout_secs,
             flight_api_address: inner.flight_api_address,
+            flight_sql_handler_host: inner.flight_sql_handler_host,
+            flight_sql_handler_port: inner.flight_sql_handler_port,
             admin_api_address: inner.admin_api_address,
             metric_api_address: inner.metric_api_address,
             http_handler_tls_server_cert: inner.http_handler_tls_server_cert,
@@ -1394,6 +1412,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             api_tls_server_cert: inner.api_tls_server_cert,
             api_tls_server_key: inner.api_tls_server_key,
             api_tls_server_root_ca_cert: inner.api_tls_server_root_ca_cert,
+            flight_sql_tls_server_cert: inner.flight_sql_tls_server_cert,
+            flight_sql_tls_server_key: inner.flight_sql_tls_server_key,
             rpc_tls_server_cert: inner.rpc_tls_server_cert,
             rpc_tls_server_key: inner.rpc_tls_server_key,
             rpc_tls_query_server_root_ca_cert: inner.rpc_tls_query_server_root_ca_cert,
@@ -1627,6 +1647,10 @@ pub struct MetaConfig {
     #[serde(alias = "auto_sync_interval")]
     pub auto_sync_interval: u64,
 
+    #[clap(long = "unhealth-endpoint-evict-time", default_value = "120")]
+    #[serde(alias = "unhealth_endpoint_evict_time")]
+    pub unhealth_endpoint_evict_time: u64,
+
     /// Certificate for client to identify meta rpc serve
     #[clap(long = "meta-rpc-tls-meta-server-root-ca-cert", default_value_t)]
     pub rpc_tls_meta_server_root_ca_cert: String,
@@ -1655,6 +1679,7 @@ impl TryInto<InnerMetaConfig> for MetaConfig {
             password: self.password,
             client_timeout_in_second: self.client_timeout_in_second,
             auto_sync_interval: self.auto_sync_interval,
+            unhealth_endpoint_evict_time: self.unhealth_endpoint_evict_time,
             rpc_tls_meta_server_root_ca_cert: self.rpc_tls_meta_server_root_ca_cert,
             rpc_tls_meta_service_domain_name: self.rpc_tls_meta_service_domain_name,
         })
@@ -1670,6 +1695,7 @@ impl From<InnerMetaConfig> for MetaConfig {
             password: inner.password,
             client_timeout_in_second: inner.client_timeout_in_second,
             auto_sync_interval: inner.auto_sync_interval,
+            unhealth_endpoint_evict_time: inner.unhealth_endpoint_evict_time,
             rpc_tls_meta_server_root_ca_cert: inner.rpc_tls_meta_server_root_ca_cert,
             rpc_tls_meta_service_domain_name: inner.rpc_tls_meta_service_domain_name,
         }
@@ -1685,6 +1711,10 @@ impl Debug for MetaConfig {
             .field("embedded_dir", &self.embedded_dir)
             .field("client_timeout_in_second", &self.client_timeout_in_second)
             .field("auto_sync_interval", &self.auto_sync_interval)
+            .field(
+                "unhealth_endpoint_evict_time",
+                &self.unhealth_endpoint_evict_time,
+            )
             .field(
                 "rpc_tls_meta_server_root_ca_cert",
                 &self.rpc_tls_meta_server_root_ca_cert,

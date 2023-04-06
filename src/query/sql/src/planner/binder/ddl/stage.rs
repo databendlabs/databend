@@ -31,6 +31,7 @@ use crate::plans::Plan;
 use crate::plans::RemoveStagePlan;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_remove_stage(
         &mut self,
         location: &str,
@@ -47,6 +48,7 @@ impl Binder {
         Ok(Plan::RemoveStage(Box::new(plan_node)))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_create_stage(
         &mut self,
         stmt: &CreateStageStmt,
@@ -113,6 +115,7 @@ impl Binder {
         })))
     }
 
+    #[async_backtrace::framed]
     pub(crate) async fn try_resolve_file_format(
         &self,
         options: &BTreeMap<String, String>,

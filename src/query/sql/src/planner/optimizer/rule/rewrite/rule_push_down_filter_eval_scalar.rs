@@ -35,10 +35,12 @@ use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::WindowFunc;
+use crate::plans::WindowFuncType;
+use crate::plans::WindowOrderBy;
 
 pub struct RulePushDownFilterEvalScalar {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RulePushDownFilterEvalScalar {
@@ -50,7 +52,7 @@ impl RulePushDownFilterEvalScalar {
             //   EvalScalar
             //    \
             //     *
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Filter,
                 }
@@ -67,7 +69,7 @@ impl RulePushDownFilterEvalScalar {
                         .into(),
                     ),
                 ),
-            ),
+            )],
         }
     }
 
@@ -162,27 +164,31 @@ impl RulePushDownFilterEvalScalar {
                     }))
                 }
                 ScalarExpr::WindowFunction(window) => {
-                    let args = window
-                        .agg_func
-                        .args
-                        .iter()
-                        .map(|arg| {
-                            Self::replace_predicate(
-                                arg,
-                                items,
-                                eval_scalar_columns,
-                                eval_scalar_child_columns,
-                            )
-                        })
-                        .collect::<Result<Vec<ScalarExpr>>>()?;
+                    let func = match &window.func {
+                        WindowFuncType::Aggregate(agg) => {
+                            let args = agg
+                                .args
+                                .iter()
+                                .map(|arg| {
+                                    Self::replace_predicate(
+                                        arg,
+                                        items,
+                                        eval_scalar_columns,
+                                        eval_scalar_child_columns,
+                                    )
+                                })
+                                .collect::<Result<Vec<ScalarExpr>>>()?;
 
-                    let agg_func = AggregateFunction {
-                        func_name: window.agg_func.func_name.clone(),
-                        distinct: window.agg_func.distinct,
-                        params: window.agg_func.params.clone(),
-                        args,
-                        return_type: window.agg_func.return_type.clone(),
-                        display_name: window.agg_func.display_name.clone(),
+                            WindowFuncType::Aggregate(AggregateFunction {
+                                func_name: agg.func_name.clone(),
+                                distinct: agg.distinct,
+                                params: agg.params.clone(),
+                                args,
+                                return_type: agg.return_type.clone(),
+                                display_name: agg.display_name.clone(),
+                            })
+                        }
+                        func => func.clone(),
                     };
 
                     let partition_by = window
@@ -198,9 +204,28 @@ impl RulePushDownFilterEvalScalar {
                         })
                         .collect::<Result<Vec<ScalarExpr>>>()?;
 
+                    let order_by = window
+                        .order_by
+                        .iter()
+                        .map(|arg| {
+                            Ok(WindowOrderBy {
+                                asc: arg.asc,
+                                nulls_first: arg.nulls_first,
+                                expr: Self::replace_predicate(
+                                    &arg.expr,
+                                    items,
+                                    eval_scalar_columns,
+                                    eval_scalar_child_columns,
+                                )?,
+                            })
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+
                     Ok(ScalarExpr::WindowFunction(WindowFunc {
-                        agg_func,
+                        display_name: window.display_name.clone(),
+                        func,
                         partition_by,
+                        order_by,
                         frame: window.frame.clone(),
                     }))
                 }
@@ -333,7 +358,7 @@ impl Rule for RulePushDownFilterEvalScalar {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }

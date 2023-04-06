@@ -24,6 +24,9 @@ io-uring = [
 
 enable-histogram = ["common-metrics/enable-histogram"]
 
+# Enable defensive check when accessing raft store.
+raft-store-defensive = []
+
 [dependencies]
 # Workspace dependencies
 common-arrow = { path = "../../common/arrow" }
@@ -40,7 +43,7 @@ common-meta-types = { path = "../types" }
 common-metrics = { path = "../../common/metrics" }
 common-tracing = { path = "../../common/tracing" }
 
-# Github dependencies
+# GitHub dependencies
 sled = { workspace = true }
 
 # Crates.io dependencies

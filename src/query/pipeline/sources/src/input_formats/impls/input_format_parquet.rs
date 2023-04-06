@@ -128,6 +128,7 @@ fn col_offset(meta: &ColumnChunkMetaData) -> i64 {
 
 #[async_trait::async_trait]
 impl InputFormat for InputFormatParquet {
+    #[async_backtrace::framed]
     async fn get_splits(
         &self,
         file_infos: Vec<StageFileInfo>,
@@ -143,6 +144,7 @@ impl InputFormat for InputFormatParquet {
         Self::make_splits(file_infos, metas)
     }
 
+    #[async_backtrace::framed]
     async fn infer_schema(&self, path: &str, op: &Operator) -> Result<TableSchemaRef> {
         let mut reader = op.reader(path).await?;
         let file_meta = read_metadata_async(&mut reader).await?;
@@ -169,6 +171,7 @@ impl InputFormatPipe for ParquetFormatPipe {
     type AligningState = AligningState;
     type BlockBuilder = ParquetBlockBuilder;
 
+    #[async_backtrace::framed]
     async fn read_split(
         ctx: Arc<InputContext>,
         split_info: Arc<SplitInfo>,
@@ -263,6 +266,7 @@ impl RowGroupInMemory {
         })
     }
 
+    #[async_backtrace::framed]
     async fn read_field_async(
         op: Operator,
         path: String,
@@ -277,6 +281,7 @@ impl RowGroupInMemory {
         Ok((index, cols))
     }
 
+    #[async_backtrace::framed]
     async fn read_async(
         split_info: Arc<SplitInfo>,
         operator: Operator,
@@ -517,6 +522,7 @@ fn get_field_columns<'a>(
         .collect()
 }
 
+#[async_backtrace::framed]
 async fn read_single_column_async<R>(
     reader: &mut R,
     meta: &ColumnChunkMetaData,

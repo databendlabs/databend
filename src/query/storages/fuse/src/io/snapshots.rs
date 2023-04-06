@@ -65,7 +65,7 @@ pub enum ListSnapshotLiteOption {
 
 struct SnapshotLiteExtended {
     snapshot_lite: TableSnapshotLite,
-    segment_locations: HashMap<Location, HashSet<SnapshotId>>,
+    segment_locations: Vec<Location>,
 }
 
 impl SnapshotsIO {
@@ -77,6 +77,7 @@ impl SnapshotsIO {
         }
     }
 
+    #[async_backtrace::framed]
     async fn read_snapshot(
         snapshot_location: String,
         format_version: u64,
@@ -92,6 +93,7 @@ impl SnapshotsIO {
         reader.read(&load_params).await
     }
 
+    #[async_backtrace::framed]
     async fn read_snapshot_lite(
         snapshot_location: String,
         format_version: u64,
@@ -121,8 +123,7 @@ impl SnapshotsIO {
                 "The timestamp of snapshot need less than the min_snapshot_timestamp",
             ));
         }
-        let snapshot_id = snapshot.snapshot_id;
-        let mut segment_locations: HashMap<Location, HashSet<SnapshotId>> = HashMap::new();
+        let mut segment_locations = Vec::new();
         if let ListSnapshotLiteOption::NeedSegmentsWithExclusion(filter) = list_options {
             // collects segments, and the snapshots that reference them.
             for segment_location in &snapshot.segments {
@@ -131,12 +132,7 @@ impl SnapshotsIO {
                         continue;
                     }
                 }
-                segment_locations
-                    .entry(segment_location.clone())
-                    .and_modify(|v| {
-                        v.insert(snapshot_id);
-                    })
-                    .or_insert_with(|| HashSet::from_iter(vec![snapshot_id]));
+                segment_locations.push(segment_location.clone());
             }
         }
 
@@ -147,6 +143,7 @@ impl SnapshotsIO {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
+    #[async_backtrace::framed]
     async fn read_snapshot_lites(
         &self,
         snapshot_files: &[String],
@@ -181,6 +178,7 @@ impl SnapshotsIO {
 
     // Read all the table statistic files by the root file(exclude the root file).
     // limit: read how many table statistic files
+    #[async_backtrace::framed]
     pub async fn read_table_statistic_files(
         &self,
         root_ts_file: &str,
@@ -194,6 +192,7 @@ impl SnapshotsIO {
     }
 
     // read all the precedent snapshots of given `root_snapshot`
+    #[async_backtrace::framed]
     pub async fn read_chained_snapshot_lites(
         &self,
         location_generator: TableMetaLocationGenerator,
@@ -215,6 +214,7 @@ impl SnapshotsIO {
     // Read all the snapshots by the root file.
     // limit: limits the number of snapshot files listed
     // with_segment_locations: if true will get the segments of the snapshot
+    #[async_backtrace::framed]
     pub async fn read_snapshot_lites_ext<T>(
         &self,
         root_snapshot_file: String,
@@ -250,12 +250,15 @@ impl SnapshotsIO {
                 .await?;
 
             for snapshot_lite_extend in results.into_iter().flatten() {
+                let snapshot_id = snapshot_lite_extend.snapshot_lite.snapshot_id;
                 snapshot_lites.push(snapshot_lite_extend.snapshot_lite);
-                for (k, v) in snapshot_lite_extend.segment_locations.into_iter() {
+                for location in snapshot_lite_extend.segment_locations.into_iter() {
                     segment_location_with_index
-                        .entry(k)
-                        .and_modify(|val| val.extend(v.iter()))
-                        .or_insert(v);
+                        .entry(location)
+                        .and_modify(|val| {
+                            val.insert(snapshot_id);
+                        })
+                        .or_insert(HashSet::from([snapshot_id]));
                 }
             }
 
@@ -319,6 +322,7 @@ impl SnapshotsIO {
         (chained_snapshot_lites, snapshot_map.into_values().collect())
     }
 
+    #[async_backtrace::framed]
     async fn list_files(
         &self,
         prefix: &str,

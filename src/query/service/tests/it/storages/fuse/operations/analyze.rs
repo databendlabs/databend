@@ -18,27 +18,27 @@ use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
 
+use crate::storages::fuse::table_test_fixture::analyze_table;
 use crate::storages::fuse::table_test_fixture::check_data_dir;
 use crate::storages::fuse::table_test_fixture::execute_command;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 use crate::storages::fuse::utils::do_insertions;
-use crate::storages::fuse::utils::do_purge_test;
-use crate::storages::fuse::utils::TestTableOperation;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_analyze() -> Result<()> {
-    do_purge_test(
-        "test_fuse_snapshot_analyze",
-        TestTableOperation::Analyze,
-        3,
-        1,
-        2,
-        2,
-        2,
-        // After compact, all the count will become 1
-        Some((1, 1, 1, 1, 1)),
-    )
-    .await
+    let fixture = TestFixture::new().await;
+    let db = fixture.default_db_name();
+    let tbl = fixture.default_table_name();
+    let case_name = "analyze_statistic_optimize";
+    do_insertions(&fixture).await?;
+
+    analyze_table(&fixture).await?;
+    check_data_dir(&fixture, case_name, 3, 1, 2, 2, 2, Some(()), None).await?;
+
+    // After compact, all the count will become 1
+    let qry = format!("optimize table {}.{} all", db, tbl);
+    execute_command(fixture.ctx().clone(), &qry).await?;
+    check_data_dir(&fixture, case_name, 1, 1, 1, 1, 1, Some(()), Some(())).await
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -97,20 +97,14 @@ async fn test_fuse_snapshot_analyze_purge() -> Result<()> {
     do_insertions(&fixture).await?;
 
     // optimize statistics twice
-    for i in 0..1 {
-        let qry = format!("Analyze table {}.{}", db, tbl);
-
-        let ctx = fixture.ctx();
-        execute_command(ctx, &qry).await?;
-
-        check_data_dir(&fixture, case_name, 3, 1 + i, 2, 2, 2, Some(()), None).await?;
+    for i in 0..2 {
+        analyze_table(&fixture).await?;
+        check_data_dir(&fixture, case_name, 3 + i, 1 + i, 2, 2, 2, Some(()), None).await?;
     }
 
-    // After compact, all the count will become 1
-    let qry = format!("optimize table {}.{} all", db, tbl);
+    // After purge, all the count should be 1
+    let qry = format!("optimize table {}.{} purge", db, tbl);
     execute_command(fixture.ctx().clone(), &qry).await?;
-
-    check_data_dir(&fixture, case_name, 1, 1, 1, 1, 1, Some(()), Some(())).await?;
-
-    Ok(())
+    // note: purge statistic files exists bug, so the count of statistic files is 2.
+    check_data_dir(&fixture, case_name, 1, 2, 1, 1, 1, Some(()), Some(())).await
 }

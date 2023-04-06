@@ -22,7 +22,7 @@ use crate::Incompatible;
 ///
 /// Every time fields are added/removed into/from data types in this crate:
 /// - Add a new line to this list to describe what changed.
-/// - Add a test case to ensure protobuf message serialized by this this version can be loaded,
+/// - Add a test case to ensure protobuf message serialized by this version can be loaded,
 ///   similar to: test_user_stage_fs_v6() in tests/it/user_stage.rs;
 ///
 /// `VER` is the current metadata version and is automatically set to the last version.
@@ -60,6 +60,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (28, "2023-02-13: Add: user.proto/UserDefinedFileFormat"),
     (29, "2023-02-23: Add: metadata.proto/DataType EmptyMap types", ),
     (30, "2023-02-21: Add: config.proto/WebhdfsStorageConfig; Modify: user.proto/UserStageInfo::StageStorage", ),
+    (31, "2023-02-21: Add: CopyOptions::max_files", ),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

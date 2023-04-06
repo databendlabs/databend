@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use common_base::base::ProgressValues;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::InternalColumn;
 use common_catalog::plan::PartStatistics;
@@ -31,6 +32,7 @@ use common_expression::TableField;
 #[async_trait::async_trait]
 pub trait ToReadDataSourcePlan {
     /// Real read_plan to access partitions/push_downs
+    #[async_backtrace::framed]
     async fn read_plan(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -51,6 +53,7 @@ pub trait ToReadDataSourcePlan {
 
 #[async_trait::async_trait]
 impl ToReadDataSourcePlan for dyn Table {
+    #[async_backtrace::framed]
     async fn read_plan_with_catalog(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -71,6 +74,11 @@ impl ToReadDataSourcePlan for dyn Table {
         } else {
             self.read_partitions(ctx.clone(), push_downs.clone()).await
         }?;
+
+        ctx.incr_total_scan_value(ProgressValues {
+            rows: statistics.read_rows,
+            bytes: statistics.read_bytes,
+        });
 
         // We need the partition sha256 to specify the result cache.
         if ctx.get_settings().get_enable_query_result_cache()? {

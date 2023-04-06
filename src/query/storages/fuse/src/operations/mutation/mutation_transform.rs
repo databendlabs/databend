@@ -148,6 +148,7 @@ impl MutationTransform {
         }
     }
 
+    #[async_backtrace::framed]
     async fn write_segments(&self, segments: Vec<SerializedData>) -> Result<()> {
         let mut tasks = Vec::with_capacity(segments.len());
         for segment in segments {
@@ -324,6 +325,7 @@ impl Processor for MutationTransform {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::ReadSegments => {
@@ -332,7 +334,7 @@ impl Processor for MutationTransform {
                     SegmentsIO::create(self.ctx.clone(), self.dal.clone(), self.schema.clone());
                 let segment_locations = self.base_segments.as_slice();
                 let segments = segments_io
-                    .read_segments(segment_locations)
+                    .read_segments(segment_locations, true)
                     .await?
                     .into_iter()
                     .collect::<Result<Vec<_>>>()?;

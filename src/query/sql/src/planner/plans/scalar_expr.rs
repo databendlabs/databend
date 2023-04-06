@@ -24,11 +24,14 @@ use common_expression::Scalar;
 use educe::Educe;
 use jsonb::JsonPath;
 
+use super::WindowFuncFrame;
+use super::WindowFuncType;
 use crate::binder::ColumnBinding;
 use crate::binder::InternalColumnBinding;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
 use crate::IndexType;
+use crate::MetadataRef;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ScalarExpr {
@@ -77,9 +80,12 @@ impl ScalarExpr {
                 left.union(&right).cloned().collect()
             }
             ScalarExpr::WindowFunction(scalar) => {
-                let mut result = ColumnSet::new();
-                for scalar in &scalar.agg_func.args {
+                let mut result = scalar.func.used_columns();
+                for scalar in &scalar.partition_by {
                     result = result.union(&scalar.used_columns()).cloned().collect();
+                }
+                for order in &scalar.order_by {
+                    result = result.union(&order.expr.used_columns()).cloned().collect();
                 }
                 result
             }
@@ -99,6 +105,59 @@ impl ScalarExpr {
             }
             ScalarExpr::CastExpr(scalar) => scalar.argument.used_columns(),
             ScalarExpr::SubqueryExpr(scalar) => scalar.outer_columns.clone(),
+        }
+    }
+
+    // Get used tables in ScalarExpr
+    pub fn used_tables(&self, metadata: MetadataRef) -> Result<Vec<IndexType>> {
+        match self {
+            ScalarExpr::BoundColumnRef(scalar) => {
+                let mut tables = vec![];
+                if let Some(table_index) = scalar.column.table_index {
+                    tables = vec![table_index];
+                }
+                Ok(tables)
+            }
+            ScalarExpr::BoundInternalColumnRef(_) | ScalarExpr::ConstantExpr(_) => Ok(vec![]),
+            ScalarExpr::AndExpr(scalar) => {
+                let mut left: Vec<IndexType> = scalar.left.used_tables(metadata.clone())?;
+                let mut right: Vec<IndexType> = scalar.right.used_tables(metadata)?;
+                left.append(&mut right);
+                Ok(left)
+            }
+            ScalarExpr::OrExpr(scalar) => {
+                let mut left: Vec<IndexType> = scalar.left.used_tables(metadata.clone())?;
+                let mut right: Vec<IndexType> = scalar.right.used_tables(metadata)?;
+                left.append(&mut right);
+                Ok(left)
+            }
+            ScalarExpr::NotExpr(scalar) => scalar.argument.used_tables(metadata),
+            ScalarExpr::ComparisonExpr(scalar) => {
+                let mut left: Vec<IndexType> = scalar.left.used_tables(metadata.clone())?;
+                let mut right: Vec<IndexType> = scalar.right.used_tables(metadata)?;
+                left.append(&mut right);
+                Ok(left)
+            }
+            ScalarExpr::AggregateFunction(scalar) => {
+                let mut result = vec![];
+                for scalar in &scalar.args {
+                    result.append(&mut scalar.used_tables(metadata.clone())?);
+                }
+                Ok(result)
+            }
+            ScalarExpr::FunctionCall(scalar) => {
+                let mut result = vec![];
+                for scalar in &scalar.arguments {
+                    result.append(&mut scalar.used_tables(metadata.clone())?);
+                }
+                Ok(result)
+            }
+            ScalarExpr::CastExpr(scalar) => scalar.argument.used_tables(metadata),
+            ScalarExpr::WindowFunction(_) | ScalarExpr::SubqueryExpr(_) => {
+                Err(ErrorCode::Unimplemented(
+                    "SubqueryExpr/WindowFunction doesn't support used_tables method".to_string(),
+                ))
+            }
         }
     }
 
@@ -456,38 +515,20 @@ pub struct AggregateFunction {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct WindowFunc {
-    pub agg_func: AggregateFunction,
+    pub display_name: String,
     pub partition_by: Vec<ScalarExpr>,
+    pub func: WindowFuncType,
+    pub order_by: Vec<WindowOrderBy>,
     pub frame: WindowFuncFrame,
 }
 
-impl WindowFunc {
-    pub fn display_name(&self) -> String {
-        format!("{}_with_window", self.agg_func.func_name)
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct WindowFuncFrame {
-    pub units: WindowFuncFrameUnits,
-    pub start: WindowFuncFrameBound,
-    pub end: WindowFuncFrameBound,
-}
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub enum WindowFuncFrameBound {
-    /// `CURRENT ROW`
-    CurrentRow,
-    /// `<N> PRECEDING` or `UNBOUNDED PRECEDING`
-    Preceding(Option<Box<ScalarExpr>>),
-    /// `<N> FOLLOWING` or `UNBOUNDED FOLLOWING`.
-    Following(Option<Box<ScalarExpr>>),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum WindowFuncFrameUnits {
-    Rows,
-    Range,
+pub struct WindowOrderBy {
+    pub expr: ScalarExpr,
+    // Optional `ASC` or `DESC`
+    pub asc: Option<bool>,
+    // Optional `NULLS FIRST` or `NULLS LAST`
+    pub nulls_first: Option<bool>,
 }
 
 #[derive(Clone, Debug, Educe)]

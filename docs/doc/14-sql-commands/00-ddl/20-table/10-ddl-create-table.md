@@ -58,13 +58,26 @@ For detailed information about the CLUSTER BY clause, see [SET CLUSTER KEY](../7
 
 ## CREATE TABLE ... LIKE
 
-Creates an empty copy of an existing table, the new table automatically copies all column names, their data types, and their not-null constraints.
+Creates a table with the same column definitions as an existing table. Column names, data types, and their non-NUll constraints of the existing will be copied to the new table.
 
 Syntax:
 ```sql
 CREATE TABLE [IF NOT EXISTS] [db.]table_name
 LIKE [db.]origin_table_name
 ```
+
+This command does not include any data or attributes (such as CLUSTER BY, TRANSIENT, and COMPRESSION) from the original table, and instead creates a new table using the default system settings.
+
+:::note WORKAROUND
+- `CLUSTER BY` can be added back using [ALTER TABLE](90-alter-table-column.md). See [ALTER CLUSTER KEY](../../00-ddl/70-clusterkey/dml-alter-cluster-key.md) for details.
+- `TRANSIENT` and `COMPRESSION` can be explicitly specified when you create a new table with this command. For example,
+
+```sql
+create transient table t_new like t_old;
+
+create table t_new compression='lz4' like t_old;
+```
+:::
 
 ## CREATE TABLE ... AS
 
@@ -75,6 +88,19 @@ Syntax:
 CREATE TABLE [IF NOT EXISTS] [db.]table_name
 AS SELECT query
 ```
+
+This command does not include any attributes (such as CLUSTER BY, TRANSIENT, and COMPRESSION) from the original table, and instead creates a new table using the default system settings.
+
+:::note WORKAROUND
+- `CLUSTER BY` can be added back using [ALTER TABLE](90-alter-table-column.md). See [ALTER CLUSTER KEY](../../00-ddl/70-clusterkey/dml-alter-cluster-key.md) for details.
+- `TRANSIENT` and `COMPRESSION` can be explicitly specified when you create a new table with this command. For example,
+
+```sql
+create transient table t_new as select * from t_old;
+
+create table t_new compression='lz4' as select * from t_old;
+```
+:::
 
 ## CREATE TRANSIENT TABLE
 
@@ -264,11 +290,11 @@ SELECT * FROM test;
 
 ### Create Table ... Like
 
-```sql
-CREATE TABLE test2 LIKE test;
-```
+The following example indicates that the command does not copy any data from an existing table but only the column definitions:
 
 ```sql
+CREATE TABLE test2 LIKE test;
+
 DESC test2;
 +-------+--------+------+---------------+
 | Field | Type   | Null | Default       |
@@ -277,19 +303,63 @@ DESC test2;
 | b     | String | NO   |               |
 | c     | String | NO   | concat(b, -b) |
 +-------+--------+------+---------------+
-```
 
-```sql
 INSERT INTO test2(a,b) VALUES(888, 'stars');
-```
 
-```sql
+-- The new table contains inserted data only. Data in the existing table was not copied.
 SELECT * FROM test2;
 +------+-------+---------+
 | a    | b     | c       |
 +------+-------+---------+
 |  888 | stars | stars-b |
 +------+-------+---------+
+```
+
+The following example indicates that the command does not copy attributes of an existing table:
+
+```sql
+CREATE TRANSIENT TABLE tb_01(id int, c1 varchar) CLUSTER BY(id);
+
+SET hide_options_in_show_create_table=0
+
+SHOW CREATE TABLE tb_01;
+
+Table|Create Table                                                                                                                           |
+-----+---------------------------------------------------------------------------------------------------------------------------------------+
+tb_01|CREATE TABLE `tb_01` (¶  `id` INT,¶  `c1` VARCHAR¶) ENGINE=FUSE CLUSTER BY (id) TRANSIENT='T' COMPRESSION='lz4' STORAGE_FORMAT='native'|
+
+
+CREATE TABLE tb_02 LIKE tb_01;
+
+-- The attributes CLUSTER BY and TRANSIENT were not copied to the new table.
+
+SHOW CREATE TABLE tb_02;
+
+Table|Create Table                                                                                             |
+-----+---------------------------------------------------------------------------------------------------------+
+tb_02|CREATE TABLE `tb_02` (¶  `id` INT,¶  `c1` VARCHAR¶) ENGINE=FUSE COMPRESSION='lz4' STORAGE_FORMAT='native'|
+
+-- Add CLUSTER BY using ALTER TABLE.
+
+ALTER TABLE tb_02 CLUSTER BY(id);
+
+Table|Create Table                                                                                                                                                                                      |
+-----+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+tb_02|CREATE TABLE `tb_02` (¶  `id` INT,¶  `c1` VARCHAR¶) ENGINE=FUSE CLUSTER BY (id) COMPRESSION='lz4' SNAPSHOT_LOCATION='1/21465/_ss/6b4b16900a4c4134b7dab535b1c93546_v2.json' STORAGE_FORMAT='native'|
+
+-- Not all the table attributes can be added using ALTER TABLE.
+
+ALTER TABLE tb_02 TRANSIENT='T';
+
+SQL Error [1105] [HY000]: Code: 1005, displayText = error: 
+  --> SQL:1:83
+  |
+1 | /* ApplicationName=DBeaver 23.0.1 - SQLEditor <Script-1.sql> */ alter table tb_02 TRANSIENT='T'
+  |                                                                 -----             ^^^^^^^^^ expected `RENAME`, `ADD`, `DROP`, `CLUSTER`, `RECLUSTER`, `FLASHBACK`, or 1 more ...
+  |                                                                 |                  
+  |                                                                 while parsing `ALTER TABLE [<database>.]<table> <action>`
+
+.
 ```
 
 ### Create Table ... As

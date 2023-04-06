@@ -50,7 +50,7 @@ con.connect((err) => {
    var sql = "CREATE DATABASE IF NOT EXISTS book_db";
    con.query(sql, function (err, result) {
       if (err) throw err;
-      console.log("Dataabse created");
+      console.log("Database created");
    });
 
    var sql = "USE book_db";

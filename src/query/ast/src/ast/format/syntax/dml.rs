@@ -19,7 +19,7 @@ use super::query::pretty_query;
 use super::query::pretty_table;
 use crate::ast::format::syntax::inline_comma;
 use crate::ast::format::syntax::interweave_comma;
-use crate::ast::format::syntax::parenthenized;
+use crate::ast::format::syntax::parenthesized;
 use crate::ast::format::syntax::NEST_FACTOR;
 use crate::ast::CopyStmt;
 use crate::ast::CopyUnit;
@@ -87,7 +87,7 @@ fn pretty_source(source: InsertSource) -> RcDoc<'static> {
         InsertSource::StreamingV2 { settings, start } => RcDoc::text("FILE_FORMAT").append(
             RcDoc::line()
                 .append(RcDoc::text("FILE_FORMAT_SETTINGS = "))
-                .append(parenthenized(
+                .append(parenthesized(
                     interweave_comma(settings.iter().map(|(k, v)| {
                         RcDoc::text(k.to_string())
                             .append(RcDoc::space())
@@ -175,7 +175,7 @@ pub(crate) fn pretty_copy(copy_stmt: CopyStmt) -> RcDoc<'static> {
         .append(if let Some(files) = &copy_stmt.files {
             RcDoc::line()
                 .append(RcDoc::text("FILES = "))
-                .append(parenthenized(
+                .append(parenthesized(
                     interweave_comma(files.iter().map(|file| RcDoc::text(format!("{:?}", file))))
                         .group(),
                 ))
@@ -192,7 +192,7 @@ pub(crate) fn pretty_copy(copy_stmt: CopyStmt) -> RcDoc<'static> {
         .append(if !copy_stmt.file_format.is_empty() {
             RcDoc::line()
                 .append(RcDoc::text("FILE_FORMAT = "))
-                .append(parenthenized(
+                .append(parenthesized(
                     interweave_comma(copy_stmt.file_format.iter().map(|(k, v)| {
                         RcDoc::text(k.to_string())
                             .append(RcDoc::space())
@@ -216,6 +216,13 @@ pub(crate) fn pretty_copy(copy_stmt: CopyStmt) -> RcDoc<'static> {
             RcDoc::line()
                 .append(RcDoc::text("SIZE_LIMIT = "))
                 .append(RcDoc::text(format!("{}", copy_stmt.size_limit)))
+        } else {
+            RcDoc::nil()
+        })
+        .append(if copy_stmt.max_files != 0 {
+            RcDoc::line()
+                .append(RcDoc::text("MAX_FILES = "))
+                .append(RcDoc::text(format!("{}", copy_stmt.max_files)))
         } else {
             RcDoc::nil()
         })

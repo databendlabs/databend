@@ -1,4 +1,4 @@
-# Github issue: https://github.com/datafuselabs/databend/issues/9236
+# GitHub issue: https://github.com/datafuselabs/databend/issues/9236
 
 statement ok
 DROP DATABASE IF EXISTS databend0

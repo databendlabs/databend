@@ -26,6 +26,7 @@ use crate::plans::PresignPlan;
 use crate::BindContext;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_presign(
         &mut self,
         _: &BindContext,

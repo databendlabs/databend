@@ -54,6 +54,7 @@ impl Interpreter for ShowCreateTableInterpreter {
         self.plan.schema()
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
@@ -97,6 +98,9 @@ impl Interpreter for ShowCreateTableInterpreter {
         let n_fields = schema.fields().len();
 
         let mut table_create_sql = format!("CREATE TABLE `{}` (\n", name);
+        if table.options().contains_key("TRANSIENT") {
+            table_create_sql = format!("CREATE TRANSIENT TABLE `{}` (\n", name)
+        }
 
         // Append columns.
         {

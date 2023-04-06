@@ -162,7 +162,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                 let (data_tx, data_rx) = tokio::sync::mpsc::channel(ctx.num_prefetch_per_split());
                 let split_clone = s.clone();
                 let ctx_clone2 = ctx_clone.clone();
-                tokio::spawn(async move {
+                tokio::spawn(async_backtrace::location!().frame(async move {
                     if let Err(e) =
                         Self::copy_reader_with_aligner(ctx_clone2, split_clone, data_tx).await
                     {
@@ -170,7 +170,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                     } else {
                         tracing::debug!("copy split reader stopped");
                     }
-                });
+                }));
                 if split_tx
                     .send(Ok(Split {
                         info: s.clone(),
@@ -293,6 +293,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn read_split(
         _ctx: Arc<InputContext>,
         _split_info: Arc<SplitInfo>,
@@ -301,6 +302,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
     }
 
     #[tracing::instrument(level = "debug", skip(ctx, batch_tx))]
+    #[async_backtrace::framed]
     async fn copy_reader_with_aligner(
         ctx: Arc<InputContext>,
         split_info: Arc<SplitInfo>,
@@ -342,6 +344,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
     }
 }
 
+#[async_backtrace::framed]
 pub async fn read_full<R: AsyncRead + Unpin>(reader: &mut R, buf: &mut [u8]) -> Result<usize> {
     let mut buf = &mut buf[0..];
     let mut n = 0;

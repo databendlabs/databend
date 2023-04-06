@@ -125,6 +125,7 @@ impl InsertInterpreter {
         Ok(cast_needed)
     }
 
+    #[async_backtrace::framed]
     async fn try_purge_files(
         ctx: Arc<QueryContext>,
         stage_info: &StageInfo,
@@ -149,6 +150,7 @@ impl InsertInterpreter {
         }
     }
 
+    #[async_backtrace::framed]
     async fn prepared_values(&self, values_str: &str) -> Result<(DataSchemaRef, Vec<Scalar>)> {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
@@ -192,6 +194,7 @@ impl InsertInterpreter {
         Ok((Arc::new(DataSchema::new(attachment_fields)), const_values))
     }
 
+    #[async_backtrace::framed]
     async fn build_insert_from_stage_pipeline(
         &self,
         table: Arc<dyn Table>,
@@ -232,7 +235,7 @@ impl InsertInterpreter {
             files_to_copy: None,
         };
 
-        let all_source_files = StageTable::list_files(&stage_table_info).await?;
+        let all_source_files = StageTable::list_files(&stage_table_info, None).await?;
 
         info!(
             "insert: read all stage attachment files finished: {}, elapsed:{}",
@@ -346,6 +349,7 @@ impl Interpreter for InsertInterpreter {
         "InsertIntoInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
         let table = self
@@ -552,6 +556,7 @@ impl AsyncSource for ValueSource {
     const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
     #[async_trait::unboxed_simple]
+    #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.is_finished {
             return Ok(None);
@@ -601,6 +606,7 @@ impl ValueSource {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn read<R: AsRef<[u8]>>(
         &self,
         estimated_rows: usize,
@@ -648,6 +654,7 @@ impl ValueSource {
     }
 
     /// Parse single row value, like ('111', 222, 1 + 1)
+    #[async_backtrace::framed]
     async fn parse_next_row<R: AsRef<[u8]>>(
         &self,
         field_decoder: &FastFieldDecoderValues,

@@ -646,12 +646,11 @@ impl SchemaApiTestSuite {
         mt: &MT,
     ) -> anyhow::Result<()> {
         let tenant1 = "tenant1";
-        let tenant2 = "tenant2";
         let db1 = "db1";
         let db2 = "db2";
         let share = "share";
         let share_name = ShareNameIdent {
-            tenant: tenant2.to_string(),
+            tenant: tenant1.to_string(),
             share_name: share.to_string(),
         };
         let db_name1 = DatabaseNameIdent {
@@ -659,7 +658,7 @@ impl SchemaApiTestSuite {
             db_name: db1.to_string(),
         };
         let db_name2 = DatabaseNameIdent {
-            tenant: tenant2.to_string(),
+            tenant: tenant1.to_string(),
             db_name: db2.to_string(),
         };
         let db_id;
@@ -1565,10 +1564,7 @@ impl SchemaApiTestSuite {
             let err_code = ErrorCode::from(status);
 
             assert_eq!(
-                format!(
-                    "Code: 2302, displayText = Table '{}' already exists.",
-                    tbl_name
-                ),
+                format!("Code: 2302, Text = Table '{}' already exists.", tbl_name),
                 err_code.to_string()
             );
 
@@ -1641,7 +1637,7 @@ impl SchemaApiTestSuite {
                     let err_code = ErrorCode::from(status);
 
                     assert_eq!(
-                        format!("Code: 1025, displayText = Unknown table '{:}'.", tbl_name),
+                        format!("Code: 1025, Text = Unknown table '{:}'.", tbl_name),
                         err_code.to_string(),
                         "get dropped table {}",
                         tbl_name
@@ -3107,7 +3103,7 @@ impl SchemaApiTestSuite {
 
             let new_tb_info = mt.get_table((tenant, db_name, new_tbl_name).into()).await?;
 
-            // then drop drop table2
+            // then drop table2
             let drop_plan = DropTableByIdReq {
                 if_exists: false,
                 tb_id: new_tb_info.ident.table_id,
@@ -3512,7 +3508,7 @@ impl SchemaApiTestSuite {
         mt: &MT,
     ) -> anyhow::Result<()> {
         let tenant1 = "tenant1";
-        let tenant2 = "tenant2";
+        let tenant2 = "tenant1";
         let db1 = "db1";
         let db2 = "db2";
         let share = "share";
@@ -4054,7 +4050,7 @@ impl SchemaApiTestSuite {
             assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
             assert_eq!("Unknown database 'nonexistent'", err.message());
             assert_eq!(
-                "Code: 1003, displayText = Unknown database 'nonexistent'.",
+                "Code: 1003, Text = Unknown database 'nonexistent'.",
                 err.to_string()
             );
         }

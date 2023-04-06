@@ -4,59 +4,74 @@ create table if not exists t1(a int, b int);
 query T
 explain select a from (select * from t1 order by a) as t2 where a > 1;
 ----
-Sort
-├── sort keys: [a ASC NULLS LAST]
+EvalScalar
+├── expressions: [t2.a (#0), t1.a (#0)]
 ├── estimated rows: 0.00
-└── Filter
-    ├── filters: [t2.a (#0) > 1]
+└── Sort
+    ├── sort keys: [a ASC NULLS LAST]
     ├── estimated rows: 0.00
-    └── TableScan
-        ├── table: default.default.t1
-        ├── read rows: 0
-        ├── read bytes: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        ├── push downs: [filters: [t2.a (#0) > 1], limit: NONE]
-        ├── output columns: [a]
-        └── estimated rows: 0.00
+    └── Filter
+        ├── filters: [t2.a (#0) > 1]
+        ├── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.default.t1
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [t2.a (#0) > 1], limit: NONE]
+            ├── output columns: [a]
+            └── estimated rows: 0.00
 
 query T
 explain select a from (select * from t1) where a > 1 order by a;
 ----
-Sort
-├── sort keys: [a ASC NULLS LAST]
+EvalScalar
+├── expressions: [t1.a (#0)]
 ├── estimated rows: 0.00
-└── Filter
-    ├── filters: [t1.a (#0) > 1]
+└── Sort
+    ├── sort keys: [a ASC NULLS LAST]
     ├── estimated rows: 0.00
-    └── TableScan
-        ├── table: default.default.t1
-        ├── read rows: 0
-        ├── read bytes: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        ├── push downs: [filters: [t1.a (#0) > 1], limit: NONE]
-        ├── output columns: [a]
-        └── estimated rows: 0.00
+    └── EvalScalar
+        ├── expressions: [t1.a (#0)]
+        ├── estimated rows: 0.00
+        └── Filter
+            ├── filters: [t1.a (#0) > 1]
+            ├── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.default.t1
+                ├── read rows: 0
+                ├── read bytes: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [t1.a (#0) > 1], limit: NONE]
+                ├── output columns: [a]
+                └── estimated rows: 0.00
 
 query T
 explain select a from (select * from t1) as t2 where t2.a > 1 order by a;
 ----
-Sort
-├── sort keys: [a ASC NULLS LAST]
+EvalScalar
+├── expressions: [t2.a (#0)]
 ├── estimated rows: 0.00
-└── Filter
-    ├── filters: [t2.a (#0) > 1]
+└── Sort
+    ├── sort keys: [a ASC NULLS LAST]
     ├── estimated rows: 0.00
-    └── TableScan
-        ├── table: default.default.t1
-        ├── read rows: 0
-        ├── read bytes: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        ├── push downs: [filters: [t2.a (#0) > 1], limit: NONE]
-        ├── output columns: [a]
-        └── estimated rows: 0.00
+    └── EvalScalar
+        ├── expressions: [t1.a (#0)]
+        ├── estimated rows: 0.00
+        └── Filter
+            ├── filters: [t2.a (#0) > 1]
+            ├── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.default.t1
+                ├── read rows: 0
+                ├── read bytes: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [t2.a (#0) > 1], limit: NONE]
+                ├── output columns: [a]
+                └── estimated rows: 0.00
 
 
 statement ok

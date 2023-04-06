@@ -71,6 +71,7 @@ const OCC_DEFAULT_BACKOFF_MAX_ELAPSED_MS: Duration = Duration::from_millis(120 *
 const MAX_RETRIES: u64 = 10;
 
 impl FuseTable {
+    #[async_backtrace::framed]
     pub async fn do_commit(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -82,6 +83,7 @@ impl FuseTable {
             .await
     }
 
+    #[async_backtrace::framed]
     pub async fn commit_with_max_retry_elapsed(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -198,6 +200,7 @@ impl FuseTable {
     }
 
     #[inline]
+    #[async_backtrace::framed]
     pub async fn try_commit<'a>(
         &'a self,
         ctx: Arc<dyn TableContext>,
@@ -345,6 +348,7 @@ impl FuseTable {
         Ok(new_snapshot)
     }
 
+    #[async_backtrace::framed]
     pub async fn commit_to_meta_server(
         ctx: &dyn TableContext,
         table_info: &TableInfo,
@@ -466,9 +470,10 @@ impl FuseTable {
                 let stats = &segment_info.summary;
                 acc.row_count += stats.row_count;
                 acc.block_count += stats.block_count;
+                acc.perfect_block_count += stats.perfect_block_count;
                 acc.uncompressed_byte_size += stats.uncompressed_byte_size;
                 acc.compressed_byte_size += stats.compressed_byte_size;
-                acc.index_size = stats.index_size;
+                acc.index_size += stats.index_size;
                 acc.col_stats = if acc.col_stats.is_empty() {
                     stats.col_stats.clone()
                 } else {
@@ -483,6 +488,7 @@ impl FuseTable {
     }
 
     // Left a hint file which indicates the location of the latest snapshot
+    #[async_backtrace::framed]
     pub async fn write_last_snapshot_hint(
         operator: &Operator,
         location_generator: &TableMetaLocationGenerator,
@@ -513,6 +519,7 @@ impl FuseTable {
     }
 
     // TODO refactor, it is called by segment compaction and re-cluster now
+    #[async_backtrace::framed]
     pub async fn commit_mutation(
         &self,
         ctx: &Arc<dyn TableContext>,
@@ -633,6 +640,7 @@ impl FuseTable {
         )))
     }
 
+    #[async_backtrace::framed]
     async fn merge_with_base(
         ctx: Arc<dyn TableContext>,
         operator: Operator,
@@ -653,7 +661,7 @@ impl FuseTable {
 
             let fuse_segment_io = SegmentsIO::create(ctx, operator, schema);
             let concurrent_appended_segment_infos = fuse_segment_io
-                .read_segments(concurrently_appended_segment_locations)
+                .read_segments(concurrently_appended_segment_locations, true)
                 .await?;
 
             let mut new_statistics = base_summary.clone();
@@ -706,6 +714,7 @@ mod utils {
     use crate::metrics::metrics_inc_commit_mutation_aborts;
 
     #[inline]
+    #[async_backtrace::framed]
     pub async fn abort_operations(
         operator: Operator,
         operation_log: TableOperationLog,

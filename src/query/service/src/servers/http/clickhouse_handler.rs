@@ -217,6 +217,7 @@ async fn execute(
 }
 
 #[poem::handler]
+#[async_backtrace::framed]
 pub async fn clickhouse_handler_get(
     ctx: &HttpQueryContext,
     Query(params): Query<StatementHandlerParams>,
@@ -231,9 +232,9 @@ pub async fn clickhouse_handler_get(
         .await
         .map_err(InternalServerError)?;
 
-    session
-        .get_settings()
-        .set_batch_settings(&params.settings, false)
+    let settings = session.get_settings();
+    settings
+        .set_batch_settings(&params.settings)
         .map_err(BadRequest)?;
 
     let default_format = get_default_format(&params, headers).map_err(BadRequest)?;
@@ -246,7 +247,7 @@ pub async fn clickhouse_handler_get(
         .map_err(BadRequest)?;
     let format = get_format_with_default(extras.format, default_format)?;
 
-    context.attach_query_str(plan.to_string(), extras.stament.to_mask_sql());
+    context.attach_query_str(plan.to_string(), extras.statement.to_mask_sql());
     let interpreter = InterpreterFactory::get(context.clone(), &plan)
         .await
         .map_err(|err| err.display_with_sql(&sql))
@@ -258,6 +259,7 @@ pub async fn clickhouse_handler_get(
 }
 
 #[poem::handler]
+#[async_backtrace::framed]
 pub async fn clickhouse_handler_post(
     ctx: &HttpQueryContext,
     body: Body,
@@ -275,7 +277,7 @@ pub async fn clickhouse_handler_post(
 
     let settings = ctx.get_settings();
     settings
-        .set_batch_settings(&params.settings, false)
+        .set_batch_settings(&params.settings)
         .map_err(BadRequest)?;
 
     let default_format = get_default_format(&params, headers).map_err(BadRequest)?;
@@ -304,7 +306,7 @@ pub async fn clickhouse_handler_post(
         .map_err(|err| err.display_with_sql(&sql))
         .map_err(BadRequest)?;
     let schema = plan.schema();
-    ctx.attach_query_str(plan.to_string(), extras.stament.to_mask_sql());
+    ctx.attach_query_str(plan.to_string(), extras.statement.to_mask_sql());
     let mut handle = None;
     if let Plan::Insert(insert) = &mut plan {
         if let InsertInputSource::StreamingWithFormat(format, start, input_context_ref) =
@@ -417,6 +419,7 @@ pub async fn clickhouse_handler_post(
 }
 
 #[poem::handler]
+#[async_backtrace::framed]
 pub async fn clickhouse_ping_handler() -> String {
     "OK.\n".to_string()
 }

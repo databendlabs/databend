@@ -44,6 +44,7 @@ use crate::plans::Sort;
 use crate::plans::SortItem;
 use crate::BindContext;
 use crate::IndexType;
+use crate::WindowChecker;
 
 #[derive(Debug)]
 pub struct OrderItems {
@@ -60,6 +61,7 @@ pub struct OrderItem {
 }
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(super) async fn analyze_order_items(
         &mut self,
         from_context: &BindContext,
@@ -210,6 +212,7 @@ impl Binder {
                     let column_binding = self.create_column_binding(
                         None,
                         None,
+                        None,
                         format!("{:#}", order.expr),
                         rewrite_scalar.data_type()?,
                     );
@@ -229,6 +232,7 @@ impl Binder {
         Ok(OrderItems { items: order_items })
     }
 
+    #[async_backtrace::framed]
     pub(super) async fn bind_order_by(
         &mut self,
         from_context: &BindContext,
@@ -242,7 +246,7 @@ impl Binder {
 
         for order in order_by.items {
             if from_context.in_grouping {
-                let mut group_checker = GroupingChecker::new(from_context);
+                let group_checker = GroupingChecker::new(from_context);
                 // Perform grouping check on original scalar expression if order item is alias.
                 if let Some(scalar_item) = select_list
                     .items
@@ -279,8 +283,11 @@ impl Binder {
                         need_group_check = true;
                     }
                     if from_context.in_grouping || need_group_check {
-                        let mut group_checker = GroupingChecker::new(from_context);
+                        let group_checker = GroupingChecker::new(from_context);
                         scalar = group_checker.resolve(&scalar, None)?;
+                    } else if !from_context.windows.window_functions.is_empty() {
+                        let window_checker = WindowChecker::new(from_context);
+                        scalar = window_checker.resolve(&scalar)?;
                     }
                     scalars.push(ScalarItem { scalar, index });
                 }
@@ -318,6 +325,7 @@ impl Binder {
         Ok(new_expr)
     }
 
+    #[async_backtrace::framed]
     pub(crate) async fn bind_order_by_for_set_operation(
         &mut self,
         bind_context: &mut BindContext,

@@ -28,10 +28,12 @@ use common_pipeline_core::processors::Processor;
 pub trait AsyncMpscSink: Send {
     const NAME: &'static str;
 
+    #[async_backtrace::framed]
     async fn on_start(&mut self) -> Result<()> {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn on_finish(&mut self) -> Result<()> {
         Ok(())
     }
@@ -149,6 +151,7 @@ impl<T: AsyncMpscSink + 'static> Processor for AsyncMpscSinker<T> {
         }
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if !self.called_on_start {
             self.called_on_start = true;

@@ -15,7 +15,7 @@
 use common_ast::ast::FormatTreeNode;
 use common_catalog::plan::PartStatistics;
 use common_exception::Result;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_profile::ProfSpanSetRef;
 use itertools::Itertools;
 
@@ -34,12 +34,14 @@ use super::ProjectSet;
 use super::Sort;
 use super::TableScan;
 use super::UnionAll;
+use super::WindowFunction;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::DistributedInsertSelect;
 use crate::executor::ExchangeSink;
 use crate::executor::ExchangeSource;
 use crate::executor::FragmentKind;
 use crate::executor::RuntimeFilterSource;
+use crate::executor::Window;
 use crate::planner::MetadataRef;
 use crate::planner::DUMMY_TABLE_INDEX;
 use crate::BaseTableColumn;
@@ -129,6 +131,7 @@ fn to_format_tree(
         PhysicalPlan::AggregateFinal(plan) => {
             aggregate_final_to_format_tree(plan, metadata, prof_span_set)
         }
+        PhysicalPlan::Window(plan) => window_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::Sort(plan) => sort_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::Limit(plan) => limit_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::HashJoin(plan) => hash_join_to_format_tree(plan, metadata, prof_span_set),
@@ -509,6 +512,74 @@ fn aggregate_final_to_format_tree(
     ))
 }
 
+fn window_to_format_tree(
+    plan: &Window,
+    metadata: &MetadataRef,
+    prof_span_set: &ProfSpanSetRef,
+) -> Result<FormatTreeNode<String>> {
+    let partition_by = plan
+        .partition_by
+        .iter()
+        .map(|col| {
+            let column = metadata.read().column(*col).clone();
+            let name = match column {
+                ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => column_name,
+                ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
+                ColumnEntry::InternalColumn(TableInternalColumn {
+                    internal_column, ..
+                }) => internal_column.column_name().to_string(),
+            };
+            Ok(name)
+        })
+        .collect::<Result<Vec<_>>>()?
+        .join(", ");
+
+    let order_by = plan
+        .order_by
+        .iter()
+        .map(|v| {
+            let column = metadata.read().column(v.order_by).clone();
+            let name = match column {
+                ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => column_name,
+                ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
+                ColumnEntry::InternalColumn(TableInternalColumn {
+                    internal_column, ..
+                }) => internal_column.column_name().to_string(),
+            };
+            Ok(name)
+        })
+        .collect::<Result<Vec<_>>>()?
+        .join(", ");
+
+    let frame = plan.window_frame.to_string();
+
+    let func = match &plan.func {
+        WindowFunction::Aggregate(agg) => pretty_display_agg_desc(agg, metadata),
+        func => format!("{}", func),
+    };
+
+    let mut children = vec![
+        FormatTreeNode::new(format!("aggregate function: [{func}]")),
+        FormatTreeNode::new(format!("partition by: [{partition_by}]")),
+        FormatTreeNode::new(format!("order by: [{order_by}]")),
+        FormatTreeNode::new(format!("frame: [{frame}]")),
+    ];
+
+    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
+        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
+        children.push(FormatTreeNode::new(format!(
+            "total process time: {process_time}ms"
+        )));
+    }
+
+    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
+
+    Ok(FormatTreeNode::with_children(
+        "Window".to_string(), // todo(ariesdevil): show full window expression.
+        children,
+    ))
+}
+
 fn sort_to_format_tree(
     plan: &Sort,
     metadata: &MetadataRef,
@@ -804,7 +875,7 @@ fn project_set_to_format_tree(
         "set returning functions: {}",
         plan.srf_exprs
             .iter()
-            .map(|(expr, _)| expr.clone().into_srf_expr().sql_display())
+            .map(|(expr, _)| expr.clone().as_expr(&BUILTIN_FUNCTIONS).sql_display())
             .collect::<Vec<_>>()
             .join(", ")
     ))]);

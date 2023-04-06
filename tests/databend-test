@@ -132,7 +132,7 @@ def get_stacktraces(server_pid):
     try:
         return subprocess.check_output(cmd, shell=True)
     except Exception as ex:
-        return "Error occured while receiving stack traces {}".format(str(ex))
+        return "Error occurred while receiving stack traces {}".format(str(ex))
 
 
 def get_server_pid(server_tcp_port):
@@ -646,7 +646,7 @@ if __name__ == '__main__':
     parser.add_argument('-t',
                         '--timeout',
                         type=int,
-                        default=600,
+                        default=60,
                         help='Timeout for each test case in seconds')
     parser.add_argument('--record',
                         type=int,
