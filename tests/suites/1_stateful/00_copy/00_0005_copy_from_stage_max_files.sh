@@ -33,8 +33,8 @@ do
 	for purge in 'false'  'true'
 	do
 	  gen_files
-	  echo "select count(*) from @s5" | $MYSQL_CLIENT_CONNECT
 		echo "--- force = ${force}, purge = ${purge}"
+	  echo "select count(*) from @s5" | $MYSQL_CLIENT_CONNECT
 		for i in {1..3}
 		do
 			table="test_max_files_force_${force}_purge_${purge}"
