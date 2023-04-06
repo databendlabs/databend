@@ -55,7 +55,6 @@ pub struct Statistics {
     pub statistics: Option<TableStatistics>,
     // statistics will be ignored in comparison and hashing
     pub col_stats: HashMap<IndexType, Option<ColumnStatistics>>,
-    pub is_accurate: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -89,7 +88,6 @@ impl Scan {
             statistics: Statistics {
                 statistics: self.statistics.statistics,
                 col_stats,
-                is_accurate: self.statistics.is_accurate,
             },
             prewhere,
         }
@@ -194,7 +192,6 @@ impl Operator for Scan {
             statistics: OpStatistics {
                 precise_cardinality,
                 column_stats,
-                is_accurate: self.statistics.is_accurate,
             },
         })
     }

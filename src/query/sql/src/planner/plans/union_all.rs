@@ -94,7 +94,6 @@ impl Operator for UnionAll {
             statistics: Statistics {
                 precise_cardinality,
                 column_stats: Default::default(),
-                is_accurate: left_prop.statistics.is_accurate && right_prop.statistics.is_accurate,
             },
         })
     }
