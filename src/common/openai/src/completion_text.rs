@@ -60,7 +60,7 @@ impl OpenAI {
         })?;
 
         let usage = resp.usage.total_tokens;
-        let sql = if resp.choices.is_empty() {
+        let result = if resp.choices.is_empty() {
             "".to_string()
         } else {
             resp.choices[0].text.clone().unwrap_or("".to_string())
@@ -72,6 +72,6 @@ impl OpenAI {
             metrics_completion_token(usage.unwrap_or(0));
         }
 
-        Ok((sql, usage))
+        Ok((result, usage))
     }
 }
