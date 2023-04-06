@@ -51,7 +51,7 @@ statement ok
 SELECT (false and NULL NOT IN (0.1, 0.2, 0.3,0.4)) ::BIGINT FROM t1,t0
 
 
-statement error mysql client error: Server error: `ERROR HY000 (1105): Code: 2302, Text = Table 'cast_array' already exists.'
+statement ok
 create table cast_array (t Array(String NULL) NULL )
 
 statement ok
