@@ -2157,6 +2157,13 @@ impl<'a> TypeChecker<'a> {
         if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
             match table_data_type.remove_nullable() {
                 TableDataType::Tuple { .. } => {
+                    let column_entry = self.metadata.read().column(column.index).clone();
+                    match column_entry {
+                        ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) => {
+                            table_data_type = data_type;
+                        }
+                        _ => unreachable!(),
+                    }
                     let box (inner_scalar, _inner_data_type) = self
                         .resolve_tuple_map_access_pushdown(
                             expr.span(),
