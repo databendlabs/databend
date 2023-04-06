@@ -870,6 +870,13 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
             ToNumberImpl::eval_timestamp::<ToDayOfWeek, _>(val, ctx.tz)
         }),
     );
+    registry.register_passthrough_nullable_1_arg::<TimestampType, Int64Type, _, _>(
+        "to_unix_timestamp",
+        |_| FunctionDomain::Full,
+        vectorize_1_arg::<TimestampType, Int64Type>(|val, ctx| {
+            ToNumberImpl::eval_timestamp::<ToUnixTimestamp, _>(val, ctx.tz)
+        }),
+    );
 
     registry.register_passthrough_nullable_1_arg::<TimestampType, UInt8Type, _, _>(
         "to_hour",
