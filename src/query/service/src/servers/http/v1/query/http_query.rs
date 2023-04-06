@@ -192,6 +192,7 @@ pub struct HttpQuery {
 }
 
 impl HttpQuery {
+    #[async_backtrace::framed]
     pub(crate) async fn try_create(
         ctx: &HttpQueryContext,
         request: HttpQueryRequest,
@@ -234,7 +235,7 @@ impl HttpQuery {
             if let Some(conf_settings) = &session_conf.settings {
                 let settings = session.get_settings();
                 for (k, v) in conf_settings {
-                    settings.set_settings(k.to_string(), v.to_string(), false)?;
+                    settings.set_setting(k.to_string(), v.to_string())?;
                 }
             }
             if let Some(secs) = session_conf.keep_server_session_secs {
@@ -333,6 +334,7 @@ impl HttpQuery {
         Ok(Arc::new(query))
     }
 
+    #[async_backtrace::framed]
     pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
         let data = Some(self.get_page(page_no).await?);
         let state = self.get_state().await;
@@ -351,6 +353,7 @@ impl HttpQuery {
         })
     }
 
+    #[async_backtrace::framed]
     pub async fn get_response_state_only(&self) -> HttpQueryResponseInternal {
         HttpQueryResponseInternal {
             data: None,
@@ -360,6 +363,7 @@ impl HttpQuery {
         }
     }
 
+    #[async_backtrace::framed]
     async fn get_state(&self) -> ResponseState {
         let state = self.state.read().await;
         let (exe_state, err) = state.state.extract();
@@ -372,6 +376,7 @@ impl HttpQuery {
         }
     }
 
+    #[async_backtrace::framed]
     async fn get_page(&self, page_no: usize) -> Result<ResponseData> {
         let mut page_manager = self.page_manager.lock().await;
         let page = page_manager
@@ -384,6 +389,7 @@ impl HttpQuery {
         Ok(response)
     }
 
+    #[async_backtrace::framed]
     pub async fn kill(&self) {
         Executor::stop(
             &self.state,
@@ -393,11 +399,13 @@ impl HttpQuery {
         .await;
     }
 
+    #[async_backtrace::framed]
     pub async fn detach(&self) {
         let data = self.page_manager.lock().await;
         data.detach().await
     }
 
+    #[async_backtrace::framed]
     pub async fn update_expire_time(&self, before_wait: bool) {
         let duration = Duration::from_secs(self.config.result_timeout_secs)
             + if before_wait {
@@ -410,12 +418,14 @@ impl HttpQuery {
         *t = ExpireState::ExpireAt(deadline);
     }
 
+    #[async_backtrace::framed]
     pub async fn mark_removed(&self) {
         let mut t = self.expire_state.lock().await;
         *t = ExpireState::Removed;
     }
 
     // return Duration to sleep
+    #[async_backtrace::framed]
     pub async fn check_expire(&self) -> ExpireResult {
         let expire_state = self.expire_state.lock().await;
         match *expire_state {

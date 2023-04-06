@@ -23,6 +23,7 @@ use crate::ast::Expr;
 use crate::ast::FileLocation;
 use crate::ast::Identifier;
 use crate::ast::SelectStageOptions;
+use crate::ast::WindowDefinition;
 
 /// Root node of a query tree
 #[derive(Debug, Clone, PartialEq)]
@@ -85,6 +86,8 @@ pub struct SelectStmt {
     pub group_by: Option<GroupBy>,
     // `HAVING` clause
     pub having: Option<Expr>,
+    // `WINDOW` clause
+    pub window_list: Option<Vec<WindowDefinition>>,
 }
 
 /// Group by Clause.
@@ -145,6 +148,26 @@ pub enum SelectTarget {
     },
 }
 
+impl SelectTarget {
+    pub fn is_star(&self) -> bool {
+        match self {
+            SelectTarget::AliasedExpr { .. } => false,
+            SelectTarget::QualifiedName { qualified, .. } => {
+                matches!(qualified.last(), Some(Indirection::Star(_)))
+            }
+        }
+    }
+
+    pub fn exclude(&mut self, exclude: Vec<Identifier>) {
+        match self {
+            SelectTarget::AliasedExpr { .. } => unreachable!(),
+            SelectTarget::QualifiedName { exclude: e, .. } => {
+                *e = Some(exclude);
+            }
+        }
+    }
+}
+
 pub type QualifiedName = Vec<Indirection>;
 
 /// Indirection of a select result, like a part of `db.table.column`.
@@ -164,6 +187,20 @@ pub enum TimeTravelPoint {
     Timestamp(Box<Expr>),
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Pivot {
+    pub aggregate: Expr,
+    pub value_column: Identifier,
+    pub values: Vec<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Unpivot {
+    pub value_column: Identifier,
+    pub column_name: Identifier,
+    pub names: Vec<Identifier>,
+}
+
 /// A table name or a parenthesized subquery with an optional alias
 #[derive(Debug, Clone, PartialEq)]
 pub enum TableReference {
@@ -175,6 +212,8 @@ pub enum TableReference {
         table: Identifier,
         alias: Option<TableAlias>,
         travel_point: Option<TimeTravelPoint>,
+        pivot: Option<Box<Pivot>>,
+        unpivot: Option<Box<Unpivot>>,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
@@ -200,6 +239,22 @@ pub enum TableReference {
         options: SelectStageOptions,
         alias: Option<TableAlias>,
     },
+}
+
+impl TableReference {
+    pub fn pivot(&self) -> Option<&Pivot> {
+        match self {
+            TableReference::Table { pivot, .. } => pivot.as_ref().map(|b| b.as_ref()),
+            _ => None,
+        }
+    }
+
+    pub fn unpivot(&self) -> Option<&Unpivot> {
+        match self {
+            TableReference::Table { unpivot, .. } => unpivot.as_ref().map(|b| b.as_ref()),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -282,6 +337,28 @@ impl Display for TableAlias {
     }
 }
 
+impl Display for Pivot {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PIVOT({} FOR {} IN (", self.aggregate, self.value_column)?;
+        write_comma_separated_list(f, &self.values)?;
+        write!(f, "))")?;
+        Ok(())
+    }
+}
+
+impl Display for Unpivot {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "UNPIVOT({} FOR {} IN (",
+            self.value_column, self.column_name
+        )?;
+        write_comma_separated_list(f, &self.names)?;
+        write!(f, "))")?;
+        Ok(())
+    }
+}
+
 impl Display for TableReference {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -292,6 +369,8 @@ impl Display for TableReference {
                 table,
                 alias,
                 travel_point,
+                pivot,
+                unpivot,
             } => {
                 write_period_separated_list(
                     f,
@@ -308,6 +387,13 @@ impl Display for TableReference {
 
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
+                }
+                if let Some(pivot) = pivot {
+                    write!(f, " {pivot}")?;
+                }
+
+                if let Some(unpivot) = unpivot {
+                    write!(f, " {unpivot}")?;
                 }
             }
             TableReference::TableFunction {
@@ -545,6 +631,7 @@ impl Display for CTE {
         Ok(())
     }
 }
+
 impl Display for With {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if self.recursive {

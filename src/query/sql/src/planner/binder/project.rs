@@ -25,6 +25,7 @@ use common_exception::Span;
 
 use crate::binder::select::SelectItem;
 use crate::binder::select::SelectList;
+use crate::binder::ExprContext;
 use crate::binder::Visibility;
 use crate::optimizer::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
@@ -41,6 +42,7 @@ use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::IndexType;
+use crate::WindowChecker;
 
 impl Binder {
     pub(super) fn analyze_projection(
@@ -56,7 +58,13 @@ impl Binder {
                 column_binding.column_name = item.alias.clone();
                 column_binding
             } else {
-                self.create_column_binding(None, None, item.alias.clone(), item.scalar.data_type()?)
+                self.create_column_binding(
+                    None,
+                    None,
+                    None,
+                    item.alias.clone(),
+                    item.scalar.data_type()?,
+                )
             };
             let scalar = if let ScalarExpr::SubqueryExpr(SubqueryExpr {
                 span,
@@ -105,18 +113,24 @@ impl Binder {
         scalars: &HashMap<IndexType, ScalarItem>,
         child: SExpr,
     ) -> Result<SExpr> {
+        bind_context.set_expr_context(ExprContext::SelectClause);
         let mut scalars = scalars
             .iter()
             .map(|(_, item)| {
                 if bind_context.in_grouping {
-                    let mut grouping_checker = GroupingChecker::new(bind_context);
+                    let grouping_checker = GroupingChecker::new(bind_context);
                     let scalar = grouping_checker.resolve(&item.scalar, None)?;
                     Ok(ScalarItem {
                         scalar,
                         index: item.index,
                     })
                 } else {
-                    Ok(item.clone())
+                    let window_checker = WindowChecker::new(bind_context);
+                    let scalar = window_checker.resolve(&item.scalar)?;
+                    Ok(ScalarItem {
+                        scalar,
+                        index: item.index,
+                    })
                 }
             })
             .collect::<Result<Vec<_>>>()?;
@@ -149,11 +163,14 @@ impl Binder {
     /// For scalar expressions and aggregate expressions, we will register new columns for
     /// them in `Metadata`. And notice that, the semantic of aggregate expressions won't be checked
     /// in this function.
+    #[async_backtrace::framed]
     pub(super) async fn normalize_select_list<'a>(
         &mut self,
         input_context: &mut BindContext,
         select_list: &'a [SelectTarget],
     ) -> Result<SelectList<'a>> {
+        input_context.set_expr_context(ExprContext::SelectClause);
+
         let mut output = SelectList::default();
         for select_target in select_list {
             match select_target {
@@ -164,8 +181,13 @@ impl Binder {
                     // Handle qualified name as select target
                     let mut exclude_cols: HashSet<String> = HashSet::new();
                     if let Some(cols) = exclude {
+                        let is_unquoted_ident_case_sensitive =
+                            self.name_resolution_ctx.unquoted_ident_case_sensitive;
                         for col in cols {
-                            exclude_cols.insert(col.name.clone());
+                            let name = is_unquoted_ident_case_sensitive
+                                .then(|| col.name.clone())
+                                .unwrap_or_else(|| col.name.to_lowercase());
+                            exclude_cols.insert(name);
                         }
                         if exclude_cols.len() < cols.len() {
                             // * except (id, id)

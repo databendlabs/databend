@@ -88,6 +88,7 @@ impl HiveCatalog {
         Ok(ThriftHiveMetastoreSyncClient::new(i_prot, o_prot))
     }
 
+    #[async_backtrace::framed]
     pub async fn get_partitions(
         &self,
         db: String,
@@ -124,6 +125,7 @@ impl HiveCatalog {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
+    #[async_backtrace::framed]
     pub async fn get_partition_names(
         &self,
         db: String,
@@ -220,7 +222,9 @@ impl Catalog for HiveCatalog {
         self
     }
 
+    #[async_backtrace::framed]
     #[tracing::instrument(level = "info", skip(self))]
+    #[async_backtrace::framed]
     async fn get_database(&self, _tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
         let client = self.get_client()?;
         let _tenant = _tenant.to_string();
@@ -231,29 +235,34 @@ impl Catalog for HiveCatalog {
     }
 
     // Get all the databases.
+    #[async_backtrace::framed]
     async fn list_databases(&self, _tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
         todo!()
     }
 
     // Operation with database.
+    #[async_backtrace::framed]
     async fn create_database(&self, _req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
         Err(ErrorCode::Unimplemented(
             "Cannot create database in HIVE catalog",
         ))
     }
 
+    #[async_backtrace::framed]
     async fn drop_database(&self, _req: DropDatabaseReq) -> Result<()> {
         Err(ErrorCode::Unimplemented(
             "Cannot drop database in HIVE catalog",
         ))
     }
 
+    #[async_backtrace::framed]
     async fn undrop_database(&self, _req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
         Err(ErrorCode::Unimplemented(
             "Cannot undrop database in HIVE catalog",
         ))
     }
 
+    #[async_backtrace::framed]
     async fn rename_database(&self, _req: RenameDatabaseReq) -> Result<RenameDatabaseReply> {
         Err(ErrorCode::Unimplemented(
             "Cannot rename database in HIVE catalog",
@@ -265,6 +274,7 @@ impl Catalog for HiveCatalog {
         Ok(res)
     }
 
+    #[async_backtrace::framed]
     async fn get_table_meta_by_id(
         &self,
         _table_id: MetaId,
@@ -276,6 +286,7 @@ impl Catalog for HiveCatalog {
 
     // Get one table by db and table name.
     #[tracing::instrument(level = "info", skip(self))]
+    #[async_backtrace::framed]
     async fn get_table(
         &self,
         _tenant: &str,
@@ -290,10 +301,12 @@ impl Catalog for HiveCatalog {
             .unwrap()
     }
 
+    #[async_backtrace::framed]
     async fn list_tables(&self, _tenant: &str, _db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         todo!()
     }
 
+    #[async_backtrace::framed]
     async fn list_tables_history(
         &self,
         _tenant: &str,
@@ -304,24 +317,28 @@ impl Catalog for HiveCatalog {
         ))
     }
 
+    #[async_backtrace::framed]
     async fn create_table(&self, _req: CreateTableReq) -> Result<()> {
         Err(ErrorCode::Unimplemented(
             "Cannot create table in HIVE catalog",
         ))
     }
 
+    #[async_backtrace::framed]
     async fn drop_table_by_id(&self, _req: DropTableByIdReq) -> Result<DropTableReply> {
         Err(ErrorCode::Unimplemented(
             "Cannot drop table in HIVE catalog",
         ))
     }
 
+    #[async_backtrace::framed]
     async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
         Err(ErrorCode::Unimplemented(
             "Cannot undrop table in HIVE catalog",
         ))
     }
 
+    #[async_backtrace::framed]
     async fn rename_table(&self, _req: RenameTableReq) -> Result<RenameTableReply> {
         Err(ErrorCode::Unimplemented(
             "Cannot rename table in HIVE catalog",
@@ -329,6 +346,7 @@ impl Catalog for HiveCatalog {
     }
 
     // Check a db.table is exists or not.
+    #[async_backtrace::framed]
     async fn exists_table(&self, tenant: &str, db_name: &str, table_name: &str) -> Result<bool> {
         // TODO refine this
         match self.get_table(tenant, db_name, table_name).await {
@@ -343,6 +361,7 @@ impl Catalog for HiveCatalog {
         }
     }
 
+    #[async_backtrace::framed]
     async fn upsert_table_option(
         &self,
         _tenant: &str,
@@ -354,6 +373,7 @@ impl Catalog for HiveCatalog {
         ))
     }
 
+    #[async_backtrace::framed]
     async fn update_table_meta(
         &self,
         _table_info: &TableInfo,
@@ -364,6 +384,7 @@ impl Catalog for HiveCatalog {
         ))
     }
 
+    #[async_backtrace::framed]
     async fn get_table_copied_file_info(
         &self,
         _tenant: &str,
@@ -373,6 +394,7 @@ impl Catalog for HiveCatalog {
         unimplemented!()
     }
 
+    #[async_backtrace::framed]
     async fn truncate_table(
         &self,
         _table_info: &TableInfo,
@@ -381,6 +403,7 @@ impl Catalog for HiveCatalog {
         unimplemented!()
     }
 
+    #[async_backtrace::framed]
     async fn count_tables(&self, _req: CountTablesReq) -> Result<CountTablesReply> {
         unimplemented!()
     }
@@ -398,7 +421,7 @@ impl Catalog for HiveCatalog {
 
     // List all table functions' names.
     fn list_table_functions(&self) -> Vec<String> {
-        unimplemented!()
+        vec![]
     }
 
     // Get table engines

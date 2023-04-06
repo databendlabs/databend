@@ -126,74 +126,80 @@ insert into t1 values(1),(1)
 query T
 explain select * from t left join t1 on t.a = t1.a limit 1,2
 ----
-Limit
-├── limit: 2
-├── offset: 1
+EvalScalar
+├── expressions: [t.a (#0), t1.a (#1)]
 ├── estimated rows: 2.00
-└── HashJoin
-    ├── join type: RIGHT OUTER
-    ├── build keys: [CAST(t.a (#0) AS Int32 NULL)]
-    ├── probe keys: [t1.a (#1)]
-    ├── filters: []
+└── Limit
+    ├── limit: 2
+    ├── offset: 1
     ├── estimated rows: 2.00
-    ├── Limit(Build)
-    │   ├── limit: 2
-    │   ├── offset: 1
-    │   ├── estimated rows: 1.00
-    │   └── TableScan
-    │       ├── table: default.default.t
-    │       ├── read rows: 1
-    │       ├── read bytes: 35
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │       ├── push downs: [filters: [], limit: 3]
-    │       └── estimated rows: 1.00
-    └── TableScan(Probe)
-        ├── table: default.default.t1
-        ├── read rows: 2
-        ├── read bytes: 39
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 2.00
+    └── HashJoin
+        ├── join type: RIGHT OUTER
+        ├── build keys: [CAST(t.a (#0) AS Int32 NULL)]
+        ├── probe keys: [t1.a (#1)]
+        ├── filters: []
+        ├── estimated rows: 2.00
+        ├── Limit(Build)
+        │   ├── limit: 2
+        │   ├── offset: 1
+        │   ├── estimated rows: 1.00
+        │   └── TableScan
+        │       ├── table: default.default.t
+        │       ├── read rows: 1
+        │       ├── read bytes: 35
+        │       ├── partitions total: 1
+        │       ├── partitions scanned: 1
+        │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        │       ├── push downs: [filters: [], limit: 3]
+        │       └── estimated rows: 1.00
+        └── TableScan(Probe)
+            ├── table: default.default.t1
+            ├── read rows: 2
+            ├── read bytes: 39
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 2.00
 
 query T
 explain select * from t1 right join t on t.a = t1.a limit 1,2
 ----
-Limit
-├── limit: 2
-├── offset: 1
+EvalScalar
+├── expressions: [t1.a (#0), t.a (#1)]
 ├── estimated rows: 2.00
-└── HashJoin
-    ├── join type: RIGHT OUTER
-    ├── build keys: [CAST(t.a (#1) AS Int32 NULL)]
-    ├── probe keys: [t1.a (#0)]
-    ├── filters: []
+└── Limit
+    ├── limit: 2
+    ├── offset: 1
     ├── estimated rows: 2.00
-    ├── Limit(Build)
-    │   ├── limit: 2
-    │   ├── offset: 1
-    │   ├── estimated rows: 1.00
-    │   └── TableScan
-    │       ├── table: default.default.t
-    │       ├── read rows: 1
-    │       ├── read bytes: 35
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │       ├── push downs: [filters: [], limit: 3]
-    │       └── estimated rows: 1.00
-    └── TableScan(Probe)
-        ├── table: default.default.t1
-        ├── read rows: 2
-        ├── read bytes: 39
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 2.00
+    └── HashJoin
+        ├── join type: RIGHT OUTER
+        ├── build keys: [CAST(t.a (#1) AS Int32 NULL)]
+        ├── probe keys: [t1.a (#0)]
+        ├── filters: []
+        ├── estimated rows: 2.00
+        ├── Limit(Build)
+        │   ├── limit: 2
+        │   ├── offset: 1
+        │   ├── estimated rows: 1.00
+        │   └── TableScan
+        │       ├── table: default.default.t
+        │       ├── read rows: 1
+        │       ├── read bytes: 35
+        │       ├── partitions total: 1
+        │       ├── partitions scanned: 1
+        │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        │       ├── push downs: [filters: [], limit: 3]
+        │       └── estimated rows: 1.00
+        └── TableScan(Probe)
+            ├── table: default.default.t1
+            ├── read rows: 2
+            ├── read bytes: 39
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 2.00
 
 query II
 select * from t left join t1 on t.a = t1.a limit 1

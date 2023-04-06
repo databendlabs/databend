@@ -12,10 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
+use chrono::DateTime;
+use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::TableInfo;
+use common_meta_app::share::ShareGrantObjectPrivilege;
+use enumflags2::BitFlags;
 use poem::async_trait;
 use poem::error::Result as PoemResult;
 use poem::http;
@@ -116,6 +123,54 @@ pub struct RequestFile {
     pub method: String,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct TableMetaResponse {
+    pub table_info_map: BTreeMap<String, TableInfo>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct TableMetaLambdaInput {
+    pub authorization: String,
+    pub share_name: String,
+    pub tenant_id: String,
+    pub request_tables: HashSet<String>,
+    pub request_id: String,
+}
+
+// AsRef implement
+impl AsRef<TableMetaLambdaInput> for TableMetaLambdaInput {
+    fn as_ref(&self) -> &TableMetaLambdaInput {
+        self
+    }
+}
+
+impl TableMetaLambdaInput {
+    pub fn new(
+        authorization: String,
+        share_name: String,
+        tenant_id: String,
+        request_tables: Vec<String>,
+        request_id: Option<String>,
+    ) -> Self {
+        let request_id = match request_id {
+            Some(id) => id,
+            None => uuid::Uuid::new_v4().to_string(),
+        };
+        TableMetaLambdaInput {
+            authorization,
+            share_name,
+            tenant_id,
+            request_tables: HashSet::from_iter(request_tables.into_iter()),
+            request_id,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct TableMetaLambdaOutput {
+    table_meta_resp: TableMetaResponse,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Credentials {
     pub(crate) token: String,
@@ -123,6 +178,7 @@ pub struct Credentials {
 
 #[async_trait]
 impl<'a> FromRequest<'a> for &'a Credentials {
+    #[async_backtrace::framed]
     async fn from_request(req: &'a Request, _body: &mut RequestBody) -> PoemResult<Self> {
         Ok(req
             .extensions()
@@ -178,9 +234,12 @@ pub struct ShareSpec {
     pub name: String,
     pub share_id: u64,
     pub version: u64,
-    pub database: DatabaseSpec,
+    pub database: Option<DatabaseSpec>,
     pub tables: Vec<TableSpec>,
     pub tenants: Vec<String>,
+    pub db_privileges: Option<BitFlags<ShareGrantObjectPrivilege>>,
+    pub comment: Option<String>,
+    pub share_on: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

@@ -25,6 +25,8 @@ pub enum ExplainKind {
     Raw,
     Plan,
 
+    JOIN,
+
     // Explain analyze plan
     AnalyzePlan,
 }

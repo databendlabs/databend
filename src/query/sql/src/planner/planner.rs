@@ -50,7 +50,7 @@ pub struct Planner {
 pub struct PlanExtras {
     pub metadata: MetadataRef,
     pub format: Option<String>,
-    pub stament: Statement,
+    pub statement: Statement,
 }
 
 impl Planner {
@@ -58,6 +58,7 @@ impl Planner {
         Planner { ctx }
     }
 
+    #[async_backtrace::framed]
     pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, PlanExtras)> {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
@@ -111,7 +112,7 @@ impl Planner {
                 Ok((optimized_plan, PlanExtras {
                     metadata,
                     format,
-                    stament: stmt,
+                    statement: stmt,
                 }))
             }
             .await;

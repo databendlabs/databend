@@ -46,6 +46,7 @@ impl Interpreter for AlterShareTenantsInterpreter {
         "AlterShareTenantsInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let meta_api = UserApiProvider::instance().get_meta_store_client();
@@ -65,6 +66,7 @@ impl Interpreter for AlterShareTenantsInterpreter {
                 &self.ctx.get_tenant(),
                 self.ctx.get_data_operator()?.operator(),
                 resp.spec_vec,
+                None,
             )
             .await?;
         } else {
@@ -82,6 +84,7 @@ impl Interpreter for AlterShareTenantsInterpreter {
                 &self.ctx.get_tenant(),
                 self.ctx.get_data_operator()?.operator(),
                 resp.spec_vec,
+                None,
             )
             .await?;
         };

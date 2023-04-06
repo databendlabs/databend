@@ -31,7 +31,7 @@ use common_expression::HashMethodKind;
 use common_expression::HashMethodSerializer;
 use common_expression::HashMethodSingleString;
 use common_expression::RemoteExpr;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::HashMap;
 use common_hashtable::HashtableKeyable;
 use common_hashtable::ShortStringHashMap;

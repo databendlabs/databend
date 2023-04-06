@@ -14,7 +14,8 @@
 
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::Literal;
+use common_expression::types::NumberScalar;
+use common_expression::Scalar;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::RuleID;
@@ -33,7 +34,7 @@ use crate::plans::ScalarExpr;
 /// Fold simple `COUNT(*)` aggregate with statistics information.
 pub struct RuleFoldCountAggregate {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RuleFoldCountAggregate {
@@ -43,7 +44,7 @@ impl RuleFoldCountAggregate {
             //  Aggregate
             //  \
             //   *
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Aggregate,
                 }
@@ -54,7 +55,7 @@ impl RuleFoldCountAggregate {
                     }
                     .into(),
                 ),
-            ),
+            )],
         }
     }
 }
@@ -104,8 +105,7 @@ impl Rule for RuleFoldCountAggregate {
             for item in scalars.iter_mut() {
                 item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
                     span: item.scalar.span(),
-                    value: Literal::UInt64(card),
-                    data_type: Box::new(item.scalar.data_type()?),
+                    value: Scalar::Number(NumberScalar::UInt64(card)),
                 });
             }
             let eval_scalar = EvalScalar { items: scalars };
@@ -114,9 +114,8 @@ impl Rule for RuleFoldCountAggregate {
                 eval_scalar.into(),
                 SExpr::create_leaf(dummy_table_scan.into()),
             ));
-        } else if let (true, true, column_stats, Some(table_card)) = (
+        } else if let (true, column_stats, Some(table_card)) = (
             simple_nullable_count,
-            input_prop.statistics.is_accurate,
             input_prop.statistics.column_stats,
             input_prop.statistics.precise_cardinality,
         ) {
@@ -126,8 +125,7 @@ impl Rule for RuleFoldCountAggregate {
                     if agg_func.args.is_empty() {
                         item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
                             span: item.scalar.span(),
-                            value: Literal::UInt64(table_card),
-                            data_type: Box::new(item.scalar.data_type()?),
+                            value: Scalar::Number(NumberScalar::UInt64(table_card)),
                         });
                         return Ok(());
                     } else {
@@ -137,8 +135,9 @@ impl Rule for RuleFoldCountAggregate {
                             if let Some(card) = col_stat {
                                 item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
                                     span: item.scalar.span(),
-                                    value: Literal::UInt64(table_card - card.null_count),
-                                    data_type: Box::new(item.scalar.data_type()?),
+                                    value: Scalar::Number(NumberScalar::UInt64(
+                                        table_card - card.null_count,
+                                    )),
                                 });
                             } else {
                                 return Ok(());
@@ -157,7 +156,7 @@ impl Rule for RuleFoldCountAggregate {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }

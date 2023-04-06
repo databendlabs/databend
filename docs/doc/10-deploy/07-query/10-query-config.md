@@ -72,6 +72,11 @@ You can find [sample configuration files](https://github.com/datafuselabs/databe
 * This setting only takes effect when Databend-query works with remote meta service(`endpoints` is not empty). You don't need to configure it for standalone Databend.
 * Default: 60
 
+### unhealth_endpoint_evict_time
+
+* Internal(in seconds) time that not querying an unhealth meta node endpoint.
+* Default: 120
+
 ## 3. Query config
 
 ### admin_api_address
@@ -103,12 +108,6 @@ You can find [sample configuration files](https://github.com/datafuselabs/databe
 * The port to listen on for MySQL handler, e.g., `3307`.
 * Default: `3307`
 * Env variable: `QUERY_MYSQL_HANDLER_PORT`
-
-### clickhouse_handler_host
-
-* The IP address to listen on for ClickHouse handler, e.g., `0.0.0.0`.
-* Default: `"127.0.0.1"`
-* Env variable: `QUERY_CLICKHOUSE_HANDLER_HOST`
 
 ### clickhouse_http_handler_host
 
@@ -286,7 +285,7 @@ For ease of experience, set all hosts to 0.0.0.0. Exercise caution when setting 
 # Logging
 [log.file]
 on = true
-dir = "./.datanend/logs"
+dir = "./.databend/logs"
 level = "INFO"
 format = "json"
 
@@ -317,9 +316,9 @@ flight_api_address = "0.0.0.0:9091"
 mysql_handler_host = "0.0.0.0"
 mysql_handler_port = 3307
 
-# Query ClickHouse Handler.
-clickhouse_handler_host = "0.0.0.0"
-clickhouse_handler_port = 9001
+# Query ClickHouse HTTP Handler.
+clickhouse_http_handler_host = "0.0.0.0"
+clickhouse_http_handler_port = 9001
 
 # Query HTTP Handler.
 http_handler_host = "0.0.0.0"

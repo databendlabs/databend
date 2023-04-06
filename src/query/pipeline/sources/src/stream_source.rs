@@ -58,6 +58,7 @@ impl<const T: bool> AsyncSource for AsyncStreamSource<T> {
     const SKIP_EMPTY_DATA_BLOCK: bool = T;
 
     #[async_trait::unboxed_simple]
+    #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         match self
             .stream

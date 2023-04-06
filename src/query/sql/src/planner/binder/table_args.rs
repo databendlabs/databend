@@ -18,15 +18,15 @@ use common_ast::ast::Expr;
 use common_catalog::table_args::TableArgs;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::type_check::check_literal;
 use common_expression::ConstantFolder;
 use common_expression::Scalar;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::plans::ConstantExpr;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
 
+#[async_backtrace::framed]
 pub async fn bind_table_args(
     scalar_binder: &mut ScalarBinder<'_>,
     params: &Vec<Expr>,
@@ -61,9 +61,7 @@ pub async fn bind_table_args(
     let named_args: HashMap<String, Scalar> = named_args
         .into_iter()
         .map(|(name, scalar)| match scalar {
-            ScalarExpr::ConstantExpr(ConstantExpr { value, .. }) => {
-                Ok((name, check_literal(&value).0))
-            }
+            ScalarExpr::ConstantExpr(ConstantExpr { value, .. }) => Ok((name, value)),
             _ => Err(ErrorCode::Unimplemented(format!(
                 "Unsupported table named argument type: {:?}",
                 scalar

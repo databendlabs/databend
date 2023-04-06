@@ -45,6 +45,7 @@ impl Interpreter for RevokeShareObjectInterpreter {
         "RevokeShareObjectInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let meta_api = UserApiProvider::instance().get_meta_store_client();
@@ -63,6 +64,7 @@ impl Interpreter for RevokeShareObjectInterpreter {
             &self.ctx.get_tenant(),
             self.ctx.get_data_operator()?.operator(),
             resp.spec_vec,
+            Some(&resp.share_table_info),
         )
         .await?;
 

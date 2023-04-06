@@ -43,7 +43,7 @@ impl ExchangeSink {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let exchange_manager = ctx.get_exchange_manager();
-        let mut flight_exchanges = exchange_manager.get_flight_exchanges(params)?;
+        let mut flight_senders = exchange_manager.get_flight_sender(params)?;
 
         match params {
             ExchangeParams::MergeExchange(params) => {
@@ -73,14 +73,12 @@ impl ExchangeSink {
                     )]));
                 }
 
-                assert_eq!(flight_exchanges.len(), 1);
-                let flight_exchange = flight_exchanges.remove(0);
+                assert_eq!(flight_senders.len(), 1);
+                let flight_sender = flight_senders.remove(0);
                 pipeline.add_sink(|input| {
                     Ok(ProcessorPtr::create(ExchangeWriterSink::create(
                         input,
-                        flight_exchange.clone(),
-                        params.query_id.to_string(),
-                        params.fragment_id,
+                        flight_sender.clone(),
                     )))
                 })
             }
@@ -89,11 +87,7 @@ impl ExchangeSink {
 
                 // exchange writer sink
                 let len = pipeline.output_len();
-                let items = create_writer_items(
-                    flight_exchanges,
-                    params.query_id.clone(),
-                    params.fragment_id,
-                );
+                let items = create_writer_items(flight_senders);
                 pipeline.add_pipe(Pipe::create(len, 0, items));
                 Ok(())
             }

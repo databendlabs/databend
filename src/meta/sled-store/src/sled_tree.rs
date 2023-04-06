@@ -292,14 +292,15 @@ impl SledTree {
     }
 
     /// Append many key-values into SledTree.
-    pub(crate) async fn append<KV, T>(&self, kvs: &[T]) -> Result<(), MetaStorageError>
+    pub(crate) async fn append<KV, T, I>(&self, kvs: I) -> Result<(), MetaStorageError>
     where
         KV: SledKeySpace,
         T: SledAsRef<KV::K, KV::V>,
+        I: IntoIterator<Item = T>,
     {
         let mut batch = sled::Batch::default();
 
-        for t in kvs.iter() {
+        for t in kvs.into_iter() {
             let key = t.as_key();
             let value = t.as_value();
 
@@ -522,9 +523,12 @@ impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
         Ok(res)
     }
 
-    pub async fn append<T>(&self, kvs: &[T]) -> Result<(), MetaStorageError>
-    where T: SledAsRef<KV::K, KV::V> {
-        self.inner.append::<KV, _>(kvs).await
+    pub async fn append<T, I>(&self, kvs: I) -> Result<(), MetaStorageError>
+    where
+        T: SledAsRef<KV::K, KV::V>,
+        I: IntoIterator<Item = T>,
+    {
+        self.inner.append::<KV, _, _>(kvs).await
     }
 
     pub async fn insert(

@@ -14,7 +14,7 @@
 
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::Literal;
+use common_expression::Scalar;
 
 use crate::binder::split_conjunctions;
 use crate::optimizer::rule::Rule;
@@ -96,7 +96,7 @@ fn normalize_predicate_scalar(
 // It'll find all OR expressions and extract the common terms.
 pub struct RuleNormalizeDisjunctiveFilter {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RuleNormalizeDisjunctiveFilter {
@@ -106,7 +106,7 @@ impl RuleNormalizeDisjunctiveFilter {
             // Filter
             //  \
             //   *
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Filter,
                 }
@@ -117,7 +117,7 @@ impl RuleNormalizeDisjunctiveFilter {
                     }
                     .into(),
                 ),
-            ),
+            )],
         }
     }
 }
@@ -161,8 +161,8 @@ impl Rule for RuleNormalizeDisjunctiveFilter {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }
 
@@ -221,8 +221,7 @@ fn process_duplicate_or_exprs(or_args: &[PredicateScalar]) -> (PredicateScalar, 
             PredicateScalar::Other {
                 expr: Box::from(ScalarExpr::ConstantExpr(ConstantExpr {
                     span: None,
-                    value: Literal::Boolean(false),
-                    data_type: Box::new(DataType::Boolean),
+                    value: Scalar::Boolean(false),
                 })),
             },
             false,

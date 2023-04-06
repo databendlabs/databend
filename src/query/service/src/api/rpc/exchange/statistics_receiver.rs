@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::future::Future;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -29,122 +30,120 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::api::rpc::flight_client::FlightExchange;
+use crate::api::rpc::flight_client::FlightSender;
 use crate::api::DataPacket;
 use crate::sessions::QueryContext;
 
 pub struct StatisticsReceiver {
-    ctx: Arc<QueryContext>,
-    exchanges: Vec<FlightExchange>,
+    _runtime: Runtime,
     shutdown_flag: Arc<AtomicBool>,
     shutdown_notify: Arc<Notify>,
     exchange_handler: Vec<JoinHandle<Result<()>>>,
-    runtime: Arc<Runtime>,
 }
 
 impl StatisticsReceiver {
-    pub fn create(
-        ctx: Arc<QueryContext>,
-        exchanges: Vec<FlightExchange>,
+    pub fn spawn_receiver(
+        ctx: &Arc<QueryContext>,
+        statistics_exchanges: HashMap<String, Vec<FlightExchange>>,
     ) -> Result<StatisticsReceiver> {
-        Ok(StatisticsReceiver {
-            ctx,
-            exchanges,
-            shutdown_flag: Arc::new(AtomicBool::new(false)),
-            shutdown_notify: Arc::new(Notify::new()),
-            exchange_handler: vec![],
-            runtime: Arc::new(Runtime::with_worker_threads(
-                2,
-                Some(String::from("StatisticsReceiver")),
-            )?),
-        })
-    }
+        let shutdown_notify = Arc::new(Notify::new());
+        let shutdown_flag = Arc::new(AtomicBool::new(false));
+        let mut exchange_handler = Vec::with_capacity(statistics_exchanges.len());
+        let runtime = Runtime::with_worker_threads(2, Some(String::from("StatisticsReceiver")))?;
 
-    pub fn start(&mut self) {
-        while let Some(flight_exchange) = self.exchanges.pop() {
-            let ctx = self.ctx.clone();
-            let shutdown_flag = self.shutdown_flag.clone();
-            let shutdown_notify = self.shutdown_notify.clone();
+        for (_source, mut exchanges) in statistics_exchanges.into_iter() {
+            debug_assert_eq!(exchanges.len(), 2);
 
-            self.exchange_handler.push(self.runtime.spawn(async move {
-                let mut recv = Box::pin(flight_exchange.recv());
-                let mut notified = Box::pin(shutdown_notify.notified());
+            let (tx, rx) = match (exchanges.remove(0), exchanges.remove(0)) {
+                (tx @ FlightExchange::Sender { .. }, rx @ FlightExchange::Receiver { .. }) => {
+                    (tx.as_sender(), rx.as_receiver())
+                }
+                (rx @ FlightExchange::Receiver { .. }, tx @ FlightExchange::Sender { .. }) => {
+                    (tx.as_sender(), rx.as_receiver())
+                }
+                _ => unreachable!(),
+            };
 
-                'worker_loop: while !shutdown_flag.load(Ordering::Relaxed) {
-                    let interval = Box::pin(tokio::time::sleep(Duration::from_millis(500)));
+            exchange_handler.push(runtime.spawn({
+                let ctx = ctx.clone();
+                let shutdown_flag = shutdown_flag.clone();
+                let shutdown_notify = shutdown_notify.clone();
 
-                    match select3(interval, notified, recv).await {
-                        Select3Output::Left((_res, middle, right)) => {
-                            recv = right;
-                            notified = middle;
+                async move {
+                    let mut recv = Box::pin(rx.recv());
+                    let mut notified = Box::pin(shutdown_notify.notified());
 
-                            if !shutdown_flag.load(Ordering::Relaxed) {
-                                match Self::fetch(&ctx, &flight_exchange, recv).await {
+                    'worker_loop: while !shutdown_flag.load(Ordering::Relaxed) {
+                        let interval = Box::pin(tokio::time::sleep(Duration::from_millis(500)));
+
+                        match select3(interval, notified, recv).await {
+                            Select3Output::Left((_res, middle, right)) => {
+                                recv = right;
+                                notified = middle;
+
+                                if !shutdown_flag.load(Ordering::Relaxed) {
+                                    match Self::fetch(&ctx, &tx, recv).await {
+                                        Ok(true) => {
+                                            return Ok(());
+                                        }
+                                        Ok(false) => {
+                                            recv = Box::pin(rx.recv());
+                                        }
+                                        Err(cause) => {
+                                            ctx.get_current_session()
+                                                .force_kill_query(cause.clone());
+                                            return Err(cause);
+                                        }
+                                    };
+                                }
+                            }
+                            Select3Output::Middle((_, _, right)) => {
+                                recv = right;
+                                break 'worker_loop;
+                            }
+                            Select3Output::Right((res, _, middle)) => {
+                                notified = middle;
+                                match StatisticsReceiver::recv_data(&ctx, res) {
                                     Ok(true) => {
-                                        flight_exchange.close_input().await;
-                                        flight_exchange.close_output().await;
                                         return Ok(());
                                     }
                                     Ok(false) => {
-                                        recv = Box::pin(flight_exchange.recv());
+                                        recv = Box::pin(rx.recv());
                                     }
                                     Err(cause) => {
                                         ctx.get_current_session().force_kill_query(cause.clone());
-                                        flight_exchange.close_input().await;
-                                        flight_exchange.close_output().await;
                                         return Err(cause);
                                     }
                                 };
                             }
                         }
-                        Select3Output::Middle((_, _, right)) => {
-                            recv = right;
-                            break 'worker_loop;
-                        }
-                        Select3Output::Right((res, _, middle)) => {
-                            notified = middle;
-                            match Self::recv_data(&ctx, res) {
-                                Ok(true) => {
-                                    flight_exchange.close_input().await;
-                                    flight_exchange.close_output().await;
-                                    return Ok(());
-                                }
-                                Ok(false) => {
-                                    recv = Box::pin(flight_exchange.recv());
-                                }
-                                Err(cause) => {
-                                    ctx.get_current_session().force_kill_query(cause.clone());
-                                    flight_exchange.close_input().await;
-                                    flight_exchange.close_output().await;
-                                    return Err(cause);
-                                }
-                            };
-                        }
                     }
-                }
 
-                if let Err(cause) = Self::fetch(&ctx, &flight_exchange, recv).await {
-                    ctx.get_current_session().force_kill_query(cause.clone());
-                    flight_exchange.close_input().await;
-                    flight_exchange.close_output().await;
-                    return Err(cause);
-                }
+                    if let Err(cause) = StatisticsReceiver::fetch(&ctx, &tx, recv).await {
+                        ctx.get_current_session().force_kill_query(cause.clone());
+                        return Err(cause);
+                    }
 
-                flight_exchange.close_input().await;
-                flight_exchange.close_output().await;
-                Ok(())
+                    Ok(())
+                }
             }));
         }
+
+        Ok(StatisticsReceiver {
+            shutdown_flag,
+            shutdown_notify,
+            exchange_handler,
+            _runtime: runtime,
+        })
     }
 
+    #[async_backtrace::framed]
     async fn fetch(
         ctx: &Arc<QueryContext>,
-        flight_exchange: &FlightExchange,
+        tx: &FlightSender,
         recv: impl Future<Output = Result<Option<DataPacket>>>,
     ) -> Result<bool> {
-        if let Err(error) = flight_exchange
-            .send(DataPacket::FetchProgressAndPrecommit)
-            .await
-        {
+        if let Err(error) = tx.send(DataPacket::FetchProgressAndPrecommit).await {
             // The query is done(in remote).
             return match error.code() == ErrorCode::ABORTED_QUERY {
                 true => Ok(true),

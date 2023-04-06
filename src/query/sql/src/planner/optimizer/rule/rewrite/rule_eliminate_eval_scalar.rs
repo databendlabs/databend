@@ -21,12 +21,10 @@ use crate::optimizer::SExpr;
 use crate::plans::EvalScalar;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
-use crate::plans::ScalarExpr;
-use crate::plans::ScalarItem;
 
 pub struct RuleEliminateEvalScalar {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RuleEliminateEvalScalar {
@@ -36,7 +34,7 @@ impl RuleEliminateEvalScalar {
             // EvalScalar
             //  \
             //   *
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::EvalScalar,
                 }
@@ -47,7 +45,7 @@ impl RuleEliminateEvalScalar {
                     }
                     .into(),
                 ),
-            ),
+            )],
         }
     }
 }
@@ -65,28 +63,10 @@ impl Rule for RuleEliminateEvalScalar {
             state.add_result(s_expr.child(0)?.clone());
             return Ok(());
         }
-
-        // TODO(leiysky): Use another rule to do this.
-        // Remove trivial column reference scalar.
-        if eval_scalar.items.iter().any(|item| matches!(&item.scalar, ScalarExpr::BoundColumnRef(column) if column.column.index == item.index)) {
-            let new_items = eval_scalar
-                .items
-                .into_iter()
-                .filter(|item| !matches!(&item.scalar, ScalarExpr::BoundColumnRef(column) if column.column.index == item.index))
-                .collect::<Vec<ScalarItem>>();
-            if new_items.is_empty() {
-                state.add_result(s_expr.child(0)?.clone());
-            } else {
-                state.add_result(SExpr::create_unary(
-                    EvalScalar { items: new_items }.into(),
-                    s_expr.child(0)?.clone(),
-                ));
-            }
-        }
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }

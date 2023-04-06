@@ -21,7 +21,7 @@ hive-it = []
 [dependencies] # In alphabetical order
 # Workspace dependencies
 
-# Github dependencies
+# GitHub dependencies
 
 # Crates.io dependencies
 thrift = { package = "databend-thrift", version = "0.17.0" }

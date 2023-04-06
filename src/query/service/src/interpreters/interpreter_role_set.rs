@@ -42,6 +42,7 @@ impl Interpreter for SetRoleInterpreter {
     }
 
     #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let session = self.ctx.get_current_session();
 

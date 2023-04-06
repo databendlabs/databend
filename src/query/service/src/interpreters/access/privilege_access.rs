@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::UserPrivilegeType;
 use common_sql::plans::CopyPlan;
+use common_sql::plans::RewriteKind;
 
 use crate::interpreters::access::AccessChecker;
 use crate::sessions::QueryContext;
@@ -36,11 +37,27 @@ impl PrivilegeAccess {
 
 #[async_trait::async_trait]
 impl AccessChecker for PrivilegeAccess {
+    #[async_backtrace::framed]
     async fn check(&self, plan: &Plan) -> Result<()> {
         let session = self.ctx.get_current_session();
 
         match plan {
-            Plan::Query { metadata, .. } => {
+            Plan::Query {
+                metadata,
+                rewrite_kind,
+                ..
+            } => {
+                match rewrite_kind {
+                    Some(RewriteKind::ShowDatabases)
+                    | Some(RewriteKind::ShowTables)
+                    | Some(RewriteKind::ShowColumns)
+                    | Some(RewriteKind::ShowEngines)
+                    | Some(RewriteKind::ShowFunctions)
+                    | Some(RewriteKind::ShowTableFunctions) => {
+                        return Ok(());
+                    }
+                    _ => {}
+                };
                 let metadata = metadata.read().clone();
                 for table in metadata.tables() {
                     if table.is_source_of_view() {
@@ -421,7 +438,10 @@ impl AccessChecker for PrivilegeAccess {
                         .await?;
                 }
             },
-            Plan::CreateShare(_)
+            Plan::CreateShareEndpoint(_)
+            | Plan::ShowShareEndpoint(_)
+            | Plan::DropShareEndpoint(_)
+            | Plan::CreateShare(_)
             | Plan::DropShare(_)
             | Plan::DescShare(_)
             | Plan::ShowShares(_)
@@ -429,7 +449,6 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::ShowCreateCatalog(_)
             | Plan::CreateCatalog(_)
             | Plan::DropCatalog(_)
-            | Plan::ListStage(_)
             | Plan::CreateStage(_)
             | Plan::DropStage(_)
             | Plan::RemoveStage(_)

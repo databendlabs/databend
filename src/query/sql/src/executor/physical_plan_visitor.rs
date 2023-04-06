@@ -27,11 +27,12 @@ use super::HashJoin;
 use super::Limit;
 use super::PhysicalPlan;
 use super::Project;
+use super::ProjectSet;
 use super::Sort;
 use super::TableScan;
-use super::Unnest;
 use crate::executor::RuntimeFilterSource;
 use crate::executor::UnionAll;
+use crate::executor::Window;
 
 pub trait PhysicalPlanReplacer {
     fn replace(&mut self, plan: &PhysicalPlan) -> Result<PhysicalPlan> {
@@ -43,6 +44,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::AggregateExpand(plan) => self.replace_aggregate_expand(plan),
             PhysicalPlan::AggregatePartial(plan) => self.replace_aggregate_partial(plan),
             PhysicalPlan::AggregateFinal(plan) => self.replace_aggregate_final(plan),
+            PhysicalPlan::Window(plan) => self.replace_window(plan),
             PhysicalPlan::Sort(plan) => self.replace_sort(plan),
             PhysicalPlan::Limit(plan) => self.replace_limit(plan),
             PhysicalPlan::HashJoin(plan) => self.replace_hash_join(plan),
@@ -51,7 +53,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ExchangeSink(plan) => self.replace_exchange_sink(plan),
             PhysicalPlan::UnionAll(plan) => self.replace_union(plan),
             PhysicalPlan::DistributedInsertSelect(plan) => self.replace_insert_select(plan),
-            PhysicalPlan::Unnest(plan) => self.replace_unnest(plan),
+            PhysicalPlan::ProjectSet(plan) => self.replace_project_set(plan),
             PhysicalPlan::RuntimeFilterSource(plan) => self.replace_runtime_filter_source(plan),
         }
     }
@@ -130,6 +132,20 @@ pub trait PhysicalPlanReplacer {
             agg_funcs: plan.agg_funcs.clone(),
             stat_info: plan.stat_info.clone(),
             limit: plan.limit,
+        }))
+    }
+
+    fn replace_window(&mut self, plan: &Window) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+
+        Ok(PhysicalPlan::Window(Window {
+            plan_id: plan.plan_id,
+            index: plan.index,
+            input: Box::new(input),
+            func: plan.func.clone(),
+            partition_by: plan.partition_by.clone(),
+            order_by: plan.order_by.clone(),
+            window_frame: plan.window_frame.clone(),
         }))
     }
 
@@ -233,12 +249,12 @@ pub trait PhysicalPlanReplacer {
         )))
     }
 
-    fn replace_unnest(&mut self, plan: &Unnest) -> Result<PhysicalPlan> {
+    fn replace_project_set(&mut self, plan: &ProjectSet) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::Unnest(Unnest {
+        Ok(PhysicalPlan::ProjectSet(ProjectSet {
             plan_id: plan.plan_id,
             input: Box::new(input),
-            num_columns: plan.num_columns,
+            srf_exprs: plan.srf_exprs.clone(),
             stat_info: plan.stat_info.clone(),
         }))
     }
@@ -288,6 +304,9 @@ impl PhysicalPlan {
                 PhysicalPlan::AggregateFinal(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
+                PhysicalPlan::Window(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
                 PhysicalPlan::Sort(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
@@ -312,7 +331,7 @@ impl PhysicalPlan {
                 PhysicalPlan::DistributedInsertSelect(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::Unnest(plan) => {
+                PhysicalPlan::ProjectSet(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit)
                 }
                 PhysicalPlan::RuntimeFilterSource(plan) => {

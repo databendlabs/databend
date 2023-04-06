@@ -26,6 +26,7 @@ use crate::plans::Operator;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
+use crate::plans::WindowFuncType;
 use crate::IndexType;
 use crate::ScalarExpr;
 
@@ -253,11 +254,22 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
                     .any(|expr| find_subquery_in_expr(&expr.scalar))
         }
         RelOperator::Window(op) => {
-            op.partition_by
+            op.order_by
                 .iter()
-                .any(|expr| find_subquery_in_expr(&expr.scalar))
-                || find_subquery_in_expr(&op.aggregate_function.scalar)
+                .any(|o| find_subquery_in_expr(&o.order_by_item.scalar))
+                || op
+                    .partition_by
+                    .iter()
+                    .any(|expr| find_subquery_in_expr(&expr.scalar))
+                || match &op.function {
+                    WindowFuncType::Aggregate(agg) => agg.args.iter().any(find_subquery_in_expr),
+                    _ => false,
+                }
         }
+        RelOperator::ProjectSet(op) => op
+            .srfs
+            .iter()
+            .any(|expr| find_subquery_in_expr(&expr.scalar)),
     }
 }
 
@@ -276,11 +288,17 @@ fn find_subquery_in_expr(expr: &ScalarExpr) -> bool {
         ScalarExpr::ComparisonExpr(expr) => {
             find_subquery_in_expr(&expr.left) || find_subquery_in_expr(&expr.right)
         }
-        ScalarExpr::WindowFunction(expr) => expr.agg_func.args.iter().any(find_subquery_in_expr),
+        ScalarExpr::WindowFunction(expr) => {
+            let flag = match &expr.func {
+                WindowFuncType::Aggregate(agg) => agg.args.iter().any(find_subquery_in_expr),
+                _ => false,
+            };
+            flag || expr.partition_by.iter().any(find_subquery_in_expr)
+                || expr.order_by.iter().any(|o| find_subquery_in_expr(&o.expr))
+        }
         ScalarExpr::AggregateFunction(expr) => expr.args.iter().any(find_subquery_in_expr),
         ScalarExpr::FunctionCall(expr) => expr.arguments.iter().any(find_subquery_in_expr),
         ScalarExpr::CastExpr(expr) => find_subquery_in_expr(&expr.argument),
         ScalarExpr::SubqueryExpr(_) => true,
-        ScalarExpr::Unnest(expr) => find_subquery_in_expr(&expr.argument),
     }
 }

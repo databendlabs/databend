@@ -175,6 +175,12 @@ impl From<opendal::Error> for ErrorCode {
     }
 }
 
+impl From<http::Error> for ErrorCode {
+    fn from(error: http::Error) -> Self {
+        ErrorCode::from_std_error(error)
+    }
+}
+
 impl From<std::io::Error> for ErrorCode {
     fn from(error: std::io::Error) -> Self {
         use std::io::ErrorKind;
@@ -219,7 +225,7 @@ pub struct SerializedError {
 
 impl Display for SerializedError {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "Code: {}, displayText = {}.", self.code, self.message,)
+        write!(f, "Code: {}, Text = {}.", self.code, self.message,)
     }
 }
 

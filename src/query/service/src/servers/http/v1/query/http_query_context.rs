@@ -39,6 +39,7 @@ impl HttpQueryContext {
 
 #[async_trait::async_trait]
 impl<'a> FromRequest<'a> for &'a HttpQueryContext {
+    #[async_backtrace::framed]
     async fn from_request(req: &'a Request, _body: &mut RequestBody) -> PoemResult<Self> {
         Ok(req.extensions().get::<HttpQueryContext>().expect(
             "To use the `HttpQueryContext` extractor, the `HTTPSessionMiddleware` is required",

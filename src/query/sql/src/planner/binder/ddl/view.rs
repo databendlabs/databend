@@ -25,6 +25,7 @@ use crate::plans::DropViewPlan;
 use crate::plans::Plan;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_create_view(
         &mut self,
         stmt: &CreateViewStmt,
@@ -59,6 +60,7 @@ impl Binder {
         Ok(Plan::CreateView(Box::new(plan)))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_alter_view(
         &mut self,
         stmt: &AlterViewStmt,
@@ -91,6 +93,7 @@ impl Binder {
         Ok(Plan::AlterView(Box::new(plan)))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_drop_view(
         &mut self,
         stmt: &DropViewStmt,

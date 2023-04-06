@@ -77,6 +77,7 @@ impl SegmentCompactMutator {
 
 #[async_trait::async_trait]
 impl TableMutator for SegmentCompactMutator {
+    #[async_backtrace::framed]
     async fn target_select(&mut self) -> Result<bool> {
         let select_begin = Instant::now();
 
@@ -121,6 +122,7 @@ impl TableMutator for SegmentCompactMutator {
         Ok(self.has_compaction())
     }
 
+    #[async_backtrace::framed]
     async fn try_commit(self: Box<Self>, table: Arc<dyn Table>) -> Result<()> {
         if !self.has_compaction() {
             // defensive checking
@@ -189,6 +191,7 @@ impl<'a> SegmentCompactor<'a> {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn compact<T>(
         mut self,
         reverse_locations: Vec<Location>,
@@ -204,9 +207,10 @@ impl<'a> SegmentCompactor<'a> {
         let segments_io = self.segment_reader;
         let chunk_size = self.chunk_size;
         let mut checked_end_at = 0;
+        let mut is_end = false;
         for chunk in reverse_locations.chunks(chunk_size) {
             let segment_infos = segments_io
-                .read_segments(chunk)
+                .read_segments(chunk, false)
                 .await?
                 .into_iter()
                 .collect::<Result<Vec<_>>>()?;
@@ -216,6 +220,7 @@ impl<'a> SegmentCompactor<'a> {
                 let compacted = self.num_fragments_compacted();
                 checked_end_at += 1;
                 if compacted >= limit {
+                    is_end = true;
                     // break if number of compacted segments reach the limit
                     // note that during the finalization of compaction, there might be some extra
                     // fragmented segments also need to be compacted, we just let it go
@@ -234,6 +239,10 @@ impl<'a> SegmentCompactor<'a> {
                 info!(status);
                 (status_callback)(status);
             }
+
+            if is_end {
+                break;
+            }
         }
         let mut compaction = self.finalize().await?;
 
@@ -245,7 +254,7 @@ impl<'a> SegmentCompactor<'a> {
             let start_pos = checked_end_at;
             for chunk in reverse_locations[start_pos..].chunks(chunk_size) {
                 let segment_infos = segments_io
-                    .read_segments(chunk)
+                    .read_segments(chunk, false)
                     .await?
                     .into_iter()
                     .collect::<Result<Vec<_>>>()?;
@@ -276,6 +285,7 @@ impl<'a> SegmentCompactor<'a> {
     }
 
     // accumulate one segment
+    #[async_backtrace::framed]
     pub async fn add(&mut self, segment_info: Arc<SegmentInfo>, location: Location) -> Result<()> {
         let num_blocks_current_segment = segment_info.blocks.len() as u64;
 
@@ -307,6 +317,7 @@ impl<'a> SegmentCompactor<'a> {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn compact_fragments(&mut self) -> Result<()> {
         if self.fragmented_segments.is_empty() {
             return Ok(());
@@ -356,6 +367,7 @@ impl<'a> SegmentCompactor<'a> {
     }
 
     // finalize the compaction, compacts left fragments (if any)
+    #[async_backtrace::framed]
     pub async fn finalize(mut self) -> Result<SegmentCompactionState> {
         if !self.fragmented_segments.is_empty() {
             // some fragments left, compact them

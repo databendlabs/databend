@@ -28,7 +28,7 @@ use crate::MetadataRef;
 
 /// Helper for binding scalar expression with `BindContext`.
 pub struct ScalarBinder<'a> {
-    bind_context: &'a BindContext,
+    bind_context: &'a mut BindContext,
     ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
@@ -37,7 +37,7 @@ pub struct ScalarBinder<'a> {
 
 impl<'a> ScalarBinder<'a> {
     pub fn new(
-        bind_context: &'a BindContext,
+        bind_context: &'a mut BindContext,
         ctx: Arc<dyn TableContext>,
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
@@ -52,6 +52,7 @@ impl<'a> ScalarBinder<'a> {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn bind(&mut self, expr: &Expr) -> Result<(ScalarExpr, DataType)> {
         let mut type_checker = TypeChecker::new(
             self.bind_context,

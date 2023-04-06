@@ -1,5 +1,5 @@
 ast            : regexp_instr('dog cat dog', 'dog', 1)
-raw expr       : regexp_instr("dog cat dog", "dog", 1_u8)
+raw expr       : regexp_instr("dog cat dog", "dog", 1)
 checked expr   : regexp_instr<String, String, Int64>("dog cat dog", "dog", to_int64<UInt8>(1_u8))
 optimized expr : 1_u64
 output type    : UInt64
@@ -8,7 +8,7 @@ output         : 1
 
 
 ast            : regexp_instr('aa aaa aaaa aa aaa aaaa', 'a{2}', 1)
-raw expr       : regexp_instr("aa aaa aaaa aa aaa aaaa", "a{2}", 1_u8)
+raw expr       : regexp_instr("aa aaa aaaa aa aaa aaaa", "a{2}", 1)
 checked expr   : regexp_instr<String, String, Int64>("aa aaa aaaa aa aaa aaaa", "a{2}", to_int64<UInt8>(1_u8))
 optimized expr : 1_u64
 output type    : UInt64
@@ -17,7 +17,7 @@ output         : 1
 
 
 ast            : regexp_instr('aa aaa aaaa aa aaa aaaa', NULL, 2)
-raw expr       : regexp_instr("aa aaa aaaa aa aaa aaaa", NULL, 2_u8)
+raw expr       : regexp_instr("aa aaa aaaa aa aaa aaaa", NULL, 2)
 checked expr   : regexp_instr<String NULL, String NULL, Int64 NULL>(CAST("aa aaa aaaa aa aaa aaaa" AS String NULL), CAST(NULL AS String NULL), CAST(2_u8 AS Int64 NULL))
 optimized expr : NULL
 output type    : UInt64 NULL
@@ -26,7 +26,7 @@ output         : NULL
 
 
 ast            : regexp_instr('', '', 1)
-raw expr       : regexp_instr("", "", 1_u8)
+raw expr       : regexp_instr("", "", 1)
 checked expr   : regexp_instr<String, String, Int64>("", "", to_int64<UInt8>(1_u8))
 optimized expr : 0_u64
 output type    : UInt64
@@ -488,7 +488,7 @@ output         : NULL
 
 
 ast            : regexp_replace('abc def ghi', '[a-z]+', 'X', 1, 3)
-raw expr       : regexp_replace("abc def ghi", "[a-z]+", "X", 1_u8, 3_u8)
+raw expr       : regexp_replace("abc def ghi", "[a-z]+", "X", 1, 3)
 checked expr   : regexp_replace<String, String, String, Int64, Int64>("abc def ghi", "[a-z]+", "X", to_int64<UInt8>(1_u8), to_int64<UInt8>(3_u8))
 optimized expr : "abc def X"
 output type    : String
@@ -724,7 +724,7 @@ output         : "abc"
 
 
 ast            : regexp_substr('abc def ghi', '[a-z]+', 1, 3)
-raw expr       : regexp_substr("abc def ghi", "[a-z]+", 1_u8, 3_u8)
+raw expr       : regexp_substr("abc def ghi", "[a-z]+", 1, 3)
 checked expr   : regexp_substr<String, String, Int64, Int64>("abc def ghi", "[a-z]+", to_int64<UInt8>(1_u8), to_int64<UInt8>(3_u8))
 optimized expr : "ghi"
 output type    : String NULL
@@ -760,7 +760,7 @@ output         : NULL
 
 
 ast            : regexp_substr('', '', 1, 3)
-raw expr       : regexp_substr("", "", 1_u8, 3_u8)
+raw expr       : regexp_substr("", "", 1, 3)
 checked expr   : regexp_substr<String, String, Int64, Int64>("", "", to_int64<UInt8>(1_u8), to_int64<UInt8>(3_u8))
 optimized expr : NULL
 output type    : String NULL

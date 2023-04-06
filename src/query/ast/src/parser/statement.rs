@@ -35,6 +35,7 @@ use crate::input::Input;
 use crate::parser::expr::subexpr;
 use crate::parser::expr::*;
 use crate::parser::query::*;
+use crate::parser::share::share_endpoint_uri_location;
 use crate::parser::stage::*;
 use crate::parser::token::*;
 use crate::rule;
@@ -56,7 +57,7 @@ pub enum CreateDatabaseOption {
 pub fn statement(i: Input) -> IResult<StatementMsg> {
     let explain = map_res(
         rule! {
-            EXPLAIN ~ ( AST | SYNTAX | PIPELINE | GRAPH | FRAGMENTS | RAW | MEMO )? ~ #statement
+            EXPLAIN ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | MEMO )? ~ #statement
         },
         |(_, opt_kind, statement)| {
             Ok(Statement::Explain {
@@ -72,6 +73,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                         ExplainKind::Syntax(pretty_stmt)
                     }
                     Some(TokenKind::PIPELINE) => ExplainKind::Pipeline,
+                    Some(TokenKind::JOIN) => ExplainKind::JOIN,
                     Some(TokenKind::GRAPH) => ExplainKind::Graph,
                     Some(TokenKind::FRAGMENTS) => ExplainKind::Fragments,
                     Some(TokenKind::RAW) => ExplainKind::Raw,
@@ -393,6 +395,25 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 full: opt_full.is_some(),
                 limit,
                 with_history: opt_history.is_some(),
+            })
+        },
+    );
+    let show_columns = map(
+        rule! {
+            SHOW ~ FULL? ~ COLUMNS ~ ( FROM | IN ) ~ #ident ~ ((FROM | IN) ~ #period_separated_idents_1_to_2)? ~ #show_limit?
+        },
+        |(_, opt_full, _, _, table, ctl_db, limit)| {
+            let (catalog, database) = match ctl_db {
+                Some((_, (Some(c), d))) => (Some(c), Some(d)),
+                Some((_, (None, d))) => (None, Some(d)),
+                _ => (None, None),
+            };
+            Statement::ShowColumns(ShowColumnsStmt {
+                catalog,
+                database,
+                table,
+                full: opt_full.is_some(),
+                limit,
             })
         },
     );
@@ -909,6 +930,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 file_format: Default::default(),
                 validation_mode: Default::default(),
                 size_limit: Default::default(),
+                max_files: Default::default(),
                 max_file_size: Default::default(),
                 split_size: Default::default(),
                 single: Default::default(),
@@ -956,6 +978,49 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
 
     // share statements
+    let create_share_endpoint = map(
+        rule! {
+            CREATE ~ SHARE ~ ENDPOINT ~ (IF ~ NOT ~ EXISTS )?
+             ~ #ident
+             ~ URL ~ "=" ~ #share_endpoint_uri_location
+             ~ TENANT ~ "=" ~ #ident
+             ~ ( ARGS ~ "=" ~ #options)?
+             ~ ( COMMENT ~ "=" ~ #literal_string)?
+        },
+        |(_, _, _, opt_if_not_exists, endpoint, _, _, url, _, _, tenant, args_opt, comment_opt)| {
+            Statement::CreateShareEndpoint(CreateShareEndpointStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                endpoint,
+                url,
+                tenant,
+                args: match args_opt {
+                    Some(opt) => opt.2,
+                    None => BTreeMap::new(),
+                },
+                comment: match comment_opt {
+                    Some(opt) => Some(opt.2),
+                    None => None,
+                },
+            })
+        },
+    );
+    let show_share_endpoints = map(
+        rule! {
+            SHOW ~ SHARE ~ ENDPOINT
+        },
+        |(_, _, _)| Statement::ShowShareEndpoint(ShowShareEndpointStmt {}),
+    );
+    let drop_share_endpoint = map(
+        rule! {
+            DROP ~ SHARE ~ ENDPOINT ~ (IF ~ EXISTS)? ~ #ident
+        },
+        |(_, _, _, opt_if_exists, endpoint)| {
+            Statement::DropShareEndpoint(DropShareEndpointStmt {
+                if_exists: opt_if_exists.is_some(),
+                endpoint,
+            })
+        },
+    );
     let create_share = map(
         rule! {
             CREATE ~ SHARE ~ (IF ~ NOT ~ EXISTS )? ~ #ident ~ ( COMMENT ~ "=" ~ #literal_string)?
@@ -1093,6 +1158,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         ),
         rule!(
             #show_tables : "`SHOW [FULL] TABLES [FROM <database>] [<show_limit>]`"
+            | #show_columns : "`SHOW [FULL] COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
             | #show_create_table : "`SHOW CREATE TABLE [<database>.]<table>`"
             | #describe_table : "`DESCRIBE [<database>.]<table>`"
             | #show_fields : "`SHOW FIELDS FROM [<database>.]<table>`"
@@ -1140,7 +1206,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #show_file_formats: "`SHOW FILE FORMATS`"
             | #drop_file_format: "`DROP FILE FORMAT  [ IF EXISTS ] <format_name>`"
         ),
-        rule! (
+        rule!(
             #copy_into: "`COPY
                 INTO { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> }
                 FROM { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> | ( <query> ) }
@@ -1150,7 +1216,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`"
         ),
-        rule! (
+        rule!(
             #call: "`CALL <procedure_name>(<parameter>, ...)`"
         ),
         rule!(
@@ -1163,7 +1229,10 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         ),
         // share
         rule!(
-            #create_share: "`CREATE SHARE [IF NOT EXISTS] <share_name> [ COMMENT = '<string_literal>' ]`"
+            #create_share_endpoint: "`CREATE SHARE ENDPOINT [IF NOT EXISTS] <endpoint_name> URL=endpoint_location tenant=tenant_name ARGS=(arg=..) [ COMMENT = '<string_literal>' ]`"
+            | #show_share_endpoints: "`SHOW SHARE ENDPOINT`"
+            | #drop_share_endpoint: "`DROP SHARE ENDPOINT <endpoint_name>`"
+            | #create_share: "`CREATE SHARE [IF NOT EXISTS] <share_name> [ COMMENT = '<string_literal>' ]`"
             | #drop_share: "`DROP SHARE [IF EXISTS] <share_name>`"
             | #grant_share_object: "`GRANT { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } TO SHARE <share_name>`"
             | #revoke_share_object: "`REVOKE { USAGE | SELECT | REFERENCE_USAGE } ON { DATABASE db | TABLE db.table } FROM SHARE <share_name>`"
@@ -1827,6 +1896,10 @@ pub fn copy_option(i: Input) -> IResult<CopyOption> {
             |(_, _, size_limit)| CopyOption::SizeLimit(size_limit as usize),
         ),
         map(
+            rule! { MAX_FILES ~ "=" ~ #literal_u64 },
+            |(_, _, max_files)| CopyOption::MaxFiles(max_files as usize),
+        ),
+        map(
             rule! { MAX_FILE_SIZE ~ "=" ~ #literal_u64 },
             |(_, _, max_file_size)| CopyOption::MaxFileSize(max_file_size as usize),
         ),
@@ -1889,6 +1962,8 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
             table,
             alias: None,
             travel_point: None,
+            pivot: None,
+            unpivot: None,
         },
     )(i)
 }

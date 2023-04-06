@@ -23,7 +23,7 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::RemoteExpr;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::plans::RuntimeFilterId;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -92,6 +92,7 @@ impl RuntimeFilterConnector for RuntimeFilterState {
         Ok(*self.finished.lock())
     }
 
+    #[async_backtrace::framed]
     async fn wait_finish(&self) -> Result<()> {
         if !self.is_finished()? {
             self.finished_notify.notified().await;

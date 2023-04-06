@@ -27,7 +27,7 @@ use crate::plans::ScalarExpr;
 
 pub struct RuleEliminateFilter {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RuleEliminateFilter {
@@ -37,7 +37,7 @@ impl RuleEliminateFilter {
             // Filter
             //  \
             //   *
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Filter,
                 }
@@ -48,7 +48,7 @@ impl RuleEliminateFilter {
                     }
                     .into(),
                 ),
-            ),
+            )],
         }
     }
 }
@@ -101,7 +101,7 @@ impl Rule for RuleEliminateFilter {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }

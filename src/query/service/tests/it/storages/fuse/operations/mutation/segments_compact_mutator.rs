@@ -22,6 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::number::NumberColumn;
 use common_expression::types::number::NumberScalar;
+use common_expression::BlockThresholds;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::Scalar;
@@ -666,6 +667,7 @@ impl CompactSegmentTestFixture {
             &segment_writer,
             num_block_of_segments,
             &rows_per_block,
+            BlockThresholds::default(),
         )
         .await?;
         self.input_blocks = blocks;
@@ -682,6 +684,7 @@ impl CompactSegmentTestFixture {
         segment_writer: &SegmentWriter<'_>,
         block_num_of_segments: &[usize],
         rows_per_blocks: &[usize],
+        thresholds: BlockThresholds,
     ) -> Result<(Vec<Location>, Vec<BlockMeta>, Vec<SegmentInfo>)> {
         let mut locations = vec![];
         let mut collected_blocks = vec![];
@@ -693,12 +696,12 @@ impl CompactSegmentTestFixture {
         {
             let (schema, blocks) =
                 TestFixture::gen_sample_blocks_ex(*num_blocks, *rows_per_block, 1);
-            let mut stats_acc = StatisticsAccumulator::default();
+            let mut stats_acc = StatisticsAccumulator::new(thresholds);
             for block in blocks {
                 let block = block?;
                 let col_stats = gen_columns_statistics(&block, None, &schema)?;
 
-                let block_meta = block_writer
+                let (block_meta, _index_meta) = block_writer
                     .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
                     .await?;
 

@@ -27,6 +27,7 @@ use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::TransformDummy;
+use common_sql::executor::PhysicalPlan;
 use common_sql::parse_result_scan_args;
 use common_sql::MetadataRef;
 use common_storages_result_cache::gen_result_cache_key;
@@ -72,9 +73,15 @@ impl SelectInterpreter {
         })
     }
 
-    pub async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
+    #[inline]
+    #[async_backtrace::framed]
+    pub async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
         let mut builder = PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone());
-        let physical_plan = builder.build(&self.s_expr).await?;
+        builder.build(&self.s_expr).await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn build_pipeline(&self, physical_plan: PhysicalPlan) -> Result<PipelineBuildResult> {
         build_query_pipeline(
             &self.ctx,
             &self.bind_context.columns,
@@ -186,9 +193,10 @@ impl Interpreter for SelectInterpreter {
     /// This method will create a new pipeline
     /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
     #[tracing::instrument(level = "debug", name = "select_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        // 0. Need to build pipeline first to get the partitions.
-        let mut build_res = self.build_pipeline().await?;
+        // 0. Need to build physical plan first to get the partitions.
+        let physical_plan = self.build_physical_plan().await?;
         if self.ctx.get_settings().get_enable_query_result_cache()? && self.ctx.get_cacheable() {
             let key = gen_result_cache_key(self.formatted_ast.as_ref().unwrap());
             // 1. Try to get result from cache.
@@ -211,7 +219,7 @@ impl Interpreter for SelectInterpreter {
                     self.ctx
                         .set_query_id_result_cache(self.ctx.get_id(), meta_key);
                 }
-                return Ok(build_res);
+                return self.build_pipeline(physical_plan).await;
             }
 
             let cache_reader = ResultCacheReader::create(
@@ -233,6 +241,7 @@ impl Interpreter for SelectInterpreter {
                     return PipelineBuildResult::from_blocks(blocks);
                 }
                 Ok(None) => {
+                    let mut build_res = self.build_pipeline(physical_plan).await?;
                     // 2.2 If not found result in cache, add pipelines to write the result to cache.
                     let schema = infer_table_schema(&self.schema())?;
                     self.add_result_cache(&key, schema, &mut build_res.main_pipeline, kv_store)?;
@@ -244,6 +253,7 @@ impl Interpreter for SelectInterpreter {
                 }
             }
         }
-        Ok(build_res)
+        // Not use query cache.
+        self.build_pipeline(physical_plan).await
     }
 }

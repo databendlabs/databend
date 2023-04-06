@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::str;
 use std::sync::Arc;
 
 use common_catalog::table::Table;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
 use common_meta_app::schema::CreateTableReq;
@@ -23,8 +25,6 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
-use common_meta_app::schema::GetTableReq;
-use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableInfo;
@@ -38,10 +38,12 @@ use common_meta_app::schema::UpsertTableCopiedFileReply;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
+use common_sharing::ShareEndpointManager;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
 
+// Share Database implementation for `Database` trait.
 #[derive(Clone)]
 pub struct ShareDatabase {
     ctx: DatabaseContext,
@@ -62,6 +64,34 @@ impl ShareDatabase {
             Ok(acc)
         })
     }
+
+    #[async_backtrace::framed]
+    async fn get_table_info(&self, table_name: &str) -> Result<Arc<TableInfo>> {
+        let table_info_map = ShareEndpointManager::instance()
+            .get_table_info_map(&self.ctx.tenant, &self.db_info, vec![
+                table_name.to_string(),
+            ])
+            .await?;
+        match table_info_map.get(table_name) {
+            None => Err(ErrorCode::UnknownTable(format!(
+                "share table {} is unknown",
+                table_name
+            ))),
+            Some(table_info) => Ok(Arc::new(table_info.clone())),
+        }
+    }
+
+    #[async_backtrace::framed]
+    async fn list_tables(&self) -> Result<Vec<Arc<TableInfo>>> {
+        let table_info_map = ShareEndpointManager::instance()
+            .get_table_info_map(&self.ctx.tenant, &self.db_info, vec![])
+            .await?;
+        let table_infos: Vec<Arc<TableInfo>> = table_info_map
+            .values()
+            .map(|table_info| Arc::new(table_info.to_owned()))
+            .collect();
+        Ok(table_infos)
+    }
 }
 
 #[async_trait::async_trait]
@@ -80,86 +110,72 @@ impl Database for ShareDatabase {
     }
 
     // Get one table by db and table name.
+    #[async_backtrace::framed]
     async fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
-        let table_info = self
-            .ctx
-            .meta
-            .get_table(GetTableReq::new(
-                self.get_tenant(),
-                self.get_db_name(),
-                table_name,
-            ))
-            .await?;
+        let table_info = self.get_table_info(table_name).await?;
         self.get_table_by_info(table_info.as_ref())
     }
 
+    #[async_backtrace::framed]
     async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
-        let table_infos = self
-            .ctx
-            .meta
-            .list_tables(ListTableReq::new(self.get_tenant(), self.get_db_name()))
-            .await?;
+        let table_infos = self.list_tables().await?;
 
         self.load_tables(table_infos)
     }
 
+    #[async_backtrace::framed]
     async fn list_tables_history(&self) -> Result<Vec<Arc<dyn Table>>> {
-        // `get_table_history` will not fetch the tables that created before the
-        // "metasrv time travel functions" is added.
-        // thus, only the table-infos of dropped tables are used.
-        let mut dropped = self
-            .ctx
-            .meta
-            .get_table_history(ListTableReq::new(self.get_tenant(), self.get_db_name()))
-            .await?
-            .into_iter()
-            .filter(|i| i.meta.drop_on.is_some())
-            .collect::<Vec<_>>();
-
-        let mut table_infos = self
-            .ctx
-            .meta
-            .list_tables(ListTableReq::new(self.get_tenant(), self.get_db_name()))
-            .await?;
-
-        table_infos.append(&mut dropped);
-
-        self.load_tables(table_infos)
+        Err(ErrorCode::PermissionDenied(
+            "Permission denied, cannot list table history from a shared database".to_string(),
+        ))
     }
 
-    async fn create_table(&self, req: CreateTableReq) -> Result<()> {
-        self.ctx.meta.create_table(req).await?;
-        Ok(())
+    #[async_backtrace::framed]
+    async fn create_table(&self, _req: CreateTableReq) -> Result<()> {
+        Err(ErrorCode::PermissionDenied(
+            "Permission denied, cannot create table from a shared database".to_string(),
+        ))
     }
 
-    async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply> {
-        let res = self.ctx.meta.drop_table_by_id(req).await?;
-        Ok(res)
+    #[async_backtrace::framed]
+    async fn drop_table_by_id(&self, _req: DropTableByIdReq) -> Result<DropTableReply> {
+        Err(ErrorCode::PermissionDenied(
+            "Permission denied, cannot drop table from a shared database".to_string(),
+        ))
     }
 
-    async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
-        let res = self.ctx.meta.undrop_table(req).await?;
-        Ok(res)
+    #[async_backtrace::framed]
+    async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
+        Err(ErrorCode::PermissionDenied(
+            "Permission denied, cannot undrop table from a shared database".to_string(),
+        ))
     }
 
-    async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
-        let res = self.ctx.meta.rename_table(req).await?;
-        Ok(res)
+    #[async_backtrace::framed]
+    async fn rename_table(&self, _req: RenameTableReq) -> Result<RenameTableReply> {
+        Err(ErrorCode::PermissionDenied(
+            "Permission denied, cannot rename table from a shared database".to_string(),
+        ))
     }
 
+    #[async_backtrace::framed]
     async fn upsert_table_option(
         &self,
-        req: UpsertTableOptionReq,
+        _req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
-        let res = self.ctx.meta.upsert_table_option(req).await?;
-        Ok(res)
+        Err(ErrorCode::PermissionDenied(
+            "Permission denied, cannot upsert table option from a shared database".to_string(),
+        ))
     }
 
-    async fn update_table_meta(&self, req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
-        let res = self.ctx.meta.update_table_meta(req).await?;
-        Ok(res)
+    #[async_backtrace::framed]
+    async fn update_table_meta(&self, _req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
+        Err(ErrorCode::PermissionDenied(
+            "Permission denied, cannot upsert table meta from a shared database".to_string(),
+        ))
     }
 
+    #[async_backtrace::framed]
     async fn get_table_copied_file_info(
         &self,
         req: GetTableCopiedFileReq,
@@ -168,6 +184,7 @@ impl Database for ShareDatabase {
         Ok(res)
     }
 
+    #[async_backtrace::framed]
     async fn upsert_table_copied_file_info(
         &self,
         req: UpsertTableCopiedFileReq,
@@ -176,8 +193,10 @@ impl Database for ShareDatabase {
         Ok(res)
     }
 
-    async fn truncate_table(&self, req: TruncateTableReq) -> Result<TruncateTableReply> {
-        let res = self.ctx.meta.truncate_table(req).await?;
-        Ok(res)
+    #[async_backtrace::framed]
+    async fn truncate_table(&self, _req: TruncateTableReq) -> Result<TruncateTableReply> {
+        Err(ErrorCode::PermissionDenied(
+            "Permission denied, cannot truncate table from a shared database".to_string(),
+        ))
     }
 }

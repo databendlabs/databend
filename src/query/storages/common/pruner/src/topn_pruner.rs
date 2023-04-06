@@ -71,7 +71,7 @@ impl BlockMetaIndex {
     }
 }
 
-/// TopN prunner.
+/// TopN pruner.
 /// Pruning for order by x limit N.
 pub struct TopNPrunner {
     schema: TableSchemaRef,

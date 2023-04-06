@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::optimizer::ColumnSet;
@@ -90,7 +91,7 @@ impl Operator for Aggregate {
 
     fn compute_required_prop_child(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
         rel_expr: &RelExpr,
         _child_index: usize,
         required: &RequiredProperty,
@@ -108,9 +109,24 @@ impl Operator for Aggregate {
                     // Scalar aggregation
                     required.distribution = Distribution::Any;
                 } else {
+                    let settings = ctx.get_settings();
+
                     // Group aggregation, enforce `Hash` distribution
-                    required.distribution =
-                        Distribution::Hash(vec![self.group_items[0].scalar.clone()]);
+                    required.distribution = match settings.get_group_by_shuffle_mode()?.as_str() {
+                        "before_partial" => Ok(Distribution::Hash(
+                            self.group_items
+                                .iter()
+                                .map(|item| item.scalar.clone())
+                                .collect(),
+                        )),
+                        "before_merge" => {
+                            Ok(Distribution::Hash(vec![self.group_items[0].scalar.clone()]))
+                        }
+                        value => Err(ErrorCode::Internal(format!(
+                            "Bad settings value group_by_shuffle_mode = {:?}",
+                            value
+                        ))),
+                    }?;
                 }
             }
 
@@ -130,7 +146,7 @@ impl Operator for Aggregate {
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty> {
-        let input_prop = rel_expr.derive_relational_prop_child(0)?;
+        let mut input_prop = rel_expr.derive_relational_prop_child(0)?;
 
         // Derive output columns
         let mut output_columns = ColumnSet::new();
@@ -165,6 +181,28 @@ impl Operator for Aggregate {
                 let item_stat = input_prop.statistics.column_stats.get(&item.index).unwrap();
                 acc * item_stat.ndv
             });
+            for item in self.group_items.iter() {
+                let item_stat = input_prop
+                    .statistics
+                    .column_stats
+                    .get_mut(&item.index)
+                    .unwrap();
+                if let Some(histogram) = &mut item_stat.histogram {
+                    let mut num_values = 0.0;
+                    let mut num_distinct = 0.0;
+                    for bucket in histogram.buckets.iter() {
+                        num_distinct += bucket.num_distinct();
+                        num_values += bucket.num_values();
+                    }
+                    // When there is a high probability that eager aggregation
+                    // is better, we will update the histogram.
+                    if num_values / num_distinct >= 10.0 {
+                        for bucket in histogram.buckets.iter_mut() {
+                            bucket.aggregate_values();
+                        }
+                    }
+                }
+            }
             // To avoid res is very large
             f64::min(res, input_prop.cardinality)
         };
@@ -179,7 +217,6 @@ impl Operator for Aggregate {
         let mut used_columns = self.used_columns()?;
         used_columns.extend(input_prop.used_columns);
         let column_stats = input_prop.statistics.column_stats;
-        let is_accurate = input_prop.statistics.is_accurate;
 
         Ok(RelationalProperty {
             output_columns,
@@ -189,7 +226,6 @@ impl Operator for Aggregate {
             statistics: Statistics {
                 precise_cardinality,
                 column_stats,
-                is_accurate,
             },
         })
     }

@@ -35,6 +35,7 @@ use crate::plans::RevokeRolePlan;
 use crate::Binder;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_grant(
         &mut self,
         stmt: &GrantStmt,
@@ -77,6 +78,7 @@ impl Binder {
         }
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_revoke(
         &mut self,
         stmt: &RevokeStmt,
@@ -142,6 +144,7 @@ impl Binder {
         }
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_create_user(
         &mut self,
         stmt: &CreateUserStmt,
@@ -165,6 +168,7 @@ impl Binder {
         Ok(Plan::CreateUser(Box::new(plan)))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_alter_user(
         &mut self,
         stmt: &AlterUserStmt,

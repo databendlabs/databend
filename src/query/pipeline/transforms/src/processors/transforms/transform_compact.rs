@@ -36,7 +36,7 @@ pub trait Compactor {
     fn name() -> &'static str;
 
     /// `use_partial_compact` enable the compactor to compact the blocks when a new block is pushed
-    fn use_partial_compact() -> bool {
+    fn use_partial_compact(&self) -> bool {
         false
     }
 
@@ -83,7 +83,7 @@ impl<T: Compactor + Send + 'static> TransformCompact<T> {
                 let data_block = state.input_port.pull_data().unwrap()?;
                 state.input_data_blocks.push(data_block);
 
-                if T::use_partial_compact() {
+                if T::use_partial_compact(&self.compactor) {
                     return Ok(Event::Sync);
                 }
             }

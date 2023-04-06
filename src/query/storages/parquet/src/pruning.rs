@@ -76,6 +76,7 @@ pub struct PartitionPruner {
 impl PartitionPruner {
     /// Try to read parquet meta to generate row-group-wise partitions.
     /// And prune row groups an pages to generate the final row group partitions.
+    #[async_backtrace::framed]
     pub async fn read_and_prune_partitions(&self) -> Result<(PartStatistics, Partitions)> {
         let PartitionPruner {
             schema,
@@ -289,8 +290,8 @@ pub fn build_column_page_pruners(
     let mut results = vec![];
     for (column, _) in filter.column_refs() {
         let col_idx = schema.index_of(&column)?;
-        let range_prunner = RangePrunerCreator::try_create(func_ctx, schema, Some(filter))?;
-        results.push((col_idx, range_prunner));
+        let range_pruner = RangePrunerCreator::try_create(func_ctx, schema, Some(filter))?;
+        results.push((col_idx, range_pruner));
     }
     Ok(results)
 }
@@ -453,8 +454,9 @@ mod tests {
     use common_exception::Result;
     use common_expression::types::DataType;
     use common_expression::types::NumberDataType;
+    use common_expression::types::NumberScalar;
     use common_expression::FunctionContext;
-    use common_expression::Literal;
+    use common_expression::Scalar;
     use common_expression::TableDataType;
     use common_expression::TableField;
     use common_expression::TableSchemaRef;
@@ -548,7 +550,7 @@ mod tests {
     fn unzip_option<T: NativeType>(
         array: &[Option<T>],
     ) -> common_arrow::parquet::error::Result<(Vec<u8>, Vec<u8>)> {
-        // leave the first 4 bytes anouncing the length of the def level
+        // leave the first 4 bytes announcing the length of the def level
         // this will be overwritten at the end, once the length is known.
         // This is unknown at this point because of the uleb128 encoding,
         // whose length is variable.
@@ -681,6 +683,7 @@ mod tests {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: "col1".to_string(),
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
@@ -689,8 +692,7 @@ mod tests {
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
                         span: None,
-                        value: Literal::Int32(12),
-                        data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                        value: Scalar::Number(NumberScalar::Int32(12)),
                     }),
                 ],
             });
@@ -712,6 +714,7 @@ mod tests {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: "col1".to_string(),
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
@@ -720,8 +723,7 @@ mod tests {
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
                         span: None,
-                        value: Literal::Int32(0),
-                        data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                        value: Scalar::Number(NumberScalar::Int32(0)),
                     }),
                 ],
             });
@@ -743,6 +745,7 @@ mod tests {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: "col1".to_string(),
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
@@ -751,8 +754,7 @@ mod tests {
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
                         span: None,
-                        value: Literal::Int32(5),
-                        data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                        value: Scalar::Number(NumberScalar::Int32(5)),
                     }),
                 ],
             });
@@ -784,6 +786,7 @@ mod tests {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: "col1".to_string(),
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
@@ -792,8 +795,7 @@ mod tests {
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
                         span: None,
-                        value: Literal::Int32(12),
-                        data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                        value: Scalar::Number(NumberScalar::Int32(12)),
                     }),
                 ],
             });
@@ -816,6 +818,7 @@ mod tests {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: "col1".to_string(),
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
@@ -824,8 +827,7 @@ mod tests {
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
                         span: None,
-                        value: Literal::Int32(5),
-                        data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                        value: Scalar::Number(NumberScalar::Int32(5)),
                     }),
                 ],
             });
@@ -848,6 +850,7 @@ mod tests {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: "col1".to_string(),
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
@@ -856,8 +859,7 @@ mod tests {
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
                         span: None,
-                        value: Literal::Int32(10),
-                        data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                        value: Scalar::Number(NumberScalar::Int32(10)),
                     }),
                 ],
             });
@@ -880,6 +882,7 @@ mod tests {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: "col1".to_string(),
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
@@ -888,8 +891,7 @@ mod tests {
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
                         span: None,
-                        value: Literal::Int32(10),
-                        data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+                        value: Scalar::Number(NumberScalar::Int32(10)),
                     }),
                 ],
             });

@@ -27,7 +27,6 @@ use common_exception::ToErrorCode;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::SendableDataBlockStream;
-use common_sql::plans::Plan;
 use common_sql::Planner;
 use common_users::CertifiedInfo;
 use common_users::UserApiProvider;
@@ -57,30 +56,6 @@ use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
 use crate::stream::DataBlockStream;
-
-fn has_result_set_by_plan(plan: &Plan) -> bool {
-    matches!(
-        plan,
-        Plan::Query { .. }
-            | Plan::Explain { .. }
-            | Plan::ExplainAst { .. }
-            | Plan::ExplainSyntax { .. }
-            | Plan::ExplainAnalyze { .. }
-            | Plan::Call(_)
-            | Plan::ShowCreateDatabase(_)
-            | Plan::ShowCreateTable(_)
-            | Plan::ShowFileFormats(_)
-            | Plan::ShowRoles(_)
-            | Plan::DescShare(_)
-            | Plan::ShowShares(_)
-            | Plan::ShowObjectGrantPrivileges(_)
-            | Plan::ShowGrantTenantsOfShare(_)
-            | Plan::DescribeTable(_)
-            | Plan::ShowGrants(_)
-            | Plan::ListStage(_)
-            | Plan::Presign(_)
-    )
-}
 
 struct InteractiveWorkerBase<W: AsyncWrite + Send + Unpin> {
     session: Arc<Session>,
@@ -116,6 +91,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         "mysql_native_password"
     }
 
+    #[async_backtrace::framed]
     async fn auth_plugin_for_username(&self, _user: &[u8]) -> &str {
         "mysql_native_password"
     }
@@ -124,6 +100,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         self.salt
     }
 
+    #[async_backtrace::framed]
     async fn authenticate(
         &self,
         _auth_plugin: &str,
@@ -151,6 +128,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         }
     }
 
+    #[async_backtrace::framed]
     async fn on_prepare<'a>(
         &'a mut self,
         query: &'a str,
@@ -172,6 +150,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         self.base.do_prepare(query, writer).await
     }
 
+    #[async_backtrace::framed]
     async fn on_execute<'a>(
         &'a mut self,
         id: u32,
@@ -195,11 +174,13 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
     }
 
     /// https://dev.mysql.com/doc/internals/en/com-stmt-close.html
+    #[async_backtrace::framed]
     async fn on_close<'a>(&'a mut self, stmt_id: u32)
     where W: 'async_trait {
         self.base.do_close(stmt_id).await;
     }
 
+    #[async_backtrace::framed]
     async fn on_query<'a>(
         &'a mut self,
         query: &'a str,
@@ -243,6 +224,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         write_result
     }
 
+    #[async_backtrace::framed]
     async fn on_init<'a>(
         &'a mut self,
         database_name: &'a str,
@@ -268,6 +250,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
 }
 
 impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
+    #[async_backtrace::framed]
     async fn authenticate(&self, salt: &[u8], info: CertifiedInfo) -> Result<bool> {
         let user_name = &info.user_name;
         let client_ip = info.user_client_address.split(':').collect::<Vec<_>>()[0];
@@ -284,6 +267,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         Ok(authed)
     }
 
+    #[async_backtrace::framed]
     async fn do_prepare(&mut self, _: &str, writer: StatementMetaWriter<'_, W>) -> Result<()> {
         writer
             .error(
@@ -294,6 +278,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn do_execute(
         &mut self,
         _: u32,
@@ -309,6 +294,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn do_close(&mut self, _: u32) {}
 
     // Check the query is a federated or driver setup command.
@@ -323,6 +309,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
+    #[async_backtrace::framed]
     async fn do_query(&mut self, query: &str) -> Result<QueryResult> {
         match self.federated_server_command_check(query) {
             Some((schema, data_block)) => {
@@ -346,9 +333,9 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                 let mut planner = Planner::new(context.clone());
                 let (plan, extras) = planner.plan_sql(query).await?;
 
-                context.attach_query_str(plan.to_string(), extras.stament.to_mask_sql());
+                context.attach_query_str(plan.to_string(), extras.statement.to_mask_sql());
                 let interpreter = InterpreterFactory::get(context.clone(), &plan).await;
-                let has_result_set = has_result_set_by_plan(&plan);
+                let has_result_set = plan.has_result_set();
 
                 match interpreter {
                     Ok(interpreter) => {
@@ -373,6 +360,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
     }
 
     #[tracing::instrument(level = "debug", skip(interpreter, context))]
+    #[async_backtrace::framed]
     async fn exec_query(
         interpreter: Arc<dyn Interpreter>,
         context: &Arc<QueryContext>,
@@ -413,6 +401,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         query_result.map(|data| (data, Some(reporter)))
     }
 
+    #[async_backtrace::framed]
     async fn do_init(&mut self, database_name: &str) -> Result<()> {
         if database_name.is_empty() {
             return Ok(());
@@ -479,7 +468,7 @@ impl ProgressReporter for ContextProgressReporter {
     }
 
     fn affected_rows(&self) -> u64 {
-        let progress = self.context.get_scan_progress_value();
+        let progress = self.context.get_write_progress_value();
         progress.rows as u64
     }
 }

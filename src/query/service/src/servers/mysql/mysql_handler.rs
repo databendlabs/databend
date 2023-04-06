@@ -62,6 +62,7 @@ impl MySQLHandler {
         }))
     }
 
+    #[async_backtrace::framed]
     async fn listener_tcp(listening: SocketAddr) -> Result<(TcpListenerStream, SocketAddr)> {
         let listener = tokio::net::TcpListener::bind(listening)
             .await
@@ -117,6 +118,7 @@ impl MySQLHandler {
         });
     }
 
+    #[async_backtrace::framed]
     async fn reject_session(stream: TcpStream, error: ErrorCode) {
         let (kind, message) = match error.code() {
             41 => (ErrorKind::ER_TOO_MANY_USER_CONNECTIONS, error.message()),
@@ -134,6 +136,7 @@ impl MySQLHandler {
 
 #[async_trait::async_trait]
 impl Server for MySQLHandler {
+    #[async_backtrace::framed]
     async fn shutdown(&mut self, graceful: bool) {
         if !graceful {
             return;
@@ -151,6 +154,7 @@ impl Server for MySQLHandler {
         }
     }
 
+    #[async_backtrace::framed]
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
         match self.abort_registration.take() {
             None => Err(ErrorCode::Internal("MySQLHandler already running.")),
@@ -161,7 +165,9 @@ impl Server for MySQLHandler {
                 )?);
                 let (stream, listener) = Self::listener_tcp(listening).await?;
                 let stream = Abortable::new(stream, registration);
-                self.join_handle = Some(tokio::spawn(self.listen_loop(stream, rejected_rt)));
+                self.join_handle = Some(tokio::spawn(
+                    async_backtrace::location!().frame(self.listen_loop(stream, rejected_rt)),
+                ));
                 Ok(listener)
             }
         }

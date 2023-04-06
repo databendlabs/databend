@@ -10,17 +10,21 @@ edition = { workspace = true }
 doctest = false
 
 [dependencies]
+async-backtrace = { workspace = true }
+chrono = { workspace = true }
 common-base = { path = "../../common/base" }
 common-config = { path = "../../query/config" }
 common-exception = { path = "../../common/exception" }
 common-meta-app = { path = "../../meta/app" }
 common-storage = { path = "../../common/storage" }
+common-storages-share = { path = "../storages/share" }
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
 
 time = { version = "0.3", features = ["serde"] }
 
 base64 = "0.21.0"
 clap = { workspace = true }
+enumflags2 = { version = "0.7.5", features = ["serde"] }
 opendal = { workspace = true }
 poem = { version = "1", features = ["rustls", "multipart", "compression"] }
 serde = { workspace = true }

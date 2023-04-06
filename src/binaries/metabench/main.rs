@@ -17,6 +17,7 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
 use clap::Parser;
@@ -41,6 +42,10 @@ use serde::Serialize;
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Parser)]
 #[clap(about, version = &**METASRV_COMMIT_VERSION, author)]
 struct Config {
+    /// The prefix of keys to write.
+    #[clap(long, default_value = "0")]
+    pub prefix: u64,
+
     #[clap(long, default_value = "10")]
     pub client: u32,
 
@@ -75,20 +80,32 @@ async fn main() {
         client_num += 1;
         let addr = config.grpc_api_address.clone();
         let typ = config.rpc.clone();
+        let prefix = config.prefix;
 
         let handle = tokio::spawn(async move {
-            let client =
-                MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None, None);
-            if client.is_err() {
-                return;
-            }
-            let client = client.unwrap();
+            let client = MetaGrpcClient::try_create(
+                vec![addr.to_string()],
+                "root",
+                "xxx",
+                None,
+                None,
+                Duration::from_secs(10),
+                None,
+            );
+
+            let client = match client {
+                Ok(client) => client,
+                Err(e) => {
+                    eprintln!("Failed to create client: {}", e);
+                    return;
+                }
+            };
 
             for i in 0..config.number {
                 if typ == "upsert_kv" {
-                    benchmark_upsert(&client, client_num, i).await;
+                    benchmark_upsert(&client, prefix, client_num, i).await;
                 } else if typ == "table" {
-                    benchmark_table(&client, client_num, i).await;
+                    benchmark_table(&client, prefix, client_num, i).await;
                 } else {
                     unreachable!("Invalid config.rpc: {}", typ);
                 }
@@ -109,25 +126,30 @@ async fn main() {
     );
 }
 
-async fn benchmark_upsert(client: &Arc<ClientHandle>, client_num: u32, i: u32) {
-    let node_key = format!("{}-{}", client_num, i);
+async fn benchmark_upsert(client: &Arc<ClientHandle>, prefix: u64, client_num: u32, i: u32) {
+    let node_key = || format!("{}-{}-{}", prefix, client_num, i);
+
     let seq = MatchSeq::Any;
-    let value = Operation::Update(b"v3".to_vec());
+    let value = Operation::Update(node_key().as_bytes().to_vec());
 
     let res = client
-        .upsert_kv(UpsertKVReq::new(&node_key, seq, value, None))
+        .upsert_kv(UpsertKVReq::new(&node_key(), seq, value, None))
         .await;
 
     print_res(i, "upsert_kv", &res);
 }
 
-async fn benchmark_table(client: &Arc<ClientHandle>, client_num: u32, i: u32) {
+async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u32, i: u32) {
+    let tenant = || format!("tenant-{}-{}", prefix, client_num);
+    let db_name = || format!("db-{}-{}", prefix, client_num);
+    let table_name = || format!("table-{}-{}", prefix, client_num);
+
     let res = client
         .create_database(CreateDatabaseReq {
             if_not_exists: false,
             name_ident: DatabaseNameIdent {
-                tenant: format!("tenant-{}", client_num),
-                db_name: format!("db-{}", client_num),
+                tenant: tenant(),
+                db_name: db_name(),
             },
             meta: Default::default(),
         })
@@ -139,9 +161,9 @@ async fn benchmark_table(client: &Arc<ClientHandle>, client_num: u32, i: u32) {
         .create_table(CreateTableReq {
             if_not_exists: true,
             name_ident: TableNameIdent {
-                tenant: format!("tenant-{}", client_num),
-                db_name: format!("db-{}", client_num),
-                table_name: format!("table-{}", client_num),
+                tenant: tenant(),
+                db_name: db_name(),
+                table_name: table_name(),
             },
             table_meta: Default::default(),
         })
@@ -150,11 +172,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, client_num: u32, i: u32) {
     print_res(i, "create_table", &res);
 
     let res = client
-        .get_table(GetTableReq::new(
-            format!("tenant-{}", client_num),
-            format!("db-{}", client_num),
-            format!("table-{}", client_num),
-        ))
+        .get_table(GetTableReq::new(tenant(), db_name(), table_name()))
         .await;
 
     print_res(i, "get_table", &res);

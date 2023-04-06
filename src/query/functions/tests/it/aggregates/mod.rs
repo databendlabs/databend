@@ -34,7 +34,7 @@ use common_expression::RawExpr;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::scalars::parser;
@@ -158,7 +158,7 @@ pub fn run_scalar_expr(
 }
 
 /// Simulate group-by aggregation.
-/// Rows are ditributed into two group-by keys.
+/// Rows are distributed into two group-by keys.
 ///
 /// Example:
 ///

@@ -30,14 +30,14 @@ statement ok
 COPY INTO @st FROM t FILE_FORMAT=(type=TSV)
 
 statement ok
-COPY INTO t_copy from @st PATTERN='.*[.]tsv' file_format = (type = TSV) PURGE = true
+COPY INTO t_copy from @st PATTERN='.*[.]tsv' file_format = (type = TSV) PURGE = true force=false max_files=1
 
 ###### CSV ######
 statement ok
 COPY INTO @st FROM t FILE_FORMAT=(type=CSV);
 
 statement ok
-COPY INTO t_copy from @st PATTERN='.*[.]csv' file_format = (type = CSV) PURGE = true
+COPY INTO t_copy from @st PATTERN='.*[.]csv' file_format = (type = CSV) PURGE = true force=true max_files=1
 
 ###### NDJSON ######
 statement ok

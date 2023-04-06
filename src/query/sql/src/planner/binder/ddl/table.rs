@@ -58,7 +58,7 @@ use common_expression::DataSchemaRefExt;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::storage::StorageParams;
 use common_storage::DataOperator;
 use common_storages_view::view_table::QUERY;
@@ -106,9 +106,10 @@ use crate::ScalarExpr;
 use crate::SelectBuilder;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_show_tables(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &ShowTablesStmt,
     ) -> Result<Plan> {
         let ShowTablesStmt {
@@ -179,6 +180,7 @@ impl Binder {
             .await
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_show_create_table(
         &mut self,
         stmt: &ShowCreateTableStmt,
@@ -204,6 +206,7 @@ impl Binder {
         })))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_describe_table(
         &mut self,
         stmt: &DescribeTableStmt,
@@ -232,9 +235,10 @@ impl Binder {
         })))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_show_tables_status(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &ShowTablesStatusStmt,
     ) -> Result<Plan> {
         let ShowTablesStatusStmt { database, limit } = stmt;
@@ -276,6 +280,7 @@ impl Binder {
         self.bind_statement(bind_context, &stmt).await
     }
 
+    #[async_backtrace::framed]
     async fn check_database_exist(
         &mut self,
         catalog: &Option<Identifier>,
@@ -298,6 +303,7 @@ impl Binder {
         }
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_create_table(
         &mut self,
         stmt: &CreateTableStmt,
@@ -369,8 +375,8 @@ impl Binder {
             }
             (None, Some(query)) => {
                 // `CREATE TABLE AS SELECT ...` without column definitions
-                let init_bind_context = BindContext::new();
-                let (_s_expr, bind_context) = self.bind_query(&init_bind_context, query).await?;
+                let mut init_bind_context = BindContext::new();
+                let (_, bind_context) = self.bind_query(&mut init_bind_context, query).await?;
                 let fields = bind_context
                     .columns
                     .iter()
@@ -389,8 +395,8 @@ impl Binder {
                 // e.g. `CREATE TABLE t (i INT) AS SELECT * from old_t` with columns specified
                 let (source_schema, source_default_exprs, source_comments) =
                     self.analyze_create_table_schema(source).await?;
-                let init_bind_context = BindContext::new();
-                let (_, bind_context) = self.bind_query(&init_bind_context, query).await?;
+                let mut init_bind_context = BindContext::new();
+                let (_, bind_context) = self.bind_query(&mut init_bind_context, query).await?;
                 let query_fields: Vec<TableField> = bind_context
                     .columns
                     .iter()
@@ -496,9 +502,9 @@ impl Binder {
             field_comments,
             cluster_key,
             as_select: if let Some(query) = as_query {
-                let bind_context = BindContext::new();
+                let mut bind_context = BindContext::new();
                 let stmt = Statement::Query(Box::new(*query.clone()));
-                let select_plan = self.bind_statement(&bind_context, &stmt).await?;
+                let select_plan = self.bind_statement(&mut bind_context, &stmt).await?;
                 // Don't enable distributed optimization for `CREATE TABLE ... AS SELECT ...` for now
                 let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig::default()));
                 let optimized_plan = optimize(self.ctx.clone(), opt_ctx, select_plan)?;
@@ -510,6 +516,7 @@ impl Binder {
         Ok(Plan::CreateTable(Box::new(plan)))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_drop_table(
         &mut self,
         stmt: &DropTableStmt,
@@ -536,6 +543,7 @@ impl Binder {
         })))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_undrop_table(
         &mut self,
         stmt: &UndropTableStmt,
@@ -558,9 +566,10 @@ impl Binder {
         })))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_alter_table(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &AlterTableStmt,
     ) -> Result<Plan> {
         let AlterTableStmt {
@@ -648,12 +657,12 @@ impl Binder {
                 is_final,
                 selection,
             } => {
-                let (_, context) = self
+                let (_, mut context) = self
                     .bind_table_reference(bind_context, table_reference)
                     .await?;
 
                 let mut scalar_binder = ScalarBinder::new(
-                    &context,
+                    &mut context,
                     self.ctx.clone(),
                     &self.name_resolution_ctx,
                     self.metadata.clone(),
@@ -690,6 +699,7 @@ impl Binder {
         }
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_rename_table(
         &mut self,
         stmt: &RenameTableStmt,
@@ -728,6 +738,7 @@ impl Binder {
         })))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_truncate_table(
         &mut self,
         stmt: &TruncateTableStmt,
@@ -750,9 +761,10 @@ impl Binder {
         })))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_optimize_table(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &OptimizeTableStmt,
     ) -> Result<Plan> {
         let OptimizeTableStmt {
@@ -801,6 +813,7 @@ impl Binder {
         })))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_analyze_table(
         &mut self,
         stmt: &AnalyzeTableStmt,
@@ -821,6 +834,7 @@ impl Binder {
         })))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_exists_table(
         &mut self,
         stmt: &ExistsTableStmt,
@@ -841,13 +855,14 @@ impl Binder {
         })))
     }
 
+    #[async_backtrace::framed]
     async fn analyze_create_table_schema_by_columns(
         &self,
         columns: &[ColumnDefinition],
     ) -> Result<(TableSchemaRef, Vec<Option<String>>, Vec<String>)> {
-        let bind_context = BindContext::new();
+        let mut bind_context = BindContext::new();
         let mut scalar_binder = ScalarBinder::new(
-            &bind_context,
+            &mut bind_context,
             self.ctx.clone(),
             &self.name_resolution_ctx,
             self.metadata.clone(),
@@ -895,6 +910,7 @@ impl Binder {
         Ok((schema, fields_default_expr, fields_comments))
     }
 
+    #[async_backtrace::framed]
     async fn analyze_create_table_schema(
         &self,
         source: &CreateTableSource,
@@ -959,6 +975,7 @@ impl Binder {
         }
     }
 
+    #[async_backtrace::framed]
     async fn analyze_cluster_keys(
         &mut self,
         cluster_by: &[Expr],
@@ -970,6 +987,7 @@ impl Binder {
             let column = ColumnBinding {
                 database_name: None,
                 table_name: None,
+                table_index: None,
                 column_name: field.name().clone(),
                 index,
                 data_type: Box::new(DataType::from(field.data_type())),
@@ -978,7 +996,7 @@ impl Binder {
             bind_context.columns.push(column);
         }
         let mut scalar_binder = ScalarBinder::new(
-            &bind_context,
+            &mut bind_context,
             self.ctx.clone(),
             &self.name_resolution_ctx,
             self.metadata.clone(),
@@ -989,7 +1007,7 @@ impl Binder {
         for cluster_by in cluster_by.iter() {
             let (cluster_key, _) = scalar_binder.bind(cluster_by).await?;
             let expr = cluster_key.as_expr_with_col_index()?;
-            if !expr.is_deterministic() {
+            if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Cluster by expression `{:#}` is not deterministic",
                     cluster_by

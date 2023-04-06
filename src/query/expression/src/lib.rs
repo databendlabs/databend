@@ -36,6 +36,7 @@
 #[allow(dead_code)]
 mod block;
 
+mod convert_arrow_rs;
 pub mod converts;
 mod evaluator;
 mod expression;

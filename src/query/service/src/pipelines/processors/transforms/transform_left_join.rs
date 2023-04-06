@@ -40,8 +40,21 @@ impl Compactor for LeftJoinCompactor {
         self.hash_join_state.interrupt();
     }
 
+    fn use_partial_compact(&self) -> bool {
+        true
+    }
+
+    fn compact_partial(&mut self, blocks: &mut Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+        let res = self.hash_join_state.left_join_blocks(blocks)?;
+        // Original blocks are already in res, so clear them.
+        blocks.clear();
+        Ok(res)
+    }
+
     // `compact_final` is called when all the blocks are pushed
     fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+        // If upstream data block is small, all blocks will be in rest blocks
+        // So compact partial won't be triggered, we still need to compact final here.
         self.hash_join_state.left_join_blocks(blocks)
     }
 }

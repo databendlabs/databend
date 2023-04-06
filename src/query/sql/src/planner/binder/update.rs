@@ -28,9 +28,10 @@ use crate::plans::UpdatePlan;
 use crate::BindContext;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_update(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &UpdateStmt,
     ) -> Result<Plan> {
         let UpdateStmt {
@@ -62,7 +63,7 @@ impl Binder {
             ));
         };
 
-        let (_, context) = self.bind_table_reference(bind_context, table).await?;
+        let (_, mut context) = self.bind_table_reference(bind_context, table).await?;
 
         let table = self
             .ctx
@@ -70,7 +71,7 @@ impl Binder {
             .await?;
 
         let mut scalar_binder = ScalarBinder::new(
-            &context,
+            &mut context,
             self.ctx.clone(),
             &self.name_resolution_ctx,
             self.metadata.clone(),

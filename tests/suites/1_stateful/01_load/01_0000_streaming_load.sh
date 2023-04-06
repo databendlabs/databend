@@ -89,11 +89,11 @@ echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime_less;" | $MYSQL_CL
 
 # load parquet with mismatch schema, will auto cast
 echo "--parquet runtime cast schema"
-cat $CURDIR/../ddl/ontime.sql | sed 's/ontime/ontime_test_schmea_mismatch/g' | sed 's/DATE/TIMESTAMP/g' | $MYSQL_CLIENT_CONNECT
-curl -s -H "insert_sql:insert into ontime_test_schmea_mismatch file_format = (type = Parquet)" -F "upload=@/tmp/ontime_200.parquet" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load"  > /dev/null 2>&1
-echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime_test_schmea_mismatch;" | $MYSQL_CLIENT_CONNECT
+cat $CURDIR/../ddl/ontime.sql | sed 's/ontime/ontime_test_schema_mismatch/g' | sed 's/DATE/TIMESTAMP/g' | $MYSQL_CLIENT_CONNECT
+curl -s -H "insert_sql:insert into ontime_test_schema_mismatch file_format = (type = Parquet)" -F "upload=@/tmp/ontime_200.parquet" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load"  > /dev/null 2>&1
+echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime_test_schema_mismatch;" | $MYSQL_CLIENT_CONNECT
 
 
 echo "drop table ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT
-echo "drop table ontime_test_schmea_mismatch;" | $MYSQL_CLIENT_CONNECT
+echo "drop table ontime_test_schema_mismatch;" | $MYSQL_CLIENT_CONNECT
 echo "drop table ontime_less;" | $MYSQL_CLIENT_CONNECT

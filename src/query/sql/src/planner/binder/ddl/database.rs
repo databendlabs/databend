@@ -46,9 +46,10 @@ use crate::BindContext;
 use crate::SelectBuilder;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_show_databases(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &ShowDatabasesStmt,
     ) -> Result<Plan> {
         let ShowDatabasesStmt {
@@ -90,6 +91,7 @@ impl Binder {
             .await
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_show_create_database(
         &self,
         stmt: &ShowCreateDatabaseStmt,
@@ -113,6 +115,7 @@ impl Binder {
         })))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_alter_database(
         &self,
         stmt: &AlterDatabaseStmt,
@@ -149,6 +152,7 @@ impl Binder {
         }
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_drop_database(
         &self,
         stmt: &DropDatabaseStmt,
@@ -174,6 +178,7 @@ impl Binder {
         })))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_undrop_database(
         &self,
         stmt: &UndropDatabaseStmt,
@@ -194,6 +199,7 @@ impl Binder {
         })))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_create_database(
         &self,
         stmt: &CreateDatabaseStmt,

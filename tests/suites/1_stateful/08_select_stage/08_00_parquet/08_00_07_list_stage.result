@@ -1,0 +1,18 @@
+--- dir:
+data/tuple.parquet	431	NULL	NULL
+--- file:
+data/tuple.parquet	431	NULL	NULL
+--- pattern:
+data/tuple.parquet	431	NULL	NULL
+--- complex:
+data/complex.parquet	92762	NULL	NULL
+--- limit
+data/complex.parquet	92762	NULL	NULL
+--- where
+data/tuple.parquet	431	NULL	NULL
+--- list files so far
+--- In the CI runs, this file may executed multiple times, so we list files order by name instead of creation time (by default).
+00.csv	96	NULL	NULL
+data/00.csv	96	NULL	NULL
+data/complex.parquet	92762	NULL	NULL
+data/tuple.parquet	431	NULL	NULL

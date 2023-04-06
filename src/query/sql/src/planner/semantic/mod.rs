@@ -18,10 +18,12 @@ mod grouping_check;
 mod lowering;
 mod name_resolution;
 mod type_check;
+mod window_check;
 
 pub use aggregate_rewriter::AggregateRewriter;
 pub use distinct_to_groupby::DistinctToGroupBy;
 pub use grouping_check::GroupingChecker;
+pub use lowering::*;
 pub use name_resolution::compare_table_name;
 pub use name_resolution::normalize_identifier;
 pub use name_resolution::IdentifierNormalizer;
@@ -30,3 +32,4 @@ pub use type_check::resolve_type_name;
 pub use type_check::resolve_type_name_by_str;
 pub use type_check::validate_function_arg;
 pub use type_check::TypeChecker;
+pub use window_check::WindowChecker;

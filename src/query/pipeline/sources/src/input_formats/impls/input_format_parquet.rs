@@ -34,7 +34,6 @@ use common_arrow::parquet::metadata::ColumnChunkMetaData;
 use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::read_metadata;
-use common_arrow::read_columns_async;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -48,7 +47,9 @@ use common_settings::Settings;
 use common_storage::read_parquet_metas_in_parallel;
 use common_storage::StageFileInfo;
 use futures::AsyncRead;
+use futures::AsyncReadExt;
 use futures::AsyncSeek;
+use futures::AsyncSeekExt;
 use opendal::Operator;
 use serde::Deserializer;
 use serde::Serializer;
@@ -127,6 +128,7 @@ fn col_offset(meta: &ColumnChunkMetaData) -> i64 {
 
 #[async_trait::async_trait]
 impl InputFormat for InputFormatParquet {
+    #[async_backtrace::framed]
     async fn get_splits(
         &self,
         file_infos: Vec<StageFileInfo>,
@@ -142,6 +144,7 @@ impl InputFormat for InputFormatParquet {
         Self::make_splits(file_infos, metas)
     }
 
+    #[async_backtrace::framed]
     async fn infer_schema(&self, path: &str, op: &Operator) -> Result<TableSchemaRef> {
         let mut reader = op.reader(path).await?;
         let file_meta = read_metadata_async(&mut reader).await?;
@@ -168,22 +171,16 @@ impl InputFormatPipe for ParquetFormatPipe {
     type AligningState = AligningState;
     type BlockBuilder = ParquetBlockBuilder;
 
+    #[async_backtrace::framed]
     async fn read_split(
         ctx: Arc<InputContext>,
         split_info: Arc<SplitInfo>,
     ) -> Result<Self::RowBatch> {
         let meta = Self::get_split_meta(&split_info).expect("must success");
         let op = ctx.source.get_operator()?;
-        let mut reader = op.reader(&split_info.file.path).await?;
         let input_fields = Arc::new(get_used_fields(&meta.file.fields, &ctx.schema)?);
 
-        RowGroupInMemory::read_async(
-            split_info.to_string(),
-            &mut reader,
-            meta.meta.clone(),
-            input_fields,
-        )
-        .await
+        RowGroupInMemory::read_async(split_info.clone(), op, meta.meta.clone(), input_fields).await
     }
 }
 
@@ -269,25 +266,50 @@ impl RowGroupInMemory {
         })
     }
 
-    async fn read_async<R: AsyncRead + AsyncSeek + Send + Unpin>(
-        split_info: String,
-        reader: &mut R,
+    #[async_backtrace::framed]
+    async fn read_field_async(
+        op: Operator,
+        path: String,
+        col_metas: Vec<ColumnChunkMetaData>,
+        index: usize,
+    ) -> Result<(usize, Vec<Vec<u8>>)> {
+        let mut cols = Vec::with_capacity(col_metas.len());
+        let mut reader = op.reader(&path).await?;
+        for meta in &col_metas {
+            cols.push(read_single_column_async(&mut reader, meta).await?)
+        }
+        Ok((index, cols))
+    }
+
+    #[async_backtrace::framed]
+    async fn read_async(
+        split_info: Arc<SplitInfo>,
+        operator: Operator,
         meta: RowGroupMetaData,
         fields: Arc<Vec<Field>>,
     ) -> Result<Self> {
         let field_names = fields.iter().map(|x| x.name.as_str()).collect::<Vec<_>>();
         let field_meta_indexes = split_column_metas_by_field(meta.columns(), &field_names);
-        let mut filed_arrays = vec![];
-        for field_name in field_names {
-            let meta_data = read_columns_async(reader, meta.columns(), field_name).await?;
-            let data = meta_data.into_iter().map(|t| t.1).collect::<Vec<_>>();
-            filed_arrays.push(data)
+        let mut join_handlers = Vec::with_capacity(field_names.len());
+        for (i, field_name) in field_names.iter().enumerate() {
+            let col_metas = get_field_columns(meta.columns(), field_name)
+                .into_iter()
+                .cloned()
+                .collect::<Vec<_>>();
+            let op = operator.clone();
+            let path = split_info.file.path.clone();
+            join_handlers.push(async move { Self::read_field_async(op, path, col_metas, i).await });
         }
+
+        let mut field_arrays = futures::future::try_join_all(join_handlers).await?;
+        field_arrays.sort();
+        let field_arrays = field_arrays.into_iter().map(|t| t.1).collect::<Vec<_>>();
+
         Ok(Self {
-            split_info,
+            split_info: split_info.to_string(),
             meta,
             field_meta_indexes,
-            field_arrays: filed_arrays,
+            field_arrays,
             fields_to_read: fields,
         })
     }
@@ -488,4 +510,29 @@ pub fn split_column_metas_by_field(
         }
     });
     r
+}
+
+fn get_field_columns<'a>(
+    columns: &'a [ColumnChunkMetaData],
+    field_name: &str,
+) -> Vec<&'a ColumnChunkMetaData> {
+    columns
+        .iter()
+        .filter(|x| x.descriptor().path_in_schema[0] == field_name)
+        .collect()
+}
+
+#[async_backtrace::framed]
+async fn read_single_column_async<R>(
+    reader: &mut R,
+    meta: &ColumnChunkMetaData,
+) -> Result<Vec<u8>>
+where
+    R: AsyncRead + AsyncSeek + Send + Unpin,
+{
+    let (start, len) = meta.byte_range();
+    reader.seek(std::io::SeekFrom::Start(start)).await?;
+    let mut chunk = vec![0; len as usize];
+    reader.read_exact(&mut chunk).await?;
+    Ok(chunk)
 }

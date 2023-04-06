@@ -41,7 +41,6 @@ use common_exception::Result;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageInfo;
 use common_storage::init_stage_operator;
-use common_storage::StageFileStatus;
 use common_storage::StageFilesInfo;
 use common_users::UserApiProvider;
 use tracing::debug;
@@ -55,9 +54,10 @@ use crate::plans::ValidationMode;
 use crate::BindContext;
 
 impl<'a> Binder {
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_copy(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &CopyStmt,
     ) -> Result<Plan> {
         match (&stmt.src, &stmt.dst) {
@@ -214,6 +214,7 @@ impl<'a> Binder {
 
     /// Bind COPY INFO <table> FROM <stage_location>
     #[allow(clippy::too_many_arguments)]
+    #[async_backtrace::framed]
     async fn bind_copy_from_stage_into_table(
         &mut self,
         _: &BindContext,
@@ -272,6 +273,7 @@ impl<'a> Binder {
 
     /// Bind COPY INFO <table> FROM <uri_location>
     #[allow(clippy::too_many_arguments)]
+    #[async_backtrace::framed]
     async fn bind_copy_from_uri_into_table(
         &mut self,
         _: &BindContext,
@@ -336,9 +338,10 @@ impl<'a> Binder {
 
     /// Bind COPY INFO <stage_location> FROM <table>
     #[allow(clippy::too_many_arguments)]
+    #[async_backtrace::framed]
     async fn bind_copy_from_table_into_stage(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &CopyStmt,
         src_catalog_name: &str,
         src_database_name: &str,
@@ -381,9 +384,10 @@ impl<'a> Binder {
 
     /// Bind COPY INFO <uri_location> FROM <table>
     #[allow(clippy::too_many_arguments)]
+    #[async_backtrace::framed]
     async fn bind_copy_from_table_into_uri(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &CopyStmt,
         src_catalog_name: &str,
         src_database_name: &str,
@@ -430,9 +434,10 @@ impl<'a> Binder {
     }
 
     /// Bind COPY INFO <stage_location> FROM <query>
+    #[async_backtrace::framed]
     async fn bind_copy_from_query_into_stage(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &CopyStmt,
         src_query: &Query,
         dst_stage: &str,
@@ -460,9 +465,10 @@ impl<'a> Binder {
 
     /// Bind COPY INFO <uri_location> FROM <query>
     #[allow(clippy::too_many_arguments)]
+    #[async_backtrace::framed]
     async fn bind_copy_from_query_into_uri(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &CopyStmt,
         src_query: &Query,
         dst_uri_location: &mut UriLocation,
@@ -494,6 +500,7 @@ impl<'a> Binder {
     }
 
     /// Bind COPY INTO <table> FROM <query>
+    #[async_backtrace::framed]
     async fn bind_copy_from_query_into_table(
         &mut self,
         bind_context: &BindContext,
@@ -539,15 +546,30 @@ impl<'a> Binder {
         }
 
         let operator = init_stage_operator(&stage_info)?;
-        let mut files = if operator.info().can_blocking() {
-            files_info.blocking_list(&operator, false)
+        let max_files = stage_info.copy_options.max_files;
+        let max_files = if max_files == 0 {
+            None
         } else {
-            files_info.list(&operator, false).await
+            Some(max_files)
+        };
+        let mut files = if operator.info().can_blocking() {
+            if stmt.force {
+                files_info.blocking_list(&operator, false, max_files)
+            } else {
+                files_info.blocking_list(&operator, false, None)
+            }
+        } else if stmt.force {
+            files_info.list(&operator, false, max_files).await
+        } else {
+            files_info.list(&operator, false, None).await
         }?;
 
-        info!("end to list files: {}", files.len());
+        let num_all_files = files.len();
+        info!("end to list files: {}", num_all_files);
 
-        if !stmt.force {
+        let need_copy_file_infos = if stmt.force {
+            files
+        } else {
             // Status.
             {
                 let status = "begin to color copied files";
@@ -557,23 +579,24 @@ impl<'a> Binder {
 
             files = self
                 .ctx
-                .color_copied_files(dst_catalog_name, dst_database_name, dst_table_name, files)
+                .filter_out_copied_files(
+                    dst_catalog_name,
+                    dst_database_name,
+                    dst_table_name,
+                    &files,
+                    max_files,
+                )
                 .await?;
 
             info!("end to color copied files: {}", files.len());
-        }
-
-        let mut need_copy_file_infos = vec![];
-        for file in &files {
-            if file.status == StageFileStatus::NeedCopy {
-                need_copy_file_infos.push(file.clone());
-            }
-        }
+            files
+        };
 
         info!(
-            "copy: read all files finished, all:{}, need copy:{}, elapsed:{}",
-            files.len(),
+            "copy: read all files finished, all:{}, need copy:{}, max_files:{:?}, elapsed:{}",
+            num_all_files,
             need_copy_file_infos.len(),
+            max_files,
             start.elapsed().as_secs()
         );
 
@@ -619,13 +642,13 @@ impl<'a> Binder {
             schema: dst_table.schema(),
             from: Box::new(query_plan),
             stage_info: Box::new(stage_info),
-            all_source_file_infos: files,
             need_copy_file_infos,
             validation_mode,
             force: stmt.force,
         })))
     }
 
+    #[async_backtrace::framed]
     async fn apply_stage_options(&mut self, stmt: &CopyStmt, stage: &mut StageInfo) -> Result<()> {
         if !stmt.file_format.is_empty() {
             stage.file_format_options = self.try_resolve_file_format(&stmt.file_format).await?;
@@ -640,6 +663,9 @@ impl<'a> Binder {
             // size_limit.
             if stmt.size_limit != 0 {
                 stage.copy_options.size_limit = stmt.size_limit;
+            }
+            if stmt.max_files != 0 {
+                stage.copy_options.max_files = stmt.max_files;
             }
             // max_file_size.
             if stmt.max_file_size != 0 {
@@ -719,6 +745,7 @@ fn check_transform_query(
 /// For internal stage, we will also add prefix `/stage/<stage>/`
 ///
 /// - @internal/abc => (internal, "/stage/internal/abc")
+#[async_backtrace::framed]
 pub async fn parse_stage_location(
     ctx: &Arc<dyn TableContext>,
     location: &str,
@@ -748,6 +775,7 @@ pub async fn parse_stage_location(
 ///
 /// # NOTE:
 /// `path` MUST starts with '/'
+#[async_backtrace::framed]
 pub async fn parse_stage_location_v2(
     ctx: &Arc<dyn TableContext>,
     name: &str,
@@ -768,6 +796,7 @@ pub async fn parse_stage_location_v2(
     Ok((stage, relative_path))
 }
 
+#[async_backtrace::framed]
 pub async fn parse_file_location(
     ctx: &Arc<dyn TableContext>,
     location: &FileLocation,

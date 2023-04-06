@@ -44,9 +44,10 @@ use crate::BindContext;
 use crate::Binder;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_show_catalogs(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &ShowCatalogsStmt,
     ) -> Result<Plan> {
         let ShowCatalogsStmt { limit } = stmt;
@@ -67,6 +68,7 @@ impl Binder {
             .await
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_show_create_catalogs(
         &self,
         stmt: &ShowCreateCatalogStmt,
@@ -83,6 +85,7 @@ impl Binder {
         })))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_create_catalog(
         &self,
         stmt: &CreateCatalogStmt,
@@ -106,6 +109,7 @@ impl Binder {
         })))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_drop_catalog(
         &self,
         stmt: &DropCatalogStmt,

@@ -37,7 +37,7 @@ use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_expression::Value;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_sql::evaluator::BlockOperator;
@@ -66,6 +66,7 @@ impl FuseTable {
     /// +---------------+      +-----------------------+         |      +-----------------+      +------------+
     /// |MutationSourceN| ---> |SerializeDataTransformN|   ------
     /// +---------------+      +-----------------------+
+    #[async_backtrace::framed]
     pub async fn do_delete(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -185,6 +186,7 @@ impl FuseTable {
         })
     }
 
+    #[async_backtrace::framed]
     async fn try_add_deletion_source(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -254,6 +256,7 @@ impl FuseTable {
         )
     }
 
+    #[async_backtrace::framed]
     pub async fn mutation_block_pruning(
         &self,
         ctx: Arc<dyn TableContext>,

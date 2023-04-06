@@ -36,6 +36,7 @@ pub trait VersionedReader<T> {
 
 #[async_trait::async_trait]
 impl VersionedReader<TableSnapshot> for SnapshotVersion {
+    #[async_backtrace::framed]
     async fn read<R>(&self, reader: R) -> Result<TableSnapshot>
     where R: AsyncRead + Unpin + Send {
         let r = match self {
@@ -53,6 +54,7 @@ impl VersionedReader<TableSnapshot> for SnapshotVersion {
 
 #[async_trait::async_trait]
 impl VersionedReader<TableSnapshotStatistics> for TableSnapshotStatisticsVersion {
+    #[async_backtrace::framed]
     async fn read<R>(&self, reader: R) -> Result<TableSnapshotStatistics>
     where R: AsyncRead + Unpin + Send {
         let r = match self {
@@ -64,6 +66,7 @@ impl VersionedReader<TableSnapshotStatistics> for TableSnapshotStatisticsVersion
 
 #[async_trait::async_trait]
 impl VersionedReader<SegmentInfo> for (SegmentInfoVersion, TableSchemaRef) {
+    #[async_backtrace::framed]
     async fn read<R>(&self, reader: R) -> Result<SegmentInfo>
     where R: AsyncRead + Unpin + Send {
         let schema = &self.1;

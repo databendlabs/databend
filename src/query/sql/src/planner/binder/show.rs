@@ -21,9 +21,10 @@ use crate::BindContext;
 use crate::Binder;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_show_functions(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         limit: &Option<ShowLimit>,
     ) -> Result<Plan> {
         // rewrite show functions to select * from system.functions ...
@@ -49,9 +50,10 @@ impl Binder {
             .await
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_show_table_functions(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         limit: &Option<ShowLimit>,
     ) -> Result<Plan> {
         // rewrite show functions to select * from system.table_functions ...
@@ -74,9 +76,10 @@ impl Binder {
             .await
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_show_settings(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         like: &Option<String>,
     ) -> Result<Plan> {
         let sub_query = like

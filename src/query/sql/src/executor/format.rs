@@ -15,7 +15,7 @@
 use common_ast::ast::FormatTreeNode;
 use common_catalog::plan::PartStatistics;
 use common_exception::Result;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_profile::ProfSpanSetRef;
 use itertools::Itertools;
 
@@ -30,16 +30,18 @@ use super::HashJoin;
 use super::Limit;
 use super::PhysicalPlan;
 use super::Project;
+use super::ProjectSet;
 use super::Sort;
 use super::TableScan;
 use super::UnionAll;
-use super::Unnest;
+use super::WindowFunction;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::DistributedInsertSelect;
 use crate::executor::ExchangeSink;
 use crate::executor::ExchangeSource;
 use crate::executor::FragmentKind;
 use crate::executor::RuntimeFilterSource;
+use crate::executor::Window;
 use crate::planner::MetadataRef;
 use crate::planner::DUMMY_TABLE_INDEX;
 use crate::BaseTableColumn;
@@ -54,6 +56,59 @@ impl PhysicalPlan {
         prof_span_set: ProfSpanSetRef,
     ) -> Result<FormatTreeNode<String>> {
         to_format_tree(self, &metadata, &prof_span_set)
+    }
+
+    pub fn format_join(&self, metadata: &MetadataRef) -> Result<FormatTreeNode<String>> {
+        match self {
+            PhysicalPlan::TableScan(plan) => {
+                if plan.table_index == DUMMY_TABLE_INDEX {
+                    return Ok(FormatTreeNode::with_children(
+                        format!("Scan: dummy, rows: {}", plan.source.statistics.read_rows),
+                        vec![],
+                    ));
+                }
+                let table = metadata.read().table(plan.table_index).clone();
+                let table_name =
+                    format!("{}.{}.{}", table.catalog(), table.database(), table.name());
+
+                Ok(FormatTreeNode::with_children(
+                    format!(
+                        "Scan: {}, rows: {}",
+                        table_name, plan.source.statistics.read_rows
+                    ),
+                    vec![],
+                ))
+            }
+            PhysicalPlan::HashJoin(plan) => {
+                let build_child = plan.build.format_join(metadata)?;
+                let probe_child = plan.probe.format_join(metadata)?;
+
+                let children = vec![
+                    FormatTreeNode::with_children("Build".to_string(), vec![build_child]),
+                    FormatTreeNode::with_children("Probe".to_string(), vec![probe_child]),
+                ];
+
+                Ok(FormatTreeNode::with_children(
+                    format!("HashJoin: {}", plan.join_type),
+                    children,
+                ))
+            }
+            other => {
+                let children = other
+                    .children()
+                    .map(|child| child.format_join(metadata))
+                    .collect::<Result<Vec<FormatTreeNode<String>>>>()?;
+
+                if children.len() == 1 {
+                    Ok(children[0].clone())
+                } else {
+                    Ok(FormatTreeNode::with_children(
+                        format!("{:?}", other),
+                        children,
+                    ))
+                }
+            }
+        }
     }
 }
 
@@ -76,6 +131,7 @@ fn to_format_tree(
         PhysicalPlan::AggregateFinal(plan) => {
             aggregate_final_to_format_tree(plan, metadata, prof_span_set)
         }
+        PhysicalPlan::Window(plan) => window_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::Sort(plan) => sort_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::Limit(plan) => limit_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::HashJoin(plan) => hash_join_to_format_tree(plan, metadata, prof_span_set),
@@ -88,7 +144,7 @@ fn to_format_tree(
         PhysicalPlan::DistributedInsertSelect(plan) => {
             distributed_insert_to_format_tree(plan.as_ref(), metadata, prof_span_set)
         }
-        PhysicalPlan::Unnest(plan) => unnest_to_format_tree(plan, metadata, prof_span_set),
+        PhysicalPlan::ProjectSet(plan) => project_set_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::RuntimeFilterSource(plan) => {
             runtime_filter_source_to_format_tree(plan, metadata, prof_span_set)
         }
@@ -456,6 +512,74 @@ fn aggregate_final_to_format_tree(
     ))
 }
 
+fn window_to_format_tree(
+    plan: &Window,
+    metadata: &MetadataRef,
+    prof_span_set: &ProfSpanSetRef,
+) -> Result<FormatTreeNode<String>> {
+    let partition_by = plan
+        .partition_by
+        .iter()
+        .map(|col| {
+            let column = metadata.read().column(*col).clone();
+            let name = match column {
+                ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => column_name,
+                ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
+                ColumnEntry::InternalColumn(TableInternalColumn {
+                    internal_column, ..
+                }) => internal_column.column_name().to_string(),
+            };
+            Ok(name)
+        })
+        .collect::<Result<Vec<_>>>()?
+        .join(", ");
+
+    let order_by = plan
+        .order_by
+        .iter()
+        .map(|v| {
+            let column = metadata.read().column(v.order_by).clone();
+            let name = match column {
+                ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => column_name,
+                ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
+                ColumnEntry::InternalColumn(TableInternalColumn {
+                    internal_column, ..
+                }) => internal_column.column_name().to_string(),
+            };
+            Ok(name)
+        })
+        .collect::<Result<Vec<_>>>()?
+        .join(", ");
+
+    let frame = plan.window_frame.to_string();
+
+    let func = match &plan.func {
+        WindowFunction::Aggregate(agg) => pretty_display_agg_desc(agg, metadata),
+        func => format!("{}", func),
+    };
+
+    let mut children = vec![
+        FormatTreeNode::new(format!("aggregate function: [{func}]")),
+        FormatTreeNode::new(format!("partition by: [{partition_by}]")),
+        FormatTreeNode::new(format!("order by: [{order_by}]")),
+        FormatTreeNode::new(format!("frame: [{frame}]")),
+    ];
+
+    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
+        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
+        children.push(FormatTreeNode::new(format!(
+            "total process time: {process_time}ms"
+        )));
+    }
+
+    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
+
+    Ok(FormatTreeNode::with_children(
+        "Window".to_string(), // todo(ariesdevil): show full window expression.
+        children,
+    ))
+}
+
 fn sort_to_format_tree(
     plan: &Sort,
     metadata: &MetadataRef,
@@ -728,15 +852,38 @@ fn distributed_insert_to_format_tree(
     ))
 }
 
-fn unnest_to_format_tree(
-    plan: &Unnest,
+fn project_set_to_format_tree(
+    plan: &ProjectSet,
     metadata: &MetadataRef,
     prof_span_set: &ProfSpanSetRef,
 ) -> Result<FormatTreeNode<String>> {
-    let children = vec![to_format_tree(&plan.input, metadata, prof_span_set)?];
+    let mut children = vec![];
+
+    if let Some(info) = &plan.stat_info {
+        let items = plan_stats_info_to_format_tree(info);
+        children.extend(items);
+    }
+
+    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
+        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
+        children.push(FormatTreeNode::new(format!(
+            "total process time: {process_time}ms"
+        )));
+    }
+
+    children.extend(vec![FormatTreeNode::new(format!(
+        "set returning functions: {}",
+        plan.srf_exprs
+            .iter()
+            .map(|(expr, _)| expr.clone().as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .collect::<Vec<_>>()
+            .join(", ")
+    ))]);
+
+    children.extend(vec![to_format_tree(&plan.input, metadata, prof_span_set)?]);
 
     Ok(FormatTreeNode::with_children(
-        "Unnest".to_string(),
+        "ProjectSet".to_string(),
         children,
     ))
 }

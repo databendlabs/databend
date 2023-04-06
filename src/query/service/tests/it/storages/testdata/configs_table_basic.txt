@@ -34,6 +34,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | "meta"    | "password"                                 | ""                               | ""       |
 | "meta"    | "rpc_tls_meta_server_root_ca_cert"         | ""                               | ""       |
 | "meta"    | "rpc_tls_meta_service_domain_name"         | "localhost"                      | ""       |
+| "meta"    | "unhealth_endpoint_evict_time"             | "120"                            | ""       |
 | "meta"    | "username"                                 | "root"                           | ""       |
 | "query"   | "admin_api_address"                        | "127.0.0.1:8080"                 | ""       |
 | "query"   | "api_tls_server_cert"                      | ""                               | ""       |
@@ -48,6 +49,10 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | "query"   | "default_storage_format"                   | "auto"                           | ""       |
 | "query"   | "disable_system_table_load"                | "false"                          | ""       |
 | "query"   | "flight_api_address"                       | "127.0.0.1:9090"                 | ""       |
+| "query"   | "flight_sql_handler_host"                  | "127.0.0.1"                      | ""       |
+| "query"   | "flight_sql_handler_port"                  | "8900"                           | ""       |
+| "query"   | "flight_sql_tls_server_cert"               | ""                               | ""       |
+| "query"   | "flight_sql_tls_server_key"                | ""                               | ""       |
 | "query"   | "http_handler_host"                        | "127.0.0.1"                      | ""       |
 | "query"   | "http_handler_port"                        | "8000"                           | ""       |
 | "query"   | "http_handler_result_timeout_secs"         | "60"                             | ""       |
@@ -68,6 +73,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | "query"   | "mysql_handler_port"                       | "3307"                           | ""       |
 | "query"   | "mysql_handler_tcp_keepalive_timeout_secs" | "120"                            | ""       |
 | "query"   | "num_cpus"                                 | "0"                              | ""       |
+| "query"   | "openai_api_key"                           | "******"                         | ""       |
 | "query"   | "quota"                                    | "null"                           | ""       |
 | "query"   | "rpc_tls_query_server_root_ca_cert"        | ""                               | ""       |
 | "query"   | "rpc_tls_query_service_domain_name"        | "localhost"                      | ""       |

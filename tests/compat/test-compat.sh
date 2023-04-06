@@ -114,9 +114,10 @@ download_query_config() {
 	local ver="$1"
 	local local_dir="$2"
 
-	echo " === Download query config.toml from $ver:$query_config_path"
+	config_dir="$(dirname $query_config_path)"
+	echo " === Download query config.toml from $ver:$config_dir"
 
-	git_partial_clone "$bend_repo_url" "v$ver-nightly" "$query_config_path" "$local_dir"
+	git_partial_clone "$bend_repo_url" "v$ver-nightly" "$config_dir" "$local_dir"
 }
 
 kill_proc() {
@@ -194,7 +195,7 @@ run_test() {
 	echo ' === Start databend-meta...'
 
 	nohup "$metasrv" --single --log-level=DEBUG &
-	python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
+	python3 scripts/ci/wait_tcp.py --timeout 10 --port 9191
 
 	echo ' === Start databend-query...'
 
@@ -208,26 +209,26 @@ run_test() {
 	fi
 
 	nohup "$query" -c "$config_path" --log-level DEBUG --meta-endpoints "0.0.0.0:9191" >query.log &
-	python3 scripts/ci/wait_tcp.py --timeout 5 --port 3307
+	python3 scripts/ci/wait_tcp.py --timeout 10 --port 3307
 
 	echo " === Run metasrv related test: 05_ddl"
 
-        if [ "$query_ver" = "current" ]; then
-            # Only run test on mysql handler
-            $sqllogictests --handlers mysql --run_dir 05_ddl
-        else
-            (
-                # download suites into ./old_suite
-                download_test_suite $query_ver
-            )
+	if [ "$query_ver" = "current" ]; then
+		# Only run test on mysql handler
+		$sqllogictests --handlers mysql --run_dir 05_ddl
+	else
+		(
+			# download suites into ./old_suite
+			download_test_suite $query_ver
+		)
 
-            # Replace suites
-            rm -rf "tests/sqllogictests/suites"
-            mv "old_suite/tests/sqllogictests/suites" "tests/sqllogictests/suites"
+		# Replace suites
+		rm -rf "tests/sqllogictests/suites"
+		mv "old_suite/tests/sqllogictests/suites" "tests/sqllogictests/suites"
 
-            $sqllogictests --handlers mysql --run_dir 05_ddl
-            cd -
-        fi
+		$sqllogictests --handlers mysql --run_dir 05_ddl
+		cd -
+	fi
 }
 
 # -- main --

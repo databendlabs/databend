@@ -32,9 +32,10 @@ use crate::plans::Replace;
 use crate::BindContext;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_replace(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &ReplaceStmt,
     ) -> Result<Plan> {
         let ReplaceStmt {

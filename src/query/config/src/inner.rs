@@ -95,6 +95,11 @@ impl InnerConfig {
             && !self.meta.rpc_tls_meta_service_domain_name.is_empty()
     }
 
+    pub fn flight_sql_tls_server_enabled(&self) -> bool {
+        !self.query.flight_sql_tls_server_key.is_empty()
+            && !self.query.flight_sql_tls_server_cert.is_empty()
+    }
+
     pub fn tls_rpc_server_enabled(&self) -> bool {
         !self.query.rpc_tls_server_key.is_empty() && !self.query.rpc_tls_server_cert.is_empty()
     }
@@ -132,6 +137,8 @@ pub struct QueryConfig {
     pub http_handler_port: u16,
     pub http_handler_result_timeout_secs: u64,
     pub flight_api_address: String,
+    pub flight_sql_handler_host: String,
+    pub flight_sql_handler_port: u16,
     pub admin_api_address: String,
     pub metric_api_address: String,
     pub http_handler_tls_server_cert: String,
@@ -140,6 +147,8 @@ pub struct QueryConfig {
     pub api_tls_server_cert: String,
     pub api_tls_server_key: String,
     pub api_tls_server_root_ca_cert: String,
+    pub flight_sql_tls_server_cert: String,
+    pub flight_sql_tls_server_key: String,
     /// rpc server cert
     pub rpc_tls_server_cert: String,
     /// key for rpc server cert
@@ -165,6 +174,7 @@ pub struct QueryConfig {
     pub internal_merge_on_read_mutation: bool,
     /// Disable some system load(For example system.configs) for cloud security.
     pub disable_system_table_load: bool,
+    pub openai_api_key: String,
 }
 
 impl Default for QueryConfig {
@@ -185,11 +195,14 @@ impl Default for QueryConfig {
             http_handler_port: 8000,
             http_handler_result_timeout_secs: 60,
             flight_api_address: "127.0.0.1:9090".to_string(),
+            flight_sql_handler_host: "127.0.0.1".to_string(),
+            flight_sql_handler_port: 8900,
             admin_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),
             api_tls_server_cert: "".to_string(),
             api_tls_server_key: "".to_string(),
             api_tls_server_root_ca_cert: "".to_string(),
+            flight_sql_tls_server_cert: "".to_string(),
             http_handler_tls_server_cert: "".to_string(),
             http_handler_tls_server_key: "".to_string(),
             http_handler_tls_server_root_ca_cert: "".to_string(),
@@ -212,6 +225,8 @@ impl Default for QueryConfig {
             internal_enable_sandbox_tenant: false,
             internal_merge_on_read_mutation: false,
             disable_system_table_load: false,
+            openai_api_key: "".to_string(),
+            flight_sql_tls_server_key: "".to_string(),
         }
     }
 }
@@ -240,6 +255,7 @@ pub struct MetaConfig {
     /// AutoSyncInterval is the interval to update endpoints with its latest members.
     /// 0 disables auto-sync. By default auto-sync is disabled.
     pub auto_sync_interval: u64,
+    pub unhealth_endpoint_evict_time: u64,
     /// Certificate for client to identify meta rpc serve
     pub rpc_tls_meta_server_root_ca_cert: String,
     pub rpc_tls_meta_service_domain_name: String,
@@ -254,6 +270,7 @@ impl Default for MetaConfig {
             password: "".to_string(),
             client_timeout_in_second: 10,
             auto_sync_interval: 0,
+            unhealth_endpoint_evict_time: 120,
             rpc_tls_meta_server_root_ca_cert: "".to_string(),
             rpc_tls_meta_service_domain_name: "localhost".to_string(),
         }
@@ -312,6 +329,7 @@ impl MetaConfig {
             } else {
                 None
             },
+            unhealth_endpoint_evict_time: Duration::from_secs(self.unhealth_endpoint_evict_time),
         }
     }
 }
@@ -325,6 +343,10 @@ impl Debug for MetaConfig {
             .field("embedded_dir", &self.embedded_dir)
             .field("client_timeout_in_second", &self.client_timeout_in_second)
             .field("auto_sync_interval", &self.auto_sync_interval)
+            .field(
+                "unhealth_endpoint_evict_time",
+                &self.unhealth_endpoint_evict_time,
+            )
             .field(
                 "rpc_tls_meta_server_root_ca_cert",
                 &self.rpc_tls_meta_server_root_ca_cert,

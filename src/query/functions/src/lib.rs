@@ -18,11 +18,31 @@
 #![feature(type_ascription)]
 
 use aggregates::AggregateFunctionFactory;
-use scalars::BUILTIN_FUNCTIONS;
+use common_expression::FunctionRegistry;
+use ctor::ctor;
 
 pub mod aggregates;
+mod cast_rules;
 pub mod scalars;
+pub mod srfs;
 
 pub fn is_builtin_function(name: &str) -> bool {
-    BUILTIN_FUNCTIONS.contains(name) || AggregateFunctionFactory::instance().contains(name)
+    BUILTIN_FUNCTIONS.contains(name)
+        || AggregateFunctionFactory::instance().contains(name)
+        || GENERAL_WINDOW_FUNCTIONS.contains(&name)
+}
+
+#[ctor]
+pub static BUILTIN_FUNCTIONS: FunctionRegistry = builtin_functions();
+
+pub const GENERAL_WINDOW_FUNCTIONS: [&str; 3] = ["row_number", "rank", "dense_rank"];
+
+fn builtin_functions() -> FunctionRegistry {
+    let mut registry = FunctionRegistry::empty();
+
+    cast_rules::register(&mut registry);
+    scalars::register(&mut registry);
+    srfs::register(&mut registry);
+
+    registry
 }

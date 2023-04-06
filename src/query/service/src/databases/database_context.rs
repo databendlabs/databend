@@ -23,4 +23,5 @@ use crate::storages::StorageFactory;
 pub struct DatabaseContext {
     pub meta: MetaStore,
     pub storage_factory: Arc<StorageFactory>,
+    pub tenant: String,
 }

@@ -16,7 +16,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use async_channel::Receiver;
 use async_channel::Sender;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::runtime::TrySpawn;
@@ -26,96 +25,96 @@ use common_exception::Result;
 use futures_util::future::Either;
 
 use crate::api::rpc::flight_client::FlightExchange;
+use crate::api::rpc::flight_client::FlightSender;
 use crate::api::rpc::packets::PrecommitBlock;
 use crate::api::rpc::packets::ProgressInfo;
 use crate::api::DataPacket;
 use crate::sessions::QueryContext;
 
 pub struct StatisticsSender {
-    query_id: String,
-    ctx: Arc<QueryContext>,
-    exchange: Option<FlightExchange>,
+    _spawner: Arc<QueryContext>,
     shutdown_flag: Arc<AtomicBool>,
     shutdown_flag_sender: Sender<Option<ErrorCode>>,
-    shutdown_flag_receiver: Receiver<Option<ErrorCode>>,
     join_handle: Option<JoinHandle<()>>,
 }
 
 impl StatisticsSender {
-    pub fn create(
+    pub fn spawn_sender(
         query_id: &str,
         ctx: Arc<QueryContext>,
-        exchange: FlightExchange,
+        mut exchanges: Vec<FlightExchange>,
     ) -> StatisticsSender {
-        let (shutdown_flag_sender, shutdown_flag_receiver) = async_channel::bounded(1);
-        StatisticsSender {
-            ctx,
-            shutdown_flag_sender,
-            shutdown_flag_receiver,
-            exchange: Some(exchange),
-            query_id: query_id.to_string(),
-            shutdown_flag: Arc::new(AtomicBool::new(false)),
-            join_handle: None,
-        }
-    }
+        debug_assert_eq!(exchanges.len(), 2);
 
-    pub fn start(&mut self) {
-        let ctx = self.ctx.clone();
-        let query_id = self.query_id.clone();
-        let flight_exchange = self.exchange.take().unwrap();
-        let shutdown_flag = self.shutdown_flag.clone();
-        let shutdown_flag_receiver = self.shutdown_flag_receiver.clone();
+        let (tx, rx) = match (exchanges.remove(0), exchanges.remove(0)) {
+            (tx @ FlightExchange::Sender { .. }, rx @ FlightExchange::Receiver { .. }) => {
+                (tx.as_sender(), rx.as_receiver())
+            }
+            (rx @ FlightExchange::Receiver { .. }, tx @ FlightExchange::Sender { .. }) => {
+                (tx.as_sender(), rx.as_receiver())
+            }
+            _ => unreachable!(),
+        };
 
         let spawner = ctx.clone();
-        self.join_handle = Some(spawner.spawn(async move {
-            let mut recv = Box::pin(flight_exchange.recv());
-            let mut notified = Box::pin(shutdown_flag_receiver.recv());
+        let shutdown_flag = Arc::new(AtomicBool::new(false));
+        let (shutdown_flag_sender, shutdown_flag_receiver) = async_channel::bounded(1);
 
-            while !shutdown_flag.load(Ordering::Relaxed) {
-                match futures::future::select(recv, notified).await {
-                    Either::Right((Ok(None), _))
-                    | Either::Right((Err(_), _))
-                    | Either::Left((Ok(None), _))
-                    | Either::Left((Err(_), _)) => {
-                        break;
-                    }
-                    Either::Right((Ok(Some(error_code)), _recv)) => {
-                        let data = DataPacket::ErrorCode(error_code);
-                        if let Err(error_code) = flight_exchange.send(data).await {
-                            tracing::warn!(
-                                "Cannot send data via flight exchange, cause: {:?}",
-                                error_code
-                            );
+        let handle = spawner.spawn({
+            let query_id = query_id.to_string();
+            let shutdown_flag = shutdown_flag.clone();
+
+            async move {
+                let mut recv = Box::pin(rx.recv());
+                let mut notified = Box::pin(shutdown_flag_receiver.recv());
+
+                while !shutdown_flag.load(Ordering::Relaxed) {
+                    match futures::future::select(recv, notified).await {
+                        Either::Right((Ok(None), _))
+                        | Either::Right((Err(_), _))
+                        | Either::Left((Ok(None), _))
+                        | Either::Left((Err(_), _)) => {
+                            break;
                         }
+                        Either::Right((Ok(Some(error_code)), _recv)) => {
+                            let data = DataPacket::ErrorCode(error_code);
+                            if let Err(error_code) = tx.send(data).await {
+                                tracing::warn!(
+                                    "Cannot send data via flight exchange, cause: {:?}",
+                                    error_code
+                                );
+                            }
 
-                        flight_exchange.close_input().await;
-                        flight_exchange.close_output().await;
-                        return;
-                    }
-                    Either::Left((Ok(Some(command)), right)) => {
-                        notified = right;
-                        recv = Box::pin(flight_exchange.recv());
-
-                        if let Err(_cause) = Self::on_command(&ctx, command, &flight_exchange).await
-                        {
-                            ctx.get_exchange_manager().shutdown_query(&query_id);
-                            flight_exchange.close_input().await;
-                            flight_exchange.close_output().await;
                             return;
                         }
+                        Either::Left((Ok(Some(command)), right)) => {
+                            notified = right;
+                            recv = Box::pin(rx.recv());
+
+                            if let Err(_cause) =
+                                StatisticsSender::on_command(&ctx, command, &tx).await
+                            {
+                                ctx.get_exchange_manager().shutdown_query(&query_id);
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                if let Ok(Some(command)) = rx.recv().await {
+                    if let Err(error) = Self::on_command(&ctx, command, &tx).await {
+                        tracing::warn!("Statistics send has error, cause: {:?}.", error);
                     }
                 }
             }
+        });
 
-            if let Ok(Some(command)) = flight_exchange.recv().await {
-                if let Err(error) = Self::on_command(&ctx, command, &flight_exchange).await {
-                    tracing::warn!("Statistics send has error, cause: {:?}.", error);
-                }
-            }
-
-            flight_exchange.close_input().await;
-            flight_exchange.close_output().await;
-        }));
+        StatisticsSender {
+            _spawner: spawner,
+            shutdown_flag,
+            shutdown_flag_sender,
+            join_handle: Some(handle),
+        }
     }
 
     pub fn shutdown(&mut self, error: Option<ErrorCode>) {
@@ -139,10 +138,11 @@ impl StatisticsSender {
         });
     }
 
+    #[async_backtrace::framed]
     async fn on_command(
         ctx: &Arc<QueryContext>,
         command: DataPacket,
-        exchange_flight: &FlightExchange,
+        flight_sender: &FlightSender,
     ) -> Result<()> {
         match command {
             DataPacket::ErrorCode(_) => unreachable!(),
@@ -151,7 +151,7 @@ impl StatisticsSender {
             DataPacket::ClosingInput => unreachable!(),
             DataPacket::ClosingOutput => unreachable!(),
             DataPacket::FetchProgressAndPrecommit => {
-                exchange_flight
+                flight_sender
                     .send(DataPacket::ProgressAndPrecommit {
                         progress: Self::fetch_progress(ctx).await?,
                         precommit: Self::fetch_precommit(ctx).await?,
@@ -161,6 +161,7 @@ impl StatisticsSender {
         }
     }
 
+    #[async_backtrace::framed]
     async fn fetch_progress(ctx: &Arc<QueryContext>) -> Result<Vec<ProgressInfo>> {
         let mut progress_info = vec![];
 
@@ -188,6 +189,7 @@ impl StatisticsSender {
         Ok(progress_info)
     }
 
+    #[async_backtrace::framed]
     async fn fetch_precommit(ctx: &Arc<QueryContext>) -> Result<Vec<PrecommitBlock>> {
         Ok(ctx
             .consume_precommit_blocks()

@@ -29,14 +29,13 @@ use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::FromData;
 use common_expression::FunctionContext;
-use common_expression::Literal;
 use common_expression::RawExpr;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_functions::aggregates::eval_aggr;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
 use common_storages_fuse::statistics::reducers::reduce_block_metas;
 use common_storages_fuse::statistics::Trim;
@@ -236,7 +235,7 @@ async fn test_accumulator() -> common_exception::Result<()> {
         let block = item?;
         let col_stats = gen_columns_statistics(&block, None, &schema)?;
         let block_writer = BlockWriter::new(&operator, &loc_generator);
-        let block_meta = block_writer
+        let (block_meta, _index_meta) = block_writer
             .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
             .await?;
         stats_acc.add_with_block_meta(block_meta);
@@ -295,9 +294,9 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
                 data_type: schema.field(0).data_type().clone(),
                 display_name: schema.field(0).name().clone(),
             },
-            RawExpr::Literal {
+            RawExpr::Constant {
                 span: None,
-                lit: Literal::UInt64(1),
+                scalar: Scalar::Number(NumberScalar::UInt64(1)),
             },
         ],
     };

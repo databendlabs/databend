@@ -48,6 +48,7 @@ impl AbortOperation {
         self.segments.push(segment);
     }
 
+    #[async_backtrace::framed]
     pub async fn abort(self, ctx: Arc<dyn TableContext>, operator: Operator) -> Result<()> {
         let fuse_file = Files::create(ctx, operator);
         // TODO the segments and the bloom filters?

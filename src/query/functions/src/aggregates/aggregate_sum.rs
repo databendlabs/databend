@@ -411,7 +411,14 @@ pub fn try_create_aggregate_sum_function(
 }
 
 pub fn aggregate_sum_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_sum_function))
+    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+        is_decomposable: true,
+        ..Default::default()
+    };
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_aggregate_sum_function),
+        features,
+    )
 }
 
 #[inline]

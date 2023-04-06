@@ -20,7 +20,7 @@ use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use storages_common_index::Index;
 use storages_common_index::RangeIndex;
 use storages_common_pruner::RangePrunerCreator;
@@ -33,6 +33,7 @@ use crate::ParquetTable;
 
 impl ParquetTable {
     #[inline]
+    #[async_backtrace::framed]
     pub(super) async fn do_read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -113,9 +114,9 @@ impl ParquetTable {
                 .map(|f| (f.path.clone(), f.size))
                 .collect::<Vec<_>>(),
             None => if self.operator.info().can_blocking() {
-                self.files_info.blocking_list(&self.operator, false)
+                self.files_info.blocking_list(&self.operator, false, None)
             } else {
-                self.files_info.list(&self.operator, false).await
+                self.files_info.list(&self.operator, false, None).await
             }?
             .into_iter()
             .map(|f| (f.path, f.size))

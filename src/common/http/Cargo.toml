@@ -20,10 +20,11 @@ memory-profiling = ["tempfile"]
 common-base = { path = "../base" }
 common-exception = { path = "../exception" }
 
-# Github dependencies
+# GitHub dependencies
 
 # Crates.io dependencies
 anyerror = { workspace = true }
+async-backtrace = { workspace = true }
 futures = "0.3.24"
 poem = { version = "1", features = ["rustls"] }
 serde = { workspace = true }

@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
@@ -56,13 +57,13 @@ impl<'a> BlockWriter<'a> {
         block: DataBlock,
         col_stats: StatisticsOfColumns,
         cluster_stats: Option<ClusterStatistics>,
-    ) -> Result<BlockMeta> {
+    ) -> Result<(BlockMeta, Option<ThriftFileMetaData>)> {
         let (location, block_id) = self.location_generator.gen_block_location();
 
         let data_accessor = &self.data_accessor;
         let row_count = block.num_rows() as u64;
         let block_size = block.memory_size() as u64;
-        let (bloom_filter_index_size, bloom_filter_index_location) = self
+        let (bloom_filter_index_size, bloom_filter_index_location, meta) = self
             .build_block_index(data_accessor, schema.clone(), &block, block_id)
             .await?;
 
@@ -88,7 +89,7 @@ impl<'a> BlockWriter<'a> {
             bloom_filter_index_size,
             Compression::Lz4Raw,
         );
-        Ok(block_meta)
+        Ok((block_meta, meta))
     }
 
     pub async fn build_block_index(
@@ -97,7 +98,7 @@ impl<'a> BlockWriter<'a> {
         schema: TableSchemaRef,
         block: &DataBlock,
         block_id: Uuid,
-    ) -> Result<(u64, Option<Location>)> {
+    ) -> Result<(u64, Option<Location>, Option<ThriftFileMetaData>)> {
         let location = self
             .location_generator
             .block_bloom_index_location(&block_id);
@@ -109,18 +110,16 @@ impl<'a> BlockWriter<'a> {
             let filter_schema = bloom_index.filter_schema;
             let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
             let index_block_schema = &filter_schema;
-            let (size, _) = blocks_to_parquet(
+            let (size, meta) = blocks_to_parquet(
                 index_block_schema,
                 vec![index_block],
                 &mut data,
                 TableCompression::None,
             )?;
-
             data_accessor.write(&location.0, data).await?;
-
-            Ok((size, Some(location)))
+            Ok((size, Some(location), Some(meta)))
         } else {
-            Ok((0u64, None))
+            Ok((0u64, None, None))
         }
     }
 }

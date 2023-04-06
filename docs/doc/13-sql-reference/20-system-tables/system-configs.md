@@ -43,9 +43,6 @@ mysql> SELECT * FROM system.configs;
 | query   | management_mode                        | false                          |             |
 | query   | jwt_key_file                           |                                |             |
 | query   | jwt_key_files                          |                                |             |
-| query   | async_insert_max_data_size             | 10000                          |             |
-| query   | async_insert_busy_timeout              | 200                            |             |
-| query   | async_insert_stale_timeout             | 0                              |             |
 | query   | users                                  |                                |             |
 | query   | share_endpoint_address                 |                                |             |
 | query   | share_endpoint_auth_token_file         |                                |             |
@@ -69,6 +66,7 @@ mysql> SELECT * FROM system.configs;
 | meta    | auto_sync_interval                     | 0                              |             |
 | meta    | rpc_tls_meta_server_root_ca_cert       |                                |             |
 | meta    | rpc_tls_meta_service_domain_name       | localhost                      |             |
+| meta    | unhealth_endpoint_evict_time           | 120                            |             |
 | cache   | enable_table_meta_cache                | true                           |             |
 | cache   | table_meta_snapshot_count              | 256                            |             |
 | cache   | table_meta_segment_count               | 10240                          |             |

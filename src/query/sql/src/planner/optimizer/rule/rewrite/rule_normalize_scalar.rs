@@ -13,8 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::Literal;
+use common_expression::Scalar;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::RuleID;
@@ -35,7 +34,7 @@ fn is_true(predicate: &ScalarExpr) -> bool {
     matches!(
         predicate,
         ScalarExpr::ConstantExpr(ConstantExpr {
-            value: Literal::Boolean(true),
+            value: Scalar::Boolean(true),
             ..
         })
     )
@@ -47,7 +46,7 @@ fn is_falsy(predicate: &ScalarExpr) -> bool {
         ScalarExpr::ConstantExpr(ConstantExpr {
             value,
             ..
-        }) if value == &Literal::Boolean(false) || value == &Literal::Null
+        }) if value == &Scalar::Boolean(false) || value == &Scalar::Null
     )
 }
 
@@ -60,8 +59,7 @@ fn normalize_falsy_predicate(predicates: Vec<ScalarExpr>) -> Vec<ScalarExpr> {
         vec![
             ConstantExpr {
                 span: None,
-                value: Literal::Boolean(false),
-                data_type: Box::new(DataType::Boolean),
+                value: Scalar::Boolean(false),
             }
             .into(),
         ]
@@ -76,7 +74,7 @@ fn normalize_falsy_predicate(predicates: Vec<ScalarExpr>) -> Vec<ScalarExpr> {
 /// whole filter with FALSE
 pub struct RuleNormalizeScalarFilter {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RuleNormalizeScalarFilter {
@@ -86,7 +84,7 @@ impl RuleNormalizeScalarFilter {
             // Filter
             //  \
             //   *
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Filter,
                 }
@@ -97,7 +95,7 @@ impl RuleNormalizeScalarFilter {
                     }
                     .into(),
                 ),
-            ),
+            )],
         }
     }
 }
@@ -127,7 +125,7 @@ impl Rule for RuleNormalizeScalarFilter {
         }
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }

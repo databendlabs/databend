@@ -20,6 +20,7 @@ use common_arrow::arrow::trusted_len::TrustedLen;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::SimpleDomain;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -246,7 +247,7 @@ impl StringColumnBuilder {
         let mut offsets = Vec::with_capacity(len + 1);
         offsets.push(0);
         StringColumnBuilder {
-            need_estimated: data_capacity == 0,
+            need_estimated: data_capacity == 0 && len > 0,
             data: Vec::with_capacity(data_capacity),
             offsets,
         }
@@ -330,8 +331,11 @@ impl StringColumnBuilder {
             let bytes_per_row = self.data.len() / 64 + 1;
             let bytes_estimate = bytes_per_row * self.offsets.capacity();
 
+            const MAX_HINT_SIZE: usize = 1_000_000_000;
             // if we are more than 10% over the capacity, we reserve more
-            if bytes_estimate as f64 > self.data.capacity() as f64 * 1.10f64 {
+            if bytes_estimate < MAX_HINT_SIZE
+                && bytes_estimate as f64 > self.data.capacity() as f64 * 1.10f64
+            {
                 self.data.reserve(bytes_estimate - self.data.capacity());
             }
         }
@@ -408,5 +412,31 @@ impl<'a> FromIterator<&'a [u8]> for StringColumnBuilder {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StringDomain {
     pub min: Vec<u8>,
+    // max value is None for full domain
     pub max: Option<Vec<u8>>,
+}
+
+impl StringDomain {
+    pub fn unify(&self, other: &Self) -> (SimpleDomain<Vec<u8>>, SimpleDomain<Vec<u8>>) {
+        let mut max_size = self.min.len().max(other.min.len());
+        if let Some(max) = &self.max {
+            max_size = max_size.max(max.len());
+        }
+        if let Some(max) = &other.max {
+            max_size = max_size.max(max.len());
+        }
+
+        let max_value = vec![255; max_size + 1];
+
+        (
+            SimpleDomain {
+                min: self.min.clone(),
+                max: self.max.clone().unwrap_or_else(|| max_value.clone()),
+            },
+            SimpleDomain {
+                min: other.min.clone(),
+                max: other.max.clone().unwrap_or_else(|| max_value.clone()),
+            },
+        )
+    }
 }

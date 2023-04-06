@@ -25,7 +25,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
 use common_expression::type_check::common_super_type;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
@@ -54,6 +54,7 @@ pub struct JoinConditions {
 
 impl Binder {
     #[async_recursion]
+    #[async_backtrace::framed]
     pub(super) async fn bind_join(
         &mut self,
         bind_context: &BindContext,
@@ -392,6 +393,7 @@ impl<'a> JoinConditionResolver<'a> {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn resolve(
         &mut self,
         left_join_conditions: &mut Vec<ScalarExpr>,
@@ -456,6 +458,7 @@ impl<'a> JoinConditionResolver<'a> {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn resolve_on(
         &mut self,
         condition: &Expr,
@@ -484,6 +487,7 @@ impl<'a> JoinConditionResolver<'a> {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn resolve_predicate(
         &self,
         predicate: &Expr,
@@ -500,7 +504,7 @@ impl<'a> JoinConditionResolver<'a> {
             &mut join_context,
         );
         let mut scalar_binder = ScalarBinder::new(
-            &join_context,
+            &mut join_context,
             self.ctx.clone(),
             self.name_resolution_ctx,
             self.metadata.clone(),
@@ -534,6 +538,7 @@ impl<'a> JoinConditionResolver<'a> {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn resolve_using(
         &mut self,
         using_columns: Vec<(Span, String)>,
@@ -652,6 +657,7 @@ impl<'a> JoinConditionResolver<'a> {
         Ok(false)
     }
 
+    #[async_backtrace::framed]
     async fn add_other_conditions(
         &self,
         predicate: &Expr,
@@ -665,7 +671,7 @@ impl<'a> JoinConditionResolver<'a> {
             &mut join_context,
         );
         let mut scalar_binder = ScalarBinder::new(
-            &join_context,
+            &mut join_context,
             self.ctx.clone(),
             self.name_resolution_ctx,
             self.metadata.clone(),

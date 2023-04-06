@@ -23,7 +23,7 @@ use common_expression::BlockThresholds;
 use common_expression::DataField;
 use common_expression::Expr;
 use common_expression::SortColumnDescription;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::transform_block_compact_no_split::BlockCompactorNoSplit;
@@ -178,10 +178,12 @@ impl FuseTable {
 
         let func_ctx = ctx.get_function_context()?;
         if !exprs.is_empty() {
+            let num_input_columns = input_schema.fields().len();
             pipeline.add_transform(move |input, output| {
                 Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                     input,
                     output,
+                    num_input_columns,
                     func_ctx,
                     vec![BlockOperator::Map {
                         exprs: exprs.clone(),

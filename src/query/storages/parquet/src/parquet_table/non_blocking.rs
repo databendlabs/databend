@@ -30,6 +30,7 @@ use super::table::create_parquet_table_info;
 use crate::ParquetTable;
 
 impl ParquetTable {
+    #[async_backtrace::framed]
     pub async fn create(
         stage_info: StageInfo,
         files_info: StageFilesInfo,
@@ -66,6 +67,7 @@ impl ParquetTable {
         }))
     }
 
+    #[async_backtrace::framed]
     async fn prepare_metas(path: &str, operator: Operator) -> Result<ArrowSchema> {
         // Infer schema from the first parquet file.
         // Assume all parquet files have the same schema.

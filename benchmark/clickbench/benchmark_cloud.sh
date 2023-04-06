@@ -25,9 +25,28 @@ if [[ -z "${CLOUD_EMAIL}" || -z "${CLOUD_PASSWORD}" || -z "${CLOUD_ORG}" ]]; the
 fi
 
 echo "Checking script dependencies..."
-bc --version
-jq --version
+python3 --version
+yq --version
 bendsql version
+
+echo "Preparing benchmark metadata..."
+echo '{}' >result.json
+yq -i ".date = \"$(date -u +%Y-%m-%d)\"" result.json
+yq -i '.tags = ["s3"]' result.json
+case ${BENCHMARK_SIZE} in
+Medium)
+    yq -i '.cluster_size = "16"' result.json
+    yq -i '.machine = "16×Medium"' result.json
+    ;;
+Large)
+    yq -i '.cluster_size = "64"' result.json
+    yq -i '.machine = "64×Large"' result.json
+    ;;
+*)
+    echo "Unsupported benchmark size: ${BENCHMARK_SIZE}"
+    exit 1
+    ;;
+esac
 
 echo "#######################################################"
 echo "Running benchmark for Databend Cloud with S3 storage..."
@@ -44,37 +63,9 @@ bendsql cloud warehouse ls
 bendsql cloud warehouse create "${CLOUD_WAREHOUSE}" --size "${BENCHMARK_SIZE}" --tag "${BENCHMARK_IMAGE_TAG}"
 bendsql cloud warehouse ls
 bendsql cloud warehouse resume "${CLOUD_WAREHOUSE}" --wait
-
 bendsql cloud warehouse use "${CLOUD_WAREHOUSE}"
 
-# Data loaded before the benchmark starts
-# bendsql query <"${BENCHMARK_DATASET}/create.sql"
-
-# echo "Loading data..."
-# load_start=$(date +%s)
-# bendsql query <"${BENCHMARK_DATASET}/load.sql"
-# load_end=$(date +%s)
-# load_time=$(echo "$load_end - $load_start" | bc -l)
-# echo "Data loaded in ${load_time}s."
-
-# data_size=$(echo "select sum(data_compressed_size) from system.tables where database = '${BENCHMARK_DATASET}';" | bendsql query -f unaligned -t)
-
-# echo '{}' >result.json
-# jq ".load_time = ${load_time} | .data_size = ${data_size} | .result = []" <result.json >result.json.tmp && mv result.json.tmp result.json
-
-echo '{}' >result.json
 echo "Running queries..."
-
-function append_result() {
-    local query_num=$1
-    local seq=$2
-    local value=$3
-    if [[ $seq -eq 1 ]]; then
-        jq ".result += [[${value}]]" <result.json >result.json.tmp && mv result.json.tmp result.json
-    else
-        jq ".result[${query_num} - 1] += [${value}]" <result.json >result.json.tmp && mv result.json.tmp result.json
-    fi
-}
 
 function run_query() {
     local query_num=$1
@@ -86,19 +77,19 @@ function run_query() {
     q_start=$(date +%s.%N)
     if echo "$query" | bendsql query --format csv --rows-only >/dev/null; then
         q_end=$(date +%s.%N)
-        q_time=$(echo "$q_end - $q_start" | bc -l)
-        echo "Q${QUERY_NUM}[$seq] succeeded in $q_time seconds"
-        append_result "$query_num" "$seq" "$q_time"
+        q_time=$(python3 -c "print($q_end - $q_start)")
+        echo "Q${query_num}[$seq] succeeded in $q_time seconds"
+        yq -i ".result[${query_num}] += [${q_time}]" result.json
     else
-        echo "Q${QUERY_NUM}[$seq] failed"
-        append_result "$query_num" "$seq" "null"
+        echo "Q${query_num}[$seq] failed"
     fi
 }
 
 TRIES=5
-QUERY_NUM=1
+QUERY_NUM=0
 while read -r query; do
     echo "Running Q${QUERY_NUM}: ${query}"
+    yq -i ".result += [[]]" result.json
     for i in $(seq 1 $TRIES); do
         run_query "$QUERY_NUM" "$i" "$query"
     done

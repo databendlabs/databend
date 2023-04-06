@@ -16,7 +16,8 @@ use std::sync::Arc;
 
 use common_base::base::GlobalInstance;
 use common_expression::types::DataType;
-use common_expression::Literal;
+use common_expression::types::NumberScalar;
+use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
@@ -113,6 +114,7 @@ fn test_format() {
                             column: ColumnBinding {
                                 database_name: None,
                                 table_name: None,
+                                table_index: None,
                                 column_name: "col1".to_string(),
                                 index: col1,
                                 data_type: Box::new(DataType::Boolean),
@@ -122,8 +124,7 @@ fn test_format() {
                         .into(),
                         ConstantExpr {
                             span: None,
-                            value: Literal::UInt64(123u64),
-                            data_type: Box::new(DataType::Boolean),
+                            value: Scalar::Number(NumberScalar::UInt64(123u64)),
                         }
                         .into(),
                     ],
@@ -136,6 +137,7 @@ fn test_format() {
                     column: ColumnBinding {
                         database_name: None,
                         table_name: None,
+                        table_index: None,
                         column_name: "col2".to_string(),
                         index: col2,
                         data_type: Box::new(DataType::Boolean),
@@ -156,8 +158,7 @@ fn test_format() {
                 predicates: vec![
                     ConstantExpr {
                         span: None,
-                        value: Literal::Boolean(true),
-                        data_type: Box::new(DataType::Boolean),
+                        value: Scalar::Boolean(true),
                     }
                     .into(),
                 ],
@@ -175,7 +176,6 @@ fn test_format() {
                     statistics: Statistics {
                         statistics: None,
                         col_stats: Default::default(),
-                        is_accurate: false,
                     },
                 }
                 .into(),
@@ -192,7 +192,6 @@ fn test_format() {
                 statistics: Statistics {
                     statistics: None,
                     col_stats: Default::default(),
-                    is_accurate: false,
                 },
             }
             .into(),
@@ -203,9 +202,9 @@ fn test_format() {
 
     let tree = s_expr.to_format_tree(&metadata_ref);
     let result = tree.format_indent().unwrap();
-    let expect = "HashJoin: INNER\n    equi conditions: [col2 (#1) eq plus(col1 (#0), 123_u64)]\n    non-equi conditions: []\n    Filter\n        filters: [true]\n        LogicalGet\n            table: catalog.database.table\n            filters: []\n            order by: []\n            limit: NONE\n    LogicalGet\n        table: catalog.database.table\n        filters: []\n        order by: []\n        limit: NONE\n";
+    let expect = "HashJoin: INNER\n    equi conditions: [col2 (#1) eq plus(col1 (#0), 123)]\n    non-equi conditions: []\n    Filter\n        filters: [true]\n        LogicalGet\n            table: catalog.database.table\n            filters: []\n            order by: []\n            limit: NONE\n    LogicalGet\n        table: catalog.database.table\n        filters: []\n        order by: []\n        limit: NONE\n";
     assert_eq!(result.as_str(), expect);
     let pretty_result = tree.format_pretty().unwrap();
-    let pretty_expect = "HashJoin: INNER\n├── equi conditions: [col2 (#1) eq plus(col1 (#0), 123_u64)]\n├── non-equi conditions: []\n├── Filter\n│   ├── filters: [true]\n│   └── LogicalGet\n│       ├── table: catalog.database.table\n│       ├── filters: []\n│       ├── order by: []\n│       └── limit: NONE\n└── LogicalGet\n    ├── table: catalog.database.table\n    ├── filters: []\n    ├── order by: []\n    └── limit: NONE\n";
+    let pretty_expect = "HashJoin: INNER\n├── equi conditions: [col2 (#1) eq plus(col1 (#0), 123)]\n├── non-equi conditions: []\n├── Filter\n│   ├── filters: [true]\n│   └── LogicalGet\n│       ├── table: catalog.database.table\n│       ├── filters: []\n│       ├── order by: []\n│       └── limit: NONE\n└── LogicalGet\n    ├── table: catalog.database.table\n    ├── filters: []\n    ├── order by: []\n    └── limit: NONE\n";
     assert_eq!(pretty_result.as_str(), pretty_expect);
 }

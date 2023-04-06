@@ -286,7 +286,7 @@ fn test_schema_from_struct() -> Result<()> {
         assert_eq!(field.column_id(), i as u32);
     }
 
-    let expeted_column_ids = vec![
+    let expected_column_ids = vec![
         ("u64", vec![0]),
         ("tuplearray", vec![1, 1, 1, 2, 3, 3]),
         ("arraytuple", vec![4, 4, 4, 5]),
@@ -298,15 +298,15 @@ fn test_schema_from_struct() -> Result<()> {
     ];
 
     for (i, column_id) in schema.field_column_ids().iter().enumerate() {
-        let expeted_column_id = &expeted_column_ids[i];
+        let expected_column_id = &expected_column_ids[i];
         assert_eq!(
-            expeted_column_id.0.to_string(),
+            expected_column_id.0.to_string(),
             schema.fields()[i].name().to_string()
         );
-        assert_eq!(expeted_column_id.1, *column_id);
+        assert_eq!(expected_column_id.1, *column_id);
     }
 
-    let expeted_flat_column_ids = vec![
+    let expected_flat_column_ids = vec![
         ("u64", vec![0]),
         ("tuplearray", vec![1, 2, 3]),
         ("arraytuple", vec![4, 5]),
@@ -318,9 +318,9 @@ fn test_schema_from_struct() -> Result<()> {
     ];
 
     for (i, field) in schema.fields().iter().enumerate() {
-        let expeted_column_id = &expeted_flat_column_ids[i];
-        assert_eq!(expeted_column_id.0.to_string(), field.name().to_string());
-        assert_eq!(expeted_column_id.1, field.leaf_column_ids());
+        let expected_column_id = &expected_flat_column_ids[i];
+        assert_eq!(expected_column_id.0.to_string(), field.name().to_string());
+        assert_eq!(expected_column_id.1, field.leaf_column_ids());
     }
 
     assert_eq!(schema.next_column_id(), 13);

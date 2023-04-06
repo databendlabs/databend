@@ -9,17 +9,17 @@ rm -fr .databend/
 echo " === start 3 meta node cluster"
 
 nohup ./target/debug/databend-meta --config-file=./tests/metactl/config/databend-meta-node-1.toml &
-python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
+python3 scripts/ci/wait_tcp.py --timeout 10 --port 9191
 
 sleep 1
 
 nohup ./target/debug/databend-meta --config-file=./tests/metactl/config/databend-meta-node-2.toml &
-python3 scripts/ci/wait_tcp.py --timeout 5 --port 28202
+python3 scripts/ci/wait_tcp.py --timeout 10 --port 28202
 
 sleep 1
 
 nohup ./target/debug/databend-meta --config-file=./tests/metactl/config/databend-meta-node-3.toml &
-python3 scripts/ci/wait_tcp.py --timeout 5 --port 28302
+python3 scripts/ci/wait_tcp.py --timeout 10 --port 28302
 
 sleep 1
 
@@ -32,7 +32,6 @@ sleep 2
 echo " === export meta node data"
 
 ./target/debug/databend-metactl --export --raft-dir ./.databend/meta1 --db meta.db
-
 
 rm -fr .databend/
 
@@ -47,18 +46,18 @@ if ./target/debug/databend-metactl --export --raft-dir ./.databend/new_meta1 | g
     echo "=== 'LastMembership' is found"
 else
     echo "=== 'LastMembership' is not found"
-    exit 1;
+    exit 1
 fi
 
 echo " === start 3 new meta node cluster"
 nohup ./target/debug/databend-meta --config-file=./tests/metactl/config/new-databend-meta-node-1.toml &
-python3 scripts/ci/wait_tcp.py --timeout 5 --port 19191
+python3 scripts/ci/wait_tcp.py --timeout 10 --port 19191
 
 nohup ./target/debug/databend-meta --config-file=./tests/metactl/config/new-databend-meta-node-2.toml &
-python3 scripts/ci/wait_tcp.py --timeout 5 --port 29191
+python3 scripts/ci/wait_tcp.py --timeout 10 --port 29191
 
 nohup ./target/debug/databend-meta --config-file=./tests/metactl/config/new-databend-meta-node-3.toml &
-python3 scripts/ci/wait_tcp.py --timeout 5 --port 39191
+python3 scripts/ci/wait_tcp.py --timeout 10 --port 39191
 
 echo " === sleep 3 sec to wait for membership to commit"
 time sleep 5
@@ -68,16 +67,16 @@ curl -sL http://127.0.0.1:28101/v1/cluster/status
 echo ""
 
 echo " === check new cluster state has the voters 4"
-curl -sL http://127.0.0.1:28101/v1/cluster/status \
-    | grep '{"name":"4","endpoint":{"addr":"localhost","port":29103},"grpc_api_advertise_address":"127.0.0.1:19191"}'
+curl -sL http://127.0.0.1:28101/v1/cluster/status |
+    grep '{"name":"4","endpoint":{"addr":"localhost","port":29103},"grpc_api_advertise_address":"127.0.0.1:19191"}'
 
 echo " === check new cluster state has the voters 5"
-curl -sL http://127.0.0.1:28101/v1/cluster/status \
-    | grep '{"name":"5","endpoint":{"addr":"localhost","port":29203},"grpc_api_advertise_address":"127.0.0.1:29191"}'
+curl -sL http://127.0.0.1:28101/v1/cluster/status |
+    grep '{"name":"5","endpoint":{"addr":"localhost","port":29203},"grpc_api_advertise_address":"127.0.0.1:29191"}'
 
 echo " === check new cluster state has the voters 6"
-curl -sL http://127.0.0.1:28101/v1/cluster/status \
-    | grep '{"name":"6","endpoint":{"addr":"localhost","port":29303},"grpc_api_advertise_address":"127.0.0.1:39191"}'
+curl -sL http://127.0.0.1:28101/v1/cluster/status |
+    grep '{"name":"6","endpoint":{"addr":"localhost","port":29303},"grpc_api_advertise_address":"127.0.0.1:39191"}'
 echo ""
 
 killall databend-meta

@@ -21,14 +21,10 @@ use common_exception::Span;
 use itertools::Itertools;
 
 use crate::expression::Expr;
-use crate::expression::Literal;
 use crate::expression::RawExpr;
 use crate::function::FunctionRegistry;
 use crate::function::FunctionSignature;
-use crate::types::decimal::DecimalScalar;
 use crate::types::decimal::DecimalSize;
-use crate::types::number::NumberDataType;
-use crate::types::number::NumberScalar;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
 use crate::types::Number;
@@ -43,14 +39,11 @@ pub fn check<Index: ColumnIndex>(
     fn_registry: &FunctionRegistry,
 ) -> Result<Expr<Index>> {
     match ast {
-        RawExpr::Literal { span, lit } => {
-            let (scalar, data_type) = check_literal(lit);
-            Ok(Expr::Constant {
-                span: *span,
-                scalar,
-                data_type,
-            })
-        }
+        RawExpr::Constant { span, scalar } => Ok(Expr::Constant {
+            span: *span,
+            scalar: scalar.clone(),
+            data_type: scalar.as_ref().infer_data_type(),
+        }),
         RawExpr::ColumnRef {
             span,
             id,
@@ -83,82 +76,6 @@ pub fn check<Index: ColumnIndex>(
                 .try_collect()?;
             check_function(*span, name, params, &args_expr, fn_registry)
         }
-    }
-}
-
-pub fn check_literal(literal: &Literal) -> (Scalar, DataType) {
-    match literal {
-        Literal::Null => (Scalar::Null, DataType::Null),
-        Literal::UInt8(v) => (
-            Scalar::Number(NumberScalar::UInt8(*v)),
-            DataType::Number(NumberDataType::UInt8),
-        ),
-        Literal::UInt16(v) => (
-            Scalar::Number(NumberScalar::UInt16(*v)),
-            DataType::Number(NumberDataType::UInt16),
-        ),
-        Literal::UInt32(v) => (
-            Scalar::Number(NumberScalar::UInt32(*v)),
-            DataType::Number(NumberDataType::UInt32),
-        ),
-        Literal::UInt64(v) => (
-            Scalar::Number(NumberScalar::UInt64(*v)),
-            DataType::Number(NumberDataType::UInt64),
-        ),
-        Literal::Int8(v) => (
-            Scalar::Number(NumberScalar::Int8(*v)),
-            DataType::Number(NumberDataType::Int8),
-        ),
-        Literal::Int16(v) => (
-            Scalar::Number(NumberScalar::Int16(*v)),
-            DataType::Number(NumberDataType::Int16),
-        ),
-        Literal::Int32(v) => (
-            Scalar::Number(NumberScalar::Int32(*v)),
-            DataType::Number(NumberDataType::Int32),
-        ),
-        Literal::Int64(v) => (
-            Scalar::Number(NumberScalar::Int64(*v)),
-            DataType::Number(NumberDataType::Int64),
-        ),
-        Literal::Decimal128 {
-            value,
-            precision,
-            scale,
-        } => {
-            let size = DecimalSize {
-                precision: *precision,
-                scale: *scale,
-            };
-            (
-                Scalar::Decimal(DecimalScalar::Decimal128(*value, size)),
-                DataType::Decimal(DecimalDataType::Decimal128(size)),
-            )
-        }
-        Literal::Decimal256 {
-            value,
-            precision,
-            scale,
-        } => {
-            let size = DecimalSize {
-                precision: *precision,
-                scale: *scale,
-            };
-            (
-                Scalar::Decimal(DecimalScalar::Decimal256(*value, size)),
-                DataType::Decimal(DecimalDataType::Decimal256(size)),
-            )
-        }
-        Literal::Float32(v) => (
-            Scalar::Number(NumberScalar::Float32(*v)),
-            DataType::Number(NumberDataType::Float32),
-        ),
-        Literal::Float64(v) => (
-            Scalar::Number(NumberScalar::Float64(*v)),
-            DataType::Number(NumberDataType::Float64),
-        ),
-        Literal::Boolean(v) => (Scalar::Boolean(*v), DataType::Boolean),
-        Literal::String(v) => (Scalar::String(v.clone()), DataType::String),
     }
 }
 
@@ -211,7 +128,7 @@ pub fn check_cast<Index: ColumnIndex>(
     }
 }
 
-fn wrap_nullable_for_try_cast(span: Span, ty: &DataType) -> Result<DataType> {
+pub fn wrap_nullable_for_try_cast(span: Span, ty: &DataType) -> Result<DataType> {
     match ty {
         DataType::Null => Err(ErrorCode::from_string_no_backtrace(
             "TRY_CAST() to NULL is not supported".to_string(),
@@ -278,9 +195,24 @@ pub fn check_function<Index: ColumnIndex>(
         );
     }
 
+    // Do not check grouping
+    if name == "grouping" {
+        debug_assert!(candidates.len() == 1);
+        let (id, function) = candidates.into_iter().next().unwrap();
+        let return_type = function.signature.return_type.clone();
+        return Ok(Expr::FunctionCall {
+            span,
+            id,
+            function,
+            generics: vec![],
+            args: args.to_vec(),
+            return_type,
+        });
+    }
+
     let auto_cast_rules = fn_registry.get_auto_cast_rules(name);
 
-    let mut fail_resaons = Vec::with_capacity(candidates.len());
+    let mut fail_reasons = Vec::with_capacity(candidates.len());
     for (id, func) in &candidates {
         match try_check_function(args, &func.signature, auto_cast_rules, fn_registry) {
             Ok((checked_args, return_type, generics)) => {
@@ -293,7 +225,7 @@ pub fn check_function<Index: ColumnIndex>(
                     return_type,
                 });
             }
-            Err(err) => fail_resaons.push(err),
+            Err(err) => fail_reasons.push(err),
         }
     }
 
@@ -323,7 +255,7 @@ pub fn check_function<Index: ColumnIndex>(
 
         let candidates_fail_reason = candidates_sig
             .into_iter()
-            .zip(fail_resaons)
+            .zip(fail_reasons)
             .map(|(sig, err)| format!("  {sig:<max_len$}  : {}", err.message()))
             .join("\n");
 
@@ -444,7 +376,13 @@ pub fn try_unify_signature(
     dest_tys: impl IntoIterator<Item = &DataType> + ExactSizeIterator,
     auto_cast_rules: AutoCastRules,
 ) -> Result<Substitution> {
-    assert_eq!(src_tys.len(), dest_tys.len());
+    if src_tys.len() != dest_tys.len() {
+        return Err(ErrorCode::from_string_no_backtrace(format!(
+            "expected {} arguments, got {}",
+            dest_tys.len(),
+            src_tys.len()
+        )));
+    }
 
     let substs = src_tys
         .into_iter()

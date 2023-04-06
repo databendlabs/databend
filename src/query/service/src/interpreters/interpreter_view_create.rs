@@ -21,6 +21,7 @@ use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_sql::plans::CreateViewPlan;
+use common_sql::plans::Plan;
 use common_sql::Planner;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
@@ -47,6 +48,7 @@ impl Interpreter for CreateViewInterpreter {
         "CreateViewInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         // check whether view has exists
         if self
@@ -68,15 +70,41 @@ impl Interpreter for CreateViewInterpreter {
 }
 
 impl CreateViewInterpreter {
+    #[async_backtrace::framed]
     async fn create_view(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
+        let tenant = self.ctx.get_tenant();
+        let table_function = catalog.list_table_functions();
         let mut options = BTreeMap::new();
+        let mut planner = Planner::new(self.ctx.clone());
+        let (plan, _) = planner.plan_sql(&self.plan.subquery.clone()).await?;
+        match plan.clone() {
+            Plan::Query { metadata, .. } => {
+                let metadata = metadata.read().clone();
+                for table in metadata.tables() {
+                    let database_name = table.database();
+                    let table_name = table.name();
+                    if !catalog
+                        .exists_table(tenant.as_str(), database_name, table_name)
+                        .await?
+                        && !table_function.contains(&table_name.to_string())
+                    {
+                        return Err(common_exception::ErrorCode::UnknownTable(format!(
+                            "VIEW QUERY: {}.{} not exists",
+                            database_name, table_name,
+                        )));
+                    }
+                }
+            }
+            _ => {
+                // This logic will never be used, because of QUERY parse as query
+                return Err(ErrorCode::Unimplemented("create view only support Query"));
+            }
+        }
 
         let subquery = if self.plan.column_names.is_empty() {
             self.plan.subquery.clone()
         } else {
-            let mut planner = Planner::new(self.ctx.clone());
-            let (plan, _) = planner.plan_sql(&self.plan.subquery.clone()).await?;
             if plan.schema().fields().len() != self.plan.column_names.len() {
                 return Err(ErrorCode::BadDataArrayLength(format!(
                     "column name length mismatch, expect {}, got {}",

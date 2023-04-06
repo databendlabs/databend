@@ -39,6 +39,8 @@ use crate::operations::CompactOptions;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::TableContext;
 
+static MAX_BLOCK_COUNT: usize = 1000_1000;
+
 #[derive(Clone)]
 pub struct BlockCompactMutator {
     pub ctx: Arc<dyn TableContext>,
@@ -78,6 +80,7 @@ impl BlockCompactMutator {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn target_select(&mut self) -> Result<()> {
         let start = Instant::now();
         let snapshot = self.compact_params.base_snapshot.clone();
@@ -87,6 +90,7 @@ impl BlockCompactMutator {
 
         let mut segment_idx = 0;
         let mut compacted_segment_cnt = 0;
+        let mut compacted_block_cnt = 0;
         let mut checked_end_at = 0;
 
         // Status.
@@ -103,10 +107,11 @@ impl BlockCompactMutator {
         );
         let mut checker = SegmentCompactChecker::new(self.compact_params.block_per_seg as u64);
         let max_io_requests = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+        let mut is_end = false;
         for chunk in segment_locations.chunks(max_io_requests) {
             // Read the segments information in parallel.
             let segment_infos = segments_io
-                .read_segments(chunk)
+                .read_segments(chunk, false)
                 .await?
                 .into_iter()
                 .collect::<Result<Vec<_>>>()?;
@@ -118,6 +123,8 @@ impl BlockCompactMutator {
                 for segments in segments_vec {
                     if SegmentCompactChecker::check_for_compact(&segments) {
                         compacted_segment_cnt += segments.len();
+                        compacted_block_cnt +=
+                            segments.iter().fold(0, |acc, x| acc + x.1.blocks.len());
                         // build the compact tasks.
                         self.build_compact_tasks(
                             segments.into_iter().map(|s| s.1).collect(),
@@ -135,7 +142,10 @@ impl BlockCompactMutator {
                     segment_idx += 1;
                 }
                 checked_end_at += 1;
-                if compacted_segment_cnt + checker.segments.len() >= limit {
+                if compacted_segment_cnt + checker.segments.len() >= limit
+                    || compacted_block_cnt > MAX_BLOCK_COUNT
+                {
+                    is_end = true;
                     break;
                 }
             }
@@ -150,6 +160,10 @@ impl BlockCompactMutator {
                 );
                 self.ctx.set_status_info(&status);
                 info!(status);
+            }
+
+            if is_end {
+                break;
             }
         }
 
@@ -174,7 +188,7 @@ impl BlockCompactMutator {
         if checked_end_at < number_segments {
             for chunk in segment_locations[checked_end_at..].chunks(max_io_requests) {
                 let segment_infos = segments_io
-                    .read_segments(chunk)
+                    .read_segments(chunk, false)
                     .await?
                     .into_iter()
                     .collect::<Result<Vec<_>>>()?;
@@ -252,11 +266,7 @@ impl BlockCompactMutator {
                     .map_or((0, vec![]), |(k, v)| (k, vec![v]))
             };
             blocks.extend(builder.take_blocks());
-            if blocks.len() > 1 || builder.check_column_ids(&blocks[0]) {
-                tasks.push_back((index, blocks));
-            } else {
-                unreachable!("expect more than one block");
-            }
+            tasks.push_back((index, blocks));
         }
 
         let mut partitions = tasks

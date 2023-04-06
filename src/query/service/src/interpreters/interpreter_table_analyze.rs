@@ -39,6 +39,7 @@ impl Interpreter for AnalyzeTableInterpreter {
         "AnalyzeTableInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
         let table = self

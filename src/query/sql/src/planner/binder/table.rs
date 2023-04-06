@@ -44,8 +44,9 @@ use common_exception::Span;
 use common_expression::types::DataType;
 use common_expression::ColumnId;
 use common_expression::ConstantFolder;
+use common_expression::FunctionKind;
 use common_expression::Scalar;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
 use common_storage::DataOperator;
@@ -65,6 +66,7 @@ use crate::binder::table_args::bind_table_args;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
 use crate::binder::CteInfo;
+use crate::binder::ExprContext;
 use crate::binder::Visibility;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
@@ -79,6 +81,7 @@ use crate::IndexType;
 use crate::TableInternalColumn;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(super) async fn bind_one_table(
         &mut self,
         bind_context: &BindContext,
@@ -137,9 +140,10 @@ impl Binder {
     }
 
     #[async_recursion]
+    #[async_backtrace::framed]
     async fn bind_single_table(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         table_ref: &TableReference,
     ) -> Result<(SExpr, BindContext)> {
         match table_ref {
@@ -150,6 +154,8 @@ impl Binder {
                 table,
                 alias,
                 travel_point,
+                pivot: _,
+                unpivot: _,
             } => {
                 let (catalog, database, table_name) =
                     self.normalize_object_identifier_triple(catalog, database, table);
@@ -231,7 +237,7 @@ impl Binder {
                                 false,
                             );
                             let (s_expr, mut new_bind_context) =
-                                self.bind_query(&new_bind_context, query).await?;
+                                self.bind_query(&mut new_bind_context, query).await?;
                             if let Some(alias) = alias {
                                 // view maybe has alias, e.g. select v1.col1 from v as v1;
                                 new_bind_context
@@ -351,32 +357,68 @@ impl Binder {
                     return Ok((s_expr, bind_context));
                 }
 
-                // Table functions always reside is default catalog
-                let table_meta: Arc<dyn TableFunction> = self
-                    .catalogs
-                    .get_catalog(CATALOG_DEFAULT)?
-                    .get_table_function(&func_name.name, table_args)?;
-                let table = table_meta.as_table();
-                let table_alias_name = if let Some(table_alias) = alias {
-                    Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
+                if BUILTIN_FUNCTIONS
+                    .get_property(&func_name.name)
+                    .map(|p| p.kind == FunctionKind::SRF)
+                    .unwrap_or(false)
+                {
+                    // If it is a set-returning function, we bind it as a subquery.
+                    let mut bind_context = BindContext::new();
+                    let stmt = SelectStmt {
+                        span: *span,
+                        distinct: false,
+                        select_list: vec![SelectTarget::AliasedExpr {
+                            expr: Box::new(common_ast::ast::Expr::FunctionCall {
+                                span: *span,
+                                distinct: false,
+                                name: common_ast::ast::Identifier {
+                                    span: *span,
+                                    name: func_name.name.clone(),
+                                    quote: None,
+                                },
+                                params: vec![],
+                                args: params.clone(),
+                                window: None,
+                            }),
+                            alias: None,
+                        }],
+                        from: vec![],
+                        selection: None,
+                        group_by: None,
+                        having: None,
+                        window_list: None,
+                    };
+                    self.bind_select_stmt(&mut bind_context, &stmt, &[]).await
                 } else {
-                    None
-                };
-                let table_index = self.metadata.write().add_table(
-                    CATALOG_DEFAULT.to_string(),
-                    "system".to_string(),
-                    table.clone(),
-                    table_alias_name,
-                    false,
-                );
+                    // Other table functions always reside is default catalog
+                    let table_meta: Arc<dyn TableFunction> = self
+                        .catalogs
+                        .get_catalog(CATALOG_DEFAULT)?
+                        .get_table_function(&func_name.name, table_args)?;
+                    let table = table_meta.as_table();
+                    let table_alias_name = if let Some(table_alias) = alias {
+                        Some(
+                            normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name,
+                        )
+                    } else {
+                        None
+                    };
+                    let table_index = self.metadata.write().add_table(
+                        CATALOG_DEFAULT.to_string(),
+                        "system".to_string(),
+                        table.clone(),
+                        table_alias_name,
+                        false,
+                    );
 
-                let (s_expr, mut bind_context) = self
-                    .bind_base_table(bind_context, "system", table_index)
-                    .await?;
-                if let Some(alias) = alias {
-                    bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    let (s_expr, mut bind_context) = self
+                        .bind_base_table(bind_context, "system", table_index)
+                        .await?;
+                    if let Some(alias) = alias {
+                        bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    }
+                    Ok((s_expr, bind_context))
                 }
-                Ok((s_expr, bind_context))
             }
             TableReference::Subquery {
                 span: _,
@@ -384,9 +426,9 @@ impl Binder {
                 alias,
             } => {
                 // For subquery, we need use a new context to bind it.
-                let new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+                let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
                 let (s_expr, mut new_bind_context) =
-                    self.bind_query(&new_bind_context, subquery).await?;
+                    self.bind_query(&mut new_bind_context, subquery).await?;
                 if let Some(alias) = alias {
                     new_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 }
@@ -415,6 +457,7 @@ impl Binder {
         }
     }
 
+    #[async_backtrace::framed]
     pub(crate) async fn bind_stage_table(
         &mut self,
         bind_context: &BindContext,
@@ -461,9 +504,10 @@ impl Binder {
         }
     }
 
+    #[async_backtrace::framed]
     pub(super) async fn bind_table_reference(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         table_ref: &TableReference,
     ) -> Result<(SExpr, BindContext)> {
         let mut current_ref = table_ref;
@@ -534,6 +578,7 @@ impl Binder {
         Ok((result_expr, result_ctx))
     }
 
+    #[async_backtrace::framed]
     async fn bind_cte(
         &mut self,
         span: Span,
@@ -542,18 +587,21 @@ impl Binder {
         alias: &Option<TableAlias>,
         cte_info: &CteInfo,
     ) -> Result<(SExpr, BindContext)> {
-        let new_bind_context = BindContext {
+        let mut new_bind_context = BindContext {
             parent: Some(Box::new(bind_context.clone())),
             bound_internal_columns: BTreeMap::new(),
             columns: vec![],
             aggregate_info: Default::default(),
-            windows: vec![],
+            windows: Default::default(),
             in_grouping: false,
             ctes_map: Box::new(DashMap::new()),
             view_info: None,
+            srfs: Default::default(),
+            expr_context: ExprContext::default(),
         };
-        let (s_expr, mut new_bind_context) =
-            self.bind_query(&new_bind_context, &cte_info.query).await?;
+        let (s_expr, mut new_bind_context) = self
+            .bind_query(&mut new_bind_context, &cte_info.query)
+            .await?;
         let mut cols_alias = cte_info.columns_alias.clone();
         if let Some(alias) = alias {
             for (idx, col_alias) in alias.columns.iter().enumerate() {
@@ -587,6 +635,7 @@ impl Binder {
         Ok((s_expr, new_bind_context))
     }
 
+    #[async_backtrace::framed]
     async fn bind_base_table(
         &mut self,
         bind_context: &BindContext,
@@ -607,11 +656,13 @@ impl Binder {
                     path_indices,
                     data_type,
                     leaf_index,
+                    table_index,
                     ..
                 }) => {
                     let column_binding = ColumnBinding {
                         database_name: Some(database_name.to_string()),
                         table_name: Some(table.name().to_string()),
+                        table_index: Some(*table_index),
                         column_name: column_name.clone(),
                         index: *column_index,
                         data_type: Box::new(DataType::from(data_type)),
@@ -636,8 +687,8 @@ impl Binder {
             }
         }
 
-        let is_accurate = table.table().engine().to_lowercase() == "fuse";
         let stat = table.table().table_statistics()?;
+
         Ok((
             SExpr::create_leaf(
                 Scan {
@@ -663,7 +714,6 @@ impl Binder {
                     statistics: Statistics {
                         statistics: stat,
                         col_stats,
-                        is_accurate,
                     },
                     prewhere: None,
                 }
@@ -673,6 +723,7 @@ impl Binder {
         ))
     }
 
+    #[async_backtrace::framed]
     async fn resolve_data_source(
         &self,
         tenant: &str,
@@ -691,9 +742,10 @@ impl Binder {
         Ok(table_meta)
     }
 
+    #[async_backtrace::framed]
     pub(crate) async fn resolve_data_travel_point(
         &self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         travel_point: &TimeTravelPoint,
     ) -> Result<NavigationPoint> {
         match travel_point {

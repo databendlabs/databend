@@ -25,34 +25,43 @@ use crate::api::FlightAction;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ConnectionInfo {
-    pub target: Arc<NodeInfo>,
+    pub source: Arc<NodeInfo>,
     pub fragments: Vec<usize>,
-    pub create_request_channel: bool,
+}
+
+impl ConnectionInfo {
+    pub fn create(source: Arc<NodeInfo>, fragments: Vec<usize>) -> ConnectionInfo {
+        ConnectionInfo { source, fragments }
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct InitNodesChannelPacket {
     pub query_id: String,
     pub executor: Arc<NodeInfo>,
-    pub connections_info: Vec<ConnectionInfo>,
+    pub fragment_connections_info: Vec<ConnectionInfo>,
+    pub statistics_connections_info: Vec<ConnectionInfo>,
 }
 
 impl InitNodesChannelPacket {
     pub fn create(
         query_id: String,
         executor: Arc<NodeInfo>,
-        connections_info: Vec<ConnectionInfo>,
+        fragment_connections_info: Vec<ConnectionInfo>,
+        statistics_connections_info: Vec<ConnectionInfo>,
     ) -> InitNodesChannelPacket {
         InitNodesChannelPacket {
             query_id,
             executor,
-            connections_info,
+            fragment_connections_info,
+            statistics_connections_info,
         }
     }
 }
 
 #[async_trait::async_trait]
 impl Packet for InitNodesChannelPacket {
+    #[async_backtrace::framed]
     async fn commit(&self, config: &InnerConfig, timeout: u64) -> Result<()> {
         let executor_info = &self.executor;
         let mut conn = create_client(config, &executor_info.flight_address).await?;

@@ -78,7 +78,7 @@ async fn test_as_range() -> anyhow::Result<()> {
         },
     ];
 
-    log_tree.append(&logs).await?;
+    log_tree.append(logs.clone()).await?;
 
     let metas = vec![
         (
@@ -88,7 +88,7 @@ async fn test_as_range() -> anyhow::Result<()> {
         (Initialized, StateMachineMetaValue::Bool(true)),
     ];
 
-    meta_tree.append(metas.as_slice()).await?;
+    meta_tree.append(metas.clone()).await?;
 
     // key space Logs
 
@@ -152,7 +152,7 @@ async fn test_key_space_last() -> anyhow::Result<()> {
         },
     ];
 
-    log_tree.append(&logs).await?;
+    log_tree.append(logs.clone()).await?;
     assert_eq!(Some((4, logs[1].clone())), log_tree.last()?);
     assert_eq!(None, tree.key_space::<StateMachineMeta>().last()?);
 
@@ -165,7 +165,7 @@ async fn test_key_space_last() -> anyhow::Result<()> {
     ];
 
     tree.key_space::<StateMachineMeta>()
-        .append(metas.as_slice())
+        .append(metas.clone())
         .await?;
 
     assert_eq!(Some((4, logs[1].clone())), log_tree.last()?);
@@ -203,7 +203,7 @@ async fn test_key_space_append() -> anyhow::Result<()> {
         }),
     ];
 
-    log_tree.append(&logs).await?;
+    log_tree.append(logs.clone()).await?;
 
     let want: Vec<Entry> = vec![
         Entry {
@@ -271,7 +271,7 @@ async fn test_key_space_append_and_range_get() -> anyhow::Result<()> {
         },
     ];
 
-    log_tree.append(&logs).await?;
+    log_tree.append(logs.clone()).await?;
 
     let got = log_tree.range_values(0..)?;
     assert_eq!(logs, got);
@@ -330,7 +330,7 @@ async fn test_key_space_range_kvs() -> anyhow::Result<()> {
         },
     ];
 
-    log_tree.append(&logs).await?;
+    log_tree.append(logs.clone()).await?;
 
     let got = log_tree
         .range(9..)?
@@ -361,7 +361,7 @@ async fn test_key_space_scan_prefix() -> anyhow::Result<()> {
         ("b".to_string(), "y".to_string()),
     ];
 
-    file_tree.append(&files).await?;
+    file_tree.append(files.clone()).await?;
 
     let kvs = vec![
         ("a".to_string(), SeqV::new(1, vec![])),
@@ -369,7 +369,7 @@ async fn test_key_space_scan_prefix() -> anyhow::Result<()> {
         ("b".to_string(), SeqV::new(3, vec![])),
     ];
 
-    kv_tree.append(&kvs).await?;
+    kv_tree.append(kvs.clone()).await?;
 
     let got = file_tree.scan_prefix(&"".to_string())?;
     assert_eq!(files, got);
@@ -414,7 +414,7 @@ async fn test_key_space_insert() -> anyhow::Result<()> {
         },
     ];
 
-    log_tree.append(&logs).await?;
+    log_tree.append(logs.clone()).await?;
 
     assert_eq!(logs, log_tree.range_values(..)?);
 
@@ -473,7 +473,7 @@ async fn test_key_space_get() -> anyhow::Result<()> {
         },
     ];
 
-    log_tree.append(&logs).await?;
+    log_tree.append(logs.clone()).await?;
 
     assert_eq!(None, log_tree.get(&1)?);
     assert_eq!(Some(logs[0].clone()), log_tree.get(&2)?);
@@ -522,19 +522,19 @@ async fn test_key_space_range_remove() -> anyhow::Result<()> {
         },
     ];
 
-    log_tree.append(&logs).await?;
+    log_tree.append(logs.clone()).await?;
     log_tree.range_remove(0.., false).await?;
     assert_eq!(logs[5..], log_tree.range_values(0..)?);
 
-    log_tree.append(&logs).await?;
+    log_tree.append(logs.clone()).await?;
     log_tree.range_remove(1.., false).await?;
     assert_eq!(logs[5..], log_tree.range_values(0..)?);
 
-    log_tree.append(&logs).await?;
+    log_tree.append(logs.clone()).await?;
     log_tree.range_remove(3.., true).await?;
     assert_eq!(logs[0..1], log_tree.range_values(0..)?);
 
-    log_tree.append(&logs).await?;
+    log_tree.append(logs.clone()).await?;
     log_tree.range_remove(3..10, true).await?;
     assert_eq!(logs[0..1], log_tree.range_values(0..5)?);
     assert_eq!(logs[3..], log_tree.range_values(5..)?);
@@ -569,7 +569,7 @@ async fn test_key_space_multi_types() -> anyhow::Result<()> {
         },
     ];
 
-    log_tree.append(&logs).await?;
+    log_tree.append(logs.clone()).await?;
 
     let metas = vec![
         (
@@ -578,7 +578,7 @@ async fn test_key_space_multi_types() -> anyhow::Result<()> {
         ),
         (Initialized, StateMachineMetaValue::Bool(true)),
     ];
-    sm_meta.append(&metas).await?;
+    sm_meta.append(metas.clone()).await?;
 
     // range get/keys are limited to its own namespace.
     {
@@ -634,7 +634,7 @@ async fn test_export() -> anyhow::Result<()> {
             },
         ];
 
-        log_tree.append(&logs).await?;
+        log_tree.append(logs.clone()).await?;
 
         let data = tree.export()?;
 

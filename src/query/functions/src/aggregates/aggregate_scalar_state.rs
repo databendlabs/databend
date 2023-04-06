@@ -113,7 +113,7 @@ impl<T: ValueType> ChangeIf<T> for CmpAny {
 
 pub trait ScalarStateFunc<T: ValueType>: Send + Sync + 'static {
     fn new() -> Self;
-    fn add(&mut self, other: T::ScalarRef<'_>);
+    fn add(&mut self, other: Option<T::ScalarRef<'_>>);
     fn add_batch(&mut self, column: &T::Column, validity: Option<&Bitmap>) -> Result<()>;
     fn merge(&mut self, rhs: &Self) -> Result<()>;
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()>;
@@ -156,15 +156,17 @@ where
         Self::default()
     }
 
-    fn add(&mut self, other: T::ScalarRef<'_>) {
-        match &self.value {
-            Some(v) => {
-                if C::change_if(T::to_scalar_ref(v), other.clone()) {
+    fn add(&mut self, other: Option<T::ScalarRef<'_>>) {
+        if let Some(other) = other {
+            match &self.value {
+                Some(v) => {
+                    if C::change_if(T::to_scalar_ref(v), other.clone()) {
+                        self.value = Some(T::to_owned_scalar(other));
+                    }
+                }
+                None => {
                     self.value = Some(T::to_owned_scalar(other));
                 }
-            }
-            None => {
-                self.value = Some(T::to_owned_scalar(other));
             }
         }
     }
@@ -199,7 +201,7 @@ where
             }
 
             if has_v {
-                self.add(v);
+                self.add(Some(v));
             }
         } else {
             let v = column_iter.reduce(|l, r| {
@@ -209,16 +211,14 @@ where
                     r
                 }
             });
-            if let Some(v) = v {
-                self.add(v);
-            }
+            self.add(v);
         }
         Ok(())
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
         if let Some(v) = &rhs.value {
-            self.add(T::to_scalar_ref(v));
+            self.add(Some(T::to_scalar_ref(v)));
         }
         Ok(())
     }

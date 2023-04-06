@@ -17,7 +17,7 @@ output         : NULL
 
 
 ast            : 1=2
-raw expr       : eq(1_u8, 2_u8)
+raw expr       : eq(1, 2)
 checked expr   : eq<UInt8, UInt8>(1_u8, 2_u8)
 optimized expr : false
 output type    : Boolean
@@ -26,8 +26,8 @@ output         : false
 
 
 ast            : 1.0=1
-raw expr       : eq(1.0_decimal(2, 1), 1_u8)
-checked expr   : eq<Decimal(38, 1), Decimal(38, 1)>(to_decimal<Decimal(2, 1)>(1.0_d128(2,1)), to_decimal<UInt8>(1_u8))
+raw expr       : eq(1.0, 1)
+checked expr   : eq<Decimal(38, 1), Decimal(38, 1)>(to_decimal<Decimal(2, 1)>(38, 1)(1.0_d128(2,1)), to_decimal<UInt8>(38, 1)(1_u8))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -80,7 +80,7 @@ output         : true
 
 
 ast            : [1, 2]=[1, 2]
-raw expr       : eq(array(1_u8, 2_u8), array(1_u8, 2_u8))
+raw expr       : eq(array(1, 2), array(1, 2))
 checked expr   : eq<T0=UInt8><Array(T0), Array(T0)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=UInt8><T0, T0>(1_u8, 2_u8))
 optimized expr : true
 output type    : Boolean
@@ -143,7 +143,7 @@ has tried possible overloads:
 
 
 ast            : (1, 'a') = (1, 'a')
-raw expr       : eq(tuple(1_u8, "a"), tuple(1_u8, "a"))
+raw expr       : eq(tuple(1, "a"), tuple(1, "a"))
 checked expr   : eq<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "a"))
 optimized expr : true
 output type    : Boolean
@@ -152,7 +152,7 @@ output         : true
 
 
 ast            : (1, 'a') = (1, 'b')
-raw expr       : eq(tuple(1_u8, "a"), tuple(1_u8, "b"))
+raw expr       : eq(tuple(1, "a"), tuple(1, "b"))
 checked expr   : eq<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
 optimized expr : false
 output type    : Boolean
@@ -170,7 +170,7 @@ output         : false
 
 
 ast            : to_timestamp(-315360000000000)=to_timestamp(-100)
-raw expr       : eq(to_timestamp(-315360000000000_i64), to_timestamp(-100_i8))
+raw expr       : eq(to_timestamp(-315360000000000), to_timestamp(-100))
 checked expr   : eq<Timestamp, Timestamp>(to_timestamp<Int64>(-315360000000000_i64), to_timestamp<Int64>(to_int64<Int8>(-100_i8)))
 optimized expr : false
 output type    : Boolean
@@ -210,8 +210,8 @@ evaluation (internal):
 
 
 ast            : 1.1=1.1
-raw expr       : eq(1.1_decimal(2, 1), 1.1_decimal(2, 1))
-checked expr   : eq<Decimal(3, 1), Decimal(3, 1)>(to_decimal<Decimal(2, 1)>(1.1_d128(2,1)), to_decimal<Decimal(2, 1)>(1.1_d128(2,1)))
+raw expr       : eq(1.1, 1.1)
+checked expr   : eq<Decimal(3, 1), Decimal(3, 1)>(to_decimal<Decimal(2, 1)>(3, 1)(1.1_d128(2,1)), to_decimal<Decimal(2, 1)>(3, 1)(1.1_d128(2,1)))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -291,7 +291,7 @@ output         : true
 
 
 ast            : 1!=2
-raw expr       : noteq(1_u8, 2_u8)
+raw expr       : noteq(1, 2)
 checked expr   : noteq<UInt8, UInt8>(1_u8, 2_u8)
 optimized expr : true
 output type    : Boolean
@@ -300,7 +300,7 @@ output         : true
 
 
 ast            : 1.1!=1.1
-raw expr       : noteq(1.1_decimal(2, 1), 1.1_decimal(2, 1))
+raw expr       : noteq(1.1, 1.1)
 checked expr   : noteq<Float32, Float32>(to_float32<Decimal(2, 1)>(1.1_d128(2,1)), to_float32<Decimal(2, 1)>(1.1_d128(2,1)))
 optimized expr : false
 output type    : Boolean
@@ -408,7 +408,7 @@ has tried possible overloads:
 
 
 ast            : (1, 'a') != (1, 'a')
-raw expr       : noteq(tuple(1_u8, "a"), tuple(1_u8, "a"))
+raw expr       : noteq(tuple(1, "a"), tuple(1, "a"))
 checked expr   : noteq<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "a"))
 optimized expr : false
 output type    : Boolean
@@ -417,7 +417,7 @@ output         : false
 
 
 ast            : (1, 'a') != (1, 'b')
-raw expr       : noteq(tuple(1_u8, "a"), tuple(1_u8, "b"))
+raw expr       : noteq(tuple(1, "a"), tuple(1, "b"))
 checked expr   : noteq<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
 optimized expr : true
 output type    : Boolean
@@ -426,7 +426,7 @@ output         : true
 
 
 ast            : to_timestamp(-315360000000000)!=to_timestamp(-100)
-raw expr       : noteq(to_timestamp(-315360000000000_i64), to_timestamp(-100_i8))
+raw expr       : noteq(to_timestamp(-315360000000000), to_timestamp(-100))
 checked expr   : noteq<Timestamp, Timestamp>(to_timestamp<Int64>(-315360000000000_i64), to_timestamp<Int64>(to_int64<Int8>(-100_i8)))
 optimized expr : true
 output type    : Boolean
@@ -501,7 +501,7 @@ output         : true
 
 
 ast            : 3<2
-raw expr       : lt(3_u8, 2_u8)
+raw expr       : lt(3, 2)
 checked expr   : lt<UInt8, UInt8>(3_u8, 2_u8)
 optimized expr : false
 output type    : Boolean
@@ -510,8 +510,8 @@ output         : false
 
 
 ast            : 1.1<1.1
-raw expr       : lt(1.1_decimal(2, 1), 1.1_decimal(2, 1))
-checked expr   : lt<Decimal(3, 1), Decimal(3, 1)>(to_decimal<Decimal(2, 1)>(1.1_d128(2,1)), to_decimal<Decimal(2, 1)>(1.1_d128(2,1)))
+raw expr       : lt(1.1, 1.1)
+checked expr   : lt<Decimal(3, 1), Decimal(3, 1)>(to_decimal<Decimal(2, 1)>(3, 1)(1.1_d128(2,1)), to_decimal<Decimal(2, 1)>(3, 1)(1.1_d128(2,1)))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -555,7 +555,7 @@ output         : false
 
 
 ast            : [1, 2] < [2, 3]
-raw expr       : lt(array(1_u8, 2_u8), array(2_u8, 3_u8))
+raw expr       : lt(array(1, 2), array(2, 3))
 checked expr   : lt<T0=UInt8><Array(T0), Array(T0)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=UInt8><T0, T0>(2_u8, 3_u8))
 optimized expr : true
 output type    : Boolean
@@ -564,7 +564,7 @@ output         : true
 
 
 ast            : (1, 'b') < (1, 'a')
-raw expr       : lt(tuple(1_u8, "b"), tuple(1_u8, "a"))
+raw expr       : lt(tuple(1, "b"), tuple(1, "a"))
 checked expr   : lt<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "b"), tuple<UInt8, String>(1_u8, "a"))
 optimized expr : false
 output type    : Boolean
@@ -573,7 +573,7 @@ output         : false
 
 
 ast            : (1, 'a') < (1, 'b')
-raw expr       : lt(tuple(1_u8, "a"), tuple(1_u8, "b"))
+raw expr       : lt(tuple(1, "a"), tuple(1, "b"))
 checked expr   : lt<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
 optimized expr : true
 output type    : Boolean
@@ -582,7 +582,7 @@ output         : true
 
 
 ast            : (1, 'a') < (2, 'a')
-raw expr       : lt(tuple(1_u8, "a"), tuple(2_u8, "a"))
+raw expr       : lt(tuple(1, "a"), tuple(2, "a"))
 checked expr   : lt<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
 optimized expr : true
 output type    : Boolean
@@ -591,7 +591,7 @@ output         : true
 
 
 ast            : to_timestamp(-315360000000000)<to_timestamp(-100)
-raw expr       : lt(to_timestamp(-315360000000000_i64), to_timestamp(-100_i8))
+raw expr       : lt(to_timestamp(-315360000000000), to_timestamp(-100))
 checked expr   : lt<Timestamp, Timestamp>(to_timestamp<Int64>(-315360000000000_i64), to_timestamp<Int64>(to_int64<Int8>(-100_i8)))
 optimized expr : true
 output type    : Boolean
@@ -672,7 +672,7 @@ output         : false
 
 
 ast            : 1<=2
-raw expr       : lte(1_u8, 2_u8)
+raw expr       : lte(1, 2)
 checked expr   : lte<UInt8, UInt8>(1_u8, 2_u8)
 optimized expr : true
 output type    : Boolean
@@ -681,8 +681,8 @@ output         : true
 
 
 ast            : 1.1<=2.1
-raw expr       : lte(1.1_decimal(2, 1), 2.1_decimal(2, 1))
-checked expr   : lte<Decimal(3, 1), Decimal(3, 1)>(to_decimal<Decimal(2, 1)>(1.1_d128(2,1)), to_decimal<Decimal(2, 1)>(2.1_d128(2,1)))
+raw expr       : lte(1.1, 2.1)
+checked expr   : lte<Decimal(3, 1), Decimal(3, 1)>(to_decimal<Decimal(2, 1)>(3, 1)(1.1_d128(2,1)), to_decimal<Decimal(2, 1)>(3, 1)(2.1_d128(2,1)))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -726,7 +726,7 @@ output         : true
 
 
 ast            : [1, 2] <= [2, 3]
-raw expr       : lte(array(1_u8, 2_u8), array(2_u8, 3_u8))
+raw expr       : lte(array(1, 2), array(2, 3))
 checked expr   : lte<T0=UInt8><Array(T0), Array(T0)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=UInt8><T0, T0>(2_u8, 3_u8))
 optimized expr : true
 output type    : Boolean
@@ -735,7 +735,7 @@ output         : true
 
 
 ast            : (1, 'b') <= (1, 'a')
-raw expr       : lte(tuple(1_u8, "b"), tuple(1_u8, "a"))
+raw expr       : lte(tuple(1, "b"), tuple(1, "a"))
 checked expr   : lte<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "b"), tuple<UInt8, String>(1_u8, "a"))
 optimized expr : false
 output type    : Boolean
@@ -744,7 +744,7 @@ output         : false
 
 
 ast            : (1, 'a') <= (1, 'b')
-raw expr       : lte(tuple(1_u8, "a"), tuple(1_u8, "b"))
+raw expr       : lte(tuple(1, "a"), tuple(1, "b"))
 checked expr   : lte<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
 optimized expr : true
 output type    : Boolean
@@ -753,7 +753,7 @@ output         : true
 
 
 ast            : (1, 'a') <= (2, 'a')
-raw expr       : lte(tuple(1_u8, "a"), tuple(2_u8, "a"))
+raw expr       : lte(tuple(1, "a"), tuple(2, "a"))
 checked expr   : lte<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
 optimized expr : true
 output type    : Boolean
@@ -771,7 +771,7 @@ output         : true
 
 
 ast            : to_timestamp(-315360000000000)<=to_timestamp(-100)
-raw expr       : lte(to_timestamp(-315360000000000_i64), to_timestamp(-100_i8))
+raw expr       : lte(to_timestamp(-315360000000000), to_timestamp(-100))
 checked expr   : lte<Timestamp, Timestamp>(to_timestamp<Int64>(-315360000000000_i64), to_timestamp<Int64>(to_int64<Int8>(-100_i8)))
 optimized expr : true
 output type    : Boolean
@@ -780,7 +780,7 @@ output         : true
 
 
 ast            : to_timestamp(-315360000000000)<=to_timestamp(-315360000000000)
-raw expr       : lte(to_timestamp(-315360000000000_i64), to_timestamp(-315360000000000_i64))
+raw expr       : lte(to_timestamp(-315360000000000), to_timestamp(-315360000000000))
 checked expr   : lte<Timestamp, Timestamp>(to_timestamp<Int64>(-315360000000000_i64), to_timestamp<Int64>(-315360000000000_i64))
 optimized expr : true
 output type    : Boolean
@@ -844,7 +844,7 @@ output         : true
 
 
 ast            : 1>2
-raw expr       : gt(1_u8, 2_u8)
+raw expr       : gt(1, 2)
 checked expr   : gt<UInt8, UInt8>(1_u8, 2_u8)
 optimized expr : false
 output type    : Boolean
@@ -853,8 +853,8 @@ output         : false
 
 
 ast            : 1.2>1.1
-raw expr       : gt(1.2_decimal(2, 1), 1.1_decimal(2, 1))
-checked expr   : gt<Decimal(3, 1), Decimal(3, 1)>(to_decimal<Decimal(2, 1)>(1.2_d128(2,1)), to_decimal<Decimal(2, 1)>(1.1_d128(2,1)))
+raw expr       : gt(1.2, 1.1)
+checked expr   : gt<Decimal(3, 1), Decimal(3, 1)>(to_decimal<Decimal(2, 1)>(3, 1)(1.2_d128(2,1)), to_decimal<Decimal(2, 1)>(3, 1)(1.1_d128(2,1)))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -898,7 +898,7 @@ output         : false
 
 
 ast            : [1, 2] > [2, 3]
-raw expr       : gt(array(1_u8, 2_u8), array(2_u8, 3_u8))
+raw expr       : gt(array(1, 2), array(2, 3))
 checked expr   : gt<T0=UInt8><Array(T0), Array(T0)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=UInt8><T0, T0>(2_u8, 3_u8))
 optimized expr : false
 output type    : Boolean
@@ -907,7 +907,7 @@ output         : false
 
 
 ast            : (1, 'b') > (1, 'a')
-raw expr       : gt(tuple(1_u8, "b"), tuple(1_u8, "a"))
+raw expr       : gt(tuple(1, "b"), tuple(1, "a"))
 checked expr   : gt<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "b"), tuple<UInt8, String>(1_u8, "a"))
 optimized expr : true
 output type    : Boolean
@@ -916,7 +916,7 @@ output         : true
 
 
 ast            : (1, 'a') > (1, 'b')
-raw expr       : gt(tuple(1_u8, "a"), tuple(1_u8, "b"))
+raw expr       : gt(tuple(1, "a"), tuple(1, "b"))
 checked expr   : gt<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
 optimized expr : false
 output type    : Boolean
@@ -925,7 +925,7 @@ output         : false
 
 
 ast            : (1, 'a') > (2, 'a')
-raw expr       : gt(tuple(1_u8, "a"), tuple(2_u8, "a"))
+raw expr       : gt(tuple(1, "a"), tuple(2, "a"))
 checked expr   : gt<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
 optimized expr : false
 output type    : Boolean
@@ -934,7 +934,7 @@ output         : false
 
 
 ast            : to_timestamp(-315360000000000)>to_timestamp(-100)
-raw expr       : gt(to_timestamp(-315360000000000_i64), to_timestamp(-100_i8))
+raw expr       : gt(to_timestamp(-315360000000000), to_timestamp(-100))
 checked expr   : gt<Timestamp, Timestamp>(to_timestamp<Int64>(-315360000000000_i64), to_timestamp<Int64>(to_int64<Int8>(-100_i8)))
 optimized expr : false
 output type    : Boolean
@@ -943,7 +943,7 @@ output         : false
 
 
 ast            : to_timestamp(-315360000000000)>to_timestamp(-315360000000000)
-raw expr       : gt(to_timestamp(-315360000000000_i64), to_timestamp(-315360000000000_i64))
+raw expr       : gt(to_timestamp(-315360000000000), to_timestamp(-315360000000000))
 checked expr   : gt<Timestamp, Timestamp>(to_timestamp<Int64>(-315360000000000_i64), to_timestamp<Int64>(-315360000000000_i64))
 optimized expr : false
 output type    : Boolean
@@ -1020,7 +1020,7 @@ output         : true
 
 
 ast            : 1>=2
-raw expr       : gte(1_u8, 2_u8)
+raw expr       : gte(1, 2)
 checked expr   : gte<UInt8, UInt8>(1_u8, 2_u8)
 optimized expr : false
 output type    : Boolean
@@ -1029,8 +1029,8 @@ output         : false
 
 
 ast            : 1.1>=1.1
-raw expr       : gte(1.1_decimal(2, 1), 1.1_decimal(2, 1))
-checked expr   : gte<Decimal(3, 1), Decimal(3, 1)>(to_decimal<Decimal(2, 1)>(1.1_d128(2,1)), to_decimal<Decimal(2, 1)>(1.1_d128(2,1)))
+raw expr       : gte(1.1, 1.1)
+checked expr   : gte<Decimal(3, 1), Decimal(3, 1)>(to_decimal<Decimal(2, 1)>(3, 1)(1.1_d128(2,1)), to_decimal<Decimal(2, 1)>(3, 1)(1.1_d128(2,1)))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -1074,7 +1074,7 @@ output         : true
 
 
 ast            : [1, 2] >= [2, 3]
-raw expr       : gte(array(1_u8, 2_u8), array(2_u8, 3_u8))
+raw expr       : gte(array(1, 2), array(2, 3))
 checked expr   : gte<T0=UInt8><Array(T0), Array(T0)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8), array<T0=UInt8><T0, T0>(2_u8, 3_u8))
 optimized expr : false
 output type    : Boolean
@@ -1083,7 +1083,7 @@ output         : false
 
 
 ast            : (1, 'b') >= (1, 'a')
-raw expr       : gte(tuple(1_u8, "b"), tuple(1_u8, "a"))
+raw expr       : gte(tuple(1, "b"), tuple(1, "a"))
 checked expr   : gte<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "b"), tuple<UInt8, String>(1_u8, "a"))
 optimized expr : true
 output type    : Boolean
@@ -1092,7 +1092,7 @@ output         : true
 
 
 ast            : (1, 'a') >= (1, 'b')
-raw expr       : gte(tuple(1_u8, "a"), tuple(1_u8, "b"))
+raw expr       : gte(tuple(1, "a"), tuple(1, "b"))
 checked expr   : gte<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
 optimized expr : false
 output type    : Boolean
@@ -1101,7 +1101,7 @@ output         : false
 
 
 ast            : (1, 'a') >= (2, 'a')
-raw expr       : gte(tuple(1_u8, "a"), tuple(2_u8, "a"))
+raw expr       : gte(tuple(1, "a"), tuple(2, "a"))
 checked expr   : gte<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
 optimized expr : false
 output type    : Boolean
@@ -1110,7 +1110,7 @@ output         : false
 
 
 ast            : to_timestamp(-315360000000000)>=to_timestamp(-100)
-raw expr       : gte(to_timestamp(-315360000000000_i64), to_timestamp(-100_i8))
+raw expr       : gte(to_timestamp(-315360000000000), to_timestamp(-100))
 checked expr   : gte<Timestamp, Timestamp>(to_timestamp<Int64>(-315360000000000_i64), to_timestamp<Int64>(to_int64<Int8>(-100_i8)))
 optimized expr : false
 output type    : Boolean
@@ -1119,7 +1119,7 @@ output         : false
 
 
 ast            : to_timestamp(-315360000000000)>=to_timestamp(-315360000000000)
-raw expr       : gte(to_timestamp(-315360000000000_i64), to_timestamp(-315360000000000_i64))
+raw expr       : gte(to_timestamp(-315360000000000), to_timestamp(-315360000000000))
 checked expr   : gte<Timestamp, Timestamp>(to_timestamp<Int64>(-315360000000000_i64), to_timestamp<Int64>(-315360000000000_i64))
 optimized expr : true
 output type    : Boolean

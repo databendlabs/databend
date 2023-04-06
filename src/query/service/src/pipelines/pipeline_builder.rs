@@ -25,10 +25,11 @@ use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::FunctionContext;
 use common_expression::HashMethodKind;
+use common_expression::RemoteExpr;
 use common_expression::SortColumnDescription;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
@@ -54,17 +55,19 @@ use common_sql::executor::HashJoin;
 use common_sql::executor::Limit;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
+use common_sql::executor::ProjectSet;
 use common_sql::executor::RuntimeFilterSource;
 use common_sql::executor::Sort;
 use common_sql::executor::TableScan;
 use common_sql::executor::UnionAll;
-use common_sql::executor::Unnest;
+use common_sql::executor::Window;
 use common_sql::plans::JoinType;
 use common_sql::ColumnBinding;
 use common_sql::IndexType;
 use common_storage::DataOperator;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
 
+use super::processors::transforms::WindowFunctionInfo;
 use super::processors::ProfileWrapper;
 use super::processors::TransformExpandGroupingSets;
 use crate::api::DefaultExchangeInjector;
@@ -85,6 +88,7 @@ use crate::pipelines::processors::transforms::TransformPartialAggregate;
 use crate::pipelines::processors::transforms::TransformPartialGroupBy;
 use crate::pipelines::processors::transforms::TransformRightJoin;
 use crate::pipelines::processors::transforms::TransformRightSemiAntiJoin;
+use crate::pipelines::processors::transforms::TransformWindow;
 use crate::pipelines::processors::AggregatorParams;
 use crate::pipelines::processors::JoinHashTable;
 use crate::pipelines::processors::LeftJoinCompactor;
@@ -165,6 +169,7 @@ impl PipelineBuilder {
             PhysicalPlan::AggregateExpand(aggregate) => self.build_aggregate_expand(aggregate),
             PhysicalPlan::AggregatePartial(aggregate) => self.build_aggregate_partial(aggregate),
             PhysicalPlan::AggregateFinal(aggregate) => self.build_aggregate_final(aggregate),
+            PhysicalPlan::Window(window) => self.build_window(window),
             PhysicalPlan::Sort(sort) => self.build_sort(sort),
             PhysicalPlan::Limit(limit) => self.build_limit(limit),
             PhysicalPlan::HashJoin(join) => self.build_join(join),
@@ -174,7 +179,7 @@ impl PipelineBuilder {
             PhysicalPlan::DistributedInsertSelect(insert_select) => {
                 self.build_distributed_insert_select(insert_select)
             }
-            PhysicalPlan::Unnest(unnest) => self.build_unnest(unnest),
+            PhysicalPlan::ProjectSet(project_set) => self.build_project_set(project_set),
             PhysicalPlan::Exchange(_) => Err(ErrorCode::Internal(
                 "Invalid physical plan with PhysicalPlan::Exchange",
             )),
@@ -263,10 +268,12 @@ impl PipelineBuilder {
             let index = column_binding.index;
             projections.push(input_schema.index_of(index.to_string().as_str())?);
         }
+        let num_input_columns = input_schema.num_fields();
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                 input,
                 output,
+                num_input_columns,
                 *func_ctx,
                 vec![BlockOperator::Project {
                     projection: projections.clone(),
@@ -302,10 +309,13 @@ impl PipelineBuilder {
         if projection != (0..schema.fields().len()).collect::<Vec<usize>>() {
             let ops = vec![BlockOperator::Project { projection }];
             let func_ctx = self.ctx.get_function_context()?;
+
+            let num_input_columns = schema.num_fields();
             self.main_pipeline.add_transform(|input, output| {
                 Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                     input,
                     output,
+                    num_input_columns,
                     func_ctx,
                     ops.clone(),
                 )))
@@ -323,7 +333,7 @@ impl PipelineBuilder {
             .iter()
             .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
             .try_reduce(|lhs, rhs| {
-                check_function(None, "and", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
+                check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
             })
             .transpose()
             .unwrap_or_else(|| {
@@ -332,10 +342,12 @@ impl PipelineBuilder {
                 ))
             })?;
 
+        let num_input_columns = filter.input.output_schema()?.num_fields();
         self.main_pipeline.add_transform(|input, output| {
             let transform = CompoundBlockOperator::create(
                 input,
                 output,
+                num_input_columns,
                 self.ctx.get_function_context()?,
                 vec![BlockOperator::Filter {
                     expr: predicate.clone(),
@@ -360,10 +372,13 @@ impl PipelineBuilder {
         self.build_pipeline(&project.input)?;
         let func_ctx = self.ctx.get_function_context()?;
 
+        let num_input_columns = project.input.output_schema()?.num_fields();
+
         self.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                 input,
                 output,
+                num_input_columns,
                 func_ctx,
                 vec![BlockOperator::Project {
                     projection: project.projections.clone(),
@@ -378,6 +393,12 @@ impl PipelineBuilder {
         let exprs = eval_scalar
             .exprs
             .iter()
+            .filter(|(scalar, idx)| {
+                if let RemoteExpr::ColumnRef { id, .. } = scalar {
+                    return idx != id;
+                }
+                true
+            })
             .map(|(scalar, _)| scalar.as_expr(&BUILTIN_FUNCTIONS))
             .collect::<Vec<_>>();
 
@@ -385,9 +406,13 @@ impl PipelineBuilder {
 
         let func_ctx = self.ctx.get_function_context()?;
 
+        let num_input_columns = eval_scalar.input.output_schema()?.num_fields();
+
         self.main_pipeline.add_transform(|input, output| {
             let transform =
-                CompoundBlockOperator::create(input, output, func_ctx, vec![op.clone()]);
+                CompoundBlockOperator::create(input, output, num_input_columns, func_ctx, vec![
+                    op.clone(),
+                ]);
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProfileWrapper::create(
@@ -403,23 +428,31 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    fn build_unnest(&mut self, unnest: &Unnest) -> Result<()> {
-        self.build_pipeline(&unnest.input)?;
+    fn build_project_set(&mut self, project_set: &ProjectSet) -> Result<()> {
+        self.build_pipeline(&project_set.input)?;
 
-        let op = BlockOperator::Unnest {
-            num_columns: unnest.num_columns,
+        let op = BlockOperator::FlatMap {
+            srf_exprs: project_set
+                .srf_exprs
+                .iter()
+                .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS))
+                .collect(),
         };
 
         let func_ctx = self.ctx.get_function_context()?;
 
+        let num_input_columns = project_set.input.output_schema()?.num_fields();
+
         self.main_pipeline.add_transform(|input, output| {
             let transform =
-                CompoundBlockOperator::create(input, output, func_ctx, vec![op.clone()]);
+                CompoundBlockOperator::create(input, output, num_input_columns, func_ctx, vec![
+                    op.clone(),
+                ]);
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProfileWrapper::create(
                     transform,
-                    unnest.plan_id,
+                    project_set.plan_id,
                     self.prof_span_set.clone(),
                 )))
             } else {
@@ -684,15 +717,9 @@ impl PipelineBuilder {
             .iter()
             .map(|agg_func| {
                 agg_args.push(agg_func.args.clone());
-                let params = agg_func
-                    .sig
-                    .params
-                    .iter()
-                    .map(|p| p.clone().into_scalar())
-                    .collect();
                 AggregateFunctionFactory::instance().get(
                     agg_func.sig.name.as_str(),
-                    params,
+                    agg_func.sig.params.clone(),
                     agg_func.sig.args.clone(),
                 )
             })
@@ -708,6 +735,68 @@ impl PipelineBuilder {
         )?;
 
         Ok(params)
+    }
+
+    fn build_window(&mut self, window: &Window) -> Result<()> {
+        self.build_pipeline(&window.input)?;
+
+        let input_schema = window.input.output_schema()?;
+
+        let partition_by = window
+            .partition_by
+            .iter()
+            .map(|p| {
+                let offset = input_schema.index_of(&p.to_string())?;
+                Ok(offset)
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let order_by = window
+            .order_by
+            .iter()
+            .map(|o| {
+                let offset = input_schema.index_of(&o.order_by.to_string())?;
+                Ok(SortColumnDescription {
+                    offset,
+                    asc: o.asc,
+                    nulls_first: o.nulls_first,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let old_output_len = self.main_pipeline.output_len();
+        if !partition_by.is_empty() || !order_by.is_empty() {
+            let mut sort_desc = Vec::with_capacity(partition_by.len() + order_by.len());
+
+            for offset in &partition_by {
+                sort_desc.push(SortColumnDescription {
+                    offset: *offset,
+                    asc: true,
+                    nulls_first: true,
+                })
+            }
+
+            sort_desc.extend(order_by.clone());
+
+            self.build_sort_pipeline(input_schema.clone(), sort_desc, window.plan_id, None)?;
+        }
+        // `TransformWindow` is a pipeline breaker.
+        self.main_pipeline.resize(1)?;
+        let func = WindowFunctionInfo::try_create(&window.func, &input_schema)?;
+        // Window
+        self.main_pipeline.add_transform(|input, output| {
+            let transform = TransformWindow::try_create(
+                input,
+                output,
+                func.clone(),
+                partition_by.clone(),
+                order_by.clone(),
+                window.window_frame.clone(),
+            )?;
+            Ok(ProcessorPtr::create(transform))
+        })?;
+
+        self.main_pipeline.resize(old_output_len)
     }
 
     fn build_sort(&mut self, sort: &Sort) -> Result<()> {
@@ -728,23 +817,32 @@ impl PipelineBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+        self.build_sort_pipeline(input_schema, sort_desc, sort.plan_id, sort.limit)
+    }
+
+    fn build_sort_pipeline(
+        &mut self,
+        input_schema: DataSchemaRef,
+        sort_desc: Vec<SortColumnDescription>,
+        plan_id: u32,
+        limit: Option<usize>,
+    ) -> Result<()> {
         let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
+        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
 
         // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
         if self.main_pipeline.output_len() == 1 || max_threads == 1 {
             self.main_pipeline.resize(max_threads)?;
         }
-
         // Sort
         self.main_pipeline.add_transform(|input, output| {
             let transform =
-                TransformSortPartial::try_create(input, output, sort.limit, sort_desc.clone())?;
+                TransformSortPartial::try_create(input, output, limit, sort_desc.clone())?;
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProfileWrapper::create(
                     transform,
-                    sort.plan_id,
+                    plan_id,
                     self.prof_span_set.clone(),
                 )))
             } else {
@@ -759,14 +857,14 @@ impl PipelineBuilder {
                 output,
                 input_schema.clone(),
                 block_size,
-                sort.limit,
+                limit,
                 sort_desc.clone(),
             )?;
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProfileWrapper::create(
                     transform,
-                    sort.plan_id,
+                    plan_id,
                     self.prof_span_set.clone(),
                 )))
             } else {
@@ -779,7 +877,7 @@ impl PipelineBuilder {
             &mut self.main_pipeline,
             input_schema,
             block_size,
-            sort.limit,
+            limit,
             sort_desc,
         )
     }
@@ -831,7 +929,6 @@ impl PipelineBuilder {
             || join.join_type == JoinType::Single)
             && join.non_equi_conditions.is_empty()
         {
-            self.main_pipeline.resize(1)?;
             self.main_pipeline.add_transform(|input, output| {
                 let transform = TransformLeftJoin::try_create(
                     input,
@@ -878,7 +975,7 @@ impl PipelineBuilder {
                 let transform = TransformRightJoin::try_create(
                     input,
                     output,
-                    RightJoinCompactor::create(state.clone()),
+                    RightJoinCompactor::create(state.clone(), join.non_equi_conditions.is_empty()),
                 )?;
 
                 if self.enable_profiling {
@@ -899,7 +996,11 @@ impl PipelineBuilder {
                 let transform = TransformRightSemiAntiJoin::try_create(
                     input,
                     output,
-                    RightSemiAntiJoinCompactor::create(state.clone()),
+                    RightSemiAntiJoinCompactor::create(
+                        state.clone(),
+                        join.non_equi_conditions.is_empty()
+                            && join.join_type == JoinType::RightAnti,
+                    ),
                 )?;
 
                 if self.enable_profiling {

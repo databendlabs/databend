@@ -59,6 +59,18 @@ pub struct AggregateFunctionFeatures {
     /// or we should return non-Nullable type with default value (example: count, count_distinct, approx_count_distinct)
     pub(crate) returns_default_when_only_null: bool,
 
+    /// An aggregation function F is decomposable if there exist aggregation functions F1 and F2
+    /// such that F(S1 ∪ S2) = F2(F1(S1), F1(S2)), where S1 and S2 are two sets of values.
+    /// MAX and MIN are always decomposable:
+    ///   MAX(S1 ∪ S2) = MAX(MAX(S1), MAX(S2))
+    ///   MIN(S1 ∪ S2) = MIN(MIN(S1), MIN(S2))
+    /// SUM and COUNT are decomposable when they contain no DISTINCT:
+    ///   SUM(S1 ∪ S2) = SUM(SUM(S1), SUM(S2))
+    ///   COUNT(S1 ∪ S2) = SUM(COUNT(S1), COUNT(S2))
+    /// AVG(C) can be handled as SUM(C) and COUNT(C) and thus is decomposable.
+    ///   AVG(C) = SUM(C) / COUNT(C)
+    pub(crate) is_decomposable: bool,
+
     // Function Category
     pub category: &'static str,
     // Introduce the function in brief.
@@ -75,6 +87,7 @@ impl AggregateFunctionDescription {
             aggregate_function_creator: creator,
             features: AggregateFunctionFeatures {
                 returns_default_when_only_null: false,
+                is_decomposable: false,
                 ..Default::default()
             },
         }
@@ -157,6 +170,12 @@ impl AggregateFunctionFactory {
     ) -> Result<AggregateFunctionRef> {
         let name = name.as_ref();
         let mut features = AggregateFunctionFeatures::default();
+        // The NULL value in the list function needs to be added to the returned array column,
+        // so handled separately.
+        if name == "list" {
+            let agg = self.get_impl(name, params, arguments, &mut features)?;
+            return Ok(agg);
+        }
 
         if !arguments.is_empty() && arguments.iter().any(|f| f.is_nullable_or_null()) {
             let new_params = AggregateFunctionCombinatorNull::transform_params(&params)?;
@@ -245,6 +264,16 @@ impl AggregateFunctionFactory {
         }
 
         false
+    }
+
+    pub fn is_decomposable(&self, func_name: impl AsRef<str>) -> bool {
+        let origin = func_name.as_ref();
+        let lowercase_name = origin.to_lowercase();
+
+        match self.case_insensitive_desc.get(&lowercase_name) {
+            Some(desc) => desc.features.is_decomposable,
+            None => false,
+        }
     }
 
     pub fn registered_names(&self) -> Vec<String> {

@@ -58,6 +58,7 @@ impl Interpreter for ExplainInterpreter {
         self.schema.clone()
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let blocks = match &self.kind {
             ExplainKind::Raw => self.explain_plan(&self.plan)?,
@@ -80,6 +81,28 @@ impl Interpreter for ExplainInterpreter {
                     self.explain_physical_plan(&plan, metadata)?
                 }
                 _ => self.explain_plan(&self.plan)?,
+            },
+
+            ExplainKind::JOIN => match &self.plan {
+                Plan::Query {
+                    s_expr, metadata, ..
+                } => {
+                    let ctx = self.ctx.clone();
+                    let settings = ctx.get_settings();
+
+                    let enable_distributed_eval_index =
+                        settings.get_enable_distributed_eval_index()?;
+                    settings.set_enable_distributed_eval_index(false)?;
+                    scopeguard::defer! {
+                        let _ = settings.set_enable_distributed_eval_index(enable_distributed_eval_index);
+                    }
+                    let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx);
+                    let plan = builder.build(s_expr).await?;
+                    self.explain_join_order(&plan, metadata)?
+                }
+                _ => Err(ErrorCode::Unimplemented(
+                    "Unsupported EXPLAIN JOIN statement",
+                ))?,
             },
 
             ExplainKind::AnalyzePlan => match &self.plan {
@@ -185,6 +208,18 @@ impl ExplainInterpreter {
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 
+    pub fn explain_join_order(
+        &self,
+        plan: &PhysicalPlan,
+        metadata: &MetadataRef,
+    ) -> Result<Vec<DataBlock>> {
+        let result = plan.format_join(metadata)?.format_pretty()?;
+        let line_split_result: Vec<&str> = result.lines().collect();
+        let formatted_plan = StringType::from_data(line_split_result);
+        Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
+    }
+
+    #[async_backtrace::framed]
     pub async fn explain_pipeline(
         &self,
         s_expr: SExpr,
@@ -215,6 +250,7 @@ impl ExplainInterpreter {
         Ok(blocks)
     }
 
+    #[async_backtrace::framed]
     async fn explain_fragments(
         &self,
         s_expr: SExpr,
@@ -239,6 +275,7 @@ impl ExplainInterpreter {
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 
+    #[async_backtrace::framed]
     async fn explain_analyze(
         &self,
         s_expr: &SExpr,

@@ -70,6 +70,9 @@ fn test_statement() {
         r#"show full tables"#,
         r#"show full tables from db"#,
         r#"show full tables from ctl.db"#,
+        r#"show full columns in t in db"#,
+        r#"show columns in t from ctl.db"#,
+        r#"show full columns from t from db like 'id%'"#,
         r#"show processlist;"#,
         r#"show create table a.b;"#,
         r#"show create table a.b format TabSeparatedWithNamesAndTypes;"#,
@@ -212,7 +215,8 @@ fn test_statement() {
                     record_delimiter = '\n'
                     skip_header = 1
                 )
-                size_limit=10;"#,
+                size_limit=10
+                max_files=10;"#,
         r#"COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
                 CONNECTION = (
@@ -337,6 +341,7 @@ fn test_statement() {
         r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200"#,
         r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200 CONTENT_TYPE='application/octet-stream'"#,
         r#"PRESIGN UPLOAD @my_stage/path/to/file CONTENT_TYPE='application/octet-stream' EXPIRE=7200"#,
+        r#"CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';"#,
         r#"CREATE SHARE t COMMENT='share comment';"#,
         r#"CREATE SHARE IF NOT EXISTS t;"#,
         r#"DROP SHARE a;"#,
@@ -415,7 +420,7 @@ fn test_statement_error() {
         r#"alter database system x rename to db"#,
         r#"create user 'test-e'@'localhost' identified bi 'password';"#,
         r#"drop usar if exists 'test-j'@'localhost';"#,
-        r#"alter user 'test-e'@'localhost' identifie by 'new-password';"#,
+        r#"alter user 'test-e'@'localhost' identifies by 'new-password';"#,
         r#"create role 'test'@'localhost';"#,
         r#"drop role 'test'@'localhost';"#,
         r#"drop role role1;"#,
@@ -454,6 +459,7 @@ fn test_query() {
         r#"select * exclude c1, b.* exclude (c2, c3, c4) from customer inner join orders on a = b limit 1"#,
         r#"select * from customer inner join orders"#,
         r#"select * from customer cross join orders"#,
+        r#"select * from customer inner join orders on (a = b)"#,
         r#"select * from customer inner join orders on a = b limit 1"#,
         r#"select * from customer inner join orders on a = b limit 2 offset 3"#,
         r#"select * from customer natural full join orders"#,
@@ -485,6 +491,14 @@ fn test_query() {
         r#"select * from t1 union select * from t2 intersect select * from t3"#,
         r#"(select * from t1 union select * from t2) union select * from t3"#,
         r#"select * from t1 union (select * from t2 union select * from t3)"#,
+        r#"SELECT * FROM ((SELECT *) EXCEPT (SELECT *)) foo"#,
+        r#"SELECT * FROM (((SELECT *) EXCEPT (SELECT *))) foo"#,
+        r#"SELECT * FROM (SELECT * FROM xyu ORDER BY x, y) AS xyu"#,
+        r#"select * from monthly_sales pivot(sum(amount) for month in ('JAN', 'FEB', 'MAR', 'APR')) order by empid"#,
+        r#"select * from monthly_sales_1 unpivot(sales for month in (jan, feb, mar, april)) order by empid"#,
+        r#"select * from range(1, 2)"#,
+        r#"select sum(a) over w from customer window w as (partition by a order by b)"#,
+        r#"select a, sum(a) over w, sum(a) over w1, sum(a) over w2 from t1 window w as (partition by a), w2 as (w1 rows current row), w1 as (w order by a) order by a"#,
     ];
 
     for case in cases {
@@ -504,6 +518,7 @@ fn test_query_error() {
         r#"select * order"#,
         r#"select number + 5 as a, cast(number as float(255))"#,
         r#"select 1 1"#,
+        r#"SELECT * FROM ((SELECT * FROM xyu ORDER BY x, y)) AS xyu"#,
     ];
 
     for case in cases {
@@ -527,6 +542,7 @@ fn test_expr() {
         r#"1e100000000000000"#,
         r#".1"#,
         r#"-1"#,
+        r#"(1)"#,
         r#"(1,)"#,
         r#"(1,2)"#,
         r#"(1,2,)"#,

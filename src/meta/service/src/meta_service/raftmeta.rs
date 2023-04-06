@@ -34,7 +34,9 @@ use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::key_spaces::GenericKV;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::ChangeMembers;
+#[cfg(feature = "raft-store-defensive")]
 use common_meta_sled_store::openraft::DefensiveCheckBase;
+#[cfg(feature = "raft-store-defensive")]
 use common_meta_sled_store::openraft::StoreExt;
 use common_meta_sled_store::SledKeySpace;
 use common_meta_stoerr::MetaStorageError;
@@ -367,8 +369,13 @@ impl MetaNode {
         }
 
         let sto = RaftStoreBare::open_create(&config, open, create).await?;
-        let sto = StoreExt::new(sto);
-        sto.set_defensive(true);
+
+        #[cfg(feature = "raft-store-defensive")]
+        let sto = {
+            let sto_ext = StoreExt::new(sto);
+            sto_ext.set_defensive(true);
+            sto_ext
+        };
 
         // config.id only used for the first time
         let self_node_id = if sto.is_opened() { sto.id } else { config.id };
@@ -656,6 +663,7 @@ impl MetaNode {
                 }
             }
         }
+
         Err(MetaManagementError::Join(AnyError::error(format!(
             "fail to join {} cluster via {:?}, caused by errors: {}",
             self.sto.id,

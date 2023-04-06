@@ -167,6 +167,7 @@ impl MetaSrvTestContext {
             "xxx",
             None,
             Some(Duration::from_secs(10)),
+            Duration::from_secs(10),
             None,
         )?;
         Ok(client)
@@ -216,8 +217,16 @@ impl kvapi::ApiBuilder<Arc<ClientHandle>> for MetaSrvBuilder {
     async fn build(&self) -> Arc<ClientHandle> {
         let (tc, addr) = start_metasrv().await.unwrap();
 
-        let client =
-            MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None, None).unwrap();
+        let client = MetaGrpcClient::try_create(
+            vec![addr],
+            "root",
+            "xxx",
+            None,
+            None,
+            Duration::from_secs(10),
+            None,
+        )
+        .unwrap();
 
         {
             let mut tcs = self.test_contexts.lock().unwrap();

@@ -27,6 +27,7 @@ use crate::io::SegmentsIO;
 use crate::FuseTable;
 
 impl FuseTable {
+    #[async_backtrace::framed]
     pub async fn do_analyze(&self, ctx: &Arc<dyn TableContext>) -> Result<()> {
         // 1. Read table snapshot.
         let r = self.read_table_snapshot().await;
@@ -51,7 +52,7 @@ impl FuseTable {
             let mut block_count_sum: u64 = 0;
 
             let segments_io = SegmentsIO::create(ctx.clone(), self.operator.clone(), self.schema());
-            let segments = segments_io.read_segments(&snapshot.segments).await?;
+            let segments = segments_io.read_segments(&snapshot.segments, true).await?;
             for segment in segments {
                 let segment = segment?;
                 segment.blocks.iter().for_each(|block| {

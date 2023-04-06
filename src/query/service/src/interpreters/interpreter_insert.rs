@@ -125,6 +125,7 @@ impl InsertInterpreter {
         Ok(cast_needed)
     }
 
+    #[async_backtrace::framed]
     async fn try_purge_files(
         ctx: Arc<QueryContext>,
         stage_info: &StageInfo,
@@ -149,6 +150,7 @@ impl InsertInterpreter {
         }
     }
 
+    #[async_backtrace::framed]
     async fn prepared_values(&self, values_str: &str) -> Result<(DataSchemaRef, Vec<Scalar>)> {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
@@ -177,7 +179,7 @@ impl InsertInterpreter {
             }
         }
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-        let bind_context = BindContext::new();
+        let mut bind_context = BindContext::new();
         let metadata = Arc::new(RwLock::new(Metadata::default()));
         let const_schema = Arc::new(DataSchema::new(const_fields));
         let const_values = exprs_to_scalar(
@@ -185,13 +187,14 @@ impl InsertInterpreter {
             &const_schema,
             self.ctx.clone(),
             &name_resolution_ctx,
-            &bind_context,
+            &mut bind_context,
             metadata,
         )
         .await?;
         Ok((Arc::new(DataSchema::new(attachment_fields)), const_values))
     }
 
+    #[async_backtrace::framed]
     async fn build_insert_from_stage_pipeline(
         &self,
         table: Arc<dyn Table>,
@@ -232,7 +235,7 @@ impl InsertInterpreter {
             files_to_copy: None,
         };
 
-        let all_source_files = StageTable::list_files(&stage_table_info).await?;
+        let all_source_files = StageTable::list_files(&stage_table_info, None).await?;
 
         info!(
             "insert: read all stage attachment files finished: {}, elapsed:{}",
@@ -346,6 +349,7 @@ impl Interpreter for InsertInterpreter {
         "InsertIntoInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
         let table = self
@@ -552,6 +556,7 @@ impl AsyncSource for ValueSource {
     const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
     #[async_trait::unboxed_simple]
+    #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.is_finished {
             return Ok(None);
@@ -601,6 +606,7 @@ impl ValueSource {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn read<R: AsRef<[u8]>>(
         &self,
         estimated_rows: usize,
@@ -613,6 +619,8 @@ impl ValueSource {
             .iter()
             .map(|f| ColumnBuilder::with_capacity(f.data_type(), estimated_rows))
             .collect::<Vec<_>>();
+
+        let mut bind_context = self.bind_context.clone();
 
         let format = self.ctx.get_format_settings()?;
         let field_decoder = FastFieldDecoderValues::create_for_insert(format);
@@ -632,7 +640,7 @@ impl ValueSource {
                 reader,
                 &mut columns,
                 positions,
-                &self.bind_context,
+                &mut bind_context,
                 self.metadata.clone(),
             )
             .await?;
@@ -646,13 +654,14 @@ impl ValueSource {
     }
 
     /// Parse single row value, like ('111', 222, 1 + 1)
+    #[async_backtrace::framed]
     async fn parse_next_row<R: AsRef<[u8]>>(
         &self,
         field_decoder: &FastFieldDecoderValues,
         reader: &mut Cursor<R>,
         columns: &mut [ColumnBuilder],
         positions: &mut VecDeque<usize>,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         metadata: MetadataRef,
     ) -> Result<()> {
         let _ = reader.ignore_white_spaces();
@@ -836,7 +845,7 @@ async fn exprs_to_scalar(
     schema: &DataSchemaRef,
     ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &NameResolutionContext,
-    bind_context: &BindContext,
+    bind_context: &mut BindContext,
     metadata: MetadataRef,
 ) -> Result<Vec<Scalar>> {
     let schema_fields_len = schema.fields().len();

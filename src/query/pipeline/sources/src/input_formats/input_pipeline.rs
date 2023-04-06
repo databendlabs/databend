@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::tokio::sync::mpsc::Sender;
-use common_base::runtime::CatchUnwindFuture;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
 use common_compress::CompressAlgorithm;
@@ -27,9 +26,8 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::Pipeline;
 use futures::AsyncRead;
-use futures_util::stream::FuturesUnordered;
 use futures_util::AsyncReadExt;
-use futures_util::StreamExt;
+use parking_lot::Mutex;
 
 use crate::input_formats::Aligner;
 use crate::input_formats::BeyondEndReader;
@@ -164,7 +162,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                 let (data_tx, data_rx) = tokio::sync::mpsc::channel(ctx.num_prefetch_per_split());
                 let split_clone = s.clone();
                 let ctx_clone2 = ctx_clone.clone();
-                tokio::spawn(async move {
+                tokio::spawn(async_backtrace::location!().frame(async move {
                     if let Err(e) =
                         Self::copy_reader_with_aligner(ctx_clone2, split_clone, data_tx).await
                     {
@@ -172,7 +170,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                     } else {
                         tracing::debug!("copy split reader stopped");
                     }
-                });
+                }));
                 if split_tx
                     .send(Ok(Split {
                         info: s.clone(),
@@ -191,39 +189,59 @@ pub trait InputFormatPipe: Sized + Send + 'static {
     }
 
     fn execute_copy_aligned(ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
-        let (data_tx, data_rx) = async_channel::bounded(ctx.num_prefetch_splits()?);
+        let (data_tx, data_rx) = async_channel::bounded(1);
         Self::build_pipeline_aligned(&ctx, data_rx, pipeline)?;
-
-        let ctx_clone = ctx.clone();
-        let p = 3;
-        GlobalIORuntime::instance().spawn(async move {
-            for splits in ctx_clone.splits.chunks(p) {
-                let ctx_clone2 = ctx_clone.clone();
-                let row_batch_tx = data_tx.clone();
-                let splits = splits.to_owned().clone();
-                tokio::spawn(async move {
-                    let mut futs = FuturesUnordered::new();
-                    for s in splits.into_iter() {
-                        let fut =
-                            CatchUnwindFuture::create(Self::read_split(ctx_clone2.clone(), s));
-                        futs.push(fut);
-                    }
-                    while let Some(row_batch) = futs.next().await {
-                        match row_batch {
-                            Ok(row_batch) => {
-                                if row_batch_tx.send(row_batch).await.is_err() {
-                                    break;
-                                }
-                            }
-                            Err(cause) => {
-                                row_batch_tx.send(Err(cause)).await.ok();
+        let max_storage_io_requests = ctx.settings.get_max_storage_io_requests()?;
+        let per_split_io = ctx.schema.fields().len();
+        let max_splits = max_storage_io_requests as usize / per_split_io;
+        let mut max_splits = std::cmp::max(max_splits, 1);
+        let mut sizes = ctx.splits.iter().map(|s| s.size).collect::<Vec<usize>>();
+        sizes.sort_by(|a, b| b.cmp(a));
+        let max_memory = ctx.settings.get_max_memory_usage()? as usize;
+        let mut mem = 0;
+        for (i, s) in sizes.iter().enumerate() {
+            let m = mem + s;
+            if m > max_memory {
+                max_splits = std::cmp::min(max_splits, std::cmp::max(i, 1));
+                break;
+            } else {
+                mem = m
+            }
+        }
+        tracing::info!(
+            "copy read {max_splits} splits in parallel, according to max_memory={max_memory}, num_fields={per_split_io}, max_storage_io_requests={max_storage_io_requests}, max_split_size={}",
+            sizes[0]
+        );
+        let splits = ctx.splits.to_vec();
+        let splits = Arc::new(Mutex::new(splits));
+        for _ in 0..max_splits {
+            let splits = splits.clone();
+            let ctx_clone = ctx.clone();
+            let data_tx = data_tx.clone();
+            GlobalIORuntime::instance().spawn(async move {
+                loop {
+                    let split = {
+                        let mut splits = splits.lock();
+                        if let Some(split) = splits.pop() {
+                            split
+                        } else {
+                            break;
+                        }
+                    };
+                    match Self::read_split(ctx_clone.clone(), split.clone()).await {
+                        Ok(row_batch) => {
+                            if data_tx.send(Ok(row_batch)).await.is_err() {
                                 break;
                             }
                         }
+                        Err(cause) => {
+                            data_tx.send(Err(cause)).await.ok();
+                            break;
+                        }
                     }
-                });
-            }
-        });
+                }
+            });
+        }
         Ok(())
     }
 
@@ -275,6 +293,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn read_split(
         _ctx: Arc<InputContext>,
         _split_info: Arc<SplitInfo>,
@@ -283,6 +302,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
     }
 
     #[tracing::instrument(level = "debug", skip(ctx, batch_tx))]
+    #[async_backtrace::framed]
     async fn copy_reader_with_aligner(
         ctx: Arc<InputContext>,
         split_info: Arc<SplitInfo>,
@@ -324,6 +344,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
     }
 }
 
+#[async_backtrace::framed]
 pub async fn read_full<R: AsyncRead + Unpin>(reader: &mut R, buf: &mut [u8]) -> Result<usize> {
     let mut buf = &mut buf[0..];
     let mut n = 0;

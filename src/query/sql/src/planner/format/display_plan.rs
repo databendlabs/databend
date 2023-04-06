@@ -83,7 +83,6 @@ impl Plan {
             Plan::Update(update) => Ok(format!("{:?}", update)),
 
             // Stages
-            Plan::ListStage(s) => Ok(format!("{:?}", s)),
             Plan::CreateStage(create_stage) => Ok(format!("{:?}", create_stage)),
             Plan::DropStage(s) => Ok(format!("{:?}", s)),
             Plan::RemoveStage(s) => Ok(format!("{:?}", s)),
@@ -116,6 +115,9 @@ impl Plan {
             Plan::UseDatabase(p) => Ok(format!("{:?}", p)),
             Plan::Kill(p) => Ok(format!("{:?}", p)),
 
+            Plan::CreateShareEndpoint(p) => Ok(format!("{:?}", p)),
+            Plan::ShowShareEndpoint(p) => Ok(format!("{:?}", p)),
+            Plan::DropShareEndpoint(p) => Ok(format!("{:?}", p)),
             Plan::CreateShare(p) => Ok(format!("{:?}", p)),
             Plan::DropShare(p) => Ok(format!("{:?}", p)),
             Plan::GrantShareObject(p) => Ok(format!("{:?}", p)),

@@ -30,6 +30,7 @@ pub trait MetaWriter<T> {
 impl<T> MetaWriter<T> for T
 where T: Serialize + Sync + Send
 {
+    #[async_backtrace::framed]
     async fn write_meta(&self, data_accessor: &Operator, location: &str) -> Result<()> {
         write_to_storage(data_accessor, location, &self).await
     }
@@ -48,6 +49,7 @@ where
     T: Serialize,
     C: CacheAccessor<String, T>,
 {
+    #[async_backtrace::framed]
     async fn write_meta_through_cache(
         self,
         data_accessor: &Operator,

@@ -15,12 +15,12 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::AggregateExpand;
 use super::DistributedInsertSelect;
-use super::Unnest;
+use super::ProjectSet;
 use crate::executor::AggregateFinal;
 use crate::executor::AggregatePartial;
 use crate::executor::EvalScalar;
@@ -36,6 +36,7 @@ use crate::executor::RuntimeFilterSource;
 use crate::executor::Sort;
 use crate::executor::TableScan;
 use crate::executor::UnionAll;
+use crate::executor::Window;
 use crate::plans::JoinType;
 
 impl PhysicalPlan {
@@ -61,6 +62,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::AggregateExpand(aggregate) => write!(f, "{}", aggregate)?,
             PhysicalPlan::AggregatePartial(aggregate) => write!(f, "{}", aggregate)?,
             PhysicalPlan::AggregateFinal(aggregate) => write!(f, "{}", aggregate)?,
+            PhysicalPlan::Window(window) => write!(f, "{}", window)?,
             PhysicalPlan::Sort(sort) => write!(f, "{}", sort)?,
             PhysicalPlan::Limit(limit) => write!(f, "{}", limit)?,
             PhysicalPlan::HashJoin(join) => write!(f, "{}", join)?,
@@ -69,7 +71,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ExchangeSink(sink) => write!(f, "{}", sink)?,
             PhysicalPlan::UnionAll(union_all) => write!(f, "{}", union_all)?,
             PhysicalPlan::DistributedInsertSelect(insert_select) => write!(f, "{}", insert_select)?,
-            PhysicalPlan::Unnest(unnest) => write!(f, "{}", unnest)?,
+            PhysicalPlan::ProjectSet(unnest) => write!(f, "{}", unnest)?,
             PhysicalPlan::RuntimeFilterSource(plan) => write!(f, "{}", plan)?,
         }
 
@@ -232,6 +234,13 @@ impl Display for AggregatePartial {
     }
 }
 
+impl Display for Window {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let window_id = self.plan_id;
+        write!(f, "Window: [{}]", window_id)
+    }
+}
+
 impl Display for Limit {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let limit = self.limit.as_ref().cloned().unwrap_or(0);
@@ -327,8 +336,18 @@ impl Display for RuntimeFilterSource {
     }
 }
 
-impl Display for Unnest {
+impl Display for ProjectSet {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Unnest: unnset num : {}", self.num_columns)
+        let scalars = self
+            .srf_exprs
+            .iter()
+            .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS).to_string())
+            .collect::<Vec<String>>();
+
+        write!(
+            f,
+            "ProjectSet: set-returning functions : {}",
+            scalars.join(", ")
+        )
     }
 }

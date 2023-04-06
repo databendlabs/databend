@@ -34,6 +34,7 @@ use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::plans::runtime_filter_source::RuntimeFilterSource;
 use crate::plans::Exchange;
+use crate::plans::ProjectSet;
 use crate::plans::Window;
 
 pub trait Operator {
@@ -71,6 +72,7 @@ pub enum RelOp {
     DummyTableScan,
     RuntimeFilterSource,
     Window,
+    ProjectSet,
 
     // Pattern
     Pattern,
@@ -91,6 +93,7 @@ pub enum RelOperator {
     DummyTableScan(DummyTableScan),
     RuntimeFilterSource(RuntimeFilterSource),
     Window(Window),
+    ProjectSet(ProjectSet),
 
     Pattern(PatternPlan),
 }
@@ -110,6 +113,7 @@ impl Operator for RelOperator {
             RelOperator::UnionAll(rel_op) => rel_op.rel_op(),
             RelOperator::DummyTableScan(rel_op) => rel_op.rel_op(),
             RelOperator::RuntimeFilterSource(rel_op) => rel_op.rel_op(),
+            RelOperator::ProjectSet(rel_op) => rel_op.rel_op(),
             RelOperator::Window(rel_op) => rel_op.rel_op(),
         }
     }
@@ -128,6 +132,7 @@ impl Operator for RelOperator {
             RelOperator::UnionAll(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::DummyTableScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::RuntimeFilterSource(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::ProjectSet(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Window(rel_op) => rel_op.derive_relational_prop(rel_expr),
         }
     }
@@ -146,6 +151,7 @@ impl Operator for RelOperator {
             RelOperator::UnionAll(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::DummyTableScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::RuntimeFilterSource(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::ProjectSet(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Window(rel_op) => rel_op.derive_physical_prop(rel_expr),
         }
     }
@@ -195,6 +201,9 @@ impl Operator for RelOperator {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
             RelOperator::Window(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::ProjectSet(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
         }
@@ -437,6 +446,26 @@ impl TryFrom<RelOperator> for RuntimeFilterSource {
         } else {
             Err(ErrorCode::Internal(
                 "Cannot downcast RelOperator to RuntimeFilterSource",
+            ))
+        }
+    }
+}
+
+impl From<ProjectSet> for RelOperator {
+    fn from(value: ProjectSet) -> Self {
+        Self::ProjectSet(value)
+    }
+}
+
+impl TryFrom<RelOperator> for ProjectSet {
+    type Error = ErrorCode;
+
+    fn try_from(value: RelOperator) -> std::result::Result<Self, Self::Error> {
+        if let RelOperator::ProjectSet(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal(
+                "Cannot downcast RelOperator to ProjectSet",
             ))
         }
     }

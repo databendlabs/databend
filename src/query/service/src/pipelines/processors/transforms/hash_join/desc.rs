@@ -18,7 +18,7 @@ use common_expression::type_check::check_function;
 use common_expression::DataBlock;
 use common_expression::Expr;
 use common_expression::RemoteExpr;
-use common_functions::scalars::BUILTIN_FUNCTIONS;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::executor::HashJoin;
 use parking_lot::RwLock;
 
@@ -43,8 +43,8 @@ pub struct JoinState {
     /// Record rows in build side that are matched with rows in probe side.
     /// It's order-sensitive, aligned with the order of rows in merged block.
     pub(crate) build_indexes: RwLock<Vec<RowPtr>>,
-    pub(crate) rest_build_indexes: RwLock<Vec<RowPtr>>,
-    pub(crate) rest_probe_blocks: RwLock<Vec<DataBlock>>,
+    /// Rest build indexes and probe blocks
+    pub(crate) rest_pairs: RwLock<(Vec<DataBlock>, Vec<RowPtr>)>,
     pub(crate) validity: RwLock<MutableBitmap>,
 }
 
@@ -52,9 +52,8 @@ impl JoinState {
     pub fn create() -> Result<Self> {
         Ok(JoinState {
             build_indexes: RwLock::new(Vec::with_capacity(JOIN_MAX_BLOCK_SIZE)),
-            rest_build_indexes: RwLock::new(Vec::with_capacity(JOIN_MAX_BLOCK_SIZE)),
-            rest_probe_blocks: RwLock::new(Vec::with_capacity(JOIN_MAX_BLOCK_SIZE)),
             validity: RwLock::new(MutableBitmap::with_capacity(JOIN_MAX_BLOCK_SIZE)),
+            rest_pairs: Default::default(),
         })
     }
 }
@@ -104,7 +103,7 @@ impl HashJoinDesc {
             .iter()
             .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
             .try_reduce(|lhs, rhs| {
-                check_function(None, "and", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
+                check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
             })
     }
 }

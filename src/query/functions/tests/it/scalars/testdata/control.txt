@@ -1,5 +1,5 @@
 ast            : if(false, 1, false, 2, NULL)
-raw expr       : if(false, 1_u8, false, 2_u8, NULL)
+raw expr       : if(false, 1, false, 2, NULL)
 checked expr   : if<T0=UInt8 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(false AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(false AS Boolean NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 optimized expr : NULL
 output type    : UInt8 NULL
@@ -8,7 +8,7 @@ output         : NULL
 
 
 ast            : if(true, 1, NULL, 2, NULL)
-raw expr       : if(true, 1_u8, NULL, 2_u8, NULL)
+raw expr       : if(true, 1, NULL, 2, NULL)
 checked expr   : if<T0=UInt8 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(true AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(NULL AS Boolean NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 optimized expr : 1_u8
 output type    : UInt8 NULL
@@ -17,7 +17,7 @@ output         : 1
 
 
 ast            : if(false, 1, true, 2, NULL)
-raw expr       : if(false, 1_u8, true, 2_u8, NULL)
+raw expr       : if(false, 1, true, 2, NULL)
 checked expr   : if<T0=UInt8 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(false AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(true AS Boolean NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 optimized expr : 2_u8
 output type    : UInt8 NULL
@@ -26,7 +26,7 @@ output         : 2
 
 
 ast            : if(true, 1, true, 2, NULL)
-raw expr       : if(true, 1_u8, true, 2_u8, NULL)
+raw expr       : if(true, 1, true, 2, NULL)
 checked expr   : if<T0=UInt8 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(true AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(true AS Boolean NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 optimized expr : 1_u8
 output type    : UInt8 NULL
@@ -35,7 +35,7 @@ output         : 1
 
 
 ast            : if(true, 1, true, NULL, 2)
-raw expr       : if(true, 1_u8, true, NULL, 2_u8)
+raw expr       : if(true, 1, true, NULL, 2)
 checked expr   : if<T0=UInt8 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(true AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(true AS Boolean NULL), CAST(NULL AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL))
 optimized expr : 1_u8
 output type    : UInt8 NULL
@@ -44,7 +44,7 @@ output         : 1
 
 
 ast            : if(true, 1, NULL)
-raw expr       : if(true, 1_u8, NULL)
+raw expr       : if(true, 1, NULL)
 checked expr   : if<T0=UInt8 NULL><Boolean NULL, T0, T0>(CAST(true AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 optimized expr : 1_u8
 output type    : UInt8 NULL
@@ -53,7 +53,7 @@ output         : 1
 
 
 ast            : if(false, 1, NULL)
-raw expr       : if(false, 1_u8, NULL)
+raw expr       : if(false, 1, NULL)
 checked expr   : if<T0=UInt8 NULL><Boolean NULL, T0, T0>(CAST(false AS Boolean NULL), CAST(1_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL))
 optimized expr : NULL
 output type    : UInt8 NULL
@@ -62,7 +62,7 @@ output         : NULL
 
 
 ast            : if(true, 1, 1 / 0)
-raw expr       : if(true, 1_u8, divide(1_u8, 0_u8))
+raw expr       : if(true, 1, divide(1, 0))
 checked expr   : if<T0=Float64><Boolean NULL, T0, T0>(CAST(true AS Boolean NULL), to_float64<UInt8>(1_u8), divide<UInt8, UInt8>(1_u8, 0_u8))
 optimized expr : if<T0=Float64><Boolean NULL, T0, T0>(true, 1_f64, divide<UInt8, UInt8>(1_u8, 0_u8))
 output type    : Float64
@@ -71,7 +71,7 @@ output         : 1
 
 
 ast            : if(false, 1 / 0, 1)
-raw expr       : if(false, divide(1_u8, 0_u8), 1_u8)
+raw expr       : if(false, divide(1, 0), 1)
 checked expr   : if<T0=Float64><Boolean NULL, T0, T0>(CAST(false AS Boolean NULL), divide<UInt8, UInt8>(1_u8, 0_u8), to_float64<UInt8>(1_u8))
 optimized expr : if<T0=Float64><Boolean NULL, T0, T0>(false, divide<UInt8, UInt8>(1_u8, 0_u8), 1_f64)
 output type    : Float64
@@ -192,7 +192,7 @@ evaluation (internal):
 
 
 ast            : if(cond_a, 1 / expr_a, expr_else)
-raw expr       : if(cond_a::Boolean, divide(1_u8, expr_a::Int64 NULL), expr_else::Int64)
+raw expr       : if(cond_a::Boolean, divide(1, expr_a::Int64 NULL), expr_else::Int64)
 checked expr   : if<T0=Float64 NULL><Boolean NULL, T0, T0>(CAST(cond_a AS Boolean NULL), divide<UInt8 NULL, Int64 NULL>(CAST(1_u8 AS UInt8 NULL), expr_a), CAST(expr_else AS Float64 NULL))
 optimized expr : if<T0=Float64 NULL><Boolean NULL, T0, T0>(CAST(cond_a AS Boolean NULL), divide<UInt8 NULL, Int64 NULL>(1_u8, expr_a), CAST(expr_else AS Float64 NULL))
 evaluation:
@@ -226,7 +226,7 @@ error:
 
 
 ast            : is_not_null(1)
-raw expr       : is_not_null(1_u8)
+raw expr       : is_not_null(1)
 checked expr   : is_not_null<T0=UInt8><T0 NULL>(CAST(1_u8 AS UInt8 NULL))
 optimized expr : true
 output type    : Boolean
@@ -235,7 +235,7 @@ output         : true
 
 
 ast            : is_not_null(4096)
-raw expr       : is_not_null(4096_u16)
+raw expr       : is_not_null(4096)
 checked expr   : is_not_null<T0=UInt16><T0 NULL>(CAST(4096_u16 AS UInt16 NULL))
 optimized expr : true
 output type    : Boolean

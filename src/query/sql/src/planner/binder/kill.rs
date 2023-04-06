@@ -21,6 +21,7 @@ use crate::plans::KillPlan;
 use crate::plans::Plan;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(super) async fn bind_kill_stmt(
         &mut self,
         _bind_context: &BindContext,

@@ -18,7 +18,7 @@ use super::expr::pretty_expr;
 use super::query::pretty_query;
 use super::query::pretty_table;
 use crate::ast::format::syntax::interweave_comma;
-use crate::ast::format::syntax::parenthenized;
+use crate::ast::format::syntax::parenthesized;
 use crate::ast::format::syntax::NEST_FACTOR;
 use crate::ast::AlterTableAction;
 use crate::ast::AlterTableStmt;
@@ -71,7 +71,7 @@ pub(crate) fn pretty_create_table(stmt: CreateTableStmt) -> RcDoc<'static> {
         .append(if !stmt.cluster_by.is_empty() {
             RcDoc::line()
                 .append(RcDoc::text("CLUSTER BY "))
-                .append(parenthenized(
+                .append(parenthesized(
                     interweave_comma(stmt.cluster_by.into_iter().map(pretty_expr)).group(),
                 ))
         } else {
@@ -105,7 +105,7 @@ pub(crate) fn pretty_create_table(stmt: CreateTableStmt) -> RcDoc<'static> {
 
 fn pretty_table_source(source: CreateTableSource) -> RcDoc<'static> {
     match source {
-        CreateTableSource::Columns(columns) => RcDoc::space().append(parenthenized(
+        CreateTableSource::Columns(columns) => RcDoc::space().append(parenthesized(
             interweave_comma(
                 columns
                     .into_iter()
@@ -162,7 +162,7 @@ pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc<'stat
             .append(RcDoc::text(column.to_string())),
         AlterTableAction::AlterTableClusterKey { cluster_by } => RcDoc::line()
             .append(RcDoc::text("CLUSTER BY "))
-            .append(parenthenized(
+            .append(parenthesized(
                 interweave_comma(cluster_by.into_iter().map(pretty_expr)).group(),
             )),
         AlterTableAction::DropTableClusterKey => {

@@ -47,6 +47,7 @@ use crate::plans::ShowRolesPlan;
 use crate::plans::UseDatabasePlan;
 use crate::BindContext;
 use crate::ColumnBinding;
+use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::Visibility;
@@ -80,15 +81,17 @@ impl<'a> Binder {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {
-        let init_bind_context = BindContext::new();
-        self.bind_statement(&init_bind_context, stmt).await
+        let mut init_bind_context = BindContext::new();
+        self.bind_statement(&mut init_bind_context, stmt).await
     }
 
     #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     pub(crate) async fn bind_statement(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         stmt: &Statement,
     ) -> Result<Plan> {
         let plan = match stmt {
@@ -167,6 +170,8 @@ impl<'a> Binder {
                     database: database.name.clone(),
                 }))
             }
+            // Columns
+            Statement::ShowColumns(stmt) => self.bind_show_columns(bind_context, stmt).await?,
             // Tables
             Statement::ShowTables(stmt) => self.bind_show_tables(bind_context, stmt).await?,
             Statement::ShowCreateTable(stmt) => self.bind_show_create_table(stmt).await?,
@@ -217,9 +222,7 @@ impl<'a> Binder {
 
             // Stages
             Statement::ShowStages => self.bind_rewrite_to_query(bind_context, "SELECT name, stage_type, number_of_files, creator, comment FROM system.stages ORDER BY name", RewriteKind::ShowStages).await?,
-            Statement::ListStage { location, pattern } => {
-                self.bind_list_stage(location, pattern).await?
-            }
+            Statement::ListStage { location, pattern } => self.bind_rewrite_to_query(bind_context, format!("SELECT * FROM LIST_STAGE(location => '@{location}', pattern => '{pattern}')").as_str(), RewriteKind::ListStage).await?,
             Statement::DescribeStage { stage_name } => self.bind_rewrite_to_query(bind_context, format!("SELECT * FROM system.stages WHERE name = '{stage_name}'").as_str(), RewriteKind::DescribeStage).await?,
             Statement::CreateStage(stmt) => self.bind_create_stage(stmt).await?,
             Statement::DropStage {
@@ -356,6 +359,15 @@ impl<'a> Binder {
             }
 
             // share statements
+            Statement::CreateShareEndpoint(stmt) => {
+                self.bind_create_share_endpoint(stmt).await?
+            }
+                        Statement::ShowShareEndpoint(stmt) => {
+                self.bind_show_share_endpoint(stmt).await?
+            }
+                                    Statement::DropShareEndpoint(stmt) => {
+                self.bind_drop_share_endpoint(stmt).await?
+            }
             Statement::CreateShare(stmt) => {
                 self.bind_create_share(stmt).await?
             }
@@ -387,9 +399,10 @@ impl<'a> Binder {
         Ok(plan)
     }
 
+    #[async_backtrace::framed]
     pub(crate) async fn bind_rewrite_to_query(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         query: &str,
         rewrite_kind_r: RewriteKind,
     ) -> Result<Plan> {
@@ -408,6 +421,7 @@ impl<'a> Binder {
         &mut self,
         database_name: Option<String>,
         table_name: Option<String>,
+        table_index: Option<IndexType>,
         column_name: String,
         data_type: DataType,
     ) -> ColumnBinding {
@@ -418,6 +432,7 @@ impl<'a> Binder {
         ColumnBinding {
             database_name,
             table_name,
+            table_index,
             column_name,
             index,
             data_type: Box::new(data_type),

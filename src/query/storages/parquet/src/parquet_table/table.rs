@@ -109,6 +109,7 @@ impl Table for ParquetTable {
 
     /// The returned partitions only record the locations of files to read.
     /// So they don't have any real statistics.
+    #[async_backtrace::framed]
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,

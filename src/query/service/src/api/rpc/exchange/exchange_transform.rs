@@ -52,31 +52,23 @@ impl ExchangeTransform {
                 let mut items = Vec::with_capacity(len);
                 let exchange_params = ExchangeParams::ShuffleExchange(params.clone());
                 let exchange_manager = ctx.get_exchange_manager();
-                let flight_exchanges = exchange_manager.get_flight_exchanges(&exchange_params)?;
+                let flight_senders = exchange_manager.get_flight_sender(&exchange_params)?;
 
-                let exchanges = flight_exchanges.iter().cloned();
-                for (destination_id, exchange) in params.destination_ids.iter().zip(exchanges) {
+                let senders = flight_senders.into_iter();
+                for (destination_id, sender) in params.destination_ids.iter().zip(senders) {
                     items.push(match destination_id == &params.executor_id {
                         true if max_threads == 1 => create_dummy_item(),
                         true => create_resize_item(1, max_threads),
-                        false => create_writer_item(
-                            exchange,
-                            params.query_id.clone(),
-                            params.fragment_id,
-                        ),
+                        false => create_writer_item(sender),
                     });
                 }
 
                 let mut nodes_source = 0;
-                let exchanges = flight_exchanges.into_iter();
-                for (destination_id, exchange) in params.destination_ids.iter().zip(exchanges) {
+                let receivers = exchange_manager.get_flight_receiver(&exchange_params)?;
+                for (destination_id, receiver) in params.destination_ids.iter().zip(receivers) {
                     if destination_id != &params.executor_id {
                         nodes_source += 1;
-                        items.push(create_reader_item(
-                            exchange,
-                            params.query_id.clone(),
-                            params.fragment_id,
-                        ));
+                        items.push(create_reader_item(receiver));
                     }
                 }
 

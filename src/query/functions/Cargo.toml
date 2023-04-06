@@ -17,6 +17,8 @@ common-exception = { path = "../../common/exception" }
 common-expression = { path = "../expression" }
 common-hashtable = { path = "../../common/hashtable" }
 common-io = { path = "../../common/io" }
+common-openai = { path = "../../common/openai" }
+common-vector = { path = "../../common/vector" }
 jsonb = { workspace = true }
 
 # Crates.io dependencies

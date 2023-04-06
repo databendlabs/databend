@@ -28,9 +28,10 @@ use crate::BindContext;
 use crate::ScalarExpr;
 
 impl<'a> Binder {
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_delete(
         &mut self,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         table_reference: &'a TableReference,
         filter: &'a Option<Expr>,
     ) -> Result<Plan> {
@@ -49,12 +50,12 @@ impl<'a> Binder {
             ));
         };
 
-        let (table_expr, context) = self
+        let (table_expr, mut context) = self
             .bind_table_reference(bind_context, table_reference)
             .await?;
 
         let mut scalar_binder = ScalarBinder::new(
-            &context,
+            &mut context,
             self.ctx.clone(),
             &self.name_resolution_ctx,
             self.metadata.clone(),

@@ -102,17 +102,16 @@ where
         column_iter.zip(places.iter()).for_each(|(v, place)| {
             let addr = place.next(offset);
             let state = addr.get::<State>();
-            state.add(v.clone())
+            state.add(Some(v.clone()))
         });
         Ok(())
     }
+
     fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
         let column = T::try_downcast_column(&columns[0]).unwrap();
         let v = T::index_column(&column, row);
-        if let Some(v) = v {
-            let state = place.get::<State>();
-            state.add(v)
-        }
+        let state = place.get::<State>();
+        state.add(v);
         Ok(())
     }
 
@@ -255,15 +254,25 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
 }
 
 pub fn aggregate_min_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(
-        try_create_aggregate_min_max_any_function::<TYPE_MIN>,
-    ))
+    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+        is_decomposable: true,
+        ..Default::default()
+    };
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_aggregate_min_max_any_function::<TYPE_MIN>),
+        features,
+    )
 }
 
 pub fn aggregate_max_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(
-        try_create_aggregate_min_max_any_function::<TYPE_MAX>,
-    ))
+    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+        is_decomposable: true,
+        ..Default::default()
+    };
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_aggregate_min_max_any_function::<TYPE_MAX>),
+        features,
+    )
 }
 
 pub fn aggregate_any_function_desc() -> AggregateFunctionDescription {

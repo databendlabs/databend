@@ -49,6 +49,7 @@ pub struct UserApiProvider {
 }
 
 impl UserApiProvider {
+    #[async_backtrace::framed]
     pub async fn init(
         conf: RpcClientConf,
         idm_config: IDMConfig,
@@ -56,7 +57,9 @@ impl UserApiProvider {
         quota: Option<TenantQuota>,
     ) -> Result<()> {
         GlobalInstance::set(Self::try_create(conf, idm_config).await?);
-
+        UserApiProvider::instance()
+            .ensure_builtin_roles(tenant)
+            .await?;
         if let Some(q) = quota {
             let i = UserApiProvider::instance().get_tenant_quota_api_client(tenant)?;
             let res = i.get_quota(MatchSeq::GE(0)).await?;
@@ -65,6 +68,7 @@ impl UserApiProvider {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     pub async fn try_create(
         conf: RpcClientConf,
         idm_config: IDMConfig,
@@ -85,6 +89,7 @@ impl UserApiProvider {
         }))
     }
 
+    #[async_backtrace::framed]
     pub async fn try_create_simple(conf: RpcClientConf) -> Result<Arc<UserApiProvider>> {
         Self::try_create(conf, IDMConfig::default()).await
     }

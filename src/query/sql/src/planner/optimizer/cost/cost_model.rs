@@ -26,6 +26,7 @@ use crate::plans::Scan;
 
 static COST_FACTOR_COMPUTE_PER_ROW: f64 = 1.0;
 static COST_FACTOR_HASH_TABLE_PER_ROW: f64 = 10.0;
+static COST_FACTOR_AGGREGATE_PER_ROW: f64 = 5.0;
 
 #[derive(Default)]
 pub struct DefaultCostModel;
@@ -42,11 +43,13 @@ fn compute_cost_impl(memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
         RelOperator::DummyTableScan(_) => Ok(Cost(0.0)),
         RelOperator::Join(plan) => compute_cost_join(memo, m_expr, plan),
         RelOperator::UnionAll(_) => compute_cost_union_all(memo, m_expr),
+        RelOperator::Aggregate(_) => compute_aggregate(memo, m_expr),
 
         RelOperator::EvalScalar(_)
         | RelOperator::Filter(_)
-        | RelOperator::Aggregate(_)
+        | RelOperator::Window(_)
         | RelOperator::Sort(_)
+        | RelOperator::ProjectSet(_)
         | RelOperator::Limit(_) => compute_cost_unary_common_operator(memo, m_expr),
 
         _ => Err(ErrorCode::Internal("Cannot compute cost from logical plan")),
@@ -95,5 +98,12 @@ fn compute_cost_union_all(memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
     let right_group = m_expr.child_group(memo, 0)?;
     let card = left_group.relational_prop.cardinality + right_group.relational_prop.cardinality;
     let cost = card * COST_FACTOR_COMPUTE_PER_ROW;
+    Ok(Cost(cost))
+}
+
+fn compute_aggregate(memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
+    let group = m_expr.child_group(memo, 0)?;
+    let card = group.relational_prop.cardinality;
+    let cost = card * COST_FACTOR_AGGREGATE_PER_ROW;
     Ok(Cost(cost))
 }

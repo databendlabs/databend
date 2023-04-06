@@ -34,6 +34,7 @@ use crate::interpreters::interpreter_role_show::ShowRolesInterpreter;
 use crate::interpreters::interpreter_table_create::CreateTableInterpreter;
 use crate::interpreters::interpreter_table_revert::RevertTableInterpreter;
 use crate::interpreters::AlterUserInterpreter;
+use crate::interpreters::CreateShareEndpointInterpreter;
 use crate::interpreters::CreateShareInterpreter;
 use crate::interpreters::DropShareInterpreter;
 use crate::interpreters::DropUserInterpreter;
@@ -48,6 +49,7 @@ pub struct InterpreterFactory;
 /// InterpreterFactory provides `get` method which transforms `Plan` into the corresponding interpreter.
 /// Such as: Plan::Query -> InterpreterSelectV2
 impl InterpreterFactory {
+    #[async_backtrace::framed]
     pub async fn get(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
         // Check the access permission.
         let access_checker = Accessor::create(ctx.clone());
@@ -259,7 +261,6 @@ impl InterpreterFactory {
             )?)),
 
             // Stages
-            Plan::ListStage(s) => Ok(Arc::new(ListInterpreter::try_create(ctx, *s.clone())?)),
             Plan::CreateStage(create_stage) => Ok(Arc::new(
                 CreateUserStageInterpreter::try_create(ctx, *create_stage.clone())?,
             )),
@@ -337,6 +338,17 @@ impl InterpreterFactory {
             Plan::Kill(p) => Ok(Arc::new(KillInterpreter::try_create(ctx, *p.clone())?)),
 
             // share plans
+            Plan::CreateShareEndpoint(p) => Ok(Arc::new(
+                CreateShareEndpointInterpreter::try_create(ctx, *p.clone())?,
+            )),
+            Plan::ShowShareEndpoint(p) => Ok(Arc::new(ShowShareEndpointInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropShareEndpoint(p) => Ok(Arc::new(DropShareEndpointInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
             Plan::CreateShare(p) => Ok(Arc::new(CreateShareInterpreter::try_create(
                 ctx,
                 *p.clone(),

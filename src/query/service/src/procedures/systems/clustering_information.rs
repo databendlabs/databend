@@ -46,6 +46,7 @@ impl OneBlockProcedure for ClusteringInformationProcedure {
         ProcedureFeatures::default().num_arguments(2)
     }
 
+    #[async_backtrace::framed]
     async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let database_name = args[0].clone();
         let table_name = args[1].clone();

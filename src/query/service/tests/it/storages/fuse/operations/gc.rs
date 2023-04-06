@@ -81,7 +81,7 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
-    // create orphan snapshot, its timestamp is larger then then the current one
+    // create orphan snapshot, its timestamp is larger than the current one
     {
         let current_snapshot = fuse_table.read_table_snapshot().await?.unwrap();
         let operator = fuse_table.get_operator();
@@ -309,7 +309,7 @@ mod utils {
         let blocks: std::vec::Vec<DataBlock> = stream.try_collect().await?;
         for block in blocks {
             let stats = gen_columns_statistics(&block, None, &schema)?;
-            let block_meta = block_writer
+            let (block_meta, _index_meta) = block_writer
                 .write(FuseStorageFormat::Parquet, &schema, block, stats, None)
                 .await?;
             block_metas.push(Arc::new(block_meta));

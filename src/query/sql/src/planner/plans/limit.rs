@@ -67,7 +67,6 @@ impl Operator for Limit {
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats: Default::default(),
-                is_accurate: false,
             },
         })
     }

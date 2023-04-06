@@ -39,6 +39,23 @@ use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 
+/// Context of current expression, this is used to check if
+/// the expression is valid in current context.
+#[derive(Debug, Clone, Default)]
+pub enum ExprContext {
+    SelectClause,
+    WhereClause,
+    HavingClause,
+    OrderByClause,
+    LimitClause,
+
+    InSetReturningFunction,
+    InAggregateFunction,
+
+    #[default]
+    Unknown,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum Visibility {
     // Default for a column
@@ -57,6 +74,8 @@ pub struct ColumnBinding {
     pub database_name: Option<String>,
     /// Table name of this `ColumnBinding` in current context
     pub table_name: Option<String>,
+    /// Table index of this `ColumnBinding` in current context
+    pub table_index: Option<IndexType>,
     /// Column name of this `ColumnBinding` in current context
     pub column_name: String,
     /// Column index of ColumnBinding
@@ -126,7 +145,7 @@ pub struct BindContext {
 
     pub aggregate_info: AggregateInfo,
 
-    pub windows: Vec<WindowInfo>,
+    pub windows: WindowInfo,
 
     /// True if there is aggregation in current context, which means
     /// non-grouping columns cannot be referenced outside aggregation
@@ -139,6 +158,12 @@ pub struct BindContext {
     ///
     /// It's used to check if the view has a loop dependency.
     pub view_info: Option<(String, String)>,
+
+    /// Set-returning functions in current context.
+    /// The key is the `Expr::to_string` of the function.
+    pub srfs: DashMap<String, ScalarExpr>,
+
+    pub expr_context: ExprContext,
 }
 
 #[derive(Clone, Debug)]
@@ -154,10 +179,12 @@ impl BindContext {
             columns: Vec::new(),
             bound_internal_columns: BTreeMap::new(),
             aggregate_info: AggregateInfo::default(),
-            windows: Vec::new(),
+            windows: WindowInfo::default(),
             in_grouping: false,
             ctes_map: Box::new(DashMap::new()),
             view_info: None,
+            srfs: DashMap::new(),
+            expr_context: ExprContext::default(),
         }
     }
 
@@ -167,10 +194,12 @@ impl BindContext {
             columns: vec![],
             bound_internal_columns: BTreeMap::new(),
             aggregate_info: Default::default(),
-            windows: vec![],
+            windows: Default::default(),
             in_grouping: false,
             ctes_map: parent.ctes_map.clone(),
             view_info: None,
+            srfs: DashMap::new(),
+            expr_context: ExprContext::default(),
         }
     }
 
@@ -411,6 +440,7 @@ impl BindContext {
             self.columns.push(ColumnBinding {
                 database_name,
                 table_name,
+                table_index: Some(table_index),
                 column_name: column_binding.internal_column.column_name().clone(),
                 index: column_binding.index,
                 data_type: Box::new(column_binding.internal_column.data_type()),
@@ -432,6 +462,10 @@ impl BindContext {
 
     pub fn column_set(&self) -> ColumnSet {
         self.columns.iter().map(|c| c.index).collect()
+    }
+
+    pub fn set_expr_context(&mut self, expr_context: ExprContext) {
+        self.expr_context = expr_context;
     }
 }
 

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_meta_app::share::TableInfoMap;
 use models::Credentials;
 use models::RequestFile;
 use poem::error::BadRequest;
@@ -22,9 +23,11 @@ use poem::web::Path;
 use crate::accessor::SharingAccessor;
 use crate::models;
 use crate::models::PresignFileResponse;
+use crate::models::ShareSpec;
 
 #[poem::handler]
-pub async fn presign_files(
+#[async_backtrace::framed]
+pub async fn share_table_presign_files(
     credentials: &Credentials,
     Path((_tenant_id, share_name, table_name)): Path<(String, String, String)>,
     Json(request_files): Json<Vec<RequestFile>>,
@@ -38,7 +41,41 @@ pub async fn presign_files(
         request_files,
         None,
     );
-    match SharingAccessor::get_presigned_files(&input).await {
+    match SharingAccessor::get_share_table_spec_presigned_files(&input).await {
+        Ok(output) => Ok(Json(output)),
+        Err(e) => Err(BadRequest(e)),
+    }
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn share_table_meta(
+    credentials: &Credentials,
+    Path((_tenant_id, share_name)): Path<(String, String)>,
+    Json(request_tables): Json<Vec<String>>,
+) -> PoemResult<Json<TableInfoMap>> {
+    let requester = credentials.token.clone();
+    let input = models::TableMetaLambdaInput::new(
+        credentials.token.clone(),
+        share_name,
+        requester,
+        request_tables,
+        None,
+    );
+    match SharingAccessor::get_share_table_meta(&input).await {
+        Ok(output) => Ok(Json(output)),
+        Err(e) => Err(BadRequest(e)),
+    }
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn share_spec(
+    _credentials: &Credentials,
+    Path(tenant_id): Path<String>,
+    Json(_request_tables): Json<Vec<String>>,
+) -> PoemResult<Json<Vec<ShareSpec>>> {
+    match SharingAccessor::get_share_spec(&tenant_id).await {
         Ok(output) => Ok(Json(output)),
         Err(e) => Err(BadRequest(e)),
     }

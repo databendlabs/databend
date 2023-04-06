@@ -194,6 +194,7 @@ impl Processor for TransformMergeBlock {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if !self.finished {
             if let Ok(result) = self.receiver.recv().await {

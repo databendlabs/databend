@@ -48,6 +48,7 @@ impl<T: NativeReadBuf + std::io::Seek + Send + Sync> NativeReaderExt for T {}
 pub type Reader = Box<dyn NativeReaderExt>;
 
 impl BlockReader {
+    #[async_backtrace::framed]
     pub async fn async_read_native_columns_data(
         &self,
         part: PartInfoPtr,
@@ -105,6 +106,7 @@ impl BlockReader {
         Ok(results)
     }
 
+    #[async_backtrace::framed]
     pub async fn read_native_columns_data(
         op: Operator,
         path: &str,
@@ -201,7 +203,7 @@ impl BlockReader {
     pub fn build_block(
         &self,
         chunks: Vec<(usize, Box<dyn Array>)>,
-        default_val_indics: Option<HashSet<usize>>,
+        default_val_indices: Option<HashSet<usize>>,
     ) -> Result<DataBlock> {
         let mut rows = 0;
         let mut entries = Vec::with_capacity(chunks.len());
@@ -213,8 +215,8 @@ impl BlockReader {
                     value: Value::Column(Column::from_arrow(array.as_ref(), &data_type)),
                 });
                 rows = array.len();
-            } else if let Some(ref default_val_indics) = default_val_indics {
-                if default_val_indics.contains(&index) {
+            } else if let Some(ref default_val_indices) = default_val_indices {
+                if default_val_indices.contains(&index) {
                     let data_type: DataType = self.projected_schema.field(index).data_type().into();
                     let default_val = &self.default_vals[index];
                     entries.push(BlockEntry {

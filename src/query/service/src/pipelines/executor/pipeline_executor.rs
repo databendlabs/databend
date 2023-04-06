@@ -227,7 +227,8 @@ impl PipelineExecutor {
                 }
 
                 info!(
-                    "Init pipeline successfully, elapsed: {:?}",
+                    "Init pipeline successfully, query_id: {:?}, elapsed: {:?}",
+                    self.settings.query_id,
                     instant.elapsed()
                 );
             }

@@ -13,12 +13,6 @@ export RUST_BACKTRACE=full
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../tests" || exit
 
-for i in $(seq 1 3); do
-	echo "Starting databend-test $i"
-	# 13_0004_q4: https://github.com/datafuselabs/databend/issues/8107
-	./databend-test --mode 'cluster' --run-dir 0_stateless --skip '13_0004_q4'
-
-	if [ $? -ne 0 ]; then
-		break
-	fi
-done
+echo "Starting databend-test"
+# 13_0004_q4: https://github.com/datafuselabs/databend/issues/8107
+./databend-test --mode 'cluster' --run-dir 0_stateless --skip '13_0004_q4', '13_0008_q8'

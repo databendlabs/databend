@@ -277,6 +277,7 @@ pub struct ConfigViaEnv {
     pub kvsrv_snapshot_logs_since_last: u64,
     pub kvsrv_heartbeat_interval: u64,
     pub kvsrv_install_snapshot_timeout: u64,
+    pub kvsrv_wait_leader_timeout: u64,
     pub raft_max_applied_log_to_keep: u64,
     pub kvsrv_single: bool,
     pub metasrv_join: Vec<String>,
@@ -320,6 +321,7 @@ impl From<Config> for ConfigViaEnv {
             kvsrv_snapshot_logs_since_last: cfg.raft_config.snapshot_logs_since_last,
             kvsrv_heartbeat_interval: cfg.raft_config.heartbeat_interval,
             kvsrv_install_snapshot_timeout: cfg.raft_config.install_snapshot_timeout,
+            kvsrv_wait_leader_timeout: cfg.raft_config.wait_leader_timeout,
             raft_max_applied_log_to_keep: cfg.raft_config.max_applied_log_to_keep,
             kvsrv_single: cfg.raft_config.single,
             metasrv_join: cfg.raft_config.join,
@@ -344,6 +346,7 @@ impl Into<Config> for ConfigViaEnv {
             snapshot_logs_since_last: self.kvsrv_snapshot_logs_since_last,
             heartbeat_interval: self.kvsrv_heartbeat_interval,
             install_snapshot_timeout: self.kvsrv_install_snapshot_timeout,
+            wait_leader_timeout: self.kvsrv_wait_leader_timeout,
             max_applied_log_to_keep: self.raft_max_applied_log_to_keep,
             single: self.kvsrv_single,
             join: self.metasrv_join,
@@ -483,6 +486,10 @@ pub struct RaftConfig {
     /// if not, the default name is used
     #[clap(long, default_value = "foo_cluster")]
     pub cluster_name: String,
+
+    /// Max timeout(in milli seconds) when waiting a cluster leader.
+    #[clap(long, default_value = "70000")]
+    pub wait_leader_timeout: u64,
 }
 
 impl Default for RaftConfig {
@@ -511,6 +518,7 @@ impl From<RaftConfig> for InnerRaftConfig {
             id: x.id,
             sled_tree_prefix: x.sled_tree_prefix,
             cluster_name: x.cluster_name,
+            wait_leader_timeout: x.wait_leader_timeout,
         }
     }
 }
@@ -535,6 +543,7 @@ impl From<InnerRaftConfig> for RaftConfig {
             id: inner.id,
             sled_tree_prefix: inner.sled_tree_prefix,
             cluster_name: inner.cluster_name,
+            wait_leader_timeout: inner.wait_leader_timeout,
         }
     }
 }

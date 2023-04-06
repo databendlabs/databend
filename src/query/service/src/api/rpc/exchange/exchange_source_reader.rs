@@ -25,37 +25,25 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::TransformDummy;
-use tracing::info;
 
 use crate::api::rpc::exchange::serde::exchange_deserializer::ExchangeDeserializeMeta;
-use crate::api::rpc::flight_client::FlightExchangeRef;
+use crate::api::rpc::flight_client::FlightReceiver;
 use crate::api::DataPacket;
 
 pub struct ExchangeSourceReader {
     finished: bool,
-    query_id: String,
-    fragment: usize,
     output: Arc<OutputPort>,
     output_data: Option<DataPacket>,
-    flight_exchange: FlightExchangeRef,
+    flight_receiver: FlightReceiver,
 }
 
 impl ExchangeSourceReader {
-    pub fn create(
-        output: Arc<OutputPort>,
-        flight_exchange: FlightExchangeRef,
-        query_id: String,
-        fragment: usize,
-    ) -> ProcessorPtr {
-        flight_exchange.dec_output_ref();
-
+    pub fn create(output: Arc<OutputPort>, flight_receiver: FlightReceiver) -> ProcessorPtr {
         ProcessorPtr::create(Box::new(ExchangeSourceReader {
             output,
-            flight_exchange,
+            flight_receiver,
             finished: false,
             output_data: None,
-            fragment,
-            query_id,
         }))
     }
 }
@@ -78,7 +66,8 @@ impl Processor for ExchangeSourceReader {
 
         if self.output.is_finished() {
             if !self.finished {
-                return Ok(Event::Async);
+                self.finished = true;
+                self.flight_receiver.close();
             }
 
             return Ok(Event::Finished);
@@ -97,9 +86,10 @@ impl Processor for ExchangeSourceReader {
         Ok(Event::Async)
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> common_exception::Result<()> {
         if self.output_data.is_none() {
-            if let Some(output_data) = self.flight_exchange.recv().await? {
+            if let Some(output_data) = self.flight_receiver.recv().await? {
                 self.output_data = Some(output_data);
                 return Ok(());
             }
@@ -107,30 +97,15 @@ impl Processor for ExchangeSourceReader {
 
         if !self.finished {
             self.finished = true;
-            info!(
-                "Finish query:{:?}, fragment:{:?} exchange read.",
-                self.query_id, self.fragment
-            );
-            let res = self.flight_exchange.close_input().await;
-
-            info!(
-                "Finished query:{:?}, fragment:{:?} exchange read. {}",
-                self.query_id, self.fragment, res
-            );
+            self.flight_receiver.close();
         }
 
         Ok(())
     }
 }
 
-pub fn via_reader(
-    prefix_size: usize,
-    exchanges: Vec<FlightExchangeRef>,
-    pipeline: &mut Pipeline,
-    query_id: String,
-    fragment: usize,
-) {
-    let mut items = Vec::with_capacity(prefix_size + exchanges.len());
+pub fn via_reader(prefix_size: usize, pipeline: &mut Pipeline, receivers: Vec<FlightReceiver>) {
+    let mut items = Vec::with_capacity(prefix_size + receivers.len());
 
     for _index in 0..prefix_size {
         let input = InputPort::create();
@@ -143,15 +118,10 @@ pub fn via_reader(
         ));
     }
 
-    for flight_exchange in exchanges {
+    for flight_exchange in receivers {
         let output = OutputPort::create();
         items.push(PipeItem::create(
-            ExchangeSourceReader::create(
-                output.clone(),
-                flight_exchange,
-                query_id.clone(),
-                fragment,
-            ),
+            ExchangeSourceReader::create(output.clone(), flight_exchange),
             vec![],
             vec![output],
         ));
@@ -160,14 +130,10 @@ pub fn via_reader(
     pipeline.add_pipe(Pipe::create(prefix_size, items.len(), items));
 }
 
-pub fn create_reader_item(
-    exchange: FlightExchangeRef,
-    query_id: String,
-    fragment: usize,
-) -> PipeItem {
+pub fn create_reader_item(flight_receiver: FlightReceiver) -> PipeItem {
     let output = OutputPort::create();
     PipeItem::create(
-        ExchangeSourceReader::create(output.clone(), exchange, query_id, fragment),
+        ExchangeSourceReader::create(output.clone(), flight_receiver),
         vec![],
         vec![output],
     )

@@ -51,6 +51,7 @@ pub trait Processor: Send {
     }
 
     // Asynchronous work.
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         Err(ErrorCode::Unimplemented("Unimplemented async_process."))
     }

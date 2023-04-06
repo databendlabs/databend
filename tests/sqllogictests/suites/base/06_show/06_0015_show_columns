@@ -1,0 +1,58 @@
+statement ok
+DROP DATABASE IF EXISTS showcolumn
+
+statement ok
+CREATE DATABASE showcolumn
+
+statement ok
+CREATE TABLE showcolumn.t1(c1 int) ENGINE = Null
+
+statement ok
+CREATE TABLE showcolumn.t2(c1 int) ENGINE = Null
+
+statement ok
+CREATE TABLE showcolumn.t3(c1 int null default 4, c2 Datetime default '2022-02-02 12:00:00', c3 String Default 'c3') ENGINE = Null;
+
+query TTTTTT
+SHOW COLUMNS FROM t3 FROM showcolumn
+----
+c1 INT YES 4 NULL NULL
+c2 TIMESTAMP NO '2022-02-02 12:00:00' NULL NULL
+c3 VARCHAR NO 'c3' NULL NULL
+
+statement ok
+use showcolumn
+
+query TTTTTTT
+SHOW FULL COLUMNS IN t3
+----
+c1 INT YES 4 NULL NULL NULL NULL NULL
+c2 TIMESTAMP NO '2022-02-02 12:00:00' NULL NULL NULL NULL NULL
+c3 VARCHAR NO 'c3' NULL NULL NULL NULL NULL
+
+query T
+explain show full columns in t3
+----
+EvalScalar
+├── expressions: [columns.column_name (#0), columns.column_type (#4), columns.default (#6), columns.is_nullable (#7), NULL, NULL, NULL, NULL, NULL]
+├── estimated rows: 0.00
+└── Sort
+    ├── sort keys: [database ASC NULLS LAST, table ASC NULLS LAST, name ASC NULLS LAST]
+    ├── estimated rows: 0.00
+    └── EvalScalar
+        ├── expressions: [columns.name (#0), columns.database (#1), columns.table (#2), columns.data_type (#4), columns.default_expression (#6), columns.is_nullable (#7), NULL, NULL, NULL, NULL, NULL]
+        ├── estimated rows: 0.00
+        └── Filter
+            ├── filters: [columns.table_schema (#1) = "showcolumn", columns.table_name (#2) = "t3"]
+            ├── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.system.columns
+                ├── read rows: 0
+                ├── read bytes: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [and_filters(CAST(columns.database (#1) = "showcolumn" AS Boolean NULL), CAST(columns.table (#2) = "t3" AS Boolean NULL))], limit: NONE]
+                └── estimated rows: 0.00
+
+statement ok
+DROP DATABASE showcolumn

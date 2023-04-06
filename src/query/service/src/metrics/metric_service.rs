@@ -30,6 +30,7 @@ pub struct MetricService {
 }
 
 #[poem::handler]
+#[async_backtrace::framed]
 pub async fn metric_handler(prom_extension: Data<&PrometheusHandle>) -> impl IntoResponse {
     prom_extension.0.render()
 }
@@ -42,6 +43,7 @@ impl MetricService {
         })
     }
 
+    #[async_backtrace::framed]
     async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr, HttpError> {
         let prometheus_handle = common_metrics::try_handle().unwrap();
 
@@ -58,10 +60,12 @@ impl MetricService {
 
 #[async_trait::async_trait]
 impl Server for MetricService {
+    #[async_backtrace::framed]
     async fn shutdown(&mut self, graceful: bool) {
         self.shutdown_handler.shutdown(graceful).await;
     }
 
+    #[async_backtrace::framed]
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr, ErrorCode> {
         let res = self.start_without_tls(listening).await;
 
