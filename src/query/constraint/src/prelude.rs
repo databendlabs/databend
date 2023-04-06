@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,11 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// TODO(leiysky): move this crate to common-pipeline-core
-
-mod block_operator;
-mod cse;
-
-pub use block_operator::BlockOperator;
-pub use block_operator::CompoundBlockOperator;
-pub use cse::apply_cse;
+pub use crate::declare::*;

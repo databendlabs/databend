@@ -24,7 +24,11 @@ use crate::optimizer::hyper_dp::join_relation::RelationSetTree;
 use crate::optimizer::hyper_dp::query_graph::QueryGraph;
 use crate::optimizer::hyper_dp::util::intersect;
 use crate::optimizer::hyper_dp::util::union;
+use crate::optimizer::rule::TransformResult;
+use crate::optimizer::RuleFactory;
+use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
+use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
@@ -49,6 +53,7 @@ pub struct DPhpy {
     subquery_table_index_map: HashMap<IndexType, HashMap<IndexType, IndexType>>,
     query_graph: QueryGraph,
     relation_set_tree: RelationSetTree,
+    filters: HashSet<Filter>,
 }
 
 impl DPhpy {
@@ -61,6 +66,7 @@ impl DPhpy {
             subquery_table_index_map: Default::default(),
             query_graph: QueryGraph::new(),
             relation_set_tree: Default::default(),
+            filters: HashSet::new(),
         }
     }
 
@@ -96,6 +102,9 @@ impl DPhpy {
         match &s_expr.plan {
             RelOperator::Scan(op) => {
                 let join_relation = if let Some(relation) = join_relation {
+                    // Check if relation contains filter, if exists, check if the filter in `filters`
+                    // If exists, remove it from `filters`
+                    self.check_filter(&relation);
                     JoinRelation::new(&relation)
                 } else {
                     JoinRelation::new(s_expr)
@@ -106,6 +115,9 @@ impl DPhpy {
                 Ok(true)
             }
             RelOperator::Join(op) => {
+                if !matches!(op.join_type, JoinType::Inner | JoinType::Cross) {
+                    return Ok(false);
+                }
                 let mut left_is_subquery = false;
                 let mut right_is_subquery = false;
                 // Fixme: If join's child is EvalScalar, we think it is a subquery.
@@ -121,6 +133,13 @@ impl DPhpy {
                 // Add join conditions
                 for condition_pair in op.left_conditions.iter().zip(op.right_conditions.iter()) {
                     join_conditions.push((condition_pair.0.clone(), condition_pair.1.clone()));
+                }
+                if !op.non_equi_conditions.is_empty() {
+                    let filter = Filter {
+                        predicates: op.non_equi_conditions.clone(),
+                        is_having: false,
+                    };
+                    self.filters.insert(filter);
                 }
                 let left_res = self.get_base_relations(
                     &s_expr.children()[0],
@@ -146,6 +165,10 @@ impl DPhpy {
             | RelOperator::Sort(_)
             | RelOperator::Limit(_) => {
                 if join_child {
+                    // If plan in filter, save it
+                    if let RelOperator::Filter(op) = &s_expr.plan {
+                        self.filters.insert(op.clone());
+                    }
                     self.get_base_relations(
                         &s_expr.children()[0],
                         join_conditions,
@@ -489,6 +512,24 @@ impl DPhpy {
             RelOperator::Join(_) => {
                 new_s_expr.plan = join_expr.plan.clone();
                 new_s_expr.children = join_expr.children.clone();
+                // Add filters to `new_s_expr`, then push down filters if possible
+                let mut predicates = vec![];
+                for filter in self.filters.iter() {
+                    predicates.extend(filter.clone().predicates.iter().cloned())
+                }
+                new_s_expr = SExpr::create_unary(
+                    RelOperator::Filter(Filter {
+                        predicates,
+                        is_having: false,
+                    }),
+                    new_s_expr,
+                );
+                new_s_expr = self.push_down_filter(&new_s_expr)?;
+                if let RelOperator::Filter(filter) = &new_s_expr.plan {
+                    if filter.predicates.is_empty() {
+                        new_s_expr = new_s_expr.children[0].clone();
+                    }
+                }
             }
             _ => {
                 let child_expr = self.replace_join_expr(join_expr, &s_expr.children[0])?;
@@ -535,5 +576,44 @@ impl DPhpy {
             .map(|child| self.s_expr(child))
             .collect::<Vec<_>>();
         SExpr::create(rel_op, children, None, None)
+    }
+
+    fn check_filter(&mut self, expr: &SExpr) {
+        if let RelOperator::Filter(filter) = &expr.plan {
+            if self.filters.contains(filter) {
+                self.filters.remove(filter);
+            }
+        }
+        for child in expr.children() {
+            self.check_filter(child);
+        }
+    }
+
+    fn push_down_filter(&self, s_expr: &SExpr) -> Result<SExpr> {
+        let mut optimized_children = Vec::with_capacity(s_expr.arity());
+        for expr in s_expr.children() {
+            optimized_children.push(self.push_down_filter(expr)?);
+        }
+        let optimized_expr = s_expr.replace_children(optimized_children);
+        let result = self.apply_rule(&optimized_expr)?;
+
+        Ok(result)
+    }
+
+    fn apply_rule(&self, s_expr: &SExpr) -> Result<SExpr> {
+        let mut s_expr = s_expr.clone();
+        let rule = RuleFactory::create_rule(RuleID::PushDownFilterJoin, self.metadata.clone())?;
+        let mut state = TransformResult::new();
+        if s_expr.match_pattern(&rule.patterns()[0]) && !s_expr.applied_rule(&rule.id()) {
+            s_expr.set_applied_rule(&rule.id());
+            rule.apply(&s_expr, &mut state)?;
+            if !state.results().is_empty() {
+                // Recursive optimize the result
+                let result = &state.results()[0];
+                let optimized_result = self.push_down_filter(result)?;
+                return Ok(optimized_result);
+            }
+        }
+        Ok(s_expr.clone())
     }
 }

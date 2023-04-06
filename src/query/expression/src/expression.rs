@@ -68,14 +68,16 @@ pub enum RawExpr<Index: ColumnIndex = usize> {
 /// A type-checked and ready to be evaluated expression, having all overloads chosen for function calls.
 /// It is .
 #[derive(Debug, Clone, Educe, EnumAsInner)]
-#[educe(PartialEq)]
+#[educe(PartialEq, Eq, Hash)]
 pub enum Expr<Index: ColumnIndex = usize> {
     Constant {
+        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
         span: Span,
         scalar: Scalar,
         data_type: DataType,
     },
     ColumnRef {
+        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
         span: Span,
         id: Index,
         data_type: DataType,
@@ -84,21 +86,29 @@ pub enum Expr<Index: ColumnIndex = usize> {
         display_name: String,
     },
     Cast {
+        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
         span: Span,
         is_try: bool,
         expr: Box<Expr<Index>>,
         dest_type: DataType,
     },
     FunctionCall {
+        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
         span: Span,
         id: FunctionID,
-        #[educe(PartialEq(ignore))]
+        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
         function: Arc<Function>,
         generics: Vec<DataType>,
         args: Vec<Expr<Index>>,
         return_type: DataType,
     },
 }
+
+// impl<Index: ColumnIndex> Hash for Expr<Index> {
+//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+//         self.sql_display().hash(state);
+//     }
+// }
 
 /// Serializable expression used to share executable expression between nodes.
 ///

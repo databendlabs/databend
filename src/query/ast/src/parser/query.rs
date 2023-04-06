@@ -188,7 +188,7 @@ pub fn table_alias(i: Input) -> IResult<TableAlias> {
 pub fn parenthesized_query(i: Input) -> IResult<Query> {
     map(
         rule! {
-            "(" ~ ( #parenthesized_query | #query ) ~ ")"
+            "(" ~ #query ~ ")"
         },
         |(_, query, _)| query,
     )(i)
@@ -618,20 +618,20 @@ pub fn group_by_items(i: Input) -> IResult<GroupBy> {
 pub fn window_frame_bound(i: Input) -> IResult<WindowFrameBound> {
     alt((
         value(WindowFrameBound::CurrentRow, rule! { CURRENT ~ ROW }),
-        map(rule! { #subexpr(0) ~ PRECEDING }, |(expr, _)| {
-            WindowFrameBound::Preceding(Some(Box::new(expr)))
-        }),
         value(
             WindowFrameBound::Preceding(None),
             rule! { UNBOUNDED ~ PRECEDING },
         ),
-        map(rule! { #subexpr(0) ~ FOLLOWING }, |(expr, _)| {
-            WindowFrameBound::Following(Some(Box::new(expr)))
+        map(rule! { #subexpr(0) ~ PRECEDING }, |(expr, _)| {
+            WindowFrameBound::Preceding(Some(Box::new(expr)))
         }),
         value(
             WindowFrameBound::Following(None),
             rule! { UNBOUNDED ~ FOLLOWING },
         ),
+        map(rule! { #subexpr(0) ~ FOLLOWING }, |(expr, _)| {
+            WindowFrameBound::Following(Some(Box::new(expr)))
+        }),
     ))(i)
 }
 
@@ -650,11 +650,12 @@ pub fn window_frame_between(i: Input) -> IResult<(WindowFrameBound, WindowFrameB
 pub fn window_spec(i: Input) -> IResult<WindowSpec> {
     map(
         rule! {
-            (PARTITION ~ ^BY ~ #comma_separated_list1(subexpr(0)))?
+            (#ident )? ~ (PARTITION ~ ^BY ~ #comma_separated_list1(subexpr(0)))?
             ~ ( ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) )?
             ~ ((ROWS | RANGE) ~ #window_frame_between)?
         },
-        |(opt_partition, opt_order, between)| WindowSpec {
+        |(existing_window_name, opt_partition, opt_order, between)| WindowSpec {
+            existing_window_name,
             partition_by: opt_partition.map(|x| x.2).unwrap_or_default(),
             order_by: opt_order.map(|x| x.2).unwrap_or_default(),
             window_frame: between.map(|x| {
@@ -673,7 +674,6 @@ pub fn window_spec(i: Input) -> IResult<WindowSpec> {
         },
     )(i)
 }
-
 pub fn window_spec_ident(i: Input) -> IResult<Window> {
     alt((
         map(
