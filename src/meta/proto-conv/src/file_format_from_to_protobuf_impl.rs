@@ -208,7 +208,7 @@ impl FromToProto for mt::principal::UserDefinedFileFormat {
 impl FromToProto for mt::principal::FileFormatParams {
     type PB = pb::FileFormatParams;
     fn get_pb_ver(_p: &Self::PB) -> u64 {
-        0
+        VER
     }
 
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
