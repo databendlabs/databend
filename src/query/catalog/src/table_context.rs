@@ -125,6 +125,7 @@ pub trait TableContext: Send + Sync {
     fn get_result_cache_key(&self, query_id: &str) -> Option<String>;
     fn set_query_id_result_cache(&self, query_id: String, result_cache_key: String);
     fn set_on_error_map(&self, map: Option<HashMap<String, ErrorCode>>);
+    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>>;
 
     fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()>;
     fn get_changed_settings(&self) -> HashMap<String, ChangeValue>;

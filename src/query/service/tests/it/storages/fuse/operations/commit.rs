@@ -533,6 +533,9 @@ impl TableContext for CtxDelegation {
     fn set_on_error_map(&self, _map: Option<HashMap<String, ErrorCode>>) {
         todo!()
     }
+    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
+        todo!()
+    }
 
     fn apply_changed_settings(&self, _changes: HashMap<String, ChangeValue>) -> Result<()> {
         todo!()

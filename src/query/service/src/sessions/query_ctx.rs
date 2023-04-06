@@ -449,6 +449,24 @@ impl TableContext for QueryContext {
         self.shared.set_on_error_map(map);
     }
 
+    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
+        if let Some(on_error_map) = self.get_on_error_map() {
+            if on_error_map.is_empty() {
+                return None;
+            }
+            let mut m = HashMap::<String, ErrorCode>::new();
+            on_error_map
+                .iter()
+                .for_each(|x: RefMulti<String, HashMap<u16, InputError>>| {
+                    if let Some(max_v) = x.value().iter().max_by_key(|entry| entry.1.num) {
+                        m.insert(x.key().to_string(), max_v.1.err.clone());
+                    }
+                });
+            return Some(m);
+        }
+        None
+    }
+
     fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
         self.shared.apply_changed_settings(changes)
     }
