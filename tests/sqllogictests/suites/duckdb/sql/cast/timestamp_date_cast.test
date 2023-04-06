@@ -11,4 +11,3 @@ statement error 1065
 select *
 from test
 where (t::date) = '2021-02-04'
-
