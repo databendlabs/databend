@@ -1,0 +1,35 @@
+6
+--- force = false, purge = false
+4
+remain 3 files
+6
+remain 3 files
+ERROR 1105 (HY000) at line 1: Code: 1016, Text = no file need to copy.
+6
+remain 3 files
+6
+--- force = false, purge = true
+4
+remain 1 files
+6
+remain 0 files
+ERROR 1105 (HY000) at line 1: Code: 1016, Text = no file need to copy.
+6
+remain 0 files
+6
+--- force = true, purge = false
+4
+remain 3 files
+8
+remain 3 files
+12
+remain 3 files
+6
+--- force = true, purge = true
+4
+remain 1 files
+6
+remain 0 files
+ERROR 1105 (HY000) at line 1: Code: 1016, Text = no file need to copy.
+6
+remain 0 files

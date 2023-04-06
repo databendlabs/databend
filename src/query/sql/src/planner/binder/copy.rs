@@ -41,7 +41,6 @@ use common_exception::Result;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageInfo;
 use common_storage::init_stage_operator;
-use common_storage::StageFileStatus;
 use common_storage::StageFilesInfo;
 use common_users::UserApiProvider;
 use tracing::debug;
@@ -547,15 +546,30 @@ impl<'a> Binder {
         }
 
         let operator = init_stage_operator(&stage_info)?;
+        let max_files = stage_info.copy_options.max_files;
+        let max_files = if max_files == 0 {
+            None
+        } else {
+            Some(max_files)
+        };
         let mut files = if operator.info().can_blocking() {
-            files_info.blocking_list(&operator, false)
+            if stmt.force {
+                files_info.blocking_list(&operator, false, max_files)
+            } else {
+                files_info.blocking_list(&operator, false, None)
+            }
+        } else if stmt.force {
+            files_info.list(&operator, false, max_files).await
         } else {
             files_info.list(&operator, false, None).await
         }?;
 
-        info!("end to list files: {}", files.len());
+        let num_all_files = files.len();
+        info!("end to list files: {}", num_all_files);
 
-        if !stmt.force {
+        let need_copy_file_infos = if stmt.force {
+            files
+        } else {
             // Status.
             {
                 let status = "begin to color copied files";
@@ -570,24 +584,19 @@ impl<'a> Binder {
                     dst_database_name,
                     dst_table_name,
                     &files,
-                    None,
+                    max_files,
                 )
                 .await?;
 
             info!("end to color copied files: {}", files.len());
-        }
-
-        let mut need_copy_file_infos = vec![];
-        for file in &files {
-            if file.status == StageFileStatus::NeedCopy {
-                need_copy_file_infos.push(file.clone());
-            }
-        }
+            files
+        };
 
         info!(
-            "copy: read all files finished, all:{}, need copy:{}, elapsed:{}",
-            files.len(),
+            "copy: read all files finished, all:{}, need copy:{}, max_files:{:?}, elapsed:{}",
+            num_all_files,
             need_copy_file_infos.len(),
+            max_files,
             start.elapsed().as_secs()
         );
 
