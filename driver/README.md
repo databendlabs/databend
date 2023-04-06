@@ -11,10 +11,10 @@ Databend Driver for Rust
 ### exec
 
 ```rust
-use databend_driver::DatabendConnection;
+use databend_driver::new_connection;
 
 let dsn = "databend://root:@localhost:8000/default?sslmode=disable";
-let conn = DatabendConnection::create(dsn).unwrap();
+let conn = new_connection(dsn).unwrap();
 
 let sql_create = "CREATE TABLE books (
     title VARCHAR,

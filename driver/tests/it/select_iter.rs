@@ -12,15 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_driver::DatabendConnection;
+use databend_driver::{new_connection, Connection};
 use tokio_stream::StreamExt;
 
 use crate::common::DEFAULT_DSN;
 
-fn prepare(name: &str) -> (DatabendConnection, String) {
+fn prepare(name: &str) -> (Box<dyn Connection>, String) {
     let dsn = option_env!("TEST_DATABEND_DSN").unwrap_or(DEFAULT_DSN);
     let table = format!("{}_{}", name, chrono::Utc::now().timestamp());
-    (DatabendConnection::create(dsn).unwrap(), table)
+    let conn = new_connection(dsn).unwrap();
+    (conn, table)
 }
 
 #[tokio::test]

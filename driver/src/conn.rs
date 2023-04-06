@@ -12,77 +12,67 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use anyhow::Result;
-use databend_client::{response::QueryResponse, APIClient};
+use async_trait::async_trait;
+use dyn_clone::DynClone;
 
-use crate::{
-    rows::{Row, RowIterator},
-    schema::SchemaFieldList,
-};
+use crate::rest_api::RestAPIConnection;
+use crate::rows::{Row, RowIterator};
 
-#[derive(Clone)]
-pub struct DatabendConnection {
-    pub(crate) client: Arc<APIClient>,
+#[async_trait]
+pub trait Connection: DynClone {
+    async fn exec(&self, sql: &str) -> Result<()>;
+    async fn query_iter(&self, sql: &str) -> Result<RowIterator>;
+    async fn query_row(&self, sql: &str) -> Result<Option<Row>>;
+}
+dyn_clone::clone_trait_object!(Connection);
+
+pub fn new_connection(dsn: &str) -> Result<Box<dyn Connection>> {
+    let uri = dsn.parse::<http::Uri>()?;
+    let scheme = uri.scheme_str();
+    match scheme {
+        None => Err(anyhow::anyhow!("Invalid DSN: {}", dsn)),
+        Some("databend") | Some("databend+http") | Some("databend+https") => {
+            let conn = RestAPIConnection::try_create(dsn)?;
+            Ok(Box::new(conn))
+        }
+        Some(s) => Err(anyhow::anyhow!("Unsupported scheme: {}", s)),
+    }
+}
+
+pub enum DatabendConnection {
+    RestAPI(RestAPIConnection),
 }
 
 impl DatabendConnection {
-    pub fn create(dsn: &str) -> Result<Self> {
-        let client = APIClient::from_dsn(dsn)?;
-        Ok(Self {
-            client: Arc::new(client),
-        })
+    pub fn try_create(dsn: &str) -> Result<Self> {
+        let uri = dsn.parse::<http::Uri>()?;
+        let scheme = uri.scheme_str();
+        match scheme {
+            None => Err(anyhow::anyhow!("Invalid DSN: {}", dsn)),
+            Some("databend") | Some("databend+http") | Some("databend+https") => {
+                let conn = RestAPIConnection::try_create(dsn)?;
+                Ok(Self::RestAPI(conn))
+            }
+            Some(s) => Err(anyhow::anyhow!("Unsupported scheme: {}", s)),
+        }
     }
 
     pub async fn exec(&self, sql: &str) -> Result<()> {
-        let mut resp = self.client.query(sql).await?;
-        while let Some(next_uri) = resp.next_uri {
-            resp = self.client.query_page(&next_uri).await?;
+        match self {
+            Self::RestAPI(conn) => conn.exec(sql).await,
         }
-        Ok(())
     }
 
     pub async fn query_iter(&self, sql: &str) -> Result<RowIterator> {
-        let resp = self.client.query(sql).await?;
-        let rows = RowIterator::try_from((self.client.clone(), resp))?;
-        Ok(rows)
+        match self {
+            Self::RestAPI(conn) => conn.query_iter(sql).await,
+        }
     }
 
     pub async fn query_row(&self, sql: &str) -> Result<Option<Row>> {
-        let resp = self.client.query(sql).await?;
-        let resp = self.wait_for_data(resp).await?;
-        self.finish_query(resp.final_uri).await?;
-        let schema = SchemaFieldList::new(resp.schema).try_into()?;
-        if resp.data.is_empty() {
-            Ok(None)
-        } else {
-            let row = Row::try_from((schema, resp.data[0].clone()))?;
-            Ok(Some(row))
-        }
-    }
-
-    async fn wait_for_data(&self, pre: QueryResponse) -> Result<QueryResponse> {
-        if !pre.data.is_empty() {
-            return Ok(pre);
-        }
-        let mut result = pre;
-        // preserve schema since it is no included in the final response
-        let schema = result.schema;
-        while let Some(next_uri) = result.next_uri {
-            result = self.client.query_page(&next_uri).await?;
-            if !result.data.is_empty() {
-                break;
-            }
-        }
-        result.schema = schema;
-        Ok(result)
-    }
-
-    async fn finish_query(&self, final_uri: Option<String>) -> Result<QueryResponse> {
-        match final_uri {
-            Some(uri) => self.client.query_page(&uri).await,
-            None => Err(anyhow::anyhow!("final_uri is empty")),
+        match self {
+            Self::RestAPI(conn) => conn.query_row(sql).await,
         }
     }
 }

@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use chrono::{DateTime, NaiveDate, NaiveDateTime};
-use databend_driver::DatabendConnection;
+use databend_driver::{new_connection, Connection};
 
 use crate::common::DEFAULT_DSN;
 
-fn prepare() -> DatabendConnection {
+fn prepare() -> Box<dyn Connection> {
     let dsn = option_env!("TEST_DATABEND_DSN").unwrap_or(DEFAULT_DSN);
-    DatabendConnection::create(dsn).unwrap()
+    new_connection(dsn).unwrap()
 }
 
 #[tokio::test]

@@ -13,8 +13,10 @@
 // limitations under the License.
 
 mod conn;
+mod flight_sql;
+mod rest_api;
 mod rows;
 mod schema;
 mod value;
 
-pub use conn::DatabendConnection;
+pub use conn::{new_connection, Connection, DatabendConnection};
