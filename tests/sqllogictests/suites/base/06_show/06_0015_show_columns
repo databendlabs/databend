@@ -33,23 +33,26 @@ c3 VARCHAR NO 'c3' NULL NULL NULL NULL NULL
 query T
 explain show full columns in t3
 ----
-Sort
-├── sort keys: [database ASC NULLS LAST, table ASC NULLS LAST, name ASC NULLS LAST]
+EvalScalar
+├── expressions: [columns.column_name (#0), columns.column_type (#4), columns.default (#6), columns.is_nullable (#7), NULL, NULL, NULL, NULL, NULL]
 ├── estimated rows: 0.00
-└── EvalScalar
-    ├── expressions: [NULL, NULL, NULL, NULL, NULL]
+└── Sort
+    ├── sort keys: [database ASC NULLS LAST, table ASC NULLS LAST, name ASC NULLS LAST]
     ├── estimated rows: 0.00
-    └── Filter
-        ├── filters: [columns.table_schema (#1) = "showcolumn", columns.table_name (#2) = "t3"]
+    └── EvalScalar
+        ├── expressions: [columns.name (#0), columns.database (#1), columns.table (#2), columns.data_type (#4), columns.default_expression (#6), columns.is_nullable (#7), NULL, NULL, NULL, NULL, NULL]
         ├── estimated rows: 0.00
-        └── TableScan
-            ├── table: default.system.columns
-            ├── read rows: 0
-            ├── read bytes: 0
-            ├── partitions total: 0
-            ├── partitions scanned: 0
-            ├── push downs: [filters: [and_filters(CAST(columns.database (#1) = "showcolumn" AS Boolean NULL), CAST(columns.table (#2) = "t3" AS Boolean NULL))], limit: NONE]
-            └── estimated rows: 0.00
+        └── Filter
+            ├── filters: [columns.table_schema (#1) = "showcolumn", columns.table_name (#2) = "t3"]
+            ├── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.system.columns
+                ├── read rows: 0
+                ├── read bytes: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [and_filters(CAST(columns.database (#1) = "showcolumn" AS Boolean NULL), CAST(columns.table (#2) = "t3" AS Boolean NULL))], limit: NONE]
+                └── estimated rows: 0.00
 
 statement ok
 DROP DATABASE showcolumn

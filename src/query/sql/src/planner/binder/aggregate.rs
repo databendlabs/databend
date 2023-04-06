@@ -235,6 +235,7 @@ impl<'a> AggregateRewriter<'a> {
 
                     // TODO(leiysky): use a more reasonable name, since aggregate arguments
                     // can not be referenced, the name is only for debug
+                    table_index: None,
                     column_name: name,
                     index,
                     data_type: Box::new(arg.data_type()?),
@@ -367,6 +368,7 @@ impl Binder {
                     self.create_column_binding(
                         None,
                         None,
+                        None,
                         item.alias.clone(),
                         item.scalar.data_type()?,
                     )
@@ -429,6 +431,11 @@ impl Binder {
             scalar_items.push(arg.clone());
         }
         for item in agg_info.group_items.iter() {
+            if let ScalarExpr::BoundColumnRef(col) = &item.scalar {
+                if col.column.column_name.eq("_grouping_id") {
+                    continue;
+                }
+            }
             scalar_items.push(item.clone());
         }
 
@@ -501,6 +508,7 @@ impl Binder {
         let grouping_id_column = self.create_column_binding(
             None,
             None,
+            None,
             "_grouping_id".to_string(),
             DataType::Number(NumberDataType::UInt32),
         );
@@ -556,7 +564,7 @@ impl Binder {
                     {
                         column_ref.column.clone()
                     } else {
-                        self.create_column_binding(None, None, alias, scalar.data_type()?)
+                        self.create_column_binding(None, None, None, alias, scalar.data_type()?)
                     };
                     bind_context.aggregate_info.group_items.push(ScalarItem {
                         scalar: scalar.clone(),
