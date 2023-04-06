@@ -100,7 +100,7 @@ impl ShareEndpointManager {
                 },
                 None => {
                     return Err(ErrorCode::UnknownShareEndpoint(format!(
-                        "UnknownShareEndpoint from {:?} to {:?}",
+                        "Unknown share endpoint on accessing shared database from tenant {:?} to target tenant {:?}",
                         from_tenant, to_tenant
                     )));
                 }
