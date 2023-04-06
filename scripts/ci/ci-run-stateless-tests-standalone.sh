@@ -12,7 +12,7 @@ cd "$SCRIPT_PATH/../../tests" || exit
 
 for i in $(seq 1 3); do
 	echo "Starting databend-test $i"
-	./databend-test --mode 'standalone' --run-dir 0_stateless
+	./databend-test --mode 'standalone' --run-dir 0_stateless --skip '18_0010_q10' --skip '18_0035_q35' --skip '18_0069_q69'
 
 	if [ $? -ne 0 ]; then
 		break

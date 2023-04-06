@@ -1,3 +1,4 @@
+set enable_dphyp=1;
 WITH cs_ui AS
   (SELECT cs_item_sk,
           sum(cs_ext_list_price) AS sale,
