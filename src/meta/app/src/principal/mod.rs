@@ -14,6 +14,7 @@
 
 //! Principal is a user or role that accesses an entity.
 
+mod file_format;
 mod principal_identity;
 mod role_info;
 mod user_auth;
@@ -27,6 +28,7 @@ mod user_quota;
 mod user_setting;
 mod user_stage;
 
+pub use file_format::*;
 pub use principal_identity::PrincipalIdentity;
 pub use role_info::RoleInfo;
 pub use role_info::RoleInfoSerdeError;
