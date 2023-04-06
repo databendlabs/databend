@@ -268,7 +268,6 @@ impl PhysicalPlanBuilder {
                 } else {
                     Some(project_internal_columns)
                 };
-                // 这里加上 virtual column
                 Ok(PhysicalPlan::TableScan(TableScan {
                     plan_id: self.next_plan_id(),
                     name_mapping,
@@ -1024,7 +1023,6 @@ impl PhysicalPlanBuilder {
                     false,
                     false,
                 );
-
                 let prewhere_columns = Self::build_projection(
                     &metadata,
                     table_schema,
@@ -1033,7 +1031,6 @@ impl PhysicalPlanBuilder {
                     false,
                     true,
                 );
-
                 let remain_columns = Self::build_projection(
                     &metadata,
                     table_schema,

@@ -2431,7 +2431,7 @@ impl<'a> TypeChecker<'a> {
         }
 
         let data_type = DataType::Nullable(Box::new(DataType::Variant));
-        let virutal_column = ColumnBinding {
+        let virtual_column = ColumnBinding {
             database_name: column.database_name.clone(),
             table_name: column.table_name.clone(),
             table_index: Some(table_index),
@@ -2442,7 +2442,7 @@ impl<'a> TypeChecker<'a> {
         };
         let scalar = ScalarExpr::BoundColumnRef(BoundColumnRef {
             span: None,
-            column: virutal_column,
+            column: virtual_column,
         });
 
         Some(Ok(Box::new((scalar, data_type))))
