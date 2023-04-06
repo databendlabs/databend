@@ -423,6 +423,7 @@ pub struct ToDayOfWeek;
 pub struct ToHour;
 pub struct ToMinute;
 pub struct ToSecond;
+pub struct ToUnixTimestamp;
 
 impl ToNumber<u32> for ToYYYYMM {
     fn to_number(dt: &DateTime<Tz>) -> u32 {
@@ -474,6 +475,12 @@ impl ToNumber<u8> for ToDayOfMonth {
 impl ToNumber<u8> for ToDayOfWeek {
     fn to_number(dt: &DateTime<Tz>) -> u8 {
         dt.weekday().number_from_monday() as u8
+    }
+}
+
+impl ToNumber<i64> for ToUnixTimestamp {
+    fn to_number(dt: &DateTime<Tz>) -> i64 {
+        dt.timestamp()
     }
 }
 
