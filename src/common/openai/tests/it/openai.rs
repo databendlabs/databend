@@ -24,7 +24,7 @@ fn create_openai() -> Option<OpenAI> {
 }
 
 #[test]
-fn test_openai_completion() {
+fn test_openai_text_completion() {
     let openai = create_openai();
     if let Some(openai) = openai {
         let resp = openai
@@ -32,5 +32,24 @@ fn test_openai_completion() {
             .unwrap();
 
         assert!(resp.0.contains("hello"));
+    }
+}
+
+#[test]
+fn test_openai_sql_completion() {
+    let openai = create_openai();
+    if let Some(openai) = openai {
+        let resp = openai
+            .completion_sql_request("### Postgres SQL tables, with their properties:
+#
+# Employee(id, name, department_id)
+# Department(id, name, address)
+# Salary_Payments(id, employee_id, amount, date)
+#
+### A query to list the names of the departments which employed more than 10 employees in the last 3 months
+SELECT".to_string())
+            .unwrap();
+
+        assert!(resp.0.contains("FROM"));
     }
 }

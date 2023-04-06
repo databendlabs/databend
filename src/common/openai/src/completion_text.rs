@@ -14,6 +14,7 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use log::trace;
 use openai_api_rust::chat::ChatApi;
 use openai_api_rust::chat::ChatBody;
 use openai_api_rust::Auth;
@@ -55,9 +56,12 @@ impl OpenAI {
             }],
         };
 
+        trace!("openai text completion request: {:?}", body);
+
         let resp = openai.chat_completion_create(&body).map_err(|e| {
             ErrorCode::Internal(format!("openai completion text request error: {:?}", e))
         })?;
+        trace!("openai sql completion response: {:?}", resp);
 
         let usage = resp.usage.total_tokens;
         let result = if resp.choices.is_empty() {

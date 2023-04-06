@@ -14,6 +14,7 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use log::trace;
 use openai_api_rust::completions::CompletionsApi;
 use openai_api_rust::completions::CompletionsBody;
 use openai_api_rust::Auth;
@@ -53,9 +54,13 @@ impl OpenAI {
             logit_bias: None,
             user: None,
         };
+        trace!("openai sql completion request: {:?}", body);
+
         let resp = openai.completion_create(&body).map_err(|e| {
             ErrorCode::Internal(format!("openai completion request sql error: {:?}", e))
         })?;
+
+        trace!("openai sql completion response: {:?}", resp);
 
         let usage = resp.usage.total_tokens;
         let sql = if resp.choices.is_empty() {
