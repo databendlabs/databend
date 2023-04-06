@@ -530,3 +530,18 @@ fn test_int_minus() {
 
     assert_eq!(solver.check(), SatResult::Sat);
 }
+
+#[test]
+fn test_int_nullability() {
+    // Test int nullability
+    let context = Context::new(&Config::new());
+    let solver = Solver::new(&context);
+
+    let int = Int::from_i64(&context, 1);
+    solver.assert(&is_null_int(&context, &int).not());
+    solver.assert(&is_not_null_int(&context, &int));
+    solver.assert(&is_null_int(&context, &null_int(&context)));
+    solver.assert(&is_not_null_int(&context, &null_int(&context)).not());
+
+    assert_eq!(solver.check(), SatResult::Sat);
+}

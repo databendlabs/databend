@@ -12,14 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod completion_sql;
-mod completion_text;
-mod embedding;
-
-#[allow(clippy::module_inception)]
 mod openai;
-
-pub(crate) mod metrics;
-
-pub use openai::AIModel;
-pub use openai::OpenAI;
