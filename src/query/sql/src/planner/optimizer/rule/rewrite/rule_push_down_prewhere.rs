@@ -92,9 +92,11 @@ impl RulePushDownPrewhere {
     fn collect_columns(expr: &ScalarExpr) -> Option<ColumnSet> {
         let mut columns = ColumnSet::new();
         // columns in subqueries are not considered
-        Self::collect_columns_impl(expr, &mut columns)?;
-
-        Some(columns)
+        let _ = Self::collect_columns_impl(expr, &mut columns);
+        if !columns.is_empty() {
+            return Some(columns);
+        }
+        None
     }
 
     pub fn prewhere_optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
@@ -132,7 +134,6 @@ impl RulePushDownPrewhere {
                 output_columns: get.columns.clone(),
                 prewhere_columns,
                 predicates: prewhere_pred,
-                virtual_columns: None,
             });
         }
         Ok(SExpr::create_leaf(get.into()))

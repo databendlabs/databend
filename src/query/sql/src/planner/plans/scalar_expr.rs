@@ -22,7 +22,6 @@ use common_exception::Span;
 use common_expression::types::DataType;
 use common_expression::Scalar;
 use educe::Educe;
-use jsonb::JsonPath;
 
 use super::WindowFuncFrame;
 use super::WindowFuncType;
@@ -37,7 +36,6 @@ use crate::MetadataRef;
 pub enum ScalarExpr {
     BoundColumnRef(BoundColumnRef),
     BoundInternalColumnRef(BoundInternalColumnRef),
-    VirtualColumnRef(VirtualColumnRef),
     ConstantExpr(ConstantExpr),
     AndExpr(AndExpr),
     OrExpr(OrExpr),
@@ -61,7 +59,6 @@ impl ScalarExpr {
         match self {
             ScalarExpr::BoundColumnRef(scalar) => ColumnSet::from([scalar.column.index]),
             ScalarExpr::BoundInternalColumnRef(scalar) => ColumnSet::from([scalar.column.index]),
-            ScalarExpr::VirtualColumnRef(scalar) => ColumnSet::from([scalar.column.index]),
             ScalarExpr::ConstantExpr(_) => ColumnSet::new(),
             ScalarExpr::AndExpr(scalar) => {
                 let left: ColumnSet = scalar.left.used_columns();
@@ -193,25 +190,6 @@ impl TryFrom<ScalarExpr> for BoundColumnRef {
         } else {
             Err(ErrorCode::Internal(
                 "Cannot downcast Scalar to BoundColumnRef",
-            ))
-        }
-    }
-}
-
-impl From<VirtualColumnRef> for ScalarExpr {
-    fn from(v: VirtualColumnRef) -> Self {
-        Self::VirtualColumnRef(v)
-    }
-}
-
-impl TryFrom<ScalarExpr> for VirtualColumnRef {
-    type Error = ErrorCode;
-    fn try_from(value: ScalarExpr) -> Result<Self> {
-        if let ScalarExpr::VirtualColumnRef(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast Scalar to VirtualColumnRef",
             ))
         }
     }
@@ -409,16 +387,6 @@ pub struct BoundColumnRef {
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct BoundInternalColumnRef {
     pub column: InternalColumnBinding,
-}
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct VirtualColumnRef {
-    pub column: ColumnBinding,
-    pub name: String,
-    pub json_paths: Vec<JsonPath>,
-    pub index: IndexType,
-    pub table_index: IndexType,
-    pub data_type: Box<DataType>,
 }
 
 #[derive(Clone, Debug, Educe)]

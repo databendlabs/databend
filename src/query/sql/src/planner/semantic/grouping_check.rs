@@ -97,13 +97,6 @@ impl<'a> GroupingChecker<'a> {
                     &column.column.internal_column.column_name()
                 )).set_span(span))
             }
-            ScalarExpr::VirtualColumnRef(column) => {
-                // If this is a group item, then it should have been replaced with `group_items_map`
-                Err(ErrorCode::SemanticError(format!(
-                    "column \"{}\" must appear in the GROUP BY clause or be used in an aggregate function",
-                    &column.column.column_name
-                )).set_span(span))
-            }
             ScalarExpr::ConstantExpr(_) => Ok(scalar.clone()),
             ScalarExpr::AndExpr(scalar) => Ok(AndExpr {
                 left: Box::new(self.resolve(&scalar.left, span)?),

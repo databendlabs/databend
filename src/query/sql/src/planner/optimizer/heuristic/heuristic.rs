@@ -20,7 +20,6 @@ use once_cell::sync::Lazy;
 
 use super::prune_unused_columns::UnusedColumnPruner;
 use crate::optimizer::heuristic::decorrelate::decorrelate_subquery;
-use crate::optimizer::heuristic::virtual_column_optimization::VirtualColumnOptimizer;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::RuleFactory;
@@ -84,16 +83,13 @@ impl HeuristicOptimizer {
         }
 
         // always pruner the unused columns before and after optimization
-        let mut pruner = UnusedColumnPruner::new(self.metadata.clone());
+        let pruner = UnusedColumnPruner::new(self.metadata.clone());
         let require_columns: ColumnSet = self.bind_context.column_set();
         pruner.remove_unused_columns(&s_expr, require_columns)
     }
 
     fn post_optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
-        let mut virtual_column_optimizer = VirtualColumnOptimizer::new();
-        let s_expr = virtual_column_optimizer.optimize(&s_expr)?;
-
-        let mut pruner = UnusedColumnPruner::new(self.metadata.clone());
+        let pruner = UnusedColumnPruner::new(self.metadata.clone());
         let require_columns: ColumnSet = self.bind_context.column_set();
         pruner.remove_unused_columns(&s_expr, require_columns)
     }

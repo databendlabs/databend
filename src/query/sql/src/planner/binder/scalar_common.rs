@@ -188,7 +188,6 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
     match scalar {
         ScalarExpr::BoundColumnRef(_) => false,
         ScalarExpr::BoundInternalColumnRef(_) => false,
-        ScalarExpr::VirtualColumnRef(_) => false,
         ScalarExpr::ConstantExpr(_) => true,
         ScalarExpr::AndExpr(scalar) => {
             prune_by_children(&scalar.left, columns) && prune_by_children(&scalar.right, columns)

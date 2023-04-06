@@ -18,7 +18,6 @@ mod heuristic;
 mod prune_unused_columns;
 mod rule_list;
 mod subquery_rewriter;
-mod virtual_column_optimization;
 
 pub use heuristic::HeuristicOptimizer;
 pub use heuristic::DEFAULT_REWRITE_RULES;

@@ -90,29 +90,21 @@ impl ToReadDataSourcePlan for dyn Table {
 
         let schema = &source_info.schema();
         let description = statistics.get_description(&source_info.desc());
-
         let mut output_schema = match (self.benefit_column_prune(), &push_downs) {
             (true, Some(push_downs)) => match &push_downs.prewhere {
                 Some(prewhere) => Arc::new(prewhere.output_columns.project_schema(schema)),
-                _ => match &push_downs.projection {
-                    Some(projection) => Arc::new(projection.project_schema(schema)),
-                    _ => schema.clone(),
-                },
+                _ => {
+                    if let Some(output_columns) = &push_downs.output_columns {
+                        Arc::new(output_columns.project_schema(schema))
+                    } else if let Some(projection) = &push_downs.projection {
+                        Arc::new(projection.project_schema(schema))
+                    } else {
+                        schema.clone()
+                    }
+                }
             },
             _ => schema.clone(),
         };
-
-        if let Some(ref internal_columns) = internal_columns {
-            let mut schema = output_schema.as_ref().clone();
-            for internal_column in internal_columns.values() {
-                schema.add_internal_column(
-                    internal_column.column_name(),
-                    internal_column.table_data_type(),
-                    internal_column.column_id(),
-                );
-            }
-            output_schema = Arc::new(schema);
-        }
 
         if let Some(ref push_downs) = push_downs {
             if let Some(ref virtual_columns) = push_downs.virtual_columns {
@@ -124,6 +116,18 @@ impl ToReadDataSourcePlan for dyn Table {
                 schema.add_columns(&fields)?;
                 output_schema = Arc::new(schema);
             }
+        }
+
+        if let Some(ref internal_columns) = internal_columns {
+            let mut schema = output_schema.as_ref().clone();
+            for internal_column in internal_columns.values() {
+                schema.add_internal_column(
+                    internal_column.column_name(),
+                    internal_column.table_data_type(),
+                    internal_column.column_id(),
+                );
+            }
+            output_schema = Arc::new(schema);
         }
         // TODO pass in catalog name
 

@@ -18,7 +18,6 @@ mod commit;
 mod compact;
 mod delete;
 mod fuse_sink;
-mod fuse_virtual_column;
 mod gc;
 mod merge_into;
 mod mutation;

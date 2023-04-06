@@ -105,7 +105,6 @@ impl<'a> AggregateRewriter<'a> {
         match scalar {
             ScalarExpr::BoundColumnRef(_) => Ok(scalar.clone()),
             ScalarExpr::BoundInternalColumnRef(_) => Ok(scalar.clone()),
-            ScalarExpr::VirtualColumnRef(_) => Ok(scalar.clone()),
             ScalarExpr::ConstantExpr(_) => Ok(scalar.clone()),
             ScalarExpr::AndExpr(scalar) => Ok(AndExpr {
                 left: Box::new(self.visit(&scalar.left)?),

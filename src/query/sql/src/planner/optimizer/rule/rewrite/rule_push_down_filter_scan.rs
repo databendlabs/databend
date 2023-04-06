@@ -262,6 +262,7 @@ impl RulePushDownFilterScan {
                             break;
                         }
                     }
+                    ColumnEntry::VirtualColumn(_) => {}
                 }
             }
             if !contain_derived_column {

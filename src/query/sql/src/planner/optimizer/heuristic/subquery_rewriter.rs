@@ -174,7 +174,6 @@ impl SubqueryRewriter {
         match scalar {
             ScalarExpr::BoundColumnRef(_) => Ok((scalar.clone(), s_expr.clone())),
             ScalarExpr::BoundInternalColumnRef(_) => Ok((scalar.clone(), s_expr.clone())),
-            ScalarExpr::VirtualColumnRef(_) => Ok((scalar.clone(), s_expr.clone())),
 
             ScalarExpr::ConstantExpr(_) => Ok((scalar.clone(), s_expr.clone())),
 

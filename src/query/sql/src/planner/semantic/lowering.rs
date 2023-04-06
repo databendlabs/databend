@@ -47,6 +47,7 @@ impl LoweringContext for Metadata {
             ColumnEntry::BaseTableColumn(column) => Ok(DataType::from(&column.data_type)),
             ColumnEntry::DerivedColumn(column) => Ok(column.data_type.clone()),
             ColumnEntry::InternalColumn(column) => Ok(column.internal_column.data_type()),
+            ColumnEntry::VirtualColumn(column) => Ok(DataType::from(&column.data_type)),
         }
     }
 }
@@ -216,7 +217,6 @@ impl ScalarExpr {
                     column_ref.column.index
                 ),
             },
-            ScalarExpr::VirtualColumnRef(_) => todo!(),
             ScalarExpr::ConstantExpr(constant) => RawExpr::Constant {
                 span: constant.span,
                 scalar: constant.value.clone(),
@@ -326,12 +326,6 @@ impl ScalarExpr {
                     column_ref.column.internal_column.column_name().clone(),
                     column_ref.column.index
                 ),
-            },
-            ScalarExpr::VirtualColumnRef(column_ref) => RawExpr::ColumnRef {
-                span: None,
-                id: column_ref.index,
-                data_type: *column_ref.data_type.clone(),
-                display_name: format!("{} (#{})", column_ref.name, column_ref.column.index),
             },
             ScalarExpr::ConstantExpr(constant) => RawExpr::Constant {
                 span: constant.span,

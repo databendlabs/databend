@@ -156,7 +156,6 @@ fn replace_column_binding(
         ScalarExpr::BoundInternalColumnRef(_) => {
             unreachable!()
         }
-        ScalarExpr::VirtualColumnRef(_) => todo!(),
         constant_expr @ ScalarExpr::ConstantExpr(_) => Ok(constant_expr),
         ScalarExpr::AndExpr(expr) => Ok(ScalarExpr::AndExpr(AndExpr {
             left: Box::new(replace_column_binding(index_pairs, *expr.left)?),

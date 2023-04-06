@@ -127,9 +127,6 @@ fn find_nullable_columns(
         ScalarExpr::BoundColumnRef(column_binding) => {
             nullable_columns.push(column_binding.column.index);
         }
-        ScalarExpr::VirtualColumnRef(column_binding) => {
-            nullable_columns.push(column_binding.index);
-        }
         ScalarExpr::AndExpr(expr) => {
             let mut left_cols = vec![];
             let mut right_cols = vec![];
@@ -256,6 +253,11 @@ fn remove_column_nullable(
                 }
                 // None of internal columns will be nullable, so just ignore internal column type entry
                 ColumnEntry::InternalColumn(..) => {}
+                ColumnEntry::VirtualColumn(virtual_column) => {
+                    if let TableDataType::Nullable(_) = virtual_column.data_type {
+                        need_remove = false;
+                    }
+                }
             }
             match join_type {
                 JoinType::Left => {
@@ -288,7 +290,6 @@ fn remove_column_nullable(
                 },
             })
         }
-        ScalarExpr::VirtualColumnRef(_) => todo!(),
         ScalarExpr::BoundInternalColumnRef(_) => {
             // internal column will never be null
             unreachable!()
