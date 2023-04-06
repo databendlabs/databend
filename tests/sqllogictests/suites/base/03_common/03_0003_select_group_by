@@ -206,3 +206,13 @@ select number::Variant a, number as b, count()  from numbers(3) group by a, b or
 0 0 1
 1 1 1
 2 2 1
+
+# group by Decimal
+query TI
+select number::Decimal(15,2) a, number % 3 b from numbers(5) group by a, b order by a;
+----
+0.00 0
+1.00 1
+2.00 2
+3.00 0
+4.00 1
