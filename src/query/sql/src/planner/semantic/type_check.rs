@@ -2157,15 +2157,13 @@ impl<'a> TypeChecker<'a> {
         // If it is a variant column, try convert it to a virtual column.
         // For other types of columns, convert it to get functions.
         if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
+            let column_entry = self.metadata.read().column(column.index).clone();
+            table_data_type = match column_entry {
+                ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) => data_type,
+                _ => unreachable!(),
+            };
             match table_data_type.remove_nullable() {
                 TableDataType::Tuple { .. } => {
-                    let column_entry = self.metadata.read().column(column.index).clone();
-                    match column_entry {
-                        ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) => {
-                            table_data_type = data_type;
-                        }
-                        _ => unreachable!(),
-                    }
                     let box (inner_scalar, _inner_data_type) = self
                         .resolve_tuple_map_access_pushdown(
                             expr.span(),
