@@ -425,7 +425,6 @@ impl SubqueryRewriter {
                     statistics: Statistics {
                         statistics: None,
                         col_stats: HashMap::new(),
-                        is_accurate: false,
                     },
                     prewhere: None,
                 }

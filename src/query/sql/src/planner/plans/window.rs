@@ -146,7 +146,6 @@ impl Operator for Window {
         let mut used_columns = self.used_columns()?;
         used_columns.extend(input_prop.used_columns);
         let column_stats = input_prop.statistics.column_stats;
-        let is_accurate = input_prop.statistics.is_accurate;
 
         Ok(RelationalProperty {
             output_columns,
@@ -156,7 +155,6 @@ impl Operator for Window {
             statistics: Statistics {
                 precise_cardinality,
                 column_stats,
-                is_accurate,
             },
         })
     }

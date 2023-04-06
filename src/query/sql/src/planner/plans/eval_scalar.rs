@@ -95,7 +95,6 @@ impl Operator for EvalScalar {
         // Derive cardinality
         let cardinality = input_prop.cardinality;
         let precise_cardinality = input_prop.statistics.precise_cardinality;
-        let is_accurate = input_prop.statistics.is_accurate;
         // Derive used columns
         let mut used_columns = self.used_columns()?;
         used_columns.extend(input_prop.used_columns);
@@ -116,7 +115,6 @@ impl Operator for EvalScalar {
             statistics: Statistics {
                 precise_cardinality,
                 column_stats,
-                is_accurate,
             },
         })
     }
