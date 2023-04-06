@@ -2158,10 +2158,9 @@ impl<'a> TypeChecker<'a> {
         // For other types of columns, convert it to get functions.
         if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
             let column_entry = self.metadata.read().column(column.index).clone();
-            table_data_type = match column_entry {
-                ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) => data_type,
-                _ => unreachable!(),
-            };
+            if let ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) = column_entry {
+                table_data_type = data_type;
+            }
             match table_data_type.remove_nullable() {
                 TableDataType::Tuple { .. } => {
                     let box (inner_scalar, _inner_data_type) = self
