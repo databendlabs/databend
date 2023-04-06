@@ -61,13 +61,21 @@ impl OpenAI {
         let resp = openai.chat_completion_create(&body).map_err(|e| {
             ErrorCode::Internal(format!("openai completion text request error: {:?}", e))
         })?;
-        trace!("openai sql completion response: {:?}", resp);
+        trace!("openai text completion response: {:?}", resp);
 
         let usage = resp.usage.total_tokens;
         let result = if resp.choices.is_empty() {
             "".to_string()
         } else {
-            resp.choices[0].text.clone().unwrap_or("".to_string())
+            let message = resp
+                .choices
+                .get(0)
+                .and_then(|choice| choice.message.as_ref());
+
+            match message {
+                Some(msg) => msg.content.clone(),
+                _ => "".to_string(),
+            }
         };
 
         // perf.
