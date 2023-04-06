@@ -14,29 +14,19 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use openai_api_rust::completions::CompletionsApi;
-use openai_api_rust::completions::CompletionsBody;
+use openai_api_rust::chat::ChatApi;
+use openai_api_rust::chat::ChatBody;
 use openai_api_rust::Auth;
+use openai_api_rust::Message;
+use openai_api_rust::Role;
 
 use crate::metrics::metrics_completion_count;
 use crate::metrics::metrics_completion_token;
+use crate::AIModel;
 use crate::OpenAI;
 
-pub enum CompletionMode {
-    // SQL translate:
-    // max_tokens: 150, stop: ['#', ';']
-    SQL,
-    // Text completion:
-    // max_tokens: 512, stop: none
-    Text,
-}
-
 impl OpenAI {
-    pub fn completion_request(
-        &self,
-        prompt: String,
-        mode: CompletionMode,
-    ) -> Result<(String, Option<u32>)> {
+    pub fn completion_text_request(&self, prompt: String) -> Result<(String, Option<u32>)> {
         let openai = openai_api_rust::OpenAI::new(
             Auth {
                 api_key: self.api_key.clone(),
@@ -45,31 +35,28 @@ impl OpenAI {
             &self.api_base,
         );
 
-        let (max_tokens, stop) = match mode {
-            CompletionMode::SQL => (Some(150), Some(vec!["#".to_string(), ";".to_string()])),
-            CompletionMode::Text => (Some(512), None),
-        };
+        let (max_tokens, stop) = (Some(512), None);
 
-        let body = CompletionsBody {
-            model: self.model.to_string(),
-            prompt: Some(vec![prompt]),
-            suffix: None,
-            max_tokens,
+        let body = ChatBody {
+            model: AIModel::GPT35Turbo.to_string(),
             temperature: Some(0_f32),
             top_p: Some(1_f32),
-            n: Some(2),
-            stream: Some(false),
-            logprobs: None,
-            echo: None,
+            n: None,
+            stream: None,
             stop,
+            max_tokens,
             presence_penalty: None,
             frequency_penalty: None,
-            best_of: None,
             logit_bias: None,
             user: None,
+            messages: vec![Message {
+                role: Role::User,
+                content: prompt,
+            }],
         };
-        let resp = openai.completion_create(&body).map_err(|e| {
-            ErrorCode::Internal(format!("openai completion request error: {:?}", e))
+
+        let resp = openai.chat_completion_create(&body).map_err(|e| {
+            ErrorCode::Internal(format!("openai completion text request error: {:?}", e))
         })?;
 
         let usage = resp.usage.total_tokens;
