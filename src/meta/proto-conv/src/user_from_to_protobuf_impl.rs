@@ -333,32 +333,3 @@ impl FromToProto for mt::principal::UserIdentity {
         })
     }
 }
-
-impl FromToProto for mt::principal::StageType {
-    type PB = pb::stage_info::StageType;
-    fn get_pb_ver(_p: &Self::PB) -> u64 {
-        0
-    }
-    fn from_pb(p: pb::stage_info::StageType) -> Result<Self, Incompatible>
-    where Self: Sized {
-        match p {
-            pb::stage_info::StageType::LegacyInternal => {
-                Ok(mt::principal::StageType::LegacyInternal)
-            }
-            pb::stage_info::StageType::External => Ok(mt::principal::StageType::External),
-            pb::stage_info::StageType::Internal => Ok(mt::principal::StageType::Internal),
-            pb::stage_info::StageType::User => Ok(mt::principal::StageType::User),
-        }
-    }
-
-    fn to_pb(&self) -> Result<pb::stage_info::StageType, Incompatible> {
-        match *self {
-            mt::principal::StageType::LegacyInternal => {
-                Ok(pb::stage_info::StageType::LegacyInternal)
-            }
-            mt::principal::StageType::External => Ok(pb::stage_info::StageType::External),
-            mt::principal::StageType::Internal => Ok(pb::stage_info::StageType::Internal),
-            mt::principal::StageType::User => Ok(pb::stage_info::StageType::User),
-        }
-    }
-}

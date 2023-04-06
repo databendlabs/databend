@@ -14,29 +14,18 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use log::trace;
 use openai_api_rust::completions::CompletionsApi;
 use openai_api_rust::completions::CompletionsBody;
 use openai_api_rust::Auth;
 
 use crate::metrics::metrics_completion_count;
 use crate::metrics::metrics_completion_token;
+use crate::AIModel;
 use crate::OpenAI;
 
-pub enum CompletionMode {
-    // SQL translate:
-    // max_tokens: 150, stop: ['#', ';']
-    SQL,
-    // Text completion:
-    // max_tokens: 512, stop: none
-    Text,
-}
-
 impl OpenAI {
-    pub fn completion_request(
-        &self,
-        prompt: String,
-        mode: CompletionMode,
-    ) -> Result<(String, Option<u32>)> {
+    pub fn completion_sql_request(&self, prompt: String) -> Result<(String, Option<u32>)> {
         let openai = openai_api_rust::OpenAI::new(
             Auth {
                 api_key: self.api_key.clone(),
@@ -45,19 +34,16 @@ impl OpenAI {
             &self.api_base,
         );
 
-        let (max_tokens, stop) = match mode {
-            CompletionMode::SQL => (Some(150), Some(vec!["#".to_string(), ";".to_string()])),
-            CompletionMode::Text => (Some(512), None),
-        };
+        let (max_tokens, stop) = (Some(150), Some(vec!["#".to_string(), ";".to_string()]));
 
         let body = CompletionsBody {
-            model: self.model.to_string(),
+            model: AIModel::TextDavinci003.to_string(),
             prompt: Some(vec![prompt]),
             suffix: None,
             max_tokens,
             temperature: Some(0_f32),
             top_p: Some(1_f32),
-            n: Some(2),
+            n: None,
             stream: Some(false),
             logprobs: None,
             echo: None,
@@ -68,9 +54,13 @@ impl OpenAI {
             logit_bias: None,
             user: None,
         };
+        trace!("openai sql completion request: {:?}", body);
+
         let resp = openai.completion_create(&body).map_err(|e| {
-            ErrorCode::Internal(format!("openai completion request error: {:?}", e))
+            ErrorCode::Internal(format!("openai completion request sql error: {:?}", e))
         })?;
+
+        trace!("openai sql completion response: {:?}", resp);
 
         let usage = resp.usage.total_tokens;
         let sql = if resp.choices.is_empty() {
