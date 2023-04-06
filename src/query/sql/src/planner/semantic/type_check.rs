@@ -90,8 +90,10 @@ use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncFrameUnits;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
+use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnBinding;
+use crate::ColumnEntry;
 use crate::MetadataRef;
 use crate::Visibility;
 
