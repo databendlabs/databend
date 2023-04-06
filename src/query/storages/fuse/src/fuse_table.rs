@@ -66,7 +66,7 @@ use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
-use tracing::log::error;
+use tracing::error;
 use uuid::Uuid;
 
 use crate::io::MetaReaders;
