@@ -14,4 +14,4 @@ COPY ./docker/query-config.toml /etc/databend/query_config_spec.toml
 COPY ./docker/bootstrap.sh /bootstrap.sh
 ENTRYPOINT [ "dumb-init", "--", "/bootstrap.sh"]
 VOLUME [ "/var/log/databend", "/etc/databend", "/var/lib/databend", "/var/lib/minio" ]
-EXPOSE 3307 8124 8000
+EXPOSE 3307 8124 8000 8900
