@@ -18,7 +18,6 @@ use common_catalog::catalog::Catalog;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::number::UInt64Type;
 use common_expression::types::NumberDataType;
@@ -115,13 +114,14 @@ where TablesTable<T>: HistoryAware
                     Ok(tables) => tables,
                     Err(err) => {
                         // Swallow the errors related with sharing. Listing tables in a shared database
-                        // is easy to get errors, but system.tables should not be affected by it.
-                        if matches!(
-                            err.code(),
-                            ErrorCode::EMPTY_SHARE_ENDPOINT_CONFIG
-                                | ErrorCode::UNKNOWN_SHARE_ENDPOINT_CONFIG
-                        ) {
-                            tracing::warn!("list tables failed on db {}: {}", db.name(), err);
+                        // is easy to get errors with invalid configs, but system.tables is better not
+                        // to be affected by it.
+                        if db.get_db_info().meta.from_share.is_some() {
+                            tracing::warn!(
+                                "list tables failed on sharing db {}: {}",
+                                db.name(),
+                                err
+                            );
                             continue;
                         }
                         return Err(err);
