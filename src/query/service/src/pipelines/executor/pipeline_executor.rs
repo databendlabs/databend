@@ -155,7 +155,7 @@ impl PipelineExecutor {
         let mut guard = self.on_finished_callback.lock();
         if let Some(on_finished_callback) = guard.take() {
             drop(guard);
-            (on_finished_callback)(error)?;
+            catch_unwind((on_finished_callback)(error))?;
         }
 
         Ok(())
@@ -181,9 +181,9 @@ impl PipelineExecutor {
     }
 
     pub fn execute(self: &Arc<Self>) -> Result<()> {
-        self.init()?;
+        catch_unwind(self.init())?;
 
-        self.start_executor_daemon()?;
+        catch_unwind(self.start_executor_daemon())?;
 
         let mut thread_join_handles = self.execute_threads(self.threads_num);
 
