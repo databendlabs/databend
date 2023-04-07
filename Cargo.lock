@@ -2359,6 +2359,7 @@ dependencies = [
  "metrics",
  "opendal",
  "parquet-format-safe",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "sha2",

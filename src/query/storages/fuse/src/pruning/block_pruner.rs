@@ -16,12 +16,15 @@ use std::future::Future;
 use std::ops::Range;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
 use common_base::base::tokio::sync::OwnedSemaphorePermit;
+use common_base::base::tokio::time::sleep;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures_util::future;
+use rand::Rng;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::SegmentInfo;
@@ -130,6 +133,15 @@ impl BlockPruner {
                                 .should_keep(&index_location, index_size, column_ids)
                                 .await
                                 && limit_pruner.within_limit(row_count);
+
+                            // Panic
+                            {
+                                let random_seconds = rand::thread_rng().gen_range(1..=10);
+                                if random_seconds % 2 == 0 {
+                                    sleep(Duration::from_secs(random_seconds)).await;
+                                    panic!("block_pruning panic");
+                                }
+                            }
 
                             if keep {
                                 // Perf.
