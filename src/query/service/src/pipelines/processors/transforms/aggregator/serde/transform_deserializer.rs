@@ -78,7 +78,8 @@ where
             let mut data_block = self.input.pull_data().unwrap()?;
 
             if let Some(block_meta) = data_block.take_meta() {
-                if AggregateSerdeMeta::downcast_ref_from(&block_meta).is_some() {
+                let option = AggregateSerdeMeta::downcast_ref_from(&block_meta);
+                if option.is_some() {
                     let meta = AggregateSerdeMeta::downcast_from(block_meta).unwrap();
 
                     self.output.push_data(Ok(DataBlock::empty_with_meta(
