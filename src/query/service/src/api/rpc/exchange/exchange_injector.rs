@@ -128,34 +128,13 @@ impl ExchangeInjector for DefaultExchangeInjector {
         params: &MergeExchangeParams,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let local_inputs = pipeline.output_len() - remote_inputs;
-        let mut items = Vec::with_capacity(pipeline.output_len());
-
-        // for _index in 0..local_inputs {
-        //     let input = InputPort::create();
-        //     let output = OutputPort::create();
-        //
-        //     items.push(PipeItem::create(
-        //         TransformDummy::create(input.clone(), output.clone()),
-        //         vec![input],
-        //         vec![output],
-        //     ));
-        // }
-
-        for _index in 0..pipeline.output_len() {
-            let input = InputPort::create();
-            let output = OutputPort::create();
-
-            let schema = &params.schema;
-            items.push(PipeItem::create(
-                TransformExchangeDeserializer::create(input.clone(), output.clone(), schema),
-                vec![input],
-                vec![output],
-            ));
-        }
-
-        pipeline.add_pipe(Pipe::create(items.len(), items.len(), items));
-        Ok(())
+        pipeline.add_transform(|input, output| {
+            Ok(TransformExchangeDeserializer::create(
+                input.clone(),
+                output.clone(),
+                &params.schema,
+            ))
+        })
     }
 
     fn apply_shuffle_deserializer(
@@ -164,35 +143,12 @@ impl ExchangeInjector for DefaultExchangeInjector {
         params: &ShuffleExchangeParams,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let local_inputs = pipeline.output_len() - remote_inputs;
-
-        let mut items = Vec::with_capacity(pipeline.output_len());
-
-        // for _index in 0..local_inputs {
-        //     let input = InputPort::create();
-        //     let output = OutputPort::create();
-        //
-        //     items.push(PipeItem::create(
-        //         TransformDummy::create(input.clone(), output.clone()),
-        //         vec![input],
-        //         vec![output],
-        //     ));
-        // }
-
-        for _index in 0..pipeline.output_len() {
-            let input = InputPort::create();
-            let output = OutputPort::create();
-
-            let schema = &params.schema;
-            items.push(PipeItem::create(
-                TransformExchangeDeserializer::create(input.clone(), output.clone(), schema),
-                vec![input],
-                vec![output],
-            ));
-        }
-
-        pipeline.add_pipe(Pipe::create(items.len(), items.len(), items));
-
-        Ok(())
+        pipeline.add_transform(|input, output| {
+            Ok(TransformExchangeDeserializer::create(
+                input.clone(),
+                output.clone(),
+                &params.schema,
+            ))
+        })
     }
 }
