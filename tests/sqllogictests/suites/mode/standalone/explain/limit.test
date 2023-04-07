@@ -106,12 +106,12 @@ EvalScalar
                         ├── estimated rows: 0.33
                         └── HashJoin
                             ├── join type: SINGLE
-                            ├── build keys: [subquery_2 (#2)]
-                            ├── probe keys: [subquery_0 (#0)]
+                            ├── build keys: [number (#2)]
+                            ├── probe keys: [number (#0)]
                             ├── filters: []
                             ├── estimated rows: 1.00
                             ├── EvalScalar(Build)
-                            │   ├── expressions: [COUNT(*) (#4), subquery_2 (#2)]
+                            │   ├── expressions: [COUNT(*) (#4), number (#2)]
                             │   ├── estimated rows: 1.00
                             │   └── AggregateFinal
                             │       ├── group by: [number]

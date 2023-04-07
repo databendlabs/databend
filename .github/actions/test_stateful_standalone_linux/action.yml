@@ -44,6 +44,11 @@ runs:
       run: |
         ./scripts/ci/ci-run-stateful-tests-standalone-minio.sh
 
+    - name: Run Stateful Share database Tests with Standalone mode
+      shell: bash
+      run: |
+        ./scripts/ci/ci-run-sharding-tests.sh
+
     - name: Upload failure
       if: failure() || cancelled()
       uses: ./.github/actions/artifact_failure

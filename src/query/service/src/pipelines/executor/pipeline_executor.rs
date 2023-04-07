@@ -155,7 +155,7 @@ impl PipelineExecutor {
         let mut guard = self.on_finished_callback.lock();
         if let Some(on_finished_callback) = guard.take() {
             drop(guard);
-            (on_finished_callback)(error)?;
+            catch_unwind(move || on_finished_callback(error))??;
         }
 
         Ok(())
@@ -221,7 +221,7 @@ impl PipelineExecutor {
                 let mut guard = self.on_init_callback.lock();
                 if let Some(callback) = guard.take() {
                     drop(guard);
-                    if let Err(cause) = callback() {
+                    if let Err(cause) = Result::flatten(catch_unwind(callback)) {
                         return Err(cause.add_message_back("(while in query pipeline init)"));
                     }
                 }
