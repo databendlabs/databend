@@ -131,18 +131,18 @@ impl ExchangeInjector for DefaultExchangeInjector {
         let local_inputs = pipeline.output_len() - remote_inputs;
         let mut items = Vec::with_capacity(pipeline.output_len());
 
-        for _index in 0..local_inputs {
-            let input = InputPort::create();
-            let output = OutputPort::create();
+        // for _index in 0..local_inputs {
+        //     let input = InputPort::create();
+        //     let output = OutputPort::create();
+        //
+        //     items.push(PipeItem::create(
+        //         TransformDummy::create(input.clone(), output.clone()),
+        //         vec![input],
+        //         vec![output],
+        //     ));
+        // }
 
-            items.push(PipeItem::create(
-                TransformDummy::create(input.clone(), output.clone()),
-                vec![input],
-                vec![output],
-            ));
-        }
-
-        for _index in 0..remote_inputs {
+        for _index in 0..pipeline.output_len() {
             let input = InputPort::create();
             let output = OutputPort::create();
 
@@ -168,18 +168,18 @@ impl ExchangeInjector for DefaultExchangeInjector {
 
         let mut items = Vec::with_capacity(pipeline.output_len());
 
-        for _index in 0..local_inputs {
-            let input = InputPort::create();
-            let output = OutputPort::create();
+        // for _index in 0..local_inputs {
+        //     let input = InputPort::create();
+        //     let output = OutputPort::create();
+        //
+        //     items.push(PipeItem::create(
+        //         TransformDummy::create(input.clone(), output.clone()),
+        //         vec![input],
+        //         vec![output],
+        //     ));
+        // }
 
-            items.push(PipeItem::create(
-                TransformDummy::create(input.clone(), output.clone()),
-                vec![input],
-                vec![output],
-            ));
-        }
-
-        for _index in 0..remote_inputs {
+        for _index in 0..pipeline.output_len() {
             let input = InputPort::create();
             let output = OutputPort::create();
 
