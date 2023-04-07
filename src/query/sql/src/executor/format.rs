@@ -179,10 +179,11 @@ fn table_scan_to_format_tree(
         });
 
     let virtual_columns = plan.source.push_downs.as_ref().and_then(|extras| {
-        extras
-            .virtual_columns
-            .as_ref()
-            .map(|columns| columns.iter().map(|c| c.name.clone()).join(", "))
+        extras.virtual_columns.as_ref().map(|columns| {
+            let mut names = columns.iter().map(|c| c.name.clone()).collect::<Vec<_>>();
+            names.sort();
+            names.iter().join(", ")
+        })
     });
 
     let mut children = vec![FormatTreeNode::new(format!("table: {table_name}"))];

@@ -20,7 +20,7 @@ EvalScalar
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    ├── push downs: [filters: [], limit: NONE, virtual_columns: [_v['b'], _v['a'][0]]]
+    ├── push downs: [filters: [], limit: NONE, virtual_columns: [_v['a'][0], _v['b']]]                                   |
     └── estimated rows: 1.00
 
 statement ok
