@@ -28,7 +28,7 @@ http_handler_host = "0.0.0.0"
 http_handler_port = 48000
 
 flight_sql_handler_host = "0.0.0.0"
-flight_sql_handler_port = 48900
+flight_sql_handler_port = 48901
 
 tenant_id = "to_tenant"
 cluster_id = "test_cluster"

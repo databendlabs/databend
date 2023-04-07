@@ -28,6 +28,6 @@ echo "SELECT * FROM shared_db.t1" | $MYSQL_CLIENT_SHARE_2_CONNECT
 
 
 ## Drop table.
-#echo "drop database if exists shared_db"  | $MYSQL_CLIENT_SHARE_2_CONNECT
-#echo "drop share if exists test_share" | $MYSQL_CLIENT_SHARE_1_CONNECT
-#echo "drop database if exists test_database" | $MYSQL_CLIENT_SHARE_1_CONNECT
+echo "drop database if exists shared_db"  | $MYSQL_CLIENT_SHARE_2_CONNECT
+echo "drop share if exists test_share" | $MYSQL_CLIENT_SHARE_1_CONNECT
+echo "drop database if exists test_database" | $MYSQL_CLIENT_SHARE_1_CONNECT

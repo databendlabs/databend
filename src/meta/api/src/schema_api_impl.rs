@@ -25,7 +25,6 @@ use common_meta_app::app_error::DatabaseAlreadyExists;
 use common_meta_app::app_error::DropDbWithDropTime;
 use common_meta_app::app_error::DropTableWithDropTime;
 use common_meta_app::app_error::DuplicatedUpsertFiles;
-use common_meta_app::app_error::ShareHasNoGrantedDatabase;
 use common_meta_app::app_error::ShareHasNoGrantedPrivilege;
 use common_meta_app::app_error::TableAlreadyExists;
 use common_meta_app::app_error::TableVersionMismatched;
@@ -369,7 +368,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             condition.push(txn_cond_seq(tenant_dbname, Eq, db_id_seq));
             if_then.push(txn_op_del(tenant_dbname)); // (tenant, db_name) -> db_id
 
-            let (removed, from_share) = is_db_need_to_be_remove(
+            let (removed, _from_share) = is_db_need_to_be_remove(
                 self,
                 db_id,
                 // remove db directly if created from share
@@ -409,11 +408,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                         condition.push(txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq));
                         if_then.push(txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?));
                     }
-                }
-
-                if let Some(from_share) = from_share {
-                    remove_db_id_from_share(self, db_id, from_share, &mut condition, &mut if_then)
-                        .await?;
                 }
             } else {
                 // Delete db by these operations:
@@ -1448,13 +1442,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
 
         let table_id = match db_meta.from_share {
             Some(ref share) => {
-                get_table_id_from_share_by_name(
-                    self,
-                    share,
-                    db_id,
-                    &tenant_dbname_tbname.table_name,
-                )
-                .await?
+                get_table_id_from_share_by_name(self, share, &tenant_dbname_tbname.table_name)
+                    .await?
             }
             None => {
                 // Get table by tenant,db_id, table_name to assert presence.
@@ -1654,7 +1643,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
 
         let tb_infos = match db_meta.from_share {
             None => list_tables_from_unshare_db(self, db_id, tenant_dbname).await?,
-            Some(share) => list_tables_from_share_db(self, share, db_id, tenant_dbname).await?,
+            Some(share) => list_tables_from_share_db(self, share, tenant_dbname).await?,
         };
 
         Ok(tb_infos)
@@ -2693,7 +2682,6 @@ async fn count_tables(
 async fn get_table_id_from_share_by_name(
     kv_api: &impl kvapi::KVApi<Error = MetaError>,
     share: &ShareNameIdent,
-    db_id: u64,
     table_name: &String,
 ) -> Result<u64, KVAppError> {
     let res = get_share_or_err(
@@ -2713,11 +2701,6 @@ async fn get_table_id_from_share_by_name(
         return Err(KVAppError::AppError(AppError::WrongShare(WrongShare::new(
             share.to_string_key(),
         ))));
-    }
-    if !share_meta.share_from_db_ids.contains(&db_id) {
-        return Err(KVAppError::AppError(AppError::ShareHasNoGrantedDatabase(
-            ShareHasNoGrantedDatabase::new(&share.tenant, &share.share_name),
-        )));
     }
 
     let mut ids = Vec::with_capacity(share_meta.entries.len());
