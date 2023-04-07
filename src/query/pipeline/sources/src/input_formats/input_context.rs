@@ -152,6 +152,7 @@ impl InputContext {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn try_create_from_copy(
         operator: Operator,
         settings: Arc<Settings>,
