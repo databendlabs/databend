@@ -865,6 +865,9 @@ impl SubqueryRewriter {
                 ColumnEntry::InternalColumn(TableInternalColumn {
                     internal_column, ..
                 }) => internal_column.data_type(),
+                ColumnEntry::VirtualColumn(VirtualColumn { data_type, .. }) => {
+                    DataType::from(data_type)
+                }
             };
             let left_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
                 span,
