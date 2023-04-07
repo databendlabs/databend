@@ -149,7 +149,7 @@ impl Processor for TransformExchangeDeserializer {
                     None => self.output.push_data(Ok(data_block)),
                     Some(_meta) => {
                         if data_block.num_rows() != 0 {
-                            return Err(ErrorCode::Internal(""));
+                            return Err(ErrorCode::Internal("ExchangeDeserializeMeta has rows"));
                         }
 
                         self.input_data = Some(data_block);
