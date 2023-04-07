@@ -55,7 +55,8 @@ tar -zxf ${CURDIR}/data/tpcds.tar.gz -C ${CURDIR}/data
 # shellcheck disable=SC2068
 for t in ${tables[@]}
 do
-  echo $t
-  echo "copy into $t from 'fs://${CURDIR}/data/data/${t}/${t}.parquet' FILE_FORMAT = (type = PARQUET)" | $MYSQL_CLIENT_CONNECT
+    echo $t
+    insert_sql="insert into ${db}.$t file_format = (type = CSV skip_header = 0 field_delimiter = '|' record_delimiter = '\n')"
+    curl -s -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" -H "insert_sql: ${insert_sql}" -F 'upload=@"'${CURDIR}'/data/data/'$t'.csv"' > /dev/null 2>&1
 done
 
