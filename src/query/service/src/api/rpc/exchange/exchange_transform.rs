@@ -68,7 +68,7 @@ impl ExchangeTransform {
                     }
                 }
 
-                pipeline.add_pipe(Pipe::create(len, items.len(), items));
+                pipeline.add_pipe(Pipe::create(len, params.destination_ids.len(), items));
                 pipeline.resize(max_threads)?;
                 injector.apply_shuffle_deserializer(params, pipeline)
             }
