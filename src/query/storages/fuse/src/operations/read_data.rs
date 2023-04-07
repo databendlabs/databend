@@ -106,6 +106,7 @@ impl FuseTable {
                 let lazy_init_segments = lazy_init_segments.clone();
 
                 let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
+                    panic!("fuse pipeline on init panic");
                     // if query from distribute query node, need to init segment id at first
                     let segment_id_map = if plan.query_internal_columns {
                         let snapshot = table.read_table_snapshot().await?;

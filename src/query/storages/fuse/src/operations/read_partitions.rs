@@ -61,22 +61,22 @@ impl FuseTable {
         match snapshot {
             Some(snapshot) => {
                 let settings = ctx.get_settings();
-                if settings.get_enable_distributed_eval_index()? && !ctx.get_cluster().is_empty() {
-                    let mut segments = Vec::with_capacity(snapshot.segments.len());
-                    for segment_location in &snapshot.segments {
-                        segments.push(FuseLazyPartInfo::create(segment_location.clone()))
-                    }
-
-                    return Ok((
-                        PartStatistics::new_estimated(
-                            snapshot.summary.row_count as usize,
-                            snapshot.summary.compressed_byte_size as usize,
-                            snapshot.segments.len(),
-                            snapshot.segments.len(),
-                        ),
-                        Partitions::create(PartitionsShuffleKind::Mod, segments, true),
-                    ));
+                // if settings.get_enable_distributed_eval_index()? && !ctx.get_cluster().is_empty() {
+                let mut segments = Vec::with_capacity(snapshot.segments.len());
+                for segment_location in &snapshot.segments {
+                    segments.push(FuseLazyPartInfo::create(segment_location.clone()))
                 }
+
+                return Ok((
+                    PartStatistics::new_estimated(
+                        snapshot.summary.row_count as usize,
+                        snapshot.summary.compressed_byte_size as usize,
+                        snapshot.segments.len(),
+                        snapshot.segments.len(),
+                    ),
+                    Partitions::create(PartitionsShuffleKind::Mod, segments, true),
+                ));
+                //}
 
                 let table_info = self.table_info.clone();
                 let segments_location = snapshot.segments.clone();
