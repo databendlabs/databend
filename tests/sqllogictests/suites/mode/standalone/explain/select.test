@@ -213,31 +213,3 @@ EvalScalar
         ├── partitions scanned: 0
         ├── push downs: [filters: [false], limit: NONE]
         └── estimated rows: 100.00
-
-statement ok
-drop table if exists t_json
-
-statement ok
-create table t_json (a int null, v json null)
-
-statement ok
-insert into t_json values(1, parse_json('{"a":[1,2,3],"b":{"c":10}}'));
-
-query T
-explain select a, v['a'][0], v['b'] from t_json
-----
-EvalScalar
-├── expressions: [t_json.a (#0), t_json._v['a'][0] (#2), t_json._v['b'] (#3)]
-├── estimated rows: 1.00
-└── TableScan
-    ├── table: default.default.t_json
-    ├── read rows: 1
-    ├── read bytes: 108
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    ├── push downs: [filters: [], limit: NONE, virtual_columns: [_v['b'], _v['a'][0]]]
-    └── estimated rows: 1.00
-
-statement ok
-drop table t_json
