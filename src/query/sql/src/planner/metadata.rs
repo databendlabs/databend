@@ -380,6 +380,30 @@ impl ColumnEntry {
             ColumnEntry::InternalColumn(internal_column) => internal_column.column_index,
         }
     }
+
+    pub fn data_type(&self) -> DataType {
+        match self {
+            ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) => {
+                DataType::from(data_type)
+            }
+            ColumnEntry::DerivedColumn(DerivedColumn { data_type, .. }) => data_type.clone(),
+            ColumnEntry::InternalColumn(TableInternalColumn {
+                internal_column, ..
+            }) => internal_column.data_type(),
+        }
+    }
+
+    pub fn name(&self) -> String {
+        match self {
+            ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => {
+                column_name.to_string()
+            }
+            ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias.to_string(),
+            ColumnEntry::InternalColumn(TableInternalColumn {
+                internal_column, ..
+            }) => internal_column.column_name.clone(),
+        }
+    }
 }
 
 pub fn optimize_remove_count_args(name: &str, distinct: bool, args: &[&Expr]) -> bool {
