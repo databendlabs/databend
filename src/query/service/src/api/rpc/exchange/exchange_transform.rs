@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_pipeline_core::pipe::Pipe;
-use common_pipeline_core::processors::create_resize_item;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::create_dummy_item;
 
@@ -57,25 +56,21 @@ impl ExchangeTransform {
                 let senders = flight_senders.into_iter();
                 for (destination_id, sender) in params.destination_ids.iter().zip(senders) {
                     items.push(match destination_id == &params.executor_id {
-                        true if max_threads == 1 => create_dummy_item(),
-                        true => create_resize_item(1, max_threads),
+                        true => create_dummy_item(),
                         false => create_writer_item(sender),
                     });
                 }
 
-                let mut nodes_source = 0;
                 let receivers = exchange_manager.get_flight_receiver(&exchange_params)?;
                 for (destination_id, receiver) in params.destination_ids.iter().zip(receivers) {
                     if destination_id != &params.executor_id {
-                        nodes_source += 1;
                         items.push(create_reader_item(receiver));
                     }
                 }
 
-                let new_outputs = max_threads + nodes_source;
-                pipeline.add_pipe(Pipe::create(len, new_outputs, items));
-
-                injector.apply_shuffle_deserializer(nodes_source, params, pipeline)
+                pipeline.add_pipe(Pipe::create(len, items.len(), items));
+                pipeline.resize(max_threads)?;
+                injector.apply_shuffle_deserializer(params, pipeline)
             }
         }
     }

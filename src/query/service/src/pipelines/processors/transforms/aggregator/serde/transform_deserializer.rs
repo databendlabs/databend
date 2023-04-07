@@ -16,6 +16,7 @@ use std::any::Any;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
@@ -76,23 +77,32 @@ where
 
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
-            let block_meta = data_block.take_meta();
 
-            let meta = block_meta
-                .and_then(AggregateSerdeMeta::downcast_from)
-                .unwrap();
+            if let Some(block_meta) = data_block.take_meta() {
+                if let Some(meta) = AggregateSerdeMeta::downcast_from(block_meta) {
+                    self.output.push_data(Ok(DataBlock::empty_with_meta(
+                        match meta.typ == BUCKET_TYPE {
+                            true => AggregateMeta::<Method, V>::create_serialized(
+                                meta.bucket,
+                                data_block,
+                            ),
+                            false => AggregateMeta::<Method, V>::create_spilled(
+                                meta.bucket,
+                                meta.location.unwrap(),
+                                meta.columns_layout,
+                            ),
+                        },
+                    )));
 
-            self.output.push_data(Ok(DataBlock::empty_with_meta(
-                match meta.typ == BUCKET_TYPE {
-                    true => AggregateMeta::<Method, V>::create_serialized(meta.bucket, data_block),
-                    false => AggregateMeta::<Method, V>::create_spilled(
-                        meta.bucket,
-                        meta.location.unwrap(),
-                        meta.columns_layout,
-                    ),
-                },
-            )));
+                    return Ok(Event::NeedConsume);
+                }
 
+                return Err(ErrorCode::Internal(
+                    "Internal error, TransformAggregateDeserializer only recv aggregate serde meta.",
+                ));
+            }
+
+            self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
 
