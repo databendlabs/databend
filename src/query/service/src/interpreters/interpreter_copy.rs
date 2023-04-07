@@ -475,14 +475,14 @@ impl CopyInterpreter {
 
             // 3. log on_error mode errors.
             // todo(ariesdevil): persist errors with query_id
-            if let Some(error_map) = ctx.get_on_error_map() {
+            if let Some(error_map) = ctx.get_maximum_error_per_file() {
                 for (file_name, e) in error_map {
                     error!(
-                        "copy(on_error={}): file {} encounter error {},",
-                        stage_info.copy_options.on_error,
-                        file_name,
-                        e.to_string()
-                    );
+                                "copy(on_error={}): file {} encounter error {},",
+                                stage_info.copy_options.on_error,
+                                file_name,
+                                e.to_string()
+                            );
                 }
             }
 

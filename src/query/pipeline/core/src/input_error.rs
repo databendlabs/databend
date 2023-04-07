@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,17 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use common_exception::ErrorCode;
 
-pub mod processors;
-
-pub mod input_error;
-pub mod pipe;
-pub mod pipeline;
-pub mod pipeline_display;
-pub mod unsafe_cell_wrap;
-
-pub use input_error::InputError;
-pub use pipe::SinkPipeBuilder;
-pub use pipe::SourcePipeBuilder;
-pub use pipe::TransformPipeBuilder;
-pub use pipeline::Pipeline;
+#[derive(Debug, Clone)]
+pub struct InputError {
+    pub err: ErrorCode,
+    pub num: usize,
+}
