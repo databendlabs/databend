@@ -79,7 +79,9 @@ where
             let mut data_block = self.input.pull_data().unwrap()?;
 
             if let Some(block_meta) = data_block.take_meta() {
-                if let Some(meta) = AggregateSerdeMeta::downcast_from(block_meta) {
+                if AggregateSerdeMeta::downcast_ref_from(&block_meta).is_some() {
+                    let meta = AggregateSerdeMeta::downcast_from(block_meta).unwrap();
+
                     self.output.push_data(Ok(DataBlock::empty_with_meta(
                         match meta.typ == BUCKET_TYPE {
                             true => AggregateMeta::<Method, V>::create_serialized(
@@ -96,6 +98,9 @@ where
 
                     return Ok(Event::NeedConsume);
                 }
+
+                self.output.push_data(data_block.add_meta(Some(block_meta)));
+                return Ok(Event::NeedConsume);
             }
 
             self.output.push_data(Ok(data_block));
