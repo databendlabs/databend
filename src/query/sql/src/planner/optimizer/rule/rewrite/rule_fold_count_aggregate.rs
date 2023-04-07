@@ -114,9 +114,8 @@ impl Rule for RuleFoldCountAggregate {
                 eval_scalar.into(),
                 SExpr::create_leaf(dummy_table_scan.into()),
             ));
-        } else if let (true, true, column_stats, Some(table_card)) = (
+        } else if let (true, column_stats, Some(table_card)) = (
             simple_nullable_count,
-            input_prop.statistics.is_accurate,
             input_prop.statistics.column_stats,
             input_prop.statistics.precise_cardinality,
         ) {

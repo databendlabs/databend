@@ -26,6 +26,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_function;
+use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
 use common_expression::ConstantFolder;
 use common_expression::DataBlock;
@@ -50,6 +51,7 @@ use super::ProjectSet;
 use super::Sort;
 use super::TableScan;
 use super::WindowFunction;
+use crate::binder::wrap_cast;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::EvalScalar;
@@ -352,13 +354,43 @@ impl PhysicalPlanBuilder {
                         .cloned()
                         .collect::<Vec<_>>(),
                 );
+                let mut left_join_conditions = Vec::new();
+                let mut right_join_conditions = Vec::new();
+                for (left_join_condition, right_join_condition) in join
+                    .left_conditions
+                    .iter()
+                    .zip(join.right_conditions.iter())
+                {
+                    let left_type = left_join_condition.data_type()?;
+                    let right_type = right_join_condition.data_type()?;
+                    if left_type != right_type {
+                        let common_type = common_super_type(
+                            left_type.clone(),
+                            right_type.clone(),
+                            &BUILTIN_FUNCTIONS.default_cast_rules,
+                        );
+                        if let Some(common_type) = common_type {
+                            let left = wrap_cast(left_join_condition, &common_type);
+                            let right = wrap_cast(right_join_condition, &common_type);
+                            left_join_conditions.push(left);
+                            right_join_conditions.push(right);
+                        } else {
+                            return Err(ErrorCode::IllegalDataType(format!(
+                                "Cannot find common type for {:?} and {:?}",
+                                left_type, right_type
+                            )));
+                        }
+                    } else {
+                        left_join_conditions.push(left_join_condition.clone());
+                        right_join_conditions.push(right_join_condition.clone());
+                    }
+                }
                 Ok(PhysicalPlan::HashJoin(HashJoin {
                     plan_id: self.next_plan_id(),
                     build: Box::new(build_side),
                     probe: Box::new(probe_side),
                     join_type: join.join_type.clone(),
-                    build_keys: join
-                        .right_conditions
+                    build_keys: right_join_conditions
                         .iter()
                         .map(|scalar| {
                             let expr = scalar
@@ -374,8 +406,7 @@ impl PhysicalPlanBuilder {
                             Ok(expr.as_remote_expr())
                         })
                         .collect::<Result<_>>()?,
-                    probe_keys: join
-                        .left_conditions
+                    probe_keys: left_join_conditions
                         .iter()
                         .map(|scalar| {
                             let expr = scalar

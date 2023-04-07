@@ -688,7 +688,6 @@ impl Binder {
             }
         }
 
-        let is_accurate = table.table().engine().to_lowercase() == "fuse";
         let stat = table.table().table_statistics()?;
 
         Ok((
@@ -719,7 +718,6 @@ impl Binder {
                     statistics: Statistics {
                         statistics: stat,
                         col_stats,
-                        is_accurate,
                     },
                     prewhere: None,
                 }

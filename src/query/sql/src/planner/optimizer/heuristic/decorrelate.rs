@@ -436,7 +436,6 @@ impl SubqueryRewriter {
                     statistics: Statistics {
                         statistics: None,
                         col_stats: HashMap::new(),
-                        is_accurate: false,
                     },
                     prewhere: None,
                 }
@@ -857,6 +856,16 @@ impl SubqueryRewriter {
                 },
             });
             let derive_column = self.derived_columns.get(correlated_column).unwrap();
+            let column_entry = metadata.column(*derive_column);
+            let data_type = match column_entry {
+                ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) => {
+                    DataType::from(data_type)
+                }
+                ColumnEntry::DerivedColumn(DerivedColumn { data_type, .. }) => data_type.clone(),
+                ColumnEntry::InternalColumn(TableInternalColumn {
+                    internal_column, ..
+                }) => internal_column.data_type(),
+            };
             let left_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
                 span,
                 column: ColumnBinding {

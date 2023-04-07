@@ -117,7 +117,6 @@ impl Operator for Filter {
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
-                is_accurate: false,
             },
         })
     }

@@ -13,5 +13,6 @@
 // limitations under the License.
 
 mod declare;
+mod problem;
 
 pub mod prelude;

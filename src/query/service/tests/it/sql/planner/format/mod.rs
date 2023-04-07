@@ -176,7 +176,6 @@ fn test_format() {
                     statistics: Statistics {
                         statistics: None,
                         col_stats: Default::default(),
-                        is_accurate: false,
                     },
                 }
                 .into(),
@@ -193,7 +192,6 @@ fn test_format() {
                 statistics: Statistics {
                     statistics: None,
                     col_stats: Default::default(),
-                    is_accurate: false,
                 },
             }
             .into(),
