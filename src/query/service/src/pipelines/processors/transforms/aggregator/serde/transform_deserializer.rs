@@ -96,10 +96,6 @@ where
 
                     return Ok(Event::NeedConsume);
                 }
-
-                return Err(ErrorCode::Internal(
-                    "Internal error, TransformAggregateDeserializer only recv aggregate serde meta.",
-                ));
             }
 
             self.output.push_data(Ok(data_block));
