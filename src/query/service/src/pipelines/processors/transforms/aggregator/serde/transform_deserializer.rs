@@ -16,7 +16,6 @@ use std::any::Any;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
