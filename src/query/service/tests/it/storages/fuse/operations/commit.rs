@@ -536,13 +536,13 @@ impl TableContext for CtxDelegation {
     fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>> {
         todo!()
     }
-    fn set_on_error_map(&self, map: Arc<DashMap<String, HashMap<u16, InputError>>>) {
+    fn set_on_error_map(&self, _map: Arc<DashMap<String, HashMap<u16, InputError>>>) {
         todo!()
     }
     fn get_on_error_mode(&self) -> Option<OnErrorMode> {
         todo!()
     }
-    fn set_on_error_mode(&self, mode: OnErrorMode) {
+    fn set_on_error_mode(&self, _mode: OnErrorMode) {
         todo!()
     }
     fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
