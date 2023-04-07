@@ -75,6 +75,7 @@ impl ExchangeTransform {
                 let new_outputs = max_threads + nodes_source;
                 pipeline.add_pipe(Pipe::create(len, new_outputs, items));
 
+                pipeline.resize(max_threads)?;
                 injector.apply_shuffle_deserializer(nodes_source, params, pipeline)
             }
         }
