@@ -355,7 +355,6 @@ impl Operator for Join {
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
-                is_accurate: false,
             },
         })
     }

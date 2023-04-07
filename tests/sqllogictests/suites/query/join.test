@@ -512,3 +512,21 @@ query I
 select count(*) from numbers(10000) as t1 inner join numbers(10000) as t2 on t1.number = t2.number
 ----
 10000
+
+statement ok
+create table t1(a int null);
+
+statement ok
+insert into t1 values(1), (NULL), (2);
+
+statement ok
+create table t2(b int null);
+
+statement ok
+insert into t2 values(1), (NULL), (3);
+
+query I
+select * from t1 join t2 on t1.a < t2.b;
+----
+1 3
+2 3

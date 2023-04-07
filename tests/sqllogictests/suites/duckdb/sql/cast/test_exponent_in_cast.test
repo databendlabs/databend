@@ -30,4 +30,3 @@ SELECT CAST('1e1' AS DOUBLE)
 
 # ----
 # 10.0
-

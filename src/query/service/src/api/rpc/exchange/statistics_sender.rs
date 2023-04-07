@@ -148,8 +148,6 @@ impl StatisticsSender {
             DataPacket::ErrorCode(_) => unreachable!(),
             DataPacket::FragmentData(_) => unreachable!(),
             DataPacket::ProgressAndPrecommit { .. } => unreachable!(),
-            DataPacket::ClosingInput => unreachable!(),
-            DataPacket::ClosingOutput => unreachable!(),
             DataPacket::FetchProgressAndPrecommit => {
                 flight_sender
                     .send(DataPacket::ProgressAndPrecommit {

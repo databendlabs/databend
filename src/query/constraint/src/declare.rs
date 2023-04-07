@@ -42,15 +42,20 @@ pub fn false_bool(ctx: &Context) -> Dynamic {
     nullable_bool_sort(ctx).variants[1].constructor.apply(&[])
 }
 
+/// Construct a NULL value of Nullable Boolean type.
+pub fn null_bool(ctx: &Context) -> Dynamic {
+    nullable_bool_sort(ctx).variants[2].constructor.apply(&[])
+}
+
 /// Check if a Nullable Boolean value is true.
 pub fn is_true<'ctx>(ctx: &'ctx Context, a: &Dynamic<'ctx>) -> Bool<'ctx> {
     debug_assert!(a.get_sort() == nullable_bool_sort(ctx).sort);
     a._eq(&true_bool(ctx))
 }
 
-/// Construct a NULL value of Nullable Boolean type.
-pub fn null_bool(ctx: &Context) -> Dynamic {
-    nullable_bool_sort(ctx).variants[2].constructor.apply(&[])
+/// Construct a Nullable Boolean value from a Boolean value.
+pub fn from_bool<'ctx>(ctx: &'ctx Context, a: &Bool<'ctx>) -> Dynamic<'ctx> {
+    a.ite(&true_bool(ctx), &false_bool(ctx))
 }
 
 /// Construct a NULL value of Nullable Int type.
