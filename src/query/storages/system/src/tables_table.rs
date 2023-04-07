@@ -113,11 +113,19 @@ where TablesTable<T>: HistoryAware
                 let name: &str = Box::leak(name);
                 let tables = match Self::list_tables(&ctl, tenant.as_str(), name).await {
                     Ok(tables) => tables,
-                    Err(err) if err.code() == ErrorCode::EMPTY_SHARE_ENDPOINT_CONFIG => {
-                        tracing::warn!("list tables failed on db {}: {}", db.name(), err);
-                        continue;
+                    Err(err) => {
+                        // Swallow the errors related with sharing. Listing tables in a shared database
+                        // is easy to get errors, but system.tables should not be affected by it.
+                        if matches!(
+                            err.code(),
+                            ErrorCode::EMPTY_SHARE_ENDPOINT_CONFIG
+                                | ErrorCode::UNKNOWN_SHARE_ENDPOINT_CONFIG
+                        ) {
+                            tracing::warn!("list tables failed on db {}: {}", db.name(), err);
+                            continue;
+                        }
+                        return Err(err);
                     }
-                    Err(err) => return Err(err),
                 };
                 for table in tables {
                     catalogs.push(ctl_name.as_bytes().to_vec());
