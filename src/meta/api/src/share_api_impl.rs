@@ -55,7 +55,6 @@ use crate::get_share_meta_by_id_or_err;
 use crate::get_share_or_err;
 use crate::get_u64_value;
 use crate::id_generator::IdGenerator;
-use crate::is_db_need_to_be_remove;
 use crate::kv_app_error::KVAppError;
 use crate::list_keys;
 use crate::send_txn;
@@ -258,8 +257,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             .await?;
 
             // drop all the databases created from the share
-            drop_all_database_from_share(self, share_id, &share_meta, &mut condition, &mut if_then)
-                .await?;
+            // drop_all_database_from_share(self, share_id, &share_meta, &mut condition, &mut if_then)
+            //    .await?;
 
             let share_id_key = ShareId { share_id };
             let id_name_key = ShareIdToName { share_id };
@@ -1713,19 +1712,6 @@ async fn remove_share_id_from_share_objects(
         remove_share_id_from_share_object(kv_api, share_id, entry, condition, if_then).await?;
     }
 
-    Ok(())
-}
-
-async fn drop_all_database_from_share(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    _share_id: u64,
-    share_meta: &ShareMeta,
-    condition: &mut Vec<TxnCondition>,
-    if_then: &mut Vec<TxnOp>,
-) -> Result<(), KVAppError> {
-    for db_id in &share_meta.share_from_db_ids {
-        let _ = is_db_need_to_be_remove(kv_api, *db_id, |_db_meta| true, condition, if_then).await;
-    }
     Ok(())
 }
 

@@ -786,7 +786,6 @@ pub async fn list_tables_from_unshare_db(
 pub async fn list_tables_from_share_db(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     share: ShareNameIdent,
-    db_id: u64,
     tenant_dbname: &DatabaseNameIdent,
 ) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
     let res = get_share_or_err(
@@ -806,11 +805,6 @@ pub async fn list_tables_from_share_db(
         return Err(KVAppError::AppError(AppError::WrongShare(WrongShare::new(
             share.to_string_key(),
         ))));
-    }
-    if !share_meta.share_from_db_ids.contains(&db_id) {
-        return Err(KVAppError::AppError(AppError::ShareHasNoGrantedDatabase(
-            ShareHasNoGrantedDatabase::new(&share.tenant, &share.share_name),
-        )));
     }
 
     let mut ids = Vec::with_capacity(share_meta.entries.len());
