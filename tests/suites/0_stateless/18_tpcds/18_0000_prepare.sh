@@ -36,7 +36,7 @@ tables=(
 # shellcheck disable=SC2068
 for t in ${tables[@]}
 do
-    echo "DROP TABLE IF EXISTS $t ALL" | $MYSQL_CLIENT_CONNECT
+    echo "DROP TABLE IF EXISTS $db.$t ALL" | $MYSQL_CLIENT_CONNECT
 done
 
 # Create Tables;
