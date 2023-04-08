@@ -28,6 +28,7 @@ use common_exception::Result;
 use futures::future::select;
 use futures_util::future::Either;
 use parking_lot::Mutex;
+use petgraph::matrix_graph::Zero;
 use tracing::info;
 use tracing::warn;
 
@@ -63,6 +64,13 @@ impl PipelineExecutor {
         settings: ExecutorSettings,
     ) -> Result<Arc<PipelineExecutor>> {
         let threads_num = pipeline.get_max_threads();
+
+        if threads_num.is_zero() {
+            return Err(ErrorCode::Internal(
+                "Pipeline max threads cannot equals zero.",
+            ));
+        }
+
         let on_init_callback = pipeline.take_on_init();
         let on_finished_callback = pipeline.take_on_finished();
 
@@ -71,17 +79,13 @@ impl PipelineExecutor {
                 let _ = on_finished_callback(&Some(cause.clone()));
                 Err(cause)
             }
-            Ok(running_graph) => {
-                assert_ne!(threads_num, 0, "Pipeline max threads cannot equals zero.");
-
-                Self::try_create(
-                    running_graph,
-                    threads_num,
-                    Mutex::new(Some(on_init_callback)),
-                    Mutex::new(Some(on_finished_callback)),
-                    settings,
-                )
-            }
+            Ok(running_graph) => Self::try_create(
+                running_graph,
+                threads_num,
+                Mutex::new(Some(on_init_callback)),
+                Mutex::new(Some(on_finished_callback)),
+                settings,
+            ),
         }
     }
 
@@ -98,6 +102,12 @@ impl PipelineExecutor {
             .map(|x| x.get_max_threads())
             .max()
             .unwrap_or(0);
+
+        if threads_num.is_zero() {
+            return Err(ErrorCode::Internal(
+                "Pipeline max threads cannot equals zero.",
+            ));
+        }
 
         let on_init_callback = {
             let pipelines_callback = pipelines
@@ -135,16 +145,13 @@ impl PipelineExecutor {
 
                 Err(cause)
             }
-            Ok(running_graph) => {
-                assert_ne!(threads_num, 0, "Pipeline max threads cannot equals zero.");
-                Self::try_create(
-                    running_graph,
-                    threads_num,
-                    Mutex::new(on_init_callback),
-                    Mutex::new(on_finished_callback),
-                    settings,
-                )
-            }
+            Ok(running_graph) => Self::try_create(
+                running_graph,
+                threads_num,
+                Mutex::new(on_init_callback),
+                Mutex::new(on_finished_callback),
+                settings,
+            ),
         }
     }
 
