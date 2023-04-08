@@ -183,7 +183,6 @@ impl Binder {
                     });
                 }
                 _ => {
-                    // let mut bind_context = bind_context.clone();
                     for column_binding in projections.iter() {
                         if bind_context.columns.contains(column_binding) {
                             continue;
@@ -472,49 +471,6 @@ impl Binder {
                     let mut rewriter = WindowRewriter::new(bind_context, self.metadata.clone());
                     rewriter.visit(window)
                 }
-                //     let func = match func {
-                //         WindowFuncType::Aggregate(agg) => {
-                //             if let ScalarExpr::AggregateFunction(agg) = self
-                //                 .rewrite_scalar_with_replacement(
-                //                     &ScalarExpr::AggregateFunction(agg.clone()),
-                //                     replacement_fn,
-                //                 )?
-                //             {
-                //                 WindowFuncType::Aggregate(agg)
-                //             } else {
-                //                 return Err(ErrorCode::Internal(
-                //                     "rewrite_scalar_with_replacement should return AggregateFunction",
-                //                 ));
-                //             }
-                //         }
-                //         _ => func.clone(),
-                //     };
-                //     let partition_by = partition_by
-                //         .iter()
-                //         .map(|arg| self.rewrite_scalar_with_replacement(arg, replacement_fn))
-                //         .collect::<Result<Vec<_>>>()?;
-                //
-                //     let order_by = order_by
-                //         .iter()
-                //         .map(|order| {
-                //             let expr =
-                //                 self.rewrite_scalar_with_replacement(&order.expr, replacement_fn)?;
-                //             Ok(WindowOrderBy {
-                //                 expr,
-                //                 asc: order.asc,
-                //                 nulls_first: order.nulls_first,
-                //             })
-                //         })
-                //         .collect::<Result<Vec<_>>>()?;
-                //
-                //     Ok(ScalarExpr::WindowFunction(WindowFunc {
-                //         display_name: display_name.clone(),
-                //         partition_by,
-                //         func,
-                //         order_by,
-                //         frame: frame.clone(),
-                //     }))
-                // }
                 ScalarExpr::FunctionCall(FunctionCall {
                     span,
                     params,

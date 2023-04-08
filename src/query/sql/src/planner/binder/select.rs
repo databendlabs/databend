@@ -109,10 +109,7 @@ impl Binder {
         );
         let (new_stmt, new_order_by) = rewriter.rewrite(stmt, order_by)?;
         let stmt = new_stmt.as_ref().unwrap_or(stmt);
-        let order_by = new_order_by
-            .as_ref()
-            .map(|order_by| order_by.as_slice())
-            .unwrap_or(order_by);
+        let order_by = new_order_by.as_deref().unwrap_or(order_by);
 
         if let Some(expr) = &stmt.selection {
             s_expr = self.bind_where(&mut from_context, expr, s_expr).await?;
