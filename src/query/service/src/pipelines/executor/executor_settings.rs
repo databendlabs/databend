@@ -18,6 +18,7 @@ use std::time::Duration;
 use common_exception::Result;
 use common_settings::Settings;
 
+#[derive(Clone)]
 pub struct ExecutorSettings {
     pub query_id: Arc<String>,
     pub max_execute_time: Duration,
