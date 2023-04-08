@@ -162,7 +162,7 @@ impl Binder {
 
         let order_items = self
             .analyze_order_items(
-                &from_context,
+                &mut from_context,
                 &mut scalar_items,
                 &projections,
                 order_by,
