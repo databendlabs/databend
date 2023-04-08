@@ -157,9 +157,6 @@ impl PartitionPruner {
                 None
             };
 
-            // If one row group does not have stats, we cannot use the stats for topk optimization.
-            all_have_minmax &= row_group_stats.is_some();
-
             for (rg_idx, rg) in file_meta.row_groups.iter().enumerate() {
                 if row_group_pruned[rg_idx] {
                     continue;
