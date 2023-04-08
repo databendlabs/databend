@@ -19,6 +19,7 @@ use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use chrono::Duration;
 use common_catalog::catalog::StorageDescription;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
@@ -546,8 +547,38 @@ impl Table for FuseTable {
 
     #[tracing::instrument(level = "debug", name = "fuse_table_optimize", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     #[async_backtrace::framed]
-    async fn purge(&self, ctx: Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
-        self.do_purge(&ctx, keep_last_snapshot).await
+    async fn purge(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        instant: Option<NavigationPoint>,
+        keep_last_snapshot: bool,
+    ) -> Result<()> {
+        let retention = Duration::hours(ctx.get_settings().get_retention_period()? as i64);
+        let root_snapshot = if let Some(snapshot) = self.read_table_snapshot().await? {
+            snapshot
+        } else {
+            // not an error?
+            return Err(ErrorCode::TableHistoricalDataNotFound(
+                "Empty Table has no historical data",
+            ));
+        };
+
+        assert!(root_snapshot.timestamp.is_some());
+        let retention_point = root_snapshot.timestamp.unwrap() - retention;
+
+        let table = match instant {
+            Some(NavigationPoint::TimePoint(time_point)) => {
+                let min_time_point = std::cmp::min(time_point, retention_point);
+                self.navigate_to_time_point(min_time_point).await?
+            }
+            Some(NavigationPoint::SnapshotID(snapshot_id)) => {
+                self.navigate_with_retention(snapshot_id.as_str(), Some(retention_point))
+                    .await?
+            }
+            None => self.navigate_to_time_point(retention_point).await?,
+        };
+
+        table.do_purge(&ctx, keep_last_snapshot).await
     }
 
     #[tracing::instrument(level = "debug", name = "analyze", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]

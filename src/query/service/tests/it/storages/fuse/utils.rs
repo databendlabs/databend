@@ -15,6 +15,7 @@
 use std::str;
 
 use common_exception::Result;
+use common_storages_fuse::TableContext;
 
 use super::table_test_fixture::append_sample_data;
 use super::table_test_fixture::append_sample_data_overwrite;
@@ -51,6 +52,7 @@ pub async fn do_purge_test(
 
     // execute the query
     let ctx = fixture.ctx();
+    ctx.get_settings().set_retention_period(0)?;
     execute_command(ctx, &qry).await?;
 
     check_data_dir(

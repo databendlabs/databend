@@ -33,6 +33,7 @@ pub use read::TableSnapshotReader;
 pub use read::UncompressedBuffer;
 pub use segments::SegmentsIO;
 pub use snapshots::ListSnapshotLiteOption;
+pub use snapshots::SnapshotLiteExtended2;
 pub use snapshots::SnapshotLiteListExtended;
 pub use snapshots::SnapshotsIO;
 pub use write::serialize_block;

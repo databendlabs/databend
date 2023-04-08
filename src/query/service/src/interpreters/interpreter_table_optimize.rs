@@ -86,7 +86,7 @@ impl Interpreter for OptimizeTableInterpreter {
 
         if do_purge {
             if build_res.main_pipeline.is_empty() {
-                purge(ctx, table, &action).await?;
+                purge(ctx, table, action).await?;
             } else {
                 build_res.main_pipeline.set_on_finished(move |may_error| {
                     if may_error.is_none() {
@@ -97,7 +97,7 @@ impl Interpreter for OptimizeTableInterpreter {
                                 .get_catalog(&catalog_name)?
                                 .get_table(ctx.get_tenant().as_str(), &db_name, &tbl_name)
                                 .await?;
-                            purge(ctx, table, &action).await
+                            purge(ctx, table, action).await
                         });
                     }
 
@@ -112,14 +112,14 @@ impl Interpreter for OptimizeTableInterpreter {
 
 async fn purge(
     ctx: Arc<QueryContext>,
-    origin: Arc<dyn Table>,
-    action: &OptimizeTableAction,
+    table: Arc<dyn Table>,
+    action: OptimizeTableAction,
 ) -> Result<()> {
-    let table = if let OptimizeTableAction::Purge(Some(point)) = action {
-        origin.navigate_to(point).await?
+    let instant = if let OptimizeTableAction::Purge(point) = action {
+        point
     } else {
-        origin
+        None
     };
     let keep_latest = true;
-    table.purge(ctx, keep_latest).await
+    table.purge(ctx, instant, keep_latest).await
 }

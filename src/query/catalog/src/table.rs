@@ -227,8 +227,13 @@ pub trait Table: Sync + Send {
     }
 
     #[async_backtrace::framed]
-    async fn purge(&self, ctx: Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
-        let (_, _) = (ctx, keep_last_snapshot);
+    async fn purge(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        instant: Option<NavigationPoint>,
+        keep_last_snapshot: bool,
+    ) -> Result<()> {
+        let (_, _, _) = (ctx, instant, keep_last_snapshot);
 
         Ok(())
     }

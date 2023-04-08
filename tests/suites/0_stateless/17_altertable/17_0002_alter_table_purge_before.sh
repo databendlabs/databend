@@ -28,7 +28,7 @@ echo "alter table add a column"
 echo "alter table t17_0002 add column a float default 1.01" | $MYSQL_CLIENT_CONNECT
 
 ## verify
-echo "optimize table t17_0002 purge before (snapshot => '$SNAPSHOT_ID')" | $MYSQL_CLIENT_CONNECT
+echo "set retention_period=0; optimize table t17_0002 purge before (snapshot => '$SNAPSHOT_ID')" | $MYSQL_CLIENT_CONNECT
 echo "checking that after purge (by snapshot id) there should be 2 snapshots left"
 echo "select count(*)=2  from fuse_snapshot('default', 't17_0002')" | $MYSQL_CLIENT_CONNECT
 echo "checking that after purge (by snapshot id) there should be 4 rows left"
@@ -39,7 +39,7 @@ echo "alter table drop a column"
 echo "alter table t17_0002 drop column c" | $MYSQL_CLIENT_CONNECT
 
 ## verify
-echo "optimize table t17_0002 purge before (snapshot => '$SNAPSHOT_ID')" | $MYSQL_CLIENT_CONNECT
+echo "set retention_period=0; optimize table t17_0002 purge before (snapshot => '$SNAPSHOT_ID')" | $MYSQL_CLIENT_CONNECT
 echo "checking that after purge (by snapshot id) there should be 2 snapshots left"
 echo "select count(*)=2  from fuse_snapshot('default', 't17_0002')" | $MYSQL_CLIENT_CONNECT
 echo "checking that after purge (by snapshot id) there should be 4 rows left"
@@ -70,7 +70,7 @@ echo "alter table drop a column"
 echo "alter table t17_0002 drop column c" | $MYSQL_CLIENT_CONNECT
 
 ## verify
-echo "optimize table t17_0002 purge before (TIMESTAMP => '$TIMEPOINT'::TIMESTAMP)" | $MYSQL_CLIENT_CONNECT
+echo "set retention_period=0; optimize table t17_0002 purge before (TIMESTAMP => '$TIMEPOINT'::TIMESTAMP)" | $MYSQL_CLIENT_CONNECT
 echo "checking that after purge (by timestamp) there should be 2 snapshots left"
 echo "select count(*)=2  from fuse_snapshot('default', 't17_0002')" | $MYSQL_CLIENT_CONNECT
 echo "checking that after purge (by timestamp) there should be 4 rows left"
@@ -81,7 +81,7 @@ echo "alter table drop a column"
 echo "alter table t17_0002 drop column c" | $MYSQL_CLIENT_CONNECT
 
 ## verify
-echo "optimize table t17_0002 purge before (TIMESTAMP => '$TIMEPOINT'::TIMESTAMP)" | $MYSQL_CLIENT_CONNECT
+echo "set retention_period=0; optimize table t17_0002 purge before (TIMESTAMP => '$TIMEPOINT'::TIMESTAMP)" | $MYSQL_CLIENT_CONNECT
 echo "checking that after purge (by timestamp) there should be 2 snapshots left"
 echo "select count(*)=2  from fuse_snapshot('default', 't17_0002')" | $MYSQL_CLIENT_CONNECT
 echo "checking that after purge (by timestamp) there should be 4 rows left"

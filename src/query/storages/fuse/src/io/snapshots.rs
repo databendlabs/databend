@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::collections::VecDeque;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
@@ -35,7 +34,6 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotLite;
-use storages_common_table_meta::meta::TableSnapshotLite2;
 use tracing::info;
 use tracing::warn;
 use tracing::Instrument;
@@ -43,6 +41,15 @@ use tracing::Instrument;
 use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
 use crate::io::TableMetaLocationGenerator;
+
+#[derive(Clone, Debug)]
+pub struct SnapshotLiteExtended2 {
+    pub format_version: u64,
+    pub snapshot_id: SnapshotId,
+    pub timestamp: Option<DateTime<Utc>>,
+    pub segments: HashSet<Location>,
+    pub table_statistics_location: Option<String>,
+}
 
 // Read snapshot related operations.
 pub struct SnapshotsIO {
@@ -63,16 +70,13 @@ pub enum ListSnapshotLiteOption {
     NeedNotSegments,
     // need segment, and exclude the locations if Some(Hashset<Location>) is provided
     NeedSegmentsWithExclusion(Option<Arc<HashSet<Location>>>),
+    // need segment, and exclude the locations if Some(Hashset<Location>) is provided
+    // NeedSegmentsWithExclusions(Option<Arc<HashSet<Location>>>),
 }
 
 struct SnapshotLiteExtended {
     snapshot_lite: TableSnapshotLite,
     segment_locations: Vec<Location>,
-}
-
-struct SnapshotLiteExtended2 {
-    snapshot_lite: TableSnapshotLite2,
-    segment_locations: HashSet<Location>,
 }
 
 impl SnapshotsIO {
@@ -221,21 +225,22 @@ impl SnapshotsIO {
     #[async_backtrace::framed]
     async fn read_snapshot_lite2(
         snapshot_location: String,
-        format_version: u64,
         data_accessor: Operator,
         min_snapshot_timestamp: Option<DateTime<Utc>>,
-        list_options: ListSnapshotLiteOption,
+        segments_referenced_by_root: Arc<HashSet<Location>>,
+        root_ts_location_opt: Option<String>,
     ) -> Result<SnapshotLiteExtended2> {
         let reader = MetaReaders::table_snapshot_reader(data_accessor);
+        let ver = TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
         let load_params = LoadParams {
             location: snapshot_location,
             len_hint: None,
-            ver: format_version,
+            ver,
             put_cache: false,
         };
         let snapshot = reader.read(&load_params).await?;
 
-        if snapshot.timestamp > min_snapshot_timestamp {
+        if snapshot.timestamp >= min_snapshot_timestamp {
             // filter out snapshots which have larger (artificial)timestamp , they are
             // not members of precedents of the current snapshot, whose timestamp is
             // min_snapshot_timestamp.
@@ -248,32 +253,38 @@ impl SnapshotsIO {
                 "The timestamp of snapshot need less than the min_snapshot_timestamp",
             ));
         }
-        let mut segment_locations = HashSet::new();
-        if let ListSnapshotLiteOption::NeedSegmentsWithExclusion(filter) = list_options {
-            // collects segments, and the snapshots that reference them.
-            for segment_location in &snapshot.segments {
-                if let Some(excludes) = filter.as_ref() {
-                    if excludes.contains(segment_location) {
-                        continue;
-                    }
-                }
-                segment_locations.insert(segment_location.clone());
+        let mut segments = HashSet::new();
+        // collects segments, and the snapshots that reference them.
+        for segment_location in &snapshot.segments {
+            if segments_referenced_by_root.contains(segment_location) {
+                continue;
             }
+            segments.insert(segment_location.clone());
         }
+        let table_statistics_location =
+            if snapshot.table_statistics_location != root_ts_location_opt {
+                snapshot.table_statistics_location.clone()
+            } else {
+                None
+            };
 
         Ok(SnapshotLiteExtended2 {
-            snapshot_lite: TableSnapshotLite2::from(snapshot.as_ref()),
-            segment_locations,
+            format_version: ver,
+            snapshot_id: snapshot.snapshot_id,
+            timestamp: snapshot.timestamp,
+            segments,
+            table_statistics_location,
         })
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
     #[async_backtrace::framed]
-    async fn read_snapshot_lites2(
+    pub async fn read_snapshot_lites2(
         &self,
         snapshot_files: &[String],
         min_snapshot_timestamp: Option<DateTime<Utc>>,
-        list_options: &ListSnapshotLiteOption,
+        segments_referenced_by_root: Arc<HashSet<Location>>,
+        root_ts_location_opt: Option<String>,
     ) -> Result<Vec<Result<SnapshotLiteExtended2>>> {
         // combine all the tasks.
         let mut iter = snapshot_files.iter();
@@ -281,10 +292,10 @@ impl SnapshotsIO {
             iter.next().map(|location| {
                 Self::read_snapshot_lite2(
                     location.clone(),
-                    self.format_version,
                     self.operator.clone(),
                     min_snapshot_timestamp,
-                    list_options.clone(),
+                    segments_referenced_by_root.clone(),
+                    root_ts_location_opt.clone(),
                 )
                 .instrument(tracing::debug_span!("read_snapshot"))
             })
@@ -299,64 +310,6 @@ impl SnapshotsIO {
             "fuse-req-snapshots-worker".to_owned(),
         )
         .await
-    }
-
-    pub async fn read<T>(
-        &self,
-        root_snapshot_file: String,
-        list_options: &ListSnapshotLiteOption,
-        min_snapshot_timestamp: Option<DateTime<Utc>>,
-        status_callback: T,
-    ) -> Result<SnapshotLiteListExtended>
-    where
-        T: Fn(String),
-    {
-        let ctx = self.ctx.clone();
-        let data_accessor = self.operator.clone();
-
-        // List all the snapshot file paths
-        // note that snapshot file paths of ongoing txs might be included
-        let mut snapshot_files = vec![];
-        if let Some(prefix) = Self::get_s3_prefix_from_file(&root_snapshot_file) {
-            snapshot_files = self.list_files(&prefix, None, None).await?;
-        }
-
-        // 1. Get all the snapshot by chunks.
-        let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
-
-        let start = Instant::now();
-        let mut count = 0;
-        let mut remain_snapshots = Vec::new();
-        for chunk in snapshot_files.chunks(max_io_requests).rev() {
-            let results = self
-                .read_snapshot_lites2(chunk, min_snapshot_timestamp, list_options)
-                .await?;
-
-            if results.is_empty() {
-                continue;
-            }
-            
-            let mut snapshots: VecDeque<SnapshotLiteExtended2> = results.into_iter().flatten().collect();
-            let root = snapshots.pop_front().unwrap();
-            snapshots.extend(std::mem::take(&mut remain_snapshots));
-            let root_segments = root.segment_locations.clone();
-            let root_timestamp = root.snapshot_lite.timestamp;
-            remain_snapshots.push(root);
-            let mut purge_snapshots = Vec::new();
-            let mut purge_segments = HashSet::new();
-
-            for s in snapshots.into_iter() {
-                if s.snapshot_lite.timestamp >= root_timestamp {
-                    remain_snapshots.push(s);
-                    continue;
-                }
-
-                let diff: HashSet<_> = s.segment_locations.difference(&root_segments).cloned().collect();
-                purge_segments.extend(diff);
-                purge_snapshots.push((s.snapshot_lite.snapshot_id, s.snapshot_lite.format_version));
-            }
-        }
-        todo!()
     }
 
     // Read all the snapshots by the root file.
@@ -471,7 +424,7 @@ impl SnapshotsIO {
     }
 
     #[async_backtrace::framed]
-    async fn list_files(
+    pub async fn list_files(
         &self,
         prefix: &str,
         limit: Option<usize>,
@@ -518,7 +471,7 @@ impl SnapshotsIO {
     }
 
     // _ss/xx/yy.json -> _ss/xx/
-    fn get_s3_prefix_from_file(file_path: &str) -> Option<String> {
+    pub fn get_s3_prefix_from_file(file_path: &str) -> Option<String> {
         if let Some(path) = Path::new(&file_path).parent() {
             let mut prefix = path.to_str().unwrap_or("").to_string();
 

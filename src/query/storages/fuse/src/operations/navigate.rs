@@ -42,6 +42,7 @@ impl FuseTable {
         })
         .await
     }
+
     #[async_backtrace::framed]
     pub async fn navigate_to_snapshot(&self, snapshot_id: &str) -> Result<Arc<FuseTable>> {
         self.find(|snapshot| {
@@ -51,6 +52,38 @@ impl FuseTable {
                 .to_string()
                 .as_str()
                 .starts_with(snapshot_id)
+        })
+        .await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn navigate_with_retention(
+        &self,
+        snapshot_id: &str,
+        retention_point: Option<DateTime<Utc>>,
+    ) -> Result<Arc<FuseTable>> {
+        assert!(retention_point.is_some());
+
+        let mut find_id = false;
+        self.find(|snapshot| {
+            if find_id {
+                snapshot.timestamp <= retention_point
+            } else if snapshot
+                .snapshot_id
+                .simple()
+                .to_string()
+                .as_str()
+                .starts_with(snapshot_id)
+            {
+                if snapshot.timestamp > retention_point {
+                    find_id = true;
+                    false
+                } else {
+                    true
+                }
+            } else {
+                false
+            }
         })
         .await
     }

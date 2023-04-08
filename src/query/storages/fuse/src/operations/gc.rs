@@ -25,6 +25,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use storages_common_cache::CacheAccessor;
+use storages_common_cache::LoadParams;
 use storages_common_cache_manager::CachedObject;
 use storages_common_index::BloomIndexMeta;
 use storages_common_table_meta::meta::Location;
@@ -38,8 +39,10 @@ use tracing::warn;
 
 use crate::io::Files;
 use crate::io::ListSnapshotLiteOption;
+use crate::io::MetaReaders;
 use crate::io::SegmentsIO;
 use crate::io::SnapshotsIO;
+use crate::io::TableMetaLocationGenerator;
 use crate::FuseTable;
 
 #[derive(Default)]
@@ -68,6 +71,305 @@ impl From<Arc<SegmentInfo>> for LocationTuple {
 impl FuseTable {
     #[async_backtrace::framed]
     pub async fn do_purge(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        keep_last_snapshot: bool,
+    ) -> Result<()> {
+        let root_snapshot_location_op = self.snapshot_loc().await?;
+        if root_snapshot_location_op.is_none() {
+            return Ok(());
+        }
+
+        let root_snapshot_location = root_snapshot_location_op.unwrap();
+        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+        let ver = TableMetaLocationGenerator::snapshot_version(root_snapshot_location.as_str());
+        let params = LoadParams {
+            location: root_snapshot_location.clone(),
+            len_hint: None,
+            ver,
+            put_cache: true,
+        };
+        let root_snapshot = match reader.read(&params).await {
+            Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
+                // concurrent gc: someone else has already collected this snapshot, ignore it
+                warn!(
+                    "concurrent gc: snapshot {:?} already collected. table: {}, ident {}",
+                    root_snapshot_location, self.table_info.desc, self.table_info.ident,
+                );
+                return Ok(());
+            }
+            Err(e) => return Err(e),
+            Ok(v) => v,
+        };
+        let root_snapshot_ts = root_snapshot.timestamp;
+        let root_ts_location_opt = root_snapshot.table_statistics_location.clone();
+        let locations_referenced_by_root = self
+            .get_block_locations(ctx.clone(), &root_snapshot.segments, true)
+            .await?;
+        let segments_referenced_by_root = HashSet::from_iter(root_snapshot.segments.clone());
+        let segments_excluded = Arc::new(segments_referenced_by_root);
+        drop(root_snapshot);
+
+        let snapshots_io = SnapshotsIO::create(
+            ctx.clone(),
+            self.operator.clone(),
+            self.snapshot_format_version().await?,
+        );
+
+        // List all the snapshot file paths
+        // note that snapshot file paths of ongoing txs might be included
+        let mut snapshot_files = vec![];
+        if let Some(prefix) = SnapshotsIO::get_s3_prefix_from_file(&root_snapshot_location) {
+            snapshot_files = snapshots_io.list_files(&prefix, None, None).await?;
+        }
+
+        let chunk_size = ctx.get_settings().get_max_storage_io_requests()? as usize;
+        let location_gen = self.meta_location_generator();
+        let start = Instant::now();
+        let mut count = 0;
+        let mut remain_snapshots = Vec::new();
+        for chunk in snapshot_files.chunks(chunk_size).rev() {
+            let results = snapshots_io
+                .read_snapshot_lites2(
+                    chunk,
+                    root_snapshot_ts,
+                    segments_excluded.clone(),
+                    root_ts_location_opt.clone(),
+                )
+                .await?;
+            let mut snapshots: Vec<_> = results.into_iter().filter_map(|r| r.ok()).collect();
+            if snapshots.is_empty() {
+                continue;
+            }
+            snapshots.extend(std::mem::take(&mut remain_snapshots));
+            snapshots.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+
+            let base_segments = snapshots[0].segments.clone();
+            let base_timestamp = snapshots[0].timestamp;
+            let base_ts_location_opt = snapshots[0].table_statistics_location.clone();
+
+            let mut snapshots_to_be_purged = HashSet::new();
+            let mut segments_to_be_purged = HashSet::new();
+            let mut ts_to_be_purged = HashSet::new();
+            for s in snapshots.into_iter() {
+                if s.timestamp >= base_timestamp {
+                    remain_snapshots.push(s);
+                    continue;
+                }
+
+                let diff: HashSet<_> = s.segments.difference(&base_segments).cloned().collect();
+                segments_to_be_purged.extend(diff);
+                if let Ok(loc) =
+                    location_gen.snapshot_location_from_uuid(&s.snapshot_id, s.format_version)
+                {
+                    snapshots_to_be_purged.insert(loc);
+                }
+
+                if s.table_statistics_location.is_some()
+                    && s.table_statistics_location != base_ts_location_opt
+                {
+                    ts_to_be_purged.insert(s.table_statistics_location.unwrap());
+                }
+            }
+
+            // Refresh status.
+            {
+                count += chunk.len();
+                let status = format!(
+                    "gc: read snapshot files:{}/{}, cost:{} sec",
+                    count,
+                    snapshot_files.len(),
+                    start.elapsed().as_secs()
+                );
+                info!(status);
+                ctx.set_status_info(&status);
+            }
+
+            self.purge_files(
+                ctx,
+                segments_to_be_purged,
+                &locations_referenced_by_root,
+                ts_to_be_purged,
+                snapshots_to_be_purged,
+            )
+            .await?;
+        }
+
+        if !remain_snapshots.is_empty() {
+            let mut snapshots_to_be_purged = HashSet::new();
+            let mut segments_to_be_purged = HashSet::new();
+            let mut ts_to_be_purged = HashSet::new();
+            for s in remain_snapshots.into_iter() {
+                if let Ok(loc) =
+                    location_gen.snapshot_location_from_uuid(&s.snapshot_id, s.format_version)
+                {
+                    snapshots_to_be_purged.insert(loc);
+                }
+                segments_to_be_purged.extend(s.segments);
+                if let Some(ts) = s.table_statistics_location {
+                    ts_to_be_purged.insert(ts);
+                }
+            }
+
+            self.purge_files(
+                ctx,
+                segments_to_be_purged,
+                &locations_referenced_by_root,
+                ts_to_be_purged,
+                snapshots_to_be_purged,
+            )
+            .await?;
+        }
+
+        if !keep_last_snapshot {
+            let snapshots_to_be_purged = HashSet::from([root_snapshot_location]);
+            let segments_to_be_purged = segments_excluded.as_ref().clone();
+            let ts_to_be_purged = if let Some(ts) = root_ts_location_opt {
+                HashSet::from([ts])
+            } else {
+                Default::default()
+            };
+            self.purge_files(
+                ctx,
+                segments_to_be_purged,
+                &Default::default(),
+                ts_to_be_purged,
+                snapshots_to_be_purged,
+            )
+            .await?;
+        }
+
+        Ok(())
+    }
+
+    async fn purge_files(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        segments_to_be_purged: HashSet<Location>,
+        locations_referenced_by_root: &LocationTuple,
+        ts_to_be_purged: HashSet<String>,
+        snapshots_to_be_purged: HashSet<String>,
+    ) -> Result<()> {
+        let chunk_size = ctx.get_settings().get_max_storage_io_requests()? as usize;
+        // 1. Purge segments&blocks by chunk size
+        {
+            let mut status_block_to_be_purged_count = 0;
+            let mut status_bloom_to_be_purged_count = 0;
+            let mut status_segment_to_be_purged_count = 0;
+
+            let segment_locations = Vec::from_iter(segments_to_be_purged);
+            for chunk in segment_locations.chunks(chunk_size) {
+                let start = Instant::now();
+                let locations = self.get_block_locations(ctx.clone(), chunk, false).await?;
+
+                // 1. Try to purge block file chunks.
+                {
+                    let mut block_locations_to_be_pruged = HashSet::new();
+                    for loc in &locations.block_location {
+                        if locations_referenced_by_root.block_location.contains(loc) {
+                            continue;
+                        }
+                        block_locations_to_be_pruged.insert(loc.to_string());
+                    }
+                    status_block_to_be_purged_count += block_locations_to_be_pruged.len();
+                    self.try_purge_location_files(ctx.clone(), block_locations_to_be_pruged)
+                        .await?;
+                }
+
+                // 2. Try to purge bloom index file chunks.
+                {
+                    let mut bloom_locations_to_be_pruged = HashSet::new();
+                    for loc in &locations.bloom_location {
+                        if locations_referenced_by_root.bloom_location.contains(loc) {
+                            continue;
+                        }
+                        bloom_locations_to_be_pruged.insert(loc.to_string());
+                    }
+                    status_bloom_to_be_purged_count += bloom_locations_to_be_pruged.len();
+                    self.try_purge_location_files_and_cache::<BloomIndexMeta>(
+                        ctx.clone(),
+                        bloom_locations_to_be_pruged,
+                    )
+                    .await?;
+                }
+
+                // 3. Try to purge segment file chunks.
+                {
+                    let segment_locations_to_be_purged = HashSet::from_iter(
+                        chunk
+                            .iter()
+                            .map(|loc| loc.0.clone())
+                            .collect::<Vec<String>>(),
+                    );
+                    self.try_purge_location_files_and_cache::<SegmentInfo>(
+                        ctx.clone(),
+                        segment_locations_to_be_purged,
+                    )
+                    .await?;
+                }
+
+                // Refresh status.
+                {
+                    status_segment_to_be_purged_count += chunk.len();
+                    let status = format!(
+                        "gc: block files purged:{}, bloom files purged:{}, segment files purged:{}, take:{} sec",
+                        status_block_to_be_purged_count,
+                        status_bloom_to_be_purged_count,
+                        status_segment_to_be_purged_count,
+                        start.elapsed().as_secs()
+                    );
+                    ctx.set_status_info(&status);
+                    info!(status);
+                }
+            }
+        }
+
+        // 6. Purge table statistic files
+        if !ts_to_be_purged.is_empty() {
+            let status_purged_count = ts_to_be_purged.len();
+            let start = Instant::now();
+            self.try_purge_location_files_and_cache::<TableSnapshotStatistics>(
+                ctx.clone(),
+                ts_to_be_purged,
+            )
+            .await?;
+            // Refresh status.
+            {
+                let status = format!(
+                    "gc: table statistic files purged:{}, take:{} sec",
+                    status_purged_count,
+                    start.elapsed().as_secs()
+                );
+                ctx.set_status_info(&status);
+                info!(status);
+            }
+        }
+
+        // 5. Purge snapshots by chunk size(max_storage_io_requests).
+        if !snapshots_to_be_purged.is_empty() {
+            let status_purged_count = snapshots_to_be_purged.len();
+            let start = Instant::now();
+            self.try_purge_location_files_and_cache::<TableSnapshot>(
+                ctx.clone(),
+                snapshots_to_be_purged,
+            )
+            .await?;
+            // Refresh status.
+            {
+                let status = format!(
+                    "gc: snapshots purged:{}, take:{} sec",
+                    status_purged_count,
+                    start.elapsed().as_secs()
+                );
+                ctx.set_status_info(&status);
+                info!(status);
+            }
+        }
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    pub async fn do_purge2(
         &self,
         ctx: &Arc<dyn TableContext>,
         keep_last_snapshot: bool,

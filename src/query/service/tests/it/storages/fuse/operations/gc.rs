@@ -132,53 +132,62 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
     //
     // for example :
     //
-    //   ──┬──           S_current───────────► seg_c ──────────────► block_c
+    //   ──┬──
     //     │
     //  within retention
     //     │
-    //     │             S_2 ───────────┐
-    //   ──┴──                          └───────┐
-    //  beyond retention                        ▼
+    //     │             S_2 ────────────────► seg_2 ──────────────► block_2
+    //   ──┴──
+    //  beyond retention S_current───────────► seg_1 seg_c ──────────────► block_1 block_c
+    //     │
     //     │             S_1 ────────────────► seg_1 ──────────────► block_1
     //     │
     //     │             S_0 ────────────────► seg_0 ──────────────► block_0
     //
     // - S_current is the gc root
-    // - S_2, S_1, S_0 are all orphan snapshots in S_current's point of view
+    // - S_1 is S_current's precedent
+    // - S_2, S_0 are orphan snapshots in S_current's point of view
     //   each of them is not a number of  S_current's precedents
     //
-    // - s_current, seg_c, and block_c shall NOT be purged
-    //   since they are referenced by the current table snapshot
     // - S_2 should NOT be purged
     //   since it is within the retention period
+    //    - seg_2 shall NOT be purged, since it is referenced by S_2.
+    //    - block_2 shall NOT be purged , since it is referenced by seg_2
+    //
+    // - S_current, seg_1, seg_c, block_1 and block_c shall NOT be purged
+    //   since they are referenced by the current table snapshot
+    //
+    // - S_1 should be purged
+    //
     // - S_1 should be purged, since it is beyond the retention period
-    //    BUT
-    //    - seg_1 shall NOT be purged, since it is still referenced by s_1
-    //      although it is not referenced by the current snapshot.
-    //    - block_1 shall NOT be purged , since it is referenced by seg_1
+    //    - seg_1 and block_1 shall be purged
+
     // - S_0 should be purged, since it is beyond the retention period
     //    - seg_0 and block_0 shall be purged
     //
     //  put them together, after GC, there will be
     //  - 2 snapshots left: s_current, s_2
-    //  - 2 segments left: seg_c, seg_1
-    //  - 2 blocks left: block_c, block_1
+    //  - 3 segments left: seg_c, seg_2, seg_1
+    //  - 3 blocks left: block_c, block_2, block_1
 
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
     fixture.create_default_table().await?;
 
-    // 1. prepare `S_current`
+    // 1. prepare `S_1`
     let number_of_block = 1;
     append_sample_data(number_of_block, &fixture).await?;
     // no we have 1 snapshot, 1 segment, 1 blocks
 
+    // 2. prepare `s_current`
+    append_sample_data(1, &fixture).await?;
+    // no we have 2 snapshot, 2 segment, 2 blocks
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let base_snapshot = fuse_table.read_table_snapshot().await?.unwrap();
     let base_timestamp = base_snapshot.timestamp.unwrap();
 
-    // 2. prepare `seg_1`
+    // 2. prepare `seg_2`
     let num_of_segments = 1;
     let blocks_per_segment = 1;
     let segments =
@@ -186,16 +195,7 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
     let (segment_locations, _segment_info): (Vec<_>, Vec<_>) = segments.into_iter().unzip();
 
     // 2. prepare S_2
-    let new_timestamp = base_timestamp - Duration::minutes(1);
-    let _snapshot_location = utils::generate_snapshot_with_segments(
-        fuse_table,
-        segment_locations.clone(),
-        Some(new_timestamp),
-    )
-    .await?;
-
-    // 2. prepare S_1
-    let new_timestamp = base_timestamp - Duration::days(2);
+    let new_timestamp = base_timestamp + Duration::minutes(1);
     let _snapshot_location = utils::generate_snapshot_with_segments(
         fuse_table,
         segment_locations.clone(),
@@ -210,7 +210,7 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
         let segments =
             utils::generate_segments(fuse_table, num_of_segments, blocks_per_segment).await?;
         let segment_locations: Vec<Location> = segments.into_iter().map(|(l, _)| l).collect();
-        let new_timestamp = base_timestamp - Duration::days(2);
+        let new_timestamp = base_timestamp - Duration::days(1);
         let _snapshot_location = utils::generate_snapshot_with_segments(
             fuse_table,
             segment_locations.clone(),
@@ -225,8 +225,8 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
     fuse_table.do_purge(&table_ctx, keep_last_snapshot).await?;
 
     let expected_num_of_snapshot = 2;
-    let expected_num_of_segment = 2;
-    let expected_num_of_blocks = 2;
+    let expected_num_of_segment = 3;
+    let expected_num_of_blocks = 3;
     let expected_num_of_index = expected_num_of_blocks;
     check_data_dir(
         &fixture,

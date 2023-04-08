@@ -48,7 +48,7 @@ echo "optimize table t20_0012 all" | $TEST_USER_CONNECT
 echo "GRANT Super ON *.* TO 'test-user'@'$QUERY_MYSQL_HANDLER_HOST'" | $MYSQL_CLIENT_CONNECT
 echo "GRANT SELECT ON system.fuse_snapshot TO 'test-user'@'$QUERY_MYSQL_HANDLER_HOST'" | $MYSQL_CLIENT_CONNECT
 ## optimize table
-echo "optimize table t20_0012 all" | $TEST_USER_CONNECT
+echo "set retention_period=0; optimize table t20_0012 all" | $TEST_USER_CONNECT
 ## verify
 echo "select count(*)=1  from fuse_snapshot('default', 't20_0012')" | $TEST_USER_CONNECT
 ## revoke privilege
