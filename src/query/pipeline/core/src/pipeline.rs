@@ -327,7 +327,11 @@ impl Drop for Pipeline {
     fn drop(&mut self) {
         // An error may have occurred before the executor was created.
         if let Some(on_finished) = self.on_finished.take() {
-            (on_finished)(&None).ok();
+            let cause = Some(ErrorCode::Internal(
+                "Pipeline illegal state: not successfully shutdown.",
+            ));
+
+            let _ = (on_finished)(&cause);
         }
     }
 }
