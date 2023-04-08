@@ -25,6 +25,7 @@ use crate::plans::Prewhere;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::Scan;
+use crate::IndexType;
 use crate::MetadataRef;
 
 pub struct RulePushDownPrewhere {
@@ -54,34 +55,43 @@ impl RulePushDownPrewhere {
     }
 
     /// will throw error if the bound column ref is not in the table, such as subquery
-    fn collect_columns_impl(expr: &ScalarExpr, columns: &mut ColumnSet) -> Result<()> {
+    fn collect_columns_impl(
+        table_index: IndexType,
+        expr: &ScalarExpr,
+        columns: &mut ColumnSet,
+    ) -> Result<()> {
         match expr {
             ScalarExpr::BoundColumnRef(column) => {
-                if column.column.table_name.is_none() {
-                    return Err(ErrorCode::Unimplemented("Column is not in the table"));
+                if let Some(index) = &column.column.table_index {
+                    if table_index == *index {
+                        columns.insert(column.column.index);
+                        return Ok(());
+                    }
                 }
-                columns.insert(column.column.index);
+                return Err(ErrorCode::Unimplemented("Column is not in the table"));
             }
             ScalarExpr::AndExpr(and) => {
-                Self::collect_columns_impl(and.left.as_ref(), columns)?;
-                Self::collect_columns_impl(and.right.as_ref(), columns)?;
+                Self::collect_columns_impl(table_index, and.left.as_ref(), columns)?;
+                Self::collect_columns_impl(table_index, and.right.as_ref(), columns)?;
             }
             ScalarExpr::OrExpr(or) => {
-                Self::collect_columns_impl(or.left.as_ref(), columns)?;
-                Self::collect_columns_impl(or.right.as_ref(), columns)?;
+                Self::collect_columns_impl(table_index, or.left.as_ref(), columns)?;
+                Self::collect_columns_impl(table_index, or.right.as_ref(), columns)?;
             }
-            ScalarExpr::NotExpr(not) => Self::collect_columns_impl(not.argument.as_ref(), columns)?,
+            ScalarExpr::NotExpr(not) => {
+                Self::collect_columns_impl(table_index, not.argument.as_ref(), columns)?
+            }
             ScalarExpr::ComparisonExpr(cmp) => {
-                Self::collect_columns_impl(cmp.left.as_ref(), columns)?;
-                Self::collect_columns_impl(cmp.right.as_ref(), columns)?;
+                Self::collect_columns_impl(table_index, cmp.left.as_ref(), columns)?;
+                Self::collect_columns_impl(table_index, cmp.right.as_ref(), columns)?;
             }
             ScalarExpr::FunctionCall(func) => {
                 for arg in func.arguments.iter() {
-                    Self::collect_columns_impl(arg, columns)?;
+                    Self::collect_columns_impl(table_index, arg, columns)?;
                 }
             }
             ScalarExpr::CastExpr(cast) => {
-                Self::collect_columns_impl(cast.argument.as_ref(), columns)?;
+                Self::collect_columns_impl(table_index, cast.argument.as_ref(), columns)?;
             }
             ScalarExpr::ConstantExpr(_) => {}
             _ => {
@@ -96,10 +106,10 @@ impl RulePushDownPrewhere {
     }
 
     // analyze if the expression can be moved to prewhere
-    fn collect_columns(expr: &ScalarExpr) -> Option<ColumnSet> {
+    fn collect_columns(table_index: IndexType, expr: &ScalarExpr) -> Option<ColumnSet> {
         let mut columns = ColumnSet::new();
         // columns in subqueries are not considered
-        Self::collect_columns_impl(expr, &mut columns).ok()?;
+        Self::collect_columns_impl(table_index, expr, &mut columns).ok()?;
 
         Some(columns)
     }
@@ -120,7 +130,7 @@ impl RulePushDownPrewhere {
 
         // filter.predicates are already split by AND
         for pred in filter.predicates.iter() {
-            match Self::collect_columns(pred) {
+            match Self::collect_columns(get.table_index, pred) {
                 Some(columns) => {
                     prewhere_pred.push(pred.clone());
                     prewhere_columns.extend(&columns);

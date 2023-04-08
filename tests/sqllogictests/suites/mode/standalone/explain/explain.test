@@ -1037,7 +1037,7 @@ EvalScalar
     ├── expressions: [t4.a (#0), TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL)]
     ├── estimated rows: 0.00
     └── Filter
-        ├── filters: [v4.a (#0) > 100]
+        ├── filters: [t4.a (#0) > 100]
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.default.t4

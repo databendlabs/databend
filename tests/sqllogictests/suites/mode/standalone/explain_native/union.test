@@ -27,9 +27,9 @@ explain select * from v where a > b
 ----
 EvalScalar
 ├── expressions: [v.a (#0), v.b (#1)]
-├── estimated rows: 2.67
+├── estimated rows: 4.00
 └── UnionAll
-    ├── estimated rows: 2.67
+    ├── estimated rows: 4.00
     ├── EvalScalar
     │   ├── expressions: [t1.a (#0), t1.b (#1)]
     │   ├── estimated rows: 2.00
@@ -44,28 +44,25 @@ EvalScalar
     │       └── estimated rows: 2.00
     └── EvalScalar
         ├── expressions: [t2.a (#2), t2.b (#3)]
-        ├── estimated rows: 0.67
-        └── Filter
-            ├── filters: [a (#2) > b (#3)]
-            ├── estimated rows: 0.67
-            └── TableScan
-                ├── table: default.default.t2
-                ├── read rows: 0
-                ├── read bytes: 0
-                ├── partitions total: 1
-                ├── partitions scanned: 0
-                ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
-                ├── push downs: [filters: [t2.a (#2) > t2.b (#3)], limit: NONE]
-                └── estimated rows: 2.00
+        ├── estimated rows: 2.00
+        └── TableScan
+            ├── table: default.default.t2
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 1
+            ├── partitions scanned: 0
+            ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
+            ├── push downs: [filters: [t2.a (#2) > t2.b (#3)], limit: NONE]
+            └── estimated rows: 2.00
 
 query T
 explain select * from v where a > 1
 ----
 EvalScalar
 ├── expressions: [v.a (#0), v.b (#1)]
-├── estimated rows: 2.67
+├── estimated rows: 4.00
 └── UnionAll
-    ├── estimated rows: 2.67
+    ├── estimated rows: 4.00
     ├── EvalScalar
     │   ├── expressions: [t1.a (#0), t1.b (#1)]
     │   ├── estimated rows: 2.00
@@ -80,19 +77,16 @@ EvalScalar
     │       └── estimated rows: 2.00
     └── EvalScalar
         ├── expressions: [t2.a (#2), t2.b (#3)]
-        ├── estimated rows: 0.67
-        └── Filter
-            ├── filters: [a (#2) > 1]
-            ├── estimated rows: 0.67
-            └── TableScan
-                ├── table: default.default.t2
-                ├── read rows: 2
-                ├── read bytes: 36
-                ├── partitions total: 1
-                ├── partitions scanned: 1
-                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                ├── push downs: [filters: [t2.a (#2) > 1], limit: NONE]
-                └── estimated rows: 2.00
+        ├── estimated rows: 2.00
+        └── TableScan
+            ├── table: default.default.t2
+            ├── read rows: 2
+            ├── read bytes: 36
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+            ├── push downs: [filters: [t2.a (#2) > 1], limit: NONE]
+            └── estimated rows: 2.00
 
 query T
 explain select * from v limit 3
