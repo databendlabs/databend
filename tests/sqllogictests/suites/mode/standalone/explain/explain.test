@@ -977,7 +977,7 @@ Query (children 1)
                 └── refresh_meta_cache=>Literal Boolean(true)
 
 statement ok
-drop table if exists t4 all
+drop table if exists t4
 
 statement ok
 create table t4(a int, b string);
@@ -1001,7 +1001,7 @@ EvalScalar
         └── estimated rows: 0.00
 
 statement ok
-drop view if exists v4 all
+drop view if exists v4
 
 statement ok
 create view v4 as select a as a, try_cast(get(try_parse_json(b), 'bb') as varchar) as b from t4;
