@@ -18,7 +18,6 @@ use common_catalog::catalog::Catalog;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::number::UInt64Type;
 use common_expression::types::NumberDataType;
@@ -113,11 +112,20 @@ where TablesTable<T>: HistoryAware
                 let name: &str = Box::leak(name);
                 let tables = match Self::list_tables(&ctl, tenant.as_str(), name).await {
                     Ok(tables) => tables,
-                    Err(err) if err.code() == ErrorCode::EMPTY_SHARE_ENDPOINT_CONFIG => {
-                        tracing::warn!("list tables failed on db {}: {}", db.name(), err);
-                        continue;
+                    Err(err) => {
+                        // Swallow the errors related with sharing. Listing tables in a shared database
+                        // is easy to get errors with invalid configs, but system.tables is better not
+                        // to be affected by it.
+                        if db.get_db_info().meta.from_share.is_some() {
+                            tracing::warn!(
+                                "list tables failed on sharing db {}: {}",
+                                db.name(),
+                                err
+                            );
+                            continue;
+                        }
+                        return Err(err);
                     }
-                    Err(err) => return Err(err),
                 };
                 for table in tables {
                     catalogs.push(ctl_name.as_bytes().to_vec());

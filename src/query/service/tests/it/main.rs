@@ -15,6 +15,8 @@
 #![allow(clippy::uninlined_format_args)]
 #![feature(thread_local)]
 
+extern crate core;
+
 mod api;
 mod auth;
 mod catalogs;

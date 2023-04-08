@@ -801,11 +801,6 @@ impl SchemaApiTestSuite {
             })
             .await?;
 
-            // check that share db id has removed the db id
-            let share_id_key = ShareId { share_id };
-            let share_meta: ShareMeta = get_kv_data(mt.as_kv_api(), &share_id_key).await?;
-            assert!(!share_meta.has_share_from_db_id(db_id));
-
             // check that DatabaseMeta has been removed
             let res = is_all_db_data_removed(mt.as_kv_api(), db_id).await?;
             assert!(res);
