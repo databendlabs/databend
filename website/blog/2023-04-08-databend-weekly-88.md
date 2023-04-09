@@ -80,7 +80,7 @@ Input:
 
 If you are interested in learning more, please check out the resources listed below.
 
-- [PR #10716 | feat(planner): support eager aggregation](https://github.com/datafuselabs/databend/pull/10700)
+- [PR #10716 | feat(planner): support eager aggregation](https://github.com/datafuselabs/databend/pull/10716)
 - [Paper | Eager Aggregation and Lazy Aggregation](https://www.vldb.org/conf/1995/P345.PDF)
 
 ### Support All TPC-DS Queries
