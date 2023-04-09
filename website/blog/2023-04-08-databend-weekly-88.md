@@ -41,7 +41,7 @@ Stay connected with the latest news about Databend.
 
 ### Support Eager Aggregation
 
-Eager aggregation is a technique that can help improve the performance of queries that involve grouping and joining data. It works by partially pushing a groupby past a join, which reduces the number of input rows to the join and may result in a better overall plan.
+Eager aggregation helps improve the performance of queries that involve grouping and joining data. It works by partially pushing a groupby past a join, which reduces the number of input rows to the join and may result in a better overall plan.
 
 Databend recently added support for Eager aggregation. Here is an example of how it works.
 
@@ -100,7 +100,7 @@ Discover some fascinating code snippets or projects that showcase our work or le
 
 ### databend-driver - A driver for Databend in Rust
 
-The Databend community has developed a driver for Databend in Rust. It allows developers to easily connect to Databend and execute SQL queries using Rust.
+The Databend community has crafted a Rust driver that allows developers to connect to Databend and execute SQL queries in Rust.
 
 Here's an example of how to use the driver:
 
@@ -120,7 +120,7 @@ let sql_insert = "INSERT INTO books VALUES ('The Little Prince', 'Antoine de Sai
 conn.exec(sql_insert).await.unwrap();
 ```
 
-Welcome to try it out and give us feedback. If you want to learn more information, you can also follow the resources listed below.
+Feel free to try it out and give us feedback. For more information, follow the resources listed below.
 
 - [Crates.io - databend-driver](https://crates.io/crates/databend-driver)
 - [Github - datafuselabs/databend-client](https://github.com/datafuselabs/databend-client)
@@ -129,16 +129,16 @@ Welcome to try it out and give us feedback. If you want to learn more informatio
 
 AskBend is a Rust project that utilizes the power of Databend and OpenAI to create a SQL-based knowledge base from Markdown files.
 
-With AskBend, you can easily search and retrieve the most relevant information to your queries using SQL. The project automatically generates document embeddings from the content, enabling users to quickly find the information they need.
+With AskBend, you can easily search and retrieve the most relevant information to your queries using SQL. The project automatically generates document embeddings from the content, enabling you to quickly find the information you need.
 
-Here's how it works:
+How it works:
 
 1. Read and parse Markdown files from a directory.
 2. Store the content in the `askbend.doc` table.
 3. Compute embeddings for the content using Databend Cloud's built-in AI capabilities.
-4. When a user queries, generate the query embedding using Databend Cloud's SQL-based `ai_embedding_vector` function.
+4. When a users asks a question, generate the embedding using Databend Cloud's SQL-based `ai_embedding_vector` function.
 5. Find the most relevant doc.content using Databend Cloud's SQL-based `cosine_distance` function.
-6. Use OpenAI's completion capabilities with Databend Cloud's SQL-based `ai_text_completion` function
+6. Use OpenAI's completion capabilities with Databend Cloud's SQL-based `ai_text_completion` function.
 7. Output the completion result in Markdown format.
 
 If you want to learn more about AskBend or try out the existing live demo, you can refer to the resources listed below:
