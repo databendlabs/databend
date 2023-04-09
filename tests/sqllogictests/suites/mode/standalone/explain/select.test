@@ -62,7 +62,7 @@ EvalScalar
     ├── expressions: [numbers.number (#0), numbers.number (#0) + 1]
     ├── estimated rows: 0.33
     └── Filter
-        ├── filters: [numbers.number (#0) = 1]
+        ├── filters: [t1.a (#0) = 1]
         ├── estimated rows: 0.33
         └── TableScan
             ├── table: default.system.numbers
@@ -70,7 +70,7 @@ EvalScalar
             ├── read bytes: 8
             ├── partitions total: 1
             ├── partitions scanned: 1
-            ├── push downs: [filters: [numbers.number (#0) = 1], limit: NONE]
+            ├── push downs: [filters: [t1.a (#0) = 1], limit: NONE]
             └── estimated rows: 1.00
 
 query T
