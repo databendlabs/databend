@@ -89,6 +89,8 @@ Databend now supports all TPC-DS queries!
 
 TPC-DS is a decision support benchmark that models several generally applicable aspects of a decision support system, including queries and data maintenance. The benchmark provides a representative evaluation of performance as a general-purpose decision support system.
 
+If you are interested in learning more, please check out the resources listed below.
+
 - [PR | feat: support cte in dphyp](https://github.com/datafuselabs/databend/pull/10673)
 - [PR | chore(test): add tpcds to test](https://github.com/datafuselabs/databend/pull/10673)
 
@@ -96,11 +98,11 @@ TPC-DS is a decision support benchmark that models several generally applicable 
 
 Discover some fascinating code snippets or projects that showcase our work or learning journey.
 
-### Databend Rust Driver
+### databend-driver - A driver for Databend in Rust
 
-To help developers use Databend with Rust, the Databend community has developed a Rust-based driver for Databend.
+The Databend community has developed a driver for Databend in Rust. It allows developers to easily connect to Databend and execute SQL queries using Rust.
 
-The Databend Rust Driver is a powerful tool that allows developers to easily connect to Databend and execute SQL queries using Rust. Here's an example of how to use the driver:
+Here's an example of how to use the driver:
 
 ```Rust
 use databend_driver::new_connection;
@@ -125,7 +127,7 @@ Welcome to try it out and give us feedback. If you want to learn more informatio
 
 ### AskBend - SQL-based Knowledge Base Search and Completion
 
-Are you tired of searching through endless documentation to find the information you need? Look no further than AskBend! AskBend is a Rust project that utilizes the power of Databend and OpenAI to create a SQL-based knowledge base from Markdown files.
+AskBend is a Rust project that utilizes the power of Databend and OpenAI to create a SQL-based knowledge base from Markdown files.
 
 With AskBend, you can easily search and retrieve the most relevant information to your queries using SQL. The project automatically generates document embeddings from the content, enabling users to quickly find the information they need.
 
