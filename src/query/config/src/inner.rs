@@ -233,8 +233,8 @@ impl Default for QueryConfig {
             flight_sql_tls_server_key: "".to_string(),
             openai_api_base_url: "https://api.openai.com/v1/".to_string(),
             openai_api_key: "".to_string(),
-            openai_api_completion_model: "text-embedding-ada-002".to_string(),
-            openai_api_embedding_model: "gpt-3.5-turbo".to_string(),
+            openai_api_completion_model: "gpt-3.5-turbo".to_string(),
+            openai_api_embedding_model: "text-embedding-ada-002".to_string(),
         }
     }
 }
