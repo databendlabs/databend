@@ -1,0 +1,133 @@
+statement ok
+drop database if exists join_reorder
+
+statement ok
+create database join_reorder
+
+statement ok
+use join_reorder
+
+statement ok
+create table t as select number as a from numbers(1)
+
+statement ok
+create table t1 as select number as a from numbers(10)
+
+statement ok
+create table t2 as select number as a from numbers(100)
+
+statement ok
+create table t3 as select number as a from numbers(500)
+
+statement ok
+create table t4 as select number as a from numbers(2500)
+
+statement ok
+create table t5 as select number as a from numbers(100000)
+
+statement ok
+analyze table t
+
+statement ok
+analyze table t1
+
+statement ok
+analyze table t2
+
+statement ok
+analyze table t3
+
+statement ok
+analyze table t4
+
+statement ok
+analyze table t5
+
+# A flaky test, analyze table may get different results.
+onlyif todo
+query T
+explain select * from t, t3, t2, t5, t4, t1
+where t5.a = t1.a and t5.a = t2.a and t5.a = t3.a and t5.a = t4.a and t5.a = t.a
+----
+HashJoin
+├── join type: INNER
+├── build keys: [t5.a (#3)]
+├── probe keys: [t4.a (#4)]
+├── filters: []
+├── estimated rows: 2379.35
+├── HashJoin(Build)
+│   ├── join type: INNER
+│   ├── build keys: [t5.a (#3)]
+│   ├── probe keys: [t2.a (#2)]
+│   ├── filters: []
+│   ├── estimated rows: 1.00
+│   ├── HashJoin(Build)
+│   │   ├── join type: INNER
+│   │   ├── build keys: [t5.a (#3)]
+│   │   ├── probe keys: [t3.a (#1)]
+│   │   ├── filters: []
+│   │   ├── estimated rows: 397.39
+│   │   ├── HashJoin(Build)
+│   │   │   ├── join type: INNER
+│   │   │   ├── build keys: [t5.a (#3)]
+│   │   │   ├── probe keys: [t1.a (#5)]
+│   │   │   ├── filters: []
+│   │   │   ├── estimated rows: 8.00
+│   │   │   ├── HashJoin(Build)
+│   │   │   │   ├── join type: INNER
+│   │   │   │   ├── build keys: [t.a (#0)]
+│   │   │   │   ├── probe keys: [t5.a (#3)]
+│   │   │   │   ├── filters: []
+│   │   │   │   ├── estimated rows: 1.00
+│   │   │   │   ├── TableScan(Build)
+│   │   │   │   │   ├── table: default.join_reorder.t
+│   │   │   │   │   ├── read rows: 1
+│   │   │   │   │   ├── read bytes: 31
+│   │   │   │   │   ├── partitions total: 1
+│   │   │   │   │   ├── partitions scanned: 1
+│   │   │   │   │   ├── push downs: [filters: [], limit: NONE]
+│   │   │   │   │   └── estimated rows: 1.00
+│   │   │   │   └── TableScan(Probe)
+│   │   │   │       ├── table: default.join_reorder.t5
+│   │   │   │       ├── read rows: 100000
+│   │   │   │       ├── read bytes: 400274
+│   │   │   │       ├── partitions total: 2
+│   │   │   │       ├── partitions scanned: 2
+│   │   │   │       ├── push downs: [filters: [], limit: NONE]
+│   │   │   │       └── estimated rows: 100000.00
+│   │   │   └── TableScan(Probe)
+│   │   │       ├── table: default.join_reorder.t1
+│   │   │       ├── read rows: 10
+│   │   │       ├── read bytes: 68
+│   │   │       ├── partitions total: 1
+│   │   │       ├── partitions scanned: 1
+│   │   │       ├── push downs: [filters: [], limit: NONE]
+│   │   │       └── estimated rows: 10.00
+│   │   └── TableScan(Probe)
+│   │       ├── table: default.join_reorder.t3
+│   │       ├── read rows: 500
+│   │       ├── read bytes: 2030
+│   │       ├── partitions total: 1
+│   │       ├── partitions scanned: 1
+│   │       ├── push downs: [filters: [], limit: NONE]
+│   │       └── estimated rows: 500.00
+│   └── TableScan(Probe)
+│       ├── table: default.join_reorder.t2
+│       ├── read rows: 100
+│       ├── read bytes: 431
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── push downs: [filters: [], limit: NONE]
+│       └── estimated rows: 100.00
+└── TableScan(Probe)
+    ├── table: default.join_reorder.t4
+    ├── read rows: 2500
+    ├── read bytes: 10029
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 2500.00
+
+
+statement ok
+drop database join_reorder

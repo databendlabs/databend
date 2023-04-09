@@ -2418,7 +2418,7 @@ impl<'a> TypeChecker<'a> {
             .read()
             .virtual_columns_by_table_index(table_index)
         {
-            if column.name() == &name {
+            if column.name() == name {
                 index = column.index();
                 break;
             }

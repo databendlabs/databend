@@ -434,12 +434,33 @@ impl ColumnEntry {
         }
     }
 
-    pub fn name(&self) -> &String {
+    pub fn data_type(&self) -> DataType {
         match self {
-            ColumnEntry::BaseTableColumn(base) => &base.column_name,
-            ColumnEntry::DerivedColumn(derived) => &derived.alias,
-            ColumnEntry::InternalColumn(internal) => internal.internal_column.column_name(),
-            ColumnEntry::VirtualColumn(virtual_column) => &virtual_column.column_name,
+            ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) => {
+                DataType::from(data_type)
+            }
+            ColumnEntry::DerivedColumn(DerivedColumn { data_type, .. }) => data_type.clone(),
+            ColumnEntry::InternalColumn(TableInternalColumn {
+                internal_column, ..
+            }) => internal_column.data_type(),
+            ColumnEntry::VirtualColumn(VirtualColumn { data_type, .. }) => {
+                DataType::from(data_type)
+            }
+        }
+    }
+
+    pub fn name(&self) -> String {
+        match self {
+            ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => {
+                column_name.to_string()
+            }
+            ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias.to_string(),
+            ColumnEntry::InternalColumn(TableInternalColumn {
+                internal_column, ..
+            }) => internal_column.column_name.clone(),
+            ColumnEntry::VirtualColumn(VirtualColumn { column_name, .. }) => {
+                column_name.to_string()
+            }
         }
     }
 }
