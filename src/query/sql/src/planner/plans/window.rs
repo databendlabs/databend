@@ -22,6 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use common_expression::Scalar;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
@@ -193,30 +194,62 @@ pub enum WindowFuncFrameBound {
     #[default]
     CurrentRow,
     /// `<N> PRECEDING` or `UNBOUNDED PRECEDING`
-    Preceding(Option<usize>),
+    Preceding(Option<Scalar>),
     /// `<N> FOLLOWING` or `UNBOUNDED FOLLOWING`.
-    Following(Option<usize>),
-}
-
-impl WindowFuncFrameBound {
-    fn to_number(&self) -> i64 {
-        match self {
-            WindowFuncFrameBound::CurrentRow => 0,
-            WindowFuncFrameBound::Preceding(n) => match n {
-                None => i64::MIN,
-                Some(n) => -(*n as i64),
-            },
-            WindowFuncFrameBound::Following(n) => match n {
-                None => i64::MAX,
-                Some(n) => *n as i64,
-            },
-        }
-    }
+    Following(Option<Scalar>),
 }
 
 impl PartialOrd for WindowFuncFrameBound {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.to_number().partial_cmp(&other.to_number())
+        match (self, other) {
+            (WindowFuncFrameBound::CurrentRow, WindowFuncFrameBound::CurrentRow) => {
+                Some(Ordering::Equal)
+            }
+            (WindowFuncFrameBound::CurrentRow, WindowFuncFrameBound::Preceding(_)) => {
+                Some(Ordering::Greater)
+            }
+            (WindowFuncFrameBound::CurrentRow, WindowFuncFrameBound::Following(_)) => {
+                Some(Ordering::Less)
+            }
+            (WindowFuncFrameBound::Preceding(_), WindowFuncFrameBound::CurrentRow) => {
+                Some(Ordering::Less)
+            }
+            (WindowFuncFrameBound::Preceding(None), WindowFuncFrameBound::Preceding(None)) => {
+                Some(Ordering::Equal)
+            }
+            (WindowFuncFrameBound::Preceding(None), WindowFuncFrameBound::Preceding(_)) => {
+                Some(Ordering::Less)
+            }
+            (WindowFuncFrameBound::Preceding(Some(_)), WindowFuncFrameBound::Preceding(None)) => {
+                Some(Ordering::Greater)
+            }
+            (
+                WindowFuncFrameBound::Preceding(Some(lhs)),
+                WindowFuncFrameBound::Preceding(Some(rhs)),
+            ) => lhs.partial_cmp(rhs).map(Ordering::reverse),
+            (WindowFuncFrameBound::Preceding(_), WindowFuncFrameBound::Following(_)) => {
+                Some(Ordering::Less)
+            }
+            (WindowFuncFrameBound::Following(_), WindowFuncFrameBound::CurrentRow) => {
+                Some(Ordering::Greater)
+            }
+            (WindowFuncFrameBound::Following(_), WindowFuncFrameBound::Preceding(_)) => {
+                Some(Ordering::Greater)
+            }
+            (WindowFuncFrameBound::Following(None), WindowFuncFrameBound::Following(None)) => {
+                Some(Ordering::Equal)
+            }
+            (WindowFuncFrameBound::Following(None), WindowFuncFrameBound::Following(_)) => {
+                Some(Ordering::Greater)
+            }
+            (WindowFuncFrameBound::Following(Some(_)), WindowFuncFrameBound::Following(None)) => {
+                Some(Ordering::Less)
+            }
+            (
+                WindowFuncFrameBound::Following(Some(lhs)),
+                WindowFuncFrameBound::Following(Some(rhs)),
+            ) => lhs.partial_cmp(rhs),
+        }
     }
 }
 

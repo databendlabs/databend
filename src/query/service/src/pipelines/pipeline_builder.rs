@@ -785,15 +785,16 @@ impl PipelineBuilder {
         let func = WindowFunctionInfo::try_create(&window.func, &input_schema)?;
         // Window
         self.main_pipeline.add_transform(|input, output| {
-            let transform = TransformWindow::try_create(
-                input,
-                output,
-                func.clone(),
-                partition_by.clone(),
-                order_by.clone(),
-                window.window_frame.clone(),
-            )?;
-            Ok(ProcessorPtr::create(transform))
+            todo!()
+            // let transform = TransformWindow::try_create(
+            //     input,
+            //     output,
+            //     func.clone(),
+            //     partition_by.clone(),
+            //     order_by.clone(),
+            //     window.window_frame.clone(),
+            // )?;
+            // Ok(ProcessorPtr::create(transform))
         })?;
 
         self.main_pipeline.resize(old_output_len)
