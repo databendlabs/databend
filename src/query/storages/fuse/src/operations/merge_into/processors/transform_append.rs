@@ -125,7 +125,7 @@ impl AppendTransform {
             col_stats,
         });
 
-        let data = serde_json::to_vec(&segment_info)?;
+        let data = segment_info.to_bytes()?;
         let location = self.meta_locations.gen_segment_info_location();
         let segment = Arc::new(segment_info);
 

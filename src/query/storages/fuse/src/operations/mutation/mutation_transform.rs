@@ -294,7 +294,7 @@ impl Processor for MutationTransform {
                             segments_editor
                                 .insert(seg_idx, (location.clone(), new_segment.format_version()));
                             serialized_data.push(SerializedData {
-                                data: serde_json::to_vec(&new_segment)?,
+                                data: new_segment.to_bytes()?,
                                 location,
                                 segment: Arc::new(new_segment),
                             });

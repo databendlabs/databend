@@ -18,6 +18,7 @@ use std::marker::PhantomData;
 use common_exception::Result;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
+use common_io::prelude::BinaryRead;
 use futures::AsyncRead;
 use serde::de::DeserializeOwned;
 use serde_json::from_slice;
@@ -27,6 +28,8 @@ use storages_common_table_meta::meta::SnapshotVersion;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
 use storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
+
+use crate::io::read::meta::segment_reader::load_segment_v3;
 
 #[async_trait::async_trait]
 pub trait VersionedReader<T> {
@@ -71,7 +74,11 @@ impl VersionedReader<SegmentInfo> for (SegmentInfoVersion, TableSchemaRef) {
     where R: AsyncRead + Unpin + Send {
         let schema = &self.1;
         let r = match &self.0 {
-            SegmentInfoVersion::V2(v) => load_by_version(reader, v).await?,
+            SegmentInfoVersion::V3(v) => load_segment_v3(reader, v).await?,
+            SegmentInfoVersion::V2(v) => {
+                let data = load_by_version(reader, v).await?;
+                SegmentInfo::from_v2(data)
+            }
             SegmentInfoVersion::V1(v) => {
                 let data = load_by_version(reader, v).await?;
                 let fields = schema.leaf_fields();

@@ -17,13 +17,19 @@ mod statistics;
 mod compression;
 /// Re-exports meta data structures of current version, i.e. v1
 mod current;
+mod segment_format;
 mod v0;
 mod v1;
 mod v2;
+mod v3;
 mod versions;
 
 pub use compression::Compression;
 pub use current::*;
+pub use segment_format::decode;
+pub use segment_format::decompress;
+pub use segment_format::Compression as SegmentCompression;
+pub use segment_format::Encoding;
 pub use statistics::ClusterKey;
 pub use statistics::ClusterStatistics;
 pub use statistics::ColumnStatistics;

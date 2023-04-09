@@ -88,7 +88,7 @@ impl CompactAggregator {
 
     #[async_backtrace::framed]
     async fn write_segment(dal: Operator, segment: SerializedSegment) -> Result<()> {
-        dal.write(&segment.location, serde_json::to_vec(&segment.segment)?)
+        dal.write(&segment.location, segment.segment.to_bytes()?)
             .await?;
         if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
             segment_cache.put(segment.location.clone(), segment.segment.clone());

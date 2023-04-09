@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Error;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -24,6 +23,13 @@ use storages_common_cache_manager::CachedObject;
 #[async_trait::async_trait]
 pub trait MetaWriter<T> {
     async fn write_meta(&self, data_accessor: &Operator, location: &str) -> Result<()>;
+
+    async fn write_meta_data(
+        &self,
+        data_accessor: &Operator,
+        location: &str,
+        bs: Vec<u8>,
+    ) -> Result<()>;
 }
 
 #[async_trait::async_trait]
@@ -32,7 +38,19 @@ where T: Serialize + Sync + Send
 {
     #[async_backtrace::framed]
     async fn write_meta(&self, data_accessor: &Operator, location: &str) -> Result<()> {
-        write_to_storage(data_accessor, location, &self).await
+        write_to_storage(data_accessor, location, &self).await?;
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    async fn write_meta_data(
+        &self,
+        data_accessor: &Operator,
+        location: &str,
+        bs: Vec<u8>,
+    ) -> Result<()> {
+        data_accessor.write(location, bs).await?;
+        Ok(())
     }
 }
 
@@ -40,6 +58,13 @@ where T: Serialize + Sync + Send
 pub trait CachedMetaWriter<T> {
     async fn write_meta_through_cache(self, data_accessor: &Operator, location: &str)
     -> Result<()>;
+
+    async fn write_meta_data_through_cache(
+        self,
+        data_accessor: &Operator,
+        location: &str,
+        bs: Vec<u8>,
+    ) -> Result<()>;
 }
 
 #[async_trait::async_trait]
@@ -61,11 +86,25 @@ where
         }
         Ok(())
     }
+
+    #[async_backtrace::framed]
+    async fn write_meta_data_through_cache(
+        self,
+        data_accessor: &Operator,
+        location: &str,
+        bs: Vec<u8>,
+    ) -> Result<()> {
+        data_accessor.write(location, bs).await?;
+        if let Some(cache) = T::cache() {
+            cache.put(location.to_owned(), Arc::new(self))
+        }
+        Ok(())
+    }
 }
 
 async fn write_to_storage<T>(data_accessor: &Operator, location: &str, meta: &T) -> Result<()>
 where T: Serialize {
-    let bs = serde_json::to_vec(&meta).map_err(Error::other)?;
+    let bs = serde_json::to_vec(&meta)?;
     data_accessor.write(location, bs).await?;
 
     Ok(())

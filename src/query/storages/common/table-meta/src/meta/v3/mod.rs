@@ -1,4 +1,4 @@
-//  Copyright 2022 Datafuse Labs.
+//  Copyright 2021 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -11,16 +11,5 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-
-pub use v0::ColumnMeta as SingleColumnMeta;
-pub use v1::TableSnapshotStatistics;
-pub use v2::BlockMeta;
-pub use v2::ColumnMeta;
-pub use v2::TableSnapshot;
-pub use v2::TableSnapshotLite;
-pub use v3::SegmentInfo;
-
-use super::v0;
-use super::v1;
-use super::v2;
-use super::v3;
+mod segment;
+pub use segment::SegmentInfo;

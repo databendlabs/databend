@@ -178,7 +178,7 @@ impl MutationAccumulator {
                     segments_editor
                         .insert(seg_idx, (location.clone(), new_segment.format_version()));
                     serialized_segments.push(SerializedSegment {
-                        raw_data: serde_json::to_vec(&new_segment)?,
+                        raw_data: new_segment.to_bytes()?,
                         path: location,
                         segment: Arc::new(new_segment),
                     });
