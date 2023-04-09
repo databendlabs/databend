@@ -23,11 +23,28 @@ use openai_api_rust::Role;
 
 use crate::metrics::metrics_completion_count;
 use crate::metrics::metrics_completion_token;
-use crate::AIModel;
 use crate::OpenAI;
+
+#[derive(Debug)]
+enum CompletionMode {
+    Sql,
+    Text,
+}
 
 impl OpenAI {
     pub fn completion_text_request(&self, prompt: String) -> Result<(String, Option<u32>)> {
+        self.completion_request(CompletionMode::Text, prompt)
+    }
+
+    pub fn completion_sql_request(&self, prompt: String) -> Result<(String, Option<u32>)> {
+        self.completion_request(CompletionMode::Sql, prompt)
+    }
+
+    fn completion_request(
+        &self,
+        mode: CompletionMode,
+        prompt: String,
+    ) -> Result<(String, Option<u32>)> {
         let openai = openai_api_rust::OpenAI::new(
             Auth {
                 api_key: self.api_key.clone(),
@@ -36,10 +53,13 @@ impl OpenAI {
             &self.api_base,
         );
 
-        let (max_tokens, stop) = (Some(1024), None);
+        let (max_tokens, stop) = match mode {
+            CompletionMode::Sql => (Some(150), Some(vec!["#".to_string(), ";".to_string()])),
+            CompletionMode::Text => (Some(1024), None),
+        };
 
         let body = ChatBody {
-            model: AIModel::GPT35Turbo.to_string(),
+            model: self.completion_model.to_string(),
             temperature: Some(0_f32),
             top_p: Some(1_f32),
             n: None,
@@ -56,12 +76,15 @@ impl OpenAI {
             }],
         };
 
-        trace!("openai text completion request: {:?}", body);
+        trace!("openai {:?} completion request: {:?}", mode, body);
 
         let resp = openai.chat_completion_create(&body).map_err(|e| {
-            ErrorCode::Internal(format!("openai completion text request error: {:?}", e))
+            ErrorCode::Internal(format!(
+                "openai {:?} completion request error: {:?}",
+                mode, e
+            ))
         })?;
-        trace!("openai text completion response: {:?}", resp);
+        trace!("openai {:?} completion response: {:?}", mode, resp);
 
         let usage = resp.usage.total_tokens;
         let result = if resp.choices.is_empty() {
