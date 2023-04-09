@@ -330,7 +330,7 @@ pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata
         desc.sig.name,
         desc.arg_indices
             .iter()
-            .map(|&index| { metadata.read().column(index).name().clone() })
+            .map(|&index| { metadata.read().column(index).name() })
             .collect::<Vec<_>>()
             .join(", ")
     )
@@ -346,7 +346,7 @@ fn aggregate_expand_to_format_tree(
         .iter()
         .map(|set| {
             set.iter()
-                .map(|&index| metadata.read().column(index).name().clone())
+                .map(|&index| metadata.read().column(index).name())
                 .collect::<Vec<_>>()
                 .join(", ")
         })
@@ -385,7 +385,7 @@ fn aggregate_partial_to_format_tree(
         .group_by
         .iter()
         .map(|&index| {
-            let name = metadata.read().column(index).name().clone();
+            let name = metadata.read().column(index).name();
             Ok(name)
         })
         .collect::<Result<Vec<_>>>()?
@@ -431,7 +431,7 @@ fn aggregate_final_to_format_tree(
         .group_by
         .iter()
         .map(|&index| {
-            let name = metadata.read().column(index).name().clone();
+            let name = metadata.read().column(index).name();
             Ok(name)
         })
         .collect::<Result<Vec<_>>>()?
@@ -483,7 +483,7 @@ fn window_to_format_tree(
         .partition_by
         .iter()
         .map(|&index| {
-            let name = metadata.read().column(index).name().clone();
+            let name = metadata.read().column(index).name();
             Ok(name)
         })
         .collect::<Result<Vec<_>>>()?
@@ -493,7 +493,7 @@ fn window_to_format_tree(
         .order_by
         .iter()
         .map(|v| {
-            let name = metadata.read().column(v.order_by).name().clone();
+            let name = metadata.read().column(v.order_by).name();
             Ok(name)
         })
         .collect::<Result<Vec<_>>>()?
