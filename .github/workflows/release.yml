@@ -339,12 +339,13 @@ jobs:
           context: .
           file: ./docker/Dockerfile
       - name: Update repo description
+        continue-on-error: true
         uses: peter-evans/dockerhub-description@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: ${{ steps.login.outputs.dockerhub_repo }}
-          short-description: ${{ github.event.repository.description }}
+          short-description: "A modern cloud data warehouse. Also available in the cloud: https://app.databend.com."
           readme-filepath: ./docker/README.md
 
   docker_separate:
