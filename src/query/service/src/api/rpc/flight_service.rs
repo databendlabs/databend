@@ -172,24 +172,38 @@ impl FlightService for DatabendQueryFlightService {
                 ctx.set_id(init_query_fragments_plan.executor_packet.query_id.clone());
 
                 let spawner = ctx.clone();
-                match_join_handle(spawner.spawn(async move {
+                let query_id = init_query_fragments_plan.executor_packet.query_id.clone();
+                if let Err(cause) = match_join_handle(spawner.spawn(async move {
                     DataExchangeManager::instance()
                         .init_query_fragments_plan(&ctx, &init_query_fragments_plan.executor_packet)
                 }))
-                .await?;
+                .await
+                {
+                    DataExchangeManager::instance().on_finished_query(&query_id);
+                    return Err(cause.into());
+                }
 
                 FlightResult { body: vec![] }
             }
             FlightAction::InitNodesChannel(init_nodes_channel) => {
                 let publisher_packet = &init_nodes_channel.init_nodes_channel_packet;
-                DataExchangeManager::instance()
+                if let Err(cause) = DataExchangeManager::instance()
                     .init_nodes_channel(publisher_packet)
-                    .await?;
+                    .await
+                {
+                    let query_id = &init_nodes_channel.init_nodes_channel_packet.query_id;
+                    DataExchangeManager::instance().on_finished_query(query_id);
+                    return Err(cause.into());
+                }
 
                 FlightResult { body: vec![] }
             }
             FlightAction::ExecutePartialQuery(query_id) => {
-                DataExchangeManager::instance().execute_partial_query(&query_id)?;
+                if let Err(cause) = DataExchangeManager::instance().execute_partial_query(&query_id)
+                {
+                    DataExchangeManager::instance().on_finished_query(&query_id);
+                    return Err(cause.into());
+                }
 
                 FlightResult { body: vec![] }
             }
