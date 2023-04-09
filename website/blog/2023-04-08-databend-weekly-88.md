@@ -91,7 +91,7 @@ TPC-DS is a decision support benchmark that models several generally applicable 
 
 If you are interested in learning more, please check out the resources listed below.
 
-- [PR | feat: support cte in dphyp](https://github.com/datafuselabs/databend/pull/10673)
+- [PR | feat: support cte in dphyp](https://github.com/datafuselabs/databend/pull/10910)
 - [PR | chore(test): add tpcds to test](https://github.com/datafuselabs/databend/pull/10673)
 
 ## Code Corner
