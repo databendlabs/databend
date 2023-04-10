@@ -19,8 +19,11 @@ use common_catalog::table::AppendMode;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_function;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::with_hash_method;
 use common_expression::with_mappedhash_method;
+use common_expression::with_number_mapped_type;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::FunctionContext;
@@ -788,10 +791,10 @@ impl PipelineBuilder {
         // Window
         self.main_pipeline.add_transform(|input, output| {
             // The transform can only be created here, bacause it cannot be cloned.
-            let start_bound = FrameBound::try_from(&window.window_frame.start_bound)?;
-            let end_bound = FrameBound::try_from(&window.window_frame.end_bound)?;
 
             let transform = if window.window_frame.units.is_rows() {
+                let start_bound = FrameBound::try_from(&window.window_frame.start_bound)?;
+                let end_bound = FrameBound::try_from(&window.window_frame.end_bound)?;
                 Box::new(TransformWindow::<u64>::try_create_rows(
                     input,
                     output,
@@ -802,7 +805,44 @@ impl PipelineBuilder {
                     (start_bound, end_bound),
                 )?) as Box<dyn Processor>
             } else {
-                todo!("window")
+                if order_by.len() == 1 {
+                    // If the length of order_by is 1, there may be a RANGE frame.
+                    let data_type = input_schema.field(order_by[0].offset).data_type();
+                    with_number_mapped_type!(|NUM_TYPE| match data_type {
+                        DataType::Number(NumberDataType::NUM_TYPE) => {
+                            let start_bound =
+                                FrameBound::try_from(&window.window_frame.start_bound)?;
+                            let end_bound = FrameBound::try_from(&window.window_frame.end_bound)?;
+                            return Ok(ProcessorPtr::create(Box::new(
+                                TransformWindow::<NUM_TYPE>::try_create_range(
+                                    input,
+                                    output,
+                                    func.clone(),
+                                    partition_by.clone(),
+                                    order_by.clone(),
+                                    window.window_frame.units.clone(),
+                                    (start_bound, end_bound),
+                                )?,
+                            )
+                                as Box<dyn Processor>));
+                        }
+                        _ => {}
+                    })
+                }
+
+                // There is no offset in the RANGE frame. (just CURRENT ROW or UNBOUNDED)
+                // So we can use any number type to create the transform.
+                let start_bound = FrameBound::try_from(&window.window_frame.start_bound)?;
+                let end_bound = FrameBound::try_from(&window.window_frame.end_bound)?;
+                Box::new(TransformWindow::<u8>::try_create_range(
+                    input,
+                    output,
+                    func.clone(),
+                    partition_by.clone(),
+                    order_by.clone(),
+                    window.window_frame.units.clone(),
+                    (start_bound, end_bound),
+                )?) as Box<dyn Processor>
             };
             Ok(ProcessorPtr::create(transform))
         })?;

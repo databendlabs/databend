@@ -1004,14 +1004,11 @@ impl<'a> SelectRewriter<'a> {
             .clone();
 
             let resolved_spec = match referenced_window_spec.existing_window_name.clone() {
-                Some(_) => {
-                    println!("call recursion:{:?}", referenced_name);
-                    Self::rewrite_inherited_window_spec(
-                        &referenced_window_spec,
-                        window_list,
-                        resolved_window,
-                    )?
-                }
+                Some(_) => Self::rewrite_inherited_window_spec(
+                    &referenced_window_spec,
+                    window_list,
+                    resolved_window,
+                )?,
                 None => referenced_window_spec.clone(),
             };
 

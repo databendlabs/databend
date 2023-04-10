@@ -22,6 +22,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::arithmetics_type::ResultTypeOfUnary;
 use common_expression::types::Number;
 use common_expression::types::NumberScalar;
 use common_expression::BlockEntry;
@@ -36,8 +37,6 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::Processor;
 use common_sql::plans::WindowFuncFrameUnits;
-use num::CheckedAdd;
-use num::CheckedSub;
 
 use super::frame_bound::FrameBound;
 use super::window_function::WindowFuncAggImpl;
@@ -525,7 +524,7 @@ impl TransformWindow<u64> {
 
 // For RANGE frame
 impl<T> TransformWindow<T>
-where T: Number + CheckedAdd + CheckedSub
+where T: Number + ResultTypeOfUnary
 {
     /// Cannot be cloned because every [`TransformWindow`] has one independent `place`.
     pub fn try_create_range(
@@ -583,7 +582,7 @@ where T: Number + CheckedAdd + CheckedSub
         cmp_row: usize,
         ref_col: &[T],
         ref_row: usize,
-        offset: &T,
+        offset: T,
         is_preceding: bool,
     ) -> Ordering {
         let cmp_v = unsafe { cmp_col.get_unchecked(cmp_row) };
@@ -626,7 +625,7 @@ where T: Number + CheckedAdd + CheckedSub
                 self.frame_start.row,
                 &ref_col,
                 self.current_row.row,
-                &n,
+                n,
                 preceding,
             );
             if !asc {
@@ -699,7 +698,7 @@ where T: Number + CheckedAdd + CheckedSub
                 self.frame_end.row,
                 &ref_col,
                 self.current_row.row,
-                &n,
+                n,
                 preceding,
             );
             if !asc {
@@ -876,7 +875,7 @@ enum ProcessorState {
 
 #[async_trait::async_trait]
 impl<T> Processor for TransformWindow<T>
-where T: Number + CheckedAdd + CheckedSub
+where T: Number + ResultTypeOfUnary
 {
     fn name(&self) -> String {
         "Transform Window".to_string()

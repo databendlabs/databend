@@ -931,25 +931,8 @@ impl<'a> TypeChecker<'a> {
         }
         let mut order_by = Vec::with_capacity(window.order_by.len());
 
-        let is_range = window
-            .window_frame
-            .as_ref()
-            .map(|f| f.units.is_range())
-            .unwrap_or(false);
-
         for o in window.order_by.iter() {
-            let box (mut order, _) = self.resolve(&o.expr).await?;
-            if is_range {
-                // Change the item to Int64 type to compute offset for `RANGE`.
-                // TODO: find a better way. Maybe use generic in `TransformWindow` preocessor.
-                order = CastExpr {
-                    span: order.span(),
-                    is_try: false,
-                    argument: Box::new(order),
-                    target_type: Box::new(DataType::Number(NumberDataType::Int64)),
-                }
-                .into();
-            }
+            let box (order, _) = self.resolve(&o.expr).await?;
             order_by.push(WindowOrderBy {
                 expr: order,
                 asc: o.asc,
@@ -974,16 +957,26 @@ impl<'a> TypeChecker<'a> {
     #[inline]
     fn resolve_rows_offset(&self, expr: &Expr) -> Result<Scalar> {
         if let Expr::Literal { lit, .. } = expr {
-            let box (value, data_type) = self.resolve_literal(lit)?;
-            if matches!(data_type, DataType::Number(NumberDataType::UInt64)) {
-                return Ok(value);
+            let box (value, _) = self.resolve_literal(lit)?;
+            match value {
+                Scalar::Number(NumberScalar::UInt8(v)) => {
+                    return Ok(Scalar::Number(NumberScalar::UInt64(v as u64)));
+                }
+                Scalar::Number(NumberScalar::UInt16(v)) => {
+                    return Ok(Scalar::Number(NumberScalar::UInt64(v as u64)));
+                }
+                Scalar::Number(NumberScalar::UInt32(v)) => {
+                    return Ok(Scalar::Number(NumberScalar::UInt64(v as u64)));
+                }
+                Scalar::Number(NumberScalar::UInt64(_)) => return Ok(value),
+                _ => {}
             }
         }
 
-        Err(
-            ErrorCode::SemanticError("Only UInt64 literals are allowed in ROWS offset".to_string())
-                .set_span(expr.span()),
+        Err(ErrorCode::SemanticError(
+            "Only unsigned numbers are allowed in ROWS offset".to_string(),
         )
+        .set_span(expr.span()))
     }
 
     fn resolve_window_rows_frame(&self, span: Span, frame: WindowFrame) -> Result<WindowFuncFrame> {
@@ -1049,7 +1042,7 @@ impl<'a> TypeChecker<'a> {
         match bound {
             WindowFrameBound::Following(Some(box expr))
             | WindowFrameBound::Preceding(Some(box expr)) => {
-                let box (value, data_type) = self.resolve(expr).await?;
+                let box (value, mut data_type) = self.resolve(expr).await?;
                 if matches!(
                     data_type,
                     DataType::Number(_)
@@ -1057,6 +1050,12 @@ impl<'a> TypeChecker<'a> {
                         | DataType::Date
                         | DataType::Timestamp
                 ) {
+                    // Make sure RANEG offset is number type.
+                    if data_type.is_decimal() {
+                        data_type = DataType::Number(NumberDataType::Float64)
+                    } else if data_type.is_date_or_date_time() {
+                        data_type = DataType::Number(NumberDataType::Int64)
+                    }
                     return Ok(Some((value, data_type)));
                 }
                 Err(ErrorCode::SemanticError(
@@ -1106,13 +1105,12 @@ impl<'a> TypeChecker<'a> {
         }
         let func_ctx = self.ctx.get_function_context()?;
         let start_offset = start_offset
-            .map(|(mut expr, ty)| {
-                if ty != common_type {
-                    expr = wrap_cast(&expr, &common_type);
-                }
+            .map(|(mut expr, _)| {
+                expr = wrap_cast(&expr, &common_type);
                 let expr = expr.as_expr_with_col_index()?;
                 let (expr, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
                 if let common_expression::Expr::Constant { scalar, .. } = expr {
+                    debug_assert!(matches!(scalar, Scalar::Number(_)));
                     if scalar.is_positive() {
                         return Ok(scalar);
                     }
@@ -1124,13 +1122,12 @@ impl<'a> TypeChecker<'a> {
             })
             .transpose()?;
         let end_offset = end_offset
-            .map(|(mut expr, ty)| {
-                if ty != common_type {
-                    expr = wrap_cast(&expr, &common_type);
-                }
+            .map(|(mut expr, _)| {
+                expr = wrap_cast(&expr, &common_type);
                 let expr = expr.as_expr_with_col_index()?;
                 let (expr, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
                 if let common_expression::Expr::Constant { scalar, .. } = expr {
+                    debug_assert!(matches!(scalar, Scalar::Number(_)));
                     if scalar.is_positive() {
                         return Ok(scalar);
                     }
