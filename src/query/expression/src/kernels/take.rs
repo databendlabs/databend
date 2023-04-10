@@ -64,7 +64,7 @@ impl DataBlock {
         Ok(DataBlock::new(after_columns, indices.len()))
     }
 
-    pub fn probe_take(&self, indices: &[(u32, u32)], probe_num: u32) -> Result<Self> {
+    pub fn probe_take(&self, indices: &[(u32, u32)], probe_num: usize) -> Result<Self> {
         if indices.is_empty() {
             return Ok(self.slice(0..0));
         }
@@ -84,7 +84,7 @@ impl DataBlock {
             })
             .collect();
 
-        Ok(DataBlock::new(after_columns, probe_num as usize))
+        Ok(DataBlock::new(after_columns, probe_num))
     }
 }
 
@@ -168,7 +168,7 @@ impl Column {
         }
     }
 
-    pub fn probe_take(&self, indices: &[(u32, u32)], probe_num: u32) -> Self {
+    pub fn probe_take(&self, indices: &[(u32, u32)], probe_num: usize) -> Self {
         let length = indices.len();
         match self {
             Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {
@@ -180,7 +180,7 @@ impl Column {
             }),
             Column::Decimal(column) => with_decimal_type!(|DECIMAL_TYPE| match column {
                 DecimalColumn::Decimal128(values, size) => {
-                    let mut builder: Vec<i128> = Vec::with_capacity(probe_num as usize);
+                    let mut builder: Vec<i128> = Vec::with_capacity(probe_num);
                     let builder_ptr = builder.as_mut_ptr();
                     let col_ptr = values.as_ptr();
                     let mut offset = 0;
@@ -246,7 +246,7 @@ impl Column {
                     Column::Decimal(DecimalColumn::Decimal128(builder.into(), *size))
                 }
                 DecimalColumn::Decimal256(values, size) => {
-                    let mut builder: Vec<I256> = Vec::with_capacity(probe_num as usize);
+                    let mut builder: Vec<I256> = Vec::with_capacity(probe_num);
                     let builder_ptr = builder.as_mut_ptr();
                     let col_ptr = values.as_ptr();
                     let mut offset = 0;
@@ -414,7 +414,7 @@ impl Column {
     fn probe_take_arg_types<T: ArgType>(
         col: &T::Column,
         indices: &[(u32, u32)],
-        probe_num: u32,
+        probe_num: usize,
     ) -> Column {
         T::upcast_column(unsafe { T::probe_column_by_indices(col, indices, probe_num) })
     }

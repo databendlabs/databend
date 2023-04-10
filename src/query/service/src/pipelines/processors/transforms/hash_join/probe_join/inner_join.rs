@@ -45,8 +45,8 @@ impl JoinHashTable {
         H::Key: 'a,
     {
         let valids = &probe_state.valids;
-        // The inner join will return multiple data blocks of similar size
-        let mut probed_num: u32 = 0;
+        // The inner join will return multiple data blocks of similar size.
+        let mut probed_num = 0;
         let mut probed_blocks = vec![];
         let mut probe_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
         let mut build_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
@@ -76,7 +76,7 @@ impl JoinHashTable {
                         build_indexes.push(it);
                     }
                     probe_indexes.push((i as u32, probed_rows.len() as u32));
-                    probed_num += probed_rows.len() as u32;
+                    probed_num += probed_rows.len();
                 } else {
                     let mut index = 0_usize;
                     let mut remain = probed_rows.len();
@@ -87,7 +87,7 @@ impl JoinHashTable {
                                 build_indexes.push(it);
                             }
                             probe_indexes.push((i as u32, remain as u32));
-                            probed_num += remain as u32;
+                            probed_num += remain;
                             index += remain;
                         } else {
                             if self.interrupt.load(Ordering::Relaxed) {
@@ -103,7 +103,7 @@ impl JoinHashTable {
                                 build_indexes.push(it);
                             }
                             probe_indexes.push((i as u32, addition as u32));
-                            probed_num += addition as u32;
+                            probed_num += addition;
 
                             probed_blocks.push(self.merge_eq_block(
                                 &self.row_space.gather_build(

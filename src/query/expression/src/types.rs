@@ -315,7 +315,7 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     unsafe fn probe_column_by_indices<'a>(
         _col: &'a Self::Column,
         _indices: &[(u32, u32)],
-        _probe_num: u32,
+        _probe_num: usize,
     ) -> Self::Column {
         unimplemented!()
     }

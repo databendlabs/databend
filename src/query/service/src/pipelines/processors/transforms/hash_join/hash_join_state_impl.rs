@@ -473,7 +473,7 @@ impl JoinHashTable {
     pub(crate) fn non_equi_conditions_for_left_join(
         &self,
         input_blocks: &[DataBlock],
-        probe_indexes_vec: &[Vec<u32>],
+        probe_indexes_vec: &[Vec<(u32, u32)>],
         row_state: &mut [u32],
     ) -> Result<Vec<DataBlock>> {
         let mut output_blocks = Vec::with_capacity(input_blocks.len());

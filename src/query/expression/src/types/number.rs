@@ -157,9 +157,9 @@ impl<Num: Number> ValueType for NumberType<Num> {
     unsafe fn probe_column_by_indices<'a>(
         col: &'a Self::Column,
         indices: &[(u32, u32)],
-        probe_num: u32,
+        probe_num: usize,
     ) -> Self::Column {
-        let mut col_builder = Self::create_builder(probe_num as usize, &[]);
+        let mut col_builder = Self::create_builder(probe_num, &[]);
         let builder_ptr = col_builder.as_mut_ptr();
         let col_ptr = col.as_ptr();
         let mut offset = 0;

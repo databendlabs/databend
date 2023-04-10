@@ -107,10 +107,10 @@ impl ValueType for StringType {
     unsafe fn probe_column_by_indices<'a>(
         col: &'a Self::Column,
         indices: &[(u32, u32)],
-        probe_num: u32,
+        probe_num: usize,
     ) -> Self::Column {
         let mut data_capacity: u64 = 0;
-        let mut offsets: Vec<u64> = Vec::with_capacity(probe_num as usize + 1);
+        let mut offsets: Vec<u64> = Vec::with_capacity(probe_num + 1);
         offsets.push(0);
         for (index, cnt) in indices {
             let col = col.index_unchecked(*index as usize);
@@ -120,7 +120,7 @@ impl ValueType for StringType {
             }
         }
         let mut col_builder = StringColumnBuilder::with_capacity_and_offset(
-            probe_num as usize,
+            probe_num,
             data_capacity as usize,
             offsets,
         );

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::iter::repeat;
 use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
@@ -54,12 +53,22 @@ impl JoinHashTable {
         let valids = &probe_state.valids;
 
         // The left join will return multiple data blocks of similar size
+        let mut probed_num = 0;
         let mut probed_blocks = vec![];
         let mut probe_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
         let mut probe_indexes_vec = Vec::new();
         // Collect each probe_indexes, used by non-equi conditions filter
         let mut local_build_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
         let mut validity = MutableBitmap::with_capacity(JOIN_MAX_BLOCK_SIZE);
+
+        let chunks = &self.row_space.chunks.read().unwrap();
+        let data_blocks = chunks
+            .iter()
+            .map(|c| c.data_block.clone())
+            .collect::<Vec<DataBlock>>();
+        let num_rows = data_blocks
+            .iter()
+            .fold(0, |acc, chunk| acc + chunk.num_rows());
 
         let mut row_state = match WITH_OTHER_CONJUNCT {
             true => vec![0; input.num_rows()],
@@ -94,7 +103,11 @@ impl JoinHashTable {
                         row_index: usize::MAX,
                         marker: Some(MarkerKind::False),
                     }),
-                    Some(_) => build_indexes.extend(probed_rows),
+                    Some(_) => {
+                        for it in probed_rows {
+                            build_indexes.push(*it);
+                        }
+                    }
                 };
             }
 
@@ -109,18 +122,25 @@ impl JoinHashTable {
             }
 
             if probe_indexes.len() + probed_rows.len() < probe_indexes.capacity() {
-                local_build_indexes.extend_from_slice(probed_rows);
+                for it in probed_rows {
+                    local_build_indexes.push(it);
+                }
+                probe_indexes.push((i as u32, probed_rows.len() as u32));
+                probed_num += probed_rows.len();
                 validity.extend_constant(probed_rows.len(), validity_value);
-                probe_indexes.extend(repeat(i as u32).take(probed_rows.len()));
             } else {
                 let mut index = 0_usize;
                 let mut remain = probed_rows.len();
 
                 while index < probed_rows.len() {
                     if probe_indexes.len() + remain < probe_indexes.capacity() {
+                        for it in probed_rows {
+                            local_build_indexes.push(it);
+                        }
+                        probe_indexes.push((i as u32, probed_rows.len() as u32));
+                        probed_num += remain;
                         validity.extend_constant(remain, validity_value);
-                        probe_indexes.extend(repeat(i as u32).take(remain));
-                        local_build_indexes.extend_from_slice(&probed_rows[index..]);
+
                         index += remain;
                     } else {
                         if self.interrupt.load(Ordering::Relaxed) {
@@ -132,9 +152,12 @@ impl JoinHashTable {
                         let addition = probe_indexes.capacity() - probe_indexes.len();
                         let new_index = index + addition;
 
+                        for it in probed_rows {
+                            local_build_indexes.push(it);
+                        }
+                        probe_indexes.push((i as u32, probed_rows.len() as u32));
+                        probed_num += addition;
                         validity.extend_constant(addition, validity_value);
-                        probe_indexes.extend(repeat(i as u32).take(addition));
-                        local_build_indexes.extend_from_slice(&probed_rows[index..new_index]);
 
                         let validity_bitmap: Bitmap = validity.into();
                         let build_block = if !self.hash_join_desc.from_correlated_subquery
@@ -154,7 +177,11 @@ impl JoinHashTable {
                                 .collect::<Vec<_>>();
                             DataBlock::new(columns, input.num_rows())
                         } else {
-                            self.row_space.gather(&local_build_indexes)?
+                            self.row_space.gather_build(
+                                &local_build_indexes,
+                                &data_blocks,
+                                &num_rows,
+                            )?
                         };
 
                         // For left join, wrap nullable for build block
@@ -192,7 +219,8 @@ impl JoinHashTable {
                         let nullable_build_block = DataBlock::new(nullable_columns, num_rows);
 
                         // For full join, wrap nullable for probe block
-                        let mut probe_block = DataBlock::take(input, &probe_indexes)?;
+                        let mut probe_block =
+                            DataBlock::probe_take(input, &probe_indexes, probed_num)?;
                         let num_rows = probe_block.num_rows();
                         if self.hash_join_desc.join_type == JoinType::Full {
                             let nullable_probe_columns = probe_block
@@ -220,6 +248,7 @@ impl JoinHashTable {
                         remain -= addition;
                         probe_indexes.clear();
                         local_build_indexes.clear();
+                        probed_num = 0;
                         validity = MutableBitmap::with_capacity(JOIN_MAX_BLOCK_SIZE);
                     }
                 }
@@ -227,7 +256,7 @@ impl JoinHashTable {
         }
 
         // For full join, wrap nullable for probe block
-        let mut probe_block = DataBlock::take(input, &probe_indexes)?;
+        let mut probe_block = DataBlock::probe_take(input, &probe_indexes, probed_num)?;
         if self.hash_join_desc.join_type == JoinType::Full {
             let nullable_probe_columns = probe_block
                 .columns()
@@ -270,7 +299,8 @@ impl JoinHashTable {
                 .collect::<Vec<_>>();
             DataBlock::new(columns, input.num_rows())
         } else {
-            self.row_space.gather(&local_build_indexes)?
+            self.row_space
+                .gather_build(&local_build_indexes, &data_blocks, &num_rows)?
         };
 
         // For left join, wrap nullable for build chunk
@@ -305,31 +335,35 @@ impl JoinHashTable {
     }
 
     // keep at least one index of the positive state and the null state
-    // bitmap: [1, 0, 1] with row_state [2, 1], probe_index: [0, 0, 1]
+    // bitmap: [1, 0, 1] with row_state [2, 1], probe_index: [(0, 2), (1, 1)] => [0, 0, 1]
     // bitmap will be [1, 0, 1] -> [1, 0, 1] -> [1, 0, 1] -> [1, 0, 1]
     // row_state will be [2, 1] -> [2, 1] -> [1, 1] -> [1, 1]
     pub(crate) fn fill_null_for_left_join(
         &self,
         bm: &mut MutableBitmap,
-        probe_indexes: &[u32],
+        probe_indexes: &[(u32, u32)],
         row_state: &mut [u32],
     ) {
-        for (index, row) in probe_indexes.iter().enumerate() {
+        let mut index = 0;
+        for (row, cnt) in probe_indexes {
             let row = *row as usize;
-            if row_state[row] == 0 {
-                bm.set(index, true);
-                continue;
-            }
-
-            if row_state[row] == 1 {
-                if !bm.get(index) {
-                    bm.set(index, true)
+            for _ in 0..*cnt {
+                if row_state[row] == 0 {
+                    bm.set(index, true);
+                    continue;
                 }
-                continue;
-            }
 
-            if !bm.get(index) {
-                row_state[row] -= 1;
+                if row_state[row] == 1 {
+                    if !bm.get(index) {
+                        bm.set(index, true)
+                    }
+                    continue;
+                }
+
+                if !bm.get(index) {
+                    row_state[row] -= 1;
+                }
+                index += 1;
             }
         }
     }
