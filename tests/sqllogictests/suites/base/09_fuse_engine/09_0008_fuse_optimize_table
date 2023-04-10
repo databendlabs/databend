@@ -46,7 +46,18 @@ statement ok
 optimize table `t` purge
 
 query B
-select count(*)=1 from fuse_snapshot('db_09_0008', 't')
+select count(*) from fuse_snapshot('db_09_0008', 't')
+----
+5
+
+statement ok
+set retention_period = 0
+
+statement ok
+optimize table `t` purge
+
+query B
+select count(*) from fuse_snapshot('db_09_0008', 't')
 ----
 1
 
