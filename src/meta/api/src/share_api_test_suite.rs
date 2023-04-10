@@ -20,6 +20,8 @@ use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::*;
@@ -118,7 +120,9 @@ impl ShareApiTestSuite {
         suite
             .get_grant_privileges_of_object(&b.build().await)
             .await?;
-        // suite.drop_share_database(&b.build().await).await?;
+        suite
+            .drop_share_database_and_table(&b.build().await)
+            .await?;
 
         Ok(())
     }
@@ -1415,6 +1419,130 @@ impl ShareApiTestSuite {
             assert!(res.is_ok());
             let res = res.unwrap();
             assert_eq!(res.privileges.len(), 0);
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn drop_share_database_and_table<
+        MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi,
+    >(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let share1 = "share1";
+        let db_name = "db1";
+        let tbl_name = "table1";
+        let share_id: u64;
+        let table_id: u64;
+
+        let share_name = ShareNameIdent {
+            tenant: tenant.to_string(),
+            share_name: share1.to_string(),
+        };
+
+        info!("--- create share1");
+        let create_on = Utc::now();
+        {
+            let req = CreateShareReq {
+                if_not_exists: false,
+                share_name: share_name.clone(),
+                comment: None,
+                create_on,
+            };
+
+            let res = mt.create_share(req).await;
+            info!("create share res: {:?}", res);
+            let res = res.unwrap();
+            assert_eq!(1, res.share_id, "first database id is 1");
+            share_id = res.share_id;
+        }
+
+        info!("--- create db1,table1");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta::default(),
+            };
+
+            let res = mt.create_database(plan).await?;
+            info!("create database res: {:?}", res);
+
+            let req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: TableMeta::default(),
+            };
+
+            let res = mt.create_table(req.clone()).await?;
+            info!("create table res: {:?}", res);
+            table_id = res.table_id;
+        }
+
+        info!("--- share db1 and table1");
+        {
+            let req = GrantShareObjectReq {
+                share_name: share_name.clone(),
+                object: ShareGrantObjectName::Database(db_name.to_string()),
+                grant_on: create_on,
+                privilege: ShareGrantObjectPrivilege::Usage,
+            };
+
+            let res = mt.grant_share_object(req).await?;
+            info!("grant object res: {:?}", res);
+            assert_eq!(1, res.spec_vec.unwrap().len());
+
+            let tbl_ob_name =
+                ShareGrantObjectName::Table(db_name.to_string(), tbl_name.to_string());
+            let req = GrantShareObjectReq {
+                share_name: share_name.clone(),
+                object: tbl_ob_name.clone(),
+                grant_on: create_on,
+                privilege: ShareGrantObjectPrivilege::Usage,
+            };
+
+            let res = mt.grant_share_object(req).await?;
+            info!("grant object res: {:?}", res);
+            assert_eq!(1, res.spec_vec.unwrap().len());
+        }
+
+        info!("--- drop share table");
+        {
+            let plan = DropTableByIdReq {
+                if_exists: false,
+                tb_id: table_id,
+            };
+            let res = mt.drop_table_by_id(plan).await;
+
+            let (_share_meta_seq, share_meta) =
+                get_share_meta_by_id_or_err(mt.as_kv_api(), share_id, "").await?;
+            assert!(!share_meta.entries.contains_key(tbl_name));
+        }
+
+        info!("--- drop share database");
+        {
+            mt.drop_database(DropDatabaseReq {
+                if_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+            })
+            .await?;
+
+            let (_share_meta_seq, share_meta) =
+                get_share_meta_by_id_or_err(mt.as_kv_api(), share_id, "").await?;
+            assert!(share_meta.database.is_none());
         }
 
         Ok(())
