@@ -674,6 +674,7 @@ pub fn window_spec(i: Input) -> IResult<WindowSpec> {
         },
     )(i)
 }
+
 pub fn window_spec_ident(i: Input) -> IResult<Window> {
     alt((
         map(
