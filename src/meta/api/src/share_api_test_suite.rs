@@ -118,6 +118,7 @@ impl ShareApiTestSuite {
         suite
             .get_grant_privileges_of_object(&b.build().await)
             .await?;
+        // suite.drop_share_database(&b.build().await).await?;
 
         Ok(())
     }

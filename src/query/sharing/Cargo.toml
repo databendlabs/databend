@@ -20,6 +20,7 @@ common-exception = { path = "../../common/exception" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
 common-users = { path = "../users" }
+common-storage = { path = "../../common/storage" }
 
 async-backtrace = { workspace = true }
 http = "0.2"
