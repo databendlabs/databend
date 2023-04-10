@@ -26,13 +26,13 @@ use common_formats::FileFormatOptionsExt;
 use common_io::cursor_ext::*;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageFileFormatType;
+use common_pipeline_core::InputError;
 use xml::reader::XmlEvent;
 use xml::ParserConfig;
 
 use crate::input_formats::AligningStateTextBased;
 use crate::input_formats::BlockBuilder;
 use crate::input_formats::InputContext;
-use crate::input_formats::InputError;
 use crate::input_formats::InputFormatTextBase;
 use crate::input_formats::RowBatch;
 use crate::input_formats::SplitInfo;
