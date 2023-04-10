@@ -47,6 +47,7 @@ impl LoweringContext for Metadata {
             ColumnEntry::BaseTableColumn(column) => Ok(DataType::from(&column.data_type)),
             ColumnEntry::DerivedColumn(column) => Ok(column.data_type.clone()),
             ColumnEntry::InternalColumn(column) => Ok(column.internal_column.data_type()),
+            ColumnEntry::VirtualColumn(column) => Ok(DataType::from(&column.data_type)),
         }
     }
 }

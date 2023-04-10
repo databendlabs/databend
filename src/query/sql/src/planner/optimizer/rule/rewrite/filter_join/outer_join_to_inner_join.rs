@@ -253,6 +253,11 @@ fn remove_column_nullable(
                 }
                 // None of internal columns will be nullable, so just ignore internal column type entry
                 ColumnEntry::InternalColumn(..) => {}
+                ColumnEntry::VirtualColumn(virtual_column) => {
+                    if let TableDataType::Nullable(_) = virtual_column.data_type {
+                        need_remove = false;
+                    }
+                }
             }
             match join_type {
                 JoinType::Left => {

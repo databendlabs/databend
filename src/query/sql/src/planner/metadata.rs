@@ -23,6 +23,7 @@ use common_ast::ast::Literal;
 use common_catalog::plan::InternalColumn;
 use common_catalog::table::Table;
 use common_expression::types::DataType;
+use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use parking_lot::RwLock;
@@ -118,6 +119,19 @@ impl Metadata {
             .collect()
     }
 
+    pub fn virtual_columns_by_table_index(&self, index: IndexType) -> Vec<ColumnEntry> {
+        self.columns
+            .iter()
+            .filter(|column| match column {
+                ColumnEntry::VirtualColumn(VirtualColumn { table_index, .. }) => {
+                    index == *table_index
+                }
+                _ => false,
+            })
+            .cloned()
+            .collect()
+    }
+
     pub fn add_base_table_column(
         &mut self,
         name: String,
@@ -162,6 +176,28 @@ impl Metadata {
                 column_index,
                 internal_column,
             }));
+        column_index
+    }
+
+    pub fn add_virtual_column(
+        &mut self,
+        table_index: IndexType,
+        source_column_name: String,
+        source_column_index: IndexType,
+        column_name: String,
+        data_type: TableDataType,
+        paths: Vec<Scalar>,
+    ) -> IndexType {
+        let column_index = self.columns.len();
+        self.columns.push(ColumnEntry::VirtualColumn(VirtualColumn {
+            table_index,
+            source_column_name,
+            source_column_index,
+            column_index,
+            column_name,
+            data_type,
+            paths,
+        }));
         column_index
     }
 
@@ -361,6 +397,19 @@ pub struct TableInternalColumn {
 }
 
 #[derive(Clone, Debug)]
+pub struct VirtualColumn {
+    pub table_index: IndexType,
+    pub source_column_name: String,
+    pub source_column_index: IndexType,
+    pub column_index: IndexType,
+    pub column_name: String,
+    pub data_type: TableDataType,
+
+    /// Paths to generate virtual column from source column
+    pub paths: Vec<Scalar>,
+}
+
+#[derive(Clone, Debug)]
 pub enum ColumnEntry {
     /// Column from base table, for example `SELECT t.a, t.b FROM t`.
     BaseTableColumn(BaseTableColumn),
@@ -370,6 +419,9 @@ pub enum ColumnEntry {
 
     /// Internal columns, such as `_row_id`, `_segment_name`, etc.
     InternalColumn(TableInternalColumn),
+
+    /// Virtual column generated from source column by paths, such as `a.b.c`, `a[1][2]`, etc.
+    VirtualColumn(VirtualColumn),
 }
 
 impl ColumnEntry {
@@ -377,7 +429,8 @@ impl ColumnEntry {
         match self {
             ColumnEntry::BaseTableColumn(base) => base.column_index,
             ColumnEntry::DerivedColumn(derived) => derived.column_index,
-            ColumnEntry::InternalColumn(internal_column) => internal_column.column_index,
+            ColumnEntry::InternalColumn(internal) => internal.column_index,
+            ColumnEntry::VirtualColumn(virtual_column) => virtual_column.column_index,
         }
     }
 
@@ -390,6 +443,9 @@ impl ColumnEntry {
             ColumnEntry::InternalColumn(TableInternalColumn {
                 internal_column, ..
             }) => internal_column.data_type(),
+            ColumnEntry::VirtualColumn(VirtualColumn { data_type, .. }) => {
+                DataType::from(data_type)
+            }
         }
     }
 
@@ -402,6 +458,9 @@ impl ColumnEntry {
             ColumnEntry::InternalColumn(TableInternalColumn {
                 internal_column, ..
             }) => internal_column.column_name.clone(),
+            ColumnEntry::VirtualColumn(VirtualColumn { column_name, .. }) => {
+                column_name.to_string()
+            }
         }
     }
 }

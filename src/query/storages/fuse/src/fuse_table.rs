@@ -672,6 +672,10 @@ impl Table for FuseTable {
     fn support_prewhere(&self) -> bool {
         matches!(self.storage_format, FuseStorageFormat::Native)
     }
+
+    fn support_virtual_columns(&self) -> bool {
+        matches!(self.storage_format, FuseStorageFormat::Native)
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

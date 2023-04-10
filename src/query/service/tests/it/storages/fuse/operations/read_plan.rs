@@ -132,10 +132,12 @@ fn test_to_partitions() -> Result<()> {
     // kick off
     let push_down = Some(PushDownInfo {
         projection: Some(proj),
+        output_columns: None,
         filter: None,
         limit: None,
         order_by: vec![],
         prewhere: None,
+        virtual_columns: None,
     });
 
     let (stats, parts) =
@@ -173,10 +175,12 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
         let proj = Projection::Columns(vec![]);
         let push_downs = PushDownInfo {
             projection: Some(proj),
+            output_columns: None,
             filter: None,
             prewhere: None,
             limit: None,
             order_by: vec![],
+            virtual_columns: None,
         };
         let (stats, parts) = table.read_partitions(ctx.clone(), Some(push_downs)).await?;
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);

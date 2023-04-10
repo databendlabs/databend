@@ -79,6 +79,7 @@ use crate::ColumnEntry;
 use crate::DerivedColumn;
 use crate::IndexType;
 use crate::TableInternalColumn;
+use crate::VirtualColumn;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -706,6 +707,9 @@ impl Binder {
                                 column_index,
                                 ..
                             }) => column_index,
+                            ColumnEntry::VirtualColumn(VirtualColumn { column_index, .. }) => {
+                                column_index
+                            }
                         })
                         .collect(),
                     push_down_predicates: None,
