@@ -38,6 +38,9 @@ SELECT * FROM `05_0003_at_t1`
 statement error 1005
 ALTER TABLE `05_0003_at_t1` RENAME TO system.`05_0003_at_t1`
 
+statement error 1025
+ALTER TABLE system.abc drop column c1
+
 statement ok
 DROP TABLE IF EXISTS `05_0003_at_t1`
 
