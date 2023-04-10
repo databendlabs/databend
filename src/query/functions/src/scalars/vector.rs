@@ -18,6 +18,7 @@ use common_expression::types::Float32Type;
 use common_expression::types::StringType;
 use common_expression::types::F32;
 use common_expression::vectorize_with_builder_2_arg;
+use common_expression::vectorize_with_builder_5_arg;
 use common_expression::FunctionDomain;
 use common_expression::FunctionRegistry;
 use common_openai::OpenAI;
@@ -28,7 +29,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     // This function takes two Float32 arrays as input and computes the cosine distance between them.
     registry.register_passthrough_nullable_2_arg::<ArrayType<Float32Type>, ArrayType<Float32Type>, Float32Type, _, _>(
         "cosine_distance",
-        |_,  _| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<ArrayType<Float32Type>, ArrayType<Float32Type>,  Float32Type>(
             |lhs, rhs, output, ctx| {
                 let l_f32=
@@ -52,14 +53,18 @@ pub fn register(registry: &mut FunctionRegistry) {
     // embedding_vector
     // This function takes two strings as input, sends an API request to OpenAI, and returns the Float32 array of embeddings.
     // The OpenAI API key is pre-configured during the binder phase, so we rewrite this function and set the API key.
-    registry.register_passthrough_nullable_2_arg::<StringType, StringType, ArrayType<Float32Type>, _, _>(
+    registry.register_passthrough_nullable_5_arg::<StringType, StringType, StringType, StringType, StringType, ArrayType<Float32Type>, _, _>(
         "embedding_vector",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<StringType, StringType, ArrayType<Float32Type>>(
-            |data, api_key, output, ctx| {
+        |_, _, _, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_5_arg::<StringType, StringType, StringType, StringType, StringType, ArrayType<Float32Type>>(
+            |data, api_base,api_key, embedding_model, completion_model, output, ctx| {
                 let data = std::str::from_utf8(data).unwrap();
-                let api_key = std::str::from_utf8(api_key).unwrap();
-                let openai = OpenAI::create(api_key.to_string());
+
+                let api_base = std::str::from_utf8(api_base).unwrap().to_string();
+                let api_key = std::str::from_utf8(api_key).unwrap().to_string();
+                let embedding_model = std::str::from_utf8(embedding_model).unwrap().to_string();
+                let completion_model= std::str::from_utf8(completion_model).unwrap().to_string();
+                let openai = OpenAI::create(api_base, api_key, embedding_model, completion_model);
                 let result = openai.embedding_request(&[data.to_string()]);
                 match result {
                     Ok((embeddings, _)) => {
@@ -78,14 +83,18 @@ pub fn register(registry: &mut FunctionRegistry) {
     // text_completion
     // This function takes two strings as input, sends an API request to OpenAI, and returns the AI-generated completion as a string.
     // The OpenAI API key is pre-configured during the binder phase, so we rewrite this function and set the API key.
-    registry.register_passthrough_nullable_2_arg::<StringType, StringType, StringType, _, _>(
+    registry.register_passthrough_nullable_5_arg::<StringType,StringType,StringType, StringType, StringType, StringType, _, _>(
         "text_completion",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<StringType, StringType, StringType>(
-            |data, api_key, output, ctx| {
+        |_, _, _, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_5_arg::<StringType, StringType, StringType, StringType, StringType, StringType>(
+                |data, api_base,api_key, embedding_model, completion_model, output, ctx| {
                 let data = std::str::from_utf8(data).unwrap();
-                let api_key = std::str::from_utf8(api_key).unwrap();
-                let openai = OpenAI::create(api_key.to_string());
+
+                let api_base = std::str::from_utf8(api_base).unwrap().to_string();
+                let api_key = std::str::from_utf8(api_key).unwrap().to_string();
+                let embedding_model = std::str::from_utf8(embedding_model).unwrap().to_string();
+                let completion_model= std::str::from_utf8(completion_model).unwrap().to_string();
+                let openai = OpenAI::create(api_base, api_key, embedding_model, completion_model);
                 let result = openai.completion_text_request(data.to_string());
                 match result {
                     Ok((resp, _)) => {
