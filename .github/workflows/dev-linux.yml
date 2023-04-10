@@ -208,7 +208,7 @@ jobs:
 
   test_sqllogic_management_mode:
     timeout-minutes: 30
-    name: test_sqllogic_management
+    name: test_sqllogic_${{ matrix.dirs }}
     runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build
     strategy:
