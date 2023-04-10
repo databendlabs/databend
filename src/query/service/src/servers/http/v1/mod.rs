@@ -28,6 +28,8 @@ pub(crate) use json_block::JsonBlock;
 pub use load::streaming_load;
 pub use load::LoadResponse;
 pub use query::ExecuteStateKind;
+pub use query::ExpiringMap;
+pub use query::ExpiringState;
 pub use query::HttpQueryContext;
 pub use query::HttpQueryManager;
 pub use query::HttpSessionConf;

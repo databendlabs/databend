@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use common_base::base::tokio::sync::RwLock;
-use common_base::base::tokio::time::sleep;
 use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
@@ -58,6 +57,9 @@ impl HttpQueryManager {
             },
         }));
 
+        // Start a background thread to check expired queries.
+        // Must be called after GlobalIORuntime::init()
+        Self::instance().check_expire().await;
         Ok(())
     }
 
@@ -86,32 +88,35 @@ impl HttpQueryManager {
     async fn add_query(self: &Arc<Self>, query_id: &str, query: Arc<HttpQuery>) {
         let mut queries = self.queries.write().await;
         queries.insert(query_id.to_string(), query.clone());
-        let timeout = self.config.result_timeout_secs;
+    }
 
+    #[async_backtrace::framed]
+    async fn check_expire(self: &Arc<Self>) {
+        let timeout = self.config.result_timeout_secs;
         let self_clone = self.clone();
-        let query_id_clone = query_id.to_string();
-        let query_clone = query.clone();
         GlobalIORuntime::instance().spawn(async move {
             loop {
-                match query_clone.check_expire().await {
-                    ExpireResult::Expired => {
-                        let msg =
-                            format!("http query {} timeout after {} s", &query_id_clone, timeout);
-                        if self_clone.remove_query(&query_id_clone).await.is_none() {
-                            warn!("{msg}, but fail to remove");
-                        } else {
-                            warn!("{msg}");
-                            query.detach().await;
-                        };
-                        break;
-                    }
-                    ExpireResult::Sleep(t) => {
-                        sleep(t).await;
-                    }
-                    ExpireResult::Removed => {
-                        break;
+                let queries = self_clone.queries.read().await;
+                for (query_id, query) in queries.iter() {
+                    match query.check_expire().await {
+                        ExpireResult::Expired | ExpireResult::Removed => {
+                            let msg =
+                                format!("http query {} timeout after {} s", &query_id, timeout);
+                            if self_clone.remove_query(&query_id).await.is_none() {
+                                warn!("{msg}, but fail to remove");
+                            } else {
+                                warn!("{msg}");
+                                query.detach().await;
+                            };
+                            break;
+                        }
+                        ExpireResult::Sleep(_) => {}
                     }
                 }
+                common_base::base::tokio::time::sleep(
+                    common_base::base::tokio::time::Duration::from_secs(1),
+                )
+                .await;
             }
         });
     }
