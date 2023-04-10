@@ -1308,9 +1308,20 @@ pub struct QueryConfig {
     #[clap(long)]
     pub disable_system_table_load: bool,
 
+    #[clap(long, default_value = "https://api.openai.com/v1/")]
+    pub openai_api_base_url: String,
+
     // This will not show in system.configs, put it to mask.rs.
     #[clap(long, default_value = "")]
     pub openai_api_key: String,
+
+    /// https://platform.openai.com/docs/models/embeddings
+    #[clap(long, default_value = "text-embedding-ada-002")]
+    pub openai_api_embedding_model: String,
+
+    /// https://platform.openai.com/docs/guides/chat
+    #[clap(long, default_value = "gpt-3.5-turbo")]
+    pub openai_api_completion_model: String,
 }
 
 impl Default for QueryConfig {
@@ -1372,7 +1383,10 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             internal_enable_sandbox_tenant: self.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: self.internal_merge_on_read_mutation,
             disable_system_table_load: self.disable_system_table_load,
+            openai_api_base_url: self.openai_api_base_url,
             openai_api_key: self.openai_api_key,
+            openai_api_completion_model: self.openai_api_completion_model,
+            openai_api_embedding_model: self.openai_api_embedding_model,
         })
     }
 }
@@ -1446,7 +1460,10 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_cache_bloom_index_filter_count: None,
             table_cache_bloom_index_data_bytes: None,
             disable_system_table_load: inner.disable_system_table_load,
+            openai_api_base_url: inner.openai_api_base_url,
             openai_api_key: inner.openai_api_key,
+            openai_api_completion_model: inner.openai_api_completion_model,
+            openai_api_embedding_model: inner.openai_api_embedding_model,
         }
     }
 }

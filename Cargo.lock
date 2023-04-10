@@ -2584,6 +2584,7 @@ dependencies = [
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-storage",
+ "dashmap",
  "opendal",
  "parking_lot 0.12.1",
  "uuid",

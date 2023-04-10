@@ -28,10 +28,10 @@ use common_io::cursor_ext::*;
 use common_io::format_diagnostic::verbose_string;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageFileFormatType;
+use common_pipeline_core::InputError;
 
 use crate::input_formats::AligningStateRowDelimiter;
 use crate::input_formats::BlockBuilder;
-use crate::input_formats::InputError;
 use crate::input_formats::InputFormatTextBase;
 use crate::input_formats::RowBatch;
 

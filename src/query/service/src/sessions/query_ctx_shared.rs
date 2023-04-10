@@ -26,12 +26,15 @@ use common_catalog::table_context::StageAttachment;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
+use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
+use dashmap::DashMap;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
@@ -79,7 +82,12 @@ pub struct QueryContextShared {
     pub(in crate::sessions) precommit_blocks: Arc<RwLock<Vec<DataBlock>>>,
     pub(in crate::sessions) stage_attachment: Arc<RwLock<Option<StageAttachment>>>,
     pub(in crate::sessions) created_time: SystemTime,
-    pub(in crate::sessions) on_error_map: Arc<RwLock<Option<HashMap<String, ErrorCode>>>>,
+    // DashMap<file_path, HashMap<ErrorCode::code, (ErrorCode, Number of occurrences)>>
+    // We use this field to count maximum of one error found per data file.
+    #[allow(clippy::type_complexity)]
+    pub(in crate::sessions) on_error_map:
+        Arc<RwLock<Option<Arc<DashMap<String, HashMap<u16, InputError>>>>>>,
+    pub(in crate::sessions) on_error_mode: Arc<RwLock<Option<OnErrorMode>>>,
     /// partitions_sha for each table in the query. Not empty only when enabling query result cache.
     pub(in crate::sessions) partitions_shas: Arc<RwLock<Vec<String>>>,
     pub(in crate::sessions) cacheable: Arc<AtomicBool>,
@@ -114,6 +122,7 @@ impl QueryContextShared {
             stage_attachment: Arc::new(RwLock::new(None)),
             created_time: SystemTime::now(),
             on_error_map: Arc::new(RwLock::new(None)),
+            on_error_mode: Arc::new(RwLock::new(None)),
             partitions_shas: Arc::new(RwLock::new(vec![])),
             cacheable: Arc::new(AtomicBool::new(true)),
             status: Arc::new(RwLock::new("null".to_string())),
@@ -125,13 +134,21 @@ impl QueryContextShared {
         *guard = Some(err);
     }
 
-    pub fn set_on_error_map(&self, map: Option<HashMap<String, ErrorCode>>) {
+    pub fn set_on_error_map(&self, map: Arc<DashMap<String, HashMap<u16, InputError>>>) {
         let mut guard = self.on_error_map.write();
-        *guard = map;
+        *guard = Some(map);
     }
 
-    pub fn get_on_error_map(&self) -> Option<HashMap<String, ErrorCode>> {
+    pub fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>> {
         self.on_error_map.read().as_ref().cloned()
+    }
+
+    pub fn get_on_error_mode(&self) -> Option<OnErrorMode> {
+        self.on_error_mode.read().clone()
+    }
+    pub fn set_on_error_mode(&self, mode: OnErrorMode) {
+        let mut guard = self.on_error_mode.write();
+        *guard = Some(mode);
     }
 
     pub fn kill(&self, cause: ErrorCode) {

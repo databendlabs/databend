@@ -11,13 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use common_exception::ErrorCode;
 
-mod completion;
-mod embedding;
-
-#[allow(clippy::module_inception)]
-mod openai;
-
-pub(crate) mod metrics;
-
-pub use openai::OpenAI;
+#[derive(Debug, Clone)]
+pub struct InputError {
+    pub err: ErrorCode,
+    pub num: usize,
+}
