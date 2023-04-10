@@ -28,8 +28,6 @@ use common_expression::TableSchema;
 use common_expression::TableSchemaRefExt;
 use storages_common_table_meta::meta::TableSnapshotLite;
 
-use crate::io::ListSnapshotLiteOption;
-use crate::io::SnapshotLiteListExtended;
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::sessions::TableContext;
@@ -64,14 +62,9 @@ impl<'a> FuseSnapshot<'a> {
                 // account, BEFORE the snapshots are chained, so there might be the case that although
                 // there are more than limited number of snapshots could be chained, the number of
                 // snapshots returned is lesser.
-                let SnapshotLiteListExtended {
-                    chained_snapshot_lites,
-                    ..
-                } = snapshots_io
+                let (chained_snapshot_lites, _) = snapshots_io
                     .read_snapshot_lites_ext(
                         snapshot_location,
-                        None,
-                        &ListSnapshotLiteOption::NeedNotSegments,
                         snapshot.and_then(|s| s.timestamp),
                         &|_| {},
                     )

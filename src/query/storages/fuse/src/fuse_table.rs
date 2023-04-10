@@ -68,6 +68,7 @@ use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use tracing::error;
+use tracing::warn;
 use uuid::Uuid;
 
 use crate::io::MetaReaders;
@@ -557,10 +558,8 @@ impl Table for FuseTable {
         let root_snapshot = if let Some(snapshot) = self.read_table_snapshot().await? {
             snapshot
         } else {
-            // not an error?
-            return Err(ErrorCode::TableHistoricalDataNotFound(
-                "Empty Table has no historical data",
-            ));
+            warn!("Empty Table has no historical data");
+            return Ok(());
         };
 
         assert!(root_snapshot.timestamp.is_some());
@@ -569,16 +568,21 @@ impl Table for FuseTable {
         let table = match instant {
             Some(NavigationPoint::TimePoint(time_point)) => {
                 let min_time_point = std::cmp::min(time_point, retention_point);
-                self.navigate_to_time_point(min_time_point).await?
+                self.navigate_to_time_point(min_time_point).await
             }
             Some(NavigationPoint::SnapshotID(snapshot_id)) => {
                 self.navigate_with_retention(snapshot_id.as_str(), Some(retention_point))
-                    .await?
+                    .await
             }
-            None => self.navigate_to_time_point(retention_point).await?,
+            None => self.navigate_to_time_point(retention_point).await,
         };
-
-        table.do_purge(&ctx, keep_last_snapshot).await
+        match table {
+            Err(e) => {
+                warn!("navigate failed: {:?}", e);
+                Ok(())
+            }
+            Ok(t) => t.do_purge(&ctx, keep_last_snapshot).await,
+        }
     }
 
     #[tracing::instrument(level = "debug", name = "analyze", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
