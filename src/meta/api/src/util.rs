@@ -962,7 +962,7 @@ pub async fn remove_table_from_share(
     let entries = share_meta.entries.clone();
     for (table_name, entry) in entries {
         if let ShareGrantObject::Table(share_table_id) = entry.object {
-            if share_table_id != table_id {
+            if share_table_id == table_id {
                 remove_table_name = Some(table_name);
                 break;
             }

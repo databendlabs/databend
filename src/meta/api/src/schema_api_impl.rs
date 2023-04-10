@@ -1841,7 +1841,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                     let (share_name, share_meta, share_table_info) = remove_table_from_share(
                         self,
                         *share_id,
-                        db_id,
+                        table_id,
                         &tenant_dbname_tbname,
                         &mut condition,
                         &mut if_then,

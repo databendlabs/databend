@@ -1432,9 +1432,9 @@ impl ShareApiTestSuite {
         mt: &MT,
     ) -> anyhow::Result<()> {
         let tenant = "tenant1";
-        let share1 = "share1";
-        let db_name = "db1";
-        let tbl_name = "table1";
+        let share1 = "drop_share_database_and_table_share";
+        let db_name = "drop_share_database_and_table_db";
+        let tbl_name = "drop_share_database_and_table_table";
         let share_id: u64;
         let table_id: u64;
 
@@ -1456,7 +1456,7 @@ impl ShareApiTestSuite {
             let res = mt.create_share(req).await;
             info!("create share res: {:?}", res);
             let res = res.unwrap();
-            assert_eq!(1, res.share_id, "first database id is 1");
+            assert_eq!(1, res.share_id, "first share id is 1");
             share_id = res.share_id;
         }
 
@@ -1520,7 +1520,8 @@ impl ShareApiTestSuite {
         {
             let (_share_meta_seq, share_meta) =
                 get_share_meta_by_id_or_err(mt.as_kv_api(), share_id, "").await?;
-            assert!(share_meta.entries.contains_key(tbl_name));
+            let table_key_name = ShareGrantObject::Table(table_id).to_string();
+            assert!(share_meta.entries.contains_key(&table_key_name));
 
             let plan = DropTableByIdReq {
                 if_exists: false,
@@ -1530,7 +1531,7 @@ impl ShareApiTestSuite {
 
             let (_share_meta_seq, share_meta) =
                 get_share_meta_by_id_or_err(mt.as_kv_api(), share_id, "").await?;
-            assert!(!share_meta.entries.contains_key(tbl_name));
+            assert!(!share_meta.entries.contains_key(&table_key_name));
         }
 
         info!("--- drop share database");
