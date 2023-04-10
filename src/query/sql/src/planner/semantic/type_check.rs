@@ -50,6 +50,7 @@ use common_expression::types::decimal::DecimalSize;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
+use common_expression::ConstantFolder;
 use common_expression::FunctionKind;
 use common_expression::RawExpr;
 use common_expression::Scalar;
@@ -931,33 +932,17 @@ impl<'a> TypeChecker<'a> {
         }
         let mut order_by = Vec::with_capacity(window.order_by.len());
 
-        let is_range = window
-            .window_frame
-            .as_ref()
-            .map(|f| f.units.is_range())
-            .unwrap_or(false);
-
         for o in window.order_by.iter() {
-            let box (mut order, _) = self.resolve(&o.expr).await?;
-            if is_range {
-                // Change the item to Int64 type to compute offset for `RANGE`.
-                // TODO: find a better way. Maybe use generic in `TransformWindow` preocessor.
-                order = CastExpr {
-                    span: order.span(),
-                    is_try: false,
-                    argument: Box::new(order),
-                    target_type: Box::new(DataType::Number(NumberDataType::Int64)),
-                }
-                .into();
-            }
-
+            let box (order, _) = self.resolve(&o.expr).await?;
             order_by.push(WindowOrderBy {
                 expr: order,
                 asc: o.asc,
                 nulls_first: o.nulls_first,
             })
         }
-        let frame = Self::check_frame_bound(span, order_by.len(), window.window_frame.clone())?;
+        let frame = self
+            .resolve_window_frame(span, &mut order_by, window.window_frame.clone())
+            .await?;
         let data_type = func.return_type();
         let window_func = WindowFunc {
             display_name,
@@ -971,90 +956,73 @@ impl<'a> TypeChecker<'a> {
 
     // just support integer
     #[inline]
-    fn resolve_window_frame(expr: &Expr) -> Result<usize> {
-        match expr {
-            Expr::Literal {
-                lit: Literal::UInt64(value),
-                ..
-            } => Ok(*value as usize),
-            _ => Err(ErrorCode::SemanticError(
-                "Only unsigned integer literals are allowed in window frame specification"
-                    .to_string(),
-            )),
+    fn resolve_rows_offset(&self, expr: &Expr) -> Result<Scalar> {
+        if let Expr::Literal { lit, .. } = expr {
+            let box (value, _) = self.resolve_literal(lit)?;
+            match value {
+                Scalar::Number(NumberScalar::UInt8(v)) => {
+                    return Ok(Scalar::Number(NumberScalar::UInt64(v as u64)));
+                }
+                Scalar::Number(NumberScalar::UInt16(v)) => {
+                    return Ok(Scalar::Number(NumberScalar::UInt64(v as u64)));
+                }
+                Scalar::Number(NumberScalar::UInt32(v)) => {
+                    return Ok(Scalar::Number(NumberScalar::UInt64(v as u64)));
+                }
+                Scalar::Number(NumberScalar::UInt64(_)) => return Ok(value),
+                _ => {}
+            }
         }
+
+        Err(ErrorCode::SemanticError(
+            "Only unsigned numbers are allowed in ROWS offset".to_string(),
+        )
+        .set_span(expr.span()))
     }
 
-    fn check_frame_bound(
-        span: Span,
-        order_by_len: usize,
-        window_frame: Option<WindowFrame>,
-    ) -> Result<WindowFuncFrame> {
-        if order_by_len == 0 && window_frame.is_none() {
-            return Ok(WindowFuncFrame {
-                units: WindowFuncFrameUnits::Range,
-                start_bound: WindowFuncFrameBound::Preceding(None),
-                end_bound: WindowFuncFrameBound::Following(None),
-            });
-        }
-
-        let (units, start, end) = if let Some(frame) = window_frame {
-            if let WindowFrameUnits::Range = frame.units {
-                if order_by_len != 1 {
-                    return Err(ErrorCode::SemanticError(format!(
-                        "The RANGE OFFSET window frame requires exactly one ORDER BY column, {order_by_len} given."
-                    )));
+    fn resolve_window_rows_frame(&self, span: Span, frame: WindowFrame) -> Result<WindowFuncFrame> {
+        let units = match frame.units {
+            WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,
+            WindowFrameUnits::Range => WindowFuncFrameUnits::Range,
+        };
+        let start = match frame.start_bound {
+            WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
+            WindowFrameBound::Preceding(f) => {
+                if let Some(box expr) = f {
+                    WindowFuncFrameBound::Preceding(Some(self.resolve_rows_offset(&expr)?))
+                } else {
+                    WindowFuncFrameBound::Preceding(None)
                 }
             }
-            let units = match frame.units {
-                WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,
-                WindowFrameUnits::Range => WindowFuncFrameUnits::Range,
-            };
-            let start = match frame.start_bound {
-                WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
-                WindowFrameBound::Preceding(f) => {
-                    if let Some(box expr) = f {
-                        WindowFuncFrameBound::Preceding(Some(Self::resolve_window_frame(&expr)?))
-                    } else {
-                        WindowFuncFrameBound::Preceding(None)
-                    }
+            WindowFrameBound::Following(f) => {
+                if let Some(box expr) = f {
+                    WindowFuncFrameBound::Following(Some(self.resolve_rows_offset(&expr)?))
+                } else {
+                    WindowFuncFrameBound::Following(None)
                 }
-                WindowFrameBound::Following(f) => {
-                    if let Some(box expr) = f {
-                        WindowFuncFrameBound::Following(Some(Self::resolve_window_frame(&expr)?))
-                    } else {
-                        WindowFuncFrameBound::Following(None)
-                    }
+            }
+        };
+        let end = match frame.end_bound {
+            WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
+            WindowFrameBound::Preceding(f) => {
+                if let Some(box expr) = f {
+                    WindowFuncFrameBound::Preceding(Some(self.resolve_rows_offset(&expr)?))
+                } else {
+                    WindowFuncFrameBound::Preceding(None)
                 }
-            };
-
-            let end = match frame.end_bound {
-                WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
-                WindowFrameBound::Preceding(f) => {
-                    if let Some(box expr) = f {
-                        WindowFuncFrameBound::Preceding(Some(Self::resolve_window_frame(&expr)?))
-                    } else {
-                        WindowFuncFrameBound::Preceding(None)
-                    }
+            }
+            WindowFrameBound::Following(f) => {
+                if let Some(box expr) = f {
+                    WindowFuncFrameBound::Following(Some(self.resolve_rows_offset(&expr)?))
+                } else {
+                    WindowFuncFrameBound::Following(None)
                 }
-                WindowFrameBound::Following(f) => {
-                    if let Some(box expr) = f {
-                        WindowFuncFrameBound::Following(Some(Self::resolve_window_frame(&expr)?))
-                    } else {
-                        WindowFuncFrameBound::Following(None)
-                    }
-                }
-            };
-            (units, start, end)
-        } else {
-            let units = WindowFuncFrameUnits::Range;
-            let start = WindowFuncFrameBound::Preceding(None);
-            let end = WindowFuncFrameBound::CurrentRow;
-            (units, start, end)
+            }
         };
 
         if start > end {
             return Err(ErrorCode::SemanticError(format!(
-                "frame semantic error, start:{:?}, end:{:?}",
+                "frame start bound should be less then the end bound, start: {:?}, end: {:?}",
                 start, end
             ))
             .set_span(span));
@@ -1065,6 +1033,176 @@ impl<'a> TypeChecker<'a> {
             start_bound: start,
             end_bound: end,
         })
+    }
+
+    #[async_backtrace::framed]
+    async fn resolve_range_offset(
+        &mut self,
+        bound: &WindowFrameBound,
+    ) -> Result<Option<(ScalarExpr, DataType)>> {
+        match bound {
+            WindowFrameBound::Following(Some(box expr))
+            | WindowFrameBound::Preceding(Some(box expr)) => {
+                let box (value, mut data_type) = self.resolve(expr).await?;
+                if matches!(
+                    data_type,
+                    DataType::Number(_)
+                        | DataType::Decimal(_)
+                        | DataType::Date
+                        | DataType::Timestamp
+                ) {
+                    // Make sure RANEG offset is number type.
+                    if data_type.is_decimal() {
+                        data_type = DataType::Number(NumberDataType::Float64)
+                    } else if data_type.is_date_or_date_time() {
+                        data_type = DataType::Number(NumberDataType::Int64)
+                    }
+                    return Ok(Some((value, data_type)));
+                }
+                Err(ErrorCode::SemanticError(
+                    "Only numbers are allowed in RANGE offset".to_string(),
+                )
+                .set_span(expr.span()))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    #[async_backtrace::framed]
+    async fn resolve_window_range_frame(
+        &mut self,
+        span: Span,
+        order_by: &mut WindowOrderBy,
+        frame: WindowFrame,
+    ) -> Result<WindowFuncFrame> {
+        let order_by_type = order_by.expr.data_type()?;
+        let mut common_type = order_by_type.clone();
+        let start_offset = self.resolve_range_offset(&frame.start_bound).await?;
+        let end_offset = self.resolve_range_offset(&frame.end_bound).await?;
+        if let Some((_, data_type)) = &start_offset {
+            common_type = type_check::common_super_type(
+                common_type.clone(),
+                data_type.clone(),
+                &BUILTIN_FUNCTIONS.default_cast_rules,
+            )
+            .ok_or_else(|| {
+                ErrorCode::SemanticError("Cannot unify ORDER BY and RANGE offset types".to_string())
+            })?;
+        }
+        if let Some((_, data_type)) = &end_offset {
+            common_type = type_check::common_super_type(
+                common_type.clone(),
+                data_type.clone(),
+                &BUILTIN_FUNCTIONS.default_cast_rules,
+            )
+            .ok_or_else(|| {
+                ErrorCode::SemanticError("Cannot unify ORDER BY and RANGE offset types".to_string())
+            })?;
+        }
+
+        // Unify ORDER BY and RANGE offsets types.
+        if order_by_type != common_type {
+            order_by.expr = wrap_cast(&order_by.expr, &common_type);
+        }
+        let func_ctx = self.ctx.get_function_context()?;
+        let start_offset = start_offset
+            .map(|(mut expr, _)| {
+                expr = wrap_cast(&expr, &common_type);
+                let expr = expr.as_expr_with_col_index()?;
+                let (expr, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
+                if let common_expression::Expr::Constant { scalar, .. } = expr {
+                    debug_assert!(matches!(scalar, Scalar::Number(_)));
+                    if scalar.is_positive() {
+                        return Ok(scalar);
+                    }
+                }
+                Err(ErrorCode::SemanticError(
+                    "Only positive numbers are allowed in RANGE offset".to_string(),
+                )
+                .set_span(span))
+            })
+            .transpose()?;
+        let end_offset = end_offset
+            .map(|(mut expr, _)| {
+                expr = wrap_cast(&expr, &common_type);
+                let expr = expr.as_expr_with_col_index()?;
+                let (expr, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
+                if let common_expression::Expr::Constant { scalar, .. } = expr {
+                    debug_assert!(matches!(scalar, Scalar::Number(_)));
+                    if scalar.is_positive() {
+                        return Ok(scalar);
+                    }
+                }
+                Err(ErrorCode::SemanticError(
+                    "Only positive numbers are allowed in RANGE offset".to_string(),
+                )
+                .set_span(span))
+            })
+            .transpose()?;
+
+        let units = match frame.units {
+            WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,
+            WindowFrameUnits::Range => WindowFuncFrameUnits::Range,
+        };
+        let start = match frame.start_bound {
+            WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
+            WindowFrameBound::Preceding(_) => WindowFuncFrameBound::Preceding(start_offset),
+            WindowFrameBound::Following(_) => WindowFuncFrameBound::Following(start_offset),
+        };
+        let end = match frame.end_bound {
+            WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
+            WindowFrameBound::Preceding(_) => WindowFuncFrameBound::Preceding(end_offset),
+            WindowFrameBound::Following(_) => WindowFuncFrameBound::Following(end_offset),
+        };
+
+        if start > end {
+            return Err(ErrorCode::SemanticError(format!(
+                "frame start bound should be less then the end bound, start: {:?}, end: {:?}",
+                start, end
+            ))
+            .set_span(span));
+        }
+
+        Ok(WindowFuncFrame {
+            units,
+            start_bound: start,
+            end_bound: end,
+        })
+    }
+
+    #[async_backtrace::framed]
+    async fn resolve_window_frame(
+        &mut self,
+        span: Span,
+        order_by: &mut [WindowOrderBy],
+        window_frame: Option<WindowFrame>,
+    ) -> Result<WindowFuncFrame> {
+        if let Some(frame) = window_frame {
+            if frame.units.is_range() {
+                if order_by.len() != 1 {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "The RANGE OFFSET window frame requires exactly one ORDER BY column, {} given.",
+                        order_by.len()
+                    )).set_span(span));
+                }
+                self.resolve_window_range_frame(span, &mut order_by[0], frame)
+                    .await
+            } else {
+                self.resolve_window_rows_frame(span, frame)
+            }
+        } else if order_by.is_empty() {
+            Ok(WindowFuncFrame {
+                units: WindowFuncFrameUnits::Range,
+                start_bound: WindowFuncFrameBound::Preceding(None),
+                end_bound: WindowFuncFrameBound::Following(None),
+            })
+        } else {
+            Ok(WindowFuncFrame {
+                units: WindowFuncFrameUnits::Range,
+                start_bound: WindowFuncFrameBound::Preceding(None),
+                end_bound: WindowFuncFrameBound::CurrentRow,
+            })
+        }
     }
 
     /// Resolve aggregation function call.
