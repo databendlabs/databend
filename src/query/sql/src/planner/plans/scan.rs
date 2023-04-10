@@ -172,15 +172,11 @@ impl Operator for Scan {
             }
         }
 
-        // If prewhere is not none, we can't get precise cardinality
-        let precise_cardinality = if self.prewhere.is_none() {
-            self.statistics
-                .statistics
-                .as_ref()
-                .and_then(|stat| stat.num_rows)
-        } else {
-            None
-        };
+        let precise_cardinality = self
+            .statistics
+            .statistics
+            .as_ref()
+            .and_then(|stat| stat.num_rows);
 
         let cardinality = match (precise_cardinality, &self.prewhere) {
             (Some(precise_cardinality), Some(ref prewhere)) => {
@@ -200,6 +196,13 @@ impl Operator for Scan {
             }
             (Some(precise_cardinality), None) => precise_cardinality as f64,
             (_, _) => 0.0,
+        };
+
+        // If prewhere is not none, we can't get precise cardinality
+        let precise_cardinality = if self.prewhere.is_none() {
+            precise_cardinality
+        } else {
+            None
         };
 
         Ok(RelationalProperty {
