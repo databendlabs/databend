@@ -23,13 +23,8 @@ use common_hashtable::FastHash;
 use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
-use common_pipeline_core::pipe::Pipe;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::transforms::TransformDummy;
 use common_storage::DataOperator;
 use strength_reduce::StrengthReducedU64;
 
@@ -347,14 +342,13 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
 
     fn apply_merge_deserializer(
         &self,
-        remote_inputs: usize,
         params: &MergeExchangeParams,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_transform(|input, output| {
             Ok(TransformExchangeDeserializer::create(
-                input.clone(),
-                output.clone(),
+                input,
+                output,
                 &params.schema,
             ))
         })?;
@@ -369,14 +363,13 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
 
     fn apply_shuffle_deserializer(
         &self,
-        remote_inputs: usize,
         params: &ShuffleExchangeParams,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_transform(|input, output| {
             Ok(TransformExchangeDeserializer::create(
-                input.clone(),
-                output.clone(),
+                input,
+                output,
                 &params.schema,
             ))
         })?;

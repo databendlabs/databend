@@ -16,12 +16,7 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_pipeline_core::pipe::Pipe;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::transforms::TransformDummy;
 
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
 use crate::api::rpc::exchange::serde::exchange_deserializer::TransformExchangeDeserializer;
@@ -58,14 +53,12 @@ pub trait ExchangeInjector: Send + Sync + 'static {
 
     fn apply_merge_deserializer(
         &self,
-        remote_inputs: usize,
         params: &MergeExchangeParams,
         pipeline: &mut Pipeline,
     ) -> Result<()>;
 
     fn apply_shuffle_deserializer(
         &self,
-        remote_inputs: usize,
         params: &ShuffleExchangeParams,
         pipeline: &mut Pipeline,
     ) -> Result<()>;
@@ -124,14 +117,13 @@ impl ExchangeInjector for DefaultExchangeInjector {
 
     fn apply_merge_deserializer(
         &self,
-        remote_inputs: usize,
         params: &MergeExchangeParams,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_transform(|input, output| {
             Ok(TransformExchangeDeserializer::create(
-                input.clone(),
-                output.clone(),
+                input,
+                output,
                 &params.schema,
             ))
         })
@@ -139,14 +131,13 @@ impl ExchangeInjector for DefaultExchangeInjector {
 
     fn apply_shuffle_deserializer(
         &self,
-        remote_inputs: usize,
         params: &ShuffleExchangeParams,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_transform(|input, output| {
             Ok(TransformExchangeDeserializer::create(
-                input.clone(),
-                output.clone(),
+                input,
+                output,
                 &params.schema,
             ))
         })
