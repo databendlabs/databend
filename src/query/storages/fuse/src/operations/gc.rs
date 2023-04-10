@@ -155,7 +155,7 @@ impl FuseTable {
                 ctx.set_status_info(&status);
             }
 
-            self.purge_files(
+            self.partial_purge(
                 ctx,
                 &mut counter,
                 segments_to_be_purged,
@@ -196,7 +196,7 @@ impl FuseTable {
         }
 
         if !remain_snapshots_to_be_purged.is_empty() {
-            self.purge_files(
+            self.partial_purge(
                 ctx,
                 &mut counter,
                 remain_segments_to_be_purged,
@@ -212,7 +212,7 @@ impl FuseTable {
     }
 
     #[allow(clippy::too_many_arguments)]
-    async fn purge_files(
+    async fn partial_purge(
         &self,
         ctx: &Arc<dyn TableContext>,
         counter: &mut PurgeCounter,

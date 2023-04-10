@@ -16,18 +16,20 @@
 use std::sync::Arc;
 
 use chrono::Duration;
+use chrono::Utc;
 use common_base::base::tokio;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_storages_factory::Table;
 use common_storages_fuse::io::MetaWriter;
 use common_storages_fuse::io::SegmentWriter;
 use common_storages_fuse::statistics::gen_columns_statistics;
+use common_storages_fuse::statistics::merge_statistics;
 use common_storages_fuse::FuseTable;
 use futures_util::TryStreamExt;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
 use uuid::Uuid;
@@ -35,6 +37,7 @@ use uuid::Uuid;
 use crate::storages::fuse::block_writer::BlockWriter;
 use crate::storages::fuse::table_test_fixture::append_sample_data;
 use crate::storages::fuse::table_test_fixture::check_data_dir;
+use crate::storages::fuse::table_test_fixture::execute_command;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -243,13 +246,178 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_fuse_purge_retention() -> Result<()> {
+    let fixture = TestFixture::new().await;
+    let ctx = fixture.ctx();
+    fixture.create_default_table().await?;
+
+    let now = Utc::now();
+
+    let schema = TestFixture::default_table_schema();
+    let mut table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let location_gen = fuse_table.meta_location_generator();
+    let operator = fuse_table.get_operator();
+
+    {
+        let num_of_segments = 3;
+        let blocks_per_segment = 2;
+        let segments =
+            utils::generate_segments(fuse_table, num_of_segments, blocks_per_segment).await?;
+
+        // create snapshot 0.
+        let locations = vec![segments[0].0.clone()];
+        let id = Uuid::new_v4();
+        let mut snapshot_0 = TableSnapshot::new(
+            id,
+            &None,
+            None,
+            schema.as_ref().clone(),
+            segments[0].1.summary.clone(),
+            locations,
+            None,
+            None,
+        );
+        snapshot_0.timestamp = Some(now - Duration::hours(13));
+
+        let new_snapshot_location = location_gen
+            .snapshot_location_from_uuid(&snapshot_0.snapshot_id, TableSnapshot::VERSION)?;
+        snapshot_0
+            .write_meta(&operator, &new_snapshot_location)
+            .await?;
+
+        // create snapshot 1.
+        let mut locations = Vec::with_capacity(2);
+        for i in [1, 0] {
+            locations.push(segments[i].0.clone());
+        }
+        let mut snapshot_1 = TableSnapshot::from_previous(&snapshot_0);
+        snapshot_1.segments = locations;
+        snapshot_1.timestamp = Some(now - Duration::hours(12));
+        snapshot_1.summary = merge_statistics(&snapshot_0.summary, &segments[1].1.summary)?;
+        let new_snapshot_location = location_gen
+            .snapshot_location_from_uuid(&snapshot_1.snapshot_id, TableSnapshot::VERSION)?;
+        snapshot_1
+            .write_meta(&operator, &new_snapshot_location)
+            .await?;
+
+        // create snapshot 2.
+        let mut locations = Vec::with_capacity(3);
+        for i in [2, 1, 0] {
+            locations.push(segments[i].0.clone());
+        }
+        let mut snapshot_2 = TableSnapshot::from_previous(&snapshot_1);
+        snapshot_2.segments = locations;
+        snapshot_2.timestamp = Some(now);
+        snapshot_2.summary = merge_statistics(&snapshot_1.summary, &segments[2].1.summary)?;
+        let new_snapshot_location = location_gen
+            .snapshot_location_from_uuid(&snapshot_2.snapshot_id, TableSnapshot::VERSION)?;
+        snapshot_2
+            .write_meta(&operator, &new_snapshot_location)
+            .await?;
+        FuseTable::commit_to_meta_server(
+            ctx.as_ref(),
+            fuse_table.get_table_info(),
+            &location_gen,
+            snapshot_2,
+            None,
+            &None,
+            &operator,
+        )
+        .await?;
+    }
+
+    {
+        table = fixture.latest_default_table().await?;
+        let keep_last_snapshot = true;
+        let table_ctx: Arc<dyn TableContext> = ctx.clone();
+        table
+            .purge(table_ctx.clone(), None, keep_last_snapshot)
+            .await?;
+
+        let expected_num_of_snapshot = 2;
+        let expected_num_of_segment = 3;
+        let expected_num_of_blocks = 6;
+        let expected_num_of_index = expected_num_of_blocks;
+        check_data_dir(
+            &fixture,
+            "do_gc: retention period is 12",
+            expected_num_of_snapshot,
+            0,
+            expected_num_of_segment,
+            expected_num_of_blocks,
+            expected_num_of_index,
+            Some(()),
+            None,
+        )
+        .await?;
+    }
+
+    {
+        let db = fixture.default_db_name();
+        let tbl = fixture.default_table_name();
+        let qry = format!("optimize table {}.{} compact segment", db, tbl);
+        execute_command(ctx.clone(), &qry).await?;
+        check_data_dir(&fixture, "", 3, 0, 4, 6, 6, Some(()), None).await?;
+    }
+
+    {
+        ctx.get_settings().set_retention_period(0)?;
+        table = fixture.latest_default_table().await?;
+        let table_ctx: Arc<dyn TableContext> = ctx.clone();
+        table.purge(table_ctx.clone(), None, true).await?;
+
+        let expected_num_of_snapshot = 1;
+        let expected_num_of_segment = 1;
+        let expected_num_of_blocks = 6;
+        let expected_num_of_index = expected_num_of_blocks;
+        check_data_dir(
+            &fixture,
+            "do_gc: retention period is 0",
+            expected_num_of_snapshot,
+            0,
+            expected_num_of_segment,
+            expected_num_of_blocks,
+            expected_num_of_index,
+            Some(()),
+            None,
+        )
+        .await?;
+    }
+
+    {
+        // keep_last_snapshot is false.
+        table.purge(ctx.clone(), None, false).await?;
+        let expected_num_of_snapshot = 0;
+        let expected_num_of_segment = 0;
+        let expected_num_of_blocks = 0;
+        let expected_num_of_index = expected_num_of_blocks;
+        check_data_dir(
+            &fixture,
+            "do_gc: purge last snapshot",
+            expected_num_of_snapshot,
+            0,
+            expected_num_of_segment,
+            expected_num_of_blocks,
+            expected_num_of_index,
+            Some(()),
+            None,
+        )
+        .await?;
+    }
+    Ok(())
+}
+
 mod utils {
     use std::sync::Arc;
 
     use chrono::DateTime;
     use chrono::Utc;
+    use common_expression::BlockThresholds;
     use common_storages_factory::Table;
     use common_storages_fuse::io::MetaWriter;
+    use common_storages_fuse::statistics::reducers::reduce_block_metas;
     use common_storages_fuse::FuseStorageFormat;
 
     use super::*;
@@ -315,7 +483,8 @@ mod utils {
             block_metas.push(Arc::new(block_meta));
         }
 
-        let segment_info = SegmentInfo::new(block_metas, Statistics::default());
+        let summary = reduce_block_metas(&block_metas, BlockThresholds::default())?;
+        let segment_info = SegmentInfo::new(block_metas, summary);
         let segment_writer = SegmentWriter::new(dal, fuse_table.meta_location_generator());
         let segment_location = segment_writer.write_segment_no_cache(&segment_info).await?;
         Ok((segment_location, segment_info))
