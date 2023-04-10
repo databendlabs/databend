@@ -53,6 +53,13 @@ impl Interpreter for DropViewInterpreter {
             .await
             .ok();
 
+        if tbl.is_none() && !self.plan.if_exists {
+            return Err(ErrorCode::UnknownTable(format!(
+                "unknown view {}.{}",
+                db_name, view_name
+            )));
+        }
+
         if let Some(table) = &tbl {
             if table.get_table_info().engine() != VIEW_ENGINE {
                 return Err(ErrorCode::Internal(format!(
