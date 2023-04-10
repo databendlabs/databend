@@ -20,7 +20,6 @@ use openai_api_rust::Auth;
 
 use crate::metrics::metrics_embedding_count;
 use crate::metrics::metrics_embedding_token;
-use crate::AIModel;
 use crate::OpenAI;
 
 impl OpenAI {
@@ -34,7 +33,7 @@ impl OpenAI {
             &self.api_base,
         );
         let body = EmbeddingsBody {
-            model: AIModel::TextEmbeddingAda003.to_string(),
+            model: self.embedding_model.to_string(),
             input: input.to_vec(),
             user: None,
         };

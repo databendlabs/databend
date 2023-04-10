@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::TableSchemaRef;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::ColumnSet;
@@ -24,19 +26,19 @@ use crate::plans::Prewhere;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::Scan;
+use crate::IndexType;
 use crate::MetadataRef;
 
 pub struct RulePushDownPrewhere {
     id: RuleID,
-    metadata: MetadataRef,
     patterns: Vec<SExpr>,
+    metadata: MetadataRef,
 }
 
 impl RulePushDownPrewhere {
     pub fn new(metadata: MetadataRef) -> Self {
         Self {
             id: RuleID::PushDownPrewhere,
-            metadata,
             patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Filter,
@@ -49,56 +51,78 @@ impl RulePushDownPrewhere {
                     .into(),
                 ),
             )],
+            metadata,
         }
     }
 
     /// will throw error if the bound column ref is not in the table, such as subquery
-    fn collect_columns_impl(expr: &ScalarExpr, columns: &mut ColumnSet) -> Option<()> {
+    fn collect_columns_impl(
+        table_index: IndexType,
+        schema: &TableSchemaRef,
+        expr: &ScalarExpr,
+        columns: &mut ColumnSet,
+    ) -> Result<()> {
         match expr {
             ScalarExpr::BoundColumnRef(column) => {
-                column.column.table_name.as_ref()?;
-                columns.insert(column.column.index);
-                Some(())
+                if let Some(index) = &column.column.table_index {
+                    if table_index == *index
+                        && schema.index_of(column.column.column_name.as_str()).is_ok()
+                    {
+                        columns.insert(column.column.index);
+                        return Ok(());
+                    }
+                }
+                return Err(ErrorCode::Unimplemented("Column is not in the table"));
             }
             ScalarExpr::AndExpr(and) => {
-                Self::collect_columns_impl(and.left.as_ref(), columns)?;
-                Self::collect_columns_impl(and.right.as_ref(), columns)
+                Self::collect_columns_impl(table_index, schema, and.left.as_ref(), columns)?;
+                Self::collect_columns_impl(table_index, schema, and.right.as_ref(), columns)?;
             }
             ScalarExpr::OrExpr(or) => {
-                Self::collect_columns_impl(or.left.as_ref(), columns)?;
-                Self::collect_columns_impl(or.right.as_ref(), columns)
+                Self::collect_columns_impl(table_index, schema, or.left.as_ref(), columns)?;
+                Self::collect_columns_impl(table_index, schema, or.right.as_ref(), columns)?;
             }
-            ScalarExpr::NotExpr(not) => Self::collect_columns_impl(not.argument.as_ref(), columns),
+            ScalarExpr::NotExpr(not) => {
+                Self::collect_columns_impl(table_index, schema, not.argument.as_ref(), columns)?
+            }
             ScalarExpr::ComparisonExpr(cmp) => {
-                Self::collect_columns_impl(cmp.left.as_ref(), columns)?;
-                Self::collect_columns_impl(cmp.right.as_ref(), columns)
+                Self::collect_columns_impl(table_index, schema, cmp.left.as_ref(), columns)?;
+                Self::collect_columns_impl(table_index, schema, cmp.right.as_ref(), columns)?;
             }
             ScalarExpr::FunctionCall(func) => {
                 for arg in func.arguments.iter() {
-                    Self::collect_columns_impl(arg, columns)?;
+                    Self::collect_columns_impl(table_index, schema, arg, columns)?;
                 }
-                Some(())
             }
             ScalarExpr::CastExpr(cast) => {
-                Self::collect_columns_impl(cast.argument.as_ref(), columns)
+                Self::collect_columns_impl(table_index, schema, cast.argument.as_ref(), columns)?;
             }
-            // 1. ConstantExpr is not collected.
-            // 2. SubqueryExpr and AggregateFunction will not appear in Filter-LogicalGet
-            _ => None,
+            ScalarExpr::ConstantExpr(_) => {}
+            _ => {
+                // SubqueryExpr and AggregateFunction will not appear in Filter-LogicalGet
+                return Err(ErrorCode::Unimplemented(format!(
+                    "Prewhere don't support expr {:?}",
+                    expr
+                )));
+            }
         }
+        Ok(())
     }
 
     // analyze if the expression can be moved to prewhere
-    fn collect_columns(expr: &ScalarExpr) -> Option<ColumnSet> {
+    fn collect_columns(
+        table_index: IndexType,
+        schema: &TableSchemaRef,
+        expr: &ScalarExpr,
+    ) -> Option<ColumnSet> {
         let mut columns = ColumnSet::new();
         // columns in subqueries are not considered
-        Self::collect_columns_impl(expr, &mut columns)?;
+        Self::collect_columns_impl(table_index, schema, expr, &mut columns).ok()?;
 
         Some(columns)
     }
 
     pub fn prewhere_optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
-        let filter: Filter = s_expr.plan().clone().try_into()?;
         let mut get: Scan = s_expr.child(0)?.plan().clone().try_into()?;
         let metadata = self.metadata.read().clone();
 
@@ -107,13 +131,14 @@ impl RulePushDownPrewhere {
             // cannot optimize
             return Ok(s_expr.clone());
         }
+        let filter: Filter = s_expr.plan().clone().try_into()?;
 
         let mut prewhere_columns = ColumnSet::new();
         let mut prewhere_pred = Vec::new();
 
         // filter.predicates are already split by AND
         for pred in filter.predicates.iter() {
-            match Self::collect_columns(pred) {
+            match Self::collect_columns(get.table_index, &table.schema(), pred) {
                 Some(columns) => {
                     prewhere_pred.push(pred.clone());
                     prewhere_columns.extend(&columns);
