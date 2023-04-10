@@ -27,6 +27,7 @@ use common_io::constants::NAN_BYTES_LOWER;
 use common_io::constants::NULL_BYTES_LOWER;
 use common_io::constants::TRUE_BYTES_LOWER;
 use common_io::cursor_ext::ReadBytesExt;
+use common_meta_app::principal::XmlFileFormatParams;
 
 use crate::field_decoder::row_based::FieldDecoderRowBased;
 use crate::field_decoder::values::FieldDecoderValues;
@@ -42,17 +43,17 @@ pub struct FieldDecoderXML {
 }
 
 impl FieldDecoderXML {
-    pub fn create(options: &FileFormatOptionsExt) -> Self {
+    pub fn create(_params: XmlFileFormatParams, options_ext: &FileFormatOptionsExt) -> Self {
         FieldDecoderXML {
-            nested: FieldDecoderValues::create(options),
-            ident_case_sensitive: options.ident_case_sensitive,
+            nested: FieldDecoderValues::create(options_ext),
+            ident_case_sensitive: options_ext.ident_case_sensitive,
             common_settings: CommonSettings {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
                 null_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
-                timezone: options.timezone,
+                timezone: options_ext.timezone,
             },
         }
     }

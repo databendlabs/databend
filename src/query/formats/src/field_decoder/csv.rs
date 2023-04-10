@@ -26,6 +26,7 @@ use common_io::constants::INF_BYTES_LOWER;
 use common_io::constants::NULL_BYTES_ESCAPE;
 use common_io::constants::TRUE_BYTES_LOWER;
 use common_io::cursor_ext::ReadBytesExt;
+use common_meta_app::principal::CsvFileFormatParams;
 
 use crate::field_decoder::row_based::FieldDecoderRowBased;
 use crate::field_decoder::values::FieldDecoderValues;
@@ -40,16 +41,16 @@ pub struct FieldDecoderCSV {
 }
 
 impl FieldDecoderCSV {
-    pub fn create(options: &FileFormatOptionsExt) -> Self {
+    pub fn create(params: &CsvFileFormatParams, options_ext: &FileFormatOptionsExt) -> Self {
         FieldDecoderCSV {
-            nested: FieldDecoderValues::create(options),
+            nested: FieldDecoderValues::create(options_ext),
             common_settings: CommonSettings {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
                 null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
-                nan_bytes: options.stage.nan_display.as_bytes().to_vec(),
+                nan_bytes: params.nan_display.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
-                timezone: options.timezone,
+                timezone: options_ext.timezone,
             },
         }
     }
