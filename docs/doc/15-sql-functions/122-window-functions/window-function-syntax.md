@@ -4,7 +4,7 @@ title: Window Function Syntax
 
 ## Window Function Syntax
 ```
-supported_function() OVER (window_specification) 
+{ Aggregate | Rank | Value } functions OVER ( window_specification ) 
 ```
 
 ```sql
