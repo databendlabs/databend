@@ -104,6 +104,81 @@ impl ValueType for StringType {
         col.index_unchecked(index)
     }
 
+    unsafe fn probe_column_by_indices<'a>(
+        col: &'a Self::Column,
+        indices: &[(u32, u32)],
+        probe_num: u32,
+    ) -> Self::Column {
+        let mut data_capacity: u64 = 0;
+        let mut offsets: Vec<u64> = Vec::with_capacity(probe_num as usize + 1);
+        offsets.push(0);
+        for (index, cnt) in indices {
+            let col = col.index_unchecked(*index as usize);
+            for _ in 0..*cnt {
+                data_capacity += col.len() as u64;
+                offsets.push(data_capacity);
+            }
+        }
+        let mut col_builder = StringColumnBuilder::with_capacity_and_offset(
+            probe_num as usize,
+            data_capacity as usize,
+            offsets,
+        );
+        let builder_ptr = col_builder.as_mut_data_ptr();
+        let col_ptr = col.as_data_ptr();
+        let mut offset = 0;
+        for (index, cnt) in indices {
+            let len = col.get_len(*index as usize);
+            if *cnt == 1 {
+                std::ptr::copy_nonoverlapping(
+                    col_ptr.add(col.get_offset(*index as usize) as usize),
+                    builder_ptr.add(offset),
+                    len,
+                );
+                offset += len;
+                continue;
+            }
+            // Copy memory using the doubling method.
+            let base_offset = offset;
+            std::ptr::copy_nonoverlapping(
+                col_ptr.add(col.get_offset(*index as usize) as usize),
+                builder_ptr.add(base_offset),
+                len,
+            );
+            // Since cnt > 0, then 31 - cnt.leading_zeros() >= 0.
+            let mut remain = *cnt as usize;
+            let max_bit_num = 1 << (31 - cnt.leading_zeros());
+            let max_segment = max_bit_num * len;
+            let mut cur_segment = len;
+            while cur_segment < max_segment {
+                std::ptr::copy_nonoverlapping(
+                    builder_ptr.add(base_offset),
+                    builder_ptr.add(base_offset + cur_segment),
+                    cur_segment,
+                );
+                cur_segment <<= 1;
+            }
+            remain -= max_bit_num;
+            offset += max_segment;
+            let mut power = 0;
+            while remain > 0 {
+                if remain & 1 == 1 {
+                    let cur_segment = (1 << power) * len;
+                    std::ptr::copy_nonoverlapping(
+                        builder_ptr.add(base_offset),
+                        builder_ptr.add(offset),
+                        cur_segment,
+                    );
+                    offset += cur_segment;
+                }
+                power += 1;
+                remain >>= 1;
+            }
+        }
+        col_builder.data.set_len(offset);
+        Self::build_column(col_builder)
+    }
+
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
         col.slice(range)
     }
@@ -210,6 +285,32 @@ impl StringColumn {
             offsets: self.offsets.windows(2),
         }
     }
+
+    #[inline]
+    pub fn as_data_ptr(&self) -> *const u8 {
+        self.data.as_ptr()
+    }
+
+    #[inline]
+    pub fn get_len(&self, index: usize) -> usize {
+        self.offsets[index + 1] as usize - self.offsets[index] as usize
+        // unsafe {*self.offsets.get_unchecked(index) as usize - *self.offsets.get_unchecked(index - 1) as usize}
+    }
+
+    #[inline]
+    pub fn get_offset(&self, index: usize) -> u64 {
+        self.offsets[index]
+    }
+
+    // #[inline]
+    // pub fn get_len(&self, index: usize) -> usize {
+    //     unsafe {*self.offsets.get_unchecked(index) as usize - *self.offsets.get_unchecked(index - 1) as usize}
+    // }
+
+    // #[inline]
+    // pub fn get_offset(&self, index: usize) -> u64 {
+    //     unsafe { *self.offsets.get_unchecked(index) }
+    // }
 }
 
 pub struct StringIterator<'a> {
@@ -246,6 +347,14 @@ impl StringColumnBuilder {
     pub fn with_capacity(len: usize, data_capacity: usize) -> Self {
         let mut offsets = Vec::with_capacity(len + 1);
         offsets.push(0);
+        StringColumnBuilder {
+            need_estimated: data_capacity == 0 && len > 0,
+            data: Vec::with_capacity(data_capacity),
+            offsets,
+        }
+    }
+
+    pub fn with_capacity_and_offset(len: usize, data_capacity: usize, offsets: Vec<u64>) -> Self {
         StringColumnBuilder {
             need_estimated: data_capacity == 0 && len > 0,
             data: Vec::with_capacity(data_capacity),
@@ -394,6 +503,11 @@ impl StringColumnBuilder {
         } else {
             None
         }
+    }
+
+    #[inline]
+    pub fn as_mut_data_ptr(&mut self) -> *mut u8 {
+        self.data.as_mut_ptr()
     }
 }
 

@@ -306,6 +306,20 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
         col: &'a Self::Column,
         index: usize,
     ) -> Self::ScalarRef<'a>;
+
+    /// # Safety
+    ///
+    /// Each item in the `indices` consists of an `index` and a `cnt`, the sum
+    /// of the `cnt` must be equal to the `probe_num`, calling this method with
+    /// an out-of-bounds `index` is *[undefined behavior]*,
+    unsafe fn probe_column_by_indices<'a>(
+        _col: &'a Self::Column,
+        _indices: &[(u32, u32)],
+        _probe_num: u32,
+    ) -> Self::Column {
+        unimplemented!()
+    }
+
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column;
     fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a>;
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder;

@@ -154,6 +154,65 @@ impl<Num: Number> ValueType for NumberType<Num> {
         *col.get_unchecked(index)
     }
 
+    unsafe fn probe_column_by_indices<'a>(
+        col: &'a Self::Column,
+        indices: &[(u32, u32)],
+        probe_num: u32,
+    ) -> Self::Column {
+        let mut col_builder = Self::create_builder(probe_num as usize, &[]);
+        let builder_ptr = col_builder.as_mut_ptr();
+        let col_ptr = col.as_ptr();
+        let mut offset = 0;
+        for (index, cnt) in indices {
+            if *cnt == 1 {
+                std::ptr::copy_nonoverlapping(
+                    col_ptr.add(*index as usize),
+                    builder_ptr.add(offset),
+                    1,
+                );
+                offset += 1;
+                continue;
+            }
+            // Copy memory using the doubling method.
+            let base_offset = offset;
+            std::ptr::copy_nonoverlapping(
+                col_ptr.add(*index as usize),
+                builder_ptr.add(base_offset),
+                1,
+            );
+            let mut remain = *cnt as usize;
+            // Since cnt > 0, then 31 - cnt.leading_zeros() >= 0.
+            let max_segment = 1 << (31 - cnt.leading_zeros());
+            let mut cur_segment = 1;
+            while cur_segment < max_segment {
+                std::ptr::copy_nonoverlapping(
+                    builder_ptr.add(base_offset),
+                    builder_ptr.add(base_offset + cur_segment),
+                    cur_segment,
+                );
+                cur_segment <<= 1;
+            }
+            remain -= max_segment;
+            offset += max_segment;
+            let mut power = 0;
+            while remain > 0 {
+                if remain & 1 == 1 {
+                    let cur_segment = 1 << power;
+                    std::ptr::copy_nonoverlapping(
+                        builder_ptr.add(base_offset),
+                        builder_ptr.add(offset),
+                        cur_segment,
+                    );
+                    offset += cur_segment;
+                }
+                power += 1;
+                remain >>= 1;
+            }
+        }
+        col_builder.set_len(offset);
+        Self::build_column(col_builder)
+    }
+
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
         col.clone().sliced(range.start, range.end - range.start)
     }

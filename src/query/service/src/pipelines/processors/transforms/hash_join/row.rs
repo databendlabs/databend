@@ -108,7 +108,28 @@ impl RowSpace {
         }
 
         if !data_blocks.is_empty() && num_rows != 0 {
-            let data_block = DataBlock::take_blocks(&data_blocks, indices.as_slice());
+            let data_block =
+                DataBlock::take_blocks(&data_blocks, indices.as_slice(), indices.len());
+            Ok(data_block)
+        } else {
+            Ok(DataBlock::empty_with_schema(self.data_schema.clone()))
+        }
+    }
+
+    pub fn gather_build(
+        &self,
+        row_ptrs: &[&RowPtr],
+        data_blocks: &Vec<DataBlock>,
+        num_rows: &usize,
+    ) -> Result<DataBlock> {
+        let mut indices = Vec::with_capacity(row_ptrs.len());
+
+        for row_ptr in row_ptrs {
+            indices.push((row_ptr.chunk_index, row_ptr.row_index, 1usize));
+        }
+
+        if !data_blocks.is_empty() && *num_rows != 0 {
+            let data_block = DataBlock::take_blocks(data_blocks, indices.as_slice(), indices.len());
             Ok(data_block)
         } else {
             Ok(DataBlock::empty_with_schema(self.data_schema.clone()))

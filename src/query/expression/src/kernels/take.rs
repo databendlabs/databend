@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use ethnum::I256;
 use itertools::Itertools;
 
 use crate::types::array::ArrayColumn;
@@ -61,6 +62,29 @@ impl DataBlock {
             .collect();
 
         Ok(DataBlock::new(after_columns, indices.len()))
+    }
+
+    pub fn probe_take(&self, indices: &[(u32, u32)], probe_num: u32) -> Result<Self> {
+        if indices.is_empty() {
+            return Ok(self.slice(0..0));
+        }
+
+        let after_columns = self
+            .columns()
+            .iter()
+            .map(|entry| match &entry.value {
+                Value::Scalar(s) => BlockEntry {
+                    data_type: entry.data_type.clone(),
+                    value: Value::Scalar(s.clone()),
+                },
+                Value::Column(c) => BlockEntry {
+                    data_type: entry.data_type.clone(),
+                    value: Value::Column(Column::probe_take(c, indices, probe_num)),
+                },
+            })
+            .collect();
+
+        Ok(DataBlock::new(after_columns, probe_num as usize))
     }
 }
 
@@ -144,6 +168,219 @@ impl Column {
         }
     }
 
+    pub fn probe_take(&self, indices: &[(u32, u32)], probe_num: u32) -> Self {
+        let length = indices.len();
+        match self {
+            Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {
+                self.slice(0..length)
+            }
+            Column::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
+                NumberColumn::NUM_TYPE(values) =>
+                    Self::probe_take_arg_types::<NumberType<NUM_TYPE>>(values, indices, probe_num),
+            }),
+            Column::Decimal(column) => with_decimal_type!(|DECIMAL_TYPE| match column {
+                DecimalColumn::Decimal128(values, size) => {
+                    let mut builder: Vec<i128> = Vec::with_capacity(probe_num as usize);
+                    let builder_ptr = builder.as_mut_ptr();
+                    let col_ptr = values.as_ptr();
+                    let mut offset = 0;
+                    let mut remain;
+                    let mut power;
+                    for (index, cnt) in indices {
+                        if *cnt == 1 {
+                            unsafe {
+                                std::ptr::copy_nonoverlapping(
+                                    col_ptr.add(*index as usize),
+                                    builder_ptr.add(offset),
+                                    1,
+                                );
+                            }
+                            offset += 1;
+                            continue;
+                        }
+                        // Copy memory using the doubling method.
+                        let base_offset = offset;
+                        unsafe {
+                            std::ptr::copy_nonoverlapping(
+                                col_ptr.add(*index as usize),
+                                builder_ptr.add(base_offset),
+                                1,
+                            );
+                        }
+                        remain = *cnt as usize;
+                        // Since cnt > 0, then 31 - cnt.leading_zeros() >= 0.
+                        let max_segment = 1 << (31 - cnt.leading_zeros());
+                        let mut cur_segment = 1;
+                        while cur_segment < max_segment {
+                            unsafe {
+                                std::ptr::copy_nonoverlapping(
+                                    builder_ptr.add(base_offset),
+                                    builder_ptr.add(base_offset + cur_segment),
+                                    cur_segment,
+                                );
+                            }
+                            cur_segment <<= 1;
+                        }
+                        remain -= max_segment;
+                        offset += max_segment;
+                        power = 0;
+                        while remain > 0 {
+                            if remain & 1 == 1 {
+                                let cur_segment = 1 << power;
+                                unsafe {
+                                    std::ptr::copy_nonoverlapping(
+                                        builder_ptr.add(base_offset),
+                                        builder_ptr.add(offset),
+                                        cur_segment,
+                                    );
+                                }
+                                offset += cur_segment;
+                            }
+                            power += 1;
+                            remain >>= 1;
+                        }
+                    }
+                    unsafe {
+                        builder.set_len(offset);
+                    }
+                    Column::Decimal(DecimalColumn::Decimal128(builder.into(), *size))
+                }
+                DecimalColumn::Decimal256(values, size) => {
+                    let mut builder: Vec<I256> = Vec::with_capacity(probe_num as usize);
+                    let builder_ptr = builder.as_mut_ptr();
+                    let col_ptr = values.as_ptr();
+                    let mut offset = 0;
+                    let mut remain;
+                    let mut power;
+                    for (index, cnt) in indices {
+                        if *cnt == 1 {
+                            unsafe {
+                                std::ptr::copy_nonoverlapping(
+                                    col_ptr.add(*index as usize),
+                                    builder_ptr.add(offset),
+                                    1,
+                                );
+                            }
+                            offset += 1;
+                            continue;
+                        }
+                        // Copy memory using the doubling method.
+                        let base_offset = offset;
+                        unsafe {
+                            std::ptr::copy_nonoverlapping(
+                                col_ptr.add(*index as usize),
+                                builder_ptr.add(base_offset),
+                                1,
+                            );
+                        }
+                        remain = *cnt as usize;
+                        // Since cnt > 0, then 31 - cnt.leading_zeros() >= 0.
+                        let max_segment = 1 << (31 - cnt.leading_zeros());
+                        let mut cur_segment = 1;
+                        while cur_segment < max_segment {
+                            unsafe {
+                                std::ptr::copy_nonoverlapping(
+                                    builder_ptr.add(base_offset),
+                                    builder_ptr.add(base_offset + cur_segment),
+                                    cur_segment,
+                                );
+                            }
+                            cur_segment <<= 1;
+                        }
+                        remain -= max_segment;
+                        offset += max_segment;
+                        power = 0;
+                        while remain > 0 {
+                            if remain & 1 == 1 {
+                                let cur_segment = 1 << power;
+                                unsafe {
+                                    std::ptr::copy_nonoverlapping(
+                                        builder_ptr.add(base_offset),
+                                        builder_ptr.add(offset),
+                                        cur_segment,
+                                    );
+                                }
+                                offset += cur_segment;
+                            }
+                            power += 1;
+                            remain >>= 1;
+                        }
+                    }
+                    unsafe {
+                        builder.set_len(offset);
+                    }
+                    Column::Decimal(DecimalColumn::Decimal256(builder.into(), *size))
+                }
+            }),
+            Column::Boolean(bm) => {
+                Self::probe_take_arg_types::<BooleanType>(bm, indices, probe_num)
+            }
+            Column::String(column) => {
+                Self::probe_take_arg_types::<StringType>(column, indices, probe_num)
+            }
+            Column::Timestamp(column) => {
+                let ts = Self::probe_take_arg_types::<NumberType<i64>>(column, indices, probe_num)
+                    .into_number()
+                    .unwrap()
+                    .into_int64()
+                    .unwrap();
+                Column::Timestamp(ts)
+            }
+            Column::Date(column) => {
+                let d = Self::probe_take_arg_types::<NumberType<i32>>(column, indices, probe_num)
+                    .into_number()
+                    .unwrap()
+                    .into_int32()
+                    .unwrap();
+                Column::Date(d)
+            }
+            Column::Array(column) => {
+                let mut offsets = Vec::with_capacity(length + 1);
+                offsets.push(0);
+                let builder = ColumnBuilder::with_capacity(&column.values.data_type(), self.len());
+                let builder = ArrayColumnBuilder { builder, offsets };
+                Self::probe_take_value_types::<ArrayType<AnyType>>(column, builder, indices)
+            }
+            Column::Map(column) => {
+                let mut offsets = Vec::with_capacity(length + 1);
+                offsets.push(0);
+                let builder = ColumnBuilder::from_column(
+                    ColumnBuilder::with_capacity(&column.values.data_type(), self.len()).build(),
+                );
+                let (key_builder, val_builder) = match builder {
+                    ColumnBuilder::Tuple(fields) => (fields[0].clone(), fields[1].clone()),
+                    _ => unreachable!(),
+                };
+                let builder = KvColumnBuilder {
+                    keys: key_builder,
+                    values: val_builder,
+                };
+                let builder = ArrayColumnBuilder { builder, offsets };
+                let column = ArrayColumn::try_downcast(column).unwrap();
+                Self::probe_take_value_types::<MapType<AnyType, AnyType>>(&column, builder, indices)
+            }
+            Column::Nullable(c) => {
+                let column = c.column.probe_take(indices, probe_num);
+                let validity =
+                    Self::probe_take_arg_types::<BooleanType>(&c.validity, indices, probe_num);
+                Column::Nullable(Box::new(NullableColumn {
+                    column,
+                    validity: BooleanType::try_downcast_column(&validity).unwrap(),
+                }))
+            }
+            Column::Tuple(fields) => {
+                let fields = fields
+                    .iter()
+                    .map(|c| c.probe_take(indices, probe_num))
+                    .collect();
+                Column::Tuple(fields)
+            }
+            Column::Variant(column) => {
+                Self::probe_take_arg_types::<StringType>(column, indices, probe_num)
+            }
+        }
+    }
+
     fn take_arg_types<T: ArgType, I>(col: &T::Column, indices: &[I]) -> Column
     where I: common_arrow::arrow::types::Index {
         let col = T::column_from_ref_iter(
@@ -169,6 +406,32 @@ impl Column {
                     &mut builder,
                     T::index_column_unchecked(col, index.to_usize()),
                 )
+            }
+        }
+        T::upcast_column(T::build_column(builder))
+    }
+
+    fn probe_take_arg_types<T: ArgType>(
+        col: &T::Column,
+        indices: &[(u32, u32)],
+        probe_num: u32,
+    ) -> Column {
+        T::upcast_column(unsafe { T::probe_column_by_indices(col, indices, probe_num) })
+    }
+
+    fn probe_take_value_types<T: ValueType>(
+        col: &T::Column,
+        mut builder: T::ColumnBuilder,
+        indices: &[(u32, u32)],
+    ) -> Column {
+        unsafe {
+            for (index, cnt) in indices {
+                for _ in 0..*cnt {
+                    T::push_item(
+                        &mut builder,
+                        T::index_column_unchecked(col, *index as usize),
+                    )
+                }
             }
         }
         T::upcast_column(T::build_column(builder))

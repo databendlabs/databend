@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::iter::repeat;
 use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
@@ -46,9 +45,19 @@ impl JoinHashTable {
     {
         let valids = &probe_state.valids;
         // The inner join will return multiple data blocks of similar size
+        let mut probed_num: u32 = 0;
         let mut probed_blocks = vec![];
         let mut probe_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
         let mut build_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
+
+        let chunks = &self.row_space.chunks.read().unwrap();
+        let data_blocks = chunks
+            .iter()
+            .map(|c| c.data_block.clone())
+            .collect::<Vec<DataBlock>>();
+        let num_rows = data_blocks
+            .iter()
+            .fold(0, |acc, chunk| acc + chunk.num_rows());
 
         for (i, key) in keys_iter.enumerate() {
             // If the join is derived from correlated subquery, then null equality is safe.
@@ -62,16 +71,22 @@ impl JoinHashTable {
                 let probed_rows = v.get();
 
                 if probe_indexes.len() + probed_rows.len() < probe_indexes.capacity() {
-                    build_indexes.extend_from_slice(probed_rows);
-                    probe_indexes.extend(repeat(i as u32).take(probed_rows.len()));
+                    for it in probed_rows {
+                        build_indexes.push(it);
+                    }
+                    probe_indexes.push((i as u32, probed_rows.len() as u32));
+                    probed_num += probed_rows.len() as u32;
                 } else {
                     let mut index = 0_usize;
                     let mut remain = probed_rows.len();
 
                     while index < probed_rows.len() {
                         if probe_indexes.len() + remain < probe_indexes.capacity() {
-                            build_indexes.extend_from_slice(&probed_rows[index..]);
-                            probe_indexes.extend(std::iter::repeat(i as u32).take(remain));
+                            for it in &probed_rows[index..] {
+                                build_indexes.push(it);
+                            }
+                            probe_indexes.push((i as u32, remain as u32));
+                            probed_num += remain as u32;
                             index += remain;
                         } else {
                             if self.interrupt.load(Ordering::Relaxed) {
@@ -83,12 +98,19 @@ impl JoinHashTable {
                             let addition = probe_indexes.capacity() - probe_indexes.len();
                             let new_index = index + addition;
 
-                            build_indexes.extend_from_slice(&probed_rows[index..new_index]);
-                            probe_indexes.extend(repeat(i as u32).take(addition));
+                            for it in &probed_rows[index..new_index] {
+                                build_indexes.push(it);
+                            }
+                            probe_indexes.push((i as u32, addition as u32));
+                            probed_num += addition as u32;
 
                             probed_blocks.push(self.merge_eq_block(
-                                &self.row_space.gather(&build_indexes)?,
-                                &DataBlock::take(input, &probe_indexes)?,
+                                &self.row_space.gather_build(
+                                    &build_indexes,
+                                    &data_blocks,
+                                    &num_rows,
+                                )?,
+                                &DataBlock::probe_take(input, &probe_indexes, probed_num)?,
                             )?);
 
                             index = new_index;
@@ -96,16 +118,21 @@ impl JoinHashTable {
 
                             build_indexes.clear();
                             probe_indexes.clear();
+                            probed_num = 0;
                         }
                     }
                 }
             }
         }
 
-        probed_blocks.push(self.merge_eq_block(
-            &self.row_space.gather(&build_indexes)?,
-            &DataBlock::take(input, &probe_indexes)?,
-        )?);
+        probed_blocks.push(
+            self.merge_eq_block(
+                &self
+                    .row_space
+                    .gather_build(&build_indexes, &data_blocks, &num_rows)?,
+                &DataBlock::probe_take(input, &probe_indexes, probed_num)?,
+            )?,
+        );
 
         match &self.hash_join_desc.other_predicate {
             None => Ok(probed_blocks),
