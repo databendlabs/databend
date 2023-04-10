@@ -125,8 +125,7 @@ impl Table for StageTable {
         } else {
             StageTable::list_files(stage_info, None).await?
         };
-        let format =
-            InputContext::get_input_format(&stage_info.stage_info.file_format_options.format)?;
+        let format = InputContext::get_input_format(&stage_info.stage_info.file_format_params)?;
         let operator = StageTable::get_op(&stage_info.stage_info)?;
         let splits = format
             .get_splits(

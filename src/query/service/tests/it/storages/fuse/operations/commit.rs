@@ -37,7 +37,7 @@ use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
-use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
@@ -569,7 +569,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    async fn get_file_format(&self, _name: &str) -> Result<FileFormatOptions> {
+    async fn get_file_format(&self, _name: &str) -> Result<FileFormatParams> {
         todo!()
     }
 

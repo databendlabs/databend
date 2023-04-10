@@ -19,7 +19,8 @@ use common_ast::ast::CreateStageStmt;
 use common_ast::ast::UriLocation;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::FileFormatOptionsAst;
+use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageInfo;
 
@@ -94,7 +95,7 @@ impl Binder {
         };
 
         if !file_format_options.is_empty() {
-            stage_info.file_format_options =
+            stage_info.file_format_params =
                 self.try_resolve_file_format(file_format_options).await?;
         }
         // Copy options.
@@ -119,12 +120,13 @@ impl Binder {
     pub(crate) async fn try_resolve_file_format(
         &self,
         options: &BTreeMap<String, String>,
-    ) -> Result<FileFormatOptions> {
-        let opt = if let Some(name) = options.get("format_name") {
-            self.ctx.get_file_format(name).await?
+    ) -> Result<FileFormatParams> {
+        if let Some(name) = options.get("format_name") {
+            self.ctx.get_file_format(name).await
         } else {
-            FileFormatOptions::from_map(options)?
-        };
-        Ok(opt)
+            FileFormatParams::try_from(FileFormatOptionsAst {
+                options: options.clone(),
+            })
+        }
     }
 }

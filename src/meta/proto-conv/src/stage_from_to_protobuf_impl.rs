@@ -24,6 +24,7 @@ use common_protos::pb;
 use num::FromPrimitive;
 
 use crate::reader_check_msg;
+use crate::stage_from_to_protobuf_impl::mt::principal::FileFormatOptionsAst;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
@@ -172,6 +173,24 @@ impl FromToProto for mt::principal::StageInfo {
     fn from_pb(p: pb::StageInfo) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
+        let file_format_params = match  (p.file_format_params, p.file_format_options) {
+            (Some(p), None) => {
+                mt::principal::FileFormatParams::from_pb(p)?
+            },
+            (None, Some(p)) => {
+                let options = mt::principal::FileFormatOptions::from_pb(p)?;
+                let options = FileFormatOptionsAst{options: options.to_map()};
+                mt::principal::FileFormatParams::try_from_ast(options, true).map_err(|e| Incompatible {
+                    reason: format!("fail to convert StageInfo.file_format_options to StageInfo.file_format_params: {e:?}"),
+                })?
+            },
+            (None, None) => Err(Incompatible {
+                reason: "StageInfo.file_format_params and StageInfo.file_format_options cannot be both None".to_string(),
+            })?,
+            (Some(_), Some(_)) => Err(Incompatible {
+                reason: "StageInfo.file_format_params and StageInfo.file_format_options cannot be both set".to_string(),
+            })?,
+        };
         Ok(mt::principal::StageInfo {
             stage_name: p.stage_name.clone(),
             stage_type: mt::principal::StageType::from_pb(
@@ -184,11 +203,7 @@ impl FromToProto for mt::principal::StageInfo {
                     reason: "StageInfo.stage_params cannot be None".to_string(),
                 },
             )?)?,
-            file_format_options: mt::principal::FileFormatOptions::from_pb(
-                p.file_format_options.ok_or_else(|| Incompatible {
-                    reason: "StageInfo.file_format_options cannot be None".to_string(),
-                })?,
-            )?,
+            file_format_params,
             copy_options: mt::principal::CopyOptions::from_pb(p.copy_options.ok_or_else(
                 || Incompatible {
                     reason: "StageInfo.copy_options cannot be None".to_string(),
@@ -210,9 +225,10 @@ impl FromToProto for mt::principal::StageInfo {
             stage_name: self.stage_name.clone(),
             stage_type: mt::principal::StageType::to_pb(&self.stage_type)? as i32,
             stage_params: Some(mt::principal::StageParams::to_pb(&self.stage_params)?),
-            file_format_options: Some(mt::principal::FileFormatOptions::to_pb(
-                &self.file_format_options,
+            file_format_params: Some(mt::principal::FileFormatParams::to_pb(
+                &self.file_format_params,
             )?),
+            file_format_options: None,
             copy_options: Some(mt::principal::CopyOptions::to_pb(&self.copy_options)?),
             comment: self.comment.clone(),
             number_of_files: self.number_of_files,

@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_formats::get_format_option_checker;
 use common_meta_app::principal::UserDefinedFileFormat;
 use common_sql::plans::CreateFileFormatPlan;
 use common_users::UserApiProvider;
@@ -48,12 +47,9 @@ impl Interpreter for CreateFileFormatInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.plan.clone();
         let user_mgr = UserApiProvider::instance();
-        let mut options = plan.file_format_options.clone();
-        let checker = get_format_option_checker(&options.format)?;
-        checker.check_options(&mut options)?;
         let user_defined_file_format = UserDefinedFileFormat::new(
             &plan.name,
-            options,
+            plan.file_format_params.clone(),
             self.ctx.get_current_user()?.identity(),
         );
 

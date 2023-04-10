@@ -185,11 +185,11 @@ impl AsyncSource for InferSchemaSource {
         let operator = init_stage_operator(&stage_info)?;
 
         let first_file = files_info.first_file(&operator).await?;
-        let file_format_options = match &self.args_parsed.file_format {
+        let file_format_params = match &self.args_parsed.file_format {
             Some(f) => self.ctx.get_file_format(f).await?,
-            None => stage_info.file_format_options.clone(),
+            None => stage_info.file_format_params.clone(),
         };
-        let schema = match file_format_options.format {
+        let schema = match file_format_params.get_type() {
             StageFileFormatType::Parquet => {
                 let arrow_schema = read_parquet_schema_async(&operator, &first_file.path).await?;
                 TableSchema::from(&arrow_schema)
