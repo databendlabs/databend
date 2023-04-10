@@ -70,7 +70,7 @@ impl<E: Endpoint> Endpoint for SharingAuthImpl<E> {
                 Ok(resp)
             }
             Err(err) => {
-                println!("err: {:?}", err);
+                // println!("err: {:?}", err);
                 Err(err)
             }
         }

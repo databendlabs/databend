@@ -182,7 +182,7 @@ impl<'a> GroupingChecker<'a> {
                     }
                     .into())
                 } else {
-                    Err(ErrorCode::Internal("Invalid window function"))
+                    Err(ErrorCode::Internal("Group Check: Invalid window function"))
                 }
             }
 

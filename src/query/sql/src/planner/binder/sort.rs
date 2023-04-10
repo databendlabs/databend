@@ -24,6 +24,7 @@ use common_exception::Result;
 use super::bind_context::NameResolutionResult;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::SelectList;
+use crate::binder::window::WindowRewriter;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
 use crate::normalize_identifier;
@@ -64,7 +65,7 @@ impl Binder {
     #[async_backtrace::framed]
     pub(super) async fn analyze_order_items(
         &mut self,
-        from_context: &BindContext,
+        bind_context: &mut BindContext,
         scalar_items: &mut HashMap<IndexType, ScalarItem>,
         projections: &[ColumnBinding],
         order_by: &[OrderByExpr],
@@ -121,7 +122,7 @@ impl Binder {
 
                     // If there isn't a matched alias in select list, we will fallback to
                     // from clause.
-                    let result = from_context.resolve_name(
+                    let result = bind_context.resolve_name(
                         database.as_deref(),
                         table.as_deref(),
                         &column,
@@ -182,7 +183,6 @@ impl Binder {
                     });
                 }
                 _ => {
-                    let mut bind_context = from_context.clone();
                     for column_binding in projections.iter() {
                         if bind_context.columns.contains(column_binding) {
                             continue;
@@ -190,7 +190,7 @@ impl Binder {
                         bind_context.columns.push(column_binding.clone());
                     }
                     let mut scalar_binder = ScalarBinder::new(
-                        &mut bind_context,
+                        bind_context,
                         self.ctx.clone(),
                         &self.name_resolution_ctx,
                         self.metadata.clone(),
@@ -198,16 +198,21 @@ impl Binder {
                     );
                     let (bound_expr, _) = scalar_binder.bind(&order.expr).await?;
                     let rewrite_scalar = self
-                        .rewrite_scalar_with_replacement(&bound_expr, &|nest_scalar| {
-                            if let ScalarExpr::BoundColumnRef(BoundColumnRef { column, .. }) =
-                                nest_scalar
-                            {
-                                if let Some(scalar_item) = scalar_items.get(&column.index) {
-                                    return Ok(Some(scalar_item.scalar.clone()));
+                        .rewrite_scalar_with_replacement(
+                            bind_context,
+                            &bound_expr,
+                            &|nest_scalar| {
+                                if let ScalarExpr::BoundColumnRef(BoundColumnRef {
+                                    column, ..
+                                }) = nest_scalar
+                                {
+                                    if let Some(scalar_item) = scalar_items.get(&column.index) {
+                                        return Ok(Some(scalar_item.scalar.clone()));
+                                    }
                                 }
-                            }
-                            Ok(None)
-                        })
+                                Ok(None)
+                            },
+                        )
                         .map_err(|e| ErrorCode::SemanticError(e.message()))?;
                     let column_binding = self.create_column_binding(
                         None,
@@ -377,6 +382,7 @@ impl Binder {
     #[allow(clippy::only_used_in_recursion)]
     pub(crate) fn rewrite_scalar_with_replacement<F>(
         &self,
+        bind_context: &mut BindContext,
         original_scalar: &ScalarExpr,
         replacement_fn: &F,
     ) -> Result<ScalarExpr>
@@ -388,29 +394,50 @@ impl Binder {
             Some(replacement) => Ok(replacement),
             None => match original_scalar {
                 ScalarExpr::AndExpr(AndExpr { left, right }) => {
-                    let left =
-                        Box::new(self.rewrite_scalar_with_replacement(left, replacement_fn)?);
-                    let right =
-                        Box::new(self.rewrite_scalar_with_replacement(right, replacement_fn)?);
+                    let left = Box::new(self.rewrite_scalar_with_replacement(
+                        bind_context,
+                        left,
+                        replacement_fn,
+                    )?);
+                    let right = Box::new(self.rewrite_scalar_with_replacement(
+                        bind_context,
+                        right,
+                        replacement_fn,
+                    )?);
                     Ok(ScalarExpr::AndExpr(AndExpr { left, right }))
                 }
                 ScalarExpr::OrExpr(OrExpr { left, right }) => {
-                    let left =
-                        Box::new(self.rewrite_scalar_with_replacement(left, replacement_fn)?);
-                    let right =
-                        Box::new(self.rewrite_scalar_with_replacement(right, replacement_fn)?);
+                    let left = Box::new(self.rewrite_scalar_with_replacement(
+                        bind_context,
+                        left,
+                        replacement_fn,
+                    )?);
+                    let right = Box::new(self.rewrite_scalar_with_replacement(
+                        bind_context,
+                        right,
+                        replacement_fn,
+                    )?);
                     Ok(ScalarExpr::OrExpr(OrExpr { left, right }))
                 }
                 ScalarExpr::NotExpr(NotExpr { argument }) => {
-                    let argument =
-                        Box::new(self.rewrite_scalar_with_replacement(argument, replacement_fn)?);
+                    let argument = Box::new(self.rewrite_scalar_with_replacement(
+                        bind_context,
+                        argument,
+                        replacement_fn,
+                    )?);
                     Ok(ScalarExpr::NotExpr(NotExpr { argument }))
                 }
                 ScalarExpr::ComparisonExpr(ComparisonExpr { op, left, right }) => {
-                    let left =
-                        Box::new(self.rewrite_scalar_with_replacement(left, replacement_fn)?);
-                    let right =
-                        Box::new(self.rewrite_scalar_with_replacement(right, replacement_fn)?);
+                    let left = Box::new(self.rewrite_scalar_with_replacement(
+                        bind_context,
+                        left,
+                        replacement_fn,
+                    )?);
+                    let right = Box::new(self.rewrite_scalar_with_replacement(
+                        bind_context,
+                        right,
+                        replacement_fn,
+                    )?);
                     Ok(ScalarExpr::ComparisonExpr(ComparisonExpr {
                         op: op.clone(),
                         left,
@@ -427,7 +454,9 @@ impl Binder {
                 }) => {
                     let args = args
                         .iter()
-                        .map(|arg| self.rewrite_scalar_with_replacement(arg, replacement_fn))
+                        .map(|arg| {
+                            self.rewrite_scalar_with_replacement(bind_context, arg, replacement_fn)
+                        })
                         .collect::<Result<Vec<_>>>()?;
                     Ok(ScalarExpr::AggregateFunction(AggregateFunction {
                         display_name: display_name.clone(),
@@ -438,6 +467,10 @@ impl Binder {
                         return_type: return_type.clone(),
                     }))
                 }
+                window @ ScalarExpr::WindowFunction(_) => {
+                    let mut rewriter = WindowRewriter::new(bind_context, self.metadata.clone());
+                    rewriter.visit(window)
+                }
                 ScalarExpr::FunctionCall(FunctionCall {
                     span,
                     params,
@@ -446,7 +479,9 @@ impl Binder {
                 }) => {
                     let arguments = arguments
                         .iter()
-                        .map(|arg| self.rewrite_scalar_with_replacement(arg, replacement_fn))
+                        .map(|arg| {
+                            self.rewrite_scalar_with_replacement(bind_context, arg, replacement_fn)
+                        })
                         .collect::<Result<Vec<_>>>()?;
                     Ok(ScalarExpr::FunctionCall(FunctionCall {
                         span: *span,
@@ -461,8 +496,11 @@ impl Binder {
                     argument,
                     target_type,
                 }) => {
-                    let argument =
-                        Box::new(self.rewrite_scalar_with_replacement(argument, replacement_fn)?);
+                    let argument = Box::new(self.rewrite_scalar_with_replacement(
+                        bind_context,
+                        argument,
+                        replacement_fn,
+                    )?);
                     Ok(ScalarExpr::CastExpr(CastExpr {
                         span: *span,
                         is_try: *is_try,
