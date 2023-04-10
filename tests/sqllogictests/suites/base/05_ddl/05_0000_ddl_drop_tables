@@ -16,3 +16,5 @@ DROP TABLE t
 statement error 1025
 DROP TABLE system.abc
 
+statement ok
+DROP TABLE if exists system.abc
