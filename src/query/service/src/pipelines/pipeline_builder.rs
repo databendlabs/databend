@@ -34,6 +34,7 @@ use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Processor;
 use common_pipeline_sinks::EmptySink;
 use common_pipeline_sinks::Sinker;
 use common_pipeline_sinks::UnionReceiveSink;
@@ -67,6 +68,7 @@ use common_sql::IndexType;
 use common_storage::DataOperator;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
 
+use super::processors::transforms::FrameBound;
 use super::processors::transforms::WindowFunctionInfo;
 use super::processors::ProfileWrapper;
 use super::processors::TransformExpandGroupingSets;
@@ -785,16 +787,24 @@ impl PipelineBuilder {
         let func = WindowFunctionInfo::try_create(&window.func, &input_schema)?;
         // Window
         self.main_pipeline.add_transform(|input, output| {
-            todo!()
-            // let transform = TransformWindow::try_create(
-            //     input,
-            //     output,
-            //     func.clone(),
-            //     partition_by.clone(),
-            //     order_by.clone(),
-            //     window.window_frame.clone(),
-            // )?;
-            // Ok(ProcessorPtr::create(transform))
+            // The transform can only be created here, bacause it cannot be cloned.
+            let start_bound = FrameBound::try_from(&window.window_frame.start_bound)?;
+            let end_bound = FrameBound::try_from(&window.window_frame.end_bound)?;
+
+            let transform = if window.window_frame.units.is_rows() {
+                Box::new(TransformWindow::<u64>::try_create_rows(
+                    input,
+                    output,
+                    func.clone(),
+                    partition_by.clone(),
+                    order_by.clone(),
+                    window.window_frame.units.clone(),
+                    (start_bound, end_bound),
+                )?) as Box<dyn Processor>
+            } else {
+                todo!("window")
+            };
+            Ok(ProcessorPtr::create(transform))
         })?;
 
         self.main_pipeline.resize(old_output_len)

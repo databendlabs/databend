@@ -12,8 +12,59 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_expression::types::Number;
+use common_expression::Scalar;
+use common_sql::plans::WindowFuncFrameBound;
+
 pub enum FrameBound<T> {
     CurrentRow,
     Preceding(Option<T>),
     Following(Option<T>),
+}
+
+impl<T: Number> FrameBound<T> {
+    pub fn get_inner(&self) -> Option<T> {
+        match self {
+            FrameBound::Preceding(Some(v)) => Some(*v),
+            FrameBound::Following(Some(v)) => Some(*v),
+            _ => None,
+        }
+    }
+}
+
+impl<T: Number> TryFrom<&WindowFuncFrameBound> for FrameBound<T> {
+    type Error = ErrorCode;
+    fn try_from(value: &WindowFuncFrameBound) -> Result<Self> {
+        match value {
+            WindowFuncFrameBound::CurrentRow => Ok(FrameBound::CurrentRow),
+            WindowFuncFrameBound::Preceding(v) => Ok(FrameBound::Preceding(
+                v.as_ref()
+                    .map(|v| {
+                        if let Scalar::Number(scalar) = v {
+                            T::try_downcast_scalar(scalar).ok_or_else(|| {
+                                ErrorCode::Internal(format!("number, but got {:?}", v))
+                            })
+                        } else {
+                            Err(ErrorCode::Internal(format!("number, but got {:?}", v)))
+                        }
+                    })
+                    .transpose()?,
+            )),
+            WindowFuncFrameBound::Following(v) => Ok(FrameBound::Following(
+                v.as_ref()
+                    .map(|v| {
+                        if let Scalar::Number(scalar) = v {
+                            T::try_downcast_scalar(scalar).ok_or_else(|| {
+                                ErrorCode::Internal(format!("number, but got {:?}", v))
+                            })
+                        } else {
+                            Err(ErrorCode::Internal(format!("number, but got {:?}", v)))
+                        }
+                    })
+                    .transpose()?,
+            )),
+        }
+    }
 }

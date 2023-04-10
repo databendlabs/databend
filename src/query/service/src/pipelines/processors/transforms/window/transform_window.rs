@@ -22,6 +22,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::types::Number;
 use common_expression::types::NumberScalar;
 use common_expression::BlockEntry;
 use common_expression::Column;
@@ -35,7 +36,6 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::Processor;
 use common_sql::plans::WindowFuncFrameUnits;
-use num::traits::AsPrimitive;
 use num::CheckedAdd;
 use num::CheckedSub;
 
@@ -96,6 +96,11 @@ pub struct TransformWindow<T> {
     frame_unit: WindowFuncFrameUnits,
     start_bound: FrameBound<T>,
     end_bound: FrameBound<T>,
+
+    // Only used for ROWS frame, default value: 0. (when not used)
+    rows_start_bound: usize,
+    rows_end_bound: usize,
+
     frame_start: RowPtr,
     frame_end: RowPtr,
     frame_started: bool,
@@ -120,9 +125,7 @@ pub struct TransformWindow<T> {
     current_dense_rank: usize,
 }
 
-impl<T> TransformWindow<T>
-where T: Send + Sync
-{
+impl<T> TransformWindow<T> {
     #[inline(always)]
     fn blocks_end(&self) -> RowPtr {
         RowPtr::new(self.first_block + self.blocks.len(), 0)
@@ -467,42 +470,23 @@ where T: Send + Sync
     }
 }
 
-impl<T> TransformWindow<T>
-where T: Send + Sync + CheckedAdd + CheckedSub + Copy + AsPrimitive<usize> + Ord
-{
+// For ROWS frame
+impl TransformWindow<u64> {
     /// Cannot be cloned because every [`TransformWindow`] has one independent `place`.
-    pub fn try_create(
+    pub fn try_create_rows(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         func: WindowFunctionInfo,
         partition_indices: Vec<usize>,
         order_by_indices: Vec<SortColumnDescription>,
         unit: WindowFuncFrameUnits,
-        bounds: (FrameBound<T>, FrameBound<T>),
-    ) -> Result<Box<dyn Processor>> {
-        let transform = Self::create(
-            input,
-            output,
-            func,
-            partition_indices,
-            order_by_indices,
-            unit,
-            bounds,
-        )?;
-        Ok(Box::new(transform))
-    }
-
-    pub fn create(
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        func: WindowFunctionInfo,
-        partition_indices: Vec<usize>,
-        order_by_indices: Vec<SortColumnDescription>,
-        unit: WindowFuncFrameUnits,
-        bounds: (FrameBound<T>, FrameBound<T>),
+        bounds: (FrameBound<u64>, FrameBound<u64>),
     ) -> Result<Self> {
         let func = WindowFunctionImpl::try_create(func)?;
         let (start_bound, end_bound) = bounds;
+        let rows_start_bound = start_bound.get_inner().unwrap_or_default() as usize;
+        let rows_end_bound = end_bound.get_inner().unwrap_or_default() as usize;
+
         Ok(Self {
             input,
             output,
@@ -520,6 +504,61 @@ where T: Send + Sync + CheckedAdd + CheckedSub + Copy + AsPrimitive<usize> + Ord
             frame_unit: unit,
             start_bound,
             end_bound,
+            rows_start_bound,
+            rows_end_bound,
+            frame_start: RowPtr::default(),
+            frame_end: RowPtr::default(),
+            frame_started: false,
+            frame_ended: false,
+            prev_frame_start: RowPtr::default(),
+            prev_frame_end: RowPtr::default(),
+            peer_group_start: RowPtr::default(),
+            current_row: RowPtr::default(),
+            current_row_in_partition: 1,
+            current_rank: 1,
+            current_rank_count: 1,
+            current_dense_rank: 1,
+            input_is_finished: false,
+        })
+    }
+}
+
+// For RANGE frame
+impl<T> TransformWindow<T>
+where T: Number + CheckedAdd + CheckedSub
+{
+    /// Cannot be cloned because every [`TransformWindow`] has one independent `place`.
+    pub fn try_create_range(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        func: WindowFunctionInfo,
+        partition_indices: Vec<usize>,
+        order_by_indices: Vec<SortColumnDescription>,
+        unit: WindowFuncFrameUnits,
+        bounds: (FrameBound<T>, FrameBound<T>),
+    ) -> Result<Self> {
+        let func = WindowFunctionImpl::try_create(func)?;
+        let (start_bound, end_bound) = bounds;
+
+        Ok(Self {
+            input,
+            output,
+            state: ProcessorState::Consume,
+            func,
+            partition_indices,
+            order_by: order_by_indices,
+            blocks: VecDeque::new(),
+            outputs: VecDeque::new(),
+            first_block: 0,
+            next_output_block: 0,
+            partition_start: RowPtr::default(),
+            partition_end: RowPtr::default(),
+            partition_ended: false,
+            frame_unit: unit,
+            start_bound,
+            end_bound,
+            rows_start_bound: 0,
+            rows_end_bound: 0,
             frame_start: RowPtr::default(),
             frame_end: RowPtr::default(),
             frame_started: false,
@@ -538,11 +577,7 @@ where T: Send + Sync + CheckedAdd + CheckedSub + Copy + AsPrimitive<usize> + Ord
 
     /// Used for `RANGE` frame to compare the value of the column at `cmp_row` with the value of the column at `ref_row` add/sub `offset`.
     ///
-    /// Currently, order by column in `RANGE` frame will be cast to Int64 Column (CAST operator will be added in planner).
-    ///
     /// Returns the ordering of the value at `cmp_row` with the value at `ref_row` add/sub `offset`.
-    ///
-    /// TODO: no need to cast to i64 and use generic type to support this logic.
     fn compare_value_with_offset(
         cmp_col: &[T],
         cmp_row: usize,
@@ -574,30 +609,38 @@ where T: Send + Sync + CheckedAdd + CheckedSub + Copy + AsPrimitive<usize> + Ord
         let ref_idx = self.order_by[0].offset;
         let asc = self.order_by[0].asc;
         let preceding = asc == is_preceding;
-        let ref_col = self.column_at(&self.current_row, ref_idx);
-        todo!()
-        // while self.frame_start < self.partition_end {
-        //     let cmp_col = self.column_at(&self.frame_start, ref_idx);
-        //     let mut ordering = Self::compare_value_with_offset(
-        //         cmp_col,
-        //         self.frame_start.row,
-        //         ref_col,
-        //         self.current_row.row,
-        //         n,
-        //         preceding,
-        //     );
-        //     if !asc {
-        //         ordering = ordering.reverse();
-        //     }
+        let ref_col = self
+            .column_at(&self.current_row, ref_idx)
+            .as_number()
+            .unwrap();
+        let ref_col = T::try_downcast_column(ref_col).unwrap();
 
-        //     if ordering.is_ge() {
-        //         self.frame_started = true;
-        //         return;
-        //     }
+        while self.frame_start < self.partition_end {
+            let cmp_col = self
+                .column_at(&self.frame_start, ref_idx)
+                .as_number()
+                .unwrap();
+            let cmp_col = T::try_downcast_column(cmp_col).unwrap();
+            let mut ordering = Self::compare_value_with_offset(
+                &cmp_col,
+                self.frame_start.row,
+                &ref_col,
+                self.current_row.row,
+                &n,
+                preceding,
+            );
+            if !asc {
+                ordering = ordering.reverse();
+            }
 
-        //     self.frame_start = self.advance_row(self.frame_start);
-        // }
-        // self.frame_started = self.partition_ended;
+            if ordering.is_ge() {
+                self.frame_started = true;
+                return;
+            }
+
+            self.frame_start = self.advance_row(self.frame_start);
+        }
+        self.frame_started = self.partition_ended;
     }
 
     fn advance_frame_start(&mut self) {
@@ -615,7 +658,7 @@ where T: Send + Sync + CheckedAdd + CheckedSub + Copy + AsPrimitive<usize> + Ord
             }
             FrameBound::Preceding(Some(n)) => {
                 if self.frame_unit.is_rows() {
-                    self.advance_frame_start_rows_preceding(n.as_());
+                    self.advance_frame_start_rows_preceding(self.rows_start_bound);
                 } else {
                     self.advance_frame_start_range(*n, true);
                 }
@@ -625,7 +668,7 @@ where T: Send + Sync + CheckedAdd + CheckedSub + Copy + AsPrimitive<usize> + Ord
             }
             FrameBound::Following(Some(n)) => {
                 if self.frame_unit.is_rows() {
-                    self.advance_frame_start_rows_following(n.as_());
+                    self.advance_frame_start_rows_following(self.rows_start_bound);
                 } else {
                     self.advance_frame_start_range(*n, false);
                 }
@@ -640,32 +683,38 @@ where T: Send + Sync + CheckedAdd + CheckedSub + Copy + AsPrimitive<usize> + Ord
         let ref_idx = self.order_by[0].offset;
         let asc = self.order_by[0].asc;
         let preceding = asc == is_preceding;
-        let ref_col = self.column_at(&self.current_row, ref_idx);
-        todo!()
-        // while self.frame_end < self.partition_end {
-        //     let cmp_col = self.column_at(&self.frame_end, ref_idx);
+        let ref_col = self
+            .column_at(&self.current_row, ref_idx)
+            .as_number()
+            .unwrap();
+        let ref_col = T::try_downcast_column(ref_col).unwrap();
+        while self.frame_end < self.partition_end {
+            let cmp_col = self
+                .column_at(&self.frame_end, ref_idx)
+                .as_number()
+                .unwrap();
+            let cmp_col = T::try_downcast_column(cmp_col).unwrap();
+            let mut ordering = Self::compare_value_with_offset(
+                &cmp_col,
+                self.frame_end.row,
+                &ref_col,
+                self.current_row.row,
+                &n,
+                preceding,
+            );
+            if !asc {
+                ordering = ordering.reverse();
+            }
 
-        //     let mut ordering = Self::compare_value_with_offset(
-        //         cmp_col,
-        //         self.frame_end.row,
-        //         ref_col,
-        //         self.current_row.row,
-        //         n,
-        //         preceding,
-        //     );
-        //     if !asc {
-        //         ordering = ordering.reverse();
-        //     }
+            if ordering.is_gt() {
+                // `self.frame_end` is excluded when aggregating.
+                self.frame_ended = true;
+                return;
+            }
 
-        //     if ordering.is_gt() {
-        //         // `self.frame_end` is excluded when aggregating.
-        //         self.frame_ended = true;
-        //         return;
-        //     }
-
-        //     self.frame_end = self.advance_row(self.frame_end);
-        // }
-        // self.frame_ended = self.partition_ended;
+            self.frame_end = self.advance_row(self.frame_end);
+        }
+        self.frame_ended = self.partition_ended;
     }
 
     fn advance_frame_end(&mut self) {
@@ -677,7 +726,7 @@ where T: Send + Sync + CheckedAdd + CheckedSub + Copy + AsPrimitive<usize> + Ord
             }
             FrameBound::Preceding(Some(n)) => {
                 if self.frame_unit.is_rows() {
-                    self.advance_frame_end_rows_preceding(n.as_());
+                    self.advance_frame_end_rows_preceding(self.rows_end_bound);
                 } else {
                     self.advance_frame_end_range(*n, true)
                 }
@@ -687,7 +736,7 @@ where T: Send + Sync + CheckedAdd + CheckedSub + Copy + AsPrimitive<usize> + Ord
             }
             FrameBound::Following(Some(n)) => {
                 if self.frame_unit.is_rows() {
-                    self.advance_frame_end_rows_following(n.as_());
+                    self.advance_frame_end_rows_following(self.rows_end_bound);
                 } else {
                     self.advance_frame_end_range(*n, false);
                 }
@@ -827,7 +876,7 @@ enum ProcessorState {
 
 #[async_trait::async_trait]
 impl<T> Processor for TransformWindow<T>
-where T: Send + Sync + CheckedAdd + CheckedSub + Copy + AsPrimitive<usize> + Ord
+where T: Number + CheckedAdd + CheckedSub
 {
     fn name(&self) -> String {
         "Transform Window".to_string()
@@ -933,12 +982,12 @@ mod tests {
 
     fn get_transform_window(
         unit: WindowFuncFrameUnits,
-        bounds: (FrameBound<usize>, FrameBound<usize>),
+        bounds: (FrameBound<u64>, FrameBound<u64>),
         arg_type: DataType,
-    ) -> Result<TransformWindow<usize>> {
+    ) -> Result<TransformWindow<u64>> {
         let agg = AggregateFunctionFactory::instance().get("sum", vec![], vec![arg_type])?;
         let func = WindowFunctionInfo::Aggregate(agg, vec![0]);
-        TransformWindow::create(
+        TransformWindow::try_create_rows(
             InputPort::create(),
             OutputPort::create(),
             func,
@@ -951,9 +1000,9 @@ mod tests {
 
     fn get_transform_window_with_data(
         unit: WindowFuncFrameUnits,
-        bounds: (FrameBound<usize>, FrameBound<usize>),
+        bounds: (FrameBound<u64>, FrameBound<u64>),
         column: Column,
-    ) -> Result<TransformWindow<usize>> {
+    ) -> Result<TransformWindow<u64>> {
         let data_type = column.data_type();
         let num_rows = column.len();
         let mut transform = get_transform_window(unit, bounds, data_type.clone())?;
@@ -1550,14 +1599,14 @@ mod tests {
     #[allow(clippy::type_complexity)]
     fn get_transform_window_and_ports(
         unit: WindowFuncFrameUnits,
-        bounds: (FrameBound<usize>, FrameBound<usize>),
+        bounds: (FrameBound<u64>, FrameBound<u64>),
     ) -> Result<(Box<dyn Processor>, Arc<InputPort>, Arc<OutputPort>)> {
         let agg = AggregateFunctionFactory::instance()
             .get("sum", vec![], vec![DataType::Number(NumberDataType::Int32)])?;
         let func = WindowFunctionInfo::Aggregate(agg, vec![0]);
         let input = InputPort::create();
         let output = OutputPort::create();
-        let transform = TransformWindow::create(
+        let transform = TransformWindow::try_create_rows(
             input.clone(),
             output.clone(),
             func,
