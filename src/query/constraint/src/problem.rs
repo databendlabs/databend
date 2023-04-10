@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use z3::ast::forall_const;
+use z3::ast::Ast;
 use z3::ast::Bool;
 use z3::ast::Int;
 use z3::Context;
@@ -49,6 +50,33 @@ pub fn assert_int_is_not_null(
         &[variable],
         &[],
         &proposition.implies(&is_not_null_int(ctx, variable)),
+    );
+
+    solver.push();
+    solver.assert(&p);
+    let result = solver.check();
+    solver.pop(1);
+    result
+}
+
+/// The same as `assert_int_is_not_null`, but for multiple variables.
+pub fn assert_int_is_not_null_multiple_variables(
+    ctx: &Context,
+    solver: &Solver,
+    variables: &[Int],
+    target: &Int,
+    proposition: &Bool,
+) -> SatResult {
+    let variables = variables.iter().collect::<Vec<_>>();
+    let p = forall_const(
+        ctx,
+        variables
+            .iter()
+            .map(|v| *v as &dyn Ast)
+            .collect::<Vec<_>>()
+            .as_slice(),
+        &[],
+        &proposition.implies(&is_not_null_int(ctx, target)),
     );
 
     solver.push();

@@ -14,6 +14,7 @@
 
 use common_constraint::prelude::and_nullable_bool;
 use common_constraint::prelude::assert_int_is_not_null;
+use common_constraint::prelude::assert_int_is_not_null_multiple_variables;
 use common_constraint::prelude::gt_int;
 use common_constraint::prelude::is_not_null_int;
 use common_constraint::prelude::is_true;
@@ -96,6 +97,44 @@ fn test_assert_int_not_null() {
         );
         assert_eq!(
             assert_int_is_not_null(&ctx, &solver, &Int::new_const(&ctx, "a"), &proposition),
+            SatResult::Sat
+        );
+    }
+}
+
+#[test]
+fn test_assert_int_is_not_null_multiple_variable() {
+    let ctx = Context::new(&Config::default());
+    let solver = Solver::new(&ctx);
+
+    {
+        // a > 0 and b > 0 -> a is not null and b is not null
+        let proposition = is_true(
+            &ctx,
+            &and_nullable_bool(
+                &ctx,
+                &gt_int(&ctx, &Int::new_const(&ctx, "a"), &Int::from_i64(&ctx, 0)),
+                &gt_int(&ctx, &Int::new_const(&ctx, "b"), &Int::from_i64(&ctx, 0)),
+            ),
+        );
+        assert_eq!(
+            assert_int_is_not_null_multiple_variables(
+                &ctx,
+                &solver,
+                &[Int::new_const(&ctx, "a"), Int::new_const(&ctx, "b"),],
+                &Int::new_const(&ctx, "a"),
+                &proposition
+            ),
+            SatResult::Sat
+        );
+        assert_eq!(
+            assert_int_is_not_null_multiple_variables(
+                &ctx,
+                &solver,
+                &[Int::new_const(&ctx, "a"), Int::new_const(&ctx, "b"),],
+                &Int::new_const(&ctx, "b"),
+                &proposition
+            ),
             SatResult::Sat
         );
     }

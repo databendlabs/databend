@@ -16,6 +16,7 @@ common-ast = { path = "../ast" }
 common-base = { path = "../../common/base" }
 common-catalog = { path = "../catalog" }
 common-config = { path = "../config" }
+common-constraint = { path = "../constraint" }
 common-exception = { path = "../../common/exception" }
 common-expression = { path = "../expression" }
 common-functions = { path = "../functions" }
@@ -57,6 +58,7 @@ opendal = { workspace = true }
 ordered-float = { workspace = true }
 parking_lot = "0.12.1"
 percent-encoding = "2"
+ranges = "0.3.3"
 regex = "1.6.0"
 roaring = "0.10.1"
 serde = { workspace = true }
@@ -64,3 +66,4 @@ simsearch = "0.2"
 time = "0.3.14"
 tracing = "0.1.36"
 url = { version = "2.3" }
+z3 = { version = "0.11.2", features = ["static-link-z3"] }
