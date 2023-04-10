@@ -20,6 +20,7 @@ Databend offers a range of privileges that allow you to exercise fine-grained co
   - [Catalog Privileges](#catalog-privileges)
   - [Share Privileges](#share-privileges)
 
+
 ## All Privileges
 
 | Privilege | Object Type | Description |
