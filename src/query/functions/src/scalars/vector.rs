@@ -58,6 +58,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_5_arg::<StringType, StringType, StringType, StringType, StringType, ArrayType<Float32Type>>(
             |data, api_base,api_key, embedding_model, completion_model, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.is_valid(output.len()) {
+                        output.push(vec![F32::from(0.0)].into());
+                        return;
+                    }
+                }
                 let data = std::str::from_utf8(data).unwrap();
 
                 let api_base = std::str::from_utf8(api_base).unwrap().to_string();
@@ -88,6 +94,13 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_5_arg::<StringType, StringType, StringType, StringType, StringType, StringType>(
                 |data, api_base,api_key, embedding_model, completion_model, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.is_valid(output.len()) {
+                        output.put_str("");
+                        output.commit_row();
+                        return;
+                    }
+                }
                 let data = std::str::from_utf8(data).unwrap();
 
                 let api_base = std::str::from_utf8(api_base).unwrap().to_string();
