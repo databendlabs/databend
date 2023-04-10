@@ -31,8 +31,10 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
+use crate::optimizer::SelectivityEstimator;
 use crate::optimizer::Statistics as OpStatistics;
 use crate::optimizer::DEFAULT_HISTOGRAM_BUCKETS;
+use crate::optimizer::MAX_SELECTIVITY;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -180,15 +182,31 @@ impl Operator for Scan {
             None
         };
 
+        let cardinality = match (precise_cardinality, &self.prewhere) {
+            (Some(precise_cardinality), Some(ref prewhere)) => {
+                let statistics = OpStatistics {
+                    precise_cardinality: Some(precise_cardinality),
+                    column_stats: column_stats.clone(),
+                };
+
+                // Derive cardinality
+                let sb = SelectivityEstimator::new(&statistics);
+                let mut selectivity = MAX_SELECTIVITY;
+                for pred in prewhere.predicates.iter() {
+                    // Compute selectivity for each conjunction
+                    selectivity *= sb.compute_selectivity(pred);
+                }
+                (precise_cardinality as f64) * selectivity
+            }
+            (Some(precise_cardinality), None) => precise_cardinality as f64,
+            (_, _) => 0.0,
+        };
+
         Ok(RelationalProperty {
             output_columns: self.columns.clone(),
             outer_columns: Default::default(),
             used_columns,
-            cardinality: self
-                .statistics
-                .statistics
-                .as_ref()
-                .map_or(0.0, |stat| stat.num_rows.map_or(0.0, |num| num as f64)),
+            cardinality,
             statistics: OpStatistics {
                 precise_cardinality,
                 column_stats,
