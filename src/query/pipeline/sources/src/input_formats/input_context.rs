@@ -35,6 +35,7 @@ use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageFileCompression;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
+use common_pipeline_core::InputError;
 use common_settings::Settings;
 use dashmap::DashMap;
 use opendal::Operator;
@@ -44,7 +45,6 @@ use crate::input_formats::impls::InputFormatNDJson;
 use crate::input_formats::impls::InputFormatParquet;
 use crate::input_formats::impls::InputFormatTSV;
 use crate::input_formats::impls::InputFormatXML;
-use crate::input_formats::InputError;
 use crate::input_formats::InputFormat;
 use crate::input_formats::SplitInfo;
 use crate::input_formats::StreamingReadBatch;
@@ -123,7 +123,7 @@ pub struct InputContext {
     pub scan_progress: Arc<Progress>,
     pub on_error_mode: OnErrorMode,
     pub on_error_count: AtomicU64,
-    pub on_error_map: Option<DashMap<String, HashMap<u16, InputError>>>,
+    pub on_error_map: Option<Arc<DashMap<String, HashMap<u16, InputError>>>>,
 }
 
 impl Debug for InputContext {
@@ -152,6 +152,7 @@ impl InputContext {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn try_create_from_copy(
         operator: Operator,
         settings: Arc<Settings>,
@@ -160,6 +161,7 @@ impl InputContext {
         splits: Vec<Arc<SplitInfo>>,
         scan_progress: Arc<Progress>,
         block_compact_thresholds: BlockThresholds,
+        on_error_map: Arc<DashMap<String, HashMap<u16, InputError>>>,
     ) -> Result<Self> {
         let on_error_mode = stage_info.copy_options.on_error.clone();
         let plan = Box::new(CopyIntoPlan { stage_info });
@@ -187,7 +189,7 @@ impl InputContext {
             format_options: file_format_options,
             on_error_mode,
             on_error_count: AtomicU64::new(0),
-            on_error_map: Some(DashMap::new()),
+            on_error_map: Some(on_error_map),
         })
     }
 

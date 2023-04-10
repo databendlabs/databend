@@ -1829,7 +1829,7 @@ impl<'a> TypeChecker<'a> {
                 })
             }
             ("ai_embedding_vector", args) => {
-                // ai_embedding_vector(prompt) -> embedding_vector(prompt, api_key)
+                // ai_embedding_vector(prompt) -> embedding_vector(prompt, api_base, api_key, embedding_model, completion_model)
                 if args.len() != 1 {
                     return Some(Err(ErrorCode::BadArguments(
                         "ai_embedding_vector(STRING) only accepts one STRING argument",
@@ -1839,19 +1839,50 @@ impl<'a> TypeChecker<'a> {
 
                 // Prompt.
                 let arg1 = args[0];
-                // API key.
-                let arg2 = &Expr::Literal {
+
+                // openai.
+                let api_base = &Expr::Literal {
+                    span,
+                    lit: Literal::String(
+                        GlobalConfig::instance().query.openai_api_base_url.clone(),
+                    ),
+                };
+                let api_key = &Expr::Literal {
                     span,
                     lit: Literal::String(GlobalConfig::instance().query.openai_api_key.clone()),
                 };
+                let embedding_model = &Expr::Literal {
+                    span,
+                    lit: Literal::String(
+                        GlobalConfig::instance()
+                            .query
+                            .openai_api_embedding_model
+                            .clone(),
+                    ),
+                };
+                let completion_model = &Expr::Literal {
+                    span,
+                    lit: Literal::String(
+                        GlobalConfig::instance()
+                            .query
+                            .openai_api_completion_model
+                            .clone(),
+                    ),
+                };
 
                 Some(
-                    self.resolve_function(span, "embedding_vector", vec![], &[arg1, arg2])
-                        .await,
+                    self.resolve_function(span, "embedding_vector", vec![], &[
+                        arg1,
+                        api_base,
+                        api_key,
+                        embedding_model,
+                        completion_model,
+                    ])
+                    .await,
                 )
             }
             ("ai_text_completion", args) => {
-                // ai_text_completion(prompt) -> text_completion(prompt, api_key)
+                // ai_text_completion(prompt) -> text_completion(prompt, api_base, api_key, embedding_model, completion)
                 if args.len() != 1 {
                     return Some(Err(ErrorCode::BadArguments(
                         "ai_text_completion(STRING) only accepts one STRING argument",
@@ -1861,15 +1892,46 @@ impl<'a> TypeChecker<'a> {
 
                 // Prompt.
                 let arg1 = args[0];
-                // API key.
-                let arg2 = &Expr::Literal {
+
+                // openai.
+                let api_base = &Expr::Literal {
+                    span,
+                    lit: Literal::String(
+                        GlobalConfig::instance().query.openai_api_base_url.clone(),
+                    ),
+                };
+                let api_key = &Expr::Literal {
                     span,
                     lit: Literal::String(GlobalConfig::instance().query.openai_api_key.clone()),
                 };
+                let embedding_model = &Expr::Literal {
+                    span,
+                    lit: Literal::String(
+                        GlobalConfig::instance()
+                            .query
+                            .openai_api_embedding_model
+                            .clone(),
+                    ),
+                };
+                let completion_model = &Expr::Literal {
+                    span,
+                    lit: Literal::String(
+                        GlobalConfig::instance()
+                            .query
+                            .openai_api_completion_model
+                            .clone(),
+                    ),
+                };
 
                 Some(
-                    self.resolve_function(span, "text_completion", vec![], &[arg1, arg2])
-                        .await,
+                    self.resolve_function(span, "text_completion", vec![], &[
+                        arg1,
+                        api_base,
+                        api_key,
+                        embedding_model,
+                        completion_model,
+                    ])
+                    .await,
                 )
             }
             // Try convert get function of Variant data type into a virtual column

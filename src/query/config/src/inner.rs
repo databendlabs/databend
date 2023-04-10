@@ -174,7 +174,12 @@ pub struct QueryConfig {
     pub internal_merge_on_read_mutation: bool,
     /// Disable some system load(For example system.configs) for cloud security.
     pub disable_system_table_load: bool,
+
+    /// openai
     pub openai_api_key: String,
+    pub openai_api_base_url: String,
+    pub openai_api_embedding_model: String,
+    pub openai_api_completion_model: String,
 }
 
 impl Default for QueryConfig {
@@ -225,8 +230,11 @@ impl Default for QueryConfig {
             internal_enable_sandbox_tenant: false,
             internal_merge_on_read_mutation: false,
             disable_system_table_load: false,
-            openai_api_key: "".to_string(),
             flight_sql_tls_server_key: "".to_string(),
+            openai_api_base_url: "https://api.openai.com/v1/".to_string(),
+            openai_api_key: "".to_string(),
+            openai_api_completion_model: "gpt-3.5-turbo".to_string(),
+            openai_api_embedding_model: "text-embedding-ada-002".to_string(),
         }
     }
 }
