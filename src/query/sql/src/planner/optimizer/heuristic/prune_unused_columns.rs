@@ -22,21 +22,20 @@ use crate::plans::Aggregate;
 use crate::plans::EvalScalar;
 use crate::plans::RelOperator;
 use crate::plans::WindowFuncType;
+use crate::ColumnEntry;
 use crate::MetadataRef;
 
 pub struct UnusedColumnPruner {
-    _metadata: MetadataRef,
+    metadata: MetadataRef,
 }
 
 impl UnusedColumnPruner {
     pub fn new(metadata: MetadataRef) -> Self {
-        Self {
-            _metadata: metadata,
-        }
+        Self { metadata }
     }
 
     pub fn remove_unused_columns(&self, expr: &SExpr, require_columns: ColumnSet) -> Result<SExpr> {
-        let mut s_expr = Self::keep_required_columns(expr, require_columns)?;
+        let mut s_expr = self.keep_required_columns(expr, require_columns)?;
         s_expr.applied_rules = expr.applied_rules.clone();
         Ok(s_expr)
     }
@@ -46,19 +45,36 @@ impl UnusedColumnPruner {
     /// the required columns for each child could be different and we may include columns not needed
     /// by a specific child. Columns should be skipped once we found it not exist in the subtree as we
     /// visit a plan node.
-    fn keep_required_columns(expr: &SExpr, mut required: ColumnSet) -> Result<SExpr> {
+    fn keep_required_columns(&self, expr: &SExpr, mut required: ColumnSet) -> Result<SExpr> {
         match expr.plan() {
             RelOperator::Scan(p) => {
+                // add virtual columns to scan
+                let mut virtual_columns = ColumnSet::new();
+                for column in self
+                    .metadata
+                    .read()
+                    .virtual_columns_by_table_index(p.table_index)
+                    .iter()
+                {
+                    match column {
+                        ColumnEntry::VirtualColumn(virtual_column) => {
+                            virtual_columns.insert(virtual_column.column_index);
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+
                 // Some table may not have any column,
                 // e.g. `system.sync_crash_me`
-                if p.columns.is_empty() {
+                if p.columns.is_empty() && virtual_columns.is_empty() {
                     return Ok(expr.clone());
                 }
+                let columns = p.columns.union(&virtual_columns).cloned().collect();
                 let mut prewhere = p.prewhere.clone();
-                let mut used: ColumnSet = required.intersection(&p.columns).cloned().collect();
+                let mut used: ColumnSet = required.intersection(&columns).cloned().collect();
                 if let Some(ref mut pw) = prewhere {
                     debug_assert!(
-                        pw.prewhere_columns.is_subset(&p.columns),
+                        pw.prewhere_columns.is_subset(&columns),
                         "prewhere columns should be a subset of scan columns"
                     );
                     pw.output_columns = used.clone();
@@ -87,11 +103,11 @@ impl UnusedColumnPruner {
 
                 Ok(SExpr::create_binary(
                     RelOperator::Join(p.clone()),
-                    Self::keep_required_columns(
+                    self.keep_required_columns(
                         expr.child(0)?,
                         left.union(&others).cloned().collect(),
                     )?,
-                    Self::keep_required_columns(
+                    self.keep_required_columns(
                         expr.child(1)?,
                         right.union(&others).cloned().collect(),
                     )?,
@@ -120,11 +136,11 @@ impl UnusedColumnPruner {
                 }
                 if used.is_empty() {
                     // Eliminate unnecessary `EvalScalar`
-                    Self::keep_required_columns(expr.child(0)?, required)
+                    self.keep_required_columns(expr.child(0)?, required)
                 } else {
                     Ok(SExpr::create_unary(
                         RelOperator::EvalScalar(EvalScalar { items: used }),
-                        Self::keep_required_columns(expr.child(0)?, required)?,
+                        self.keep_required_columns(expr.child(0)?, required)?,
                     ))
                 }
             }
@@ -134,7 +150,7 @@ impl UnusedColumnPruner {
                 });
                 Ok(SExpr::create_unary(
                     RelOperator::Filter(p.clone()),
-                    Self::keep_required_columns(expr.child(0)?, used)?,
+                    self.keep_required_columns(expr.child(0)?, used)?,
                 ))
             }
             RelOperator::Aggregate(p) => {
@@ -163,7 +179,7 @@ impl UnusedColumnPruner {
                         grouping_id_index: p.grouping_id_index,
                         grouping_sets: p.grouping_sets.clone(),
                     }),
-                    Self::keep_required_columns(expr.child(0)?, required)?,
+                    self.keep_required_columns(expr.child(0)?, required)?,
                 ))
             }
             RelOperator::Window(p) => {
@@ -183,7 +199,7 @@ impl UnusedColumnPruner {
 
                 Ok(SExpr::create_unary(
                     RelOperator::Window(p.clone()),
-                    Self::keep_required_columns(expr.child(0)?, required)?,
+                    self.keep_required_columns(expr.child(0)?, required)?,
                 ))
             }
             RelOperator::Sort(p) => {
@@ -192,12 +208,12 @@ impl UnusedColumnPruner {
                 });
                 Ok(SExpr::create_unary(
                     RelOperator::Sort(p.clone()),
-                    Self::keep_required_columns(expr.child(0)?, required)?,
+                    self.keep_required_columns(expr.child(0)?, required)?,
                 ))
             }
             RelOperator::Limit(p) => Ok(SExpr::create_unary(
                 RelOperator::Limit(p.clone()),
-                Self::keep_required_columns(expr.child(0)?, required)?,
+                self.keep_required_columns(expr.child(0)?, required)?,
             )),
 
             RelOperator::UnionAll(p) => {
@@ -211,8 +227,8 @@ impl UnusedColumnPruner {
                 });
                 Ok(SExpr::create_binary(
                     RelOperator::UnionAll(p.clone()),
-                    Self::keep_required_columns(expr.child(0)?, left_used)?,
-                    Self::keep_required_columns(expr.child(1)?, right_used)?,
+                    self.keep_required_columns(expr.child(0)?, left_used)?,
+                    self.keep_required_columns(expr.child(1)?, right_used)?,
                 ))
             }
 
@@ -225,7 +241,7 @@ impl UnusedColumnPruner {
 
                 Ok(SExpr::create_unary(
                     RelOperator::ProjectSet(op.clone()),
-                    Self::keep_required_columns(expr.child(0)?, required)?,
+                    self.keep_required_columns(expr.child(0)?, required)?,
                 ))
             }
 

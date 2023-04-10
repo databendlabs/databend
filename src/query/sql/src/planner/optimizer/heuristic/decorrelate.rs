@@ -62,6 +62,7 @@ use crate::DerivedColumn;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::TableInternalColumn;
+use crate::VirtualColumn;
 
 /// Decorrelate subqueries inside `s_expr`.
 ///
@@ -584,6 +585,9 @@ impl SubqueryRewriter {
                                 internal_column,
                                 ..
                             }) => internal_column.data_type(),
+                            ColumnEntry::VirtualColumn(VirtualColumn { data_type, .. }) => {
+                                DataType::from(data_type)
+                            }
                         };
                         ColumnBinding {
                             database_name: None,

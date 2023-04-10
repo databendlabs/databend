@@ -83,6 +83,11 @@ impl AuthMgr {
 
                 let tenant = session.get_current_tenant();
                 let identity = UserIdentity::new(&user_name, "%");
+
+                // ensure the builtin roles like ACCOUNT_ADMIN, PUBLIC exists
+                user_api.ensure_builtin_roles(&tenant).await?;
+
+                // create a new user for this identity if not exists
                 let user = match user_api.get_user(&tenant, identity.clone()).await {
                     Ok(user_info) => match user_info.auth_info {
                         AuthInfo::JWT => user_info,
