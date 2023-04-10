@@ -130,5 +130,3 @@ impl Datum {
         }
     }
 }
-
-impl ranges::Domain for Datum {}
