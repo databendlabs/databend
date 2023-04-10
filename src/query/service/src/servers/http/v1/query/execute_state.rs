@@ -60,6 +60,7 @@ pub struct Progresses {
     pub scan_progress: ProgressValues,
     pub write_progress: ProgressValues,
     pub result_progress: ProgressValues,
+    pub total_scan: ProgressValues,
 }
 
 impl Progresses {
@@ -68,6 +69,7 @@ impl Progresses {
             scan_progress: ctx.get_scan_progress_value(),
             write_progress: ctx.get_write_progress_value(),
             result_progress: ctx.get_result_progress_value(),
+            total_scan: ctx.get_total_scan_value(),
         }
     }
 }
