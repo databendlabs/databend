@@ -319,7 +319,7 @@ async fn test_fuse_purge_retention() -> Result<()> {
         FuseTable::commit_to_meta_server(
             ctx.as_ref(),
             fuse_table.get_table_info(),
-            &location_gen,
+            location_gen,
             snapshot_2,
             None,
             &None,
