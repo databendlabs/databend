@@ -790,7 +790,7 @@ impl PipelineBuilder {
         let func = WindowFunctionInfo::try_create(&window.func, &input_schema)?;
         // Window
         self.main_pipeline.add_transform(|input, output| {
-            // The transform can only be created here, bacause it cannot be cloned.
+            // The transform can only be created here, because it cannot be cloned.
 
             let transform = if window.window_frame.units.is_rows() {
                 let start_bound = FrameBound::try_from(&window.window_frame.start_bound)?;
