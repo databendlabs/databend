@@ -46,7 +46,7 @@ impl FlightSqlServiceImpl {
         let session_id = authorization[bearer.len()..].to_string();
 
         if let Some(session) = self.sessions.lock().get(&session_id) {
-            Ok(session.clone())
+            Ok(session)
         } else {
             Err(Status::unauthenticated(format!(
                 "session_id not found: {session_id}"

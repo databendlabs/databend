@@ -102,7 +102,7 @@ impl HttpQueryManager {
                         ExpireResult::Expired | ExpireResult::Removed => {
                             let msg =
                                 format!("http query {} timeout after {} s", &query_id, timeout);
-                            if self_clone.remove_query(&query_id).await.is_none() {
+                            if self_clone.remove_query(query_id).await.is_none() {
                                 warn!("{msg}, but fail to remove");
                             } else {
                                 warn!("{msg}");
