@@ -1518,11 +1518,15 @@ impl ShareApiTestSuite {
 
         info!("--- drop share table");
         {
+            let (_share_meta_seq, share_meta) =
+                get_share_meta_by_id_or_err(mt.as_kv_api(), share_id, "").await?;
+            assert!(share_meta.entries.contains_key(tbl_name));
+
             let plan = DropTableByIdReq {
                 if_exists: false,
                 tb_id: table_id,
             };
-            let res = mt.drop_table_by_id(plan).await;
+            let _res = mt.drop_table_by_id(plan).await;
 
             let (_share_meta_seq, share_meta) =
                 get_share_meta_by_id_or_err(mt.as_kv_api(), share_id, "").await?;
@@ -1531,6 +1535,10 @@ impl ShareApiTestSuite {
 
         info!("--- drop share database");
         {
+            let (_share_meta_seq, share_meta) =
+                get_share_meta_by_id_or_err(mt.as_kv_api(), share_id, "").await?;
+            assert!(share_meta.database.is_some());
+
             mt.drop_database(DropDatabaseReq {
                 if_exists: false,
                 name_ident: DatabaseNameIdent {

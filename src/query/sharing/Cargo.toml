@@ -19,8 +19,8 @@ common-config = { path = "../config" }
 common-exception = { path = "../../common/exception" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
-common-users = { path = "../users" }
 common-storage = { path = "../../common/storage" }
+common-users = { path = "../users" }
 
 async-backtrace = { workspace = true }
 http = "0.2"
