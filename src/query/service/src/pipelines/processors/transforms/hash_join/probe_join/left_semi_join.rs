@@ -173,7 +173,7 @@ impl JoinHashTable {
                 row_state[i] += probed_rows.len() as u32;
             }
 
-            if probe_indexes.len() + probed_rows.len() < probe_indexes.capacity() {
+            if probed_num + probed_rows.len() < JOIN_MAX_BLOCK_SIZE {
                 for it in probed_rows {
                     build_indexes.push(it);
                 }
@@ -184,7 +184,7 @@ impl JoinHashTable {
                 let mut remain = probed_rows.len();
 
                 while index < probed_rows.len() {
-                    if probe_indexes.len() + remain < probe_indexes.capacity() {
+                    if probed_num + remain < JOIN_MAX_BLOCK_SIZE {
                         for it in &probed_rows[index..] {
                             build_indexes.push(it);
                         }
@@ -198,7 +198,7 @@ impl JoinHashTable {
                             ));
                         }
 
-                        let addition = probe_indexes.capacity() - probe_indexes.len();
+                        let addition = JOIN_MAX_BLOCK_SIZE - probed_num;
                         let new_index = index + addition;
 
                         for it in &probed_rows[index..new_index] {

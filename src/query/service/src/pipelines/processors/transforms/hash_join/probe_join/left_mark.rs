@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::iter::repeat;
 use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
@@ -117,9 +116,19 @@ impl JoinHashTable {
         let _func_ctx = self.ctx.get_function_context()?;
         let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();
 
+        let mut probed_num = 0;
         let mut row_ptrs = self.row_ptrs.write();
         let mut probe_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
         let mut build_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
+
+        let chunks = &self.row_space.chunks.read().unwrap();
+        let data_blocks = chunks
+            .iter()
+            .map(|c| c.data_block.clone())
+            .collect::<Vec<DataBlock>>();
+        let num_rows = data_blocks
+            .iter()
+            .fold(0, |acc, chunk| acc + chunk.num_rows());
 
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = match self.hash_join_desc.from_correlated_subquery {
@@ -130,17 +139,23 @@ impl JoinHashTable {
             if let Some(v) = probe_result_ptr {
                 let probed_rows = v.get();
 
-                if probe_indexes.len() + probed_rows.len() < probe_indexes.capacity() {
-                    build_indexes.extend_from_slice(probed_rows);
-                    probe_indexes.extend(repeat(i as u32).take(probed_rows.len()));
+                if probed_num + probed_rows.len() < JOIN_MAX_BLOCK_SIZE {
+                    for it in probed_rows {
+                        build_indexes.push(it);
+                    }
+                    probe_indexes.push((i as u32, probed_rows.len() as u32));
+                    probed_num += probed_rows.len();
                 } else {
                     let mut index = 0_usize;
                     let mut remain = probed_rows.len();
 
                     while index < probed_rows.len() {
-                        if probe_indexes.len() + remain < probe_indexes.capacity() {
-                            build_indexes.extend_from_slice(&probed_rows[index..]);
-                            probe_indexes.extend(std::iter::repeat(i as u32).take(remain));
+                        if probed_num + remain < JOIN_MAX_BLOCK_SIZE {
+                            for it in &probed_rows[index..] {
+                                build_indexes.push(it);
+                            }
+                            probe_indexes.push((i as u32, remain as u32));
+                            probed_num += remain;
                             index += remain;
                         } else {
                             if self.interrupt.load(Ordering::Relaxed) {
@@ -149,14 +164,22 @@ impl JoinHashTable {
                                 ));
                             }
 
-                            let addition = probe_indexes.capacity() - probe_indexes.len();
+                            let addition = JOIN_MAX_BLOCK_SIZE - probed_num;
                             let new_index = index + addition;
 
-                            build_indexes.extend_from_slice(&probed_rows[index..new_index]);
-                            probe_indexes.extend(repeat(i as u32).take(addition));
+                            for it in &probed_rows[index..new_index] {
+                                build_indexes.push(it);
+                            }
+                            probe_indexes.push((i as u32, addition as u32));
+                            probed_num += addition;
 
-                            let probe_block = DataBlock::take(input, &probe_indexes)?;
-                            let build_block = self.row_space.gather(&build_indexes)?;
+                            let probe_block =
+                                DataBlock::probe_take(input, &probe_indexes, probed_num)?;
+                            let build_block = self.row_space.gather_build(
+                                &build_indexes,
+                                &data_blocks,
+                                &num_rows,
+                            )?;
                             let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
 
                             let filter =
@@ -168,7 +191,7 @@ impl JoinHashTable {
 
                             for (idx, build_index) in build_indexes.iter().enumerate() {
                                 let self_row_ptr =
-                                    row_ptrs.iter_mut().find(|p| (*p).eq(&build_index)).unwrap();
+                                    row_ptrs.iter_mut().find(|p| (*p).eq(build_index)).unwrap();
                                 if !validity.get_bit(idx) {
                                     if self_row_ptr.marker == Some(MarkerKind::False) {
                                         self_row_ptr.marker = Some(MarkerKind::Null);
@@ -183,14 +206,17 @@ impl JoinHashTable {
 
                             build_indexes.clear();
                             probe_indexes.clear();
+                            probed_num = 0;
                         }
                     }
                 }
             }
         }
 
-        let probe_block = DataBlock::take(input, &probe_indexes)?;
-        let build_block = self.row_space.gather(&build_indexes)?;
+        let probe_block = DataBlock::probe_take(input, &probe_indexes, probed_num)?;
+        let build_block = self
+            .row_space
+            .gather_build(&build_indexes, &data_blocks, &num_rows)?;
         let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
 
         let filter = self.get_nullable_filter_column(&merged_block, other_predicate)?;
@@ -199,7 +225,7 @@ impl JoinHashTable {
         let data = &filter_viewer.column;
 
         for (idx, build_index) in build_indexes.iter().enumerate() {
-            let self_row_ptr = row_ptrs.iter_mut().find(|p| (*p).eq(&build_index)).unwrap();
+            let self_row_ptr = row_ptrs.iter_mut().find(|p| (*p).eq(build_index)).unwrap();
             if !validity.get_bit(idx) {
                 if self_row_ptr.marker == Some(MarkerKind::False) {
                     self_row_ptr.marker = Some(MarkerKind::Null);
