@@ -31,6 +31,7 @@ use common_formats::FieldDecoder;
 use common_formats::FileFormatOptionsExt;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
+use common_pipeline_core::InputError;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
 use common_storage::StageFileInfo;
@@ -44,7 +45,6 @@ use crate::input_formats::input_split::FileInfo;
 use crate::input_formats::split_by_size;
 use crate::input_formats::BeyondEndReader;
 use crate::input_formats::InputContext;
-use crate::input_formats::InputError;
 use crate::input_formats::InputFormat;
 use crate::input_formats::SplitInfo;
 

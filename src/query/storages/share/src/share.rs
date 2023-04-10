@@ -14,6 +14,8 @@
 
 use std::collections::BTreeMap;
 
+use chrono::DateTime;
+use chrono::Utc;
 use common_exception::Result;
 use common_meta_app::share::ShareDatabaseSpec;
 use common_meta_app::share::ShareSpec;
@@ -77,6 +79,8 @@ pub async fn save_share_spec(
 }
 
 mod ext {
+    use common_meta_app::share::ShareGrantObjectPrivilege;
+    use enumflags2::BitFlags;
     use storages_common_table_meta::table::database_storage_prefix;
     use storages_common_table_meta::table::table_storage_prefix;
 
@@ -99,6 +103,9 @@ mod ext {
         database: Option<WithLocation<ShareDatabaseSpec>>,
         tables: Vec<WithLocation<ShareTableSpec>>,
         tenants: Vec<String>,
+        db_privileges: Option<BitFlags<ShareGrantObjectPrivilege>>,
+        comment: Option<String>,
+        share_on: Option<DateTime<Utc>>,
     }
 
     impl ShareSpecExt {
@@ -124,6 +131,9 @@ mod ext {
                     })
                     .collect(),
                 tenants: spec.tenants,
+                db_privileges: spec.db_privileges,
+                comment: spec.comment.clone(),
+                share_on: spec.share_on,
             }
         }
     }
@@ -177,6 +187,9 @@ mod ext {
                     presigned_url_timeout: "100s".to_string(),
                 }],
                 tenants: vec!["test_tenant".to_owned()],
+                comment: None,
+                share_on: None,
+                db_privileges: None,
             };
             let tmp_dir = tempfile::tempdir()?;
             let test_root = tmp_dir.path().join("test_cluster_id/test_tenant_id");
@@ -191,11 +204,12 @@ mod ext {
             let spec_json_value = serde_json::to_value(share_spec_ext).unwrap();
 
             use serde_json::json;
+            use serde_json::Value::Null;
 
             let expected = json!({
               "name": "test_share_name",
-              "version": 1,
               "share_id": 1,
+              "version": 1,
               "database": {
                 "location": format!("{}/1/", test_root_str),
                 "name": "share_database",
@@ -212,7 +226,10 @@ mod ext {
               ],
               "tenants": [
                 "test_tenant"
-              ]
+              ],
+              "db_privileges": Null,
+              "comment": Null,
+              "share_on": Null
             });
 
             assert_eq!(expected, spec_json_value);

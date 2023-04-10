@@ -84,7 +84,6 @@ impl Operator for RuntimeFilterSource {
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats: left_prop.statistics.column_stats,
-                is_accurate: false,
             },
         })
     }

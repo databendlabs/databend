@@ -16,6 +16,10 @@ SELECT now() >= 1630295616::TIMESTAMP
 ----
 1
 
+query B
+SELECT to_unix_timestamp(now()) >= 1680753801;
+----
+1
 
 
 query TB
@@ -112,6 +116,17 @@ select to_datetime('9999-12-31 23:59:')
 ----
 9999-12-31 23:59:00.000000
 
+query T
+select to_unix_timestamp('2022-12-31T23:59:59+00:00')
+----
+1672531199
+
+query T
+select to_unix_timestamp('2022-12-31T23:59:59-08:00')
+----
+1672559999
+
+
 statement error 1001
 select to_datetime('9999-01-01 00x')
 
@@ -169,6 +184,11 @@ select typeof(today() - today()) = 'INT'
 
 query B
 select typeof(now() - now()) = 'BIGINT'
+----
+1
+
+query B
+select typeof(to_unix_timestamp('2023-04-06 04:06:23.231808')) = 'BIGINT'
 ----
 1
 

@@ -165,22 +165,26 @@ impl SubqueryRewriter {
                     non_equi_conditions.push(pred.clone());
                 }
 
-                JoinPredicate::Both { left, right } => {
-                    if left.data_type()?.eq(&right.data_type()?) {
-                        left_conditions.push(left.clone());
-                        right_conditions.push(right.clone());
-                        continue;
+                JoinPredicate::Both { left, right, equal } => {
+                    if equal {
+                        if left.data_type()?.eq(&right.data_type()?) {
+                            left_conditions.push(left.clone());
+                            right_conditions.push(right.clone());
+                            continue;
+                        }
+                        let join_type = common_super_type(
+                            left.data_type()?,
+                            right.data_type()?,
+                            &BUILTIN_FUNCTIONS.default_cast_rules,
+                        )
+                        .ok_or_else(|| ErrorCode::Internal("Cannot find common type"))?;
+                        let left = wrap_cast(left, &join_type);
+                        let right = wrap_cast(right, &join_type);
+                        left_conditions.push(left);
+                        right_conditions.push(right);
+                    } else {
+                        non_equi_conditions.push(pred.clone());
                     }
-                    let join_type = common_super_type(
-                        left.data_type()?,
-                        right.data_type()?,
-                        &BUILTIN_FUNCTIONS.default_cast_rules,
-                    )
-                    .ok_or_else(|| ErrorCode::Internal("Cannot find common type"))?;
-                    let left = wrap_cast(left, &join_type);
-                    let right = wrap_cast(right, &join_type);
-                    left_conditions.push(left);
-                    right_conditions.push(right);
                 }
             }
         }
@@ -330,6 +334,7 @@ impl SubqueryRewriter {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name,
                             index: output_column.index,
                             data_type: output_column.data_type,
@@ -397,19 +402,8 @@ impl SubqueryRewriter {
                 .unwrap();
             for correlated_column in correlated_columns.iter() {
                 let column_entry = metadata.column(*correlated_column).clone();
-                let (name, data_type) = match &column_entry {
-                    ColumnEntry::BaseTableColumn(BaseTableColumn {
-                        column_name,
-                        data_type,
-                        ..
-                    }) => (column_name, DataType::from(data_type)),
-                    ColumnEntry::DerivedColumn(DerivedColumn {
-                        alias, data_type, ..
-                    }) => (alias, data_type.clone()),
-                    ColumnEntry::InternalColumn(TableInternalColumn {
-                        internal_column, ..
-                    }) => (internal_column.column_name(), internal_column.data_type()),
-                };
+                let name = column_entry.name();
+                let data_type = column_entry.data_type();
                 self.derived_columns.insert(
                     *correlated_column,
                     metadata.add_derived_column(name.to_string(), data_type.wrap_nullable()),
@@ -425,7 +419,6 @@ impl SubqueryRewriter {
                     statistics: Statistics {
                         statistics: None,
                         col_stats: HashMap::new(),
-                        is_accurate: false,
                     },
                     prewhere: None,
                 }
@@ -471,24 +464,13 @@ impl SubqueryRewriter {
                 let metadata = self.metadata.read();
                 for derived_column in self.derived_columns.values() {
                     let column_entry = metadata.column(*derived_column);
-                    let data_type = match column_entry {
-                        ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) => {
-                            DataType::from(data_type)
-                        }
-                        ColumnEntry::DerivedColumn(DerivedColumn { data_type, .. }) => {
-                            data_type.clone()
-                        }
-                        ColumnEntry::InternalColumn(TableInternalColumn {
-                            internal_column,
-                            ..
-                        }) => internal_column.data_type(),
-                    };
                     let column_binding = ColumnBinding {
                         database_name: None,
                         table_name: None,
-                        column_name: format!("subquery_{}", derived_column),
+                        table_index: None,
+                        column_name: column_entry.name(),
                         index: *derived_column,
-                        data_type: Box::from(data_type.clone()),
+                        data_type: Box::from(column_entry.data_type()),
                         visibility: Visibility::Visible,
                     };
                     items.push(ScalarItem {
@@ -606,6 +588,7 @@ impl SubqueryRewriter {
                         ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: format!("subquery_{}", derived_column),
                             index: *derived_column,
                             data_type: Box::from(data_type.clone()),
@@ -715,14 +698,17 @@ impl SubqueryRewriter {
                 let column_binding = bound_column.column.clone();
                 if correlated_columns.contains(&column_binding.index) {
                     let index = self.derived_columns.get(&column_binding.index).unwrap();
+                    let metadata = self.metadata.read();
+                    let column_entry = metadata.column(*index);
                     return Ok(ScalarExpr::BoundColumnRef(BoundColumnRef {
                         span: scalar.span(),
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
-                            column_name: format!("subquery_{}", index),
+                            table_index: None,
+                            column_name: column_entry.name(),
                             index: *index,
-                            data_type: column_binding.data_type.clone(),
+                            data_type: Box::new(column_entry.data_type()),
                             visibility: column_binding.visibility,
                         },
                     }));
@@ -812,35 +798,29 @@ impl SubqueryRewriter {
         for correlated_column in correlated_columns.iter() {
             let metadata = self.metadata.read();
             let column_entry = metadata.column(*correlated_column);
-            let data_type = match column_entry {
-                ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) => {
-                    DataType::from(data_type)
-                }
-                ColumnEntry::DerivedColumn(DerivedColumn { data_type, .. }) => data_type.clone(),
-                ColumnEntry::InternalColumn(TableInternalColumn {
-                    internal_column, ..
-                }) => internal_column.data_type(),
-            };
             let right_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
                 span,
                 column: ColumnBinding {
                     database_name: None,
                     table_name: None,
-                    column_name: format!("subquery_{}", correlated_column),
+                    table_index: None,
+                    column_name: column_entry.name(),
                     index: *correlated_column,
-                    data_type: Box::from(data_type.clone()),
+                    data_type: Box::from(column_entry.data_type()),
                     visibility: Visibility::Visible,
                 },
             });
             let derive_column = self.derived_columns.get(correlated_column).unwrap();
+            let column_entry = metadata.column(*derive_column);
             let left_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
                 span,
                 column: ColumnBinding {
                     database_name: None,
                     table_name: None,
-                    column_name: format!("subquery_{}", derive_column),
+                    table_index: None,
+                    column_name: column_entry.name(),
                     index: *derive_column,
-                    data_type: Box::from(data_type.clone()),
+                    data_type: Box::from(column_entry.data_type()),
                     visibility: Visibility::Visible,
                 },
             });

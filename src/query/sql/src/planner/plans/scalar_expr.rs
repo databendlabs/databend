@@ -110,14 +110,8 @@ impl ScalarExpr {
         match self {
             ScalarExpr::BoundColumnRef(scalar) => {
                 let mut tables = vec![];
-                if let Some(table_name) = &scalar.column.table_name {
-                    // From metadata find table index
-                    let metadata = metadata.read();
-                    if let Some(table_index) =
-                        metadata.get_table_index(scalar.column.database_name.as_deref(), table_name)
-                    {
-                        tables = vec![table_index];
-                    }
+                if let Some(table_index) = scalar.column.table_index {
+                    tables = vec![table_index];
                 }
                 Ok(tables)
             }

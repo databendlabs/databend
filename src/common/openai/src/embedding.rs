@@ -33,7 +33,7 @@ impl OpenAI {
             &self.api_base,
         );
         let body = EmbeddingsBody {
-            model: self.model.to_string(),
+            model: self.embedding_model.to_string(),
             input: input.to_vec(),
             user: None,
         };

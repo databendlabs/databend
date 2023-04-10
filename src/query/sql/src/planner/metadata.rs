@@ -241,6 +241,16 @@ impl Metadata {
 
         table_index
     }
+
+    pub fn change_derived_column_alias(&mut self, index: IndexType, alias: String) {
+        let derived_column = self
+            .columns
+            .get_mut(index)
+            .expect("metadata must contain column");
+        if let ColumnEntry::DerivedColumn(column) = derived_column {
+            column.alias = alias;
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -368,6 +378,30 @@ impl ColumnEntry {
             ColumnEntry::BaseTableColumn(base) => base.column_index,
             ColumnEntry::DerivedColumn(derived) => derived.column_index,
             ColumnEntry::InternalColumn(internal_column) => internal_column.column_index,
+        }
+    }
+
+    pub fn data_type(&self) -> DataType {
+        match self {
+            ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) => {
+                DataType::from(data_type)
+            }
+            ColumnEntry::DerivedColumn(DerivedColumn { data_type, .. }) => data_type.clone(),
+            ColumnEntry::InternalColumn(TableInternalColumn {
+                internal_column, ..
+            }) => internal_column.data_type(),
+        }
+    }
+
+    pub fn name(&self) -> String {
+        match self {
+            ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => {
+                column_name.to_string()
+            }
+            ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias.to_string(),
+            ColumnEntry::InternalColumn(TableInternalColumn {
+                internal_column, ..
+            }) => internal_column.column_name.clone(),
         }
     }
 }

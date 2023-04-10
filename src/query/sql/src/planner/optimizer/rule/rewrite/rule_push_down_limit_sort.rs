@@ -39,14 +39,14 @@ use crate::plans::Sort as logsort;
 ///               *
 pub struct RulePushDownLimitSort {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RulePushDownLimitSort {
     pub fn new() -> Self {
         Self {
             id: RuleID::PushDownLimitSort,
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Limit,
                 }
@@ -55,7 +55,7 @@ impl RulePushDownLimitSort {
                     PatternPlan { plan_type: Sort }.into(),
                     SExpr::create_leaf(PatternPlan { plan_type: Pattern }.into()),
                 ),
-            ),
+            )],
         }
     }
 }
@@ -81,7 +81,7 @@ impl Rule for RulePushDownLimitSort {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }

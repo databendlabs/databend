@@ -128,3 +128,63 @@ Result:
 
 
 You can experience these functions on our [Databend Cloud](https://databend.com), where you can sign up for a free trial and start using these AI functions right away. Databend's AI functions are designed to be easy to use, even for users who are not familiar with machine learning or natural language processing. With Databend, you can quickly and easily add powerful AI capabilities to your SQL queries and take your data analysis to the next level.
+
+
+## Example(https://ask.databend.rs)
+
+We have used [Databend Cloud](https://databend.com) and AI functions to build a demo site: [https://ask.databend.rs](https://ask.databend.rs). We've embedded the entire https://databend.rs website, allowing you to ask questions related to it.
+
+:::note
+You can also deploy Databend and configure the `openai_api_key`.
+:::
+
+Here's how https://ask.databend.rs works:
+
+### Create Table
+
+Create a table with the following structure:
+```sql
+CREATE TABLE doc (
+                     path VARCHAR,
+                     content VARCHAR,
+                     embedding ARRAY(FLOAT32)
+);
+```
+
+### Insert raw data
+
+Insert sample data into the table:
+```sql
+INSERT INTO doc (path, content) VALUES
+    ('ai-function', 'ai_embedding_vector, ai_text_completion, cosine_distance'),
+    ('string-function', 'ASCII, BIN, CHAR_LENGTH');
+```
+
+### Generate Embeddings
+
+Update the table to generate embeddings using [ai_embedding_vector](./02-ai-embedding-vector.md) for the content:
+```sql
+UPDATE doc SET embedding = ai_embedding_vector(content)
+WHERE LENGTH(embedding) = 0;
+```
+
+### Ask a Question and Get the Answer
+
+1. Get the question embedding vector:
+```sql
+SELECT ai_embedding_vector('How to use AI Functions?');
+```
+
+2. Retrieve the top 3 most similar documents to the question using [cosine_distance](./04-ai-cosine-distance.md):
+```sql
+SELECT content, cosine_distance(q_vector, embedding) as dist
+FROM doc
+ORDER BY dist ASC
+LIMIT 3;
+```
+
+3. Concatenate the content of the top 3 documents and complete them using [ai_text_completion](./03-ai-text-completion.md):
+```sql
+SELECT ai_text_completion(<top 3 content snippets>)
+```
+

@@ -250,10 +250,11 @@ impl DataExchangeManager {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
-        if let Some(query_coordinator) = queries_coordinator.remove(query_id) {
+        if let Some(mut query_coordinator) = queries_coordinator.remove(query_id) {
             // Drop mutex guard to avoid deadlock during shutdown,
             drop(queries_coordinator_guard);
 
+            query_coordinator.shutdown_query();
             query_coordinator.on_finished();
         }
     }

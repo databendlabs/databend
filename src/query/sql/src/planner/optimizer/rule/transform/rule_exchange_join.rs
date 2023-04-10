@@ -46,7 +46,7 @@ use crate::plans::RelOp;
 /// t1 t3 t2  t4
 pub struct RuleExchangeJoin {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RuleExchangeJoin {
@@ -62,7 +62,7 @@ impl RuleExchangeJoin {
             // LogicalJoin
             // | \
             // *  *
-            pattern: SExpr::create_binary(
+            patterns: vec![SExpr::create_binary(
                 PatternPlan {
                     plan_type: RelOp::Join,
                 }
@@ -83,7 +83,7 @@ impl RuleExchangeJoin {
                     SExpr::create_pattern_leaf(),
                     SExpr::create_pattern_leaf(),
                 ),
-            ),
+            )],
         }
     }
 }
@@ -170,9 +170,13 @@ impl Rule for RuleExchangeJoin {
                 JoinPredicate::Right(pred) => {
                     join_6_preds.push(pred.clone());
                 }
-                JoinPredicate::Both { left, right } => {
-                    join_4.left_conditions.push(left.clone());
-                    join_4.right_conditions.push(right.clone());
+                JoinPredicate::Both { left, right, equal } => {
+                    if equal {
+                        join_4.left_conditions.push(left.clone());
+                        join_4.right_conditions.push(right.clone());
+                    } else {
+                        join_4.non_equi_conditions.push(predicate.clone());
+                    }
                 }
                 JoinPredicate::Other(pred) => {
                     join_4.non_equi_conditions.push(pred.clone());
@@ -192,9 +196,15 @@ impl Rule for RuleExchangeJoin {
                     // TODO(leiysky): push down the predicate
                     join_5.non_equi_conditions.push(predicate.clone());
                 }
-                JoinPredicate::Both { left, right } => {
-                    join_5.left_conditions.push(left.clone());
-                    join_5.right_conditions.push(right.clone());
+                JoinPredicate::Both {
+                    left, right, equal, ..
+                } => {
+                    if equal {
+                        join_5.left_conditions.push(left.clone());
+                        join_5.right_conditions.push(right.clone());
+                    } else {
+                        join_5.non_equi_conditions.push(predicate.clone());
+                    }
                 }
             }
         }
@@ -211,9 +221,13 @@ impl Rule for RuleExchangeJoin {
                     // TODO(leiysky): push down the predicate
                     join_6.non_equi_conditions.push(predicate.clone());
                 }
-                JoinPredicate::Both { left, right } => {
-                    join_6.left_conditions.push(left.clone());
-                    join_6.right_conditions.push(right.clone());
+                JoinPredicate::Both { left, right, equal } => {
+                    if equal {
+                        join_6.left_conditions.push(left.clone());
+                        join_6.right_conditions.push(right.clone());
+                    } else {
+                        join_6.non_equi_conditions.push(predicate.clone());
+                    }
                 }
             }
         }
@@ -255,8 +269,8 @@ impl Rule for RuleExchangeJoin {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 
     fn transformation(&self) -> bool {

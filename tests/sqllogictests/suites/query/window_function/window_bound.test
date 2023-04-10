@@ -1,8 +1,8 @@
 statement ok
-CREATE DATABASE IF NOT EXISTS test_window
+CREATE DATABASE IF NOT EXISTS test_window_bound
 
 statement ok
-USE test_window
+USE test_window_bound
 
 statement ok
 DROP TABLE IF EXISTS tenk1
@@ -105,3 +105,6 @@ ORDER BY permno, date;
 
 statement ok
 DROP TABLE IF EXISTS duckdb_issue1472
+
+statement ok
+DROP DATABASE test_window_bound;

@@ -47,19 +47,34 @@ use crate::WindowChecker;
 impl Binder {
     pub(super) fn analyze_projection(
         &mut self,
+        bind_context: &BindContext,
         select_list: &SelectList,
     ) -> Result<(HashMap<IndexType, ScalarItem>, Vec<ColumnBinding>)> {
         let mut columns = Vec::with_capacity(select_list.items.len());
         let mut scalars = HashMap::new();
+        let agg_info = &bind_context.aggregate_info;
         for item in select_list.items.iter() {
-            let column_binding = if let ScalarExpr::BoundColumnRef(ref column_ref) = item.scalar {
+            // This item is a grouping sets item, its data type should be nullable.
+            let is_grouping_sets_item = agg_info.grouping_id_column.is_some()
+                && agg_info.group_items_map.contains_key(&item.scalar);
+            let mut column_binding = if let ScalarExpr::BoundColumnRef(ref column_ref) = item.scalar
+            {
                 let mut column_binding = column_ref.column.clone();
                 // We should apply alias for the ColumnBinding, since it comes from table
                 column_binding.column_name = item.alias.clone();
                 column_binding
             } else {
-                self.create_column_binding(None, None, item.alias.clone(), item.scalar.data_type()?)
+                self.create_column_binding(
+                    None,
+                    None,
+                    None,
+                    item.alias.clone(),
+                    item.scalar.data_type()?,
+                )
             };
+            if is_grouping_sets_item {
+                column_binding.data_type = Box::new(column_binding.data_type.wrap_nullable());
+            }
             let scalar = if let ScalarExpr::SubqueryExpr(SubqueryExpr {
                 span,
                 typ,

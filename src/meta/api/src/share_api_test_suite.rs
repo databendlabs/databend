@@ -33,7 +33,6 @@ use crate::get_share_account_meta_or_err;
 use crate::get_share_id_to_name_or_err;
 use crate::get_share_meta_by_id_or_err;
 use crate::get_share_or_err;
-use crate::is_all_db_data_removed;
 use crate::kv_app_error::KVAppError;
 use crate::testing::get_kv_data;
 use crate::SchemaApi;
@@ -93,12 +92,6 @@ async fn is_all_share_data_removed(
 
     for (_key, entry) in share_meta.entries.iter() {
         if if_share_object_data_exists(kv_api, entry).await? {
-            return Ok(false);
-        }
-    }
-
-    for db_id in &share_meta.share_from_db_ids {
-        if !is_all_db_data_removed(kv_api, *db_id).await? {
             return Ok(false);
         }
     }
@@ -283,7 +276,6 @@ impl ShareApiTestSuite {
             let res = mt.upsert_share_endpoint(upsert_req.clone()).await;
             assert!(res.is_ok());
             let upsert_share_endpoint_id = res.unwrap().share_endpoint_id;
-            println!("upsert_share_endpoint_id: {:?}", upsert_share_endpoint_id);
 
             let req = GetShareEndpointReq {
                 tenant: upsert_tenant.to_string(),
@@ -1352,7 +1344,7 @@ impl ShareApiTestSuite {
 
         info!("--- drop share1 and check objects");
         {
-            let tenant2 = "tenant2";
+            let tenant2 = "tenant1";
             let db2 = "db2";
 
             let db_name2 = DatabaseNameIdent {
@@ -1383,8 +1375,6 @@ impl ShareApiTestSuite {
             let res = mt.create_database(req).await;
             info!("create database res: {:?}", res);
             assert!(res.is_ok());
-            // save the db id
-            let db_id = res.unwrap().db_id;
 
             let req = DropShareReq {
                 if_exists: true,
@@ -1402,9 +1392,6 @@ impl ShareApiTestSuite {
             let res =
                 is_all_share_data_removed(mt.as_kv_api(), &share_name1, share_id, &share_meta)
                     .await?;
-            assert!(res);
-
-            let res = is_all_db_data_removed(mt.as_kv_api(), db_id).await?;
             assert!(res);
 
             // get_grant_privileges_of_object of db and table again

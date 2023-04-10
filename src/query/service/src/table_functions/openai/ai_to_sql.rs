@@ -37,8 +37,6 @@ use common_expression::TableSchema;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_openai::AIModel;
-use common_openai::CompletionMode;
 use common_openai::OpenAI;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -218,11 +216,20 @@ impl AsyncSource for GPT2SQLSource {
         info!("openai request prompt: {}", prompt);
 
         // Response.
+        let api_base = GlobalConfig::instance().query.openai_api_base_url.clone();
         let api_key = GlobalConfig::instance().query.openai_api_key.clone();
-        let openai = OpenAI::create(api_key, AIModel::TextDavinci003);
-        let (sql, _) = openai.completion_request(prompt, CompletionMode::SQL)?;
+        let api_embedding_model = GlobalConfig::instance()
+            .query
+            .openai_api_embedding_model
+            .clone();
+        let api_completion_model = GlobalConfig::instance()
+            .query
+            .openai_api_completion_model
+            .clone();
+        let openai = OpenAI::create(api_base, api_key, api_embedding_model, api_completion_model);
+        let (sql, _) = openai.completion_sql_request(prompt)?;
 
-        let sql = format!("SELECT{}", sql);
+        let sql = format!("SELECT {}", sql);
         info!("openai response sql: {}", sql);
         let database = self.ctx.get_current_database();
         let database: Vec<Vec<u8>> = vec![database.into_bytes()];

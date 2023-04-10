@@ -15,7 +15,6 @@
 mod beyond_end_reader;
 mod impls;
 mod input_context;
-mod input_error;
 mod input_format;
 mod input_format_text;
 mod input_pipeline;
@@ -28,7 +27,6 @@ pub use beyond_end_reader::BeyondEndReader;
 pub use input_context::InputContext;
 pub use input_context::InputPlan;
 pub use input_context::StreamPlan;
-pub use input_error::InputError;
 pub use input_format::InputFormat;
 pub use input_format_text::*;
 pub use input_pipeline::StreamingReadBatch;

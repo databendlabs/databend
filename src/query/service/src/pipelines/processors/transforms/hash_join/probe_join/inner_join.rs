@@ -25,6 +25,7 @@ use common_expression::Evaluator;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
+use common_sql::executor::cast_expr_to_non_null_boolean;
 
 use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
@@ -137,6 +138,8 @@ impl JoinHashTable {
         match &self.hash_join_desc.other_predicate {
             None => Ok(probed_blocks),
             Some(other_predicate) => {
+                // Wrap `is_true` to `other_predicate`
+                let other_predicate = cast_expr_to_non_null_boolean(other_predicate.clone())?;
                 assert_eq!(other_predicate.data_type(), &DataType::Boolean);
 
                 let func_ctx = self.ctx.get_function_context()?;
@@ -151,7 +154,7 @@ impl JoinHashTable {
 
                     let evaluator = Evaluator::new(&probed_block, func_ctx, &BUILTIN_FUNCTIONS);
                     let predicate = evaluator
-                        .run(other_predicate)?
+                        .run(&other_predicate)?
                         .try_downcast::<BooleanType>()
                         .unwrap();
                     let res = probed_block.filter_boolean_value(&predicate)?;

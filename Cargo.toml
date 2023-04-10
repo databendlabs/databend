@@ -32,6 +32,7 @@ members = [
     "src/query/ast",
     "src/query/codegen",
     "src/query/config",
+    "src/query/constraint",
     "src/query/catalog",
     "src/query/sharing",
     "src/query/sharing-endpoint",

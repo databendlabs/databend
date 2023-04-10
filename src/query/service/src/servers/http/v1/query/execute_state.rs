@@ -244,10 +244,10 @@ impl ExecuteState {
                 Executor::stop(&executor_clone, Err(err), false).await;
                 block_sender_closer.close();
             }
-            Err(_) => {
+            Err(e) => {
                 Executor::stop(
                     &executor_clone,
-                    Err(ErrorCode::PanicError("interpreter panic!")),
+                    Err(ErrorCode::PanicError(format!("interpreter panic: {e:?}"))),
                     false,
                 )
                 .await;

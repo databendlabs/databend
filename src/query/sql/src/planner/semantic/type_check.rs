@@ -929,8 +929,27 @@ impl<'a> TypeChecker<'a> {
             partitions.push(part);
         }
         let mut order_by = Vec::with_capacity(window.order_by.len());
+
+        let is_range = window
+            .window_frame
+            .as_ref()
+            .map(|f| f.units.is_range())
+            .unwrap_or(false);
+
         for o in window.order_by.iter() {
-            let box (order, _) = self.resolve(&o.expr).await?;
+            let box (mut order, _) = self.resolve(&o.expr).await?;
+            if is_range {
+                // Change the item to Int64 type to compute offset for `RANGE`.
+                // TODO: find a better way. Maybe use generic in `TransformWindow` preocessor.
+                order = CastExpr {
+                    span: order.span(),
+                    is_try: false,
+                    argument: Box::new(order),
+                    target_type: Box::new(DataType::Number(NumberDataType::Int64)),
+                }
+                .into();
+            }
+
             order_by.push(WindowOrderBy {
                 expr: order,
                 asc: o.asc,
@@ -951,13 +970,16 @@ impl<'a> TypeChecker<'a> {
 
     // just support integer
     #[inline]
-    fn resolve_window_frame(expr: &Expr) -> Option<usize> {
+    fn resolve_window_frame(expr: &Expr) -> Result<usize> {
         match expr {
             Expr::Literal {
                 lit: Literal::UInt64(value),
                 ..
-            } => Some(*value as usize),
-            _ => None,
+            } => Ok(*value as usize),
+            _ => Err(ErrorCode::SemanticError(
+                "Only unsigned integer literals are allowed in window frame specification"
+                    .to_string(),
+            )),
         }
     }
 
@@ -966,6 +988,14 @@ impl<'a> TypeChecker<'a> {
         order_by_len: usize,
         window_frame: Option<WindowFrame>,
     ) -> Result<WindowFuncFrame> {
+        if order_by_len == 0 && window_frame.is_none() {
+            return Ok(WindowFuncFrame {
+                units: WindowFuncFrameUnits::Range,
+                start_bound: WindowFuncFrameBound::Preceding(None),
+                end_bound: WindowFuncFrameBound::Following(None),
+            });
+        }
+
         let (units, start, end) = if let Some(frame) = window_frame {
             if let WindowFrameUnits::Range = frame.units {
                 if order_by_len != 1 {
@@ -982,16 +1012,14 @@ impl<'a> TypeChecker<'a> {
                 WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
                 WindowFrameBound::Preceding(f) => {
                     if let Some(box expr) = f {
-                        let result = Self::resolve_window_frame(&expr);
-                        WindowFuncFrameBound::Preceding(result)
+                        WindowFuncFrameBound::Preceding(Some(Self::resolve_window_frame(&expr)?))
                     } else {
                         WindowFuncFrameBound::Preceding(None)
                     }
                 }
                 WindowFrameBound::Following(f) => {
                     if let Some(box expr) = f {
-                        let result = Self::resolve_window_frame(&expr);
-                        WindowFuncFrameBound::Following(result)
+                        WindowFuncFrameBound::Following(Some(Self::resolve_window_frame(&expr)?))
                     } else {
                         WindowFuncFrameBound::Following(None)
                     }
@@ -1002,16 +1030,14 @@ impl<'a> TypeChecker<'a> {
                 WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
                 WindowFrameBound::Preceding(f) => {
                     if let Some(box expr) = f {
-                        let result = Self::resolve_window_frame(&expr);
-                        WindowFuncFrameBound::Preceding(result)
+                        WindowFuncFrameBound::Preceding(Some(Self::resolve_window_frame(&expr)?))
                     } else {
                         WindowFuncFrameBound::Preceding(None)
                     }
                 }
                 WindowFrameBound::Following(f) => {
                     if let Some(box expr) = f {
-                        let result = Self::resolve_window_frame(&expr);
-                        WindowFuncFrameBound::Following(result)
+                        WindowFuncFrameBound::Following(Some(Self::resolve_window_frame(&expr)?))
                     } else {
                         WindowFuncFrameBound::Following(None)
                     }
@@ -1019,7 +1045,7 @@ impl<'a> TypeChecker<'a> {
             };
             (units, start, end)
         } else {
-            let units = WindowFuncFrameUnits::Rows;
+            let units = WindowFuncFrameUnits::Range;
             let start = WindowFuncFrameBound::Preceding(None);
             let end = WindowFuncFrameBound::CurrentRow;
             (units, start, end)
@@ -1802,7 +1828,7 @@ impl<'a> TypeChecker<'a> {
                 })
             }
             ("ai_embedding_vector", args) => {
-                // ai_embedding_vector(prompt) -> embedding_vector(prompt, api_key)
+                // ai_embedding_vector(prompt) -> embedding_vector(prompt, api_base, api_key, embedding_model, completion_model)
                 if args.len() != 1 {
                     return Some(Err(ErrorCode::BadArguments(
                         "ai_embedding_vector(STRING) only accepts one STRING argument",
@@ -1812,19 +1838,50 @@ impl<'a> TypeChecker<'a> {
 
                 // Prompt.
                 let arg1 = args[0];
-                // API key.
-                let arg2 = &Expr::Literal {
+
+                // openai.
+                let api_base = &Expr::Literal {
+                    span,
+                    lit: Literal::String(
+                        GlobalConfig::instance().query.openai_api_base_url.clone(),
+                    ),
+                };
+                let api_key = &Expr::Literal {
                     span,
                     lit: Literal::String(GlobalConfig::instance().query.openai_api_key.clone()),
                 };
+                let embedding_model = &Expr::Literal {
+                    span,
+                    lit: Literal::String(
+                        GlobalConfig::instance()
+                            .query
+                            .openai_api_embedding_model
+                            .clone(),
+                    ),
+                };
+                let completion_model = &Expr::Literal {
+                    span,
+                    lit: Literal::String(
+                        GlobalConfig::instance()
+                            .query
+                            .openai_api_completion_model
+                            .clone(),
+                    ),
+                };
 
                 Some(
-                    self.resolve_function(span, "embedding_vector", vec![], &[arg1, arg2])
-                        .await,
+                    self.resolve_function(span, "embedding_vector", vec![], &[
+                        arg1,
+                        api_base,
+                        api_key,
+                        embedding_model,
+                        completion_model,
+                    ])
+                    .await,
                 )
             }
             ("ai_text_completion", args) => {
-                // ai_text_completion(prompt) -> text_completion(prompt, api_key)
+                // ai_text_completion(prompt) -> text_completion(prompt, api_base, api_key, embedding_model, completion)
                 if args.len() != 1 {
                     return Some(Err(ErrorCode::BadArguments(
                         "ai_text_completion(STRING) only accepts one STRING argument",
@@ -1834,15 +1891,46 @@ impl<'a> TypeChecker<'a> {
 
                 // Prompt.
                 let arg1 = args[0];
-                // API key.
-                let arg2 = &Expr::Literal {
+
+                // openai.
+                let api_base = &Expr::Literal {
+                    span,
+                    lit: Literal::String(
+                        GlobalConfig::instance().query.openai_api_base_url.clone(),
+                    ),
+                };
+                let api_key = &Expr::Literal {
                     span,
                     lit: Literal::String(GlobalConfig::instance().query.openai_api_key.clone()),
                 };
+                let embedding_model = &Expr::Literal {
+                    span,
+                    lit: Literal::String(
+                        GlobalConfig::instance()
+                            .query
+                            .openai_api_embedding_model
+                            .clone(),
+                    ),
+                };
+                let completion_model = &Expr::Literal {
+                    span,
+                    lit: Literal::String(
+                        GlobalConfig::instance()
+                            .query
+                            .openai_api_completion_model
+                            .clone(),
+                    ),
+                };
 
                 Some(
-                    self.resolve_function(span, "text_completion", vec![], &[arg1, arg2])
-                        .await,
+                    self.resolve_function(span, "text_completion", vec![], &[
+                        arg1,
+                        api_base,
+                        api_key,
+                        embedding_model,
+                        completion_model,
+                    ])
+                    .await,
                 )
             }
             _ => None,

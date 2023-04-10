@@ -1506,8 +1506,8 @@ Functions overloads:
 198 divide(Float64 NULL, Float32 NULL) :: Float64 NULL
 199 divide(Float64, Float64) :: Float64
 200 divide(Float64 NULL, Float64 NULL) :: Float64 NULL
-0 embedding_vector(String, String) :: Array(Float32)
-1 embedding_vector(String NULL, String NULL) :: Array(Float32) NULL
+0 embedding_vector(String, String, String, String, String) :: Array(Float32)
+1 embedding_vector(String NULL, String NULL, String NULL, String NULL, String NULL) :: Array(Float32) NULL
 0 eq(Variant, Variant) :: Boolean
 1 eq(Variant NULL, Variant NULL) :: Boolean NULL
 2 eq(String, String) :: Boolean
@@ -2996,8 +2996,8 @@ Functions overloads:
 3 subtract_years(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 0 tan(Float64) :: Float64
 1 tan(Float64 NULL) :: Float64 NULL
-0 text_completion(String, String) :: String
-1 text_completion(String NULL, String NULL) :: String NULL
+0 text_completion(String, String, String, String, String) :: String
+1 text_completion(String NULL, String NULL, String NULL, String NULL, String NULL) :: String NULL
 0 time_slot(Timestamp) :: Timestamp
 1 time_slot(Timestamp NULL) :: Timestamp NULL
 0 to_base64(String) :: String
@@ -3376,6 +3376,8 @@ Functions overloads:
 21 to_uint8(Float64 NULL) :: UInt8 NULL
 22 to_uint8(Boolean) :: UInt8
 23 to_uint8(Boolean NULL) :: UInt8 NULL
+0 to_unix_timestamp(Timestamp) :: Int64
+1 to_unix_timestamp(Timestamp NULL) :: Int64 NULL
 0 to_variant(T0) :: Variant
 1 to_variant(T0 NULL) :: Variant NULL
 0 to_year(Date) :: UInt16

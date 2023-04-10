@@ -159,8 +159,6 @@ impl StatisticsReceiver {
             Ok(None) => Ok(true),
             Err(transport_error) => Err(transport_error),
             Ok(Some(DataPacket::ErrorCode(error))) => Err(error),
-            Ok(Some(DataPacket::ClosingInput)) => unreachable!(),
-            Ok(Some(DataPacket::ClosingOutput)) => unreachable!(),
             Ok(Some(DataPacket::FragmentData(_))) => unreachable!(),
             Ok(Some(DataPacket::FetchProgressAndPrecommit)) => unreachable!(),
             Ok(Some(DataPacket::ProgressAndPrecommit {

@@ -22,6 +22,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use enum_as_inner::EnumAsInner;
+use serde::Deserialize;
+use serde::Serialize;
 
 use super::AggregateFunction;
 use crate::binder::WindowOrderByInfo;
@@ -146,7 +149,6 @@ impl Operator for Window {
         let mut used_columns = self.used_columns()?;
         used_columns.extend(input_prop.used_columns);
         let column_stats = input_prop.statistics.column_stats;
-        let is_accurate = input_prop.statistics.is_accurate;
 
         Ok(RelationalProperty {
             output_columns,
@@ -156,13 +158,12 @@ impl Operator for Window {
             statistics: Statistics {
                 precise_cardinality,
                 column_stats,
-                is_accurate,
             },
         })
     }
 }
 
-#[derive(Default, Clone, PartialEq, Eq, Hash, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Default, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct WindowFuncFrame {
     pub units: WindowFuncFrameUnits,
     pub start_bound: WindowFuncFrameBound,
@@ -179,14 +180,14 @@ impl Display for WindowFuncFrame {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, EnumAsInner)]
 pub enum WindowFuncFrameUnits {
     #[default]
     Rows,
     Range,
 }
 
-#[derive(Default, Clone, PartialEq, Eq, Hash, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Default, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub enum WindowFuncFrameBound {
     /// `CURRENT ROW`
     #[default]
