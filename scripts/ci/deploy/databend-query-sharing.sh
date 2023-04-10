@@ -25,8 +25,8 @@ nohup target/${BUILD_PROFILE}/databend-meta -c scripts/ci/deploy/config/databend
 python3 scripts/ci/wait_tcp.py --timeout 10 --port 19191
 
 echo 'Start query node2 open-sharing...'
-nohup target/${BUILD_PROFILE}/open-sharing --tenant=shared_tenant --storage-type=s3 --storage-s3-bucket=testbucket --storage-s3-endpoint-url=http://127.0.0.1:9900 --storage-s3-access-key-id=minioadmin --storage-s3-secret-access-key=minioadmin --storage-allow-insecure --share-endpoint-address=127.0.0.1:13003 &
-python3 scripts/ci/wait_tcp.py --timeout 10 --port 13003
+nohup target/${BUILD_PROFILE}/open-sharing --tenant=shared_tenant --storage-type=s3 --storage-s3-bucket=testbucket --storage-s3-endpoint-url=http://127.0.0.1:9900 --storage-s3-access-key-id=minioadmin --storage-s3-secret-access-key=minioadmin --storage-allow-insecure --share-endpoint-address=127.0.0.1:23003 &
+python3 scripts/ci/wait_tcp.py --timeout 10 --port 23003
 
 echo "Start query node2 for sharding data"
 nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-share-2.toml &
