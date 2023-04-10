@@ -59,7 +59,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_with_builder_5_arg::<StringType, StringType, StringType, StringType, StringType, ArrayType<Float32Type>>(
             |data, api_base,api_key, embedding_model, completion_model, output, ctx| {
                 if let Some(validity) = &ctx.validity {
-                    if !validity.is_valid(output.len()) {
+                    if !validity.get_bit(output.len()) {
                         output.push(vec![F32::from(0.0)].into());
                         return;
                     }
@@ -95,7 +95,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_with_builder_5_arg::<StringType, StringType, StringType, StringType, StringType, StringType>(
                 |data, api_base,api_key, embedding_model, completion_model, output, ctx| {
                 if let Some(validity) = &ctx.validity {
-                    if !validity.is_valid(output.len()) {
+                    if !validity.get_bit(output.len()) {
                         output.put_str("");
                         output.commit_row();
                         return;
