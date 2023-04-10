@@ -61,9 +61,9 @@ pub fn outer_to_inner(s_expr: &SExpr) -> Result<SExpr> {
                 if eliminate_left_null && eliminate_right_null {
                     JoinType::Inner
                 } else if eliminate_left_null {
-                    JoinType::Right
-                } else if eliminate_right_null {
                     JoinType::Left
+                } else if eliminate_right_null {
+                    JoinType::Right
                 } else {
                     JoinType::Full
                 }
