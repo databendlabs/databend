@@ -2,22 +2,46 @@
 title: (draft) Aggregate Window Functions
 ---
 
-An aggregate window function comes with an aggregate function and an OVER clause. It operates on a set of rows and returns a single value for each row from the underlying query. The OVER clause indicates how to partition the rows in the result set. 
+Window functions perform calculations across rows of the query result. They run after the HAVING clause but before the ORDER BY clause.
 
-When you use aggregate functions with GROUP BY, a single row is returned for each unique set of values in the grouped columns. Aggregate window functions do not collapse rows. All of the rows in the result set are returned. See [Examples](#examples) for a detailed comparison.
+Invoking a window function requires special syntax using the OVER clause to specify the window. The window can be specified in two ways(see [Window Function Syntax](window-function-syntax.md) for details).
 
+## Supported functions in window functions
+
+### Aggregate functions
 All the aggregate functions supported by Databend can be used as aggregate window functions. See [Aggregate Functions](../10-aggregate-functions/index.md) for supported aggregate functions.
 
-## Syntax
 
+### Ranking functions
+
+| Function Name | What It Does                                                                                                                                                                                                                                                        | 
+|---------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ROW_NUMBER    | Returns a unique, sequential number for each row, starting with one, according to the ordering of rows within the window partition.                                                                                                                                 | 
+| RANK          | Returns the rank of a value in a group of values. The rank is one plus the number of rows preceding the row that are not peer with the row. Thus, tie values in the ordering will produce gaps in the sequence. The ranking is performed for each window partition. | 
+| DESEN_RANK    | Returns the rank of a value in a group of values. This is similar to RANK(), except that tie values do not produce gaps in the sequence.                                                                                                                            |
+| CUME_DIST     | Good first issue, see: https://github.com/datafuselabs/databend/issues/10810                                                                                                                                                                                        |
+| PERCENT_RANK  | ditto                                                                                                                                                                                                                                                               |
+| NTILE(n)      | ditto                                                                                                                                                                                                                                                               |
+
+
+### Value functions(TODO)
+
+| Function Name                    | What It Does                                                                                                                        | 
+|----------------------------------|-------------------------------------------------------------------------------------------------------------------------------------|
+| FIRST_VALUE(x)                   | Good first issue, see: https://github.com/datafuselabs/databend/issues/10810                                                        |
+| LAST_VALUE(x)                    | ditto|
+| NTH_VALUE(x, offset)             | ditto|
+| LAG(x[,offset[,default_value]])  | ditto|
+| LEAD(x[,offset[,default_value]]) | ditto|
+
+#### example
 ```sql
-<aggregate-function> ( <arguments> ) 
-OVER ([PARTITION BY expression1 [, expression2] ...]
-     [ORDER BY expression1 [ASC | DESC]] [, expression2 [ASC | DESC]] ... )
+select first_value(x) over (partition by x) from xxx;
 ```
 
 ## Examples
 
+### Example 1:
 Imagine that we manage a bookstore with two branches in Toronto and Ottawa. We create a table to store the transactions for both cities from June 21 to June 23.
 
 ```sql
@@ -88,4 +112,15 @@ June 22|547.166666666667
 June 22|547.166666666667
 June 23|547.166666666667
 June 23|547.166666666667
+```
+
+### Example 2:
+Another example is find outliers in a time series.
+```sql
+select t, val, abs(val - (avg(val) over w))/(stddev(val) over w)
+from measurement
+window w as (
+  partition by location
+  order by time
+  range between 5 preceding and 5 following)
 ```
