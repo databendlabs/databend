@@ -130,7 +130,7 @@ use crate::is_db_need_to_be_remove;
 use crate::kv_app_error::KVAppError;
 use crate::list_keys;
 use crate::list_u64_value;
-use crate::revoke_db_from_share;
+use crate::remove_db_from_share;
 use crate::send_txn;
 use crate::serialize_struct;
 use crate::serialize_u64;
@@ -374,7 +374,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             // remove db from share
             let mut spec_vec = Vec::with_capacity(db_meta.shared_by.len());
             for share_id in &db_meta.shared_by {
-                let (share_name, share_meta) = revoke_db_from_share(
+                let res = remove_db_from_share(
                     self,
                     *share_id,
                     db_id,
@@ -382,11 +382,20 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                     &mut condition,
                     &mut if_then,
                 )
-                .await?;
+                .await;
 
-                spec_vec.push(
-                    convert_share_meta_to_spec(self, &share_name, *share_id, share_meta).await?,
-                );
+                match res {
+                    Ok((share_name, share_meta)) => {
+                        spec_vec.push(
+                            convert_share_meta_to_spec(self, &share_name, *share_id, share_meta)
+                                .await?,
+                        );
+                    }
+                    Err(e) => match e {
+                        KVAppError::AppError(AppError::UnknownShareId(_)) => {}
+                        _ => return Err(e),
+                    },
+                }
             }
             if !spec_vec.is_empty() {
                 db_meta.shared_by.clear();
@@ -1838,7 +1847,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 let mut spec_vec = Vec::with_capacity(db_meta.shared_by.len());
                 let mut mut_share_table_info = Vec::with_capacity(db_meta.shared_by.len());
                 for share_id in &db_meta.shared_by {
-                    let (share_name, share_meta, share_table_info) = remove_table_from_share(
+                    let res = remove_table_from_share(
                         self,
                         *share_id,
                         table_id,
@@ -1846,13 +1855,26 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                         &mut condition,
                         &mut if_then,
                     )
-                    .await?;
+                    .await;
 
-                    spec_vec.push(
-                        convert_share_meta_to_spec(self, &share_name, *share_id, share_meta)
-                            .await?,
-                    );
-                    mut_share_table_info.push((share_name.to_string(), share_table_info));
+                    match res {
+                        Ok((share_name, share_meta, share_table_info)) => {
+                            spec_vec.push(
+                                convert_share_meta_to_spec(
+                                    self,
+                                    &share_name,
+                                    *share_id,
+                                    share_meta,
+                                )
+                                .await?,
+                            );
+                            mut_share_table_info.push((share_name.to_string(), share_table_info));
+                        }
+                        Err(e) => match e {
+                            KVAppError::AppError(AppError::UnknownShareId(_)) => {}
+                            _ => return Err(e),
+                        },
+                    }
                 }
 
                 let txn_req = TxnRequest {
