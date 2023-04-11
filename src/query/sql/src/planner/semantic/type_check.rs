@@ -1768,8 +1768,6 @@ impl<'a> TypeChecker<'a> {
             "is_null",
             "coalesce",
             "last_query_id",
-            "ai_embedding_vector",
-            "ai_text_completion",
         ]
     }
 
