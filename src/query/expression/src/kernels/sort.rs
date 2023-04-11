@@ -40,6 +40,7 @@ pub struct SortColumnDescription {
     pub offset: usize,
     pub asc: bool,
     pub nulls_first: bool,
+    pub is_nullable: bool,
 }
 
 impl DataBlock {
