@@ -328,6 +328,7 @@ async fn test_fuse_purge_retention() -> Result<()> {
         .await?;
     }
 
+    // Default retention period is 12, snapshot 0 is purged.
     {
         table = fixture.latest_default_table().await?;
         let keep_last_snapshot = true;
@@ -354,6 +355,7 @@ async fn test_fuse_purge_retention() -> Result<()> {
         .await?;
     }
 
+    // Do compact segment, generate a new snapshot.
     {
         let db = fixture.default_db_name();
         let tbl = fixture.default_table_name();
@@ -362,6 +364,7 @@ async fn test_fuse_purge_retention() -> Result<()> {
         check_data_dir(&fixture, "", 3, 0, 4, 6, 6, Some(()), None).await?;
     }
 
+    // Set retention period to 0, snapshot 1 and 2 are purged.
     {
         ctx.get_settings().set_retention_period(0)?;
         table = fixture.latest_default_table().await?;
@@ -386,8 +389,8 @@ async fn test_fuse_purge_retention() -> Result<()> {
         .await?;
     }
 
+    // keep_last_snapshot is false. All of snapshots will be purged.
     {
-        // keep_last_snapshot is false.
         table.purge(ctx.clone(), None, false).await?;
         let expected_num_of_snapshot = 0;
         let expected_num_of_segment = 0;

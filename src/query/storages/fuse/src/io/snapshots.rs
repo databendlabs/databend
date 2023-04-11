@@ -231,9 +231,7 @@ impl SnapshotsIO {
     async fn read_snapshot_lite_extend(
         snapshot_location: String,
         data_accessor: Operator,
-        min_snapshot_timestamp: Option<DateTime<Utc>>,
-        segments_referenced_by_root: Arc<HashSet<Location>>,
-        root_ts_location_opt: Option<String>,
+        root_snapshot: Arc<SnapshotLiteExtended>,
     ) -> Result<SnapshotLiteExtended> {
         let reader = MetaReaders::table_snapshot_reader(data_accessor);
         let ver = TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
@@ -245,7 +243,9 @@ impl SnapshotsIO {
         };
         let snapshot = reader.read(&load_params).await?;
 
-        if snapshot.timestamp >= min_snapshot_timestamp {
+        if snapshot.timestamp >= root_snapshot.timestamp
+            && snapshot.snapshot_id != root_snapshot.snapshot_id
+        {
             // filter out snapshots which have larger (artificial)timestamp , they are
             // not members of precedents of the current snapshot, whose timestamp is
             // min_snapshot_timestamp.
@@ -258,15 +258,15 @@ impl SnapshotsIO {
             ));
         }
         let mut segments = HashSet::new();
-        // collects segments, and the snapshots that reference them.
+        // collects extended segments.
         for segment_location in &snapshot.segments {
-            if segments_referenced_by_root.contains(segment_location) {
+            if root_snapshot.segments.contains(segment_location) {
                 continue;
             }
             segments.insert(segment_location.clone());
         }
         let table_statistics_location =
-            if snapshot.table_statistics_location != root_ts_location_opt {
+            if snapshot.table_statistics_location != root_snapshot.table_statistics_location {
                 snapshot.table_statistics_location.clone()
             } else {
                 None
@@ -286,9 +286,7 @@ impl SnapshotsIO {
     pub async fn read_snapshot_lite_extends(
         &self,
         snapshot_files: &[String],
-        min_snapshot_timestamp: Option<DateTime<Utc>>,
-        segments_referenced_by_root: Arc<HashSet<Location>>,
-        root_ts_location_opt: Option<String>,
+        root_snapshot: Arc<SnapshotLiteExtended>,
     ) -> Result<Vec<Result<SnapshotLiteExtended>>> {
         // combine all the tasks.
         let mut iter = snapshot_files.iter();
@@ -297,9 +295,7 @@ impl SnapshotsIO {
                 Self::read_snapshot_lite_extend(
                     location.clone(),
                     self.operator.clone(),
-                    min_snapshot_timestamp,
-                    segments_referenced_by_root.clone(),
-                    root_ts_location_opt.clone(),
+                    root_snapshot.clone(),
                 )
                 .instrument(tracing::debug_span!("read_snapshot"))
             })
