@@ -1,6 +1,7 @@
 ---
-title: (draft) Aggregate Window Functions
+title: Window Functions
 ---
+## What is a window function?
 
 Window functions perform calculations across rows of the query result. They run after the HAVING clause but before the ORDER BY clause.
 
@@ -19,25 +20,21 @@ All the aggregate functions supported by Databend can be used as aggregate windo
 | ROW_NUMBER    | Returns a unique, sequential number for each row, starting with one, according to the ordering of rows within the window partition.                                                                                                                                 | 
 | RANK          | Returns the rank of a value in a group of values. The rank is one plus the number of rows preceding the row that are not peer with the row. Thus, tie values in the ordering will produce gaps in the sequence. The ranking is performed for each window partition. | 
 | DESEN_RANK    | Returns the rank of a value in a group of values. This is similar to RANK(), except that tie values do not produce gaps in the sequence.                                                                                                                            |
-| CUME_DIST     | Good first issue, see: https://github.com/datafuselabs/databend/issues/10810                                                                                                                                                                                        |
-| PERCENT_RANK  | ditto                                                                                                                                                                                                                                                               |
-| NTILE(n)      | ditto                                                                                                                                                                                                                                                               |
+| CUME_DIST     | Not implementation, as a good first issue, see: https://github.com/datafuselabs/databend/issues/10810                                                                                                                                                               |
+| PERCENT_RANK  | Not implementation, as a good first issue, see: https://github.com/datafuselabs/databend/issues/10810                                                                                                                                                                                                                                                               |
+| NTILE(n)      | Not implementation, as a good first issue, see: https://github.com/datafuselabs/databend/issues/10810                                                                                                                                                                                                                                                               |
 
 
 ### Value functions(TODO)
 
 | Function Name                    | What It Does                                                                                                                        | 
 |----------------------------------|-------------------------------------------------------------------------------------------------------------------------------------|
-| FIRST_VALUE(x)                   | Good first issue, see: https://github.com/datafuselabs/databend/issues/10810                                                        |
-| LAST_VALUE(x)                    | ditto|
-| NTH_VALUE(x, offset)             | ditto|
-| LAG(x[,offset[,default_value]])  | ditto|
-| LEAD(x[,offset[,default_value]]) | ditto|
+| FIRST_VALUE(x)                   | Not implementation, as a good first issue, see: https://github.com/datafuselabs/databend/issues/10810                               |
+| LAST_VALUE(x)                    | Not implementation, as a good first issue, see: https://github.com/datafuselabs/databend/issues/10810|
+| NTH_VALUE(x, offset)             | Not implementation, as a good first issue, see: https://github.com/datafuselabs/databend/issues/10810|
+| LAG(x[,offset[,default_value]])  | Not implementation, as a good first issue, see: https://github.com/datafuselabs/databend/issues/10810|
+| LEAD(x[,offset[,default_value]]) | Not implementation, as a good first issue, see: https://github.com/datafuselabs/databend/issues/10810|
 
-#### example
-```sql
-select first_value(x) over (partition by x) from xxx;
-```
 
 ## Examples
 
