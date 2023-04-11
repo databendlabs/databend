@@ -32,6 +32,7 @@ These functions help you extract and summarize data from databases to gain valua
 | [SKEWNESS](aggregate-skewness.md)                           | Calculates the skewness of a set of values                  | 
 | [STDDEV_POP](aggregate-stddev-pop.md)                       | Calculates the population standard deviation of a column    | 
 | [STDDEV_SAMP](aggregate-stddev-samp.md)                     | Calculates the sample standard deviation of a column        | 
+| [STRING_AGG](aggregate-string-agg.md)                       | Converts all the non-NULL values to String, separated by the delimiter |
 | [SUM_IF](aggregate-sum-if.md)                               | Adds up the values meeting a condition of a specific column | 
 | [SUM](aggregate-sum.md)                                     | Adds up the values of a specific column                     | 
 | [WINDOW_FUNNEL](aggregate-windowfunnel.md)                  | Analyzes user behavior in a time-ordered sequence of events | 

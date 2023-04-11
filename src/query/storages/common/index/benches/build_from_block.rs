@@ -103,7 +103,7 @@ fn bench_u64_using_digests(c: &mut Criterion) {
     let mut builder = Xor8Builder::create();
     let func_ctx = FunctionContext::default();
     let col = BloomIndex::calculate_column_digest(
-        func_ctx,
+        &func_ctx,
         &column,
         &DataType::Number(NumberDataType::Int64),
         &DataType::Boolean,
@@ -125,7 +125,7 @@ fn bench_u64_using_digests(c: &mut Criterion) {
                 let mut builder = Xor8Builder::create();
                 let func_ctx = FunctionContext::default();
                 let col = BloomIndex::calculate_column_digest(
-                    func_ctx,
+                    &func_ctx,
                     &column,
                     &DataType::Number(NumberDataType::Int64),
                     &DataType::Boolean,
@@ -145,7 +145,7 @@ fn bench_string_using_digests(c: &mut Criterion) {
     let mut builder = Xor8Builder::create();
     let func_ctx = FunctionContext::default();
     let col = BloomIndex::calculate_column_digest(
-        func_ctx,
+        &func_ctx,
         &column,
         &DataType::String,
         &DataType::Boolean,
@@ -167,7 +167,7 @@ fn bench_string_using_digests(c: &mut Criterion) {
                 let mut builder = Xor8Builder::create();
                 let func_ctx = FunctionContext::default();
                 let col = BloomIndex::calculate_column_digest(
-                    func_ctx,
+                    &func_ctx,
                     &column,
                     &DataType::String,
                     &DataType::Boolean,

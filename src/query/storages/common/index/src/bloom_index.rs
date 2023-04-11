@@ -247,7 +247,7 @@ impl BloomIndex {
         for (field, (column, data_type)) in fields.into_iter().zip(columns.iter()) {
             let (column, validity) = if data_type.is_nullable() {
                 let col = Self::calculate_column_digest(
-                    func_ctx,
+                    &func_ctx,
                     column,
                     data_type,
                     &DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
@@ -257,7 +257,7 @@ impl BloomIndex {
                 (nullable_column.column, Some(nullable_column.validity))
             } else {
                 let col = Self::calculate_column_digest(
-                    func_ctx,
+                    &func_ctx,
                     column,
                     data_type,
                     &DataType::Number(NumberDataType::UInt64),
@@ -349,7 +349,7 @@ impl BloomIndex {
             },
         )?;
 
-        let (new_expr, _) = ConstantFolder::fold(&expr, self.func_ctx, &BUILTIN_FUNCTIONS);
+        let (new_expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
         match new_expr {
             Expr::Constant {
@@ -362,7 +362,7 @@ impl BloomIndex {
 
     /// calculate digest for column
     pub fn calculate_column_digest(
-        func_ctx: FunctionContext,
+        func_ctx: &FunctionContext,
         column: &Column,
         data_type: &DataType,
         target_type: &DataType,
@@ -381,7 +381,7 @@ impl BloomIndex {
 
     /// calculate digest for constant scalar
     pub fn calculate_scalar_digest(
-        func_ctx: FunctionContext,
+        func_ctx: &FunctionContext,
         scalar: &Scalar,
         data_type: &DataType,
     ) -> Result<u64> {

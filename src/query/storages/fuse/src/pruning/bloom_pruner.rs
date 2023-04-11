@@ -78,7 +78,8 @@ impl BloomPrunerCreator {
                     if let Ok(field) = schema.field_with_name(col_name) {
                         filter_fields.push(field.clone());
                         if !scalar_map.contains_key(scalar) {
-                            let digest = BloomIndex::calculate_scalar_digest(func_ctx, scalar, ty)?;
+                            let digest =
+                                BloomIndex::calculate_scalar_digest(&func_ctx, scalar, ty)?;
                             scalar_map.insert(scalar.clone(), digest);
                         }
                     }
@@ -125,7 +126,7 @@ impl BloomPrunerCreator {
 
         match maybe_filter {
             Ok(filter) => Ok(BloomIndex::from_filter_block(
-                self.func_ctx,
+                self.func_ctx.clone(),
                 self.data_schema.clone(),
                 filter.filter_schema,
                 filter.filters,

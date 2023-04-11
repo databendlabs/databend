@@ -99,9 +99,9 @@ impl<'a> FuseBlock<'a> {
 
     #[async_backtrace::framed]
     async fn to_block(&self, snapshot: Arc<TableSnapshot>) -> Result<DataBlock> {
-        let len = snapshot.summary.block_count as usize;
         let limit = self.limit.unwrap_or(usize::MAX);
-        let len = std::cmp::min(len, limit);
+        let len = std::cmp::min(snapshot.segments.len(), limit);
+
         let snapshot_id = snapshot.snapshot_id.simple().to_string().into_bytes();
         let timestamp = snapshot.timestamp.unwrap_or_default().timestamp_micros();
         let mut block_location = StringColumnBuilder::with_capacity(len, len);

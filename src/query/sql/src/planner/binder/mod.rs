@@ -54,5 +54,6 @@ pub use internal_column_factory::INTERNAL_COLUMN_FACTORY;
 pub use location::parse_uri_location;
 pub use scalar::ScalarBinder;
 pub use scalar_common::*;
+pub use scalar_visitor::*;
 pub use table::parse_result_scan_args;
 pub use window::WindowOrderByInfo;
