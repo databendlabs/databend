@@ -889,7 +889,7 @@ impl Binder {
                     .as_expr_with_col_index()?;
                     let (fold_to_constant, _) = ConstantFolder::fold(
                         &cast_expr_to_field_type,
-                        self.ctx.get_function_context()?,
+                        &self.ctx.get_function_context()?,
                         &BUILTIN_FUNCTIONS,
                     );
                     if let common_expression::Expr::Constant { .. } = fold_to_constant {

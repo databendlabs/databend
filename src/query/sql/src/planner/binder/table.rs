@@ -764,7 +764,7 @@ impl Binder {
 
                 let (new_expr, _) = ConstantFolder::fold(
                     &scalar_expr,
-                    self.ctx.get_function_context()?,
+                    &self.ctx.get_function_context()?,
                     &BUILTIN_FUNCTIONS,
                 );
 

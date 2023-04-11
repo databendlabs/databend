@@ -85,7 +85,7 @@ impl Transform for TransformRuntimeCastSchema {
             .collect();
 
         let mut columns = Vec::with_capacity(exprs.len());
-        let evaluator = Evaluator::new(&data_block, self.func_ctx, &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
         for (field, expr) in self.insert_schema.fields().iter().zip(exprs.iter()) {
             let value = evaluator.run(expr)?;

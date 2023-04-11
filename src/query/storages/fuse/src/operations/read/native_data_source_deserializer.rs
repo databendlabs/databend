@@ -284,7 +284,7 @@ impl NativeDeserializeDataTransform {
                         None,
                         "get",
                         [src_arg, path_arg],
-                        self.func_ctx,
+                        &self.func_ctx,
                         block.num_rows(),
                         &BUILTIN_FUNCTIONS,
                     )?;
@@ -354,7 +354,7 @@ impl NativeDeserializeDataTransform {
                 }
 
                 let prewhere_block = DataBlock::new(columns.to_vec(), 1);
-                let evaluator = Evaluator::new(&prewhere_block, self.func_ctx, &BUILTIN_FUNCTIONS);
+                let evaluator = Evaluator::new(&prewhere_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 let filter = evaluator
                     .run(filter)
                     .map_err(|e| e.add_message("eval prewhere filter failed:"))?
@@ -652,7 +652,7 @@ impl Processor for NativeDeserializeDataTransform {
                         )?;
 
                         let evaluator =
-                            Evaluator::new(&prewhere_block, self.func_ctx, &BUILTIN_FUNCTIONS);
+                            Evaluator::new(&prewhere_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
                         let filter = evaluator
                             .run(filter)
                             .map_err(|e| e.add_message("eval prewhere filter failed:"))?

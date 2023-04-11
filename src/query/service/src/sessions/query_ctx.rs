@@ -37,6 +37,7 @@ use common_catalog::plan::Partitions;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_context::StageAttachment;
+use common_config::GlobalConfig;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -398,7 +399,17 @@ impl TableContext for QueryContext {
     fn get_function_context(&self) -> Result<FunctionContext> {
         let tz = self.get_settings().get_timezone()?;
         let tz = TzFactory::instance().get_by_name(&tz)?;
-        Ok(FunctionContext { tz })
+
+        let query_config = &GlobalConfig::instance().query;
+
+        Ok(FunctionContext {
+            tz,
+
+            openai_api_key: query_config.openai_api_key.clone(),
+            openai_api_base_url: query_config.openai_api_base_url.clone(),
+            openai_api_embedding_model: query_config.openai_api_embedding_model.clone(),
+            openai_api_completion_model: query_config.openai_api_completion_model.clone(),
+        })
     }
 
     fn get_connection_id(&self) -> String {

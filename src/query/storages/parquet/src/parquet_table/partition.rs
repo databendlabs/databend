@@ -90,7 +90,7 @@ impl ParquetTable {
 
         let row_group_pruner = if self.read_options.prune_row_groups() {
             Some(RangePrunerCreator::try_create(
-                func_ctx,
+                func_ctx.clone(),
                 &schema,
                 filter.as_ref(),
             )?)
@@ -100,7 +100,7 @@ impl ParquetTable {
 
         let page_pruners = if self.read_options.prune_pages() && filter.is_some() {
             Some(build_column_page_pruners(
-                func_ctx,
+                func_ctx.clone(),
                 &schema,
                 filter.as_ref().unwrap(),
             )?)
