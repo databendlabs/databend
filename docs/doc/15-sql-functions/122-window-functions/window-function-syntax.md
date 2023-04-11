@@ -19,6 +19,13 @@ window_specification:
 frame_clause:
     { RANGE | ROWS } frame_start
     { RANGE | ROWS } BETWEEN frame_start AND frame_end
+
+frame_start, frame_end:
+    UNBOUNDED PRECEDING
+    | <expression> PRECEDING
+    | CURRENT ROW
+    | UNBOUNDED FOLLOWING
+    | <expression> FOLLOWING
 ```
 
 
