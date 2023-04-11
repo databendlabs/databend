@@ -65,7 +65,7 @@ struct WindowBlock {
 /// The input [`DataBlock`] of [`TransformWindow`] should be sorted by partition and order by columns.
 ///
 /// Window function will not change the rows count of the original data.
-pub struct TransformWindow<T> {
+pub struct TransformWindow<T: Number> {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     state: ProcessorState,
@@ -127,9 +127,12 @@ pub struct TransformWindow<T> {
     current_rank: usize,
     current_rank_count: usize,
     current_dense_rank: usize,
+
+    // If `is_empty_frame`, the window function result of non-NULL rows will be NULL.
+    is_empty_frame: bool,
 }
 
-impl<T> TransformWindow<T> {
+impl<T: Number> TransformWindow<T> {
     #[inline(always)]
     fn blocks_end(&self) -> RowPtr {
         RowPtr::new(self.first_block + self.blocks.len(), 0)
@@ -505,6 +508,9 @@ impl TransformWindow<u64> {
     ) -> Result<Self> {
         let func = WindowFunctionImpl::try_create(func)?;
         let (start_bound, end_bound) = bounds;
+
+        let is_empty_frame = start_bound > end_bound;
+
         let rows_start_bound = start_bound.get_inner().unwrap_or_default() as usize;
         let rows_end_bound = end_bound.get_inner().unwrap_or_default() as usize;
 
@@ -542,6 +548,7 @@ impl TransformWindow<u64> {
             current_rank_count: 1,
             current_dense_rank: 1,
             input_is_finished: false,
+            is_empty_frame,
         })
     }
 }
@@ -561,6 +568,8 @@ where T: Number + ResultTypeOfUnary
     ) -> Result<Self> {
         let func = WindowFunctionImpl::try_create(func)?;
         let (start_bound, end_bound) = bounds;
+
+        let is_empty_frame = start_bound > end_bound;
 
         // If the window clause is a specific RANGE window, we should deal with the frame with all NULL values.
         let need_check_null_frame = if order_by.len() == 1 {
@@ -603,6 +612,7 @@ where T: Number + ResultTypeOfUnary
             current_rank_count: 1,
             current_dense_rank: 1,
             input_is_finished: false,
+            is_empty_frame,
         })
     }
 
@@ -696,7 +706,7 @@ where T: Number + ResultTypeOfUnary
                 } else if self.frame_unit.is_rows() {
                     self.advance_frame_end_rows_preceding(self.rows_end_bound);
                 } else if self.order_by[0].is_nullable {
-                    self.advance_frame_end_nullable_range(*n, false);
+                    self.advance_frame_end_nullable_range(*n, true);
                 } else {
                     self.advance_frame_end_range(*n, true)
                 }
@@ -780,27 +790,32 @@ where T: Number + ResultTypeOfUnary
                     self.is_null_frame = self.is_in_null_frame();
                 }
 
-                self.advance_frame_start();
-                if !self.frame_started {
-                    debug_assert!(!self.input_is_finished);
-                    debug_assert!(!self.partition_ended);
-                    break;
-                }
+                if self.is_empty_frame && !self.is_null_frame {
+                    // Non-NULL empty frame, no need to advance bounds.
+                    self.func.reset();
+                } else {
+                    self.advance_frame_start();
+                    if !self.frame_started {
+                        debug_assert!(!self.input_is_finished);
+                        debug_assert!(!self.partition_ended);
+                        break;
+                    }
 
-                if self.frame_end < self.frame_start {
-                    self.frame_end = self.frame_start;
-                }
+                    if self.frame_end < self.frame_start {
+                        self.frame_end = self.frame_start;
+                    }
 
-                self.advance_frame_end();
-                if !self.frame_ended {
-                    debug_assert!(!self.input_is_finished);
-                    debug_assert!(!self.partition_ended);
-                    break;
-                }
+                    self.advance_frame_end();
+                    if !self.frame_ended {
+                        debug_assert!(!self.input_is_finished);
+                        debug_assert!(!self.partition_ended);
+                        break;
+                    }
 
-                // 3.1
-                if let WindowFunctionImpl::Aggregate(agg) = &self.func {
-                    self.apply_aggregate(agg)?;
+                    // 3.1
+                    if let WindowFunctionImpl::Aggregate(agg) = &self.func {
+                        self.apply_aggregate(agg)?;
+                    }
                 }
 
                 self.merge_result_of_current_row()?;

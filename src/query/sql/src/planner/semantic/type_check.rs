@@ -983,7 +983,7 @@ impl<'a> TypeChecker<'a> {
         .set_span(expr.span()))
     }
 
-    fn resolve_window_rows_frame(&self, span: Span, frame: WindowFrame) -> Result<WindowFuncFrame> {
+    fn resolve_window_rows_frame(&self, frame: WindowFrame) -> Result<WindowFuncFrame> {
         let units = match frame.units {
             WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,
             WindowFrameUnits::Range => WindowFuncFrameUnits::Range,
@@ -1022,14 +1022,6 @@ impl<'a> TypeChecker<'a> {
                 }
             }
         };
-
-        if start > end {
-            return Err(ErrorCode::SemanticError(format!(
-                "frame start bound should be less then the end bound, start: {:?}, end: {:?}",
-                start, end
-            ))
-            .set_span(span));
-        }
 
         Ok(WindowFuncFrame {
             units,
@@ -1162,14 +1154,6 @@ impl<'a> TypeChecker<'a> {
             WindowFrameBound::Following(_) => WindowFuncFrameBound::Following(end_offset),
         };
 
-        if start > end {
-            return Err(ErrorCode::SemanticError(format!(
-                "frame start bound should be less then the end bound, start: {:?}, end: {:?}",
-                start, end
-            ))
-            .set_span(span));
-        }
-
         Ok(WindowFuncFrame {
             units,
             start_bound: start,
@@ -1195,7 +1179,7 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_window_range_frame(span, &mut order_by[0], frame)
                     .await
             } else {
-                self.resolve_window_rows_frame(span, frame)
+                self.resolve_window_rows_frame(frame)
             }
         } else if order_by.is_empty() {
             Ok(WindowFuncFrame {
