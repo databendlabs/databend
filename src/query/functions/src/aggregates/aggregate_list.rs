@@ -50,7 +50,7 @@ where
     T::Scalar: Serialize + DeserializeOwned,
 {
     #[serde(bound(deserialize = "T::Scalar: DeserializeOwned"))]
-    pub values: Vec<T::Scalar>,
+    values: Vec<T::Scalar>,
 }
 
 impl<T> Default for ListState<T>
@@ -90,9 +90,7 @@ where
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        for value in &rhs.values {
-            self.values.push(value.clone());
-        }
+        self.values.extend_from_slice(&rhs.values);
         Ok(())
     }
 
@@ -126,7 +124,7 @@ where
     T::Scalar: Serialize + DeserializeOwned,
 {
     #[serde(bound(deserialize = "T::Scalar: DeserializeOwned"))]
-    pub values: Vec<Option<T::Scalar>>,
+    values: Vec<Option<T::Scalar>>,
 }
 
 impl<T> Default for NullableListState<T>
@@ -177,9 +175,7 @@ where
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        for value in &rhs.values {
-            self.values.push(value.clone());
-        }
+        self.values.extend_from_slice(&rhs.values);
         Ok(())
     }
 
@@ -303,10 +299,10 @@ where
         let state = place.get::<State>();
         match &columns[0] {
             Column::Nullable(box nullable_column) => {
-                let column = T::try_downcast_column(&nullable_column.column).unwrap();
                 let valid = nullable_column.validity.get_bit(row);
-                let v = T::index_column(&column, row);
                 if valid {
+                    let column = T::try_downcast_column(&nullable_column.column).unwrap();
+                    let v = T::index_column(&column, row);
                     state.add(v);
                 } else {
                     state.add(None);

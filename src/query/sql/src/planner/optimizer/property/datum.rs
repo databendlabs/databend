@@ -24,36 +24,18 @@ use ordered_float::OrderedFloat;
 pub type F64 = OrderedFloat<f64>;
 
 /// Datum is the struct to represent a single value in optimizer.
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Datum {
     Bool(bool),
     Int(i64),
     UInt(u64),
     Float(F64),
     Bytes(Vec<u8>),
+
+    Null,
 }
 
 impl Datum {
-    pub fn from_data_value(data_value: &Scalar) -> Option<Self> {
-        match data_value {
-            Scalar::Boolean(v) => Some(Datum::Bool(*v)),
-            Scalar::Number(NumberScalar::Int64(v)) => Some(Datum::Int(*v)),
-            Scalar::Number(NumberScalar::Int32(v)) => Some(Datum::Int(*v as i64)),
-            Scalar::Number(NumberScalar::Int16(v)) => Some(Datum::Int(*v as i64)),
-            Scalar::Number(NumberScalar::Int8(v)) => Some(Datum::Int(*v as i64)),
-            Scalar::Number(NumberScalar::UInt64(v)) => Some(Datum::UInt(*v)),
-            Scalar::Number(NumberScalar::UInt32(v)) => Some(Datum::UInt(*v as u64)),
-            Scalar::Number(NumberScalar::UInt16(v)) => Some(Datum::UInt(*v as u64)),
-            Scalar::Number(NumberScalar::UInt8(v)) => Some(Datum::UInt(*v as u64)),
-            Scalar::Number(NumberScalar::Float64(v)) => Some(Datum::Float(*v)),
-            Scalar::Number(NumberScalar::Float32(v)) => {
-                Some(Datum::Float(F64::from(f32::from(*v) as f64)))
-            }
-            Scalar::String(v) => Some(Datum::Bytes(v.clone())),
-            _ => None,
-        }
-    }
-
     pub fn from_scalar(data_value: &Scalar) -> Option<Self> {
         match data_value {
             Scalar::Boolean(v) => Some(Datum::Bool(*v)),
@@ -98,6 +80,7 @@ impl Display for Datum {
                 let s = String::from_utf8_lossy(v);
                 write!(f, "{}", s)
             }
+            Datum::Null => write!(f, "NULL"),
         }
     }
 }

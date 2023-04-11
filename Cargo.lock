@@ -2252,6 +2252,7 @@ dependencies = [
  "common-base",
  "common-catalog",
  "common-config",
+ "common-constraint",
  "common-exception",
  "common-expression",
  "common-functions",
@@ -2288,6 +2289,7 @@ dependencies = [
  "time 0.3.20",
  "tracing",
  "url",
+ "z3",
 ]
 
 [[package]]
@@ -3379,6 +3381,7 @@ dependencies = [
  "ordered-float 3.6.0",
  "p256 0.13.0",
  "parking_lot 0.12.1",
+ "paste",
  "petgraph",
  "pin-project-lite",
  "poem",
