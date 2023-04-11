@@ -2,7 +2,11 @@
 title: SHOW SETTINGS
 ---
 
-Shows all settings of the current session.
+Shows all the system settings of the current session.
+
+:::tip
+Databend stores the system settings in the system table [system.settings](../../13-sql-reference/20-system-tables/system-settings.md).
+:::
 
 ## Syntax
 
