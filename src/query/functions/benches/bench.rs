@@ -42,12 +42,10 @@ fn bench(c: &mut Criterion) {
             b.iter(|| type_check::check(&raw_expr, &BUILTIN_FUNCTIONS))
         });
 
-        let func_ctx = FunctionContext {
-            tz: TzLUT::default(),
-        };
+        let func_ctx = FunctionContext::default();
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
         let block = DataBlock::new(vec![], 1);
-        let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
 
         group.bench_function(format!("eval/{n}"), |b| b.iter(|| evaluator.run(&expr)));
     }

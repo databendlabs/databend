@@ -193,7 +193,7 @@ impl JoinHashTable {
         let filter = cast_expr_to_non_null_boolean(filter.clone())?;
 
         let func_ctx = self.ctx.get_function_context()?;
-        let evaluator = Evaluator::new(merged_block, func_ctx, &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(merged_block, &func_ctx, &BUILTIN_FUNCTIONS);
         let predicates = evaluator
             .run_auto_type(&filter)?
             .try_downcast::<BooleanType>()
@@ -215,7 +215,7 @@ impl JoinHashTable {
         filter: &Expr,
     ) -> Result<Column> {
         let func_ctx = self.ctx.get_function_context()?;
-        let evaluator = Evaluator::new(merged_block, func_ctx, &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(merged_block, &func_ctx, &BUILTIN_FUNCTIONS);
 
         let filter_vector: Value<AnyType> = evaluator.run_auto_type(filter)?;
         let filter_vector =
@@ -366,7 +366,7 @@ impl JoinHashTable {
                 .collect::<Vec<_>>();
             data_block = DataBlock::new(nullable_columns, data_block.num_rows());
         }
-        let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(&data_block, &func_ctx, &BUILTIN_FUNCTIONS);
 
         let build_cols = self
             .hash_join_desc
