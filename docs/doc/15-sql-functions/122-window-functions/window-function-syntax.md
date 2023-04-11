@@ -31,12 +31,12 @@ frame_clause:
 > Note: Named window can be inherited by other windows.
 
 ```sql
-SELECT col1, rank() OVER w1, row_number() OVER w2, count() OVER w3  
+SELECT col1, rank() OVER w1, row_number() OVER w2, sum(col1) OVER w3  
 FROM table_name 
 WINDOW w1 AS (PARTITION BY col1),
        w2 AS (w1 ORDER BY col2 DESC),
        w3 AS (w2 ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) 
-ORDER BY count() OVER window_name DESC;
+ORDER BY count() OVER w1 DESC;
 ```
 
 ### In-line Window Specification
