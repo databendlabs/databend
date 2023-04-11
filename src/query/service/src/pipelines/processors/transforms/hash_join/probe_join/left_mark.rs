@@ -118,7 +118,8 @@ impl JoinHashTable {
 
         let mut probed_num = 0;
         let mut row_ptrs = self.row_ptrs.write();
-        let mut probe_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
+        let mut probe_indexes_len = 0;
+        let probe_indexes = &mut probe_state.probe_indexes;
         let mut build_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
 
         let chunks = &self.row_space.chunks.read().unwrap();
@@ -143,7 +144,8 @@ impl JoinHashTable {
                     for it in probed_rows {
                         build_indexes.push(it);
                     }
-                    probe_indexes.push((i as u32, probed_rows.len() as u32));
+                    probe_indexes[probe_indexes_len] = (i as u32, probed_rows.len() as u32);
+                    probe_indexes_len += 1;
                     probed_num += probed_rows.len();
                 } else {
                     let mut index = 0_usize;
@@ -154,7 +156,8 @@ impl JoinHashTable {
                             for it in &probed_rows[index..] {
                                 build_indexes.push(it);
                             }
-                            probe_indexes.push((i as u32, remain as u32));
+                            probe_indexes[probe_indexes_len] = (i as u32, remain as u32);
+                            probe_indexes_len += 1;
                             probed_num += remain;
                             index += remain;
                         } else {
@@ -170,11 +173,16 @@ impl JoinHashTable {
                             for it in &probed_rows[index..new_index] {
                                 build_indexes.push(it);
                             }
-                            probe_indexes.push((i as u32, addition as u32));
+                            probe_indexes[probe_indexes_len] = (i as u32, addition as u32);
+                            probe_indexes_len += 1;
                             probed_num += addition;
 
-                            let probe_block =
-                                DataBlock::probe_take(input, &probe_indexes, probed_num)?;
+                            let probe_block = DataBlock::probe_take(
+                                input,
+                                probe_indexes,
+                                probe_indexes_len,
+                                probed_num,
+                            )?;
                             let build_block = self.row_space.gather_build(
                                 &build_indexes,
                                 &data_blocks,
@@ -205,7 +213,7 @@ impl JoinHashTable {
                             remain -= addition;
 
                             build_indexes.clear();
-                            probe_indexes.clear();
+                            probe_indexes_len = 0;
                             probed_num = 0;
                         }
                     }
@@ -213,7 +221,8 @@ impl JoinHashTable {
             }
         }
 
-        let probe_block = DataBlock::probe_take(input, &probe_indexes, probed_num)?;
+        let probe_block =
+            DataBlock::probe_take(input, probe_indexes, probe_indexes_len, probed_num)?;
         let build_block = self
             .row_space
             .gather_build(&build_indexes, &data_blocks, &num_rows)?;

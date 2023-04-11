@@ -310,8 +310,8 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     /// # Safety
     ///
     /// Each item in the `indices` consists of an `index` and a `cnt`, the sum
-    /// of the `cnt` must be equal to the `probe_num`, the slice index 'idx' used 
-    /// to access `indices` must be less than 'indices_len', the out-of-bounds 
+    /// of the `cnt` must be equal to the `probe_num`, the slice index 'idx' used
+    /// to access `indices` must be less than 'indices_len', the out-of-bounds
     /// `index` for `col` in indices is *[undefined behavior]*.
     unsafe fn probe_column_by_indices<'a>(
         _col: &'a Self::Column,

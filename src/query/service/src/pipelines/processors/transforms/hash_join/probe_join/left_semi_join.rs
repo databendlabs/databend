@@ -111,6 +111,7 @@ impl JoinHashTable {
             input,
             &probe_indexes,
             probe_indexes.len(),
+            probe_indexes.len(),
         )?])
     }
 
@@ -134,7 +135,8 @@ impl JoinHashTable {
         // The semi join will return multiple data chunks of similar size.
         let mut probed_num = 0;
         let mut probed_blocks = vec![];
-        let mut probe_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
+        let mut probe_indexes_len = 0;
+        let probe_indexes = &mut probe_state.probe_indexes;
         let mut build_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
 
         let chunks = &self.row_space.chunks.read().unwrap();
@@ -177,7 +179,8 @@ impl JoinHashTable {
                 for it in probed_rows {
                     build_indexes.push(it);
                 }
-                probe_indexes.push((i as u32, probed_rows.len() as u32));
+                probe_indexes[probe_indexes_len] = (i as u32, probed_rows.len() as u32);
+                probe_indexes_len += 1;
                 probed_num += probed_rows.len();
             } else {
                 let mut index = 0_usize;
@@ -188,7 +191,8 @@ impl JoinHashTable {
                         for it in &probed_rows[index..] {
                             build_indexes.push(it);
                         }
-                        probe_indexes.push((i as u32, remain as u32));
+                        probe_indexes[probe_indexes_len] = (i as u32, remain as u32);
+                        probe_indexes_len += 1;
                         probed_num += remain;
                         index += remain;
                     } else {
@@ -204,10 +208,16 @@ impl JoinHashTable {
                         for it in &probed_rows[index..new_index] {
                             build_indexes.push(it);
                         }
-                        probe_indexes.push((i as u32, addition as u32));
+                        probe_indexes[probe_indexes_len] = (i as u32, addition as u32);
+                        probe_indexes_len += 1;
                         probed_num += addition;
 
-                        let probe_block = DataBlock::probe_take(input, &probe_indexes, probed_num)?;
+                        let probe_block = DataBlock::probe_take(
+                            input,
+                            probe_indexes,
+                            probe_indexes_len,
+                            probed_num,
+                        )?;
                         let build_block =
                             self.row_space
                                 .gather_build(&build_indexes, &data_blocks, &num_rows)?;
@@ -221,9 +231,19 @@ impl JoinHashTable {
                         };
 
                         if SEMI {
-                            self.fill_null_for_semi_join(&mut bm, &probe_indexes, &mut row_state);
+                            self.fill_null_for_semi_join(
+                                &mut bm,
+                                probe_indexes,
+                                probe_indexes_len,
+                                &mut row_state,
+                            );
                         } else {
-                            self.fill_null_for_anti_join(&mut bm, &probe_indexes, &mut row_state);
+                            self.fill_null_for_anti_join(
+                                &mut bm,
+                                probe_indexes,
+                                probe_indexes_len,
+                                &mut row_state,
+                            );
                         }
 
                         let probed_data_block =
@@ -237,7 +257,7 @@ impl JoinHashTable {
                         remain -= addition;
 
                         build_indexes.clear();
-                        probe_indexes.clear();
+                        probe_indexes_len = 0;
                         probed_num = 0;
                     }
                 }
@@ -250,7 +270,8 @@ impl JoinHashTable {
             ));
         }
 
-        let probe_block = DataBlock::probe_take(input, &probe_indexes, probed_num)?;
+        let probe_block =
+            DataBlock::probe_take(input, probe_indexes, probe_indexes_len, probed_num)?;
         let build_block = self
             .row_space
             .gather_build(&build_indexes, &data_blocks, &num_rows)?;
@@ -264,9 +285,9 @@ impl JoinHashTable {
         };
 
         if SEMI {
-            self.fill_null_for_semi_join(&mut bm, &probe_indexes, &mut row_state);
+            self.fill_null_for_semi_join(&mut bm, probe_indexes, probe_indexes_len, &mut row_state);
         } else {
-            self.fill_null_for_anti_join(&mut bm, &probe_indexes, &mut row_state);
+            self.fill_null_for_anti_join(&mut bm, probe_indexes, probe_indexes_len, &mut row_state);
         }
 
         let probed_data_chunk = DataBlock::filter_with_bitmap(probe_block, &bm.into())?;
@@ -287,15 +308,18 @@ impl JoinHashTable {
         &self,
         bm: &mut MutableBitmap,
         probe_indexes: &[(u32, u32)],
+        probe_indexes_len: usize,
         row_state: &mut [u32],
     ) {
         let mut index = 0;
-        for (row, cnt) in probe_indexes {
-            let row = *row as usize;
-            for _ in 0..*cnt {
+        let mut idx = 0;
+        while idx < probe_indexes_len {
+            let (row, cnt) = probe_indexes[idx];
+            idx += 1;
+            for _ in 0..cnt {
                 if bm.get(index) {
-                    if row_state[row] == 0 {
-                        row_state[row] = 1;
+                    if row_state[row as usize] == 0 {
+                        row_state[row as usize] = 1;
                     } else {
                         bm.set(index, false);
                     }
@@ -313,21 +337,24 @@ impl JoinHashTable {
         &self,
         bm: &mut MutableBitmap,
         probe_indexes: &[(u32, u32)],
+        probe_indexes_len: usize,
         row_state: &mut [u32],
     ) {
         let mut index = 0;
-        for (row, cnt) in probe_indexes {
-            let row = *row as usize;
-            for _ in 0..*cnt {
-                if row_state[row] == 0 {
+        let mut idx = 0;
+        while idx < probe_indexes_len {
+            let (row, cnt) = probe_indexes[idx];
+            idx += 1;
+            for _ in 0..cnt {
+                if row_state[row as usize] == 0 {
                     // if state is not matched, anti result will take one
                     bm.set(index, true);
-                } else if row_state[row] == 1 {
+                } else if row_state[row as usize] == 1 {
                     // if state has just one, anti reverse the result
-                    row_state[row] -= 1;
+                    row_state[row as usize] -= 1;
                     bm.set(index, !bm.get(index))
                 } else if !bm.get(index) {
-                    row_state[row] -= 1;
+                    row_state[row as usize] -= 1;
                 } else {
                     bm.set(index, false);
                 }
