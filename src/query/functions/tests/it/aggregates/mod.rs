@@ -148,7 +148,7 @@ pub fn run_scalar_expr(
     block: &DataBlock,
 ) -> Result<(Value<AnyType>, DataType)> {
     let expr = type_check::check(raw_expr, &BUILTIN_FUNCTIONS)?;
-    let func_ctx = &FunctionContext::default();
+    let func_ctx = FunctionContext::default();
     let evaluator = Evaluator::new(block, &func_ctx, &BUILTIN_FUNCTIONS);
     let result = evaluator.run(&expr)?;
     Ok((result, expr.data_type().clone()))

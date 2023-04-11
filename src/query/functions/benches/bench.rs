@@ -18,7 +18,6 @@ extern crate criterion;
 #[path = "../tests/it/scalars/parser.rs"]
 mod parser;
 
-use common_expression::date_helper::TzLUT;
 use common_expression::type_check;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
