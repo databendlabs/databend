@@ -1,3 +1,4 @@
+set prefer_broadcast_join = 0;
 WITH wscs AS
   (SELECT sold_date_sk,
           sales_price
@@ -77,3 +78,5 @@ FROM
      AND d_year = 2001+1) z
 WHERE d_week_seq1 = d_week_seq2-53
 ORDER BY d_week_seq1 NULLS FIRST;
+
+set prefer_broadcast_join = 1;

@@ -1,3 +1,4 @@
+set prefer_broadcast_join = 0;
 WITH wss AS
   (SELECT d_week_seq,
           ss_store_sk,
@@ -84,3 +85,4 @@ ORDER BY s_store_name1 NULLS FIRST,
          d_week_seq1 NULLS FIRST
 LIMIT 100;
 
+set prefer_broadcast_join = 1;
