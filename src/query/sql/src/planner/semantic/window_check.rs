@@ -110,7 +110,7 @@ impl<'a> WindowChecker<'a> {
                     }
                     .into());
                 }
-                Err(ErrorCode::Internal("Invalid window function"))
+                Err(ErrorCode::Internal("Window Check: Invalid window function"))
             }
 
             ScalarExpr::AggregateFunction(_) => unreachable!(),

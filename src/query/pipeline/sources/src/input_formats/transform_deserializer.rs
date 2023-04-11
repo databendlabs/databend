@@ -38,7 +38,7 @@ struct DeserializeProcessor<I: InputFormatPipe> {
 impl<I: InputFormatPipe> DeserializeProcessor<I> {
     pub(crate) fn create(ctx: Arc<InputContext>) -> Result<Self> {
         Ok(Self {
-            block_builder: I::BlockBuilder::create(ctx),
+            block_builder: I::try_create_block_builder(&ctx)?,
             input_buffer: Default::default(),
             output_buffer: Default::default(),
         })

@@ -168,7 +168,7 @@ impl InputFormatPipe for ParquetFormatPipe {
     type SplitMeta = SplitMeta;
     type ReadBatch = ReadBatch;
     type RowBatch = RowGroupInMemory;
-    type AligningState = AligningState;
+    type AligningState = ParquetAligningState;
     type BlockBuilder = ParquetBlockBuilder;
 
     #[async_backtrace::framed]
@@ -181,6 +181,21 @@ impl InputFormatPipe for ParquetFormatPipe {
         let input_fields = Arc::new(get_used_fields(&meta.file.fields, &ctx.schema)?);
 
         RowGroupInMemory::read_async(split_info.clone(), op, meta.meta.clone(), input_fields).await
+    }
+
+    fn try_create_align_state(
+        ctx: &Arc<InputContext>,
+        split_info: &Arc<SplitInfo>,
+    ) -> Result<ParquetAligningState> {
+        Ok(ParquetAligningState {
+            ctx: ctx.clone(),
+            split_info: split_info.clone(),
+            buffers: vec![],
+        })
+    }
+
+    fn try_create_block_builder(ctx: &Arc<InputContext>) -> Result<ParquetBlockBuilder> {
+        Ok(ParquetBlockBuilder { ctx: ctx.clone() })
     }
 }
 
@@ -378,10 +393,6 @@ pub struct ParquetBlockBuilder {
 impl BlockBuilderTrait for ParquetBlockBuilder {
     type Pipe = ParquetFormatPipe;
 
-    fn create(ctx: Arc<InputContext>) -> Self {
-        ParquetBlockBuilder { ctx }
-    }
-
     fn deserialize(&mut self, mut batch: Option<RowGroupInMemory>) -> Result<Vec<DataBlock>> {
         if let Some(rg) = batch.as_mut() {
             let chunk = rg.get_arrow_chunk()?;
@@ -415,22 +426,14 @@ impl BlockBuilderTrait for ParquetBlockBuilder {
     }
 }
 
-pub struct AligningState {
+pub struct ParquetAligningState {
     ctx: Arc<InputContext>,
     split_info: Arc<SplitInfo>,
     buffers: Vec<Vec<u8>>,
 }
 
-impl AligningStateTrait for AligningState {
+impl AligningStateTrait for ParquetAligningState {
     type Pipe = ParquetFormatPipe;
-
-    fn try_create(ctx: &Arc<InputContext>, split_info: &Arc<SplitInfo>) -> Result<Self> {
-        Ok(AligningState {
-            ctx: ctx.clone(),
-            split_info: split_info.clone(),
-            buffers: vec![],
-        })
-    }
 
     fn align(&mut self, read_batch: Option<ReadBatch>) -> Result<Vec<RowGroupInMemory>> {
         let split_info = self.split_info.to_string();

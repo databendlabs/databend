@@ -11,4 +11,7 @@ statement ok
 DROP VIEW tmp_view
 
 statement error 1025
+DROP VIEW tmp_view
+
+statement error 1025
 SELECT * FROM tmp_view

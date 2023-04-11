@@ -65,7 +65,7 @@ impl Interpreter for ShowFileFormatsInterpreter {
 
         let options = formats
             .iter()
-            .map(|x| x.file_format_options.to_string().as_bytes().to_vec())
+            .map(|x| x.file_format_params.to_string().as_bytes().to_vec())
             .collect::<Vec<_>>();
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![

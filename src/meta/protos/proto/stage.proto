@@ -70,6 +70,8 @@ message StageInfo {
   uint64 number_of_files = 7;
 
   optional UserIdentity creator = 8;
+
+  FileFormatParams file_format_params = 9;
 }
 
 message StageFile {
