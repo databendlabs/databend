@@ -146,6 +146,7 @@ impl StatisticsSender {
     ) -> Result<()> {
         match command {
             DataPacket::ErrorCode(_) => unreachable!(),
+            DataPacket::Dictionary(_) => unreachable!(),
             DataPacket::FragmentData(_) => unreachable!(),
             DataPacket::ProgressAndPrecommit { .. } => unreachable!(),
             DataPacket::FetchProgressAndPrecommit => {

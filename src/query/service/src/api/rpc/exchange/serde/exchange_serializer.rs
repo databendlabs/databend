@@ -46,11 +46,11 @@ use crate::api::FragmentData;
 
 pub struct ExchangeSerializeMeta {
     pub block_number: isize,
-    pub packet: Option<DataPacket>,
+    pub packet: Vec<DataPacket>,
 }
 
 impl ExchangeSerializeMeta {
-    pub fn create(block_number: isize, packet: Option<DataPacket>) -> BlockMetaInfoPtr {
+    pub fn create(block_number: isize, packet: Vec<DataPacket>) -> BlockMetaInfoPtr {
         Box::new(ExchangeSerializeMeta {
             packet,
             block_number,
@@ -215,7 +215,8 @@ pub fn serialize_block(
 ) -> Result<DataBlock> {
     if data_block.is_empty() && data_block.get_meta().is_none() {
         return Ok(DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
-            block_num, None,
+            block_num,
+            vec![],
         )));
     }
 
@@ -224,24 +225,22 @@ pub fn serialize_block(
     bincode::serialize_into(&mut meta, &data_block.get_meta())
         .map_err(|_| ErrorCode::BadBytes("block meta serialize error when exchange"))?;
 
-    let values = match data_block.is_empty() {
-        true => serialize_batch(&Chunk::new(vec![]), &[], options)?.1,
+    let (dict, values) = match data_block.is_empty() {
+        true => serialize_batch(&Chunk::new(vec![]), &[], options)?,
         false => {
             let chunks = data_block.try_into()?;
-            let (dicts, values) = serialize_batch(&chunks, ipc_field, options)?;
-
-            if !dicts.is_empty() {
-                return Err(ErrorCode::Unimplemented(
-                    "DatabendQuery does not implement dicts.",
-                ));
-            }
-
-            values
+            serialize_batch(&chunks, ipc_field, options)?
         }
     };
 
+    let mut packet = Vec::with_capacity(dict.len() + 1);
+
+    for dict_flight in dict {
+        packet.push(DataPacket::Dictionary(dict_flight));
+    }
+
+    packet.push(DataPacket::FragmentData(FragmentData::create(meta, values)));
     Ok(DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
-        block_num,
-        Some(DataPacket::FragmentData(FragmentData::create(meta, values))),
+        block_num, packet,
     )))
 }

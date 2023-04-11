@@ -176,6 +176,7 @@ impl Processor for TransformExchangeDeserializer {
                 if let Some(exchange_meta) = ExchangeDeserializeMeta::downcast_from(block_meta) {
                     self.output_data = Some(match exchange_meta.packet.unwrap() {
                         DataPacket::ErrorCode(v) => Err(v),
+                        DataPacket::Dictionary(_) => unreachable!(),
                         DataPacket::FetchProgressAndPrecommit => unreachable!(),
                         DataPacket::ProgressAndPrecommit { .. } => unreachable!(),
                         DataPacket::FragmentData(v) => self.recv_data(v),

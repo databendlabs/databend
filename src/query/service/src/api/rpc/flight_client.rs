@@ -185,7 +185,7 @@ impl FlightSender {
 
     #[async_backtrace::framed]
     pub async fn send(&self, data: DataPacket) -> Result<()> {
-        if let Err(_cause) = self.tx.send(Ok(FlightData::from(data))).await {
+        if let Err(_cause) = self.tx.send(Ok(FlightData::try_from(data)?)).await {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the remote flight channel is closed.",
             ));
