@@ -43,7 +43,7 @@ pub fn eval_function(
     span: Span,
     fn_name: &str,
     args: impl IntoIterator<Item = (Value<AnyType>, DataType)>,
-    func_ctx: FunctionContext,
+    func_ctx: &FunctionContext,
     num_rows: usize,
     fn_registry: &FunctionRegistry,
 ) -> Result<(Value<AnyType>, DataType)> {
