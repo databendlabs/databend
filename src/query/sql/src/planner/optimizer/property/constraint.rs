@@ -99,13 +99,8 @@ impl ConstraintSet {
                 .into_result();
 
             let solver = Solver::new(&context);
-            let result = assert_int_is_not_null_multiple_variables(
-                &context,
-                &solver,
-                &variables,
-                &variable,
-                &proposition,
-            );
+            let result =
+                assert_int_is_not_null(&context, &solver, &variables, &variable, &proposition);
 
             matches!(result, SatResult::Sat)
         } else {

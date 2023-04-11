@@ -22,10 +22,6 @@ use z3::Solver;
 
 use crate::declare::is_not_null_int;
 
-/// NOTICE: This function is only valid for the predicates that only
-/// contain a single variable. For example, `a > 0` is valid, but
-/// `a + b > 0` is not.
-///
 /// Assert that an integer is not null with a given solver.
 /// We will check this by adding a new constraint to the solver:
 ///
@@ -37,30 +33,9 @@ use crate::declare::is_not_null_int;
 /// ```ignore
 /// // a > 0
 /// let proposition = Int::new_const(&ctx, "a").gt(&Int::from_i64(&ctx, 0));
-/// assert_eq!(assert_int_is_not_null(&ctx, &solver, &Int::new_const(&ctx, "a"), &proposition), SatResult::Sat);
+/// assert_eq!(assert_int_is_not_null(&ctx, &solver, &[Int::new_const(&ctx, "a")], &Int::new_const(&ctx, "a"), &proposition), SatResult::Sat);
 /// ```
 pub fn assert_int_is_not_null(
-    ctx: &Context,
-    solver: &Solver,
-    variable: &Int,
-    proposition: &Bool,
-) -> SatResult {
-    let p = forall_const(
-        ctx,
-        &[variable],
-        &[],
-        &proposition.implies(&is_not_null_int(ctx, variable)),
-    );
-
-    solver.push();
-    solver.assert(&p);
-    let result = solver.check();
-    solver.pop(1);
-    result
-}
-
-/// The same as `assert_int_is_not_null`, but for multiple variables.
-pub fn assert_int_is_not_null_multiple_variables(
     ctx: &Context,
     solver: &Solver,
     variables: &[Int],
