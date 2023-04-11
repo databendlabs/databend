@@ -80,11 +80,11 @@ impl JoinHashTable {
 
                     while index < probed_rows.len() {
                         if probed_num + remain < JOIN_MAX_BLOCK_SIZE {
-                            for it in probed_rows {
+                            for it in &probed_rows[index..] {
                                 build_indexes.push(*it);
                                 local_build_indexes.push(it);
                             }
-                            local_probe_indexes.push((i as u32, probed_rows.len() as u32));
+                            local_probe_indexes.push((i as u32, remain as u32));
                             probed_num += remain;
                             validity.extend_constant(remain, true);
 
@@ -99,11 +99,11 @@ impl JoinHashTable {
                             let addition = JOIN_MAX_BLOCK_SIZE - probed_num;
                             let new_index = index + addition;
 
-                            for it in probed_rows {
+                            for it in &probed_rows[index..new_index] {
                                 build_indexes.push(*it);
                                 local_build_indexes.push(it);
                             }
-                            local_probe_indexes.push((i as u32, probed_rows.len() as u32));
+                            local_probe_indexes.push((i as u32, addition as u32));
                             probed_num += addition;
                             validity.extend_constant(addition, true);
 
