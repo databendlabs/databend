@@ -130,19 +130,19 @@ Result:
 You can experience these functions on our [Databend Cloud](https://databend.com), where you can sign up for a free trial and start using these AI functions right away. Databend's AI functions are designed to be easy to use, even for users who are not familiar with machine learning or natural language processing. With Databend, you can quickly and easily add powerful AI capabilities to your SQL queries and take your data analysis to the next level.
 
 
-## Example(https://ask.databend.rs)
+## Examples(https://ask.databend.rs)
 
-We have used [Databend Cloud](https://databend.com) and AI functions to build a demo site: [https://ask.databend.rs](https://ask.databend.rs). We've embedded the entire https://databend.rs website, allowing you to ask questions related to it.
+We have utilized [Databend Cloud](https://databend.com) and its AI functions to create an interactive Q&A system for the https://databend.rs website. The demo site, https://ask.databend.rs, allows users to ask questions about any topic related to the https://databend.rs website.
 
 :::note
 You can also deploy Databend and configure the `openai_api_key`.
 :::
 
-Here's how https://ask.databend.rs works:
+Here's a step-by-step guide to how https://ask.databend.rs was built:
 
-### Create Table
+### Step 1: Create Table
 
-Create a table with the following structure:
+First, create a table with the following structure to store document information and embeddings:
 ```sql
 CREATE TABLE doc (
                      path VARCHAR,
@@ -151,40 +151,66 @@ CREATE TABLE doc (
 );
 ```
 
-### Insert raw data
+### Step 2: Insert Raw Data
 
-Insert sample data into the table:
+Insert sample data into the table, including the path and content for each document:
 ```sql
 INSERT INTO doc (path, content) VALUES
     ('ai-function', 'ai_embedding_vector, ai_text_completion, cosine_distance'),
     ('string-function', 'ASCII, BIN, CHAR_LENGTH');
 ```
 
-### Generate Embeddings
+### Step 3: Generate Embeddings
 
-Update the table to generate embeddings using [ai_embedding_vector](./02-ai-embedding-vector.md) for the content:
+Update the table to generate embeddings for the content using the [ai_embedding_vector](./02-ai-embedding-vector.md) function:
 ```sql
 UPDATE doc SET embedding = ai_embedding_vector(content)
 WHERE LENGTH(embedding) = 0;
 ```
 
-### Ask a Question and Get the Answer
+### Step 4: Ask a Question and Retrieve Relevant Answers
 
-1. Get the question embedding vector:
 ```sql
-SELECT ai_embedding_vector('How to use AI Functions?');
+-- Define the question as a CTE (Common Table Expression)
+WITH question AS (
+    SELECT 'Tell me the ai functions' AS q
+),
+-- Calculate the question's embedding vector
+question_embedding AS (
+    SELECT ai_embedding_vector((SELECT q FROM question)) AS q_vector
+),
+-- Retrieve the top 3 most relevant documents
+top_3_docs AS (
+    SELECT content,
+           cosine_distance((SELECT q_vector FROM question_embedding), embedding) AS dist
+    FROM doc
+    ORDER BY dist ASC
+    LIMIT 3
+),
+-- Combine the content of the top 3 documents
+combined_content AS (
+    SELECT string_agg(content, ' ') AS aggregated_content
+    FROM top_3_docs
+),
+-- Concatenate a custom prompt, the combined content, and the original question
+prompt AS (
+    SELECT CONCAT(
+               'Utilizing the sections provided from the Databend documentation, answer the questions to the best of your ability. ',
+               'Documentation sections: ',
+               (SELECT aggregated_content FROM combined_content),
+               ' Question: ',
+               (SELECT q FROM question)
+           ) as p
+)
+-- Pass the concatenated text to the ai_text_completion function to generate a coherent and relevant response
+SELECT ai_text_completion((SELECT p FROM prompt)) AS answer;
 ```
 
-2. Retrieve the top 3 most similar documents to the question using [cosine_distance](./04-ai-cosine-distance.md):
+Result:
 ```sql
-SELECT content, cosine_distance(q_vector, embedding) as dist
-FROM doc
-ORDER BY dist ASC
-LIMIT 3;
++------------------------------------------------------------------------------------------------------------------+
+| answer                                                                                                           |
++------------------------------------------------------------------------------------------------------------------+
+| Answer: The ai functions mentioned in the Databend documentation are ai_embedding_vector and ai_text_completion. |
++------------------------------------------------------------------------------------------------------------------+
 ```
-
-3. Concatenate the content of the top 3 documents and complete them using [ai_text_completion](./03-ai-text-completion.md):
-```sql
-SELECT ai_text_completion(<top 3 content snippets>)
-```
-
