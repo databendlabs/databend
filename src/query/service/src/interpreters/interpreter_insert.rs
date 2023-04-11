@@ -398,7 +398,7 @@ impl Interpreter for InsertInterpreter {
                                     transform_input_port,
                                     transform_output_port,
                                     dest_schema.clone(),
-                                    func_ctx,
+                                    func_ctx.clone(),
                                 )
                             },
                         )?;
@@ -422,7 +422,7 @@ impl Interpreter for InsertInterpreter {
                                 transform_input_port,
                                 transform_output_port,
                                 dest_schema.clone(),
-                                func_ctx,
+                                func_ctx.clone(),
                             )
                         },
                     )?;

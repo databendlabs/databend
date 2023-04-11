@@ -173,7 +173,7 @@ impl FuseTable {
         assert_eq!(filter.data_type(), &DataType::Boolean);
 
         let func_ctx = ctx.get_function_context()?;
-        let evaluator = Evaluator::new(&dummy_block, func_ctx, &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(&dummy_block, &func_ctx, &BUILTIN_FUNCTIONS);
         let predicates = evaluator
             .run(&filter)
             .map_err(|e| e.add_message("eval try eval const failed:"))?

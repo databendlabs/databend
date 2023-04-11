@@ -73,7 +73,7 @@ impl NumbersTable {
         let args = table_args.expect_all_positioned(table_func_name, Some(1))?;
         let total = check_number(
             None,
-            FunctionContext::default(),
+            &FunctionContext::default(),
             &Expr::<usize>::Cast {
                 span: None,
                 is_try: false,
