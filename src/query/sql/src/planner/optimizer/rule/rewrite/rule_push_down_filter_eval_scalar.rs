@@ -22,14 +22,10 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::AggregateFunction;
-use crate::plans::AndExpr;
 use crate::plans::CastExpr;
-use crate::plans::ComparisonExpr;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
-use crate::plans::NotExpr;
-use crate::plans::OrExpr;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -89,37 +85,6 @@ impl RulePushDownFilterEvalScalar {
                     "Cannot find column to replace `{}`(#{})",
                     column.column.column_name, column.column.index
                 )))
-            }
-            ScalarExpr::AndExpr(scalar) => {
-                let left = Self::replace_predicate(&scalar.left, items)?;
-                let right = Self::replace_predicate(&scalar.right, items)?;
-                Ok(ScalarExpr::AndExpr(AndExpr {
-                    left: Box::new(left),
-                    right: Box::new(right),
-                }))
-            }
-            ScalarExpr::OrExpr(scalar) => {
-                let left = Self::replace_predicate(&scalar.left, items)?;
-                let right = Self::replace_predicate(&scalar.right, items)?;
-                Ok(ScalarExpr::OrExpr(OrExpr {
-                    left: Box::new(left),
-                    right: Box::new(right),
-                }))
-            }
-            ScalarExpr::NotExpr(scalar) => {
-                let argument = Self::replace_predicate(&scalar.argument, items)?;
-                Ok(ScalarExpr::NotExpr(NotExpr {
-                    argument: Box::new(argument),
-                }))
-            }
-            ScalarExpr::ComparisonExpr(scalar) => {
-                let left = Self::replace_predicate(&scalar.left, items)?;
-                let right = Self::replace_predicate(&scalar.right, items)?;
-                Ok(ScalarExpr::ComparisonExpr(ComparisonExpr {
-                    op: scalar.op.clone(),
-                    left: Box::new(left),
-                    right: Box::new(right),
-                }))
             }
             ScalarExpr::WindowFunction(window) => {
                 let func = match &window.func {

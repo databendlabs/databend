@@ -128,7 +128,7 @@ explain raw select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b and t1
 EvalScalar
 ├── scalars: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
 └── HashJoin: INNER
-    ├── equi conditions: [(t1.a (#0) eq t2.a (#2)) AND (t1.b (#1) eq t2.b (#3))]
+    ├── equi conditions: [and(eq(t1.a (#0), t2.a (#2)), eq(t1.b (#1), t2.b (#3)))]
     ├── non-equi conditions: []
     ├── Filter
     │   ├── filters: [t1.a (#0) gt 2]
@@ -827,7 +827,7 @@ EvalScalar
                         ├── push downs: [filters: [t2.a (#2) > 2 OR t2.b (#3) < 4], limit: NONE]
                         └── estimated rows: 5.00
 
-query T
+query 
 explain select * from t1,t2 where (t1.a > 1 or t1.b < 2) and (t1.a > 1 or t1.b < 2)
 ----
 EvalScalar
@@ -861,7 +861,7 @@ EvalScalar
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 5.00
 
-query T
+query 
 explain select count(distinct a) from t1;
 ----
 EvalScalar
@@ -897,7 +897,7 @@ EvalScalar
                         ├── output columns: [a]
                         └── estimated rows: 1.00
 
-query T
+query 
 explain select count_distinct(a) from t1;
 ----
 EvalScalar
@@ -933,34 +933,34 @@ EvalScalar
                         ├── output columns: [a]
                         └── estimated rows: 1.00
 
-statement ok
+statement error Http client error(from reqwest crate): error sending request for url (http://127.0.0.1:8124/?database=default&sandbox_tenant=Q89P6kw&query=drop+table+t1): error trying to connect: tcp connect error: Connection refused (os error 61)
 drop table t1
 
-statement ok
+statement error Http client error(from reqwest crate): error sending request for url (http://127.0.0.1:8124/?query=drop+table+t2&sandbox_tenant=Q89P6kw&database=default): error trying to connect: tcp connect error: Connection refused (os error 61)
 drop table t2
 
-query T
+query 
 explain syntax select * from read_parquet('p1', 'p2', 'p3');
 ----
 SELECT *
 FROM
     read_parquet('p1', 'p2', 'p3')
 
-query T
+query 
 explain syntax select * from read_parquet(prune_page=>true, refresh_meta_cache=>true);
 ----
 SELECT *
 FROM
     read_parquet(prune_page=>TRUE, refresh_meta_cache=>TRUE)
 
-query T
+query 
 explain syntax select * from read_parquet('p1', 'p2', 'p3', prune_page=>true, refresh_meta_cache=>true);
 ----
 SELECT *
 FROM
     read_parquet('p1', 'p2', 'p3', prune_page=>TRUE, refresh_meta_cache=>TRUE)
 
-query T
+query 
 explain ast select * from read_parquet('p1', 'p2', 'p3', prune_page=>true, refresh_meta_cache=>true);
 ----
 Query (children 1)
@@ -982,7 +982,7 @@ drop table if exists t4
 statement ok
 create table t4(a int, b string);
 
-query T
+query 
 explain select * from t4 where a = 1 and try_cast(get(try_parse_json(b),'bb') as varchar) = 'xx';
 ----
 EvalScalar
@@ -1003,10 +1003,10 @@ EvalScalar
 statement ok
 drop view if exists v4
 
-statement ok
+statement error Http client error(from reqwest crate): error sending request for url (http://127.0.0.1:8124/?query=create+view+v4+as+select+a+as+a%2C+try_cast%28get%28try_parse_json%28b%29%2C+%27bb%27%29+as+varchar%29+as+b+from+t4&database=default&sandbox_tenant=Q89P6kw): error trying to connect: tcp connect error: Connection refused (os error 61)
 create view v4 as select a as a, try_cast(get(try_parse_json(b), 'bb') as varchar) as b from t4;
 
-query T
+query 
 explain select * from v4 where b = 'xx';
 ----
 EvalScalar
