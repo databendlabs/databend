@@ -28,7 +28,7 @@ fn get_dsn(presigned: bool) -> String {
 }
 
 async fn upload_to_stage(client: APIClient) {
-    let mut file = std::fs::File::open("tests/it/data/sample.csv").unwrap();
+    let mut file = std::fs::File::open("tests/core/data/sample.csv").unwrap();
     let mut buf = Vec::new();
     file.read_to_end(&mut buf).unwrap();
     let path = chrono::Utc::now().format("%Y%m%d%H%M%S").to_string();

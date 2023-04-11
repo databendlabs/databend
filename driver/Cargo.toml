@@ -1,6 +1,6 @@
 [package]
 name = "databend-driver"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 license = "Apache-2.0"
 description = "Databend Driver for Rust"
@@ -16,6 +16,8 @@ rustls = ["databend-client/rustls"]
 # Enable native-tls for TLS support
 native-tls = ["databend-client/native-tls"]
 
+flight-sql = ["dep:arrow", "dep:arrow-array", "dep:arrow-cast", "dep:arrow-flight", "dep:arrow-schema", "dep:tonic"]
+
 [dependencies]
 anyhow = "1.0.70"
 async-trait = "0.1.68"
@@ -23,7 +25,23 @@ chrono = { version = "0.4.24", default-features = false, features = ["clock"] }
 databend-client = { version = "0.1.2", path = "../core" }
 dyn-clone = "1.0.11"
 http = "0.2.9"
+serde = { version = "1.0.156", default-features = false, features = ["derive"] }
+serde_json = { version = "1.0.94", default-features = false, features = ["std"] }
 tokio = { version = "1.26.0", features = ["macros"] }
 tokio-stream = "0.1.12"
+url = { version = "2.3.1", default-features = false }
+
+arrow = { version = "36.0.0", optional = true }
+arrow-array = { version = "36.0.0", optional = true }
+arrow-cast = { version = "36.0.0", features = ["prettyprint"], optional = true }
+arrow-flight = { version = "36.0.0", features = ["flight-sql-experimental"], optional = true }
+arrow-schema = { version = "36.0.0", optional = true }
+tonic = { version = "0.8.3", default-features = false, features = [
+    "transport",
+    "codegen",
+    "tls",
+    "tls-roots",
+    "prost",
+], optional = true }
 
 [dev-dependencies]

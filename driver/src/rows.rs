@@ -12,18 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::future::Future;
 use std::pin::Pin;
-use std::sync::Arc;
-use std::task::{Context, Poll};
 
 use anyhow::{anyhow, Error, Result};
-use databend_client::response::QueryResponse;
-use databend_client::APIClient;
+use serde::Deserialize;
 use tokio_stream::Stream;
 
-use crate::schema::{DataType, SchemaFieldList};
+#[cfg(feature = "flight-sql")]
+use arrow::record_batch::RecordBatch;
+
+use crate::schema::DataType;
 use crate::value::Value;
+
+pub type RowIterator = Pin<Box<dyn Stream<Item = Result<Row>>>>;
+pub type RowProgressIterator = Pin<Box<dyn Stream<Item = Result<RowWithProgress>>>>;
+
+#[derive(Deserialize, Clone, Debug, Default)]
+pub struct IterProgress {
+    pub total_rows: usize,
+    pub total_bytes: usize,
+
+    pub read_rows: usize,
+    pub read_bytes: usize,
+}
+
+#[derive(Clone, Debug)]
+pub enum RowWithProgress {
+    Row(Row),
+    Progress(IterProgress),
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct Row(Vec<Value>);
@@ -48,6 +65,38 @@ impl Row {
 
 impl IntoIterator for Row {
     type Item = Value;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Rows(Vec<Row>);
+
+#[cfg(feature = "flight-sql")]
+impl TryFrom<RecordBatch> for Rows {
+    type Error = Error;
+    fn try_from(batch: RecordBatch) -> Result<Self> {
+        let schema = batch.schema();
+        let mut rows: Vec<Row> = Vec::new();
+        for i in 0..batch.num_rows() {
+            let mut row: Vec<Value> = Vec::new();
+            for j in 0..schema.fields().len() {
+                let v = batch.column(j);
+                let field = schema.field(j);
+                let value = Value::try_from((field, v, i))?;
+                row.push(value);
+            }
+            rows.push(Row(row));
+        }
+        Ok(Self(rows))
+    }
+}
+
+impl IntoIterator for Rows {
+    type Item = Row;
     type IntoIter = std::vec::IntoIter<Self::Item>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -115,66 +164,3 @@ impl_tuple_from_row!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13);
 impl_tuple_from_row!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14);
 impl_tuple_from_row!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15);
 impl_tuple_from_row!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16);
-
-type PageFut = Pin<Box<dyn Future<Output = Result<QueryResponse>>>>;
-
-pub struct RowIterator {
-    client: Arc<APIClient>,
-    schema: Vec<DataType>,
-    data: Vec<Vec<String>>,
-    next_uri: Option<String>,
-    next_page: Option<PageFut>,
-}
-
-impl Stream for RowIterator {
-    type Item = Result<Row>;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        if !self.data.is_empty() {
-            return Poll::Ready(Some(Ok(Row::try_from((
-                self.schema.clone(),
-                self.data.remove(0),
-            ))?)));
-        }
-        match self.next_page {
-            Some(ref mut next_page) => match Pin::new(next_page).poll(cx) {
-                Poll::Ready(Ok(resp)) => {
-                    self.data = resp.data;
-                    self.next_uri = resp.next_uri;
-                    self.next_page = None;
-                    self.poll_next(cx)
-                }
-                Poll::Ready(Err(e)) => Poll::Ready(Some(Err(e))),
-                Poll::Pending => {
-                    cx.waker().wake_by_ref();
-                    Poll::Pending
-                }
-            },
-            None => match self.next_uri {
-                Some(ref next_uri) => {
-                    let client = self.client.clone();
-                    let next_uri = next_uri.clone();
-                    self.next_page =
-                        Some(Box::pin(async move { client.query_page(&next_uri).await }));
-                    self.poll_next(cx)
-                }
-                None => Poll::Ready(None),
-            },
-        }
-    }
-}
-
-impl TryFrom<(Arc<APIClient>, QueryResponse)> for RowIterator {
-    type Error = Error;
-
-    fn try_from((client, resp): (Arc<APIClient>, QueryResponse)) -> Result<Self> {
-        let schema = SchemaFieldList::new(resp.schema).try_into()?;
-        Ok(Self {
-            client,
-            next_uri: resp.next_uri,
-            schema,
-            data: resp.data,
-            next_page: None,
-        })
-    }
-}

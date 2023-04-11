@@ -13,10 +13,11 @@
 // limitations under the License.
 
 mod conn;
+#[cfg(feature = "flight-sql")]
 mod flight_sql;
 mod rest_api;
 mod rows;
 mod schema;
 mod value;
 
-pub use conn::{new_connection, Connection, DatabendConnection};
+pub use conn::{new_connection, Connection};

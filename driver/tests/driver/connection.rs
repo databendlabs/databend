@@ -12,39 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_driver::{new_connection, DatabendConnection};
+use databend_driver::new_connection;
 
 use crate::common::DEFAULT_DSN;
 
 #[tokio::test]
 async fn trait_with_clone() {
     let dsn = option_env!("TEST_DATABEND_DSN").unwrap_or(DEFAULT_DSN);
-    let conn = new_connection(dsn).unwrap();
+    let mut conn = new_connection(dsn).await.unwrap();
     let row = conn.query_row("select 'hello'").await.unwrap();
     assert!(row.is_some());
     let row = row.unwrap();
     let (val,): (String,) = row.try_into().unwrap();
     assert_eq!(val, "hello");
 
-    let conn2 = conn.clone();
+    let mut conn2 = conn.clone();
     let row = conn2.query_row("select 'world'").await.unwrap();
-    assert!(row.is_some());
-    let row = row.unwrap();
-    let (val,): (String,) = row.try_into().unwrap();
-    assert_eq!(val, "world");
-}
-
-#[tokio::test]
-async fn struct_for_backwards_compatible() {
-    let dsn = option_env!("TEST_DATABEND_DSN").unwrap_or(DEFAULT_DSN);
-    let conn = DatabendConnection::try_create(dsn).unwrap();
-    let row = conn.query_row("select 'hello'").await.unwrap();
-    assert!(row.is_some());
-    let row = row.unwrap();
-    let (val,): (String,) = row.try_into().unwrap();
-    assert_eq!(val, "hello");
-
-    let row = conn.query_row("select 'world'").await.unwrap();
     assert!(row.is_some());
     let row = row.unwrap();
     let (val,): (String,) = row.try_into().unwrap();

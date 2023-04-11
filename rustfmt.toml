@@ -1,2 +1,8 @@
 edition = "2021"
 newline_style = "unix"
+reorder_imports = true
+# imports_granularity = "Item"
+# group_imports = "StdExternalCrate"
+# where_single_line = true
+# trailing_comma = "Vertical"
+# overflow_delimited_expr = true

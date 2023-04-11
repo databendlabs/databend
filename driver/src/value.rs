@@ -12,8 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use anyhow::{anyhow, Error, Result};
+use anyhow::{anyhow, Error, Ok, Result};
+
 use chrono::{Datelike, NaiveDate, NaiveDateTime};
+
+#[cfg(feature = "flight-sql")]
+use {
+    arrow::array::AsArray,
+    arrow_array::{
+        Array as ArrowArray, BinaryArray, BooleanArray, Date32Array, Float32Array, Float64Array,
+        Int16Array, Int32Array, Int64Array, Int8Array, LargeBinaryArray, LargeStringArray,
+        StringArray, TimestampMicrosecondArray, UInt16Array, UInt32Array, UInt64Array, UInt8Array,
+    },
+    arrow_schema::{DataType as ArrowDataType, Field as ArrowField, TimeUnit},
+    std::sync::Arc,
+};
 
 use crate::schema::{DataType, NumberDataType};
 
@@ -39,12 +52,13 @@ pub enum Value {
     Number(NumberValue),
     // TODO:(everpcpc) Decimal(DecimalValue),
     Decimal(String),
+    /// Microseconds from 1970-01-01 00:00:00 UTC
     Timestamp(i64),
     Date(i32),
-    Array(Vec<Value>),
-    Map(Vec<(Value, Value)>),
-    Tuple(Vec<Value>),
-    Variant,
+    // Array(Vec<Value>),
+    // Map(Vec<(Value, Value)>),
+    // Tuple(Vec<Value>),
+    // Variant,
     // Generic(usize, Vec<u8>),
 }
 
@@ -70,10 +84,10 @@ impl Value {
             Self::Timestamp(_) => DataType::Timestamp,
             Self::Date(_) => DataType::Date,
             // TODO:(everpcpc) fix nested type
-            Self::Array(_) => DataType::Array(Box::new(DataType::Null)),
-            Self::Map(_) => DataType::Map(Box::new(DataType::Null)),
-            Self::Tuple(_) => DataType::Tuple(vec![]),
-            Self::Variant => DataType::Variant,
+            // Self::Array(v) => DataType::Array(Box::new(v[0].get_type())),
+            // Self::Map(_) => DataType::Map(Box::new(DataType::Null)),
+            // Self::Tuple(_) => DataType::Tuple(vec![]),
+            // Self::Variant => DataType::Variant,
         }
     }
 }
@@ -119,7 +133,7 @@ impl TryFrom<(DataType, String)> for Value {
             DataType::Decimal => Ok(Self::Decimal(v)),
             DataType::Timestamp => Ok(Self::Timestamp(
                 chrono::NaiveDateTime::parse_from_str(&v, "%Y-%m-%d %H:%M:%S%.6f")?
-                    .timestamp_nanos(),
+                    .timestamp_micros(),
             )),
             DataType::Date => Ok(Self::Date(
                 // 719_163 is the number of days from 0000-01-01 to 1970-01-01
@@ -127,6 +141,121 @@ impl TryFrom<(DataType, String)> for Value {
             )),
             // TODO:(everpcpc) handle complex types
             _ => Ok(Self::String(v)),
+        }
+    }
+}
+
+#[cfg(feature = "flight-sql")]
+impl TryFrom<(&ArrowField, &Arc<dyn ArrowArray>, usize)> for Value {
+    type Error = Error;
+    fn try_from(
+        (field, array, seq): (&ArrowField, &Arc<dyn ArrowArray>, usize),
+    ) -> std::result::Result<Self, Self::Error> {
+        match field.data_type() {
+            ArrowDataType::Null => Ok(Value::Null),
+            ArrowDataType::Boolean => match array.as_any().downcast_ref::<BooleanArray>() {
+                Some(array) => Ok(Value::Boolean(array.value(seq))),
+                None => Err(anyhow!("cannot convert {:?} to boolean", array)),
+            },
+            ArrowDataType::Int8 => match array.as_any().downcast_ref::<Int8Array>() {
+                Some(array) => Ok(Value::Number(NumberValue::Int8(array.value(seq)))),
+                None => Err(anyhow!("cannot convert {:?} to int8", array)),
+            },
+            ArrowDataType::Int16 => match array.as_any().downcast_ref::<Int16Array>() {
+                Some(array) => Ok(Value::Number(NumberValue::Int16(array.value(seq)))),
+                None => Err(anyhow!("cannot convert {:?} to int16", array)),
+            },
+            ArrowDataType::Int32 => match array.as_any().downcast_ref::<Int32Array>() {
+                Some(array) => Ok(Value::Number(NumberValue::Int32(array.value(seq)))),
+                None => Err(anyhow!("cannot convert {:?} to int32", array)),
+            },
+            ArrowDataType::Int64 => match array.as_any().downcast_ref::<Int64Array>() {
+                Some(array) => Ok(Value::Number(NumberValue::Int64(array.value(seq)))),
+                None => Err(anyhow!("cannot convert {:?} to int64", array)),
+            },
+            ArrowDataType::UInt8 => match array.as_any().downcast_ref::<UInt8Array>() {
+                Some(array) => Ok(Value::Number(NumberValue::UInt8(array.value(seq)))),
+                None => Err(anyhow!("cannot convert {:?} to uint8", array)),
+            },
+            ArrowDataType::UInt16 => match array.as_any().downcast_ref::<UInt16Array>() {
+                Some(array) => Ok(Value::Number(NumberValue::UInt16(array.value(seq)))),
+                None => Err(anyhow!("cannot convert {:?} to uint16", array)),
+            },
+            ArrowDataType::UInt32 => match array.as_any().downcast_ref::<UInt32Array>() {
+                Some(array) => Ok(Value::Number(NumberValue::UInt32(array.value(seq)))),
+                None => Err(anyhow!("cannot convert {:?} to uint32", array)),
+            },
+            ArrowDataType::UInt64 => match array.as_any().downcast_ref::<UInt64Array>() {
+                Some(array) => Ok(Value::Number(NumberValue::UInt64(array.value(seq)))),
+                None => Err(anyhow!("cannot convert {:?} to uint64", array)),
+            },
+            ArrowDataType::Float32 => match array.as_any().downcast_ref::<Float32Array>() {
+                Some(array) => Ok(Value::Number(NumberValue::Float32(array.value(seq)))),
+                None => Err(anyhow!("cannot convert {:?} to float32", array)),
+            },
+            ArrowDataType::Float64 => match array.as_any().downcast_ref::<Float64Array>() {
+                Some(array) => Ok(Value::Number(NumberValue::Float64(array.value(seq)))),
+                None => Err(anyhow!("cannot convert {:?} to float64", array)),
+            },
+
+            ArrowDataType::Binary => match array.as_any().downcast_ref::<BinaryArray>() {
+                Some(array) => Ok(Value::String(String::from_utf8(array.value(seq).to_vec())?)),
+                None => Err(anyhow!("cannot convert {:?} to binary", array)),
+            },
+            ArrowDataType::LargeBinary | ArrowDataType::FixedSizeBinary(_) => {
+                match array.as_any().downcast_ref::<LargeBinaryArray>() {
+                    Some(array) => Ok(Value::String(String::from_utf8(array.value(seq).to_vec())?)),
+                    None => Err(anyhow!("cannot convert {:?} to large binary", array)),
+                }
+            }
+            ArrowDataType::Utf8 => match array.as_any().downcast_ref::<StringArray>() {
+                Some(array) => Ok(Value::String(array.value(seq).to_string())),
+                None => Err(anyhow!("cannot convert {:?} to string", array)),
+            },
+            ArrowDataType::LargeUtf8 => match array.as_any().downcast_ref::<LargeStringArray>() {
+                Some(array) => Ok(Value::String(array.value(seq).to_string())),
+                None => Err(anyhow!("cannot convert {:?} to large string", array)),
+            },
+            // we only support timestamp in microsecond in databend
+            ArrowDataType::Timestamp(unit, tz) => {
+                match array.as_any().downcast_ref::<TimestampMicrosecondArray>() {
+                    Some(array) => {
+                        if unit != &TimeUnit::Microsecond {
+                            return Err(anyhow!(
+                                "unsupported timestamp unit: {:?}, only support microsecond",
+                                unit
+                            ));
+                        }
+                        let ts = array.value(seq);
+                        match tz {
+                            None => Ok(Value::Timestamp(ts)),
+                            Some(tz) => Err(anyhow!("non-UTC timezone not supported: {:?}", tz)),
+                        }
+                    }
+                    None => Err(anyhow!("cannot convert {:?} to timestamp", array)),
+                }
+            }
+            ArrowDataType::Date32 => match array.as_any().downcast_ref::<Date32Array>() {
+                Some(array) => Ok(Value::Date(array.value(seq))),
+                None => Err(anyhow!("cannot convert {:?} to date", array)),
+            },
+            ArrowDataType::Date64
+            | ArrowDataType::Time32(_)
+            | ArrowDataType::Time64(_)
+            | ArrowDataType::Interval(_)
+            | ArrowDataType::Duration(_) => {
+                Err(anyhow!("unsupported data type: {:?}", array.data_type()))
+            }
+            ArrowDataType::List(_) | ArrowDataType::LargeList(_) => {
+                let v = array.as_list_opt::<i64>().unwrap().value(seq);
+                Ok(Value::String(format!("{:?}", v)))
+            }
+            // Struct(Vec<Field>),
+            // Decimal128(u8, i8),
+            // Decimal256(u8, i8),
+            // Map(Box<Field>, bool),
+            // RunEndEncoded(Box<Field>, Box<Field>),
+            _ => Err(anyhow!("unsupported data type: {:?}", array.data_type())),
         }
     }
 }
@@ -259,8 +388,8 @@ impl TryFrom<Value> for NaiveDateTime {
     fn try_from(val: Value) -> Result<Self> {
         match val {
             Value::Timestamp(i) => {
-                let secs = i / 1_000_000_000;
-                let nanos = (i % 1_000_000_000) as u32;
+                let secs = i / 1_000_000;
+                let nanos = ((i % 1_000_000) * 1000) as u32;
                 let t = NaiveDateTime::from_timestamp_opt(secs, nanos);
                 match t {
                     Some(t) => Ok(t),
@@ -286,5 +415,11 @@ impl TryFrom<Value> for NaiveDate {
             }
             _ => Err(anyhow!("Error converting value to NaiveDate")),
         }
+    }
+}
+
+impl From<u8> for Value {
+    fn from(v: u8) -> Self {
+        Value::Number(NumberValue::UInt8(v))
     }
 }

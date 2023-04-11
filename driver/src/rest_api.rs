@@ -11,17 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+use std::collections::VecDeque;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
-use anyhow::Result;
+use anyhow::{Error, Result};
 use async_trait::async_trait;
-use databend_client::{response::QueryResponse, APIClient};
+use databend_client::response::QueryResponse;
+use databend_client::APIClient;
+use tokio_stream::{Stream, StreamExt};
 
-use crate::{
-    conn::Connection,
-    rows::{Row, RowIterator},
-    schema::SchemaFieldList,
-};
+use crate::conn::Connection;
+use crate::rows::{Row, RowIterator, RowProgressIterator, RowWithProgress};
+use crate::schema::{DataType, SchemaFieldList};
 
 #[derive(Clone)]
 pub struct RestAPIConnection {
@@ -30,7 +35,7 @@ pub struct RestAPIConnection {
 
 #[async_trait]
 impl Connection for RestAPIConnection {
-    async fn exec(&self, sql: &str) -> Result<()> {
+    async fn exec(&mut self, sql: &str) -> Result<()> {
         let mut resp = self.client.query(sql).await?;
         while let Some(next_uri) = resp.next_uri {
             resp = self.client.query_page(&next_uri).await?;
@@ -38,13 +43,23 @@ impl Connection for RestAPIConnection {
         Ok(())
     }
 
-    async fn query_iter(&self, sql: &str) -> Result<RowIterator> {
-        let resp = self.client.query(sql).await?;
-        let rows = RowIterator::try_from((self.client.clone(), resp))?;
-        Ok(rows)
+    async fn query_iter(&mut self, sql: &str) -> Result<RowIterator> {
+        let rows_with_progress = self.query_iter_with_progress(sql).await?;
+        let rows = rows_with_progress.filter_map(|r| match r {
+            Ok(RowWithProgress::Row(r)) => Some(Ok(r)),
+            Ok(RowWithProgress::Progress(_)) => None,
+            Err(err) => Some(Err(err)),
+        });
+        Ok(Box::pin(rows))
     }
 
-    async fn query_row(&self, sql: &str) -> Result<Option<Row>> {
+    async fn query_iter_with_progress(&mut self, sql: &str) -> Result<RowProgressIterator> {
+        let resp = self.client.query(sql).await?;
+        let rows = RestAPIRows::try_from((self.client.clone(), resp))?;
+        Ok(Box::pin(rows))
+    }
+
+    async fn query_row(&mut self, sql: &str) -> Result<Option<Row>> {
         let resp = self.client.query(sql).await?;
         let resp = self.wait_for_data(resp).await?;
         self.finish_query(resp.final_uri).await?;
@@ -87,6 +102,68 @@ impl RestAPIConnection {
         match final_uri {
             Some(uri) => self.client.query_page(&uri).await,
             None => Err(anyhow::anyhow!("final_uri is empty")),
+        }
+    }
+}
+
+type PageFut = Pin<Box<dyn Future<Output = Result<QueryResponse>>>>;
+
+pub struct RestAPIRows {
+    client: Arc<APIClient>,
+    schema: Vec<DataType>,
+    data: VecDeque<Vec<String>>,
+    next_uri: Option<String>,
+    next_page: Option<PageFut>,
+}
+
+impl TryFrom<(Arc<APIClient>, QueryResponse)> for RestAPIRows {
+    type Error = Error;
+
+    fn try_from((client, resp): (Arc<APIClient>, QueryResponse)) -> Result<Self> {
+        let schema = SchemaFieldList::new(resp.schema).try_into()?;
+        let rows = Self {
+            client,
+            next_uri: resp.next_uri,
+            schema,
+            data: resp.data.into(),
+            next_page: None,
+        };
+        Ok(rows)
+    }
+}
+
+impl Stream for RestAPIRows {
+    type Item = Result<RowWithProgress>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        if let Some(row) = self.data.pop_front() {
+            let row = Row::try_from((self.schema.clone(), row))?;
+            return Poll::Ready(Some(Ok(RowWithProgress::Row(row))));
+        }
+        match self.next_page {
+            Some(ref mut next_page) => match Pin::new(next_page).poll(cx) {
+                Poll::Ready(Ok(resp)) => {
+                    self.data = resp.data.into();
+                    self.next_uri = resp.next_uri;
+                    self.next_page = None;
+                    self.poll_next(cx)
+                }
+                Poll::Ready(Err(e)) => Poll::Ready(Some(Err(e))),
+                Poll::Pending => {
+                    cx.waker().wake_by_ref();
+                    Poll::Pending
+                }
+            },
+            None => match self.next_uri {
+                Some(ref next_uri) => {
+                    let client = self.client.clone();
+                    let next_uri = next_uri.clone();
+                    self.next_page =
+                        Some(Box::pin(async move { client.query_page(&next_uri).await }));
+                    self.poll_next(cx)
+                }
+                None => Poll::Ready(None),
+            },
         }
     }
 }
