@@ -23,6 +23,7 @@ use std::time::SystemTime;
 use common_base::base::Progress;
 use common_base::runtime::Runtime;
 use common_catalog::table_context::StageAttachment;
+use common_config::QueryConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -77,6 +78,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
     pub(in crate::sessions) affect: Arc<Mutex<Option<QueryAffect>>>,
     pub(in crate::sessions) catalog_manager: Arc<CatalogManager>,
+    pub(in crate::sessions) query_config: QueryConfig,
     pub(in crate::sessions) data_operator: DataOperator,
     pub(in crate::sessions) executor: Arc<RwLock<Weak<PipelineExecutor>>>,
     pub(in crate::sessions) precommit_blocks: Arc<RwLock<Vec<DataBlock>>>,
@@ -99,10 +101,12 @@ impl QueryContextShared {
     pub fn try_create(
         session: Arc<Session>,
         cluster_cache: Arc<Cluster>,
+        query_config: QueryConfig,
     ) -> Result<Arc<QueryContextShared>> {
         Ok(Arc::new(QueryContextShared {
             session,
             cluster_cache,
+            query_config,
             catalog_manager: CatalogManager::instance(),
             data_operator: DataOperator::instance(),
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),

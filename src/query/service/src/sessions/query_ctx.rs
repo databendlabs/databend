@@ -400,8 +400,7 @@ impl TableContext for QueryContext {
         let tz = self.get_settings().get_timezone()?;
         let tz = TzFactory::instance().get_by_name(&tz)?;
 
-        let query_config = &GlobalConfig::instance().query;
-
+        let query_config = &self.shared.query_config;
         Ok(FunctionContext {
             tz,
 

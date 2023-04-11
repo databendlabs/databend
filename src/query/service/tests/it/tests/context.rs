@@ -158,6 +158,7 @@ pub async fn create_query_context_with_cluster(
 
     let dummy_query_context = QueryContext::create_from_shared(QueryContextShared::try_create(
         dummy_session,
+        config.query.clone(),
         Cluster::create(nodes, local_id),
     )?);
 

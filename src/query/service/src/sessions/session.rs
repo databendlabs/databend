@@ -127,7 +127,7 @@ impl Session {
         let config = GlobalConfig::instance();
         let session = self.clone();
         let cluster = ClusterDiscovery::instance().discover(&config).await?;
-        let shared = QueryContextShared::try_create(session, cluster)?;
+        let shared = QueryContextShared::try_create(session, cluster, config.query.clone())?;
 
         self.session_ctx
             .set_query_context_shared(Arc::downgrade(&shared));
