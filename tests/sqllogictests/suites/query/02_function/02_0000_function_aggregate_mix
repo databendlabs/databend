@@ -304,6 +304,31 @@ NULL
 -0.3301409513655613
 
 statement ok
+create table t3(s string null);
+
+statement ok
+insert into t3 values
+    ('abc'),
+    ('def'),
+    (null),
+    ('xyz');
+
+query T
+select listagg(s) from t3;
+----
+abcdefxyz
+
+query T
+select listagg(s, '-') from t3;
+----
+abc-def-xyz
+
+query T
+select listagg(s, '|') from t3;
+----
+abc|def|xyz
+
+statement ok
 DROP TABLE aggr
 
 statement ok

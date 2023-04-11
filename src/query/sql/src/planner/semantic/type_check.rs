@@ -1249,6 +1249,23 @@ impl<'a> TypeChecker<'a> {
         }
         self.in_aggregate_function = false;
 
+        // Convert the delimiter of listagg to params
+        let params = if func_name.eq_ignore_ascii_case("listagg")
+            && arguments.len() == 2
+            && params.is_empty()
+        {
+            let delimiter_value = ConstantExpr::try_from(arguments[1].clone());
+            if arg_types[1] != DataType::String || delimiter_value.is_err() {
+                return Err(ErrorCode::SemanticError(
+                    "The delimiter of `listagg` must be a constant string",
+                ));
+            }
+            let delimiter = delimiter_value.unwrap();
+            vec![delimiter.value]
+        } else {
+            params
+        };
+
         // Rewrite `xxx(distinct)` to `xxx_distinct(...)`
         let (func_name, distinct) = if func_name.eq_ignore_ascii_case("count") && distinct {
             ("count_distinct", false)
