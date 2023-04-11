@@ -201,17 +201,17 @@ pub struct FlightSender {
     tx: Sender<Result<FlightData, Status>>,
 }
 
-impl Clone for FlightSender {
-    fn clone(&self) -> Self {
-        self.state.strong_count.fetch_add(1, Ordering::SeqCst);
-
-        FlightSender {
-            tx: self.tx.clone(),
-            state: self.state.clone(),
-            dropped: AtomicBool::new(false),
-        }
-    }
-}
+// impl Clone for FlightSender {
+//     fn clone(&self) -> Self {
+//         self.state.strong_count.fetch_add(1, Ordering::SeqCst);
+//
+//         FlightSender {
+//             tx: self.tx.clone(),
+//             state: self.state.clone(),
+//             dropped: AtomicBool::new(false),
+//         }
+//     }
+// }
 
 impl Drop for FlightSender {
     fn drop(&mut self) {
@@ -288,14 +288,14 @@ impl FlightExchange {
         }
     }
 
-    pub fn as_sender(&self) -> FlightSender {
+    pub fn convert_to_sender(self) -> FlightSender {
         match self {
             FlightExchange::Sender { state, sender } => {
                 state.strong_count.fetch_add(1, Ordering::SeqCst);
 
                 FlightSender {
-                    tx: sender.clone(),
-                    state: state.clone(),
+                    state,
+                    tx: sender,
                     dropped: AtomicBool::new(false),
                 }
             }
@@ -303,14 +303,14 @@ impl FlightExchange {
         }
     }
 
-    pub fn as_receiver(&self) -> FlightReceiver {
+    pub fn convert_to_receiver(self) -> FlightReceiver {
         match self {
             FlightExchange::Receiver { state, receiver } => {
                 state.strong_count.fetch_add(1, Ordering::SeqCst);
 
                 FlightReceiver {
-                    rx: receiver.clone(),
-                    state: state.clone(),
+                    state,
+                    rx: receiver,
                     dropped: AtomicBool::new(false),
                 }
             }
