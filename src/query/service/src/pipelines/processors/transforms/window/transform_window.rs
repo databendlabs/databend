@@ -302,7 +302,7 @@ impl<T> TransformWindow<T> {
 
         debug_assert!(self.frame_end.row < rows_end);
         while self.frame_end.row < rows_end {
-            if !self.are_peers(&self.current_row, &self.frame_end) {
+            if !self.are_peers(&self.current_row, &self.frame_end, true) {
                 self.frame_ended = true;
                 return;
             }
@@ -336,11 +336,11 @@ impl<T> TransformWindow<T> {
     }
 
     /// If the two rows are within the same peer group.
-    fn are_peers(&self, lhs: &RowPtr, rhs: &RowPtr) -> bool {
+    fn are_peers(&self, lhs: &RowPtr, rhs: &RowPtr, for_computing_bound: bool) -> bool {
         if lhs == rhs {
             return true;
         }
-        if self.frame_unit.is_rows() {
+        if self.frame_unit.is_rows() && for_computing_bound {
             // For ROWS frame, the row's peer is only the row itself.
             return false;
         }
@@ -562,7 +562,7 @@ where T: Number + ResultTypeOfUnary
         let func = WindowFunctionImpl::try_create(func)?;
         let (start_bound, end_bound) = bounds;
 
-        // If the window clause is a specifc RANGE window, we should deal with the frame with all NULL values.
+        // If the window clause is a specific RANGE window, we should deal with the frame with all NULL values.
         let need_check_null_frame = if order_by.len() == 1 {
             order_by[0].is_nullable
         } else {
@@ -638,7 +638,11 @@ where T: Number + ResultTypeOfUnary
                 debug_assert!(self.peer_group_start <= self.current_row);
 
                 self.frame_started = true;
-                self.frame_start = self.peer_group_start;
+                if self.frame_unit.is_range() {
+                    self.frame_start = self.peer_group_start;
+                } else {
+                    self.frame_start = self.current_row;
+                }
             }
             FrameBound::Preceding(Some(n)) => {
                 debug_assert!(self.frame_unit.is_rows() || self.order_by.len() == 1);
@@ -758,7 +762,7 @@ where T: Number + ResultTypeOfUnary
             });
 
             while self.current_row < self.partition_end {
-                if !self.are_peers(&self.peer_group_start, &self.current_row) {
+                if !self.are_peers(&self.peer_group_start, &self.current_row, false) {
                     self.peer_group_start = self.current_row;
                     self.current_dense_rank += 1;
                     self.current_rank = self.current_row_in_partition;
@@ -1680,7 +1684,7 @@ mod tests {
 
     #[allow(clippy::type_complexity)]
     fn get_transform_window_and_ports(
-        unit: WindowFuncFrameUnits,
+        _unit: WindowFuncFrameUnits,
         bounds: (FrameBound<u64>, FrameBound<u64>),
     ) -> Result<(Box<dyn Processor>, Arc<InputPort>, Arc<OutputPort>)> {
         let agg = AggregateFunctionFactory::instance()
@@ -1694,7 +1698,6 @@ mod tests {
             func,
             vec![0],
             vec![],
-            unit,
             bounds,
         )?;
 
