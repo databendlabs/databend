@@ -2226,6 +2226,7 @@ dependencies = [
  "common-exception",
  "common-meta-api",
  "common-meta-app",
+ "common-storage",
  "common-users",
  "http",
  "log",

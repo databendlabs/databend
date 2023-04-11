@@ -12,8 +12,11 @@ echo "CREATE SHARE test_share" | $MYSQL_CLIENT_SHARE_1_CONNECT
 echo "CREATE DATABASE test_database" | $MYSQL_CLIENT_SHARE_1_CONNECT
 echo "CREATE TABLE test_database.t1 (number UInt64)" | $MYSQL_CLIENT_SHARE_1_CONNECT
 echo "INSERT INTO test_database.t1 VALUES (1),(2),(3)" | $MYSQL_CLIENT_SHARE_1_CONNECT
+echo "CREATE TABLE test_database.t2 (number UInt64)" | $MYSQL_CLIENT_SHARE_1_CONNECT
+echo "INSERT INTO test_database.t2 VALUES (4),(5),(6)" | $MYSQL_CLIENT_SHARE_1_CONNECT
 echo "GRANT USAGE ON DATABASE test_database TO SHARE test_share" | $MYSQL_CLIENT_SHARE_1_CONNECT
 echo "GRANT SELECT ON TABLE test_database.t1 TO SHARE test_share" | $MYSQL_CLIENT_SHARE_1_CONNECT
+echo "GRANT SELECT ON TABLE test_database.t2 TO SHARE test_share" | $MYSQL_CLIENT_SHARE_1_CONNECT
 echo "ALTER SHARE test_share ADD TENANTS = shared_tenant,to_tenant" | $MYSQL_CLIENT_SHARE_1_CONNECT
 echo "SHOW SHARES" | $MYSQL_CLIENT_SHARE_1_CONNECT | awk '{print $(NF-4), $(NF-3), $(NF-2), $(NF-1), $NF}'
 
@@ -23,8 +26,17 @@ echo "create share endpoint to_share url='http://127.0.0.1:23003' tenant=shared_
 echo "SHOW SHARES" | $MYSQL_CLIENT_SHARE_2_CONNECT | awk '{print $(NF-4), $(NF-3), $(NF-2), $(NF-1), $NF}'
 echo "CREATE DATABASE if not exists shared_db FROM SHARE shared_tenant.test_share" | $MYSQL_CLIENT_SHARE_2_CONNECT
 echo "SELECT * FROM shared_db.t1" | $MYSQL_CLIENT_SHARE_2_CONNECT
+echo "SELECT * FROM shared_db.t2" | $MYSQL_CLIENT_SHARE_2_CONNECT
 
-## Drop table.
+# drop shared table and query data from share
+echo "drop table if exists test_database.t1" | $MYSQL_CLIENT_SHARE_1_CONNECT
+echo "SELECT * FROM shared_db.t1" | $MYSQL_CLIENT_SHARE_2_CONNECT
+
+# drop shared database and query data from share
+echo "SELECT * FROM shared_db.t2" | $MYSQL_CLIENT_SHARE_2_CONNECT
+echo "drop database if exists test_database" | $MYSQL_CLIENT_SHARE_1_CONNECT
+echo "SELECT * FROM shared_db.t2" | $MYSQL_CLIENT_SHARE_2_CONNECT
+
+## Drop database and share.
 echo "drop database if exists shared_db" | $MYSQL_CLIENT_SHARE_2_CONNECT
 echo "drop share if exists test_share" | $MYSQL_CLIENT_SHARE_1_CONNECT
-echo "drop database if exists test_database" | $MYSQL_CLIENT_SHARE_1_CONNECT
