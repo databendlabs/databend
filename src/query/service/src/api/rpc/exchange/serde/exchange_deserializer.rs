@@ -31,9 +31,9 @@ use common_expression::DataSchemaRef;
 use common_io::prelude::BinaryRead;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::Transform;
-use common_pipeline_transforms::processors::transforms::Transformer;
+use common_pipeline_core::processors::Processor;
 use serde::Deserializer;
 use serde::Serializer;
 
@@ -41,6 +41,12 @@ use crate::api::DataPacket;
 use crate::api::FragmentData;
 
 pub struct TransformExchangeDeserializer {
+    input: Arc<InputPort>,
+    output: Arc<OutputPort>,
+
+    input_data: Option<DataBlock>,
+    output_data: Option<DataBlock>,
+
     schema: DataSchemaRef,
     ipc_schema: IpcSchema,
     arrow_schema: Arc<ArrowSchema>,
@@ -59,15 +65,15 @@ impl TransformExchangeDeserializer {
             is_little_endian: true,
         };
 
-        ProcessorPtr::create(Transformer::create(
+        ProcessorPtr::create(Box::new(TransformExchangeDeserializer {
             input,
             output,
-            TransformExchangeDeserializer {
-                ipc_schema,
-                arrow_schema,
-                schema: schema.clone(),
-            },
-        ))
+            ipc_schema,
+            arrow_schema,
+            input_data: None,
+            output_data: None,
+            schema: schema.clone(),
+        }))
     }
 
     fn recv_data(&self, fragment_data: FragmentData) -> Result<DataBlock> {
@@ -104,24 +110,87 @@ impl TransformExchangeDeserializer {
     }
 }
 
-impl Transform for TransformExchangeDeserializer {
-    const NAME: &'static str = "TransformExchangeDeserializer";
+#[async_trait::async_trait]
+impl Processor for TransformExchangeDeserializer {
+    fn name(&self) -> String {
+        String::from("TransformExchangeDeserializer")
+    }
 
-    fn transform(&mut self, mut data: DataBlock) -> Result<DataBlock> {
-        if let Some(block_meta) = data.take_meta() {
-            if let Some(exchange_meta) = ExchangeDeserializeMeta::downcast_from(block_meta) {
-                return match exchange_meta.packet.unwrap() {
-                    DataPacket::ErrorCode(v) => Err(v),
-                    DataPacket::FetchProgressAndPrecommit => unreachable!(),
-                    DataPacket::ProgressAndPrecommit { .. } => unreachable!(),
-                    DataPacket::FragmentData(v) => self.recv_data(v),
-                };
-            }
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn event(&mut self) -> Result<Event> {
+        if self.output.is_finished() {
+            self.input.finish();
+            return Ok(Event::Finished);
         }
 
-        Err(ErrorCode::Internal(
-            "Internal error, exchange source deserializer only recv exchange source meta.",
-        ))
+        if !self.output.can_push() {
+            self.input.set_not_need_data();
+            return Ok(Event::NeedConsume);
+        }
+
+        if let Some(output_data) = self.output_data.take() {
+            self.output.push_data(Ok(output_data));
+            return Ok(Event::NeedConsume);
+        }
+
+        if self.input_data.is_some() {
+            return Ok(Event::Sync);
+        }
+
+        if self.input.has_data() {
+            let data_block = self.input.pull_data().unwrap()?;
+
+            match data_block.get_meta() {
+                None => self.output.push_data(Ok(data_block)),
+                Some(block_meta) => match ExchangeDeserializeMeta::downcast_ref_from(block_meta) {
+                    None => self.output.push_data(Ok(data_block)),
+                    Some(_meta) => {
+                        if data_block.num_rows() != 0 {
+                            return Err(ErrorCode::Internal("ExchangeDeserializeMeta has rows"));
+                        }
+
+                        self.input_data = Some(data_block);
+                        return Ok(Event::Sync);
+                    }
+                },
+            }
+
+            return Ok(Event::NeedConsume);
+        }
+
+        if self.input.is_finished() {
+            self.output.finish();
+            return Ok(Event::Finished);
+        }
+
+        self.input.set_need_data();
+        Ok(Event::NeedData)
+    }
+
+    fn process(&mut self) -> Result<()> {
+        if let Some(mut data) = self.input_data.take() {
+            if let Some(block_meta) = data.take_meta() {
+                if let Some(exchange_meta) = ExchangeDeserializeMeta::downcast_from(block_meta) {
+                    self.output_data = Some(match exchange_meta.packet.unwrap() {
+                        DataPacket::ErrorCode(v) => Err(v),
+                        DataPacket::FetchProgressAndPrecommit => unreachable!(),
+                        DataPacket::ProgressAndPrecommit { .. } => unreachable!(),
+                        DataPacket::FragmentData(v) => self.recv_data(v),
+                    }?);
+
+                    return Ok(());
+                }
+            }
+
+            return Err(ErrorCode::Internal(
+                "Internal error, exchange source deserializer only recv exchange source meta.",
+            ));
+        }
+
+        Ok(())
     }
 }
 

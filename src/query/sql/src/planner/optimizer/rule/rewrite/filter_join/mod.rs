@@ -20,5 +20,4 @@ mod outer_join_to_inner_join;
 pub use derive_filter::try_derive_predicates;
 pub use extract_or_predicates::rewrite_predicates;
 pub use mark_join_to_semi_join::convert_mark_to_semi_join;
-pub use outer_join_to_inner_join::convert_outer_to_inner_join;
-pub use outer_join_to_inner_join::remove_nullable;
+pub use outer_join_to_inner_join::outer_to_inner;

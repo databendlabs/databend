@@ -270,6 +270,17 @@ impl Runtime {
 
         Ok(handlers)
     }
+
+    // TODO(Winter): remove
+    // Please do not use this method(it's temporary)
+    #[async_backtrace::framed]
+    pub async fn spawn_blocking<F, R>(&self, f: F) -> Result<R>
+    where
+        F: FnOnce() -> Result<R> + Send + 'static,
+        R: Send + 'static,
+    {
+        match_join_handle(self.handle.spawn_blocking(f)).await
+    }
 }
 
 impl TrySpawn for Runtime {

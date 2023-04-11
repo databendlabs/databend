@@ -2226,6 +2226,7 @@ dependencies = [
  "common-exception",
  "common-meta-api",
  "common-meta-app",
+ "common-storage",
  "common-users",
  "http",
  "log",
@@ -2251,6 +2252,7 @@ dependencies = [
  "common-base",
  "common-catalog",
  "common-config",
+ "common-constraint",
  "common-exception",
  "common-expression",
  "common-functions",
@@ -2287,6 +2289,7 @@ dependencies = [
  "time 0.3.20",
  "tracing",
  "url",
+ "z3",
 ]
 
 [[package]]

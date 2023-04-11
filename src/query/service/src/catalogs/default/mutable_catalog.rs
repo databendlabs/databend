@@ -28,6 +28,7 @@ use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DatabaseType;
+use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
@@ -198,9 +199,8 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn drop_database(&self, req: DropDatabaseReq) -> Result<()> {
-        self.ctx.meta.drop_database(req).await?;
-        Ok(())
+    async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply> {
+        Ok(self.ctx.meta.drop_database(req).await?)
     }
 
     #[async_backtrace::framed]

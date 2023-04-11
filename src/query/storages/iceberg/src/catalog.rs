@@ -29,6 +29,7 @@ use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
@@ -180,7 +181,7 @@ impl Catalog for IcebergCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn drop_database(&self, _req: DropDatabaseReq) -> Result<()> {
+    async fn drop_database(&self, _req: DropDatabaseReq) -> Result<DropDatabaseReply> {
         unimplemented!()
     }
 

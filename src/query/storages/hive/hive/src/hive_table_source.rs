@@ -148,7 +148,7 @@ impl HiveTableSource {
         let mut exists = false;
         let func_ctx = self.ctx.get_function_context()?;
         for datablock in data_blocks {
-            let evaluator = Evaluator::new(datablock, func_ctx, &BUILTIN_FUNCTIONS);
+            let evaluator = Evaluator::new(datablock, &func_ctx, &BUILTIN_FUNCTIONS);
             let predicates = evaluator
                 .run(filter)
                 .map_err(|e| e.add_message("eval prewhere filter failed:"))?

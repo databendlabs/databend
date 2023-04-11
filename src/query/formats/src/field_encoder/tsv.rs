@@ -19,6 +19,7 @@ use common_io::constants::FALSE_BYTES_NUM;
 use common_io::constants::INF_BYTES_LOWER;
 use common_io::constants::NULL_BYTES_ESCAPE;
 use common_io::constants::TRUE_BYTES_NUM;
+use common_meta_app::principal::TsvFileFormatParams;
 
 use super::helpers::write_escaped_string;
 use crate::field_encoder::FieldEncoderRowBased;
@@ -31,17 +32,17 @@ pub struct FieldEncoderTSV {
 }
 
 impl FieldEncoderTSV {
-    pub fn create(options: &FileFormatOptionsExt) -> Self {
+    pub fn create(params: &TsvFileFormatParams, options_ext: &FileFormatOptionsExt) -> Self {
         FieldEncoderTSV {
             common_settings: CommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
                 null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
-                nan_bytes: options.stage.nan_display.as_bytes().to_vec(),
+                nan_bytes: params.nan_display.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
-                timezone: options.timezone,
+                timezone: options_ext.timezone,
             },
-            quote_char: options.get_quote_char(),
+            quote_char: params.quote.as_bytes().to_vec()[0],
         }
     }
 }

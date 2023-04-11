@@ -18,6 +18,7 @@ use std::time::Instant;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
+use common_base::runtime::GlobalIORuntime;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -166,7 +167,9 @@ impl Processor for CompactSource {
                     DataBlock::concat(&blocks)?
                 };
                 // build block serialization.
-                let serialized = tokio_rayon::spawn(move || block_builder.build(new_block)).await?;
+                let serialized = GlobalIORuntime::instance()
+                    .spawn_blocking(move || block_builder.build(new_block))
+                    .await?;
 
                 let start = Instant::now();
 

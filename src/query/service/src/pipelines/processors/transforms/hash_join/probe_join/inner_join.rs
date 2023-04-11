@@ -161,7 +161,7 @@ impl JoinHashTable {
                         ));
                     }
 
-                    let evaluator = Evaluator::new(&probed_block, func_ctx, &BUILTIN_FUNCTIONS);
+                    let evaluator = Evaluator::new(&probed_block, &func_ctx, &BUILTIN_FUNCTIONS);
                     let predicate = evaluator
                         .run(&other_predicate)?
                         .try_downcast::<BooleanType>()
