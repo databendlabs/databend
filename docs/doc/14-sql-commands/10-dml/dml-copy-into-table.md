@@ -254,7 +254,7 @@ COPY INTO mytable
   CONNECTION = (
         ENDPOINT_URL = 'https://<endpoint-URL>'
         ROLE_ARN = 'arn:aws:iam::123456789012:role/my_iam_role'
-        EXTERNAL_ID =‘123456’)
+        EXTERNAL_ID = '123456')
   FILE_FORMAT = (type = csv field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10;
 ```
 
