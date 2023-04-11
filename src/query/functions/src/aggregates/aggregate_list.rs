@@ -90,7 +90,7 @@ where
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        self.values.append(&mut rhs.values.clone());
+        self.values.extend_from_slice(&rhs.values);
         Ok(())
     }
 
@@ -175,7 +175,7 @@ where
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        self.values.append(&mut rhs.values.clone());
+        self.values.extend_from_slice(&rhs.values);
         Ok(())
     }
 
