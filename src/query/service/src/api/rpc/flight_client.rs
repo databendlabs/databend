@@ -14,10 +14,6 @@
 
 use std::convert::TryInto;
 use std::error::Error;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use async_channel::Receiver;
 use async_channel::Sender;
@@ -156,24 +152,12 @@ impl FlightClient {
 }
 
 pub struct FlightReceiver {
-    state: Arc<State>,
-    dropped: AtomicBool,
     rx: Receiver<Result<FlightData>>,
-}
-
-impl Drop for FlightReceiver {
-    fn drop(&mut self) {
-        self.close();
-    }
 }
 
 impl FlightReceiver {
     pub fn create(rx: Receiver<Result<FlightData>>) -> FlightReceiver {
-        FlightReceiver {
-            rx,
-            state: State::create(),
-            dropped: AtomicBool::new(false),
-        }
+        FlightReceiver { rx }
     }
 
     #[async_backtrace::framed]
@@ -186,46 +170,17 @@ impl FlightReceiver {
     }
 
     pub fn close(&self) {
-        #[allow(clippy::collapsible_if)]
-        if !self.dropped.fetch_or(true, Ordering::SeqCst) {
-            if self.state.strong_count.fetch_sub(1, Ordering::SeqCst) == 1 {
-                self.rx.close();
-            }
-        }
+        self.rx.close();
     }
 }
 
 pub struct FlightSender {
-    state: Arc<State>,
-    dropped: AtomicBool,
     tx: Sender<Result<FlightData, Status>>,
-}
-
-// impl Clone for FlightSender {
-//     fn clone(&self) -> Self {
-//         self.state.strong_count.fetch_add(1, Ordering::SeqCst);
-//
-//         FlightSender {
-//             tx: self.tx.clone(),
-//             state: self.state.clone(),
-//             dropped: AtomicBool::new(false),
-//         }
-//     }
-// }
-
-impl Drop for FlightSender {
-    fn drop(&mut self) {
-        self.close();
-    }
 }
 
 impl FlightSender {
     pub fn create(tx: Sender<Result<FlightData, Status>>) -> FlightSender {
-        FlightSender {
-            state: State::create(),
-            dropped: AtomicBool::new(false),
-            tx,
-        }
+        FlightSender { tx }
     }
 
     #[async_backtrace::framed]
@@ -240,80 +195,35 @@ impl FlightSender {
     }
 
     pub fn close(&self) {
-        #[allow(clippy::collapsible_if)]
-        if !self.dropped.fetch_or(true, Ordering::SeqCst) {
-            if self.state.strong_count.fetch_sub(1, Ordering::SeqCst) == 1 {
-                self.tx.close();
-            }
-        }
-    }
-}
-
-pub struct State {
-    strong_count: AtomicUsize,
-}
-
-impl State {
-    pub fn create() -> Arc<State> {
-        Arc::new(State {
-            strong_count: AtomicUsize::new(0),
-        })
+        self.tx.close();
     }
 }
 
 pub enum FlightExchange {
     Dummy,
-    Receiver {
-        state: Arc<State>,
-        receiver: Receiver<Result<FlightData>>,
-    },
-    Sender {
-        state: Arc<State>,
-        sender: Sender<Result<FlightData, Status>>,
-    },
+    Receiver(Receiver<Result<FlightData>>),
+    Sender(Sender<Result<FlightData, Status>>),
 }
 
 impl FlightExchange {
     pub fn create_sender(sender: Sender<Result<FlightData, Status>>) -> FlightExchange {
-        FlightExchange::Sender {
-            sender,
-            state: State::create(),
-        }
+        FlightExchange::Sender(sender)
     }
 
     pub fn create_receiver(receiver: Receiver<Result<FlightData>>) -> FlightExchange {
-        FlightExchange::Receiver {
-            receiver,
-            state: State::create(),
-        }
+        FlightExchange::Receiver(receiver)
     }
 
     pub fn convert_to_sender(self) -> FlightSender {
         match self {
-            FlightExchange::Sender { state, sender } => {
-                state.strong_count.fetch_add(1, Ordering::SeqCst);
-
-                FlightSender {
-                    state,
-                    tx: sender,
-                    dropped: AtomicBool::new(false),
-                }
-            }
+            FlightExchange::Sender(tx) => FlightSender { tx },
             _ => unreachable!(),
         }
     }
 
     pub fn convert_to_receiver(self) -> FlightReceiver {
         match self {
-            FlightExchange::Receiver { state, receiver } => {
-                state.strong_count.fetch_add(1, Ordering::SeqCst);
-
-                FlightReceiver {
-                    state,
-                    rx: receiver,
-                    dropped: AtomicBool::new(false),
-                }
-            }
+            FlightExchange::Receiver(rx) => FlightReceiver { rx },
             _ => unreachable!(),
         }
     }
