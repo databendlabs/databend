@@ -1,6 +1,6 @@
 [package]
 name = "databend-driver"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 license = "Apache-2.0"
 description = "Databend Driver for Rust"
@@ -30,12 +30,12 @@ tokio = { version = "1.26.0", features = ["macros"] }
 tokio-stream = "0.1.12"
 url = { version = "2.3.1", default-features = false }
 
-arrow = { version = "36.0.0", optional = true }
-arrow-array = { version = "36.0.0", optional = true }
-arrow-cast = { version = "36.0.0", features = ["prettyprint"], optional = true }
-arrow-flight = { version = "36.0.0", features = ["flight-sql-experimental"], optional = true }
-arrow-schema = { version = "36.0.0", optional = true }
-tonic = { version = "0.8.3", default-features = false, features = [
+arrow = { version = "37.0.0", optional = true }
+arrow-array = { version = "37.0.0", optional = true }
+arrow-cast = { version = "37.0.0", features = ["prettyprint"], optional = true }
+arrow-flight = { version = "37.0.0", features = ["flight-sql-experimental"], optional = true }
+arrow-schema = { version = "37.0.0", optional = true }
+tonic = { version = "0.9.1", default-features = false, features = [
     "transport",
     "codegen",
     "tls",

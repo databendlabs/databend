@@ -14,7 +14,7 @@ Databend Driver for Rust
 use databend_driver::new_connection;
 
 let dsn = "databend://root:@localhost:8000/default?sslmode=disable";
-let conn = new_connection(dsn).unwrap();
+let conn = new_connection(dsn).await.unwrap();
 
 let sql_create = "CREATE TABLE books (
     title VARCHAR,

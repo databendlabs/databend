@@ -24,7 +24,7 @@ use arrow_flight::{sql::client::FlightSqlServiceClient, FlightData};
 use arrow_schema::SchemaRef;
 use async_trait::async_trait;
 use tokio_stream::{Stream, StreamExt};
-use tonic::transport::{ClientTlsConfig, Endpoint};
+use tonic::transport::{Channel, ClientTlsConfig, Endpoint};
 use tonic::Streaming;
 use url::Url;
 
@@ -34,7 +34,7 @@ use crate::Connection;
 
 #[derive(Clone)]
 pub struct FlightSQLConnection {
-    pub(crate) client: FlightSqlServiceClient,
+    pub(crate) client: FlightSqlServiceClient<Channel>,
 }
 
 #[async_trait]
