@@ -29,7 +29,6 @@ use crate::meta::statistics::FormatVersion;
 use crate::meta::Compression;
 use crate::meta::Location;
 use crate::meta::Statistics;
-use crate::meta::Versioned;
 
 /// A segment comprises one or more blocks
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -40,13 +39,6 @@ pub struct SegmentInfo {
     pub blocks: Vec<Arc<BlockMeta>>,
     /// summary statistics
     pub summary: Statistics,
-}
-
-impl SegmentInfo {
-    #[inline]
-    pub fn version(&self) -> FormatVersion {
-        self.format_version
-    }
 }
 
 /// Meta information of a block
@@ -156,55 +148,8 @@ impl ColumnMeta {
     }
 }
 
-impl SegmentInfo {
-    pub fn new(blocks: Vec<Arc<BlockMeta>>, summary: Statistics) -> Self {
-        Self {
-            format_version: SegmentInfo::VERSION,
-            blocks,
-            summary,
-        }
-    }
-
-    pub fn format_version(&self) -> u64 {
-        self.format_version
-    }
-
-    // Total block bytes of this segment.
-    pub fn total_bytes(&self) -> u64 {
-        self.blocks.iter().map(|v| v.block_size).sum()
-    }
-}
-
 use super::super::v0;
 use super::super::v1;
-
-impl SegmentInfo {
-    pub fn from_v0(s: v0::SegmentInfo, fields: &[TableField]) -> Self {
-        let summary = Statistics::from_v0(s.summary, fields);
-        Self {
-            format_version: SegmentInfo::VERSION,
-            blocks: s
-                .blocks
-                .into_iter()
-                .map(|b| Arc::new(BlockMeta::from_v0(&b, fields)))
-                .collect::<_>(),
-            summary,
-        }
-    }
-
-    pub fn from_v1(s: v1::SegmentInfo, fields: &[TableField]) -> Self {
-        let summary = Statistics::from_v0(s.summary, fields);
-        Self {
-            format_version: SegmentInfo::VERSION,
-            blocks: s
-                .blocks
-                .into_iter()
-                .map(|b| Arc::new(BlockMeta::from_v1(b.as_ref(), fields)))
-                .collect::<_>(),
-            summary,
-        }
-    }
-}
 
 impl BlockMeta {
     pub fn from_v0(s: &v0::BlockMeta, fields: &[TableField]) -> Self {

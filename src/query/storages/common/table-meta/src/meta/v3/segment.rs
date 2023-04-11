@@ -28,6 +28,7 @@ use crate::meta::Statistics;
 use crate::meta::Versioned;
 
 /// A segment comprises one or more blocks
+/// The structure of the segment is the same as that of v2, but the serialization and deserialization methods are different
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct SegmentInfo {
     /// format version
@@ -84,6 +85,16 @@ impl SegmentInfo {
         }
     }
 
+    /// Serializes the Segment struct to a byte vector.
+    ///
+    /// The byte vector contains the format version, encoding, compression, and compressed block data and
+    /// summary data. The encoding and compression are set to default values. The block data and summary
+    /// data are encoded and compressed, respectively.
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the serialized Segment data as a byte vector. If any errors occur during
+    /// encoding, compression, or writing to the byte vector, an error will be returned.
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
         let mut buf = Vec::new();
 

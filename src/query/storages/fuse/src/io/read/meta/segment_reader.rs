@@ -17,7 +17,6 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_io::prelude::BinaryRead;
 use futures::AsyncRead;
 use serde::de::DeserializeOwned;
 use storages_common_table_meta::meta::decode;
@@ -53,7 +52,7 @@ where
 
     let decompressed_data = decompress(compression, compressed_data)?;
 
-    Ok(decode(encoding, &decompressed_data)?)
+    decode(encoding, &decompressed_data)
 }
 
 pub async fn load_segment_v3<R, T>(mut reader: R, _v: &PhantomData<T>) -> Result<SegmentInfo>
@@ -61,12 +60,12 @@ where
     T: DeserializeOwned,
     R: AsyncRead + Unpin + Send,
 {
-    let version: u64 = reader.read_scalar()?;
+    let version: u64 = read_u64_exact(&mut reader).await?;
     assert_eq!(version, SegmentInfo::VERSION);
-    let encoding = Encoding::try_from(reader.read_scalar::<u64>()?)?;
-    let compression = SegmentCompression::try_from(reader.read_scalar::<u64>()?)?;
-    let blocks_size: u64 = reader.read_scalar()?;
-    let summary_size: u64 = reader.read_scalar()?;
+    let encoding = Encoding::try_from(read_u64_exact(&mut reader).await?)?;
+    let compression = SegmentCompression::try_from(read_u64_exact(&mut reader).await?)?;
+    let blocks_size: u64 = read_u64_exact(&mut reader).await?;
+    let summary_size: u64 = read_u64_exact(&mut reader).await?;
 
     let blocks: Vec<Arc<BlockMeta>> =
         read_and_deserialize(&mut reader, blocks_size, &encoding, &compression).await?;

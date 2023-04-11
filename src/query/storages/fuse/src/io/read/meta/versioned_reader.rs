@@ -18,7 +18,6 @@ use std::marker::PhantomData;
 use common_exception::Result;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
-use common_io::prelude::BinaryRead;
 use futures::AsyncRead;
 use serde::de::DeserializeOwned;
 use serde_json::from_slice;
