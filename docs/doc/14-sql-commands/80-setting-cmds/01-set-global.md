@@ -2,7 +2,7 @@
 title: SET
 ---
 
-Changes the value and/or level of a system setting. To show all the current settings, use [SHOW SETTINGS](show-settings.md).
+Changes the value and/or level of a system setting. To show all the current settings, use [SHOW SETTINGS](../40-show/show-settings.md).
 
 See also: [UNSET](02-unset.md)
 
