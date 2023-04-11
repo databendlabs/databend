@@ -460,10 +460,10 @@ fn test_agg_list(file: &mut impl Write, simulator: impl AggregationSimulator) {
 fn test_agg_listagg(file: &mut impl Write, simulator: impl AggregationSimulator) {
     run_agg_ast(file, "listagg(s)", get_example().as_slice(), simulator);
     run_agg_ast(file, "listagg(s_null)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "listagg('|')(s)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "listagg(s, '|')", get_example().as_slice(), simulator);
     run_agg_ast(
         file,
-        "listagg('-')(s_null)",
+        "listagg(s_null, '-')",
         get_example().as_slice(),
         simulator,
     );
