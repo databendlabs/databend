@@ -57,11 +57,10 @@ FROM
 
 Result:
 
-employee_id | first_name | last_name | department | salary | rank
--------------+------------+-----------+------------+--------+------
-1 | John       | Doe       | IT         |  90000 |    1
-2 | Jane       | Smith     | HR         |  85000 |    2
-3 | Mike       | Johnson   | IT         |  82000 |    3
-4 | Sara       | Williams  | Sales      |  77000 |    4
-5 | Tom        | Brown     | HR         |  75000 |    5
-
+| employee_id | first_name | last_name | department | salary | rank |
+|-------------|------------|-----------|------------|--------|------|
+| 1           | John       | Doe       | IT         | 90000  | 1    |
+| 2           | Jane       | Smith     | HR         | 85000  | 2    |
+| 3           | Mike       | Johnson   | IT         | 82000  | 3    |
+| 4           | Sara       | Williams  | Sales      | 77000  | 4    |
+| 5           | Tom        | Brown     | HR         | 75000  | 5    |
