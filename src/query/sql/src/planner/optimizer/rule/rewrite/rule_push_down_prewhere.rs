@@ -28,6 +28,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::Scan;
 use crate::IndexType;
 use crate::MetadataRef;
+use crate::Visibility;
 
 pub struct RulePushDownPrewhere {
     id: RuleID,
@@ -66,7 +67,8 @@ impl RulePushDownPrewhere {
             ScalarExpr::BoundColumnRef(column) => {
                 if let Some(index) = &column.column.table_index {
                     if table_index == *index
-                        && schema.index_of(column.column.column_name.as_str()).is_ok()
+                        && (column.column.visibility == Visibility::InVisible
+                            || schema.index_of(column.column.column_name.as_str()).is_ok())
                     {
                         columns.insert(column.column.index);
                         return Ok(());

@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod frame_bound;
-mod transform_window;
-mod window_function;
+use common_meta_app::principal::check_record_delimiter;
 
-pub use frame_bound::FrameBound;
-pub use transform_window::TransformWindow;
-pub use window_function::WindowFunctionInfo;
+#[test]
+fn test_check_record_delimiter() {
+    assert!(check_record_delimiter("|").is_ok());
+    assert!(check_record_delimiter("\r\n").is_ok());
+    assert!(check_record_delimiter("").is_err());
+    assert!(check_record_delimiter("foo").is_err());
+    assert!(check_record_delimiter("|\r").is_err());
+}

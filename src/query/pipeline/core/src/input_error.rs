@@ -11,11 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use common_exception::ErrorCode;
 
-mod frame_bound;
-mod transform_window;
-mod window_function;
-
-pub use frame_bound::FrameBound;
-pub use transform_window::TransformWindow;
-pub use window_function::WindowFunctionInfo;
+#[derive(Debug, Clone)]
+pub struct InputError {
+    pub err: ErrorCode,
+    pub num: usize,
+}

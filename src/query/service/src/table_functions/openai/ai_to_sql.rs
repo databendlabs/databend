@@ -229,7 +229,7 @@ impl AsyncSource for GPT2SQLSource {
         let openai = OpenAI::create(api_base, api_key, api_embedding_model, api_completion_model);
         let (sql, _) = openai.completion_sql_request(prompt)?;
 
-        let sql = format!("SELECT{}", sql);
+        let sql = format!("SELECT {}", sql);
         info!("openai response sql: {}", sql);
         let database = self.ctx.get_current_database();
         let database: Vec<Vec<u8>> = vec![database.into_bytes()];

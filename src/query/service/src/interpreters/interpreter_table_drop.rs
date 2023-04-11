@@ -55,6 +55,12 @@ impl Interpreter for DropTableInterpreter {
             .await
             .ok();
 
+        if tbl.is_none() && !self.plan.if_exists {
+            return Err(ErrorCode::UnknownTable(format!(
+                "unknown table {}.{}",
+                db_name, tbl_name
+            )));
+        }
         if let Some(tbl) = tbl {
             if tbl.get_table_info().engine() == VIEW_ENGINE {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
