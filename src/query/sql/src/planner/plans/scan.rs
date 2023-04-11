@@ -150,8 +150,8 @@ impl Operator for Scan {
             if let Some(col_stat) = v {
                 let min = col_stat.min.clone();
                 let max = col_stat.max.clone();
-                let min_datum = Datum::from_data_value(&min);
-                let max_datum = Datum::from_data_value(&max);
+                let min_datum = Datum::from_scalar(&min);
+                let max_datum = Datum::from_scalar(&max);
                 if let (Some(min), Some(max)) = (min_datum, max_datum) {
                     let histogram = histogram_from_ndv(
                         col_stat.number_of_distinct_values,

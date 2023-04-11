@@ -92,6 +92,14 @@ pub fn run_agg_ast(
                     .map(|p| Scalar::Number(NumberScalar::UInt64(*p as u64)))
                     .collect();
 
+                // Convert the delimiter of string_agg to params
+                let params = if name.eq_ignore_ascii_case("string_agg") && args.len() == 2 {
+                    let val = args[1].0.as_scalar().unwrap();
+                    vec![val.clone()]
+                } else {
+                    params
+                };
+
                 let arg_columns: Vec<Column> = args
                     .iter()
                     .map(|(arg, ty)| match arg {
