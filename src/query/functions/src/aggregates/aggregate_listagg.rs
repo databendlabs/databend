@@ -38,7 +38,6 @@ use crate::aggregates::AggregateFunction;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ListAggState {
     values: Vec<u8>,
-    count: u64,
 }
 
 #[derive(Clone)]
@@ -57,10 +56,7 @@ impl AggregateFunction for AggregateListAggFunction {
     }
 
     fn init_state(&self, place: StateAddr) {
-        place.write(|| ListAggState {
-            values: Vec::new(),
-            count: 0,
-        });
+        place.write(|| ListAggState { values: Vec::new() });
     }
 
     fn state_layout(&self) -> Layout {
@@ -80,21 +76,15 @@ impl AggregateFunction for AggregateListAggFunction {
             Some(validity) => {
                 column.iter().zip(validity.iter()).for_each(|(v, b)| {
                     if b {
-                        if state.count > 0 && !self.delimiter.is_empty() {
-                            state.values.extend_from_slice(self.delimiter.as_slice());
-                        }
                         state.values.extend_from_slice(v);
-                        state.count += 1;
+                        state.values.extend_from_slice(self.delimiter.as_slice());
                     }
                 });
             }
             None => {
                 column.iter().for_each(|v| {
-                    if state.count > 0 && !self.delimiter.is_empty() {
-                        state.values.extend_from_slice(self.delimiter.as_slice());
-                    }
                     state.values.extend_from_slice(v);
-                    state.count += 1;
+                    state.values.extend_from_slice(self.delimiter.as_slice());
                 });
             }
         }
@@ -113,11 +103,8 @@ impl AggregateFunction for AggregateListAggFunction {
         column_iter.zip(places.iter()).for_each(|(v, place)| {
             let addr = place.next(offset);
             let state = addr.get::<ListAggState>();
-            if state.count > 0 && !self.delimiter.is_empty() {
-                state.values.extend_from_slice(self.delimiter.as_slice());
-            }
             state.values.extend_from_slice(v);
-            state.count += 1;
+            state.values.extend_from_slice(self.delimiter.as_slice());
         });
         Ok(())
     }
@@ -127,11 +114,8 @@ impl AggregateFunction for AggregateListAggFunction {
         let v = StringType::index_column(&column, row);
         if let Some(v) = v {
             let state = place.get::<ListAggState>();
-            if state.count > 0 && !self.delimiter.is_empty() {
-                state.values.extend_from_slice(self.delimiter.as_slice());
-            }
             state.values.extend_from_slice(v);
-            state.count += 1;
+            state.values.extend_from_slice(self.delimiter.as_slice());
         }
         Ok(())
     }
@@ -145,26 +129,23 @@ impl AggregateFunction for AggregateListAggFunction {
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<ListAggState>();
         state.values = deserialize_from_slice(reader)?;
-        state.count = deserialize_from_slice(reader)?;
         Ok(())
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
         let rhs = rhs.get::<ListAggState>();
         let state = place.get::<ListAggState>();
-        if rhs.count > 0 {
-            if state.count > 0 {
-                state.values.extend_from_slice(self.delimiter.as_slice());
-            }
-            state.values.extend_from_slice(rhs.values.as_slice());
-            state.count += rhs.count;
-        }
+        state.values.extend_from_slice(rhs.values.as_slice());
         Ok(())
     }
 
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<ListAggState>();
         let builder = StringType::try_downcast_builder(builder).unwrap();
+        if !self.delimiter.is_empty() {
+            let new_len = state.values.len() - self.delimiter.len();
+            state.values.truncate(new_len);
+        }
         builder.put_slice(state.values.as_slice());
         builder.commit_row();
         Ok(())
