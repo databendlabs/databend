@@ -18,30 +18,49 @@ There are two main types of order-sensitive window functions:
 
 The list below shows all the window functions.
 
-| Function Name                                                     | Category     | Window | Window Frame | Notes |
-|-------------------------------------------------------------------|--------------|--------|--------------|-------|
-| [AVG](../10-aggregate-functions/aggregate-avg.md)                 | General      | ✔      | ✔            |       |
-| [COUNT](../10-aggregate-functions/aggregate-count.md)             | General      | ✔      | ✔            |       |
-| [COUNT_IF](../10-aggregate-functions/aggregate-count-if.md)       | General      | ✔      | ✔            |       |
-| [COVAR_POP](../10-aggregate-functions/aggregate-covar-pop.md)     | General      | ✔      |              |       |
-| [COVAR_SAMP](../10-aggregate-functions/aggregate-covar-samp.md)   | General      | ✔      |              |       |
-| [LIST](../10-aggregate-functions/aggregate-list.md)               | General      | ✔      |              |       |
-| [MAX](../10-aggregate-functions/aggregate-max.md)                 | General      | ✔      |              |       |
-| [MIN](../10-aggregate-functions/aggregate-min.md)                 | General      | ✔      |              |       |
-| [STDDEV_POP](../10-aggregate-functions/aggregate-stddev-pop.md)   | General      | ✔      | ✔            |       |
-| [STDDEV_SAMP](../10-aggregate-functions/aggregate-stddev-samp.md) | General      | ✔      | ✔            |       |
-| [SUM](../10-aggregate-functions/aggregate-sum.md)                 | General      | ✔      | ✔            |       |
-| [DENSE_RANK](01-window-function-dense-rank.md)                    | Rank-related | ✔      | ✔            |       |
-| [RANK](01-window-function-rank.md)                                | Rank-related | ✔      | ✔            |       |
-| [ROW_NUMBER](01-window-function-row-number.md)                    | Rank-related | ✔      |              |       |
+| Function Name                                                         | Category     | Window | Window Frame | Notes |
+|-----------------------------------------------------------------------|--------------|--------|--------------|-------|
+| [AVG](../10-aggregate-functions/aggregate-avg.md)                     | General      | ✔      | ✔            |       |
+| [AVG_IF](../10-aggregate-functions/aggregate-avg-if.md)               | General      | ✔      | ✔            |       |
+| [COUNT](../10-aggregate-functions/aggregate-count.md)                 | General      | ✔      | ✔            |       |
+| [COUNT_IF](../10-aggregate-functions/aggregate-count-if.md)           | General      | ✔      | ✔            |       |
+| [COVAR_POP](../10-aggregate-functions/aggregate-covar-pop.md)         | General      | ✔      |              |       |
+| [COVAR_SAMP](../10-aggregate-functions/aggregate-covar-samp.md)       | General      | ✔      |              |       |
+| [LIST](../10-aggregate-functions/aggregate-list.md)                   | General      | ✔      |              |       |
+| [MAX](../10-aggregate-functions/aggregate-max.md)                     | General      | ✔      | ✔            |       |
+| [MAX_IF](../10-aggregate-functions/aggregate-max-if.md)               | General      | ✔      | ✔            |       |
+| [MIN](../10-aggregate-functions/aggregate-min.md)                     | General      | ✔      | ✔            |       |
+| [MIN_IF](../10-aggregate-functions/aggregate-min-if.md)               | General      | ✔      | ✔            |       |
+| [STDDEV_POP](../10-aggregate-functions/aggregate-stddev-pop.md)       | General      | ✔      | ✔            |       |
+| [STDDEV_SAMP](../10-aggregate-functions/aggregate-stddev-samp.md)     | General      | ✔      | ✔            |       |
+| [MEDIAN](../10-aggregate-functions/aggregate-median.md)               | General      | ✔      | ✔            |       |
+| [QUANTILE](../10-aggregate-functions/aggregate-quantile.md)           | General      | ✔      | ✔            |       |
+| [QUANTILE_CONT](../10-aggregate-functions/aggregate-quantile-cont.md) | General      | ✔      | ✔            |       |
+| [KURTOSIS](../10-aggregate-functions/aggregate-kurtosis.md)           | General      | ✔      | ✔            |       |
+| [SKEWNESS](../10-aggregate-functions/aggregate-skewness.md)           | General      | ✔      | ✔            |       |
+| [SUM](../10-aggregate-functions/aggregate-sum.md)                     | General      | ✔      | ✔            |       |
+| [SUM_IF](../10-aggregate-functions/aggregate-sum-if.md)               | General      | ✔      | ✔            |       |
+| [DENSE_RANK](01-window-function-dense-rank.md)                        | Rank-related | ✔      | ✔            |       |
+| [RANK](01-window-function-rank.md)                                    | Rank-related | ✔      | ✔            |       |
+| [ROW_NUMBER](01-window-function-row-number.md)                        | Rank-related | ✔      |              |       |
 
 
 ## Window Syntax
 
 ```sql
-<function> ( [ <arguments> ] ) OVER ( [ PARTITION BY <expr1> ] [ ORDER BY <expr2> ] )
+<function> ( [ <arguments> ] ) OVER ( { named window | inline window } )
+
+named window ::=
+    { window_name | ( window_name ) }
+
+inline window ::=
+    [ PARTITION BY <expression_list> ]
+    [ ORDER BY <expression_list> ]
+    [ window frame ]
 ```
-The `<function>` is [aggregate function](../10-aggregate-functions/index.md).
+The `named window` is a window that is defined in the `WINDOW` clause of the `SELECT` statement, eg: `SELECT a, SUM(a) OVER w FROM t WINDOW w AS ( inline window )`.
+
+The `<function>` is one of ([aggregate function](../10-aggregate-functions/index.md), rank function, value function).
 
 The `OVER` clause specifies that the function is being used as a window function.
 
@@ -49,14 +68,13 @@ The `PARTITION BY` sub-clause allows rows to be grouped into sub-groups, for exa
 
 The `ORDER BY` clause orders rows within the window. 
 
+The `window frame` clause specifies the window frame type and the window frame extent. The `window frame` clause is optional. If you omit the `window frame` clause, the default window frame type is `RANGE` and the default window frame extent is `UNBOUNDED PRECEDING AND CURRENT ROW`.
+
 
 ## Window Frame Syntax
 
-```sql
-<function> ( <arguments> ) OVER ( [ PARTITION BY <expr1> ] ORDER BY <expr2> [ cumulativeFrame | slidingFrame ] )
-```
+`window frame` can be one of the following types:
 
-Where:
 ```sql
 cumulativeFrame ::=
     {
