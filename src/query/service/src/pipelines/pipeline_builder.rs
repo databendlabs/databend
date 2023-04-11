@@ -279,7 +279,7 @@ impl PipelineBuilder {
                 input,
                 output,
                 num_input_columns,
-                *func_ctx,
+                func_ctx.clone(),
                 vec![BlockOperator::Project {
                     projection: projections.clone(),
                 }],
@@ -321,7 +321,7 @@ impl PipelineBuilder {
                     input,
                     output,
                     num_input_columns,
-                    func_ctx,
+                    func_ctx.clone(),
                     ops.clone(),
                 )))
             })?;
@@ -384,7 +384,7 @@ impl PipelineBuilder {
                 input,
                 output,
                 num_input_columns,
-                func_ctx,
+                func_ctx.clone(),
                 vec![BlockOperator::Project {
                     projection: project.projections.clone(),
                 }],
@@ -414,10 +414,13 @@ impl PipelineBuilder {
         let num_input_columns = eval_scalar.input.output_schema()?.num_fields();
 
         self.main_pipeline.add_transform(|input, output| {
-            let transform =
-                CompoundBlockOperator::create(input, output, num_input_columns, func_ctx, vec![
-                    op.clone(),
-                ]);
+            let transform = CompoundBlockOperator::create(
+                input,
+                output,
+                num_input_columns,
+                func_ctx.clone(),
+                vec![op.clone()],
+            );
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProfileWrapper::create(
@@ -449,10 +452,13 @@ impl PipelineBuilder {
         let num_input_columns = project_set.input.output_schema()?.num_fields();
 
         self.main_pipeline.add_transform(|input, output| {
-            let transform =
-                CompoundBlockOperator::create(input, output, num_input_columns, func_ctx, vec![
-                    op.clone(),
-                ]);
+            let transform = CompoundBlockOperator::create(
+                input,
+                output,
+                num_input_columns,
+                func_ctx.clone(),
+                vec![op.clone()],
+            );
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProfileWrapper::create(
@@ -1175,7 +1181,7 @@ impl PipelineBuilder {
                         transform_output_port,
                         select_schema.clone(),
                         insert_schema.clone(),
-                        func_ctx,
+                        func_ctx.clone(),
                     )
                 })?;
         }

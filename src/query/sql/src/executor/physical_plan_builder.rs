@@ -33,6 +33,7 @@ use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::Expr;
+use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_functions::BUILTIN_FUNCTIONS;
@@ -86,15 +87,19 @@ use crate::DUMMY_TABLE_INDEX;
 pub struct PhysicalPlanBuilder {
     metadata: MetadataRef,
     ctx: Arc<dyn TableContext>,
+    func_ctx: FunctionContext,
+
     next_plan_id: u32,
 }
 
 impl PhysicalPlanBuilder {
     pub fn new(metadata: MetadataRef, ctx: Arc<dyn TableContext>) -> Self {
+        let func_ctx = ctx.get_function_context().unwrap();
         Self {
             metadata,
             ctx,
             next_plan_id: 0,
+            func_ctx,
         }
     }
 
@@ -398,11 +403,8 @@ impl PhysicalPlanBuilder {
                                 .project_column_ref(|index| {
                                     build_schema.index_of(&index.to_string()).unwrap()
                                 });
-                            let (expr, _) = ConstantFolder::fold(
-                                &expr,
-                                self.ctx.get_function_context()?,
-                                &BUILTIN_FUNCTIONS,
-                            );
+                            let (expr, _) =
+                                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                             Ok(expr.as_remote_expr())
                         })
                         .collect::<Result<_>>()?,
@@ -414,11 +416,8 @@ impl PhysicalPlanBuilder {
                                 .project_column_ref(|index| {
                                     probe_schema.index_of(&index.to_string()).unwrap()
                                 });
-                            let (expr, _) = ConstantFolder::fold(
-                                &expr,
-                                self.ctx.get_function_context()?,
-                                &BUILTIN_FUNCTIONS,
-                            );
+                            let (expr, _) =
+                                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                             Ok(expr.as_remote_expr())
                         })
                         .collect::<Result<_>>()?,
@@ -431,11 +430,8 @@ impl PhysicalPlanBuilder {
                                 .project_column_ref(|index| {
                                     merged_schema.index_of(&index.to_string()).unwrap()
                                 });
-                            let (expr, _) = ConstantFolder::fold(
-                                &expr,
-                                self.ctx.get_function_context()?,
-                                &BUILTIN_FUNCTIONS,
-                            );
+                            let (expr, _) =
+                                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                             Ok(expr.as_remote_expr())
                         })
                         .collect::<Result<_>>()?,
@@ -460,11 +456,8 @@ impl PhysicalPlanBuilder {
                             .project_column_ref(|index| {
                                 input_schema.index_of(&index.to_string()).unwrap()
                             });
-                        let (expr, _) = ConstantFolder::fold(
-                            &expr,
-                            self.ctx.get_function_context()?,
-                            &BUILTIN_FUNCTIONS,
-                        );
+                        let (expr, _) =
+                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                         Ok((expr.as_remote_expr(), item.index))
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -492,11 +485,8 @@ impl PhysicalPlanBuilder {
                                     input_schema.index_of(&index.to_string()).unwrap()
                                 });
                             let expr = cast_expr_to_non_null_boolean(expr)?;
-                            let (expr, _) = ConstantFolder::fold(
-                                &expr,
-                                self.ctx.get_function_context()?,
-                                &BUILTIN_FUNCTIONS,
-                            );
+                            let (expr, _) =
+                                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                             Ok(expr.as_remote_expr())
                         })
                         .collect::<Result<_>>()?,
@@ -834,11 +824,8 @@ impl PhysicalPlanBuilder {
                                 .project_column_ref(|index| {
                                     input_schema.index_of(&index.to_string()).unwrap()
                                 });
-                            let (expr, _) = ConstantFolder::fold(
-                                &expr,
-                                self.ctx.get_function_context()?,
-                                &BUILTIN_FUNCTIONS,
-                            );
+                            let (expr, _) =
+                                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                             keys.push(expr.as_remote_expr());
                         }
                         FragmentKind::Normal
@@ -930,11 +917,8 @@ impl PhysicalPlanBuilder {
                             .project_column_ref(|index| {
                                 input_schema.index_of(&index.to_string()).unwrap()
                             });
-                        let (expr, _) = ConstantFolder::fold(
-                            &expr,
-                            self.ctx.get_function_context()?,
-                            &BUILTIN_FUNCTIONS,
-                        );
+                        let (expr, _) =
+                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                         Ok((expr.as_remote_expr(), item.index))
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -1027,11 +1011,7 @@ impl PhysicalPlanBuilder {
 
                 let expr = cast_expr_to_non_null_boolean(expr)?;
 
-                let (expr, _) = ConstantFolder::fold(
-                    &expr,
-                    self.ctx.get_function_context()?,
-                    &BUILTIN_FUNCTIONS,
-                );
+                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 Ok(expr.as_remote_expr())
             })
             .transpose()?;
@@ -1083,11 +1063,7 @@ impl PhysicalPlanBuilder {
                     })
                     .expect("there should be at least one predicate in prewhere");
                 let expr = cast_expr_to_non_null_boolean(predicate.as_expr_with_col_name()?)?;
-                let (filter, _) = ConstantFolder::fold(
-                    &expr,
-                    self.ctx.get_function_context()?,
-                    &BUILTIN_FUNCTIONS,
-                );
+                let (filter, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 let filter = filter.as_remote_expr();
                 let virtual_columns = self.build_virtual_columns(&prewhere.prewhere_columns);
 

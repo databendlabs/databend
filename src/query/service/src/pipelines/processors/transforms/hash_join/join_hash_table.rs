@@ -243,7 +243,7 @@ impl JoinHashTable {
                 .collect::<Vec<_>>();
             input = DataBlock::new(nullable_columns, input.num_rows());
         }
-        let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(&input, &func_ctx, &BUILTIN_FUNCTIONS);
 
         let probe_keys = self
             .hash_join_desc

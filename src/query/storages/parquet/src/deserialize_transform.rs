@@ -225,7 +225,7 @@ impl Processor for ParquetDeserializeTransform {
                     }
 
                     // Step 2: Read Prewhere columns and get the filter
-                    let evaluator = Evaluator::new(&prewhere_block, *func_ctx, &BUILTIN_FUNCTIONS);
+                    let evaluator = Evaluator::new(&prewhere_block, func_ctx, &BUILTIN_FUNCTIONS);
                     let filter = evaluator
                         .run(filter)
                         .map_err(|e| e.add_message("eval prewhere filter failed:"))?

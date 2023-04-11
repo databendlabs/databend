@@ -62,7 +62,7 @@ impl BlockOperator {
         match self {
             BlockOperator::Map { exprs } => {
                 for expr in exprs {
-                    let evaluator = Evaluator::new(&input, *func_ctx, &BUILTIN_FUNCTIONS);
+                    let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
                     let result = evaluator.run(expr)?;
                     let col = BlockEntry {
                         data_type: expr.data_type().clone(),
@@ -79,7 +79,7 @@ impl BlockOperator {
             } => {
                 let original_num_columns = input.num_columns();
                 for expr in exprs {
-                    let evaluator = Evaluator::new(&input, *func_ctx, &BUILTIN_FUNCTIONS);
+                    let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
                     let result = evaluator.run(expr)?;
                     let col = BlockEntry {
                         data_type: expr.data_type().clone(),
@@ -107,7 +107,7 @@ impl BlockOperator {
             BlockOperator::Filter { expr } => {
                 assert_eq!(expr.data_type(), &DataType::Boolean);
 
-                let evaluator = Evaluator::new(&input, *func_ctx, &BUILTIN_FUNCTIONS);
+                let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
                 let filter = evaluator.run(expr)?.try_downcast::<BooleanType>().unwrap();
                 input.filter_boolean_value(&filter)
             }
@@ -121,7 +121,7 @@ impl BlockOperator {
             }
 
             BlockOperator::FlatMap { srf_exprs } => {
-                let eval = Evaluator::new(&input, *func_ctx, &BUILTIN_FUNCTIONS);
+                let eval = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
 
                 // [
                 //   srf1: [
