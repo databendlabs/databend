@@ -190,7 +190,7 @@ impl CopyInterpreter {
                         transform_output_port,
                         source_schema.clone(),
                         dst_schema.clone(),
-                        func_ctx,
+                        func_ctx.clone(),
                     )
                 },
             )?;
@@ -354,8 +354,8 @@ impl CopyInterpreter {
 
         if stage_table_info
             .stage_info
-            .file_format_options
-            .format
+            .file_format_params
+            .get_type()
             .has_inner_schema()
         {
             let dst_schema: Arc<DataSchema> = Arc::new(to_table.schema().into());
@@ -366,7 +366,7 @@ impl CopyInterpreter {
                         transform_input_port,
                         transform_output_port,
                         dst_schema.clone(),
-                        func_ctx,
+                        func_ctx.clone(),
                     )
                 },
             )?;

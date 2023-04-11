@@ -29,6 +29,7 @@ use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_formats::FieldDecoder;
 use common_formats::FileFormatOptionsExt;
+use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
 use common_pipeline_core::InputError;
@@ -49,8 +50,6 @@ use crate::input_formats::InputFormat;
 use crate::input_formats::SplitInfo;
 
 pub trait AligningStateTextBased: Sync + Sized + Send {
-    fn try_create(ctx: &Arc<InputContext>, split_info: &Arc<SplitInfo>) -> Result<Self>;
-
     fn is_splittable() -> bool {
         false
     }
@@ -72,13 +71,9 @@ pub struct AligningStateCommon {
 }
 
 impl AligningStateCommon {
-    pub fn create(
-        ctx: &Arc<InputContext>,
-        split_info: &Arc<SplitInfo>,
-        is_splittable: bool,
-    ) -> Self {
+    pub fn create(split_info: &Arc<SplitInfo>, is_splittable: bool, skip_header: usize) -> Self {
         let rows_to_skip = if split_info.seq_in_file == 0 {
-            ctx.format_options.stage.skip_header as usize
+            skip_header
         } else {
             (is_splittable && split_info.num_file_splits > 1) as usize
         };
@@ -100,19 +95,24 @@ pub struct AligningStateRowDelimiter {
     tail_of_last_batch: Vec<u8>,
 }
 
-impl AligningStateTextBased for AligningStateRowDelimiter {
-    fn try_create(ctx: &Arc<InputContext>, split_info: &Arc<SplitInfo>) -> Result<Self> {
-        let record_delimiter_end = ctx.format_options.get_record_delimiter()?.end();
-
+impl AligningStateRowDelimiter {
+    pub fn try_create(
+        ctx: &Arc<InputContext>,
+        split_info: &Arc<SplitInfo>,
+        record_delimiter_end: u8,
+        headers: usize,
+    ) -> Result<Self> {
         Ok(Self {
             ctx: ctx.clone(),
             split_info: split_info.clone(),
             record_delimiter_end,
-            common: AligningStateCommon::create(ctx, split_info, true),
+            common: AligningStateCommon::create(split_info, true, headers),
             tail_of_last_batch: vec![],
         })
     }
+}
 
+impl AligningStateTextBased for AligningStateRowDelimiter {
     fn align(&mut self, buf_in: &[u8]) -> Result<Vec<RowBatch>> {
         let record_delimiter_end = self.record_delimiter_end;
         let size_last_remain = self.tail_of_last_batch.len();
@@ -219,13 +219,25 @@ impl AligningStateTextBased for AligningStateRowDelimiter {
 pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
     type AligningState: AligningStateTextBased;
 
+    fn try_create_align_state(
+        ctx: &Arc<InputContext>,
+        split_info: &Arc<SplitInfo>,
+    ) -> Result<Self::AligningState>;
+
+    fn try_create_block_builder(ctx: &Arc<InputContext>) -> Result<BlockBuilder<Self>> {
+        Ok(BlockBuilder::<Self>::create(ctx.clone()))
+    }
+
     fn format_type() -> StageFileFormatType;
 
     fn is_splittable() -> bool {
         false
     }
 
-    fn create_field_decoder(options: &FileFormatOptionsExt) -> Arc<dyn FieldDecoder>;
+    fn create_field_decoder(
+        params: &FileFormatParams,
+        options: &FileFormatOptionsExt,
+    ) -> Arc<dyn FieldDecoder>;
 
     fn deserialize(
         builder: &mut BlockBuilder<Self>,
@@ -281,6 +293,17 @@ impl<T: InputFormatTextBase> InputFormatPipe for InputFormatTextPipe<T> {
     type RowBatch = RowBatch;
     type AligningState = AligningStateMaybeCompressed<T>;
     type BlockBuilder = BlockBuilder<T>;
+
+    fn try_create_align_state(
+        ctx: &Arc<InputContext>,
+        split_info: &Arc<SplitInfo>,
+    ) -> Result<Self::AligningState> {
+        AligningStateMaybeCompressed::<T>::try_create(ctx, split_info)
+    }
+
+    fn try_create_block_builder(ctx: &Arc<InputContext>) -> Result<Self::BlockBuilder> {
+        Ok(BlockBuilder::<T>::create(ctx.clone()))
+    }
 }
 
 #[async_trait::async_trait]
@@ -299,7 +322,7 @@ impl<T: InputFormatTextBase> InputFormat for T {
             let path = info.path.clone();
 
             let compress_alg = InputContext::get_compression_alg_copy(
-                stage_info.file_format_options.compression,
+                stage_info.file_format_params.compression(),
                 &path,
             )?;
             let split_size = stage_info.copy_options.split_size;
@@ -409,22 +432,24 @@ pub struct AligningStateMaybeCompressed<T: InputFormatTextBase> {
     state: T::AligningState,
 }
 
-#[async_trait::async_trait]
-impl<T: InputFormatTextBase> AligningStateTrait for AligningStateMaybeCompressed<T> {
-    type Pipe = InputFormatTextPipe<T>;
-
+impl<T: InputFormatTextBase> AligningStateMaybeCompressed<T> {
     fn try_create(ctx: &Arc<InputContext>, split_info: &Arc<SplitInfo>) -> Result<Self> {
         let path = split_info.file.path.clone();
         let decompressor = ctx.get_compression_alg(&path)?.map(DecompressDecoder::new);
-        let state = T::AligningState::try_create(ctx, split_info)?;
+        let state = T::try_create_align_state(ctx, split_info)?;
 
-        Ok(AligningStateMaybeCompressed::<T> {
+        Ok(Self {
             ctx: ctx.clone(),
             split_info: split_info.clone(),
             decompressor,
             state,
         })
     }
+}
+
+#[async_trait::async_trait]
+impl<T: InputFormatTextBase> AligningStateTrait for AligningStateMaybeCompressed<T> {
+    type Pipe = InputFormatTextPipe<T>;
 
     fn align(&mut self, read_batch: Option<Vec<u8>>) -> Result<Vec<RowBatch>> {
         let row_batches = if let Some(data) = read_batch {
@@ -460,6 +485,31 @@ pub struct BlockBuilder<T> {
 }
 
 impl<T: InputFormatTextBase> BlockBuilder<T> {
+    fn create(ctx: Arc<InputContext>) -> Self {
+        let columns = ctx
+            .schema
+            .fields()
+            .iter()
+            .map(|f| {
+                ColumnBuilder::with_capacity_hint(
+                    &f.data_type().into(),
+                    ctx.block_compact_thresholds.min_rows_per_block,
+                    false,
+                )
+            })
+            .collect();
+        let field_decoder =
+            T::create_field_decoder(&ctx.file_format_params, &ctx.file_format_options_ext);
+
+        BlockBuilder {
+            ctx,
+            mutable_columns: columns,
+            num_rows: 0,
+            field_decoder,
+            phantom: PhantomData,
+        }
+    }
+
     fn flush(&mut self) -> Result<Vec<DataBlock>> {
         let columns: Vec<Column> = self
             .mutable_columns
@@ -503,30 +553,6 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
 
 impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
     type Pipe = InputFormatTextPipe<T>;
-
-    fn create(ctx: Arc<InputContext>) -> Self {
-        let columns = ctx
-            .schema
-            .fields()
-            .iter()
-            .map(|f| {
-                ColumnBuilder::with_capacity_hint(
-                    &f.data_type().into(),
-                    ctx.block_compact_thresholds.min_rows_per_block,
-                    false,
-                )
-            })
-            .collect();
-        let field_decoder = T::create_field_decoder(&ctx.format_options);
-
-        BlockBuilder {
-            ctx,
-            mutable_columns: columns,
-            num_rows: 0,
-            field_decoder,
-            phantom: PhantomData,
-        }
-    }
 
     fn deserialize(&mut self, batch: Option<RowBatch>) -> Result<Vec<DataBlock>> {
         if let Some(b) = batch {

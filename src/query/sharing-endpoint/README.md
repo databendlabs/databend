@@ -48,7 +48,7 @@ add `share_endpoint_address` field on your databend query config file
 # databend-query -c databend_query_config_spec.toml
 [query]
 ...
-share_endpoint_address = "127.0.0.1:33003" # receive shared information from open sharing
+share_endpoint_address = "127.0.0.1:13003" # receive shared information from open sharing
 ...
 ```
 
@@ -78,4 +78,3 @@ For **API** changes, please follow the following steps:
 1. provide a RFC to explain the reason why we need the additional api or why we need to change the existing api.
 2. update the protocol.md to reflect the changes.
 3. update the implementation to reflect the changes.
-

@@ -47,7 +47,7 @@ use common_expression::ConstantFolder;
 use common_expression::FunctionKind;
 use common_expression::Scalar;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::principal::StageFileFormatType;
+use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageInfo;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
@@ -444,7 +444,7 @@ impl Binder {
                 let (mut stage_info, path) =
                     parse_file_location(&self.ctx, location, options.connection.clone()).await?;
                 if let Some(f) = &options.file_format {
-                    stage_info.file_format_options = self.ctx.get_file_format(f).await?;
+                    stage_info.file_format_params = self.ctx.get_file_format(f).await?;
                 }
                 let files_info = StageFilesInfo {
                     path,
@@ -467,10 +467,7 @@ impl Binder {
         alias: &Option<TableAlias>,
         files_to_copy: Option<Vec<StageFileInfo>>,
     ) -> Result<(SExpr, BindContext)> {
-        if matches!(
-            stage_info.file_format_options.format,
-            StageFileFormatType::Parquet
-        ) {
+        if matches!(stage_info.file_format_params, FileFormatParams::Parquet(..)) {
             let read_options = ParquetReadOptions::default();
 
             let table =
@@ -767,7 +764,7 @@ impl Binder {
 
                 let (new_expr, _) = ConstantFolder::fold(
                     &scalar_expr,
-                    self.ctx.get_function_context()?,
+                    &self.ctx.get_function_context()?,
                     &BUILTIN_FUNCTIONS,
                 );
 

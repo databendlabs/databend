@@ -257,7 +257,7 @@ impl<'a> Binder {
             Statement::CreateFileFormat{  if_not_exists, name, file_format_options} =>  Plan::CreateFileFormat(Box::new(CreateFileFormatPlan {
                 if_not_exists: *if_not_exists,
                 name: name.clone(),
-                file_format_options: file_format_options.clone()
+                file_format_params: file_format_options.clone().try_into()?
             })),
 
             Statement::DropFileFormat{

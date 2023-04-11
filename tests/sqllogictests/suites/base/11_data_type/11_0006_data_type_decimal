@@ -59,14 +59,8 @@ drop table t;
 statement error 1049
 create table t (a Decimal(77, 0));
 
-statement ok
-drop table t;
-
 statement error 1049
 create table t (a Decimal(1, 2));
-
-statement ok
-drop table t;
 
 statement error 1049
 create table t (a Decimal(0, 0));

@@ -19,8 +19,11 @@ use common_catalog::table::AppendMode;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_function;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::with_hash_method;
 use common_expression::with_mappedhash_method;
+use common_expression::with_number_mapped_type;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::FunctionContext;
@@ -34,6 +37,7 @@ use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Processor;
 use common_pipeline_sinks::EmptySink;
 use common_pipeline_sinks::Sinker;
 use common_pipeline_sinks::UnionReceiveSink;
@@ -67,6 +71,7 @@ use common_sql::IndexType;
 use common_storage::DataOperator;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
 
+use super::processors::transforms::FrameBound;
 use super::processors::transforms::WindowFunctionInfo;
 use super::processors::ProfileWrapper;
 use super::processors::TransformExpandGroupingSets;
@@ -274,7 +279,7 @@ impl PipelineBuilder {
                 input,
                 output,
                 num_input_columns,
-                *func_ctx,
+                func_ctx.clone(),
                 vec![BlockOperator::Project {
                     projection: projections.clone(),
                 }],
@@ -316,7 +321,7 @@ impl PipelineBuilder {
                     input,
                     output,
                     num_input_columns,
-                    func_ctx,
+                    func_ctx.clone(),
                     ops.clone(),
                 )))
             })?;
@@ -379,7 +384,7 @@ impl PipelineBuilder {
                 input,
                 output,
                 num_input_columns,
-                func_ctx,
+                func_ctx.clone(),
                 vec![BlockOperator::Project {
                     projection: project.projections.clone(),
                 }],
@@ -409,10 +414,13 @@ impl PipelineBuilder {
         let num_input_columns = eval_scalar.input.output_schema()?.num_fields();
 
         self.main_pipeline.add_transform(|input, output| {
-            let transform =
-                CompoundBlockOperator::create(input, output, num_input_columns, func_ctx, vec![
-                    op.clone(),
-                ]);
+            let transform = CompoundBlockOperator::create(
+                input,
+                output,
+                num_input_columns,
+                func_ctx.clone(),
+                vec![op.clone()],
+            );
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProfileWrapper::create(
@@ -444,10 +452,13 @@ impl PipelineBuilder {
         let num_input_columns = project_set.input.output_schema()?.num_fields();
 
         self.main_pipeline.add_transform(|input, output| {
-            let transform =
-                CompoundBlockOperator::create(input, output, num_input_columns, func_ctx, vec![
-                    op.clone(),
-                ]);
+            let transform = CompoundBlockOperator::create(
+                input,
+                output,
+                num_input_columns,
+                func_ctx.clone(),
+                vec![op.clone()],
+            );
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProfileWrapper::create(
@@ -785,14 +796,60 @@ impl PipelineBuilder {
         let func = WindowFunctionInfo::try_create(&window.func, &input_schema)?;
         // Window
         self.main_pipeline.add_transform(|input, output| {
-            let transform = TransformWindow::try_create(
-                input,
-                output,
-                func.clone(),
-                partition_by.clone(),
-                order_by.clone(),
-                window.window_frame.clone(),
-            )?;
+            // The transform can only be created here, because it cannot be cloned.
+
+            let transform = if window.window_frame.units.is_rows() {
+                let start_bound = FrameBound::try_from(&window.window_frame.start_bound)?;
+                let end_bound = FrameBound::try_from(&window.window_frame.end_bound)?;
+                Box::new(TransformWindow::<u64>::try_create_rows(
+                    input,
+                    output,
+                    func.clone(),
+                    partition_by.clone(),
+                    order_by.clone(),
+                    window.window_frame.units.clone(),
+                    (start_bound, end_bound),
+                )?) as Box<dyn Processor>
+            } else {
+                if order_by.len() == 1 {
+                    // If the length of order_by is 1, there may be a RANGE frame.
+                    let data_type = input_schema.field(order_by[0].offset).data_type();
+                    with_number_mapped_type!(|NUM_TYPE| match data_type {
+                        DataType::Number(NumberDataType::NUM_TYPE) => {
+                            let start_bound =
+                                FrameBound::try_from(&window.window_frame.start_bound)?;
+                            let end_bound = FrameBound::try_from(&window.window_frame.end_bound)?;
+                            return Ok(ProcessorPtr::create(Box::new(
+                                TransformWindow::<NUM_TYPE>::try_create_range(
+                                    input,
+                                    output,
+                                    func.clone(),
+                                    partition_by.clone(),
+                                    order_by.clone(),
+                                    window.window_frame.units.clone(),
+                                    (start_bound, end_bound),
+                                )?,
+                            )
+                                as Box<dyn Processor>));
+                        }
+                        _ => {}
+                    })
+                }
+
+                // There is no offset in the RANGE frame. (just CURRENT ROW or UNBOUNDED)
+                // So we can use any number type to create the transform.
+                let start_bound = FrameBound::try_from(&window.window_frame.start_bound)?;
+                let end_bound = FrameBound::try_from(&window.window_frame.end_bound)?;
+                Box::new(TransformWindow::<u8>::try_create_range(
+                    input,
+                    output,
+                    func.clone(),
+                    partition_by.clone(),
+                    order_by.clone(),
+                    window.window_frame.units.clone(),
+                    (start_bound, end_bound),
+                )?) as Box<dyn Processor>
+            };
             Ok(ProcessorPtr::create(transform))
         })?;
 
@@ -1124,7 +1181,7 @@ impl PipelineBuilder {
                         transform_output_port,
                         select_schema.clone(),
                         insert_schema.clone(),
-                        func_ctx,
+                        func_ctx.clone(),
                     )
                 })?;
         }

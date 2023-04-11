@@ -19,7 +19,6 @@ use std::io::Write;
 use bumpalo::Bump;
 use comfy_table::Table;
 use common_exception::Result;
-use common_expression::date_helper::TzLUT;
 use common_expression::type_check;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::AnyType;
@@ -93,6 +92,14 @@ pub fn run_agg_ast(
                     .map(|p| Scalar::Number(NumberScalar::UInt64(*p as u64)))
                     .collect();
 
+                // Convert the delimiter of string_agg to params
+                let params = if name.eq_ignore_ascii_case("string_agg") && args.len() == 2 {
+                    let val = args[1].0.as_scalar().unwrap();
+                    vec![val.clone()]
+                } else {
+                    params
+                };
+
                 let arg_columns: Vec<Column> = args
                     .iter()
                     .map(|(arg, ty)| match arg {
@@ -149,10 +156,8 @@ pub fn run_scalar_expr(
     block: &DataBlock,
 ) -> Result<(Value<AnyType>, DataType)> {
     let expr = type_check::check(raw_expr, &BUILTIN_FUNCTIONS)?;
-    let func_ctx = FunctionContext {
-        tz: TzLUT::default(),
-    };
-    let evaluator = Evaluator::new(block, func_ctx, &BUILTIN_FUNCTIONS);
+    let func_ctx = FunctionContext::default();
+    let evaluator = Evaluator::new(block, &func_ctx, &BUILTIN_FUNCTIONS);
     let result = evaluator.run(&expr)?;
     Ok((result, expr.data_type().clone()))
 }

@@ -17,7 +17,7 @@ skipif clickhouse
 query TT
 show FILE FORMATS;
 ----
-test_format TYPE = CSV FIELD_DELIMITER = '\t' RECORD_DELIMITER = '\n' QUOTE = '\"' ESCAPE = '\\' SKIP_HEADER = 0 NAN_DISPLAY = 'NaN'
+test_format TYPE = CSV COMPRESSION = None HEADERS= 0 FIELD_DELIMITER = '\t' RECORD_DELIMITER = '\n' NAN_DISPLAY = 'NaN' ESCAPE = '\\' QUOTE = '\"'
 
 statement ok
 DROP FILE FORMAT test_format

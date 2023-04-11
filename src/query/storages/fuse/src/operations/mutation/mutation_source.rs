@@ -184,7 +184,7 @@ impl Processor for MutationSource {
                     assert_eq!(filter.data_type(), &DataType::Boolean);
 
                     let func_ctx = self.ctx.get_function_context()?;
-                    let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
+                    let evaluator = Evaluator::new(&data_block, &func_ctx, &BUILTIN_FUNCTIONS);
 
                     let predicates = evaluator
                         .run(filter)
