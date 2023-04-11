@@ -273,7 +273,7 @@ fn parse_int_literal(lit: &Scalar) -> Option<i64> {
         None,
         "to_int64",
         [(Value::Scalar(lit.clone()), lit.as_ref().infer_data_type())],
-        FunctionContext::default(),
+        &FunctionContext::default(),
         1,
         &BUILTIN_FUNCTIONS,
     )
