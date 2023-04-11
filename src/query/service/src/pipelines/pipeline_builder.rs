@@ -771,6 +771,7 @@ impl PipelineBuilder {
                     offset,
                     asc: o.asc,
                     nulls_first: o.nulls_first,
+                    is_nullable: input_schema.field(offset).is_nullable(), // Used for check null frame.
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -784,6 +785,7 @@ impl PipelineBuilder {
                     offset: *offset,
                     asc: true,
                     nulls_first: true,
+                    is_nullable: input_schema.field(*offset).is_nullable(),  // This information is not needed here.
                 })
             }
 
@@ -807,7 +809,6 @@ impl PipelineBuilder {
                     func.clone(),
                     partition_by.clone(),
                     order_by.clone(),
-                    window.window_frame.units.clone(),
                     (start_bound, end_bound),
                 )?) as Box<dyn Processor>
             } else {
@@ -826,7 +827,6 @@ impl PipelineBuilder {
                                     func.clone(),
                                     partition_by.clone(),
                                     order_by.clone(),
-                                    window.window_frame.units.clone(),
                                     (start_bound, end_bound),
                                 )?,
                             )
@@ -846,7 +846,6 @@ impl PipelineBuilder {
                     func.clone(),
                     partition_by.clone(),
                     order_by.clone(),
-                    window.window_frame.units.clone(),
                     (start_bound, end_bound),
                 )?) as Box<dyn Processor>
             };
@@ -870,6 +869,7 @@ impl PipelineBuilder {
                     offset,
                     asc: desc.asc,
                     nulls_first: desc.nulls_first,
+                    is_nullable: input_schema.field(offset).is_nullable(),  // This information is not needed here.
                 })
             })
             .collect::<Result<Vec<_>>>()?;

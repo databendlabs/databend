@@ -268,11 +268,13 @@ fn test_blocks_merge_sort() -> Result<()> {
                     offset: 0,
                     asc: true,
                     nulls_first: false,
+                    is_nullable: false,
                 },
                 SortColumnDescription {
                     offset: 1,
                     asc: false,
                     nulls_first: false,
+                    is_nullable: false,
                 },
             ],
             None,
