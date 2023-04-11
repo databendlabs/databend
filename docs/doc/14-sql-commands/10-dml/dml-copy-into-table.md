@@ -69,12 +69,19 @@ externalLocation ::=
         ENDPOINT_URL = 'https://<endpoint-URL>'
         ACCESS_KEY_ID = '<your-access-key-ID>'
         SECRET_ACCESS_KEY = '<your-secret-access-key>'
+        ROLE_ARN = '<your-ARN-of-IAM-role>'
+        EXTERNAL_ID = '<your-external-ID>'
         SESSION_TOKEN = '<your-session-token>'
         REGION = '<region-name>'
         ENABLE_VIRTUAL_HOST_STYLE = 'true|false'
   )
 ```
 
+:::note
+To access your Amazon S3 buckets, you can use one of two methods: providing AWS access keys and secrets, or specifying an AWS IAM role and external ID for authentication. 
+
+By specifying an AWS IAM role and external ID, you can provide more granular control over which S3 buckets a user can access. This means that if the IAM role has been granted permissions to access only specific S3 buckets, then the user will only be able to access those buckets. An external ID can further enhance security by providing an additional layer of verification. For more information, see https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-role.html
+:::
 
 | Parameter                 | Description                                                                                                                                                                           | Required     |
 |---------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------|
@@ -82,7 +89,9 @@ externalLocation ::=
 | ENDPOINT_URL              | The bucket endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`. | **Required** |
 | ACCESS_KEY_ID             | Your access key ID for connecting the AWS S3 compatible object storage. If not provided, Databend will access the bucket anonymously.                                                 | Optional     |
 | SECRET_ACCESS_KEY         | Your secret access key for connecting the AWS S3 compatible object storage.                                                                                                           | Optional     |
-| SESSION_TOKEN             | Your temporary credential for connecting the AWS S3 service                                                                                                                           | Optional     |
+| ROLE_ARN                  | Amazon Resource Name (ARN) of an AWS Identity and Access Management (IAM) role.                                                                                                       | Optional     |
+| EXTERNAL_ID               | Your external ID for authentication when accessing specific Amazon S3 buckets.                                                                                                        | Optional     |
+| SESSION_TOKEN             | Your temporary credential for connecting the AWS S3 service.                                                                                                                          | Optional     |
 | REGION                    | AWS region name. For example, us-east-1.                                                                                                                                              | Optional     |
 | ENABLE_VIRTUAL_HOST_STYLE | If you use virtual hosting to address the bucket, set it to "true".                                                                                                                   | Optional     |
 
@@ -230,6 +239,7 @@ COPY INTO mytable FROM @my_external_s1 pattern = 'books.*parquet' FILE_FORMAT = 
 This example reads 10 rows from a CSV file and inserts them into a table:
 
 ```sql
+-- Authenticated by AWS access keys and secrets.
 COPY INTO mytable
   FROM 's3://mybucket/data.csv'
   CONNECTION = (
@@ -237,6 +247,15 @@ COPY INTO mytable
         ACCESS_KEY_ID = '<your-access-key-ID>'
         SECRET_ACCESS_KEY = '<your-secret-access-key>')
   FILE_FORMAT = (type = CSV field_delimiter = ','  record_delimiter = '\n' skip_header = 1) size_limit=10;
+
+-- Authenticated by AWS IAM role and external ID.
+COPY INTO mytable
+  FROM 's3://mybucket/data.csv'
+  CONNECTION = (
+        ENDPOINT_URL = 'https://<endpoint-URL>'
+        ROLE_ARN = 'arn:aws:iam::123456789012:role/my_iam_role'
+        EXTERNAL_ID = '123456')
+  FILE_FORMAT = (type = csv field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10;
 ```
 
 This example reads 10 rows from a CSV file compressed as GZIP and inserts them into a table:
