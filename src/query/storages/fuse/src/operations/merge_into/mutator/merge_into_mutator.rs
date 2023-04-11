@@ -18,6 +18,7 @@ use std::hash::Hasher;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::Projection;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -226,7 +227,7 @@ impl MergeIntoOperationAggregator {
                 })?
                 .value
                 .as_column()
-                .ok_or_else(||{
+                .ok_or_else(|| {
                     ErrorCode::Internal(format!(
                         "unexpected, cast block entry (index {}) to column failed, got None. segment index {}, block index {}",
                         on_conflict_field_index, segment_index, block_index
@@ -277,7 +278,9 @@ impl MergeIntoOperationAggregator {
         // serialization and compression is cpu intensive, send them to dedicated thread pool
         // and wait (asyncly, which will NOT block the executor thread)
         let block_builder = self.block_builder.clone();
-        let serialized = tokio_rayon::spawn(move || block_builder.build(new_block)).await?;
+        let serialized = GlobalIORuntime::instance()
+            .spawn_blocking(move || block_builder.build(new_block))
+            .await?;
 
         // persistent data
         let new_block_meta = serialized.block_meta;
