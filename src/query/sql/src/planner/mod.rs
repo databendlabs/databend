@@ -29,6 +29,7 @@ pub use binder::BindContext;
 pub use binder::Binder;
 pub use binder::ColumnBinding;
 pub use binder::ScalarBinder;
+pub use binder::ScalarVisitor;
 pub use binder::SelectBuilder;
 pub use binder::Visibility;
 pub use expression_parser::*;
