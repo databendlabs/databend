@@ -203,6 +203,7 @@ impl FuseTable {
     ) -> Result<()> {
         let chunk_size = ctx.get_settings().get_max_storage_io_requests()? as usize;
         // Purge segments&blocks by chunk size
+        let mut count = 0;
         let segment_locations = Vec::from_iter(segments_to_be_purged);
         for chunk in segment_locations.chunks(chunk_size) {
             let locations = self.get_block_locations(ctx.clone(), chunk, false).await?;
@@ -229,6 +230,19 @@ impl FuseTable {
                     .map(|loc| loc.0.clone())
                     .collect::<Vec<String>>(),
             );
+
+            // Refresh status.
+            {
+                count += chunk.len();
+                let status = format!(
+                    "gc: read purged segment files:{}/{}, cost:{} sec",
+                    count,
+                    segment_locations.len(),
+                    counter.start.elapsed().as_secs()
+                );
+                info!(status);
+                ctx.set_status_info(&status);
+            }
 
             self.purge_block_segments(
                 ctx,
