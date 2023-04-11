@@ -314,17 +314,17 @@ insert into t3 values
     ('xyz');
 
 query T
-select listagg(s) from t3;
+select string_agg(s) from t3;
 ----
 abcdefxyz
 
 query T
-select listagg(s, '-') from t3;
+select string_agg(s, '-') from t3;
 ----
 abc-def-xyz
 
 query T
-select listagg(s, '|') from t3;
+select string_agg(s, '|') from t3;
 ----
 abc|def|xyz
 

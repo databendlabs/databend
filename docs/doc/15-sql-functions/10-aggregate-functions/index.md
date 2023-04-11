@@ -21,7 +21,6 @@ These functions help you extract and summarize data from databases to gain valua
 | [COVAR_SAMP](aggregate-covar-samp.md)                       | Returns the sample covariance of a set of number pairs      | 
 | [KURTOSIS](aggregate-kurtosis.md)                           | Calculates the excess kurtosis of a set of values           | 
 | [LIST](aggregate-list.md)                                   | Converts all the values of a column to an Array             |
-| [LISTAGG](aggregate-listagg.md)                             | Converts all the non-NULL values to String, separated by the delimiter |
 | [MAX_IF](aggregate-max-if.md)                               | Finds the maximum value for rows meeting a condition        | 
 | [MAX](aggregate-max.md)                                     | Finds the largest value in a specific column                | 
 | [MEDIAN](aggregate-median.md)                               | Calculates the median value of a specific column            | 
@@ -33,6 +32,7 @@ These functions help you extract and summarize data from databases to gain valua
 | [SKEWNESS](aggregate-skewness.md)                           | Calculates the skewness of a set of values                  | 
 | [STDDEV_POP](aggregate-stddev-pop.md)                       | Calculates the population standard deviation of a column    | 
 | [STDDEV_SAMP](aggregate-stddev-samp.md)                     | Calculates the sample standard deviation of a column        | 
+| [STRING_AGG](aggregate-string-agg.md)                       | Converts all the non-NULL values to String, separated by the delimiter |
 | [SUM_IF](aggregate-sum-if.md)                               | Adds up the values meeting a condition of a specific column | 
 | [SUM](aggregate-sum.md)                                     | Adds up the values of a specific column                     | 
 | [WINDOW_FUNNEL](aggregate-windowfunnel.md)                  | Analyzes user behavior in a time-ordered sequence of events | 

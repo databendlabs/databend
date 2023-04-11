@@ -56,7 +56,7 @@ fn test_agg() {
     test_agg_quantile_cont(file, eval_aggr);
     test_agg_median(file, eval_aggr);
     test_agg_list(file, eval_aggr);
-    test_agg_listagg(file, eval_aggr);
+    test_agg_string_agg(file, eval_aggr);
 }
 
 #[test]
@@ -87,7 +87,7 @@ fn test_agg_group_by() {
     test_agg_window_funnel(file, simulate_two_groups_group_by);
     test_agg_approx_count_distinct(file, simulate_two_groups_group_by);
     test_agg_list(file, simulate_two_groups_group_by);
-    test_agg_listagg(file, simulate_two_groups_group_by);
+    test_agg_string_agg(file, simulate_two_groups_group_by);
 }
 
 fn get_example() -> Vec<(&'static str, Column)> {
@@ -457,13 +457,23 @@ fn test_agg_list(file: &mut impl Write, simulator: impl AggregationSimulator) {
     run_agg_ast(file, "list(event1)", get_example().as_slice(), simulator);
 }
 
-fn test_agg_listagg(file: &mut impl Write, simulator: impl AggregationSimulator) {
-    run_agg_ast(file, "listagg(s)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "listagg(s_null)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "listagg(s, '|')", get_example().as_slice(), simulator);
+fn test_agg_string_agg(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(file, "string_agg(s)", get_example().as_slice(), simulator);
     run_agg_ast(
         file,
-        "listagg(s_null, '-')",
+        "string_agg(s_null)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "string_agg(s, '|')",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "string_agg(s_null, '-')",
         get_example().as_slice(),
         simulator,
     );

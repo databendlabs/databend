@@ -36,19 +36,19 @@ use crate::aggregates::assert_variadic_arguments;
 use crate::aggregates::AggregateFunction;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ListAggState {
+pub struct StringAggState {
     values: Vec<u8>,
 }
 
 #[derive(Clone)]
-pub struct AggregateListAggFunction {
+pub struct AggregateStringAggFunction {
     display_name: String,
     delimiter: Vec<u8>,
 }
 
-impl AggregateFunction for AggregateListAggFunction {
+impl AggregateFunction for AggregateStringAggFunction {
     fn name(&self) -> &str {
-        "AggregateListAggFunction"
+        "AggregateStringAggFunction"
     }
 
     fn return_type(&self) -> Result<DataType> {
@@ -56,11 +56,11 @@ impl AggregateFunction for AggregateListAggFunction {
     }
 
     fn init_state(&self, place: StateAddr) {
-        place.write(|| ListAggState { values: Vec::new() });
+        place.write(|| StringAggState { values: Vec::new() });
     }
 
     fn state_layout(&self) -> Layout {
-        Layout::new::<ListAggState>()
+        Layout::new::<StringAggState>()
     }
 
     fn accumulate(
@@ -71,7 +71,7 @@ impl AggregateFunction for AggregateListAggFunction {
         _input_rows: usize,
     ) -> Result<()> {
         let column = StringType::try_downcast_column(&columns[0]).unwrap();
-        let state = place.get::<ListAggState>();
+        let state = place.get::<StringAggState>();
         match validity {
             Some(validity) => {
                 column.iter().zip(validity.iter()).for_each(|(v, b)| {
@@ -102,7 +102,7 @@ impl AggregateFunction for AggregateListAggFunction {
         let column_iter = StringType::iter_column(&column);
         column_iter.zip(places.iter()).for_each(|(v, place)| {
             let addr = place.next(offset);
-            let state = addr.get::<ListAggState>();
+            let state = addr.get::<StringAggState>();
             state.values.extend_from_slice(v);
             state.values.extend_from_slice(self.delimiter.as_slice());
         });
@@ -113,7 +113,7 @@ impl AggregateFunction for AggregateListAggFunction {
         let column = StringType::try_downcast_column(&columns[0]).unwrap();
         let v = StringType::index_column(&column, row);
         if let Some(v) = v {
-            let state = place.get::<ListAggState>();
+            let state = place.get::<StringAggState>();
             state.values.extend_from_slice(v);
             state.values.extend_from_slice(self.delimiter.as_slice());
         }
@@ -121,26 +121,26 @@ impl AggregateFunction for AggregateListAggFunction {
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<ListAggState>();
+        let state = place.get::<StringAggState>();
         serialize_into_buf(writer, state)?;
         Ok(())
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<ListAggState>();
+        let state = place.get::<StringAggState>();
         state.values = deserialize_from_slice(reader)?;
         Ok(())
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<ListAggState>();
-        let state = place.get::<ListAggState>();
+        let rhs = rhs.get::<StringAggState>();
+        let state = place.get::<StringAggState>();
         state.values.extend_from_slice(rhs.values.as_slice());
         Ok(())
     }
 
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
-        let state = place.get::<ListAggState>();
+        let state = place.get::<StringAggState>();
         let builder = StringType::try_downcast_builder(builder).unwrap();
         if !self.delimiter.is_empty() {
             let new_len = state.values.len() - self.delimiter.len();
@@ -156,20 +156,20 @@ impl AggregateFunction for AggregateListAggFunction {
     }
 
     unsafe fn drop_state(&self, place: StateAddr) {
-        let state = place.get::<ListAggState>();
+        let state = place.get::<StringAggState>();
         std::ptr::drop_in_place(state);
     }
 }
 
-impl fmt::Display for AggregateListAggFunction {
+impl fmt::Display for AggregateStringAggFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
     }
 }
 
-impl AggregateListAggFunction {
+impl AggregateStringAggFunction {
     fn try_create(display_name: &str, delimiter: Vec<u8>) -> Result<Arc<dyn AggregateFunction>> {
-        let func = AggregateListAggFunction {
+        let func = AggregateStringAggFunction {
             display_name: display_name.to_string(),
             delimiter,
         };
@@ -177,7 +177,7 @@ impl AggregateListAggFunction {
     }
 }
 
-pub fn try_create_aggregate_listagg_function(
+pub fn try_create_aggregate_string_agg_function(
     display_name: &str,
     params: Vec<Scalar>,
     argument_types: Vec<DataType>,
@@ -195,9 +195,9 @@ pub fn try_create_aggregate_listagg_function(
     } else {
         vec![]
     };
-    AggregateListAggFunction::try_create(display_name, delimiter)
+    AggregateStringAggFunction::try_create(display_name, delimiter)
 }
 
-pub fn aggregate_listagg_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_listagg_function))
+pub fn aggregate_string_agg_function_desc() -> AggregateFunctionDescription {
+    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_string_agg_function))
 }
