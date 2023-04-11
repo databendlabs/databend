@@ -118,6 +118,7 @@ impl JoinHashTable {
                         build_indexes.push(it);
                     }
                     probe_indexes[probe_indexes_len] = (i as u32, probed_rows.len() as u32);
+                    probe_indexes_len += 1;
                     probed_num += probed_rows.len();
                 } else {
                     let mut index = 0_usize;
@@ -129,6 +130,7 @@ impl JoinHashTable {
                                 build_indexes.push(it);
                             }
                             probe_indexes[probe_indexes_len] = (i as u32, remain as u32);
+                            probe_indexes_len += 1;
                             probed_num += remain;
                             index += remain;
                         } else {
@@ -145,6 +147,7 @@ impl JoinHashTable {
                                 build_indexes.push(it);
                             }
                             probe_indexes[probe_indexes_len] = (i as u32, addition as u32);
+                            probe_indexes_len += 1;
                             probed_num += addition;
 
                             let probe_block = DataBlock::probe_take(
