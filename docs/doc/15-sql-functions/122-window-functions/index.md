@@ -14,6 +14,28 @@ There are two main types of order-sensitive window functions:
 
 * `Window frame functions`: Window frame functions enable you to perform rolling operations, such as calculating a running total or a moving average, on a subset of the rows in the window.
 
+## List of Functions that Support Windows
+
+The list below shows all the window functions.
+
+| Function Name                                                     | Category     | Window | Window Frame | Notes |
+|-------------------------------------------------------------------|--------------|--------|--------------|-------|
+| [AVG](../10-aggregate-functions/aggregate-avg.md)                 | General      | ✔      | ✔            |       |
+| [COUNT](../10-aggregate-functions/aggregate-count.md)             | General      | ✔      | ✔            |       |
+| [COUNT_IF](../10-aggregate-functions/aggregate-count-if.md)       | General      | ✔      | ✔            |       |
+| [COVAR_POP](../10-aggregate-functions/aggregate-covar-pop.md)     | General      | ✔      |              |       |
+| [COVAR_SAMP](../10-aggregate-functions/aggregate-covar-samp.md)   | General      | ✔      |              |       |
+| [LIST](../10-aggregate-functions/aggregate-list.md)               | General      | ✔      |              |       |
+| [MAX](../10-aggregate-functions/aggregate-max.md)                 | General      | ✔      |              |       |
+| [MIN](../10-aggregate-functions/aggregate-min.md)                 | General      | ✔      |              |       |
+| [STDDEV_POP](../10-aggregate-functions/aggregate-stddev-pop.md)   | General      | ✔      | ✔            |       |
+| [STDDEV_SAMP](../10-aggregate-functions/aggregate-stddev-samp.md) | General      | ✔      | ✔            |       |
+| [SUM](../10-aggregate-functions/aggregate-sum.md)                 | General      | ✔      | ✔            |       |
+| [DENSE_RANK](01-window-function-dense-rank.md)                    | Rank-related | ✔      | ✔            |       |
+| [RANK](01-window-function-rank.md)                                | Rank-related | ✔      | ✔            |       |
+| [ROW_NUMBER](01-window-function-row-number.md)                    | Rank-related | ✔      |              |       |
+
+
 ## Window Syntax
 
 ```sql
@@ -51,6 +73,7 @@ slidingFrame ::=
      | ROWS BETWEEN <N> { PRECEDING | FOLLOWING } AND UNBOUNDED FOLLOWING
     }
 ```
+
 
 ## Examples
 
