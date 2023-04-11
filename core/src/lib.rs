@@ -13,6 +13,8 @@
 // limitations under the License.
 
 mod client;
+
+pub mod error;
 pub mod request;
 pub mod response;
 

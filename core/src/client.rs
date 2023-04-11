@@ -14,7 +14,6 @@
 
 use std::{collections::BTreeMap, fmt};
 
-use anyhow::{anyhow, Context, Result};
 use bytes::Bytes;
 use http::StatusCode;
 use reqwest::header::HeaderMap;
@@ -23,6 +22,7 @@ use reqwest::Client as HttpClient;
 use url::Url;
 
 use crate::{
+    error::{Error, Result},
     request::{PaginationConfig, QueryRequest, SessionConfig},
     response::QueryResponse,
 };
@@ -45,19 +45,19 @@ impl fmt::Display for StageLocation {
 }
 
 impl TryFrom<&str> for StageLocation {
-    type Error = anyhow::Error;
+    type Error = Error;
     fn try_from(s: &str) -> Result<Self> {
         if !s.starts_with('@') {
-            return Err(anyhow!("Invalid stage location: {}", s));
+            return Err(Error::Parsing(format!("Invalid stage location: {}", s)));
         }
         let mut parts = s.splitn(2, '/');
         let name = parts
             .next()
-            .with_context(|| format!("Invalid stage location: {}", s))?
+            .ok_or_else(|| Error::Parsing(format!("Invalid stage location: {}", s)))?
             .trim_start_matches('@');
         let path = parts
             .next()
-            .with_context(|| format!("Invalid stage path: {}", s))?;
+            .ok_or_else(|| Error::Parsing(format!("Invalid stage location: {}", s)))?;
         Ok(Self {
             name: name.to_string(),
             path: path.to_string(),
@@ -116,7 +116,10 @@ impl APIClient {
                         "true" | "1" => true,
                         "false" | "0" => false,
                         _ => {
-                            return Err(anyhow!("Invalid value for presigned_url_disabled: {}", v))
+                            return Err(Error::BadArgument(format!(
+                                "Invalid value for presigned_url_disabled: {}",
+                                v
+                            )))
                         }
                     }
                 }
@@ -166,7 +169,7 @@ impl APIClient {
             .json()
             .await?;
         match resp.error {
-            Some(err) => Err(anyhow!("Query error {}: {}", err.code, err.message)),
+            Some(err) => Err(Error::InvalidResponse(err)),
             // TODO:(everpcpc) update session configs
             None => Ok(resp),
         }
@@ -184,7 +187,7 @@ impl APIClient {
             .json()
             .await?;
         match resp.error {
-            Some(err) => Err(anyhow!("Query page error {}: {}", err.code, err.message)),
+            Some(err) => Err(Error::InvalidPage(err)),
             None => Ok(resp),
         }
     }
@@ -269,10 +272,10 @@ impl APIClient {
         let body = resp.bytes().await?;
         match status {
             StatusCode::OK => Ok(()),
-            _ => Err(anyhow!(
+            _ => Err(Error::Request(format!(
                 "Stage Upload Failed: {}",
                 String::from_utf8_lossy(&body)
-            )),
+            ))),
         }
     }
 
@@ -291,10 +294,10 @@ impl APIClient {
         let body = resp.bytes().await?;
         match status {
             StatusCode::OK => Ok(()),
-            _ => Err(anyhow!(
+            _ => Err(Error::Request(format!(
                 "Presigned Upload Failed: {}",
                 String::from_utf8_lossy(&body)
-            )),
+            ))),
         }
     }
 
@@ -303,11 +306,13 @@ impl APIClient {
             .query(format!("PRESIGN UPLOAD {}", stage_location).as_str())
             .await?;
         if resp.data.len() != 1 {
-            return Err(anyhow!("Empty response from server for presigned request"));
+            return Err(Error::Request(
+                "Empty response from server for presigned request".to_string(),
+            ));
         }
         if resp.data[0].len() != 3 {
-            return Err(anyhow!(
-                "Invalid response from server for presigned request"
+            return Err(Error::Request(
+                "Invalid response from server for presigned request".to_string(),
             ));
         }
         // resp.data[0]: [ "PUT", "{\"host\":\"s3.us-east-2.amazonaws.com\"}", "https://s3.us-east-2.amazonaws.com/query-storage-xxxxx/tnxxxxx/stage/user/xxxx/xxx?" ]
@@ -316,7 +321,10 @@ impl APIClient {
             serde_json::from_str(resp.data[0][1].clone().as_str())?;
         let url = resp.data[0][2].clone();
         if method != "PUT" {
-            return Err(anyhow!("Invalid method {} for presigned request", method));
+            return Err(Error::Request(format!(
+                "Invalid method {} for presigned request",
+                method
+            )));
         }
         Ok(PresignedResponse {
             method,

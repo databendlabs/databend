@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use anyhow::Result;
 use databend_driver::{new_connection, Connection};
 use tokio_stream::StreamExt;
 
@@ -118,18 +117,14 @@ async fn prepare(name: &str) -> (Box<dyn Connection>, String) {
 async fn select_numbers() {
     let (mut conn, _) = prepare("select_numbers").await;
     let rows = conn.query_iter("select * from NUMBERS(5)").await.unwrap();
-    let ret: Vec<Result<(u64,)>> = rows
-        .map(|r| match r {
-            Ok(r) => match r.try_into() {
-                Ok(r) => Ok(r),
-                Err(e) => Err(anyhow::anyhow!("{}", e)),
-            },
-            Err(e) => Err(e),
-        })
-        .collect()
-        .await;
-    let result: Vec<u64> = ret.into_iter().map(|r| r.unwrap().0).collect();
-    assert_eq!(result, vec![0, 1, 2, 3, 4]);
+    let ret: Vec<u64> = rows
+        .map(|r| r.unwrap().try_into().unwrap())
+        .collect::<Vec<(u64,)>>()
+        .await
+        .into_iter()
+        .map(|r| r.0)
+        .collect();
+    assert_eq!(ret, vec![0, 1, 2, 3, 4]);
 }
 
 #[tokio::test]

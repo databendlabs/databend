@@ -1,6 +1,6 @@
 [package]
 name = "databend-driver"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 license = "Apache-2.0"
 description = "Databend Driver for Rust"
@@ -19,10 +19,9 @@ native-tls = ["databend-client/native-tls"]
 flight-sql = ["dep:arrow", "dep:arrow-array", "dep:arrow-cast", "dep:arrow-flight", "dep:arrow-schema", "dep:tonic"]
 
 [dependencies]
-anyhow = "1.0.70"
 async-trait = "0.1.68"
 chrono = { version = "0.4.24", default-features = false, features = ["clock"] }
-databend-client = { version = "0.1.2", path = "../core" }
+databend-client = { version = "0.1.4", path = "../core" }
 dyn-clone = "1.0.11"
 http = "0.2.9"
 serde = { version = "1.0.156", default-features = false, features = ["derive"] }

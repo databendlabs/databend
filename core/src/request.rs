@@ -86,7 +86,7 @@ impl QueryRequest<'_> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use anyhow::Result;
+    use crate::error::Result;
 
     #[test]
     fn build_request() -> Result<()> {

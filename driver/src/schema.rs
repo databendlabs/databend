@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use anyhow::{anyhow, Error, Result};
 use databend_client::response::SchemaField;
+
+use crate::error::{Error, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NumberDataType {
@@ -86,21 +87,27 @@ impl TryFrom<String> for DataType {
             "Date" => Ok(Self::Date),
             "Nullable" => {
                 if type_desc.args.len() != 1 {
-                    return Err(anyhow!("Nullable type must have one argument"));
+                    return Err(Error::Parsing(
+                        "Nullable type must have one argument".to_string(),
+                    ));
                 }
                 let inner = Self::try_from(type_desc.args[0].name.to_string())?;
                 Ok(Self::Nullable(Box::new(inner)))
             }
             "Array" => {
                 if type_desc.args.len() != 1 {
-                    return Err(anyhow!("Array type must have one argument"));
+                    return Err(Error::Parsing(
+                        "Array type must have one argument".to_string(),
+                    ));
                 }
                 let inner = Self::try_from(type_desc.args[0].name.to_string())?;
                 Ok(Self::Array(Box::new(inner)))
             }
             "Map" => {
                 if type_desc.args.len() != 1 {
-                    return Err(anyhow!("Map type must have one argument"));
+                    return Err(Error::Parsing(
+                        "Map type must have one argument".to_string(),
+                    ));
                 }
                 let inner = Self::try_from(type_desc.args[0].name.to_string())?;
                 Ok(Self::Map(Box::new(inner)))
@@ -113,7 +120,7 @@ impl TryFrom<String> for DataType {
                 Ok(Self::Tuple(inner))
             }
             "Variant" => Ok(Self::Variant),
-            _ => Err(anyhow!("Unknown type: {}", s)),
+            _ => Err(Error::Parsing(format!("Unknown type: {}", s))),
         }
     }
 }
@@ -187,7 +194,7 @@ fn parse_type_desc(s: &str) -> Result<TypeDesc> {
         }
     }
     if depth != 0 {
-        return Err(Error::msg(format!("Invalid type desc: {}", s)));
+        return Err(Error::Parsing(format!("Invalid type desc: {}", s)));
     }
     if start < s.len() {
         name = &s[start..];

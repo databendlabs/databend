@@ -34,6 +34,8 @@ pub struct Progresses {
     pub scan_progress: ProgressValues,
     pub write_progress: ProgressValues,
     pub result_progress: ProgressValues,
+    // make it optional for backward compatibility
+    pub total_scan: Option<ProgressValues>,
 }
 
 #[derive(Debug, Deserialize)]

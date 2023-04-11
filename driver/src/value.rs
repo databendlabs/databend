@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use anyhow::{anyhow, Error, Ok, Result};
-
 use chrono::{Datelike, NaiveDate, NaiveDateTime};
+
+use crate::error::{ConvertError, Error, Result};
 
 #[cfg(feature = "flight-sql")]
 use {
@@ -51,7 +51,7 @@ pub enum Value {
     String(String),
     Number(NumberValue),
     // TODO:(everpcpc) Decimal(DecimalValue),
-    Decimal(String),
+    // Decimal(String),
     /// Microseconds from 1970-01-01 00:00:00 UTC
     Timestamp(i64),
     Date(i32),
@@ -80,7 +80,7 @@ impl Value {
                 NumberValue::Float32(_) => DataType::Number(NumberDataType::Float32),
                 NumberValue::Float64(_) => DataType::Number(NumberDataType::Float64),
             },
-            Self::Decimal(_) => DataType::Decimal,
+            // Self::Decimal(_) => DataType::Decimal,
             Self::Timestamp(_) => DataType::Timestamp,
             Self::Date(_) => DataType::Date,
             // TODO:(everpcpc) fix nested type
@@ -130,7 +130,7 @@ impl TryFrom<(DataType, String)> for Value {
             DataType::Number(NumberDataType::Float64) => {
                 Ok(Self::Number(NumberValue::Float64(v.parse()?)))
             }
-            DataType::Decimal => Ok(Self::Decimal(v)),
+            // DataType::Decimal => Ok(Self::Decimal(v)),
             DataType::Timestamp => Ok(Self::Timestamp(
                 chrono::NaiveDateTime::parse_from_str(&v, "%Y-%m-%d %H:%M:%S%.6f")?
                     .timestamp_micros(),
@@ -155,96 +155,100 @@ impl TryFrom<(&ArrowField, &Arc<dyn ArrowArray>, usize)> for Value {
             ArrowDataType::Null => Ok(Value::Null),
             ArrowDataType::Boolean => match array.as_any().downcast_ref::<BooleanArray>() {
                 Some(array) => Ok(Value::Boolean(array.value(seq))),
-                None => Err(anyhow!("cannot convert {:?} to boolean", array)),
+                None => Err(ConvertError::new("bool", format!("{:?}", array)).into()),
             },
             ArrowDataType::Int8 => match array.as_any().downcast_ref::<Int8Array>() {
                 Some(array) => Ok(Value::Number(NumberValue::Int8(array.value(seq)))),
-                None => Err(anyhow!("cannot convert {:?} to int8", array)),
+                None => Err(ConvertError::new("int8", format!("{:?}", array)).into()),
             },
             ArrowDataType::Int16 => match array.as_any().downcast_ref::<Int16Array>() {
                 Some(array) => Ok(Value::Number(NumberValue::Int16(array.value(seq)))),
-                None => Err(anyhow!("cannot convert {:?} to int16", array)),
+                None => Err(ConvertError::new("int16", format!("{:?}", array)).into()),
             },
             ArrowDataType::Int32 => match array.as_any().downcast_ref::<Int32Array>() {
                 Some(array) => Ok(Value::Number(NumberValue::Int32(array.value(seq)))),
-                None => Err(anyhow!("cannot convert {:?} to int32", array)),
+                None => Err(ConvertError::new("int64", format!("{:?}", array)).into()),
             },
             ArrowDataType::Int64 => match array.as_any().downcast_ref::<Int64Array>() {
                 Some(array) => Ok(Value::Number(NumberValue::Int64(array.value(seq)))),
-                None => Err(anyhow!("cannot convert {:?} to int64", array)),
+                None => Err(ConvertError::new("int64", format!("{:?}", array)).into()),
             },
             ArrowDataType::UInt8 => match array.as_any().downcast_ref::<UInt8Array>() {
                 Some(array) => Ok(Value::Number(NumberValue::UInt8(array.value(seq)))),
-                None => Err(anyhow!("cannot convert {:?} to uint8", array)),
+                None => Err(ConvertError::new("uint8", format!("{:?}", array)).into()),
             },
             ArrowDataType::UInt16 => match array.as_any().downcast_ref::<UInt16Array>() {
                 Some(array) => Ok(Value::Number(NumberValue::UInt16(array.value(seq)))),
-                None => Err(anyhow!("cannot convert {:?} to uint16", array)),
+                None => Err(ConvertError::new("uint16", format!("{:?}", array)).into()),
             },
             ArrowDataType::UInt32 => match array.as_any().downcast_ref::<UInt32Array>() {
                 Some(array) => Ok(Value::Number(NumberValue::UInt32(array.value(seq)))),
-                None => Err(anyhow!("cannot convert {:?} to uint32", array)),
+                None => Err(ConvertError::new("uint32", format!("{:?}", array)).into()),
             },
             ArrowDataType::UInt64 => match array.as_any().downcast_ref::<UInt64Array>() {
                 Some(array) => Ok(Value::Number(NumberValue::UInt64(array.value(seq)))),
-                None => Err(anyhow!("cannot convert {:?} to uint64", array)),
+                None => Err(ConvertError::new("uint64", format!("{:?}", array)).into()),
             },
             ArrowDataType::Float32 => match array.as_any().downcast_ref::<Float32Array>() {
                 Some(array) => Ok(Value::Number(NumberValue::Float32(array.value(seq)))),
-                None => Err(anyhow!("cannot convert {:?} to float32", array)),
+                None => Err(ConvertError::new("float32", format!("{:?}", array)).into()),
             },
             ArrowDataType::Float64 => match array.as_any().downcast_ref::<Float64Array>() {
                 Some(array) => Ok(Value::Number(NumberValue::Float64(array.value(seq)))),
-                None => Err(anyhow!("cannot convert {:?} to float64", array)),
+                None => Err(ConvertError::new("float64", format!("{:?}", array)).into()),
             },
 
             ArrowDataType::Binary => match array.as_any().downcast_ref::<BinaryArray>() {
                 Some(array) => Ok(Value::String(String::from_utf8(array.value(seq).to_vec())?)),
-                None => Err(anyhow!("cannot convert {:?} to binary", array)),
+                None => Err(ConvertError::new("binary", format!("{:?}", array)).into()),
             },
             ArrowDataType::LargeBinary | ArrowDataType::FixedSizeBinary(_) => {
                 match array.as_any().downcast_ref::<LargeBinaryArray>() {
                     Some(array) => Ok(Value::String(String::from_utf8(array.value(seq).to_vec())?)),
-                    None => Err(anyhow!("cannot convert {:?} to large binary", array)),
+                    None => Err(ConvertError::new("large binary", format!("{:?}", array)).into()),
                 }
             }
             ArrowDataType::Utf8 => match array.as_any().downcast_ref::<StringArray>() {
                 Some(array) => Ok(Value::String(array.value(seq).to_string())),
-                None => Err(anyhow!("cannot convert {:?} to string", array)),
+                None => Err(ConvertError::new("string", format!("{:?}", array)).into()),
             },
             ArrowDataType::LargeUtf8 => match array.as_any().downcast_ref::<LargeStringArray>() {
                 Some(array) => Ok(Value::String(array.value(seq).to_string())),
-                None => Err(anyhow!("cannot convert {:?} to large string", array)),
+                None => Err(ConvertError::new("large string", format!("{:?}", array)).into()),
             },
             // we only support timestamp in microsecond in databend
             ArrowDataType::Timestamp(unit, tz) => {
                 match array.as_any().downcast_ref::<TimestampMicrosecondArray>() {
                     Some(array) => {
                         if unit != &TimeUnit::Microsecond {
-                            return Err(anyhow!(
-                                "unsupported timestamp unit: {:?}, only support microsecond",
-                                unit
-                            ));
+                            return Err(ConvertError::new("timestamp", format!("{:?}", array))
+                                .with_message(format!(
+                                    "unsupported timestamp unit: {:?}, only support microsecond",
+                                    unit
+                                ))
+                                .into());
                         }
                         let ts = array.value(seq);
                         match tz {
                             None => Ok(Value::Timestamp(ts)),
-                            Some(tz) => Err(anyhow!("non-UTC timezone not supported: {:?}", tz)),
+                            Some(tz) => Err(ConvertError::new("timestamp", format!("{:?}", array))
+                                .with_message(format!("non-UTC timezone not supported: {:?}", tz))
+                                .into()),
                         }
                     }
-                    None => Err(anyhow!("cannot convert {:?} to timestamp", array)),
+                    None => Err(ConvertError::new("timestamp", format!("{:?}", array)).into()),
                 }
             }
             ArrowDataType::Date32 => match array.as_any().downcast_ref::<Date32Array>() {
                 Some(array) => Ok(Value::Date(array.value(seq))),
-                None => Err(anyhow!("cannot convert {:?} to date", array)),
+                None => Err(ConvertError::new("date", format!("{:?}", array)).into()),
             },
             ArrowDataType::Date64
             | ArrowDataType::Time32(_)
             | ArrowDataType::Time64(_)
             | ArrowDataType::Interval(_)
             | ArrowDataType::Duration(_) => {
-                Err(anyhow!("unsupported data type: {:?}", array.data_type()))
+                Err(ConvertError::new("unsupported data type", format!("{:?}", array)).into())
             }
             ArrowDataType::List(_) | ArrowDataType::LargeList(_) => {
                 let v = array.as_list_opt::<i64>().unwrap().value(seq);
@@ -255,7 +259,7 @@ impl TryFrom<(&ArrowField, &Arc<dyn ArrowArray>, usize)> for Value {
             // Decimal256(u8, i8),
             // Map(Box<Field>, bool),
             // RunEndEncoded(Box<Field>, Box<Field>),
-            _ => Err(anyhow!("unsupported data type: {:?}", array.data_type())),
+            _ => Err(ConvertError::new("unsupported data type", format!("{:?}", array)).into()),
         }
     }
 }
@@ -265,7 +269,7 @@ impl TryFrom<Value> for String {
     fn try_from(val: Value) -> Result<Self> {
         match val {
             Value::String(s) => Ok(s),
-            _ => Err(anyhow!("Error converting value to String")),
+            _ => Err(ConvertError::new("string", format!("{:?}", val)).into()),
         }
     }
 }
@@ -276,112 +280,49 @@ impl TryFrom<Value> for bool {
         match val {
             Value::Boolean(b) => Ok(b),
             Value::Number(n) => Ok(n != NumberValue::Int8(0)),
-            _ => Err(anyhow!("Error converting value to bool")),
+            _ => Err(ConvertError::new("bool", format!("{:?}", val)).into()),
         }
     }
 }
 
-impl TryFrom<Value> for i8 {
-    type Error = Error;
-    fn try_from(val: Value) -> Result<Self> {
-        match val {
-            Value::Number(NumberValue::Int8(i)) => Ok(i),
-            _ => Err(anyhow!("Error converting value to i8")),
-        }
-    }
+// This macro implements TryFrom for NumberValue
+macro_rules! impl_try_from_number_value {
+    ($($t:ty),*) => {
+        $(
+            impl TryFrom<Value> for $t {
+                type Error = Error;
+                fn try_from(val: Value) -> Result<Self> {
+                    match val {
+                        Value::Number(NumberValue::Int8(i)) => Ok(i as $t),
+                        Value::Number(NumberValue::Int16(i)) => Ok(i as $t),
+                        Value::Number(NumberValue::Int32(i)) => Ok(i as $t),
+                        Value::Number(NumberValue::Int64(i)) => Ok(i as $t),
+                        Value::Number(NumberValue::UInt8(i)) => Ok(i as $t),
+                        Value::Number(NumberValue::UInt16(i)) => Ok(i as $t),
+                        Value::Number(NumberValue::UInt32(i)) => Ok(i as $t),
+                        Value::Number(NumberValue::UInt64(i)) => Ok(i as $t),
+                        Value::Number(NumberValue::Float32(i)) => Ok(i as $t),
+                        Value::Number(NumberValue::Float64(i)) => Ok(i as $t),
+                        Value::Date(i) => Ok(i as $t),
+                        Value::Timestamp(i) => Ok(i as $t),
+                        _ => Err(ConvertError::new("number", format!("{:?}", val)).into()),
+                    }
+                }
+            }
+        )*
+    };
 }
 
-impl TryFrom<Value> for i16 {
-    type Error = Error;
-    fn try_from(val: Value) -> Result<Self> {
-        match val {
-            Value::Number(NumberValue::Int16(i)) => Ok(i),
-            _ => Err(anyhow!("Error converting value to i16")),
-        }
-    }
-}
-
-impl TryFrom<Value> for i32 {
-    type Error = Error;
-    fn try_from(val: Value) -> Result<Self> {
-        match val {
-            Value::Number(NumberValue::Int32(i)) => Ok(i),
-            Value::Date(i) => Ok(i),
-            _ => Err(anyhow!("Error converting value to i32")),
-        }
-    }
-}
-
-impl TryFrom<Value> for i64 {
-    type Error = Error;
-    fn try_from(val: Value) -> Result<Self> {
-        match val {
-            Value::Number(NumberValue::Int64(i)) => Ok(i),
-            Value::Timestamp(i) => Ok(i),
-            _ => Err(anyhow!("Error converting value to i64")),
-        }
-    }
-}
-
-impl TryFrom<Value> for u8 {
-    type Error = Error;
-    fn try_from(val: Value) -> Result<Self> {
-        match val {
-            Value::Number(NumberValue::UInt8(i)) => Ok(i),
-            _ => Err(anyhow!("Error converting value to u8")),
-        }
-    }
-}
-
-impl TryFrom<Value> for u16 {
-    type Error = Error;
-    fn try_from(val: Value) -> Result<Self> {
-        match val {
-            Value::Number(NumberValue::UInt16(i)) => Ok(i),
-            _ => Err(anyhow!("Error converting value to u16")),
-        }
-    }
-}
-
-impl TryFrom<Value> for u32 {
-    type Error = Error;
-    fn try_from(val: Value) -> Result<Self> {
-        match val {
-            Value::Number(NumberValue::UInt32(i)) => Ok(i),
-            _ => Err(anyhow!("Error converting value to u32")),
-        }
-    }
-}
-
-impl TryFrom<Value> for u64 {
-    type Error = Error;
-    fn try_from(val: Value) -> Result<Self> {
-        match val {
-            Value::Number(NumberValue::UInt64(i)) => Ok(i),
-            _ => Err(anyhow!("Error converting value to u64")),
-        }
-    }
-}
-
-impl TryFrom<Value> for f32 {
-    type Error = Error;
-    fn try_from(val: Value) -> Result<Self> {
-        match val {
-            Value::Number(NumberValue::Float32(i)) => Ok(i),
-            _ => Err(anyhow!("Error converting value to f32")),
-        }
-    }
-}
-
-impl TryFrom<Value> for f64 {
-    type Error = Error;
-    fn try_from(val: Value) -> Result<Self> {
-        match val {
-            Value::Number(NumberValue::Float64(i)) => Ok(i),
-            _ => Err(anyhow!("Error converting value to f64")),
-        }
-    }
-}
+impl_try_from_number_value!(u8);
+impl_try_from_number_value!(u16);
+impl_try_from_number_value!(u32);
+impl_try_from_number_value!(u64);
+impl_try_from_number_value!(i8);
+impl_try_from_number_value!(i16);
+impl_try_from_number_value!(i32);
+impl_try_from_number_value!(i64);
+impl_try_from_number_value!(f32);
+impl_try_from_number_value!(f64);
 
 impl TryFrom<Value> for NaiveDateTime {
     type Error = Error;
@@ -393,10 +334,10 @@ impl TryFrom<Value> for NaiveDateTime {
                 let t = NaiveDateTime::from_timestamp_opt(secs, nanos);
                 match t {
                     Some(t) => Ok(t),
-                    None => Err(anyhow!("Empty timestamp")),
+                    None => Err(ConvertError::new("NaiveDateTime", "".to_string()).into()),
                 }
             }
-            _ => Err(anyhow!("Error converting value to NaiveDateTime")),
+            _ => Err(ConvertError::new("NaiveDateTime", format!("{}", val)).into()),
         }
     }
 }
@@ -410,16 +351,46 @@ impl TryFrom<Value> for NaiveDate {
                 let d = NaiveDate::from_num_days_from_ce_opt(days);
                 match d {
                     Some(d) => Ok(d),
-                    None => Err(anyhow!("Empty date")),
+                    None => Err(ConvertError::new("NaiveDate", "".to_string()).into()),
                 }
             }
-            _ => Err(anyhow!("Error converting value to NaiveDate")),
+            _ => Err(ConvertError::new("NaiveDate", format!("{}", val)).into()),
         }
     }
 }
 
-impl From<u8> for Value {
-    fn from(v: u8) -> Self {
-        Value::Number(NumberValue::UInt8(v))
+impl std::fmt::Display for NumberValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NumberValue::Int8(i) => write!(f, "{}", i),
+            NumberValue::Int16(i) => write!(f, "{}", i),
+            NumberValue::Int32(i) => write!(f, "{}", i),
+            NumberValue::Int64(i) => write!(f, "{}", i),
+            NumberValue::UInt8(i) => write!(f, "{}", i),
+            NumberValue::UInt16(i) => write!(f, "{}", i),
+            NumberValue::UInt32(i) => write!(f, "{}", i),
+            NumberValue::UInt64(i) => write!(f, "{}", i),
+            NumberValue::Float32(i) => write!(f, "{}", i),
+            NumberValue::Float64(i) => write!(f, "{}", i),
+        }
     }
 }
+
+impl std::fmt::Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Null => write!(f, "null"),
+            Value::Boolean(b) => write!(f, "{}", b),
+            Value::Number(n) => write!(f, "{}", n),
+            Value::String(s) => write!(f, "{}", s),
+            Value::Timestamp(t) => write!(f, "{}", t),
+            Value::Date(d) => write!(f, "{}", d),
+        }
+    }
+}
+
+// impl From<u8> for Value {
+//     fn from(v: u8) -> Self {
+//         Value::Number(NumberValue::UInt8(v))
+//     }
+// }

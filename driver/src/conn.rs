@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use anyhow::Result;
 use async_trait::async_trait;
 use dyn_clone::DynClone;
 use url::Url;
@@ -20,11 +19,12 @@ use url::Url;
 #[cfg(feature = "flight-sql")]
 use crate::flight_sql::FlightSQLConnection;
 
+use crate::error::{Error, Result};
 use crate::rest_api::RestAPIConnection;
 use crate::rows::{Row, RowIterator, RowProgressIterator};
 
 #[async_trait]
-pub trait Connection: DynClone {
+pub trait Connection: DynClone + Send + Sync {
     async fn exec(&mut self, sql: &str) -> Result<()>;
     async fn query_iter(&mut self, sql: &str) -> Result<RowIterator>;
     async fn query_iter_with_progress(&mut self, sql: &str) -> Result<RowProgressIterator>;
@@ -44,6 +44,9 @@ pub async fn new_connection(dsn: &str) -> Result<Box<dyn Connection>> {
             let conn = FlightSQLConnection::try_create(dsn).await?;
             Ok(Box::new(conn))
         }
-        _ => Err(anyhow::anyhow!("Unsupported scheme: {}", u.scheme())),
+        _ => Err(Error::Parsing(format!(
+            "Unsupported scheme: {}",
+            u.scheme()
+        ))),
     }
 }

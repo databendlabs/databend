@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod conn;
+mod error;
 #[cfg(feature = "flight-sql")]
 mod flight_sql;
 mod rest_api;

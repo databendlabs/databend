@@ -14,18 +14,18 @@
 
 use std::pin::Pin;
 
-use anyhow::{anyhow, Error, Result};
 use serde::Deserialize;
 use tokio_stream::Stream;
 
 #[cfg(feature = "flight-sql")]
 use arrow::record_batch::RecordBatch;
 
+use crate::error::{Error, Result};
 use crate::schema::DataType;
 use crate::value::Value;
 
-pub type RowIterator = Pin<Box<dyn Stream<Item = Result<Row>>>>;
-pub type RowProgressIterator = Pin<Box<dyn Stream<Item = Result<RowWithProgress>>>>;
+pub type RowIterator = Pin<Box<dyn Stream<Item = Result<Row>> + Send>>;
+pub type RowProgressIterator = Pin<Box<dyn Stream<Item = Result<RowWithProgress>> + Send>>;
 
 #[derive(Deserialize, Clone, Debug, Default)]
 pub struct IterProgress {
@@ -125,7 +125,7 @@ macro_rules! impl_tuple_from_row {
                 let expected_len = <[()]>::len(&[$(replace_expr!(($Ti) ())),*]);
 
                 if expected_len != row.len() {
-                    return Err(anyhow!("row size mismatch: expected {} columns, got {}", expected_len, row.len()));
+                    return Err(Error::InvalidResponse(format!("row size mismatch: expected {} columns, got {}", expected_len, row.len())));
                 }
                 let mut vals_iter = row.into_iter().enumerate();
 
@@ -138,7 +138,7 @@ macro_rules! impl_tuple_from_row {
                                            // so it is safe to unwrap
                             let t = col_value.get_type();
                             $Ti::try_from(col_value)
-                                .map_err(|_| anyhow!("failed converting column {} from type({:?}) to type({})", col_ix, t, std::any::type_name::<$Ti>()))?
+                                .map_err(|_| Error::InvalidResponse(format!("failed converting column {} from type({:?}) to type({})", col_ix, t, std::any::type_name::<$Ti>())))?
                         }
                     ,)+
                 ))

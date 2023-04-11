@@ -18,17 +18,17 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-use anyhow::{anyhow, Context as AnyhowContext, Result};
-use arrow::datatypes::Schema;
 use arrow::ipc::{convert::fb_to_schema, root_as_message};
 use arrow_flight::utils::flight_data_to_arrow_batch;
 use arrow_flight::{sql::client::FlightSqlServiceClient, FlightData};
+use arrow_schema::SchemaRef;
 use async_trait::async_trait;
 use tokio_stream::{Stream, StreamExt};
 use tonic::transport::{ClientTlsConfig, Endpoint};
 use tonic::Streaming;
 use url::Url;
 
+use crate::error::{Error, Result};
 use crate::rows::{IterProgress, Row, RowIterator, RowProgressIterator, RowWithProgress, Rows};
 use crate::Connection;
 
@@ -60,45 +60,16 @@ impl Connection for FlightSQLConnection {
         let ticket = flight_info.endpoint[0]
             .ticket
             .as_ref()
-            .with_context(|| "Ticket is empty")?;
+            .ok_or(Error::Protocol("Ticket is empty".to_string()))?;
         let flight_data = self.client.do_get(ticket.clone()).await?;
         let rows = FlightSQLRows::from_flight_data(flight_data).await?;
         Ok(Box::pin(rows))
     }
 
     async fn query_row(&mut self, sql: &str) -> Result<Option<Row>> {
-        let mut stmt = self.client.prepare(sql.to_string()).await?;
-        let info = stmt.execute().await?;
-        let ticket = info.endpoint[0]
-            .ticket
-            .as_ref()
-            .with_context(|| "No ticket")?;
-        let mut flight_data = self.client.do_get(ticket.clone()).await?;
-        let datum = flight_data
-            .try_next()
-            .await?
-            .with_context(|| "No flight data in stream")?;
-        let message = root_as_message(&datum.data_header[..])
-            .map_err(|err| anyhow!("InvalidFlatbuffer: {}", err))?;
-        let ipc_schema = message
-            .header_as_schema()
-            .with_context(|| anyhow!("Invalid Message: Cannot get header as Schema"))?;
-        let schema = Arc::new(fb_to_schema(ipc_schema));
-
-        let dicitionaries_by_id = HashMap::new();
-        let mut datum = flight_data
-            .try_next()
-            .await?
-            .with_context(|| "No flight data in stream")?;
-        while datum.app_metadata[..] == [0x01] {
-            datum = flight_data
-                .try_next()
-                .await?
-                .with_context(|| "No flight data in stream")?;
-        }
-        let batch = flight_data_to_arrow_batch(&datum, schema.clone(), &dicitionaries_by_id)?;
-        let rows = Rows::try_from(batch)?;
-        Ok(rows.into_iter().next())
+        let mut rows = self.query_iter(sql).await?;
+        let row = rows.try_next().await?;
+        Ok(row)
     }
 }
 
@@ -197,10 +168,10 @@ impl Args {
         }
         let host = u
             .host()
-            .with_context(|| format!("Invalid host with: {}", u))?;
+            .ok_or(Error::BadArgument("Host is empty".to_string()))?;
         let port = u
             .port()
-            .with_context(|| format!("Invalid port with: {}", u))?;
+            .ok_or(Error::BadArgument("Port is empty".to_string()))?;
         args.uri = format!("{}://{}:{}", scheme, host, port);
         args.user = u.username().to_string();
         args.password = u.password().unwrap_or_default().to_string();
@@ -209,7 +180,7 @@ impl Args {
 }
 
 pub struct FlightSQLRows {
-    schema: Schema,
+    schema: SchemaRef,
     data: Streaming<FlightData>,
     rows: VecDeque<Row>,
 }
@@ -220,16 +191,16 @@ impl FlightSQLRows {
         let datum = data
             .try_next()
             .await?
-            .with_context(|| "No flight data in stream")?;
+            .ok_or(Error::Protocol("No flight data in stream".to_string()))?;
         let message = root_as_message(&datum.data_header[..])
-            .map_err(|err| anyhow!("InvalidFlatbuffer: {}", err))?;
-        let ipc_schema = message
-            .header_as_schema()
-            .with_context(|| anyhow!("Invalid Message: Cannot get header as Schema"))?;
+            .map_err(|err| Error::Protocol(format!("InvalidFlatbuffer: {}", err)))?;
+        let ipc_schema = message.header_as_schema().ok_or(Error::Protocol(
+            "Invalid Message: Cannot get header as Schema".to_string(),
+        ))?;
         let schema = fb_to_schema(ipc_schema);
         Ok(Self {
-            schema,
-            data,
+            schema: Arc::new(schema),
+            data: data,
             rows: VecDeque::new(),
         })
     }
@@ -252,7 +223,7 @@ impl Stream for FlightSQLRows {
                     let dicitionaries_by_id = HashMap::new();
                     let batch = flight_data_to_arrow_batch(
                         &datum,
-                        Arc::new(self.schema.clone()),
+                        self.schema.clone(),
                         &dicitionaries_by_id,
                     )?;
                     let rows = Rows::try_from(batch)?;

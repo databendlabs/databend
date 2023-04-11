@@ -18,13 +18,13 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use anyhow::{Error, Result};
 use async_trait::async_trait;
 use databend_client::response::QueryResponse;
 use databend_client::APIClient;
 use tokio_stream::{Stream, StreamExt};
 
 use crate::conn::Connection;
+use crate::error::{Error, Result};
 use crate::rows::{Row, RowIterator, RowProgressIterator, RowWithProgress};
 use crate::schema::{DataType, SchemaFieldList};
 
@@ -100,13 +100,13 @@ impl RestAPIConnection {
 
     async fn finish_query(&self, final_uri: Option<String>) -> Result<QueryResponse> {
         match final_uri {
-            Some(uri) => self.client.query_page(&uri).await,
-            None => Err(anyhow::anyhow!("final_uri is empty")),
+            Some(uri) => self.client.query_page(&uri).await.map_err(|e| e.into()),
+            None => Err(Error::InvalidResponse("final_uri is empty".to_string())),
         }
     }
 }
 
-type PageFut = Pin<Box<dyn Future<Output = Result<QueryResponse>>>>;
+type PageFut = Pin<Box<dyn Future<Output = Result<QueryResponse>> + Send>>;
 
 pub struct RestAPIRows {
     client: Arc<APIClient>,
@@ -158,8 +158,9 @@ impl Stream for RestAPIRows {
                 Some(ref next_uri) => {
                     let client = self.client.clone();
                     let next_uri = next_uri.clone();
-                    self.next_page =
-                        Some(Box::pin(async move { client.query_page(&next_uri).await }));
+                    self.next_page = Some(Box::pin(async move {
+                        client.query_page(&next_uri).await.map_err(|e| e.into())
+                    }));
                     self.poll_next(cx)
                 }
                 None => Poll::Ready(None),
