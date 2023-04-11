@@ -109,12 +109,16 @@ impl ValueType for BooleanType {
     unsafe fn probe_column_by_indices<'a>(
         col: &'a Self::Column,
         indices: &[(u32, u32)],
+        indices_len: usize,
         probe_num: usize,
     ) -> Self::Column {
         let mut col_builder = MutableBitmap::with_capacity((probe_num).saturating_add(7) / 8);
-        for (index, cnt) in indices {
-            let val = col.get_bit_unchecked(*index as usize);
-            for _ in 0..*cnt {
+        let mut idx = 0;
+        while idx < indices_len {
+            let (index, cnt) = indices[idx];
+            idx += 1;
+            let val = col.get_bit_unchecked(index as usize);
+            for _ in 0..cnt {
                 col_builder.push(val);
             }
         }

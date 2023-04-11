@@ -64,7 +64,12 @@ impl DataBlock {
         Ok(DataBlock::new(after_columns, indices.len()))
     }
 
-    pub fn probe_take(&self, indices: &[(u32, u32)], probe_num: usize) -> Result<Self> {
+    pub fn probe_take(
+        &self,
+        indices: &[(u32, u32)],
+        indices_len: usize,
+        probe_num: usize,
+    ) -> Result<Self> {
         if indices.is_empty() {
             return Ok(self.slice(0..0));
         }
@@ -79,7 +84,7 @@ impl DataBlock {
                 },
                 Value::Column(c) => BlockEntry {
                     data_type: entry.data_type.clone(),
-                    value: Value::Column(Column::probe_take(c, indices, probe_num)),
+                    value: Value::Column(Column::probe_take(c, indices, indices_len, probe_num)),
                 },
             })
             .collect();
@@ -168,16 +173,21 @@ impl Column {
         }
     }
 
-    pub fn probe_take(&self, indices: &[(u32, u32)], probe_num: usize) -> Self {
+    pub fn probe_take(&self, indices: &[(u32, u32)], indices_len: usize, probe_num: usize) -> Self {
         let length = indices.len();
         match self {
             Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {
                 self.slice(0..length)
             }
-            Column::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
-                NumberColumn::NUM_TYPE(values) =>
-                    Self::probe_take_arg_types::<NumberType<NUM_TYPE>>(values, indices, probe_num),
-            }),
+            Column::Number(column) => {
+                with_number_mapped_type!(|NUM_TYPE| match column {
+                    NumberColumn::NUM_TYPE(values) => Self::probe_take_arg_types::<
+                        NumberType<NUM_TYPE>,
+                    >(
+                        values, indices, indices_len, probe_num
+                    ),
+                })
+            }
             Column::Decimal(column) => with_decimal_type!(|DECIMAL_TYPE| match column {
                 DecimalColumn::Decimal128(values, size) => {
                     let mut builder: Vec<i128> = Vec::with_capacity(probe_num);
@@ -186,11 +196,14 @@ impl Column {
                     let mut offset = 0;
                     let mut remain;
                     let mut power;
-                    for (index, cnt) in indices {
-                        if *cnt == 1 {
+                    let mut idx = 0;
+                    while idx < indices_len {
+                        let (index, cnt) = indices[idx];
+                        idx += 1;
+                        if cnt == 1 {
                             unsafe {
                                 std::ptr::copy_nonoverlapping(
-                                    col_ptr.add(*index as usize),
+                                    col_ptr.add(index as usize),
                                     builder_ptr.add(offset),
                                     1,
                                 );
@@ -198,16 +211,16 @@ impl Column {
                             offset += 1;
                             continue;
                         }
-                        // Copy memory using the doubling method.
+                        // Using the doubling method to copy memory.
                         let base_offset = offset;
                         unsafe {
                             std::ptr::copy_nonoverlapping(
-                                col_ptr.add(*index as usize),
+                                col_ptr.add(index as usize),
                                 builder_ptr.add(base_offset),
                                 1,
                             );
                         }
-                        remain = *cnt as usize;
+                        remain = cnt as usize;
                         // Since cnt > 0, then 31 - cnt.leading_zeros() >= 0.
                         let max_segment = 1 << (31 - cnt.leading_zeros());
                         let mut cur_segment = 1;
@@ -252,11 +265,14 @@ impl Column {
                     let mut offset = 0;
                     let mut remain;
                     let mut power;
-                    for (index, cnt) in indices {
-                        if *cnt == 1 {
+                    let mut idx = 0;
+                    while idx < indices_len {
+                        let (index, cnt) = indices[idx];
+                        idx += 1;
+                        if cnt == 1 {
                             unsafe {
                                 std::ptr::copy_nonoverlapping(
-                                    col_ptr.add(*index as usize),
+                                    col_ptr.add(index as usize),
                                     builder_ptr.add(offset),
                                     1,
                                 );
@@ -264,16 +280,16 @@ impl Column {
                             offset += 1;
                             continue;
                         }
-                        // Copy memory using the doubling method.
+                        // Using the doubling method to copy memory.
                         let base_offset = offset;
                         unsafe {
                             std::ptr::copy_nonoverlapping(
-                                col_ptr.add(*index as usize),
+                                col_ptr.add(index as usize),
                                 builder_ptr.add(base_offset),
                                 1,
                             );
                         }
-                        remain = *cnt as usize;
+                        remain = cnt as usize;
                         // Since cnt > 0, then 31 - cnt.leading_zeros() >= 0.
                         let max_segment = 1 << (31 - cnt.leading_zeros());
                         let mut cur_segment = 1;
@@ -313,25 +329,35 @@ impl Column {
                 }
             }),
             Column::Boolean(bm) => {
-                Self::probe_take_arg_types::<BooleanType>(bm, indices, probe_num)
+                Self::probe_take_arg_types::<BooleanType>(bm, indices, indices_len, probe_num)
             }
             Column::String(column) => {
-                Self::probe_take_arg_types::<StringType>(column, indices, probe_num)
+                Self::probe_take_arg_types::<StringType>(column, indices, indices_len, probe_num)
             }
             Column::Timestamp(column) => {
-                let ts = Self::probe_take_arg_types::<NumberType<i64>>(column, indices, probe_num)
-                    .into_number()
-                    .unwrap()
-                    .into_int64()
-                    .unwrap();
+                let ts = Self::probe_take_arg_types::<NumberType<i64>>(
+                    column,
+                    indices,
+                    indices_len,
+                    probe_num,
+                )
+                .into_number()
+                .unwrap()
+                .into_int64()
+                .unwrap();
                 Column::Timestamp(ts)
             }
             Column::Date(column) => {
-                let d = Self::probe_take_arg_types::<NumberType<i32>>(column, indices, probe_num)
-                    .into_number()
-                    .unwrap()
-                    .into_int32()
-                    .unwrap();
+                let d = Self::probe_take_arg_types::<NumberType<i32>>(
+                    column,
+                    indices,
+                    indices_len,
+                    probe_num,
+                )
+                .into_number()
+                .unwrap()
+                .into_int32()
+                .unwrap();
                 Column::Date(d)
             }
             Column::Array(column) => {
@@ -360,9 +386,13 @@ impl Column {
                 Self::probe_take_value_types::<MapType<AnyType, AnyType>>(&column, builder, indices)
             }
             Column::Nullable(c) => {
-                let column = c.column.probe_take(indices, probe_num);
-                let validity =
-                    Self::probe_take_arg_types::<BooleanType>(&c.validity, indices, probe_num);
+                let column = c.column.probe_take(indices, indices_len, probe_num);
+                let validity = Self::probe_take_arg_types::<BooleanType>(
+                    &c.validity,
+                    indices,
+                    indices_len,
+                    probe_num,
+                );
                 Column::Nullable(Box::new(NullableColumn {
                     column,
                     validity: BooleanType::try_downcast_column(&validity).unwrap(),
@@ -371,12 +401,12 @@ impl Column {
             Column::Tuple(fields) => {
                 let fields = fields
                     .iter()
-                    .map(|c| c.probe_take(indices, probe_num))
+                    .map(|c| c.probe_take(indices, indices_len, probe_num))
                     .collect();
                 Column::Tuple(fields)
             }
             Column::Variant(column) => {
-                Self::probe_take_arg_types::<StringType>(column, indices, probe_num)
+                Self::probe_take_arg_types::<StringType>(column, indices, indices_len, probe_num)
             }
         }
     }
@@ -414,9 +444,12 @@ impl Column {
     fn probe_take_arg_types<T: ArgType>(
         col: &T::Column,
         indices: &[(u32, u32)],
+        indices_len: usize,
         probe_num: usize,
     ) -> Column {
-        T::upcast_column(unsafe { T::probe_column_by_indices(col, indices, probe_num) })
+        T::upcast_column(unsafe {
+            T::probe_column_by_indices(col, indices, indices_len, probe_num)
+        })
     }
 
     fn probe_take_value_types<T: ValueType>(
