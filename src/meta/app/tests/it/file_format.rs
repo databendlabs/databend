@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,23 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#![allow(clippy::uninlined_format_args)]
-#![feature(box_patterns)]
-#![feature(cursor_remaining)]
 
-mod clickhouse;
-mod common_settings;
-mod delimiter;
-mod field_decoder;
-pub mod field_encoder;
-mod file_format_type;
-pub mod output_format;
+use common_meta_app::principal::check_record_delimiter;
 
-pub use clickhouse::ClickhouseFormatType;
-pub use delimiter::RecordDelimiter;
-pub use field_decoder::*;
-pub use file_format_type::parse_timezone;
-pub use file_format_type::FileFormatOptionsExt;
-pub use file_format_type::FileFormatTypeExt;
-
-use crate::common_settings::CommonSettings;
+#[test]
+fn test_check_record_delimiter() {
+    assert!(check_record_delimiter("|").is_ok());
+    assert!(check_record_delimiter("\r\n").is_ok());
+    assert!(check_record_delimiter("").is_err());
+    assert!(check_record_delimiter("foo").is_err());
+    assert!(check_record_delimiter("|\r").is_err());
+}

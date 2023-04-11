@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use common_meta_app::principal::AuthType;
-use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::FileFormatOptionsAst;
 use common_meta_app::principal::PrincipalIdentity;
 use common_meta_app::principal::UserIdentity;
 use common_meta_app::principal::UserPrivilegeType;
@@ -1102,9 +1102,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             CREATE ~ FILE ~ FORMAT ~ ( IF ~ NOT ~ EXISTS )?
             ~ #ident ~ #format_options
         },
-        |(_, _, _, opt_if_not_exists, name, file_format_options)| {
-            let file_format_options = FileFormatOptions::from_map(&file_format_options)
-                .map_err(|_| ErrorKind::Other("invalid statement"))?;
+        |(_, _, _, opt_if_not_exists, name, options)| {
+            let file_format_options = FileFormatOptionsAst { options };
             Ok(Statement::CreateFileFormat {
                 if_not_exists: opt_if_not_exists.is_some(),
                 name: name.to_string(),

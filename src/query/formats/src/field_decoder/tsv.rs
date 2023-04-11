@@ -29,6 +29,7 @@ use common_io::constants::NULL_BYTES_ESCAPE;
 use common_io::constants::TRUE_BYTES_NUM;
 use common_io::cursor_ext::BufferReadStringExt;
 use common_io::cursor_ext::ReadBytesExt;
+use common_meta_app::principal::TsvFileFormatParams;
 
 use crate::field_decoder::row_based::FieldDecoderRowBased;
 use crate::CommonSettings;
@@ -42,7 +43,7 @@ pub struct FieldDecoderTSV {
 }
 
 impl FieldDecoderTSV {
-    pub fn create(options: &FileFormatOptionsExt) -> Self {
+    pub fn create(params: &TsvFileFormatParams, options_ext: &FileFormatOptionsExt) -> Self {
         FieldDecoderTSV {
             common_settings: CommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
@@ -50,9 +51,9 @@ impl FieldDecoderTSV {
                 null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
-                timezone: options.timezone,
+                timezone: options_ext.timezone,
             },
-            quote_char: options.get_quote_char(),
+            quote_char: params.quote.as_bytes()[0],
         }
     }
 }

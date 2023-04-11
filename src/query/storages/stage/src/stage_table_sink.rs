@@ -70,10 +70,10 @@ impl StageTableSink {
         uuid: String,
         group_id: usize,
     ) -> Result<ProcessorPtr> {
-        let output_format = FileFormatOptionsExt::get_output_format_from_format_options(
+        let mut options_ext = FileFormatOptionsExt::create_from_settings(&ctx.get_settings())?;
+        let output_format = options_ext.get_output_format(
             table_info.schema(),
-            table_info.stage_info.file_format_options.clone(),
-            &ctx.get_settings(),
+            table_info.stage_info.file_format_params.clone(),
         )?;
 
         let max_file_size = Self::adjust_max_file_size(&ctx, &table_info)?;
@@ -120,7 +120,7 @@ impl StageTableSink {
     pub fn unload_path(&self) -> String {
         let format_name = format!(
             "{:?}",
-            self.table_info.stage_info.file_format_options.format
+            self.table_info.stage_info.file_format_params.get_type()
         );
 
         // assert_eq!("00000110", format!("{:0>8}", "110"))

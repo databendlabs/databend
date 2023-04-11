@@ -354,8 +354,8 @@ impl CopyInterpreter {
 
         if stage_table_info
             .stage_info
-            .file_format_options
-            .format
+            .file_format_params
+            .get_type()
             .has_inner_schema()
         {
             let dst_schema: Arc<DataSchema> = Arc::new(to_table.schema().into());

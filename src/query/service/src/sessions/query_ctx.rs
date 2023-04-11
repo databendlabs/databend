@@ -44,7 +44,7 @@ use common_expression::date_helper::TzFactory;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
-use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::StageFileFormatType;
@@ -500,19 +500,18 @@ impl TableContext for QueryContext {
     }
 
     #[async_backtrace::framed]
-    async fn get_file_format(&self, name: &str) -> Result<FileFormatOptions> {
-        let opt = match StageFileFormatType::from_str(name) {
-            Ok(typ) => FileFormatOptions::default_by_type(typ),
+    async fn get_file_format(&self, name: &str) -> Result<FileFormatParams> {
+        match StageFileFormatType::from_str(name) {
+            Ok(typ) => FileFormatParams::default_by_type(typ),
             Err(_) => {
                 let user_mgr = UserApiProvider::instance();
                 let tenant = self.get_tenant();
-                user_mgr
+                Ok(user_mgr
                     .get_file_format(&tenant, name)
                     .await?
-                    .file_format_options
+                    .file_format_params)
             }
-        };
-        Ok(opt)
+        }
     }
 
     /// Fetch a Table by db and table name.
