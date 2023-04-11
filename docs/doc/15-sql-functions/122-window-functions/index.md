@@ -2,125 +2,154 @@
 title: 'Window Functions'
 ---
 
-## What is a window function?
+## Overview 
 
-Window functions perform calculations across rows of the query result. They run after the HAVING clause but before the ORDER BY clause.
+A window function operates on a group ("window") of related rows.
 
-Invoking a window function requires special syntax using the OVER clause to specify the window.
+For each input row, a window function returns one output row that depends on the specific row passed to the function and the values of the other rows in the window.
 
-The window can be specified in two ways(see [Window Function Syntax](window-function-syntax.md) for details).
+There are two main types of order-sensitive window functions:
 
-## Supported functions in window functions
+* `Rank-related functions`: Rank-related functions list information based on the "rank" of a row. For example, ranking stores in descending order by profit per year, the store with the most profit will be ranked 1, and the second-most profitable store will be ranked 2, and so on.
 
-### Aggregate functions
-All the aggregate functions supported by Databend can be used as aggregate window functions. See [Aggregate Functions](../10-aggregate-functions/index.md) for supported aggregate functions.
+* `Window frame functions`: Window frame functions enable you to perform rolling operations, such as calculating a running total or a moving average, on a subset of the rows in the window.
+
+## Window Syntax
+
+```sql
+<function> ( [ <arguments> ] ) OVER ( [ PARTITION BY <expr1> ] [ ORDER BY <expr2> ] )
+```
+The `<function>` is [aggregate function](../10-aggregate-functions/index.md).
+
+The `OVER` clause specifies that the function is being used as a window function.
+
+The `PARTITION BY` sub-clause allows rows to be grouped into sub-groups, for example by city, by year, etc. The `PARTITION BY` clause is optional. You can analyze an entire group of rows without breaking it into sub-groups.
+
+The `ORDER BY` clause orders rows within the window. 
 
 
-### Ranking functions
+## Window Frame Syntax
 
-| Function Name                      | What It Does                                                                                                                                                                                                                                                        | 
-|------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [ROW_NUMBER](window-row-number.md) | Returns a unique, sequential number for each row, starting with one, according to the ordering of rows within the window partition.                                                                                                                                 | 
-| [RANK](window-rank.md)             | Returns the rank of a value in a group of values. The rank is one plus the number of rows preceding the row that are not peer with the row. Thus, tie values in the ordering will produce gaps in the sequence. The ranking is performed for each window partition. | 
-| [DENSE_RANK](window-dense-rank.md) | Returns the rank of a value in a group of values. This is similar to RANK(), except that tie values do not produce gaps in the sequence.                                                                                                                            |
-| CUME_DIST                          | Not implementation, as a good first issue, see: https://github.com/datafuselabs/databend/issues/10810                                                                                                                                                               |
-| PERCENT_RANK                       | Not implementation, as a good first issue, see: https://github.com/datafuselabs/databend/issues/10810                                                                                                                                                                                                                                                               |
-| NTILE(n)                           | Not implementation, as a good first issue, see: https://github.com/datafuselabs/databend/issues/10810                                                                                                                                                                                                                                                               |
+```sql
+<function> ( <arguments> ) OVER ( [ PARTITION BY <expr1> ] ORDER BY <expr2> [ cumulativeFrame | slidingFrame ] )
+```
 
+Where:
+```sql
+cumulativeFrame ::=
+    {
+       { ROWS | RANGE } BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+     | { ROWS | RANGE } BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
+    }
+```
 
-### Value functions(TODO)
-
-| Function Name                    | What It Does                                                                                                                        | 
-|----------------------------------|-------------------------------------------------------------------------------------------------------------------------------------|
-| FIRST_VALUE(x)                   | Not implementation, as a good first issue, see: https://github.com/datafuselabs/databend/issues/10810                               |
-| LAST_VALUE(x)                    | Not implementation, as a good first issue, see: https://github.com/datafuselabs/databend/issues/10810|
-| NTH_VALUE(x, offset)             | Not implementation, as a good first issue, see: https://github.com/datafuselabs/databend/issues/10810|
-| LAG(x[,offset[,default_value]])  | Not implementation, as a good first issue, see: https://github.com/datafuselabs/databend/issues/10810|
-| LEAD(x[,offset[,default_value]]) | Not implementation, as a good first issue, see: https://github.com/datafuselabs/databend/issues/10810|
-
+```sql
+slidingFrame ::=
+    {
+       ROWS BETWEEN <N> { PRECEDING | FOLLOWING } AND <N> { PRECEDING | FOLLOWING }
+     | ROWS BETWEEN UNBOUNDED PRECEDING AND <N> { PRECEDING | FOLLOWING }
+     | ROWS BETWEEN <N> { PRECEDING | FOLLOWING } AND UNBOUNDED FOLLOWING
+    }
+```
 
 ## Examples
 
-### Example 1:
-Imagine that we manage a bookstore with two branches in Toronto and Ottawa. We create a table to store the transactions for both cities from June 21 to June 23.
-
+**Create the table**
 ```sql
--- create a table
-CREATE TABLE BookSold (
-  id INTEGER PRIMARY KEY,
-  date TEXT NOT NULL,
-  city TEXT NOT NULL,
-  amount INTEGER NOT NULL
+CREATE TABLE employees (
+  employee_id INT,
+  first_name VARCHAR,
+  last_name VARCHAR,
+  department VARCHAR,
+  salary INT
 );
-
--- insert some values
-INSERT INTO BookSold VALUES (1, 'June 21', 'Toronto', 685);
-INSERT INTO BookSold VALUES (2, 'June 21', 'Ottawa', 403);
-INSERT INTO BookSold VALUES (3, 'June 22', 'Toronto', 679);
-INSERT INTO BookSold VALUES (4, 'June 22', 'Ottawa', 230);
-INSERT INTO BookSold VALUES (5, 'June 23', 'Toronto', 379);
-INSERT INTO BookSold VALUES (6, 'June 23', 'Ottawa', 907);
-
--- show the table
-SELECT * FROM BookSold;
-
-1|June 21|Toronto|685
-2|June 21|Ottawa|403
-3|June 22|Toronto|679
-4|June 22|Ottawa|230
-5|June 23|Toronto|379
-6|June 23|Ottawa|907
 ```
 
-If we use the aggregate function (AVG) to calculate the average amount of books sold for each branch, the result will be grouped by date:
-
+**Insert data**
 ```sql
--- use aggregate function with GROUP BY
-SELECT date, AVG(amount) AS avg_amount_for_branch
-FROM BookSold
-GROUP BY date;
-
-June 21|544.0
-June 22|454.5
-June 23|643.0
+INSERT INTO employees (employee_id, first_name, last_name, department, salary) VALUES
+  (1, 'John', 'Doe', 'IT', 75000),
+  (2, 'Jane', 'Smith', 'HR', 85000),
+  (3, 'Mike', 'Johnson', 'IT', 90000),
+  (4, 'Sara', 'Williams', 'Sales', 60000),
+  (5, 'Tom', 'Brown', 'HR', 82000),
+  (6, 'Ava', 'Davis', 'Sales', 62000),
+  (7, 'Olivia', 'Taylor', 'IT', 72000),
+  (8, 'Emily', 'Anderson', 'HR', 77000),
+  (9, 'Sophia', 'Lee', 'Sales', 58000),
+  (10, 'Ella', 'Thomas', 'IT', 67000);
 ```
 
-If we use the aggregate window function, the result will include all the rows:
+**Example 1: Ranking employees by salary**
 
+In this example, we use the RANK() function to rank employees based on their salaries in descending order. The highest salary will get a rank of 1, and the lowest salary will get the highest rank number.
 ```sql
--- use aggregate window function 
-SELECT date, AVG(amount) over (partition by date) 
-FROM BookSold
-
-June 21|544.0
-June 21|544.0
-June 22|454.5
-June 22|454.5
-June 23|643.0
-June 23|643.0
+SELECT employee_id, first_name, last_name, department, salary, RANK() OVER (ORDER BY salary DESC) AS rank
+FROM employees;
 ```
-If we leave the OVER clause empty, it calculates the average of the total amount of three days.
 
+Result:
+
+| employee_id | first_name | last_name | department | salary | rank |
+|-------------|------------|-----------|------------|--------|------|
+| 3           | Mike       | Johnson   | IT         | 90000  | 1    |
+| 2           | Jane       | Smith     | HR         | 85000  | 2    |
+| 5           | Tom        | Brown     | HR         | 82000  | 3    |
+| 8           | Emily      | Anderson  | HR         | 77000  | 4    |
+| 1           | John       | Doe       | IT         | 75000  | 5    |
+| 7           | Olivia     | Taylor    | IT         | 72000  | 6    |
+| 10          | Ella       | Thomas    | IT         | 67000  | 7    |
+| 6           | Ava        | Davis     | Sales      | 62000  | 8    |
+| 4           | Sara       | Williams  | Sales      | 60000  | 9    |
+| 9           | Sophia     | Lee       | Sales      | 58000  | 10   |
+
+
+
+**Example 2: Calculating the total salary per department**
+
+In this example, we use the SUM() function with PARTITION BY to calculate the total salary paid per department. Each row will show the department and the total salary for that department.
 ```sql
--- use aggregate window function without PARTITION BY in the OVER clause
-SELECT date, AVG(amount) over () 
-FROM BookSold
-
-June 21|547.166666666667
-June 21|547.166666666667
-June 22|547.166666666667
-June 22|547.166666666667
-June 23|547.166666666667
-June 23|547.166666666667
+SELECT department, SUM(salary) OVER (PARTITION BY department) AS total_salary
+FROM employees;
 ```
 
-### Example 2:
-Another example is find outliers in a time series.
+Result:
+
+| department | total_salary |
+|------------|--------------|
+| HR         | 244000       |
+| HR         | 244000       |
+| HR         | 244000       |
+| IT         | 304000       |
+| IT         | 304000       |
+| IT         | 304000       |
+| IT         | 304000       |
+| Sales      | 180000       |
+| Sales      | 180000       |
+| Sales      | 180000       |
+
+
+**Example 3: Calculating a running total of salaries per department**
+
+In this example, we use the SUM() function with a cumulative window frame to calculate a running total of salaries within each department. The running total is calculated based on the employee's salary ordered by their employee_id.
 ```sql
-select t, val, abs(val - (avg(val) over w))/(stddev(val) over w)
-from measurement
-window w as (
-  partition by location
-  order by time
-  range between 5 preceding and 5 following)
+SELECT employee_id, first_name, last_name, department, salary, 
+       SUM(salary) OVER (PARTITION BY department ORDER BY employee_id
+                         ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running_total
+FROM employees;
 ```
+
+Result:
+
+| employee_id | first_name | last_name | department | salary | running_total |
+|-------------|------------|-----------|------------|--------|---------------|
+| 2           | Jane       | Smith     | HR         | 85000  | 85000         |
+| 5           | Tom        | Brown     | HR         | 82000  | 167000        |
+| 8           | Emily      | Anderson  | HR         | 77000  | 244000        |
+| 1           | John       | Doe       | IT         | 75000  | 75000         |
+| 3           | Mike       | Johnson   | IT         | 90000  | 165000        |
+| 7           | Olivia     | Taylor    | IT         | 72000  | 237000        |
+| 10          | Ella       | Thomas    | IT         | 67000  | 304000        |
+| 4           | Sara       | Williams  | Sales      | 60000  | 60000         |
+| 6           | Ava        | Davis     | Sales      | 62000  | 122000        |
+| 9           | Sophia     | Lee       | Sales      | 58000  | 180000        |

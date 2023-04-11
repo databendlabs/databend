@@ -5,11 +5,16 @@ title: RANK
 
 ## RANK
 
-Returns the rank of a value in a group of values. The rank is one plus the number of rows preceding the row that are not peer with the row. 
-Thus, tie values in the ordering will produce gaps in the sequence. The ranking is performed for each window partition.
+Returns the rank of a value within an ordered group of values.
+
+The rank value starts at 1 and continues up sequentially.
+
+If two values are the same, they have the same rank.
+
+## Syntax
 
 ```sql
-RANK() OVER { named_window | inline_window }
+RANK() OVER ( [ PARTITION BY <expr1> ] ORDER BY <expr2> [ { ASC | DESC } ] [ <window_frame> ] )
 ```
 
 ## Examples
