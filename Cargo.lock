@@ -3379,6 +3379,7 @@ dependencies = [
  "ordered-float 3.6.0",
  "p256 0.13.0",
  "parking_lot 0.12.1",
+ "paste",
  "petgraph",
  "pin-project-lite",
  "poem",

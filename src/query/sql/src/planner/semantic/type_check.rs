@@ -1079,7 +1079,8 @@ impl<'a> TypeChecker<'a> {
         frame: WindowFrame,
     ) -> Result<WindowFuncFrame> {
         let order_by_type = order_by.expr.data_type()?;
-        let mut common_type = order_by_type.clone();
+        let is_nullable = order_by_type.is_nullable();
+        let mut common_type = order_by_type.remove_nullable();
         let start_offset = self.resolve_range_offset(&frame.start_bound).await?;
         let end_offset = self.resolve_range_offset(&frame.end_bound).await?;
         if let Some((_, data_type)) = &start_offset {
@@ -1104,9 +1105,6 @@ impl<'a> TypeChecker<'a> {
         }
 
         // Unify ORDER BY and RANGE offsets types.
-        if order_by_type != common_type {
-            order_by.expr = wrap_cast(&order_by.expr, &common_type);
-        }
         let start_offset = start_offset
             .map(|(mut expr, _)| {
                 expr = wrap_cast(&expr, &common_type);
@@ -1141,6 +1139,13 @@ impl<'a> TypeChecker<'a> {
                 .set_span(span))
             })
             .transpose()?;
+
+        if is_nullable {
+            common_type = common_type.wrap_nullable();
+        }
+        if order_by_type != common_type {
+            order_by.expr = wrap_cast(&order_by.expr, &common_type);
+        }
 
         let units = match frame.units {
             WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,

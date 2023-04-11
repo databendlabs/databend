@@ -814,7 +814,10 @@ impl PipelineBuilder {
             } else {
                 if order_by.len() == 1 {
                     // If the length of order_by is 1, there may be a RANGE frame.
-                    let data_type = input_schema.field(order_by[0].offset).data_type();
+                    let data_type = input_schema
+                        .field(order_by[0].offset)
+                        .data_type()
+                        .remove_nullable();
                     with_number_mapped_type!(|NUM_TYPE| match data_type {
                         DataType::Number(NumberDataType::NUM_TYPE) => {
                             let start_bound =
