@@ -44,6 +44,7 @@ use common_meta_types::TxnRequest;
 use common_tracing::func_name;
 use tracing::debug;
 
+use crate::convert_share_meta_to_spec;
 use crate::db_has_to_exist;
 use crate::fetch_id;
 use crate::get_db_or_err;
@@ -55,7 +56,6 @@ use crate::get_share_meta_by_id_or_err;
 use crate::get_share_or_err;
 use crate::get_u64_value;
 use crate::id_generator::IdGenerator;
-use crate::is_db_need_to_be_remove;
 use crate::kv_app_error::KVAppError;
 use crate::list_keys;
 use crate::send_txn;
@@ -258,8 +258,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             .await?;
 
             // drop all the databases created from the share
-            drop_all_database_from_share(self, share_id, &share_meta, &mut condition, &mut if_then)
-                .await?;
+            // drop_all_database_from_share(self, share_id, &share_meta, &mut condition, &mut if_then)
+            //    .await?;
 
             let share_id_key = ShareId { share_id };
             let id_name_key = ShareIdToName { share_id };
@@ -1716,19 +1716,6 @@ async fn remove_share_id_from_share_objects(
     Ok(())
 }
 
-async fn drop_all_database_from_share(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    _share_id: u64,
-    share_meta: &ShareMeta,
-    condition: &mut Vec<TxnCondition>,
-    if_then: &mut Vec<TxnOp>,
-) -> Result<(), KVAppError> {
-    for db_id in &share_meta.share_from_db_ids {
-        let _ = is_db_need_to_be_remove(kv_api, *db_id, |_db_meta| true, condition, if_then).await;
-    }
-    Ok(())
-}
-
 async fn get_tenant_share_spec_vec(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     tenant: String,
@@ -1771,65 +1758,6 @@ async fn get_tenant_share_spec_vec(
     }
 
     Ok(share_metas)
-}
-
-async fn convert_share_meta_to_spec(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    share_name: &str,
-    share_id: u64,
-    share_meta: ShareMeta,
-) -> Result<ShareSpec, KVAppError> {
-    let (database, db_privileges) = if let Some(database) = share_meta.database {
-        if let ShareGrantObject::Database(db_id) = database.object {
-            let id_key = DatabaseIdToName { db_id };
-
-            let (_db_meta_seq, db_name): (_, Option<DatabaseNameIdent>) =
-                get_pb_value(kv_api, &id_key).await?;
-            if let Some(db_name) = db_name {
-                (
-                    Some(ShareDatabaseSpec {
-                        name: db_name.db_name,
-                        id: db_id,
-                    }),
-                    Some(database.privileges),
-                )
-            } else {
-                (None, None)
-            }
-        } else {
-            (None, None)
-        }
-    } else {
-        (None, None)
-    };
-
-    let mut tables = vec![];
-    for (_, entry) in share_meta.entries.iter() {
-        if let ShareGrantObject::Table(table_id) = entry.object {
-            let table_id_to_name_key = TableIdToName { table_id };
-            let (_table_id_to_name_seq, table_name): (_, Option<DBIdTableName>) =
-                get_pb_value(kv_api, &table_id_to_name_key).await?;
-            if let Some(table_name) = table_name {
-                tables.push(ShareTableSpec::new(
-                    &table_name.table_name,
-                    table_name.db_id,
-                    table_id,
-                ));
-            }
-        }
-    }
-
-    Ok(ShareSpec {
-        name: share_name.to_owned(),
-        share_id,
-        version: 1,
-        database,
-        tables,
-        tenants: Vec::from_iter(share_meta.accounts.into_iter()),
-        db_privileges,
-        comment: share_meta.comment.clone(),
-        share_on: Some(share_meta.share_on),
-    })
 }
 
 async fn get_share_table_info(

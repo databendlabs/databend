@@ -16,10 +16,27 @@ use std::fmt::Debug;
 
 use common_expression::types::DataType;
 use common_expression::RemoteExpr;
+use common_expression::Scalar;
+use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 
 use crate::plan::Projection;
+
+/// Information of Virtual Columns.
+///
+/// Generated from the source column by the paths.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct VirtualColumnInfo {
+    /// Source column name
+    pub source_name: String,
+    /// Virtual column name
+    pub name: String,
+    /// Paths to generate virtual column from source column
+    pub paths: Vec<Scalar>,
+    /// Virtual column data type
+    pub data_type: Box<TableDataType>,
+}
 
 /// Information about prewhere optimization.
 ///
@@ -28,7 +45,8 @@ use crate::plan::Projection;
 /// 1. Read columns by `prewhere_columns`.
 /// 2. Filter data by `filter`.
 /// 3. Read columns by `remain_columns`.
-/// 4. Combine columns from step 1 and step 3, and prune columns to be `output_columns`.
+/// 4. If virtual columns are required, generate them from the source columns.
+/// 5. Combine columns from step 1 and step 4, and prune columns to be `output_columns`.
 ///
 /// **NOTE: the [`Projection`] is to be applied for the [`TableSchema`] of the data source.**
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -44,6 +62,8 @@ pub struct PrewhereInfo {
     /// filter for prewhere
     /// Assumption: expression's data type must be `DataType::Boolean`.
     pub filter: RemoteExpr<String>,
+    /// Optional prewhere virtual columns
+    pub virtual_columns: Option<Vec<VirtualColumnInfo>>,
 }
 
 /// Extras is a wrapper for push down items.
@@ -52,6 +72,10 @@ pub struct PushDownInfo {
     /// Optional column indices to use as a projection.
     /// It represents the columns to be read from the source.
     pub projection: Option<Projection>,
+    /// Optional column indices as output by the scan, only used when having virtual columns.
+    /// The difference with `projection` is the removal of the source columns
+    /// which were only used to generate virtual columns.
+    pub output_columns: Option<Projection>,
     /// Optional filter expression plan
     /// Assumption: expression's data type must be `DataType::Boolean`.
     pub filter: Option<RemoteExpr<String>>,
@@ -62,6 +86,8 @@ pub struct PushDownInfo {
     pub limit: Option<usize>,
     /// Optional order_by expression plan, asc, null_first
     pub order_by: Vec<(RemoteExpr<String>, bool, bool)>,
+    /// Optional virtual columns
+    pub virtual_columns: Option<Vec<VirtualColumnInfo>>,
 }
 
 /// TopK is a wrapper for topk push down items.

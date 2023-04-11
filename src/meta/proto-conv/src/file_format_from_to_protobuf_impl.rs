@@ -173,33 +173,32 @@ impl FromToProto for mt::principal::UserDefinedFileFormat {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let file_format_options =
-            mt::principal::FileFormatOptions::from_pb(p.file_format_options.ok_or_else(|| {
+        let file_format_params =
+            mt::principal::FileFormatParams::from_pb(p.file_format_params.ok_or_else(|| {
                 Incompatible {
-                    reason: "StageInfo.file_format_options cannot be None".to_string(),
+                    reason: "StageInfo.file_format_params cannot be None".to_string(),
                 }
             })?)?;
         let creator =
             mt::principal::UserIdentity::from_pb(p.creator.ok_or_else(|| Incompatible {
-                reason: "StageInfo.file_format_options cannot be None".to_string(),
+                reason: "StageInfo.creator cannot be None".to_string(),
             })?)?;
 
         Ok(mt::principal::UserDefinedFileFormat {
             name: p.name,
-            file_format_options,
+            file_format_params,
             creator,
         })
     }
 
     fn to_pb(&self) -> Result<pb::UserDefinedFileFormat, Incompatible> {
-        let file_format_options =
-            mt::principal::FileFormatOptions::to_pb(&self.file_format_options)?;
+        let file_format_params = mt::principal::FileFormatParams::to_pb(&self.file_format_params)?;
         let creator = mt::principal::UserIdentity::to_pb(&self.creator)?;
         Ok(pb::UserDefinedFileFormat {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             name: self.name.clone(),
-            file_format_options: Some(file_format_options),
+            file_format_params: Some(file_format_params),
             creator: Some(creator),
         })
     }

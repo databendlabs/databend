@@ -9116,22 +9116,18 @@ Query(
 CREATE FILE FORMAT my_csv
             type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;
 ---------- Output ---------
-CREATE FILE_FORMAT my_csv TYPE = CSV FIELD_DELIMITER = ',' RECORD_DELIMITER = '\n' QUOTE = '' ESCAPE = '' SKIP_HEADER = 1 NAN_DISPLAY = ''
+CREATE FILE_FORMAT my_csv {"field_delimiter": ",", "record_delimiter": "\n", "skip_header": "1", "type": "CSV"}
 ---------- AST ------------
 CreateFileFormat {
     if_not_exists: false,
     name: "my_csv",
-    file_format_options: FileFormatOptions {
-        format: Csv,
-        skip_header: 1,
-        field_delimiter: ",",
-        record_delimiter: "\n",
-        nan_display: "",
-        escape: "",
-        compression: None,
-        row_tag: "",
-        quote: "",
-        name: None,
+    file_format_options: FileFormatOptionsAst {
+        options: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
     },
 }
 

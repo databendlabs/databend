@@ -41,6 +41,7 @@ use common_pipeline_sources::input_formats::InputContext;
 use common_pipeline_sources::input_formats::SplitInfo;
 use common_storage::init_stage_operator;
 use common_storage::StageFileInfo;
+use dashmap::DashMap;
 use opendal::Operator;
 use parking_lot::Mutex;
 
@@ -124,8 +125,7 @@ impl Table for StageTable {
         } else {
             StageTable::list_files(stage_info, None).await?
         };
-        let format =
-            InputContext::get_input_format(&stage_info.stage_info.file_format_options.format)?;
+        let format = InputContext::get_input_format(&stage_info.stage_info.file_format_params)?;
         let operator = StageTable::get_op(&stage_info.stage_info)?;
         let splits = format
             .get_splits(
@@ -175,6 +175,14 @@ impl Table for StageTable {
         let stage_info = stage_table_info.stage_info.clone();
         let operator = StageTable::get_op(&stage_table_info.stage_info)?;
         let compact_threshold = self.get_block_compact_thresholds_with_default();
+        let on_error_map = match ctx.get_on_error_map() {
+            Some(m) => m,
+            None => {
+                let m = Arc::new(DashMap::new());
+                ctx.set_on_error_map(m.clone());
+                m
+            }
+        };
         let input_ctx = Arc::new(InputContext::try_create_from_copy(
             operator,
             settings,
@@ -183,10 +191,10 @@ impl Table for StageTable {
             splits,
             ctx.get_scan_progress(),
             compact_threshold,
+            on_error_map,
         )?);
 
         input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;
-        ctx.set_on_error_map(input_ctx.get_maximum_error_per_file());
         Ok(())
     }
 

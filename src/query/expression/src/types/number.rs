@@ -21,6 +21,7 @@ use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use lexical_core::ToLexicalWithOptions;
 use num_traits::NumCast;
+use num_traits::Signed;
 use ordered_float::OrderedFloat;
 use serde::Deserialize;
 use serde::Serialize;
@@ -418,6 +419,14 @@ impl NumberScalar {
                 min: *num,
                 max: *num,
             }),
+        })
+    }
+
+    pub fn is_positive(&self) -> bool {
+        crate::with_integer_mapped_type!(|NUM_TYPE| match self {
+            NumberScalar::NUM_TYPE(num) => *num > 0,
+            NumberScalar::Float32(num) => num.is_positive(),
+            NumberScalar::Float64(num) => num.is_positive(),
         })
     }
 }

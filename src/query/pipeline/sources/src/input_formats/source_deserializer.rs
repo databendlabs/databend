@@ -50,7 +50,7 @@ impl<I: InputFormatPipe> DeserializeSource<I> {
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(Self {
             ctx: ctx.clone(),
-            block_builder: I::BlockBuilder::create(ctx),
+            block_builder: I::try_create_block_builder(&ctx)?,
             output,
             input_rx: rx,
             input_buffer: Default::default(),

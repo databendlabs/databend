@@ -110,6 +110,11 @@ pub trait Table: Sync + Send {
         false
     }
 
+    /// Whether the table engine supports virtual columns optimization.
+    fn support_virtual_columns(&self) -> bool {
+        false
+    }
+
     #[async_backtrace::framed]
     async fn alter_table_cluster_keys(
         &self,

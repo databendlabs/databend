@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod frame_bound;
 mod transform_window;
 mod window_function;
 
+pub use frame_bound::FrameBound;
 pub use transform_window::TransformWindow;
 pub use window_function::WindowFunctionInfo;

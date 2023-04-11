@@ -29,8 +29,11 @@ use common_formats::FileFormatOptionsExt;
 use common_formats::RecordDelimiter;
 use common_io::cursor_ext::*;
 use common_io::format_diagnostic::verbose_char;
+use common_meta_app::principal::CsvFileFormatParams;
+use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageFileFormatType;
+use common_pipeline_core::InputError;
 use csv_core::ReadRecordResult;
 
 use crate::input_formats::impls::input_format_tsv::format_column_error;
@@ -38,7 +41,6 @@ use crate::input_formats::AligningStateCommon;
 use crate::input_formats::AligningStateTextBased;
 use crate::input_formats::BlockBuilder;
 use crate::input_formats::InputContext;
-use crate::input_formats::InputError;
 use crate::input_formats::InputFormatTextBase;
 use crate::input_formats::RowBatch;
 use crate::input_formats::SplitInfo;
@@ -96,8 +98,44 @@ impl InputFormatTextBase for InputFormatCSV {
         StageFileFormatType::Csv
     }
 
-    fn create_field_decoder(options: &FileFormatOptionsExt) -> Arc<dyn FieldDecoder> {
-        Arc::new(FieldDecoderCSV::create(options))
+    fn create_field_decoder(
+        params: &FileFormatParams,
+        options: &FileFormatOptionsExt,
+    ) -> Arc<dyn FieldDecoder> {
+        let csv_params = CsvFileFormatParams::downcast_unchecked(params);
+        Arc::new(FieldDecoderCSV::create(csv_params, options))
+    }
+
+    fn try_create_align_state(
+        ctx: &Arc<InputContext>,
+        split_info: &Arc<SplitInfo>,
+    ) -> Result<Self::AligningState> {
+        let csv_params = CsvFileFormatParams::downcast_unchecked(&ctx.file_format_params);
+
+        let escape = if csv_params.escape.is_empty() {
+            None
+        } else {
+            Some(csv_params.escape.as_bytes()[0])
+        };
+        let reader = csv_core::ReaderBuilder::new()
+            .delimiter(csv_params.field_delimiter.as_bytes()[0])
+            .quote(csv_params.quote.as_bytes()[0])
+            .escape(escape)
+            .terminator(match csv_params.record_delimiter.as_str().try_into()? {
+                RecordDelimiter::Crlf => csv_core::Terminator::CRLF,
+                RecordDelimiter::Any(v) => csv_core::Terminator::Any(v),
+            })
+            .build();
+        Ok(CsvReaderState {
+            common: AligningStateCommon::create(split_info, false, csv_params.headers as usize),
+            ctx: ctx.clone(),
+            split_info: split_info.clone(),
+            reader,
+            out: vec![],
+            field_ends: vec![0; ctx.schema.num_fields() + 6],
+            n_end: 0,
+            num_fields: ctx.schema.num_fields(),
+        })
     }
 
     fn deserialize(
@@ -201,33 +239,6 @@ impl CsvReaderState {
 }
 
 impl AligningStateTextBased for CsvReaderState {
-    fn try_create(ctx: &Arc<InputContext>, split_info: &Arc<SplitInfo>) -> Result<Self> {
-        let escape = if ctx.format_options.stage.escape.is_empty() {
-            None
-        } else {
-            Some(ctx.format_options.stage.escape.as_bytes()[0])
-        };
-        let reader = csv_core::ReaderBuilder::new()
-            .delimiter(ctx.format_options.get_field_delimiter())
-            .quote(ctx.format_options.stage.quote.as_bytes()[0])
-            .escape(escape)
-            .terminator(match ctx.format_options.get_record_delimiter()? {
-                RecordDelimiter::Crlf => csv_core::Terminator::CRLF,
-                RecordDelimiter::Any(v) => csv_core::Terminator::Any(v),
-            })
-            .build();
-        Ok(Self {
-            common: AligningStateCommon::create(ctx, split_info, false),
-            ctx: ctx.clone(),
-            split_info: split_info.clone(),
-            reader,
-            out: vec![],
-            field_ends: vec![0; ctx.schema.num_fields() + 6],
-            n_end: 0,
-            num_fields: ctx.schema.num_fields(),
-        })
-    }
-
     fn align(&mut self, buf_in: &[u8]) -> Result<Vec<RowBatch>> {
         let mut out_tmp = vec![0u8; buf_in.len()];
         let mut buf = buf_in;

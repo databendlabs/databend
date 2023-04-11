@@ -43,7 +43,7 @@ EvalScalar
         ├── expressions: [columns.name (#0), columns.database (#1), columns.table (#2), columns.data_type (#4), columns.default_expression (#6), columns.is_nullable (#7), NULL, NULL, NULL, NULL, NULL]
         ├── estimated rows: 0.00
         └── Filter
-            ├── filters: [columns.table_schema (#1) = "showcolumn", columns.table_name (#2) = "t3"]
+            ├── filters: [columns.database (#1) = "showcolumn", columns.table (#2) = "t3"]
             ├── estimated rows: 0.00
             └── TableScan
                 ├── table: default.system.columns
