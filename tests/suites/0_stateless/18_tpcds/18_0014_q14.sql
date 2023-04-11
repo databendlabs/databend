@@ -1,4 +1,3 @@
-set prefer_broadcast_join = 0;
 WITH cross_items AS
   (SELECT i_item_sk ss_item_sk
    FROM item,
@@ -133,4 +132,3 @@ ORDER BY channel NULLS FIRST,
          i_class_id NULLS FIRST,
          i_category_id NULLS FIRST
 LIMIT 100;
-set prefer_broadcast_join = 1;
