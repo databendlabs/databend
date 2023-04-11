@@ -1,4 +1,3 @@
-INBOUND test_share test_database shared_tenant shared_tenant
 OUTBOUND test_share test_database shared_tenant shared_tenant,to_tenant
 INBOUND test_share test_database shared_tenant to_tenant
 1
