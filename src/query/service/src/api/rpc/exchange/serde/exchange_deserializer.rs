@@ -20,6 +20,8 @@ use std::sync::Arc;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::flight::default_ipc_fields;
 use common_arrow::arrow::io::flight::deserialize_batch;
+use common_arrow::arrow::io::flight::deserialize_dictionary;
+use common_arrow::arrow::io::ipc::read::Dictionaries;
 use common_arrow::arrow::io::ipc::IpcSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -76,7 +78,7 @@ impl TransformExchangeDeserializer {
         }))
     }
 
-    fn recv_data(&self, fragment_data: FragmentData) -> Result<DataBlock> {
+    fn recv_data(&self, dict: Vec<DataPacket>, fragment_data: FragmentData) -> Result<DataBlock> {
         const ROW_HEADER_SIZE: usize = std::mem::size_of::<u32>();
 
         let meta = match bincode::deserialize(&fragment_data.get_meta()[ROW_HEADER_SIZE..]) {
@@ -93,11 +95,24 @@ impl TransformExchangeDeserializer {
             return Ok(DataBlock::new_with_meta(vec![], 0, meta));
         }
 
+        let mut dictionaries = Dictionaries::new();
+
+        for dict_packet in dict {
+            if let DataPacket::Dictionary(ff) = dict_packet {
+                deserialize_dictionary(
+                    &ff,
+                    &self.arrow_schema.fields,
+                    &self.ipc_schema,
+                    &mut dictionaries,
+                )?;
+            }
+        }
+
         let batch = deserialize_batch(
             &fragment_data.data,
             &self.arrow_schema.fields,
             &self.ipc_schema,
-            &Default::default(),
+            &dictionaries,
         )?;
 
         let data_block = DataBlock::from_arrow_chunk(&batch, &self.schema)?;
@@ -173,13 +188,14 @@ impl Processor for TransformExchangeDeserializer {
     fn process(&mut self) -> Result<()> {
         if let Some(mut data) = self.input_data.take() {
             if let Some(block_meta) = data.take_meta() {
-                if let Some(exchange_meta) = ExchangeDeserializeMeta::downcast_from(block_meta) {
-                    self.output_data = Some(match exchange_meta.packet.unwrap() {
+                if let Some(mut exchange_meta) = ExchangeDeserializeMeta::downcast_from(block_meta)
+                {
+                    self.output_data = Some(match exchange_meta.packet.pop().unwrap() {
                         DataPacket::ErrorCode(v) => Err(v),
                         DataPacket::Dictionary(_) => unreachable!(),
                         DataPacket::FetchProgressAndPrecommit => unreachable!(),
                         DataPacket::ProgressAndPrecommit { .. } => unreachable!(),
-                        DataPacket::FragmentData(v) => self.recv_data(v),
+                        DataPacket::FragmentData(v) => self.recv_data(exchange_meta.packet, v),
                     }?);
 
                     return Ok(());
@@ -196,14 +212,12 @@ impl Processor for TransformExchangeDeserializer {
 }
 
 pub struct ExchangeDeserializeMeta {
-    pub packet: Option<DataPacket>,
+    pub packet: Vec<DataPacket>,
 }
 
 impl ExchangeDeserializeMeta {
-    pub fn create(packet: DataPacket) -> BlockMetaInfoPtr {
-        Box::new(ExchangeDeserializeMeta {
-            packet: Some(packet),
-        })
+    pub fn create(packet: Vec<DataPacket>) -> BlockMetaInfoPtr {
+        Box::new(ExchangeDeserializeMeta { packet })
     }
 }
 
