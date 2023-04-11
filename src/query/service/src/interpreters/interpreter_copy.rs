@@ -190,7 +190,7 @@ impl CopyInterpreter {
                         transform_output_port,
                         source_schema.clone(),
                         dst_schema.clone(),
-                        func_ctx,
+                        func_ctx.clone(),
                     )
                 },
             )?;
@@ -366,7 +366,7 @@ impl CopyInterpreter {
                         transform_input_port,
                         transform_output_port,
                         dst_schema.clone(),
-                        func_ctx,
+                        func_ctx.clone(),
                     )
                 },
             )?;

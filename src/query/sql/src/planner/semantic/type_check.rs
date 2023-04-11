@@ -36,7 +36,6 @@ use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
-use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
@@ -51,6 +50,7 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
 use common_expression::ConstantFolder;
+use common_expression::FunctionContext;
 use common_expression::FunctionKind;
 use common_expression::RawExpr;
 use common_expression::Scalar;
@@ -110,6 +110,7 @@ use crate::Visibility;
 pub struct TypeChecker<'a> {
     bind_context: &'a mut BindContext,
     ctx: Arc<dyn TableContext>,
+    func_ctx: FunctionContext,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
 
@@ -132,9 +133,11 @@ impl<'a> TypeChecker<'a> {
         metadata: MetadataRef,
         aliases: &'a [(String, ScalarExpr)],
     ) -> Self {
+        let func_ctx = ctx.get_function_context().unwrap();
         Self {
             bind_context,
             ctx,
+            func_ctx,
             name_resolution_ctx,
             metadata,
             aliases,
@@ -1104,12 +1107,11 @@ impl<'a> TypeChecker<'a> {
         if order_by_type != common_type {
             order_by.expr = wrap_cast(&order_by.expr, &common_type);
         }
-        let func_ctx = self.ctx.get_function_context()?;
         let start_offset = start_offset
             .map(|(mut expr, _)| {
                 expr = wrap_cast(&expr, &common_type);
                 let expr = expr.as_expr_with_col_index()?;
-                let (expr, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
+                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 if let common_expression::Expr::Constant { scalar, .. } = expr {
                     debug_assert!(matches!(scalar, Scalar::Number(_)));
                     if scalar.is_positive() {
@@ -1126,7 +1128,7 @@ impl<'a> TypeChecker<'a> {
             .map(|(mut expr, _)| {
                 expr = wrap_cast(&expr, &common_type);
                 let expr = expr.as_expr_with_col_index()?;
-                let (expr, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
+                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 if let common_expression::Expr::Constant { scalar, .. } = expr {
                     debug_assert!(matches!(scalar, Scalar::Number(_)));
                     if scalar.is_positive() {
@@ -1766,8 +1768,6 @@ impl<'a> TypeChecker<'a> {
             "is_null",
             "coalesce",
             "last_query_id",
-            "ai_embedding_vector",
-            "ai_text_completion",
         ]
     }
 
@@ -1945,12 +1945,7 @@ impl<'a> TypeChecker<'a> {
                         let box (scalar, _) = self.resolve(args[0]).await?;
 
                         let expr = scalar.as_expr_with_col_index()?;
-                        check_number::<_, i64>(
-                            span,
-                            self.ctx.get_function_context()?,
-                            &expr,
-                            &BUILTIN_FUNCTIONS,
-                        )?
+                        check_number::<_, i64>(span, &self.func_ctx, &expr, &BUILTIN_FUNCTIONS)?
                     }
                 };
 
@@ -1965,112 +1960,6 @@ impl<'a> TypeChecker<'a> {
                     }
                     Err(e) => Err(e),
                 })
-            }
-            ("ai_embedding_vector", args) => {
-                // ai_embedding_vector(prompt) -> embedding_vector(prompt, api_base, api_key, embedding_model, completion_model)
-                if args.len() != 1 {
-                    return Some(Err(ErrorCode::BadArguments(
-                        "ai_embedding_vector(STRING) only accepts one STRING argument",
-                    )
-                    .set_span(span)));
-                }
-
-                // Prompt.
-                let arg1 = args[0];
-
-                // openai.
-                let api_base = &Expr::Literal {
-                    span,
-                    lit: Literal::String(
-                        GlobalConfig::instance().query.openai_api_base_url.clone(),
-                    ),
-                };
-                let api_key = &Expr::Literal {
-                    span,
-                    lit: Literal::String(GlobalConfig::instance().query.openai_api_key.clone()),
-                };
-                let embedding_model = &Expr::Literal {
-                    span,
-                    lit: Literal::String(
-                        GlobalConfig::instance()
-                            .query
-                            .openai_api_embedding_model
-                            .clone(),
-                    ),
-                };
-                let completion_model = &Expr::Literal {
-                    span,
-                    lit: Literal::String(
-                        GlobalConfig::instance()
-                            .query
-                            .openai_api_completion_model
-                            .clone(),
-                    ),
-                };
-
-                Some(
-                    self.resolve_function(span, "embedding_vector", vec![], &[
-                        arg1,
-                        api_base,
-                        api_key,
-                        embedding_model,
-                        completion_model,
-                    ])
-                    .await,
-                )
-            }
-            ("ai_text_completion", args) => {
-                // ai_text_completion(prompt) -> text_completion(prompt, api_base, api_key, embedding_model, completion)
-                if args.len() != 1 {
-                    return Some(Err(ErrorCode::BadArguments(
-                        "ai_text_completion(STRING) only accepts one STRING argument",
-                    )
-                    .set_span(span)));
-                }
-
-                // Prompt.
-                let arg1 = args[0];
-
-                // openai.
-                let api_base = &Expr::Literal {
-                    span,
-                    lit: Literal::String(
-                        GlobalConfig::instance().query.openai_api_base_url.clone(),
-                    ),
-                };
-                let api_key = &Expr::Literal {
-                    span,
-                    lit: Literal::String(GlobalConfig::instance().query.openai_api_key.clone()),
-                };
-                let embedding_model = &Expr::Literal {
-                    span,
-                    lit: Literal::String(
-                        GlobalConfig::instance()
-                            .query
-                            .openai_api_embedding_model
-                            .clone(),
-                    ),
-                };
-                let completion_model = &Expr::Literal {
-                    span,
-                    lit: Literal::String(
-                        GlobalConfig::instance()
-                            .query
-                            .openai_api_completion_model
-                            .clone(),
-                    ),
-                };
-
-                Some(
-                    self.resolve_function(span, "text_completion", vec![], &[
-                        arg1,
-                        api_base,
-                        api_key,
-                        embedding_model,
-                        completion_model,
-                    ])
-                    .await,
-                )
             }
             // Try convert get function of Variant data type into a virtual column
             ("get", args) => {

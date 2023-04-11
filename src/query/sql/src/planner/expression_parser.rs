@@ -171,8 +171,8 @@ pub fn field_default_value(ctx: Arc<dyn TableContext>, field: &TableField) -> Re
             }
 
             let dummy_block = DataBlock::new(vec![], 1);
-            let evaluator =
-                Evaluator::new(&dummy_block, FunctionContext::default(), &BUILTIN_FUNCTIONS);
+            let func_ctx = FunctionContext::default();
+            let evaluator = Evaluator::new(&dummy_block, &func_ctx, &BUILTIN_FUNCTIONS);
             let result = evaluator.run(&expr)?;
 
             match result {

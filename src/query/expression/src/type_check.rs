@@ -150,7 +150,7 @@ pub fn wrap_nullable_for_try_cast(span: Span, ty: &DataType) -> Result<DataType>
 
 pub fn check_number<Index: ColumnIndex, T: Number>(
     span: Span,
-    func_ctx: FunctionContext,
+    func_ctx: &FunctionContext,
     expr: &Expr<Index>,
     fn_registry: &FunctionRegistry,
 ) -> Result<T> {
