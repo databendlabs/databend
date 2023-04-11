@@ -142,11 +142,10 @@ impl AggregateFunction for AggregateStringAggFunction {
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<StringAggState>();
         let builder = StringType::try_downcast_builder(builder).unwrap();
-        if !self.delimiter.is_empty() {
-            let new_len = state.values.len() - self.delimiter.len();
-            state.values.truncate(new_len);
+        if !state.values.is_empty() {
+            let len = state.values.len() - self.delimiter.len();
+            builder.put_slice(&state.values.as_slice()[..len]);
         }
-        builder.put_slice(state.values.as_slice());
         builder.commit_row();
         Ok(())
     }
