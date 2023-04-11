@@ -399,8 +399,8 @@ impl TableContext for QueryContext {
     fn get_function_context(&self) -> Result<FunctionContext> {
         let tz = self.get_settings().get_timezone()?;
         let tz = TzFactory::instance().get_by_name(&tz)?;
-
         let query_config = &self.shared.query_config;
+
         Ok(FunctionContext {
             tz,
 
