@@ -834,6 +834,10 @@ pub enum TokenKind {
     VARIANT,
     #[token("VIEW", ignore(ascii_case))]
     VIEW,
+    #[token("WAREHOUSE", ignore(ascii_case))]
+    WAREHOUSE,
+    #[token("WAREHOUSES", ignore(ascii_case))]
+    WAREHOUSES,
     #[token("WEEK", ignore(ascii_case))]
     WEEK,
     #[token("WHEN", ignore(ascii_case))]
