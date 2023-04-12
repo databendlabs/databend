@@ -4,8 +4,6 @@ INBOUND test_share test_database shared_tenant shared_tenant
 OUTBOUND test_share test_database shared_tenant shared_tenant,to_tenant
 get shared database and table from same tenant
 INBOUND test_share test_database shared_tenant shared_tenant
-INBOUND test_share test_database shared_tenant shared_tenant
-OUTBOUND test_share test_database shared_tenant shared_tenant,to_tenant
 1
 2
 3

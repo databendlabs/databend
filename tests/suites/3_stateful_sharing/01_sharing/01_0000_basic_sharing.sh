@@ -25,8 +25,6 @@ echo "SHOW SHARES" | $MYSQL_CLIENT_SHARE_1_CONNECT | awk '{print $(NF-4), $(NF-3
 
 # get shared database and table from same tenant
 echo "get shared database and table from same tenant"
-echo "drop share endpoint if exists to_share" | $MYSQL_CLIENT_SHARE_3_CONNECT
-echo "create share endpoint to_share url='http://127.0.0.1:23103' tenant=shared_tenant" | $MYSQL_CLIENT_SHARE_3_CONNECT
 echo "SHOW SHARES" | $MYSQL_CLIENT_SHARE_3_CONNECT | awk '{print $(NF-4), $(NF-3), $(NF-2), $(NF-1), $NF}'
 echo "CREATE DATABASE if not exists shared_db FROM SHARE shared_tenant.test_share" | $MYSQL_CLIENT_SHARE_3_CONNECT
 echo "SELECT * FROM shared_db.t1" | $MYSQL_CLIENT_SHARE_3_CONNECT
@@ -57,3 +55,7 @@ echo "SELECT * FROM shared_db.t2" | $MYSQL_CLIENT_SHARE_3_CONNECT
 
 ## Drop database and share.
 echo "all is good"
+echo "drop share if exists test_share" | $MYSQL_CLIENT_SHARE_1_CONNECT
+echo "drop database if exists test_database" | $MYSQL_CLIENT_SHARE_1_CONNECT
+echo "drop database if exists shared_db" | $MYSQL_CLIENT_SHARE_2_CONNECT
+echo "drop database if exists shared_db" | $MYSQL_CLIENT_SHARE_3_CONNECT

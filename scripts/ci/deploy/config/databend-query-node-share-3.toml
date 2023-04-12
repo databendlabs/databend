@@ -60,10 +60,10 @@ share_endpoint_address = "127.0.0.1:23103"
 [log.file]
 level = "ERROR"
 format = "text"
-dir = "./.databend/logs_1"
+dir = "./.databend/logs_3"
 
 [meta]
-endpoints = ["0.0.0.0:9191"]
+endpoints = ["0.0.0.0:39191"]
 username = "root"
 password = "root"
 client_timeout_in_second = 60

@@ -51,8 +51,13 @@ impl CreateDatabaseInterpreter {
                 Some(share_name.clone()),
             )
             .await?;
+        println!(
+            "check_create_database_from_share INBOUND share: {:?}",
+            share_specs
+        );
         match share_specs.get(0) {
             Some((_, share_spec)) => {
+                println!("share_spec: {:?}", share_spec);
                 if !share_spec.tenants.contains(tenant) {
                     return Err(ErrorCode::UnknownShareAccounts(format!(
                         "share {} has not granted privilege to {}",
@@ -78,7 +83,7 @@ impl CreateDatabaseInterpreter {
             }
             None => {
                 return Err(ErrorCode::UnknownShare(format!(
-                    "UnknownShare {:?}",
+                    "1 UnknownShare {:?}",
                     share_name
                 )));
             }
