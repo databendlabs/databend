@@ -18,8 +18,15 @@ use std::vec;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::string::StringColumn;
+use common_expression::types::ArgType;
+use common_expression::types::DataType;
+use common_expression::types::NumberType;
+use common_expression::types::ValueType;
+use common_expression::Column;
 use common_expression::DataBlock;
 use common_hashtable::HashtableLike;
+use common_hashtable::ShortStringHashMap;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::Processor;
@@ -82,6 +89,8 @@ pub struct TransformPartialGroupBy<Method: HashMethodBounds> {
     hash_table: HashTable<Method>,
     group_columns: Vec<IndexType>,
     settings: GroupBySettings,
+    two_stage_dict_index: u64,
+    two_stage_dict_hash_table: ShortStringHashMap<[u8], u64>,
 }
 
 impl<Method: HashMethodBounds> TransformPartialGroupBy<Method> {
@@ -104,6 +113,8 @@ impl<Method: HashMethodBounds> TransformPartialGroupBy<Method> {
                 hash_table,
                 group_columns: params.group_columns.clone(),
                 settings: GroupBySettings::try_from(ctx)?,
+                two_stage_dict_index: 0,
+                two_stage_dict_hash_table: ShortStringHashMap::new(),
             },
         ))
     }
@@ -120,23 +131,50 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
             .map(|&index| block.get_by_offset(index))
             .collect::<Vec<_>>();
 
-        let group_columns = group_columns
+        let mut group_columns = group_columns
             .iter()
             .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
             .collect::<Vec<_>>();
 
         unsafe {
             let rows_num = block.num_rows();
-            let state = self.method.build_keys_state(&group_columns, rows_num)?;
 
             match &mut self.hash_table {
                 HashTable::MovedOut => unreachable!(),
                 HashTable::HashTable(cell) => {
+                    let state = self.method.build_keys_state(&group_columns, rows_num)?;
+
                     for key in self.method.build_keys_iter(&state)? {
                         let _ = cell.hashtable.insert_and_entry(key);
                     }
                 }
                 HashTable::PartitionedHashTable(cell) => {
+                    if Method::SUPPORT_TWO_STAGE && self.settings.enable_two_stage {
+                        let mut dict_group_columns = Vec::with_capacity(group_columns.len());
+
+                        for (group_column, data_type) in group_columns {
+                            let (group_column, data_type) = match group_column {
+                                Column::String(column) => Self::dictionary_group_column(
+                                    &column,
+                                    &mut self.two_stage_dict_index,
+                                    &mut self.two_stage_dict_hash_table,
+                                ),
+                                Column::Variant(column) => Self::dictionary_group_column(
+                                    &column,
+                                    &mut self.two_stage_dict_index,
+                                    &mut self.two_stage_dict_hash_table,
+                                ),
+                                _ => (group_column, data_type),
+                            };
+
+                            dict_group_columns.push((group_column, data_type));
+                        }
+
+                        group_columns = dict_group_columns;
+                    }
+
+                    let state = self.method.build_keys_state(&group_columns, rows_num)?;
+
                     for key in self.method.build_keys_iter(&state)? {
                         let _ = cell.hashtable.insert_and_entry(key);
                     }
@@ -214,5 +252,33 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                 blocks
             }
         })
+    }
+}
+
+impl<Method: HashMethodBounds> TransformPartialGroupBy<Method> {
+    fn dictionary_group_column(
+        column: &StringColumn,
+        dictionary_index: &mut u64,
+        dictionary_hash_table: &mut ShortStringHashMap<[u8], u64>,
+    ) -> (Column, DataType) {
+        let mut dict_column_data = Vec::with_capacity(column.len());
+
+        unsafe {
+            for row_data in column.iter() {
+                dict_column_data.push(match dictionary_hash_table.insert_and_entry(row_data) {
+                    Ok(mut v) => {
+                        v.write(*dictionary_index);
+                        *dictionary_index += 1;
+                        *dictionary_index - 1
+                    }
+                    Err(v) => *v.get(),
+                });
+            }
+        }
+
+        (
+            NumberType::<u64>::upcast_column(NumberType::<u64>::build_column(dict_column_data)),
+            NumberType::<u64>::data_type(),
+        )
     }
 }

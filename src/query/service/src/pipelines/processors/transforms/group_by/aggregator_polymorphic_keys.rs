@@ -94,6 +94,7 @@ use crate::pipelines::processors::AggregatorParams;
 // }
 //
 pub trait PolymorphicKeysHelper<Method: HashMethod>: Send + Sync + 'static {
+    const SUPPORT_TWO_STAGE: bool;
     const SUPPORT_PARTITIONED: bool;
 
     type HashTable<T: Send + Sync + 'static>: HashtableLike<Key = Method::HashKey, Value = T>
@@ -133,6 +134,7 @@ pub trait PolymorphicKeysHelper<Method: HashMethod>: Send + Sync + 'static {
 }
 
 impl PolymorphicKeysHelper<HashMethodFixedKeys<u8>> for HashMethodFixedKeys<u8> {
+    const SUPPORT_TWO_STAGE: bool = false;
     const SUPPORT_PARTITIONED: bool = false;
 
     type HashTable<T: Send + Sync + 'static> = LookupHashMap<u8, 256, T>;
@@ -170,6 +172,7 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u8>> for HashMethodFixedKeys<u8> 
 }
 
 impl PolymorphicKeysHelper<HashMethodFixedKeys<u16>> for HashMethodFixedKeys<u16> {
+    const SUPPORT_TWO_STAGE: bool = false;
     const SUPPORT_PARTITIONED: bool = false;
 
     type HashTable<T: Send + Sync + 'static> = LookupHashMap<u16, 65536, T>;
@@ -207,6 +210,7 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u16>> for HashMethodFixedKeys<u16
 }
 
 impl PolymorphicKeysHelper<HashMethodFixedKeys<u32>> for HashMethodFixedKeys<u32> {
+    const SUPPORT_TWO_STAGE: bool = false;
     const SUPPORT_PARTITIONED: bool = true;
 
     type HashTable<T: Send + Sync + 'static> = HashMap<u32, T>;
@@ -244,6 +248,7 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u32>> for HashMethodFixedKeys<u32
 }
 
 impl PolymorphicKeysHelper<HashMethodFixedKeys<u64>> for HashMethodFixedKeys<u64> {
+    const SUPPORT_TWO_STAGE: bool = false;
     const SUPPORT_PARTITIONED: bool = true;
 
     type HashTable<T: Send + Sync + 'static> = HashMap<u64, T>;
@@ -281,6 +286,7 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u64>> for HashMethodFixedKeys<u64
 }
 
 impl PolymorphicKeysHelper<HashMethodKeysU128> for HashMethodKeysU128 {
+    const SUPPORT_TWO_STAGE: bool = false;
     const SUPPORT_PARTITIONED: bool = true;
 
     type HashTable<T: Send + Sync + 'static> = HashMap<u128, T>;
@@ -327,6 +333,7 @@ impl PolymorphicKeysHelper<HashMethodKeysU128> for HashMethodKeysU128 {
 }
 
 impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
+    const SUPPORT_TWO_STAGE: bool = false;
     const SUPPORT_PARTITIONED: bool = true;
 
     type HashTable<T: Send + Sync + 'static> = HashMap<U256, T>;
@@ -374,6 +381,7 @@ impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
 }
 
 impl PolymorphicKeysHelper<HashMethodSingleString> for HashMethodSingleString {
+    const SUPPORT_TWO_STAGE: bool = false;
     const SUPPORT_PARTITIONED: bool = true;
 
     type HashTable<T: Send + Sync + 'static> = ShortStringHashMap<[u8], T>;
@@ -414,6 +422,7 @@ impl PolymorphicKeysHelper<HashMethodSingleString> for HashMethodSingleString {
 }
 
 impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
+    const SUPPORT_TWO_STAGE: bool = true;
     const SUPPORT_PARTITIONED: bool = true;
 
     type HashTable<T: Send + Sync + 'static> = StringHashMap<[u8], T>;
@@ -539,6 +548,7 @@ where
     Self: HashMethod<HashKey = Method::HashKey>,
     Method: HashMethod + PolymorphicKeysHelper<Method>,
 {
+    const SUPPORT_TWO_STAGE: bool = false;
     // Partitioned cannot be recursive
     const SUPPORT_PARTITIONED: bool = false;
 
