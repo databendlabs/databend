@@ -20,7 +20,9 @@ use serde::Deserialize;
 
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct Config {
+    #[serde(default)]
     pub connection: ConnectionConfig,
+    #[serde(default)]
     pub settings: Settings,
 }
 
