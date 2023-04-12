@@ -106,7 +106,7 @@ impl JoinHashTable {
                                         &data_blocks,
                                         &num_rows,
                                     )?,
-                                    &DataBlock::take_by_compressd_indices(
+                                    &DataBlock::take_compacted_indices(
                                         input,
                                         &probe_indexes[0..probe_indexes_len],
                                         probed_num,
@@ -131,7 +131,7 @@ impl JoinHashTable {
                 &self
                     .row_space
                     .gather(&build_indexes, &data_blocks, &num_rows)?,
-                &DataBlock::take_by_compressd_indices(
+                &DataBlock::take_compacted_indices(
                     input,
                     &probe_indexes[0..probe_indexes_len],
                     probed_num,

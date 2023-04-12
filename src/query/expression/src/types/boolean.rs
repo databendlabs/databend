@@ -173,21 +173,6 @@ impl ArgType for BooleanType {
     ) -> Self::Column {
         Self::column_from_iter(iter, generics)
     }
-
-    unsafe fn take_by_compressd_indices<'a>(
-        col: &'a Self::Column,
-        indices: &[(u32, u32)],
-        row_num: usize,
-    ) -> Self::Column {
-        let mut col_builder = MutableBitmap::with_capacity((row_num).saturating_add(7) / 8);
-        for (index, cnt) in indices {
-            let val = col.get_bit_unchecked(*index as usize);
-            for _ in 0..*cnt {
-                col_builder.push(val);
-            }
-        }
-        Self::build_column(col_builder)
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

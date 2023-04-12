@@ -27,7 +27,6 @@ use crate::types::DataType;
 use crate::types::GenericMap;
 use crate::types::ValueType;
 use crate::utils::arrow::buffer_into_mut;
-use crate::utils::copy::copy_string_by_compressd_indices;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
@@ -166,14 +165,6 @@ impl ArgType for StringType {
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
         StringColumnBuilder::with_capacity(capacity, 0)
     }
-
-    unsafe fn take_by_compressd_indices<'a>(
-        col: &'a Self::Column,
-        indices: &[(u32, u32)],
-        row_num: usize,
-    ) -> Self::Column {
-        Self::build_column(copy_string_by_compressd_indices(col, indices, row_num))
-    }
 }
 
 #[derive(Clone, PartialEq)]
@@ -218,21 +209,6 @@ impl StringColumn {
             data: &self.data,
             offsets: self.offsets.windows(2),
         }
-    }
-
-    #[inline]
-    pub fn as_data_ptr(&self) -> *const u8 {
-        self.data.as_ptr()
-    }
-
-    #[inline]
-    pub fn get_len(&self, index: usize) -> usize {
-        self.offsets[index + 1] as usize - self.offsets[index] as usize
-    }
-
-    #[inline]
-    pub fn get_offset(&self, index: usize) -> u64 {
-        self.offsets[index]
     }
 }
 

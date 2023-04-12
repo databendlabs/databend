@@ -208,7 +208,7 @@ impl JoinHashTable {
                         let nullable_build_block = DataBlock::new(nullable_columns, num_rows);
 
                         // For full join, wrap nullable for probe block
-                        let mut probe_block = DataBlock::take_by_compressd_indices(
+                        let mut probe_block = DataBlock::take_compacted_indices(
                             input,
                             &probe_indexes[0..probe_indexes_len],
                             probed_num,
@@ -249,7 +249,7 @@ impl JoinHashTable {
         }
 
         // For full join, wrap nullable for probe block
-        let mut probe_block = DataBlock::take_by_compressd_indices(
+        let mut probe_block = DataBlock::take_compacted_indices(
             input,
             &probe_indexes[0..probe_indexes_len],
             probed_num,

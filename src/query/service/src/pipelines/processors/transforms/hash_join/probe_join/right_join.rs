@@ -106,7 +106,7 @@ impl JoinHashTable {
                                 &data_blocks,
                                 &num_rows,
                             )?;
-                            let mut probe_block = DataBlock::take_by_compressd_indices(
+                            let mut probe_block = DataBlock::take_compacted_indices(
                                 input,
                                 &local_probe_indexes[0..probe_indexes_len],
                                 probed_num,
@@ -144,7 +144,7 @@ impl JoinHashTable {
             }
         }
 
-        let mut probe_block = DataBlock::take_by_compressd_indices(
+        let mut probe_block = DataBlock::take_compacted_indices(
             input,
             &local_probe_indexes[0..probe_indexes_len],
             probed_num,

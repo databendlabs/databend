@@ -357,25 +357,4 @@ pub trait ArgType: ValueType {
         }
         Self::build_column(col)
     }
-
-    /// # Safety
-    ///
-    /// Each item in the `indices` consists of an `index` and a `cnt`, the sum
-    /// of the `cnt` must be equal to the `row_num`, the out-of-bounds `index`
-    /// for `col` in indices is *[undefined behavior]*.
-    unsafe fn take_by_compressd_indices<'a>(
-        col: &'a Self::Column,
-        indices: &[(u32, u32)],
-        row_num: usize,
-    ) -> Self::Column {
-        let mut builder = Self::create_builder(row_num, &[]);
-        for (index, cnt) in indices {
-            for _ in 0..*cnt {
-                Self::push_item(&mut builder, unsafe {
-                    Self::index_column_unchecked(col, *index as usize)
-                });
-            }
-        }
-        Self::build_column(builder)
-    }
 }

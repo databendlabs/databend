@@ -107,7 +107,7 @@ impl JoinHashTable {
                 _ => {}
             }
         }
-        Ok(vec![DataBlock::take_by_compressd_indices(
+        Ok(vec![DataBlock::take_compacted_indices(
             input,
             &probe_indexes,
             probe_indexes.len(),
@@ -201,7 +201,7 @@ impl JoinHashTable {
                         probe_indexes_len += 1;
                         probed_num += addition;
 
-                        let probe_block = DataBlock::take_by_compressd_indices(
+                        let probe_block = DataBlock::take_compacted_indices(
                             input,
                             &probe_indexes[0..probe_indexes_len],
                             probed_num,
@@ -258,7 +258,7 @@ impl JoinHashTable {
             ));
         }
 
-        let probe_block = DataBlock::take_by_compressd_indices(
+        let probe_block = DataBlock::take_compacted_indices(
             input,
             &probe_indexes[0..probe_indexes_len],
             probed_num,

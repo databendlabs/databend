@@ -32,7 +32,6 @@ use crate::types::DataType;
 use crate::types::GenericMap;
 use crate::types::ValueType;
 use crate::utils::arrow::buffer_into_mut;
-use crate::utils::copy::copy_numeric_by_compressd_indices;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
@@ -223,15 +222,6 @@ impl<Num: Number> ArgType for NumberType<Num> {
         _: &GenericMap,
     ) -> Self::Column {
         iter.collect()
-    }
-
-    unsafe fn take_by_compressd_indices<'a>(
-        col: &'a Self::Column,
-        indices: &[(u32, u32)],
-        row_num: usize,
-    ) -> Self::Column {
-        let builder = copy_numeric_by_compressd_indices(col, indices, row_num);
-        Self::column_from_vec(builder, &[])
     }
 }
 
