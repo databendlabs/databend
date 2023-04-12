@@ -315,4 +315,16 @@ impl Settings {
     pub fn get_group_by_shuffle_mode(&self) -> Result<String> {
         self.try_get_string("group_by_shuffle_mode")
     }
+
+    pub fn enable_two_stage_group_by(&self) -> Result<()> {
+        self.try_set_u64("enable_two_stage_group_by", 1)
+    }
+
+    pub fn disable_two_stage_group_by(&self) -> Result<()> {
+        self.try_set_u64("enable_two_stage_group_by", 0)
+    }
+
+    pub fn get_enable_two_stage_group_by(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_two_stage_group_by")? != 0)
+    }
 }

@@ -51,6 +51,7 @@ impl<Method: HashMethodBounds> Default for HashTable<Method> {
 }
 
 struct GroupBySettings {
+    enable_two_stage: bool,
     convert_threshold: usize,
     spilling_bytes_threshold_per_proc: usize,
 }
@@ -62,8 +63,10 @@ impl TryFrom<Arc<QueryContext>> for GroupBySettings {
         let settings = ctx.get_settings();
         let convert_threshold = settings.get_group_by_two_level_threshold()? as usize;
         let value = settings.get_spilling_bytes_threshold_per_proc()?;
+        let enable_two_stage = settings.get_enable_two_stage_group_by()?;
 
         Ok(GroupBySettings {
+            enable_two_stage,
             convert_threshold,
             spilling_bytes_threshold_per_proc: match value == 0 {
                 true => usize::MAX,

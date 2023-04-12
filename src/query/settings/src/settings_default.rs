@@ -238,6 +238,11 @@ impl DefaultSettings {
                     desc: "Group by shuffle mode, 'before_partial' is more balanced, but more data needs to exchange.",
                     possible_values: Some(vec!["before_partial", "before_merge"]),
                 }),
+                ("enable_two_stage_group_by", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "",
+                    possible_values: None,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
