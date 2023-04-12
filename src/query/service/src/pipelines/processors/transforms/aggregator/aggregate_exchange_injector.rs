@@ -15,6 +15,7 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
@@ -26,6 +27,7 @@ use common_hashtable::HashtableLike;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_storage::DataOperator;
+use num::Zero;
 use strength_reduce::StrengthReducedU64;
 
 use crate::api::DataExchange;
@@ -47,8 +49,10 @@ use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::HashTableCell;
 use crate::pipelines::processors::transforms::TransformAggregateDeserializer;
 use crate::pipelines::processors::transforms::TransformAggregateSerializer;
+use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::TransformGroupByDeserializer;
 use crate::pipelines::processors::transforms::TransformGroupBySerializer;
+use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
 use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
 
@@ -184,6 +188,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
 }
 
 pub struct AggregateInjector<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> {
+    ctx: Arc<QueryContext>,
     method: Method,
     tenant: String,
     aggregator_params: Arc<AggregatorParams>,
@@ -192,6 +197,7 @@ pub struct AggregateInjector<Method: HashMethodBounds, V: Copy + Send + Sync + '
 
 impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> AggregateInjector<Method, V> {
     pub fn create(
+        ctx: &Arc<QueryContext>,
         tenant: String,
         method: Method,
         params: Arc<AggregatorParams>,
@@ -199,6 +205,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> AggregateInjecto
         Arc::new(AggregateInjector::<Method, V> {
             method,
             tenant,
+            ctx: ctx.clone(),
             aggregator_params: params,
             _phantom: Default::default(),
         })
@@ -239,6 +246,38 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
     ) -> Result<()> {
         let method = &self.method;
         let params = self.aggregator_params.clone();
+
+        if !self
+            .ctx
+            .get_settings()
+            .get_spilling_bytes_threshold_per_proc()?
+            .is_zero()
+        {
+            let operator = DataOperator::instance().operator();
+            let location_prefix = format!("_aggregate_spill/{}", self.tenant);
+
+            pipeline.add_transform(|input, output| {
+                Ok(ProcessorPtr::create(
+                    match params.aggregate_functions.is_empty() {
+                        true => TransformGroupBySpillWriter::create(
+                            input,
+                            output,
+                            method.clone(),
+                            operator.clone(),
+                            location_prefix.clone(),
+                        ),
+                        false => TransformAggregateSpillWriter::create(
+                            input,
+                            output,
+                            method.clone(),
+                            operator.clone(),
+                            params.clone(),
+                            location_prefix.clone(),
+                        ),
+                    },
+                ))
+            })?;
+        }
 
         pipeline.add_transform(
             |input, output| match params.aggregate_functions.is_empty() {
