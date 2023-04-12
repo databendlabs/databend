@@ -307,19 +307,6 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
         index: usize,
     ) -> Self::ScalarRef<'a>;
 
-    /// # Safety
-    ///
-    /// Each item in the `indices` consists of an `index` and a `cnt`, the sum
-    /// of the `cnt` must be equal to the `row_num`, the out-of-bounds `index`
-    /// for `col` in indices is *[undefined behavior]*.
-    unsafe fn take_by_compressd_indices<'a>(
-        _col: &'a Self::Column,
-        _indices: &[(u32, u32)],
-        _row_num: usize,
-    ) -> Self::Column {
-        unimplemented!()
-    }
-
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column;
     fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a>;
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder;
@@ -369,5 +356,29 @@ pub trait ArgType: ValueType {
             Self::push_item(&mut col, item);
         }
         Self::build_column(col)
+    }
+
+    /// # Safety
+    ///
+    /// Each item in the `indices` consists of an `index` and a `cnt`, the sum
+    /// of the `cnt` must be equal to the `row_num`, the out-of-bounds `index`
+    /// for `col` in indices is *[undefined behavior]*.
+    unsafe fn take_by_compressd_indices<'a>(
+        col: &'a Self::Column,
+        indices: &[(u32, u32)],
+        row_num: usize,
+    ) -> Self::Column {
+        let mut builder = Self::create_builder(row_num, &[]);
+        unsafe {
+            for (index, cnt) in indices {
+                for _ in 0..*cnt {
+                    Self::push_item(
+                        &mut builder,
+                        Self::index_column_unchecked(col, *index as usize),
+                    );
+                }
+            }
+        }
+        Self::build_column(builder)
     }
 }

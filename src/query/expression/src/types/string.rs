@@ -104,6 +104,68 @@ impl ValueType for StringType {
         col.index_unchecked(index)
     }
 
+    fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
+        col.slice(range)
+    }
+
+    fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a> {
+        col.iter()
+    }
+
+    fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
+        StringColumnBuilder::from_column(col)
+    }
+
+    fn builder_len(builder: &Self::ColumnBuilder) -> usize {
+        builder.len()
+    }
+
+    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
+        builder.put_slice(item);
+        builder.commit_row();
+    }
+
+    fn push_default(builder: &mut Self::ColumnBuilder) {
+        builder.commit_row();
+    }
+
+    fn append_column(builder: &mut Self::ColumnBuilder, other_builder: &Self::Column) {
+        builder.append_column(other_builder)
+    }
+
+    fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
+        builder.build()
+    }
+
+    fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
+        builder.build_scalar()
+    }
+
+    fn scalar_memory_size<'a>(scalar: &Self::ScalarRef<'a>) -> usize {
+        scalar.len()
+    }
+
+    fn column_memory_size(col: &Self::Column) -> usize {
+        col.data.len() + col.offsets.len() * 8
+    }
+}
+
+impl ArgType for StringType {
+    fn data_type() -> DataType {
+        DataType::String
+    }
+
+    fn full_domain() -> Self::Domain {
+        StringDomain {
+            min: vec![],
+            max: None,
+        }
+    }
+
+    fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
+        StringColumnBuilder::with_capacity(capacity, 0)
+    }
+
     unsafe fn take_by_compressd_indices<'a>(
         col: &'a Self::Column,
         indices: &[(u32, u32)],
@@ -174,68 +236,6 @@ impl ValueType for StringType {
         }
         col_builder.data.set_len(offset);
         Self::build_column(col_builder)
-    }
-
-    fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
-        col.slice(range)
-    }
-
-    fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a> {
-        col.iter()
-    }
-
-    fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
-        StringColumnBuilder::from_column(col)
-    }
-
-    fn builder_len(builder: &Self::ColumnBuilder) -> usize {
-        builder.len()
-    }
-
-    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
-        builder.put_slice(item);
-        builder.commit_row();
-    }
-
-    fn push_default(builder: &mut Self::ColumnBuilder) {
-        builder.commit_row();
-    }
-
-    fn append_column(builder: &mut Self::ColumnBuilder, other_builder: &Self::Column) {
-        builder.append_column(other_builder)
-    }
-
-    fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
-        builder.build()
-    }
-
-    fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
-        builder.build_scalar()
-    }
-
-    fn scalar_memory_size<'a>(scalar: &Self::ScalarRef<'a>) -> usize {
-        scalar.len()
-    }
-
-    fn column_memory_size(col: &Self::Column) -> usize {
-        col.data.len() + col.offsets.len() * 8
-    }
-}
-
-impl ArgType for StringType {
-    fn data_type() -> DataType {
-        DataType::String
-    }
-
-    fn full_domain() -> Self::Domain {
-        StringDomain {
-            min: vec![],
-            max: None,
-        }
-    }
-
-    fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
-        StringColumnBuilder::with_capacity(capacity, 0)
     }
 }
 
