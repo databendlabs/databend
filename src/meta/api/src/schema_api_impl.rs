@@ -374,7 +374,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             // remove db from share
             let mut spec_vec = Vec::with_capacity(db_meta.shared_by.len());
             for share_id in &db_meta.shared_by {
-                let (share_name, share_meta) = revoke_db_from_share(
+                let (share_name, share_meta) = match revoke_db_from_share(
                     self,
                     *share_id,
                     db_id,
@@ -382,7 +382,17 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                     &mut condition,
                     &mut if_then,
                 )
-                .await?;
+                .await
+                {
+                    Ok(x) => x,
+                    Err(e) => {
+                        if let KVAppError::AppError(AppError::UnknownShareId(_)) = e {
+                            tracing::warn!("inconsistency share info on drop database: {:?}", e);
+                            continue;
+                        }
+                        return Err(e);
+                    }
+                };
 
                 spec_vec.push(
                     convert_share_meta_to_spec(self, &share_name, *share_id, share_meta).await?,
@@ -1838,7 +1848,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 let mut spec_vec = Vec::with_capacity(db_meta.shared_by.len());
                 let mut mut_share_table_info = Vec::with_capacity(db_meta.shared_by.len());
                 for share_id in &db_meta.shared_by {
-                    let (share_name, share_meta, share_table_info) = remove_table_from_share(
+                    let (share_name, share_meta, share_table_info) = match remove_table_from_share(
                         self,
                         *share_id,
                         table_id,
@@ -1846,7 +1856,17 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                         &mut condition,
                         &mut if_then,
                     )
-                    .await?;
+                    .await
+                    {
+                        Ok(v) => v,
+                        Err(err) => {
+                            if let KVAppError::AppError(AppError::UnknownShareId(_)) = err {
+                                tracing::warn!("inconsistency share info on drop table: {:?}", err);
+                                continue;
+                            }
+                            return Err(err);
+                        }
+                    };
 
                     spec_vec.push(
                         convert_share_meta_to_spec(self, &share_name, *share_id, share_meta)
