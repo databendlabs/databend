@@ -86,11 +86,7 @@ impl FuseTable {
         });
         drop(root_snapshot);
 
-        let snapshots_io = SnapshotsIO::create(
-            ctx.clone(),
-            self.operator.clone(),
-            self.snapshot_format_version().await?,
-        );
+        let snapshots_io = SnapshotsIO::create(ctx.clone(), self.operator.clone());
 
         // 2. List all the snapshot file paths.
         // note that snapshot file paths of ongoing txs might be included

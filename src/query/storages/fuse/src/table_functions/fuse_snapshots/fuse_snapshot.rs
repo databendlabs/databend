@@ -49,12 +49,9 @@ impl<'a> FuseSnapshot<'a> {
         let snapshot_location = self.table.snapshot_loc().await?;
         let snapshot = self.table.read_table_snapshot().await?;
         if let Some(snapshot_location) = snapshot_location {
-            let snapshot_version = self.table.snapshot_format_version().await?;
-            let snapshots_io = SnapshotsIO::create(
-                self.ctx.clone(),
-                self.table.operator.clone(),
-                snapshot_version,
-            );
+            let snapshot_version =
+                TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
+            let snapshots_io = SnapshotsIO::create(self.ctx.clone(), self.table.operator.clone());
             let snapshot_lite = if limit.is_none() {
                 // Use SnapshotsIO::read_snapshot_lites only if limit is None
                 //
