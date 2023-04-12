@@ -24,7 +24,7 @@ use url::Url;
 use crate::{
     error::{Error, Result},
     request::{PaginationConfig, QueryRequest, SessionConfig},
-    response::QueryResponse,
+    response::{QueryError, QueryResponse},
 };
 
 pub struct PresignedResponse {
@@ -159,16 +159,22 @@ impl APIClient {
             .with_pagination(self.make_pagination())
             .with_session(self.make_session());
         let endpoint = self.endpoint.join("v1/query")?;
-        let resp: QueryResponse = self
+        let resp = self
             .cli
             .post(endpoint)
             .json(&req)
             .basic_auth(self.user.clone(), self.password.clone())
             .headers(self.make_headers()?)
             .send()
-            .await?
-            .json()
             .await?;
+        if resp.status() != StatusCode::OK {
+            let resp_err = QueryError {
+                code: resp.status().as_u16(),
+                message: resp.text().await?,
+            };
+            return Err(Error::InvalidResponse(resp_err));
+        }
+        let resp: QueryResponse = resp.json().await?;
         match resp.error {
             Some(err) => Err(Error::InvalidResponse(err)),
             // TODO:(everpcpc) update session configs
@@ -178,15 +184,21 @@ impl APIClient {
 
     pub async fn query_page(&self, next_uri: &str) -> Result<QueryResponse> {
         let endpoint = self.endpoint.join(next_uri)?;
-        let resp: QueryResponse = self
+        let resp = self
             .cli
             .get(endpoint)
             .basic_auth(self.user.clone(), self.password.clone())
             .headers(self.make_headers()?)
             .send()
-            .await?
-            .json()
             .await?;
+        if resp.status() != StatusCode::OK {
+            let resp_err = QueryError {
+                code: resp.status().as_u16(),
+                message: resp.text().await?,
+            };
+            return Err(Error::InvalidResponse(resp_err));
+        }
+        let resp: QueryResponse = resp.json().await?;
         match resp.error {
             Some(err) => Err(Error::InvalidPage(err)),
             None => Ok(resp),
