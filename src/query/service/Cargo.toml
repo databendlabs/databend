@@ -100,10 +100,10 @@ storages-common-table-meta = { path = "../storages/common/table-meta" }
 
 # Crates.io dependencies
 aho-corasick = { version = "0.7.20" }
-arrow-array = { version = "35.0.0" }
-arrow-flight = { version = "35.0.0", features = ["flight-sql-experimental"] }
-arrow-ipc = { version = "35.0.0" }
-arrow-schema = { version = "35.0.0" }
+arrow-array = { version = "36.0.0" }
+arrow-flight = { version = "36.0.0", features = ["flight-sql-experimental"] }
+arrow-ipc = { version = "36.0.0" }
+arrow-schema = { version = "36.0.0" }
 async-backtrace = { workspace = true }
 async-channel = "1.7.1"
 async-stream = "0.3.3"
@@ -148,14 +148,14 @@ strength_reduce = "0.2.4"
 tempfile = { version = "3.4.0", optional = true }
 time = "0.3.14"
 tokio-stream = { version = "0.1.10", features = ["net"] }
-tonic = "0.8.1"
+tonic = { workspace = true }
 tracing = "0.1.36"
 typetag = "0.2.3"
 unicode-segmentation = "1.10.1"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
 
 [dev-dependencies]
-arrow-cast = { version = "35.0.0", features = ["prettyprint"] }
+arrow-cast = { version = "36.0.0", features = ["prettyprint"] }
 common-meta-embedded = { path = "../../meta/embedded" }
 ordered-float = { workspace = true }
 

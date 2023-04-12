@@ -75,7 +75,7 @@ sentry = { version = "0.30", default-features = false, features = [
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio-stream = "0.1.10"
-tonic = "0.8.1"
+tonic = { workspace = true }
 tracing = "0.1.36"
 url = "2.3.1"
 

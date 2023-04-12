@@ -29,4 +29,4 @@ prost = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tonic = "0.8.1"
+tonic = { workspace = true }
