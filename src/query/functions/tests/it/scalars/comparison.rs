@@ -33,6 +33,7 @@ fn test_comparison() {
     test_gte(file);
     test_like(file);
     test_regexp(file);
+    test_sounds_like(file);
 }
 
 fn test_eq(file: &mut impl Write) {
@@ -385,4 +386,22 @@ fn test_regexp(file: &mut impl Write) {
 
     run_ast(file, "lhs regexp rhs", &columns);
     run_ast(file, "lhs rlike rhs", &columns);
+}
+
+fn test_sounds_like(file: &mut impl Write) {
+    let columns = [
+        (
+            "lhs",
+            StringType::from_data(vec!["abc", "abd", "abe", "abf", "abc", ""]),
+        ),
+        (
+            "rhs",
+            StringType::from_data(vec!["abc", "abb", "abe", "a", "", ""]),
+        ),
+    ];
+
+    run_ast(file, "lhs SOUNDS LIKE rhs", &columns);
+    run_ast(file, "'a' SOUNDS LIKE rhs", &columns);
+    run_ast(file, "lhs SOUNDS LIKE 'b'", &columns);
+    run_ast(file, "'a' SOUNDS LIKE 'a'", &columns);
 }

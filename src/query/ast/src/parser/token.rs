@@ -751,6 +751,8 @@ pub enum TokenKind {
     SUBSTR,
     #[token("SEMI", ignore(ascii_case))]
     SEMI,
+    #[token("SOUNDS", ignore(ascii_case))]
+    SOUNDS,
     #[token("TABLE", ignore(ascii_case))]
     TABLE,
     #[token("TABLES", ignore(ascii_case))]
