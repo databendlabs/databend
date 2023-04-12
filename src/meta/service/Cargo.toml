@@ -65,7 +65,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serfig = "0.1.0"
 tokio-stream = "0.1.10"
-tonic = { version = "0.8.1", features = ["tls"] }
+tonic = { workspace = true }
 tonic-reflection = "0.6.0"
 tracing = "0.1.36"
 tracing-appender = "0.2.2"

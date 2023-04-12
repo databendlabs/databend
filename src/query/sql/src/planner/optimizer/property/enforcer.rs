@@ -57,12 +57,19 @@ pub fn require_property(
         }
         if let RelOperator::UnionAll(_) = &s_expr.plan {
             // Wrap the child with Random exchange to make it partition to all nodes
-            let enforced_child =
-                enforce_property(optimized_expr.child(index)?, &RequiredProperty {
-                    distribution: Distribution::Any,
-                })?;
-            children.push(enforced_child);
-            continue;
+            // Check if exists `Merge` in child, if not exits, wrap it with `Exchange`
+            if optimized_expr
+                .children()
+                .iter()
+                .all(|child| !check_merge(child))
+            {
+                let enforced_child =
+                    enforce_property(optimized_expr.child(index)?, &RequiredProperty {
+                        distribution: Distribution::Any,
+                    })?;
+                children.push(enforced_child);
+                continue;
+            }
         }
 
         if required.satisfied_by(&physical) {
@@ -107,4 +114,18 @@ pub fn enforce_distribution(distribution: &Distribution, s_expr: &SExpr) -> Resu
             s_expr.clone(),
         )),
     }
+}
+
+fn check_merge(s_expr: &SExpr) -> bool {
+    if let RelOperator::Exchange(op) = &s_expr.plan {
+        if op == &Exchange::Merge {
+            return true;
+        }
+    }
+    for child in s_expr.children() {
+        if check_merge(child) {
+            return true;
+        }
+    }
+    false
 }

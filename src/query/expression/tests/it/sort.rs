@@ -43,6 +43,7 @@ fn test_block_sort() -> Result<()> {
                 offset: 0,
                 asc: true,
                 nulls_first: false,
+                is_nullable: false,
             }],
             None,
             vec![
@@ -55,6 +56,7 @@ fn test_block_sort() -> Result<()> {
                 offset: 0,
                 asc: true,
                 nulls_first: false,
+                is_nullable: false,
             }],
             Some(4),
             vec![
@@ -67,6 +69,7 @@ fn test_block_sort() -> Result<()> {
                 offset: 1,
                 asc: false,
                 nulls_first: false,
+                is_nullable: false,
             }],
             None,
             vec![
@@ -80,11 +83,13 @@ fn test_block_sort() -> Result<()> {
                     offset: 0,
                     asc: true,
                     nulls_first: false,
+                    is_nullable: false,
                 },
                 SortColumnDescription {
                     offset: 1,
                     asc: false,
                     nulls_first: false,
+                    is_nullable: false,
                 },
             ],
             None,
@@ -124,6 +129,7 @@ fn test_block_sort() -> Result<()> {
                 offset: 0,
                 asc: true,
                 nulls_first: false,
+                is_nullable: false,
             }],
             None,
             vec![
@@ -136,6 +142,7 @@ fn test_block_sort() -> Result<()> {
                 offset: 0,
                 asc: true,
                 nulls_first: false,
+                is_nullable: false,
             }],
             Some(4),
             vec![
@@ -148,6 +155,7 @@ fn test_block_sort() -> Result<()> {
                 offset: 1,
                 asc: false,
                 nulls_first: false,
+                is_nullable: false,
             }],
             None,
             vec![
@@ -161,11 +169,13 @@ fn test_block_sort() -> Result<()> {
                     offset: 0,
                     asc: true,
                     nulls_first: false,
+                    is_nullable: false,
                 },
                 SortColumnDescription {
                     offset: 1,
                     asc: false,
                     nulls_first: false,
+                    is_nullable: false,
                 },
             ],
             None,
@@ -228,6 +238,7 @@ fn test_blocks_merge_sort() -> Result<()> {
                 offset: 0,
                 asc: true,
                 nulls_first: false,
+                is_nullable: false,
             }],
             None,
             vec![
@@ -241,6 +252,7 @@ fn test_blocks_merge_sort() -> Result<()> {
                 offset: 0,
                 asc: true,
                 nulls_first: false,
+                is_nullable: false,
             }],
             Some(4),
             vec![
@@ -254,6 +266,7 @@ fn test_blocks_merge_sort() -> Result<()> {
                 offset: 1,
                 asc: false,
                 nulls_first: false,
+                is_nullable: false,
             }],
             None,
             vec![
@@ -268,11 +281,13 @@ fn test_blocks_merge_sort() -> Result<()> {
                     offset: 0,
                     asc: true,
                     nulls_first: false,
+                    is_nullable: false,
                 },
                 SortColumnDescription {
                     offset: 1,
                     asc: false,
                     nulls_first: false,
+                    is_nullable: false,
                 },
             ],
             None,
