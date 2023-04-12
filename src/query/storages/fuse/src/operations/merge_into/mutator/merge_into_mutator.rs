@@ -18,6 +18,7 @@ use std::hash::Hasher;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_base::base::ProgressValues;
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::Projection;
 use common_catalog::table_context::TableContext;
@@ -248,14 +249,25 @@ impl MergeIntoOperationAggregator {
             bitmap.push(!deleted_key_hashes.contains(&hash));
         }
 
+        let delete_nums = bitmap.unset_bits();
         // shortcuts
-        if bitmap.unset_bits() == 0 {
+        if delete_nums == 0 {
             info!("nothing deleted");
             // nothing to be deleted
             return Ok(None);
         }
 
-        if bitmap.unset_bits() == block_meta.row_count as usize {
+        let progress_values = ProgressValues {
+            rows: delete_nums,
+            // ignore bytes.
+            bytes: 0,
+        };
+        self.block_builder
+            .ctx
+            .get_write_progress()
+            .incr(&progress_values);
+
+        if delete_nums == block_meta.row_count as usize {
             info!("whole block deletion");
             // whole block deletion
             // NOTE that if deletion marker is enabled, check the real meaning of `row_count`
@@ -273,7 +285,7 @@ impl MergeIntoOperationAggregator {
 
         let bitmap = bitmap.into();
         let new_block = data_block.filter_with_bitmap(&bitmap)?;
-        info!("number of row deleted: {}", bitmap.unset_bits());
+        info!("number of row deleted: {}", delete_nums);
 
         // serialization and compression is cpu intensive, send them to dedicated thread pool
         // and wait (asyncly, which will NOT block the executor thread)
