@@ -41,7 +41,6 @@ impl ProbeState {
 
     pub fn with_capacity(capacity: usize) -> Self {
         ProbeState {
-            // probe_indexes: Vec::with_capacity(JOIN_MAX_BLOCK_SIZE),
             probe_indexes: vec![(0, 0); JOIN_MAX_BLOCK_SIZE],
             build_indexes: Vec::with_capacity(capacity),
             row_state: Vec::with_capacity(capacity),

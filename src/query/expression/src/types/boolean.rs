@@ -109,16 +109,12 @@ impl ValueType for BooleanType {
     unsafe fn take_by_compressd_indices<'a>(
         col: &'a Self::Column,
         indices: &[(u32, u32)],
-        indices_len: usize,
         row_num: usize,
     ) -> Self::Column {
         let mut col_builder = MutableBitmap::with_capacity((row_num).saturating_add(7) / 8);
-        let mut idx = 0;
-        while idx < indices_len {
-            let (index, cnt) = indices[idx];
-            idx += 1;
-            let val = col.get_bit_unchecked(index as usize);
-            for _ in 0..cnt {
+        for (index, cnt) in indices {
+            let val = col.get_bit_unchecked(*index as usize);
+            for _ in 0..*cnt {
                 col_builder.push(val);
             }
         }

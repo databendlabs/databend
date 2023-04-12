@@ -179,8 +179,7 @@ impl JoinHashTable {
 
                             let probe_block = DataBlock::take_by_compressd_indices(
                                 input,
-                                probe_indexes,
-                                probe_indexes_len,
+                                &probe_indexes[0..probe_indexes_len],
                                 probed_num,
                             )?;
                             let build_block = self.row_space.gather_build(
@@ -223,8 +222,7 @@ impl JoinHashTable {
 
         let probe_block = DataBlock::take_by_compressd_indices(
             input,
-            probe_indexes,
-            probe_indexes_len,
+            &probe_indexes[0..probe_indexes_len],
             probed_num,
         )?;
         let build_block = self

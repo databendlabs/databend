@@ -225,8 +225,7 @@ impl JoinHashTable {
                         // For full join, wrap nullable for probe block
                         let mut probe_block = DataBlock::take_by_compressd_indices(
                             input,
-                            probe_indexes,
-                            probe_indexes_len,
+                            &probe_indexes[0..probe_indexes_len],
                             probed_num,
                         )?;
                         let num_rows = probe_block.num_rows();
@@ -267,8 +266,7 @@ impl JoinHashTable {
         // For full join, wrap nullable for probe block
         let mut probe_block = DataBlock::take_by_compressd_indices(
             input,
-            probe_indexes,
-            probe_indexes_len,
+            &probe_indexes[0..probe_indexes_len],
             probed_num,
         )?;
         if self.hash_join_desc.join_type == JoinType::Full {

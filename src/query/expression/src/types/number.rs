@@ -158,20 +158,16 @@ impl<Num: Number> ValueType for NumberType<Num> {
     unsafe fn take_by_compressd_indices<'a>(
         col: &'a Self::Column,
         indices: &[(u32, u32)],
-        indices_len: usize,
         row_num: usize,
     ) -> Self::Column {
         let mut col_builder = Self::create_builder(row_num, &[]);
         let builder_ptr = col_builder.as_mut_ptr();
         let col_ptr = col.as_ptr();
         let mut offset = 0;
-        let mut idx = 0;
-        while idx < indices_len {
-            let (index, cnt) = indices[idx];
-            idx += 1;
-            if cnt == 1 {
+        for (index, cnt) in indices {
+            if *cnt == 1 {
                 std::ptr::copy_nonoverlapping(
-                    col_ptr.add(index as usize),
+                    col_ptr.add(*index as usize),
                     builder_ptr.add(offset),
                     1,
                 );
@@ -181,11 +177,11 @@ impl<Num: Number> ValueType for NumberType<Num> {
             // Using the doubling method to copy memory.
             let base_offset = offset;
             std::ptr::copy_nonoverlapping(
-                col_ptr.add(index as usize),
+                col_ptr.add(*index as usize),
                 builder_ptr.add(base_offset),
                 1,
             );
-            let mut remain = cnt as usize;
+            let mut remain = *cnt as usize;
             // Since cnt > 0, then 31 - cnt.leading_zeros() >= 0.
             let max_segment = 1 << (31 - cnt.leading_zeros());
             let mut cur_segment = 1;

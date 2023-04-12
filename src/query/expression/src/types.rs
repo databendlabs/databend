@@ -310,13 +310,11 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     /// # Safety
     ///
     /// Each item in the `indices` consists of an `index` and a `cnt`, the sum
-    /// of the `cnt` must be equal to the `row_num`, the slice index 'idx' used
-    /// to access `indices` must be less than `indices_len`, the out-of-bounds
-    /// `index` for `col` in indices is *[undefined behavior]*.
+    /// of the `cnt` must be equal to the `row_num`, the out-of-bounds `index`
+    /// for `col` in indices is *[undefined behavior]*.
     unsafe fn take_by_compressd_indices<'a>(
         _col: &'a Self::Column,
         _indices: &[(u32, u32)],
-        _indices_len: usize,
         _row_num: usize,
     ) -> Self::Column {
         unimplemented!()

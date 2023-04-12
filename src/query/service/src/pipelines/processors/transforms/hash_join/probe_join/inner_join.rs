@@ -117,8 +117,7 @@ impl JoinHashTable {
                                 )?,
                                 &DataBlock::take_by_compressd_indices(
                                     input,
-                                    probe_indexes,
-                                    probe_indexes_len,
+                                    &probe_indexes[0..probe_indexes_len],
                                     probed_num,
                                 )?,
                             )?);
@@ -142,8 +141,7 @@ impl JoinHashTable {
                     .gather_build(&build_indexes, &data_blocks, &num_rows)?,
                 &DataBlock::take_by_compressd_indices(
                     input,
-                    probe_indexes,
-                    probe_indexes_len,
+                    &probe_indexes[0..probe_indexes_len],
                     probed_num,
                 )?,
             )?,
