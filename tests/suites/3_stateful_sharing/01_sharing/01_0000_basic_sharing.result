@@ -4,3 +4,23 @@ INBOUND test_share test_database shared_tenant to_tenant
 1
 2
 3
+4
+5
+6
+ERROR 1105 (HY000) at line 1: Code: 1025, Text = error: 
+  --> SQL:1:15
+  |
+1 | SELECT * FROM shared_db.t1
+  |               ^^^^^^^^^^^^ Unknown table 't1'
+
+.
+4
+5
+6
+ERROR 1105 (HY000) at line 1: Code: 1025, Text = error: 
+  --> SQL:1:15
+  |
+1 | SELECT * FROM shared_db.t2
+  |               ^^^^^^^^^^^^ Unknown table 't2'
+
+.

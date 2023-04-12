@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_exception::Span;
-use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::FileFormatOptionsAst;
 use common_meta_app::principal::PrincipalIdentity;
 use common_meta_app::principal::UserIdentity;
 
@@ -509,7 +509,7 @@ pub trait Visitor<'ast>: Sized {
         &mut self,
         _if_not_exists: bool,
         _name: &'ast str,
-        _file_format_options: &'ast FileFormatOptions,
+        _file_format_options: &'ast FileFormatOptionsAst,
     ) {
     }
 

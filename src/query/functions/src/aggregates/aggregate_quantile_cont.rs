@@ -253,7 +253,7 @@ where T: Number + AsPrimitive<f64>
         let levels = if params.len() == 1 {
             let level: F64 = check_number(
                 None,
-                FunctionContext::default(),
+                &FunctionContext::default(),
                 &Expr::<usize>::Cast {
                     span: None,
                     is_try: false,
@@ -281,7 +281,7 @@ where T: Number + AsPrimitive<f64>
             for param in params {
                 let level: F64 = check_number(
                     None,
-                    FunctionContext::default(),
+                    &FunctionContext::default(),
                     &Expr::<usize>::Cast {
                         span: None,
                         is_try: false,

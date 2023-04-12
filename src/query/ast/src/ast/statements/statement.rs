@@ -15,7 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::FileFormatOptionsAst;
 use common_meta_app::principal::PrincipalIdentity;
 use common_meta_app::principal::UserIdentity;
 
@@ -187,7 +187,7 @@ pub enum Statement {
     CreateFileFormat {
         if_not_exists: bool,
         name: String,
-        file_format_options: FileFormatOptions,
+        file_format_options: FileFormatOptionsAst,
     },
     DropFileFormat {
         if_exists: bool,

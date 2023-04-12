@@ -27,7 +27,7 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
-use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
@@ -141,7 +141,7 @@ pub trait TableContext: Send + Sync {
     fn push_precommit_block(&self, block: DataBlock);
     fn consume_precommit_blocks(&self) -> Vec<DataBlock>;
 
-    async fn get_file_format(&self, name: &str) -> Result<FileFormatOptions>;
+    async fn get_file_format(&self, name: &str) -> Result<FileFormatParams>;
 
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;

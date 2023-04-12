@@ -152,9 +152,9 @@ checksum = "8da52d66c7071e2e3fa2a1e5c6d088fec47b593032b254f5e980de8ea54454d6"
 
 [[package]]
 name = "arrow-array"
-version = "35.0.0"
+version = "36.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43489bbff475545b78b0e20bde1d22abd6c99e54499839f9e815a2fa5134a51b"
+checksum = "e10849b60c17dbabb334be1f4ef7550701aa58082b71335ce1ed586601b2f423"
 dependencies = [
  "ahash 0.8.3",
  "arrow-buffer",
@@ -168,9 +168,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-buffer"
-version = "35.0.0"
+version = "36.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3759e4a52c593281184787af5435671dc8b1e78333e5a30242b2e2d6e3c9d1f"
+checksum = "b0746ae991b186be39933147117f8339eb1c4bbbea1c8ad37e7bf5851a1a06ba"
 dependencies = [
  "half 2.2.1",
  "num",
@@ -178,9 +178,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-cast"
-version = "35.0.0"
+version = "36.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b30c01f06172d3e8306fcc885ee97dff55ba8d48dbc2ef5fee2e75b55b8170c4"
+checksum = "b88897802515d7b193e38b27ddd9d9e43923d410a9e46307582d756959ee9595"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -195,9 +195,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-data"
-version = "35.0.0"
+version = "36.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19c7787c6cdbf9539b1ffb860bfc18c5848926ec3d62cbd52dc3b1ea35c874fd"
+checksum = "533f937efa1aaad9dc86f6a0e382c2fa736a4943e2090c946138079bdf060cef"
 dependencies = [
  "arrow-buffer",
  "arrow-schema",
@@ -207,9 +207,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-flight"
-version = "35.0.0"
+version = "36.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9b7917984e7cc3d766b4b457f0301e298a327d1cd8b18248ed40d8126a138a8"
+checksum = "cd1362a6a02e31734c67eb2e9a30dca1689d306cfe2fc00bc6430512091480ce"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -219,13 +219,10 @@ dependencies = [
  "base64 0.21.0",
  "bytes",
  "futures",
- "proc-macro2",
  "prost",
- "prost-build",
  "prost-derive",
  "tokio",
  "tonic",
- "tonic-build",
 ]
 
 [[package]]
@@ -243,9 +240,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-ipc"
-version = "35.0.0"
+version = "36.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "690167cd0ad8c4444c7bbb573066b94982acb52da554db7b7b2837c0e2dce036"
+checksum = "18b75296ff01833f602552dff26a423fc213db8e5049b540ca4a00b1c957e41c"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -257,15 +254,15 @@ dependencies = [
 
 [[package]]
 name = "arrow-schema"
-version = "35.0.0"
+version = "36.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf6b26f6a6f8410e3b9531cbd1886399b99842701da77d4b4cf2013f7708f20f"
+checksum = "d04f17f7b86ded0b5baf98fe6123391c4343e031acc3ccc5fa604cc180bff220"
 
 [[package]]
 name = "arrow-select"
-version = "35.0.0"
+version = "36.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83deb30a09afdf654d346092ef03e965f9c05d9b0753164d531f41d290d553f4"
+checksum = "163e35de698098ff5f5f672ada9dc1f82533f10407c7a11e2cd09f3bcf31d18a"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -277,10 +274,12 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.17.0"
-source = "git+https://github.com/jorgecarleitao/arrow2?rev=73ed7c8#73ed7c83034ba5d13ffb643b3aec967074a331c3"
+source = "git+https://github.com/jorgecarleitao/arrow2?rev=33f6ba1#33f6ba1d5b825f3c458d7d3eaf66eec418780b40"
 dependencies = [
  "ahash 0.8.3",
+ "arrow-array",
  "arrow-buffer",
+ "arrow-data",
  "arrow-format",
  "arrow-schema",
  "base64 0.21.0",
@@ -2226,6 +2225,7 @@ dependencies = [
  "common-exception",
  "common-meta-api",
  "common-meta-app",
+ "common-storage",
  "common-users",
  "http",
  "log",
@@ -2251,6 +2251,7 @@ dependencies = [
  "common-base",
  "common-catalog",
  "common-config",
+ "common-constraint",
  "common-exception",
  "common-expression",
  "common-functions",
@@ -2287,6 +2288,7 @@ dependencies = [
  "time 0.3.20",
  "tracing",
  "url",
+ "z3",
 ]
 
 [[package]]
@@ -2370,7 +2372,6 @@ dependencies = [
  "storages-common-pruner",
  "storages-common-table-meta",
  "streaming-decompression",
- "tokio-rayon",
  "tracing",
  "typetag",
  "uuid",
@@ -3378,6 +3379,7 @@ dependencies = [
  "ordered-float 3.6.0",
  "p256 0.13.0",
  "parking_lot 0.12.1",
+ "paste",
  "petgraph",
  "pin-project-lite",
  "poem",
@@ -9389,7 +9391,7 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 [[package]]
 name = "strawboat"
 version = "0.2.0"
-source = "git+https://github.com/sundy-li/strawboat?rev=7e1edb6#7e1edb640e8c076879d44e9d7c9bba8c32c33144"
+source = "git+https://github.com/sundy-li/strawboat?rev=0589e19#0589e193b796dbb490b30b4310e4240ba5e9d596"
 dependencies = [
  "arrow2",
  "bytemuck",
@@ -9812,16 +9814,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "tokio-rayon"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cf33a76e0b1dd03b778f83244137bd59887abf25c0e87bc3e7071105f457693"
-dependencies = [
- "rayon",
- "tokio",
 ]
 
 [[package]]

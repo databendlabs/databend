@@ -81,18 +81,11 @@ fn test_user_stage_webhdfs_v30() -> anyhow::Result<()> {
                 delegation: "<delegation_token>".to_string(),
             }),
         },
-        file_format_options: mt::principal::FileFormatOptions {
-            format: mt::principal::StageFileFormatType::Json,
-            skip_header: 1024,
-            field_delimiter: "|".to_string(),
-            record_delimiter: "//".to_string(),
-            nan_display: "NaN".to_string(),
-            escape: "".to_string(),
-            compression: mt::principal::StageFileCompression::Bz2,
-            row_tag: "row".to_string(),
-            quote: "".to_string(),
-            name: None,
-        },
+        file_format_params: mt::principal::FileFormatParams::Json(
+            mt::principal::JsonFileFormatParams {
+                compression: mt::principal::StageFileCompression::Bz2,
+            },
+        ),
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(3141),
             size_limit: 1038,
@@ -131,18 +124,11 @@ fn test_user_stage_fs_v22() -> anyhow::Result<()> {
                 root: "/dir/to/files".to_string(),
             }),
         },
-        file_format_options: mt::principal::FileFormatOptions {
-            format: mt::principal::StageFileFormatType::Json,
-            skip_header: 1024,
-            field_delimiter: "|".to_string(),
-            record_delimiter: "//".to_string(),
-            nan_display: "NaN".to_string(),
-            compression: mt::principal::StageFileCompression::Bz2,
-            escape: "\\".to_string(),
-            row_tag: "row".to_string(),
-            quote: "\'\'".to_string(),
-            name: None,
-        },
+        file_format_params: mt::principal::FileFormatParams::Json(
+            mt::principal::JsonFileFormatParams {
+                compression: mt::principal::StageFileCompression::Bz2,
+            },
+        ),
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
@@ -180,18 +166,11 @@ fn test_user_stage_fs_v21() -> anyhow::Result<()> {
                 root: "/dir/to/files".to_string(),
             }),
         },
-        file_format_options: mt::principal::FileFormatOptions {
-            format: mt::principal::StageFileFormatType::Json,
-            skip_header: 1024,
-            field_delimiter: "|".to_string(),
-            record_delimiter: "//".to_string(),
-            nan_display: "NaN".to_string(),
-            compression: mt::principal::StageFileCompression::Bz2,
-            escape: "\\".to_string(),
-            row_tag: "row".to_string(),
-            quote: "".to_string(),
-            name: None,
-        },
+        file_format_params: mt::principal::FileFormatParams::Json(
+            mt::principal::JsonFileFormatParams {
+                compression: mt::principal::StageFileCompression::Bz2,
+            },
+        ),
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
@@ -228,18 +207,11 @@ fn test_user_stage_fs_v20() -> anyhow::Result<()> {
                 root: "/dir/to/files".to_string(),
             }),
         },
-        file_format_options: mt::principal::FileFormatOptions {
-            format: mt::principal::StageFileFormatType::Json,
-            skip_header: 1024,
-            field_delimiter: "|".to_string(),
-            record_delimiter: "//".to_string(),
-            nan_display: "".to_string(),
-            compression: mt::principal::StageFileCompression::Bz2,
-            escape: "\\".to_string(),
-            row_tag: "row".to_string(),
-            quote: "".to_string(),
-            name: None,
-        },
+        file_format_params: mt::principal::FileFormatParams::Json(
+            mt::principal::JsonFileFormatParams {
+                compression: mt::principal::StageFileCompression::Bz2,
+            },
+        ),
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
@@ -277,18 +249,11 @@ fn test_user_stage_fs_v16() -> anyhow::Result<()> {
                 root: "/dir/to/files".to_string(),
             }),
         },
-        file_format_options: mt::principal::FileFormatOptions {
-            format: mt::principal::StageFileFormatType::Json,
-            skip_header: 1024,
-            field_delimiter: "|".to_string(),
-            record_delimiter: "//".to_string(),
-            nan_display: "".to_string(),
-            escape: "".to_string(),
-            compression: mt::principal::StageFileCompression::Bz2,
-            row_tag: "".to_string(),
-            quote: "".to_string(),
-            name: None,
-        },
+        file_format_params: mt::principal::FileFormatParams::Json(
+            mt::principal::JsonFileFormatParams {
+                compression: mt::principal::StageFileCompression::Bz2,
+            },
+        ),
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
@@ -338,18 +303,11 @@ fn test_user_stage_s3_v16() -> anyhow::Result<()> {
                 ..Default::default()
             }),
         },
-        file_format_options: mt::principal::FileFormatOptions {
-            format: mt::principal::StageFileFormatType::Json,
-            skip_header: 1024,
-            field_delimiter: "|".to_string(),
-            record_delimiter: "//".to_string(),
-            nan_display: "".to_string(),
-            escape: "".to_string(),
-            compression: mt::principal::StageFileCompression::Bz2,
-            row_tag: "".to_string(),
-            quote: "".to_string(),
-            name: None,
-        },
+        file_format_params: mt::principal::FileFormatParams::Json(
+            mt::principal::JsonFileFormatParams {
+                compression: mt::principal::StageFileCompression::Bz2,
+            },
+        ),
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
@@ -393,18 +351,11 @@ fn test_user_stage_gcs_v16() -> anyhow::Result<()> {
                 credential: "my_credential".to_string(),
             }),
         },
-        file_format_options: mt::principal::FileFormatOptions {
-            format: mt::principal::StageFileFormatType::Json,
-            skip_header: 1024,
-            field_delimiter: "|".to_string(),
-            record_delimiter: "//".to_string(),
-            nan_display: "".to_string(),
-            escape: "".to_string(),
-            compression: mt::principal::StageFileCompression::Bz2,
-            row_tag: "".to_string(),
-            quote: "".to_string(),
-            name: None,
-        },
+        file_format_params: mt::principal::FileFormatParams::Json(
+            mt::principal::JsonFileFormatParams {
+                compression: mt::principal::StageFileCompression::Bz2,
+            },
+        ),
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
@@ -451,18 +402,11 @@ fn test_user_stage_oss_v16() -> anyhow::Result<()> {
                 access_key_secret: "access_key_secret".to_string(),
             }),
         },
-        file_format_options: mt::principal::FileFormatOptions {
-            format: mt::principal::StageFileFormatType::Json,
-            skip_header: 1024,
-            field_delimiter: "|".to_string(),
-            record_delimiter: "//".to_string(),
-            nan_display: "".to_string(),
-            escape: "".to_string(),
-            compression: mt::principal::StageFileCompression::Bz2,
-            row_tag: "".to_string(),
-            quote: "".to_string(),
-            name: None,
-        },
+        file_format_params: mt::principal::FileFormatParams::Json(
+            mt::principal::JsonFileFormatParams {
+                compression: mt::principal::StageFileCompression::Bz2,
+            },
+        ),
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
@@ -511,18 +455,11 @@ fn test_user_stage_oss_v13() -> anyhow::Result<()> {
                 access_key_secret: "access_key_secret".to_string(),
             }),
         },
-        file_format_options: mt::principal::FileFormatOptions {
-            format: mt::principal::StageFileFormatType::Json,
-            skip_header: 1024,
-            field_delimiter: "|".to_string(),
-            record_delimiter: "//".to_string(),
-            nan_display: "".to_string(),
-            escape: "".to_string(),
-            compression: mt::principal::StageFileCompression::Bz2,
-            row_tag: "".to_string(),
-            quote: "".to_string(),
-            name: None,
-        },
+        file_format_params: mt::principal::FileFormatParams::Json(
+            mt::principal::JsonFileFormatParams {
+                compression: mt::principal::StageFileCompression::Bz2,
+            },
+        ),
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
@@ -571,18 +508,11 @@ fn test_user_stage_s3_v11() -> anyhow::Result<()> {
                 ..Default::default()
             }),
         },
-        file_format_options: mt::principal::FileFormatOptions {
-            format: mt::principal::StageFileFormatType::Json,
-            skip_header: 1024,
-            field_delimiter: "|".to_string(),
-            record_delimiter: "//".to_string(),
-            nan_display: "".to_string(),
-            escape: "".to_string(),
-            compression: mt::principal::StageFileCompression::Bz2,
-            row_tag: "".to_string(),
-            quote: "".to_string(),
-            name: None,
-        },
+        file_format_params: mt::principal::FileFormatParams::Json(
+            mt::principal::JsonFileFormatParams {
+                compression: mt::principal::StageFileCompression::Bz2,
+            },
+        ),
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
@@ -629,18 +559,11 @@ fn test_user_stage_s3_v8() -> anyhow::Result<()> {
                 ..Default::default()
             }),
         },
-        file_format_options: mt::principal::FileFormatOptions {
-            format: mt::principal::StageFileFormatType::Json,
-            skip_header: 1024,
-            field_delimiter: "|".to_string(),
-            record_delimiter: "//".to_string(),
-            nan_display: "".to_string(),
-            escape: "".to_string(),
-            compression: mt::principal::StageFileCompression::Bz2,
-            row_tag: "".to_string(),
-            quote: "".to_string(),
-            name: None,
-        },
+        file_format_params: mt::principal::FileFormatParams::Json(
+            mt::principal::JsonFileFormatParams {
+                compression: mt::principal::StageFileCompression::Bz2,
+            },
+        ),
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
@@ -678,18 +601,11 @@ fn test_user_stage_fs_v6() -> anyhow::Result<()> {
                 root: "/dir/to/files".to_string(),
             }),
         },
-        file_format_options: mt::principal::FileFormatOptions {
-            format: mt::principal::StageFileFormatType::Json,
-            skip_header: 1024,
-            field_delimiter: "|".to_string(),
-            record_delimiter: "//".to_string(),
-            nan_display: "".to_string(),
-            escape: "".to_string(),
-            compression: mt::principal::StageFileCompression::Bz2,
-            row_tag: "".to_string(),
-            quote: "".to_string(),
-            name: None,
-        },
+        file_format_params: mt::principal::FileFormatParams::Json(
+            mt::principal::JsonFileFormatParams {
+                compression: mt::principal::StageFileCompression::Bz2,
+            },
+        ),
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
@@ -737,18 +653,11 @@ fn test_user_stage_s3_v6() -> anyhow::Result<()> {
                 ..Default::default()
             }),
         },
-        file_format_options: mt::principal::FileFormatOptions {
-            format: mt::principal::StageFileFormatType::Json,
-            skip_header: 1024,
-            field_delimiter: "|".to_string(),
-            record_delimiter: "//".to_string(),
-            nan_display: "".to_string(),
-            escape: "".to_string(),
-            compression: mt::principal::StageFileCompression::Bz2,
-            row_tag: "".to_string(),
-            quote: "".to_string(),
-            name: None,
-        },
+        file_format_params: mt::principal::FileFormatParams::Json(
+            mt::principal::JsonFileFormatParams {
+                compression: mt::principal::StageFileCompression::Bz2,
+            },
+        ),
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
@@ -792,18 +701,11 @@ fn test_user_stage_gcs_v6() -> anyhow::Result<()> {
                 credential: "my_credential".to_string(),
             }),
         },
-        file_format_options: mt::principal::FileFormatOptions {
-            format: mt::principal::StageFileFormatType::Json,
-            skip_header: 1024,
-            field_delimiter: "|".to_string(),
-            record_delimiter: "//".to_string(),
-            nan_display: "".to_string(),
-            escape: "".to_string(),
-            compression: mt::principal::StageFileCompression::Bz2,
-            row_tag: "".to_string(),
-            quote: "".to_string(),
-            name: None,
-        },
+        file_format_params: mt::principal::FileFormatParams::Json(
+            mt::principal::JsonFileFormatParams {
+                compression: mt::principal::StageFileCompression::Bz2,
+            },
+        ),
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
@@ -840,18 +742,11 @@ fn test_user_stage_fs_v4() -> anyhow::Result<()> {
                 root: "/dir/to/files".to_string(),
             }),
         },
-        file_format_options: mt::principal::FileFormatOptions {
-            format: mt::principal::StageFileFormatType::Json,
-            skip_header: 1024,
-            field_delimiter: "|".to_string(),
-            record_delimiter: "//".to_string(),
-            nan_display: "".to_string(),
-            escape: "".to_string(),
-            compression: mt::principal::StageFileCompression::Bz2,
-            row_tag: "".to_string(),
-            quote: "".to_string(),
-            name: None,
-        },
+        file_format_params: mt::principal::FileFormatParams::Json(
+            mt::principal::JsonFileFormatParams {
+                compression: mt::principal::StageFileCompression::Bz2,
+            },
+        ),
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
@@ -899,18 +794,11 @@ fn test_user_stage_s3_v4() -> anyhow::Result<()> {
                 ..Default::default()
             }),
         },
-        file_format_options: mt::principal::FileFormatOptions {
-            format: mt::principal::StageFileFormatType::Json,
-            skip_header: 1024,
-            field_delimiter: "|".to_string(),
-            record_delimiter: "//".to_string(),
-            nan_display: "".to_string(),
-            escape: "".to_string(),
-            compression: mt::principal::StageFileCompression::Bz2,
-            row_tag: "".to_string(),
-            quote: "".to_string(),
-            name: None,
-        },
+        file_format_params: mt::principal::FileFormatParams::Json(
+            mt::principal::JsonFileFormatParams {
+                compression: mt::principal::StageFileCompression::Bz2,
+            },
+        ),
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
@@ -953,18 +841,11 @@ fn test_user_stage_gcs_v4() -> anyhow::Result<()> {
                 credential: "my_credential".to_string(),
             }),
         },
-        file_format_options: mt::principal::FileFormatOptions {
-            format: mt::principal::StageFileFormatType::Json,
-            skip_header: 1024,
-            field_delimiter: "|".to_string(),
-            record_delimiter: "//".to_string(),
-            nan_display: "".to_string(),
-            escape: "".to_string(),
-            compression: mt::principal::StageFileCompression::Bz2,
-            row_tag: "".to_string(),
-            quote: "".to_string(),
-            name: None,
-        },
+        file_format_params: mt::principal::FileFormatParams::Json(
+            mt::principal::JsonFileFormatParams {
+                compression: mt::principal::StageFileCompression::Bz2,
+            },
+        ),
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
@@ -1009,18 +890,11 @@ fn test_user_stage_s3_v1() -> anyhow::Result<()> {
                 ..Default::default()
             }),
         },
-        file_format_options: mt::principal::FileFormatOptions {
-            format: mt::principal::StageFileFormatType::Json,
-            skip_header: 1024,
-            field_delimiter: "|".to_string(),
-            record_delimiter: "//".to_string(),
-            nan_display: "".to_string(),
-            escape: "".to_string(),
-            compression: mt::principal::StageFileCompression::Bz2,
-            row_tag: "".to_string(),
-            quote: "".to_string(),
-            name: None,
-        },
+        file_format_params: mt::principal::FileFormatParams::Json(
+            mt::principal::JsonFileFormatParams {
+                compression: mt::principal::StageFileCompression::Bz2,
+            },
+        ),
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
@@ -1060,18 +934,11 @@ fn test_internal_stage_v17() -> anyhow::Result<()> {
                 root: "/dir/to/files".to_string(),
             }),
         },
-        file_format_options: mt::principal::FileFormatOptions {
-            format: mt::principal::StageFileFormatType::Json,
-            skip_header: 1024,
-            field_delimiter: "|".to_string(),
-            record_delimiter: "//".to_string(),
-            nan_display: "".to_string(),
-            escape: "".to_string(),
-            compression: mt::principal::StageFileCompression::Bz2,
-            row_tag: "".to_string(),
-            quote: "".to_string(),
-            name: None,
-        },
+        file_format_params: mt::principal::FileFormatParams::Json(
+            mt::principal::JsonFileFormatParams {
+                compression: mt::principal::StageFileCompression::Bz2,
+            },
+        ),
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,
@@ -1110,18 +977,11 @@ fn test_user_stage_v19() -> anyhow::Result<()> {
                 root: "/dir/to/files".to_string(),
             }),
         },
-        file_format_options: mt::principal::FileFormatOptions {
-            format: mt::principal::StageFileFormatType::Json,
-            skip_header: 1024,
-            field_delimiter: "|".to_string(),
-            record_delimiter: "//".to_string(),
-            nan_display: "".to_string(),
-            escape: "".to_string(),
-            compression: mt::principal::StageFileCompression::Bz2,
-            row_tag: "".to_string(),
-            quote: "".to_string(),
-            name: None,
-        },
+        file_format_params: mt::principal::FileFormatParams::Json(
+            mt::principal::JsonFileFormatParams {
+                compression: mt::principal::StageFileCompression::Bz2,
+            },
+        ),
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(666),
             size_limit: 1038,

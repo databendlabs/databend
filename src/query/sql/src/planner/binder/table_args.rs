@@ -47,7 +47,7 @@ pub async fn bind_table_args(
         .map(|scalar| {
             let expr = scalar.as_expr_with_col_index()?;
             let (expr, _) =
-                ConstantFolder::fold(&expr, scalar_binder.get_func_ctx()?, &BUILTIN_FUNCTIONS);
+                ConstantFolder::fold(&expr, &scalar_binder.get_func_ctx()?, &BUILTIN_FUNCTIONS);
             match expr {
                 common_expression::Expr::Constant { scalar, .. } => Ok(scalar),
                 _ => Err(ErrorCode::Unimplemented(format!(

@@ -36,7 +36,6 @@ use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
-use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
@@ -51,6 +50,7 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
 use common_expression::ConstantFolder;
+use common_expression::FunctionContext;
 use common_expression::FunctionKind;
 use common_expression::RawExpr;
 use common_expression::Scalar;
@@ -110,6 +110,7 @@ use crate::Visibility;
 pub struct TypeChecker<'a> {
     bind_context: &'a mut BindContext,
     ctx: Arc<dyn TableContext>,
+    func_ctx: FunctionContext,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
 
@@ -132,9 +133,11 @@ impl<'a> TypeChecker<'a> {
         metadata: MetadataRef,
         aliases: &'a [(String, ScalarExpr)],
     ) -> Self {
+        let func_ctx = ctx.get_function_context().unwrap();
         Self {
             bind_context,
             ctx,
+            func_ctx,
             name_resolution_ctx,
             metadata,
             aliases,
@@ -980,7 +983,7 @@ impl<'a> TypeChecker<'a> {
         .set_span(expr.span()))
     }
 
-    fn resolve_window_rows_frame(&self, span: Span, frame: WindowFrame) -> Result<WindowFuncFrame> {
+    fn resolve_window_rows_frame(&self, frame: WindowFrame) -> Result<WindowFuncFrame> {
         let units = match frame.units {
             WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,
             WindowFrameUnits::Range => WindowFuncFrameUnits::Range,
@@ -1019,14 +1022,6 @@ impl<'a> TypeChecker<'a> {
                 }
             }
         };
-
-        if start > end {
-            return Err(ErrorCode::SemanticError(format!(
-                "frame start bound should be less then the end bound, start: {:?}, end: {:?}",
-                start, end
-            ))
-            .set_span(span));
-        }
 
         Ok(WindowFuncFrame {
             units,
@@ -1076,7 +1071,8 @@ impl<'a> TypeChecker<'a> {
         frame: WindowFrame,
     ) -> Result<WindowFuncFrame> {
         let order_by_type = order_by.expr.data_type()?;
-        let mut common_type = order_by_type.clone();
+        let is_nullable = order_by_type.is_nullable();
+        let mut common_type = order_by_type.remove_nullable();
         let start_offset = self.resolve_range_offset(&frame.start_bound).await?;
         let end_offset = self.resolve_range_offset(&frame.end_bound).await?;
         if let Some((_, data_type)) = &start_offset {
@@ -1101,15 +1097,11 @@ impl<'a> TypeChecker<'a> {
         }
 
         // Unify ORDER BY and RANGE offsets types.
-        if order_by_type != common_type {
-            order_by.expr = wrap_cast(&order_by.expr, &common_type);
-        }
-        let func_ctx = self.ctx.get_function_context()?;
         let start_offset = start_offset
             .map(|(mut expr, _)| {
                 expr = wrap_cast(&expr, &common_type);
                 let expr = expr.as_expr_with_col_index()?;
-                let (expr, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
+                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 if let common_expression::Expr::Constant { scalar, .. } = expr {
                     debug_assert!(matches!(scalar, Scalar::Number(_)));
                     if scalar.is_positive() {
@@ -1126,7 +1118,7 @@ impl<'a> TypeChecker<'a> {
             .map(|(mut expr, _)| {
                 expr = wrap_cast(&expr, &common_type);
                 let expr = expr.as_expr_with_col_index()?;
-                let (expr, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
+                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 if let common_expression::Expr::Constant { scalar, .. } = expr {
                     debug_assert!(matches!(scalar, Scalar::Number(_)));
                     if scalar.is_positive() {
@@ -1139,6 +1131,13 @@ impl<'a> TypeChecker<'a> {
                 .set_span(span))
             })
             .transpose()?;
+
+        if is_nullable {
+            common_type = common_type.wrap_nullable();
+        }
+        if order_by_type != common_type {
+            order_by.expr = wrap_cast(&order_by.expr, &common_type);
+        }
 
         let units = match frame.units {
             WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,
@@ -1154,14 +1153,6 @@ impl<'a> TypeChecker<'a> {
             WindowFrameBound::Preceding(_) => WindowFuncFrameBound::Preceding(end_offset),
             WindowFrameBound::Following(_) => WindowFuncFrameBound::Following(end_offset),
         };
-
-        if start > end {
-            return Err(ErrorCode::SemanticError(format!(
-                "frame start bound should be less then the end bound, start: {:?}, end: {:?}",
-                start, end
-            ))
-            .set_span(span));
-        }
 
         Ok(WindowFuncFrame {
             units,
@@ -1188,7 +1179,7 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_window_range_frame(span, &mut order_by[0], frame)
                     .await
             } else {
-                self.resolve_window_rows_frame(span, frame)
+                self.resolve_window_rows_frame(frame)
             }
         } else if order_by.is_empty() {
             Ok(WindowFuncFrame {
@@ -1248,6 +1239,23 @@ impl<'a> TypeChecker<'a> {
             arg_types.push(arg_type);
         }
         self.in_aggregate_function = false;
+
+        // Convert the delimiter of string_agg to params
+        let params = if func_name.eq_ignore_ascii_case("string_agg")
+            && arguments.len() == 2
+            && params.is_empty()
+        {
+            let delimiter_value = ConstantExpr::try_from(arguments[1].clone());
+            if arg_types[1] != DataType::String || delimiter_value.is_err() {
+                return Err(ErrorCode::SemanticError(
+                    "The delimiter of `string_agg` must be a constant string",
+                ));
+            }
+            let delimiter = delimiter_value.unwrap();
+            vec![delimiter.value]
+        } else {
+            params
+        };
 
         // Rewrite `xxx(distinct)` to `xxx_distinct(...)`
         let (func_name, distinct) = if func_name.eq_ignore_ascii_case("count") && distinct {
@@ -1766,8 +1774,6 @@ impl<'a> TypeChecker<'a> {
             "is_null",
             "coalesce",
             "last_query_id",
-            "ai_embedding_vector",
-            "ai_text_completion",
         ]
     }
 
@@ -1945,12 +1951,7 @@ impl<'a> TypeChecker<'a> {
                         let box (scalar, _) = self.resolve(args[0]).await?;
 
                         let expr = scalar.as_expr_with_col_index()?;
-                        check_number::<_, i64>(
-                            span,
-                            self.ctx.get_function_context()?,
-                            &expr,
-                            &BUILTIN_FUNCTIONS,
-                        )?
+                        check_number::<_, i64>(span, &self.func_ctx, &expr, &BUILTIN_FUNCTIONS)?
                     }
                 };
 
@@ -1965,112 +1966,6 @@ impl<'a> TypeChecker<'a> {
                     }
                     Err(e) => Err(e),
                 })
-            }
-            ("ai_embedding_vector", args) => {
-                // ai_embedding_vector(prompt) -> embedding_vector(prompt, api_base, api_key, embedding_model, completion_model)
-                if args.len() != 1 {
-                    return Some(Err(ErrorCode::BadArguments(
-                        "ai_embedding_vector(STRING) only accepts one STRING argument",
-                    )
-                    .set_span(span)));
-                }
-
-                // Prompt.
-                let arg1 = args[0];
-
-                // openai.
-                let api_base = &Expr::Literal {
-                    span,
-                    lit: Literal::String(
-                        GlobalConfig::instance().query.openai_api_base_url.clone(),
-                    ),
-                };
-                let api_key = &Expr::Literal {
-                    span,
-                    lit: Literal::String(GlobalConfig::instance().query.openai_api_key.clone()),
-                };
-                let embedding_model = &Expr::Literal {
-                    span,
-                    lit: Literal::String(
-                        GlobalConfig::instance()
-                            .query
-                            .openai_api_embedding_model
-                            .clone(),
-                    ),
-                };
-                let completion_model = &Expr::Literal {
-                    span,
-                    lit: Literal::String(
-                        GlobalConfig::instance()
-                            .query
-                            .openai_api_completion_model
-                            .clone(),
-                    ),
-                };
-
-                Some(
-                    self.resolve_function(span, "embedding_vector", vec![], &[
-                        arg1,
-                        api_base,
-                        api_key,
-                        embedding_model,
-                        completion_model,
-                    ])
-                    .await,
-                )
-            }
-            ("ai_text_completion", args) => {
-                // ai_text_completion(prompt) -> text_completion(prompt, api_base, api_key, embedding_model, completion)
-                if args.len() != 1 {
-                    return Some(Err(ErrorCode::BadArguments(
-                        "ai_text_completion(STRING) only accepts one STRING argument",
-                    )
-                    .set_span(span)));
-                }
-
-                // Prompt.
-                let arg1 = args[0];
-
-                // openai.
-                let api_base = &Expr::Literal {
-                    span,
-                    lit: Literal::String(
-                        GlobalConfig::instance().query.openai_api_base_url.clone(),
-                    ),
-                };
-                let api_key = &Expr::Literal {
-                    span,
-                    lit: Literal::String(GlobalConfig::instance().query.openai_api_key.clone()),
-                };
-                let embedding_model = &Expr::Literal {
-                    span,
-                    lit: Literal::String(
-                        GlobalConfig::instance()
-                            .query
-                            .openai_api_embedding_model
-                            .clone(),
-                    ),
-                };
-                let completion_model = &Expr::Literal {
-                    span,
-                    lit: Literal::String(
-                        GlobalConfig::instance()
-                            .query
-                            .openai_api_completion_model
-                            .clone(),
-                    ),
-                };
-
-                Some(
-                    self.resolve_function(span, "text_completion", vec![], &[
-                        arg1,
-                        api_base,
-                        api_key,
-                        embedding_model,
-                        completion_model,
-                    ])
-                    .await,
-                )
             }
             // Try convert get function of Variant data type into a virtual column
             ("get", args) => {

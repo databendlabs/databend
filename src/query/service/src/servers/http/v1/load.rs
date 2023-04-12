@@ -129,11 +129,7 @@ pub async fn streaming_load(
     let schema = plan.schema();
     match &mut plan {
         Plan::Insert(insert) => match &mut insert.source {
-            InsertInputSource::StreamingWithFileFormat(
-                option_settings,
-                start,
-                input_context_ref,
-            ) => {
+            InsertInputSource::StreamingWithFileFormat(params, start, input_context_ref) => {
                 let sql_rest = &insert_sql[*start..].trim();
                 if !sql_rest.is_empty() {
                     return Err(poem::Error::from_string(
@@ -155,7 +151,7 @@ pub async fn streaming_load(
                     InputContext::try_create_from_insert_file_format(
                         rx,
                         context.get_settings(),
-                        option_settings.clone(),
+                        params.clone(),
                         table_schema,
                         context.get_scan_progress(),
                         false,

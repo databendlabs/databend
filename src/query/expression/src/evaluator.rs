@@ -53,14 +53,14 @@ use crate::FunctionRegistry;
 
 pub struct Evaluator<'a> {
     input_columns: &'a DataBlock,
-    func_ctx: FunctionContext,
+    func_ctx: &'a FunctionContext,
     fn_registry: &'a FunctionRegistry,
 }
 
 impl<'a> Evaluator<'a> {
     pub fn new(
         input_columns: &'a DataBlock,
-        func_ctx: FunctionContext,
+        func_ctx: &'a FunctionContext,
         fn_registry: &'a FunctionRegistry,
     ) -> Self {
         Evaluator {
@@ -190,6 +190,7 @@ impl<'a> Evaluator<'a> {
                     validity,
                     errors: None,
                     tz: self.func_ctx.tz,
+                    func_ctx: self.func_ctx,
                 };
                 let (_, eval) = function.eval.as_scalar().unwrap();
                 let result = (eval)(cols_ref.as_slice(), &mut ctx);
@@ -905,7 +906,7 @@ impl<'a> Evaluator<'a> {
 
 pub struct ConstantFolder<'a, Index: ColumnIndex> {
     input_domains: HashMap<Index, Domain>,
-    func_ctx: FunctionContext,
+    func_ctx: &'a FunctionContext,
     fn_registry: &'a FunctionRegistry,
 }
 
@@ -913,7 +914,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
     /// Fold a single expression, returning the new expression and the domain of the new expression.
     pub fn fold(
         expr: &Expr<Index>,
-        func_ctx: FunctionContext,
+        func_ctx: &'a FunctionContext,
         fn_registry: &'a FunctionRegistry,
     ) -> (Expr<Index>, Option<Domain>) {
         let input_domains = expr
@@ -939,7 +940,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
     pub fn fold_with_domain(
         expr: &Expr<Index>,
         input_domains: HashMap<Index, Domain>,
-        func_ctx: FunctionContext,
+        func_ctx: &'a FunctionContext,
         fn_registry: &'a FunctionRegistry,
     ) -> (Expr<Index>, Option<Domain>) {
         let folder = ConstantFolder {

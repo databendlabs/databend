@@ -2,14 +2,16 @@
 title: SHOW SETTINGS
 ---
 
-Shows the databend's [system settings](../../13-sql-reference/20-system-tables/system-settings.md).
+Shows all the system settings of the current session.
 
-You can change it by set command, like `set max_threads = 1`.
+:::tip
+Databend stores the system settings in the system table [system.settings](../../13-sql-reference/20-system-tables/system-settings.md).
+:::
 
 ## Syntax
 
-```
-SHOW SETTINGS
+```sql
+SHOW SETTINGS;
 ```
 
 ## Examples

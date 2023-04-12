@@ -159,9 +159,9 @@ impl Column {
             }
 
             Column::Timestamp(buf) => {
-                numbers_into::<i64, arrow_array::types::Time64NanosecondType>(
+                numbers_into::<i64, arrow_array::types::TimestampMicrosecondType>(
                     buf,
-                    DataType::Timestamp(TimeUnit::Nanosecond, None),
+                    DataType::Timestamp(TimeUnit::Microsecond, None),
                 )?
             }
             Column::Date(buf) => {

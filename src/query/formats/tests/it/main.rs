@@ -20,7 +20,6 @@ use common_formats::FileFormatOptionsExt;
 use common_settings::Settings;
 
 mod field_encoder;
-mod format_option_checker;
 mod output_format_json_each_row;
 mod output_format_tcsv;
 mod output_format_utils;
