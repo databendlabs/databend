@@ -1,6 +1,6 @@
 ---
-title: Load from a Local File
-sidebar_label: Load from a Local File
+title: Loading from a Local File
+sidebar_label: Loading from a Local File
 description:
   Load data from local file system.
 ---
