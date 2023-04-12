@@ -887,9 +887,16 @@ impl Binder {
                         argument: Box::new(expr),
                     })
                     .as_expr_with_col_index()?;
+
+                    if !cast_expr_to_field_type.is_deterministic(&BUILTIN_FUNCTIONS) {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "default expression {cast_expr_to_field_type} is a valid constant",
+                        )));
+                    }
+
                     let (fold_to_constant, _) = ConstantFolder::fold(
                         &cast_expr_to_field_type,
-                        self.ctx.get_function_context()?,
+                        &self.ctx.get_function_context()?,
                         &BUILTIN_FUNCTIONS,
                     );
                     if let common_expression::Expr::Constant { .. } = fold_to_constant {

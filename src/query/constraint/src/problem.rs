@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use z3::ast::forall_const;
+use z3::ast::Ast;
 use z3::ast::Bool;
 use z3::ast::Int;
 use z3::Context;
@@ -21,10 +22,6 @@ use z3::Solver;
 
 use crate::declare::is_not_null_int;
 
-/// NOTICE: This function is only valid for the predicates that only
-/// contain a single variable. For example, `a > 0` is valid, but
-/// `a + b > 0` is not.
-///
 /// Assert that an integer is not null with a given solver.
 /// We will check this by adding a new constraint to the solver:
 ///
@@ -36,19 +33,25 @@ use crate::declare::is_not_null_int;
 /// ```ignore
 /// // a > 0
 /// let proposition = Int::new_const(&ctx, "a").gt(&Int::from_i64(&ctx, 0));
-/// assert_eq!(assert_int_is_not_null(&ctx, &solver, &Int::new_const(&ctx, "a"), &proposition), SatResult::Sat);
+/// assert_eq!(assert_int_is_not_null(&ctx, &solver, &[Int::new_const(&ctx, "a")], &Int::new_const(&ctx, "a"), &proposition), SatResult::Sat);
 /// ```
 pub fn assert_int_is_not_null(
     ctx: &Context,
     solver: &Solver,
-    variable: &Int,
+    variables: &[Int],
+    target: &Int,
     proposition: &Bool,
 ) -> SatResult {
+    let variables = variables.iter().collect::<Vec<_>>();
     let p = forall_const(
         ctx,
-        &[variable],
+        variables
+            .iter()
+            .map(|v| *v as &dyn Ast)
+            .collect::<Vec<_>>()
+            .as_slice(),
         &[],
-        &proposition.implies(&is_not_null_int(ctx, variable)),
+        &proposition.implies(&is_not_null_int(ctx, target)),
     );
 
     solver.push();

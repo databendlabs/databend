@@ -37,7 +37,8 @@ use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
-use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::FileFormatParams;
+use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::CountTablesReply;
@@ -45,6 +46,7 @@ use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
@@ -68,6 +70,7 @@ use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
+use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::DataOperator;
@@ -78,6 +81,7 @@ use common_storages_fuse::operations::AppendOperationLogEntry;
 use common_storages_fuse::statistics::reducers::reduce_block_metas;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
+use dashmap::DashMap;
 use databend_query::sessions::QueryContext;
 use futures::TryStreamExt;
 use rand::thread_rng;
@@ -530,7 +534,19 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_on_error_map(&self, _map: Option<HashMap<String, ErrorCode>>) {
+    fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>> {
+        todo!()
+    }
+    fn set_on_error_map(&self, _map: Arc<DashMap<String, HashMap<u16, InputError>>>) {
+        todo!()
+    }
+    fn get_on_error_mode(&self) -> Option<OnErrorMode> {
+        todo!()
+    }
+    fn set_on_error_mode(&self, _mode: OnErrorMode) {
+        todo!()
+    }
+    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
         todo!()
     }
 
@@ -554,7 +570,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    async fn get_file_format(&self, _name: &str) -> Result<FileFormatOptions> {
+    async fn get_file_format(&self, _name: &str) -> Result<FileFormatParams> {
         todo!()
     }
 
@@ -599,7 +615,7 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
-    async fn drop_database(&self, _req: DropDatabaseReq) -> Result<()> {
+    async fn drop_database(&self, _req: DropDatabaseReq) -> Result<DropDatabaseReply> {
         todo!()
     }
 

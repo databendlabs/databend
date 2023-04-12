@@ -82,9 +82,14 @@ pub enum FunctionEval {
     },
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Default)]
 pub struct FunctionContext {
     pub tz: TzLUT,
+
+    pub openai_api_base_url: String,
+    pub openai_api_key: String,
+    pub openai_api_embedding_model: String,
+    pub openai_api_completion_model: String,
 }
 
 #[derive(Clone)]
@@ -93,6 +98,7 @@ pub struct EvalContext<'a> {
     pub num_rows: usize,
     pub tz: TzLUT,
 
+    pub func_ctx: &'a FunctionContext,
     /// Validity bitmap of outer nullable column. This is an optimization
     /// to avoid recording errors on the NULL value which has a corresponding
     /// default value in nullable's inner column.

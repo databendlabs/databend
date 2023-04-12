@@ -403,6 +403,28 @@ impl ShareHasNoGrantedPrivilege {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("UnknownShareTable: {tenant}.{share_name} has no share table {table_name}")]
+pub struct UnknownShareTable {
+    pub tenant: String,
+    pub share_name: String,
+    pub table_name: String,
+}
+
+impl UnknownShareTable {
+    pub fn new(
+        tenant: impl Into<String>,
+        share_name: impl Into<String>,
+        table_name: impl Into<String>,
+    ) -> Self {
+        Self {
+            tenant: tenant.into(),
+            share_name: share_name.into(),
+            table_name: table_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("WrongShare: {share_name} has the wrong format")]
 pub struct WrongShare {
     share_name: String,
@@ -581,6 +603,9 @@ pub enum AppError {
     ShareHasNoGrantedPrivilege(#[from] ShareHasNoGrantedPrivilege),
 
     #[error(transparent)]
+    UnknownShareTable(#[from] UnknownShareTable),
+
+    #[error(transparent)]
     WrongShare(#[from] WrongShare),
 
     #[error(transparent)]
@@ -717,6 +742,15 @@ impl AppErrorMessage for ShareHasNoGrantedPrivilege {
     }
 }
 
+impl AppErrorMessage for UnknownShareTable {
+    fn message(&self) -> String {
+        format!(
+            "unknown share table {} of share {}.{}",
+            self.table_name, self.tenant, self.share_name
+        )
+    }
+}
+
 impl AppErrorMessage for WrongShare {
     fn message(&self) -> String {
         format!("share {} has the wrong format", self.share_name)
@@ -821,6 +855,7 @@ impl From<AppError> for ErrorCode {
             AppError::ShareHasNoGrantedPrivilege(err) => {
                 ErrorCode::ShareHasNoGrantedPrivilege(err.message())
             }
+            AppError::UnknownShareTable(err) => ErrorCode::UnknownShareTable(err.message()),
             AppError::WrongShare(err) => ErrorCode::WrongShare(err.message()),
             AppError::ShareEndpointAlreadyExists(err) => {
                 ErrorCode::ShareEndpointAlreadyExists(err.message())

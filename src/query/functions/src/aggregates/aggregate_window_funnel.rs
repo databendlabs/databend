@@ -358,7 +358,7 @@ where
         let event_size = arguments.len() - 1;
         let window = check_number(
             None,
-            FunctionContext::default(),
+            &FunctionContext::default(),
             &Expr::<usize>::Cast {
                 span: None,
                 is_try: false,

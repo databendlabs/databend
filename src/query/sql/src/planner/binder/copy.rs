@@ -651,7 +651,7 @@ impl<'a> Binder {
     #[async_backtrace::framed]
     async fn apply_stage_options(&mut self, stmt: &CopyStmt, stage: &mut StageInfo) -> Result<()> {
         if !stmt.file_format.is_empty() {
-            stage.file_format_options = self.try_resolve_file_format(&stmt.file_format).await?;
+            stage.file_format_params = self.try_resolve_file_format(&stmt.file_format).await?;
         }
 
         // Copy options.

@@ -977,6 +977,9 @@ Query (children 1)
                 └── refresh_meta_cache=>Literal Boolean(true)
 
 statement ok
+drop table if exists t4
+
+statement ok
 create table t4(a int, b string);
 
 query T
@@ -996,6 +999,9 @@ EvalScalar
         ├── partitions scanned: 0
         ├── push downs: [filters: [and_filters(CAST(t4.a (#0) = 1 AS Boolean NULL), TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL) = "xx")], limit: NONE]
         └── estimated rows: 0.00
+
+statement ok
+drop view if exists v4
 
 statement ok
 create view v4 as select a as a, try_cast(get(try_parse_json(b), 'bb') as varchar) as b from t4;
@@ -1031,7 +1037,7 @@ EvalScalar
     ├── expressions: [t4.a (#0), TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL)]
     ├── estimated rows: 0.00
     └── Filter
-        ├── filters: [v4.a (#0) > 100]
+        ├── filters: [t4.a (#0) > 100]
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.default.t4

@@ -689,3 +689,56 @@ set enable_cbo = 1
 
 statement ok
 drop table t1
+
+statement ok
+CREATE TABLE IF NOT EXISTS onecolumn (x INT NULL);
+
+statement ok
+INSERT INTO onecolumn(x) VALUES (44), (NULL), (42);
+
+statement ok
+CREATE TABLE IF NOT EXISTS twocolumn (x INT NULL, y INT NULL);
+
+statement ok
+INSERT INTO twocolumn(x, y) VALUES (44,51), (NULL,52), (42,53), (45,45);
+
+query T
+explain SELECT o.x, t.y FROM onecolumn o INNER JOIN twocolumn t ON (o.x=t.x AND t.y=53);
+----
+EvalScalar
+├── expressions: [o.x (#0), t.y (#2)]
+├── estimated rows: 8.00
+└── HashJoin
+    ├── join type: INNER
+    ├── build keys: [t.x (#1)]
+    ├── probe keys: [o.x (#0)]
+    ├── filters: []
+    ├── estimated rows: 8.00
+    ├── Filter(Build)
+    │   ├── filters: [is_true(t.y (#2) = 53)]
+    │   ├── estimated rows: 1.14
+    │   └── TableScan
+    │       ├── table: default.default.twocolumn
+    │       ├── read rows: 8
+    │       ├── read bytes: 188
+    │       ├── partitions total: 2
+    │       ├── partitions scanned: 2
+    │       ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 2>]
+    │       ├── push downs: [filters: [is_true(t.y (#2) = 53)], limit: NONE]
+    │       └── estimated rows: 8.00
+    └── TableScan(Probe)
+        ├── table: default.default.onecolumn
+        ├── read rows: 7
+        ├── read bytes: 86
+        ├── partitions total: 2
+        ├── partitions scanned: 2
+        ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 0 to 0>]
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 7.00
+
+
+statement ok
+drop table onecolumn;
+
+statement ok
+drop table twocolumn;

@@ -31,6 +31,8 @@ use maplit::hashmap;
 
 use crate::schema::database::DatabaseNameIdent;
 use crate::share::ShareNameIdent;
+use crate::share::ShareSpec;
+use crate::share::ShareTableInfoMap;
 use crate::storage::StorageParams;
 
 /// Globally unique identifier of a version of TableMeta.
@@ -468,7 +470,9 @@ impl Display for DropTableByIdReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct DropTableReply {}
+pub struct DropTableReply {
+    pub spec_vec: Option<(Vec<ShareSpec>, Vec<ShareTableInfoMap>)>,
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UndropTableReq {

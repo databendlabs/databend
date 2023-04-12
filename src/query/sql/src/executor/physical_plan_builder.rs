@@ -21,6 +21,7 @@ use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::plan::VirtualColumnInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -32,6 +33,7 @@ use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::Expr;
+use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_functions::BUILTIN_FUNCTIONS;
@@ -78,21 +80,26 @@ use crate::Metadata;
 use crate::MetadataRef;
 use crate::TableInternalColumn;
 use crate::TypeCheck;
+use crate::VirtualColumn;
 use crate::DUMMY_COLUMN_INDEX;
 use crate::DUMMY_TABLE_INDEX;
 
 pub struct PhysicalPlanBuilder {
     metadata: MetadataRef,
     ctx: Arc<dyn TableContext>,
+    func_ctx: FunctionContext,
+
     next_plan_id: u32,
 }
 
 impl PhysicalPlanBuilder {
     pub fn new(metadata: MetadataRef, ctx: Arc<dyn TableContext>) -> Self {
+        let func_ctx = ctx.get_function_context().unwrap();
         Self {
             metadata,
             ctx,
             next_plan_id: 0,
+            func_ctx,
         }
     }
 
@@ -108,9 +115,11 @@ impl PhysicalPlanBuilder {
         columns: &ColumnSet,
         has_inner_column: bool,
         ignore_internal_column: bool,
+        add_virtual_source_column: bool,
     ) -> Projection {
         if !has_inner_column {
             let mut col_indices = Vec::new();
+            let mut virtual_col_indices = HashSet::new();
             for index in columns.iter() {
                 let name = match metadata.column(*index) {
                     ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => {
@@ -125,10 +134,25 @@ impl PhysicalPlanBuilder {
                         }
                         internal_column.column_name()
                     }
+                    ColumnEntry::VirtualColumn(VirtualColumn {
+                        source_column_name, ..
+                    }) => {
+                        if add_virtual_source_column {
+                            virtual_col_indices
+                                .insert(schema.index_of(source_column_name).unwrap());
+                        }
+                        continue;
+                    }
                 };
                 col_indices.push(schema.index_of(name).unwrap());
             }
-
+            if !virtual_col_indices.is_empty() {
+                for index in virtual_col_indices {
+                    if !col_indices.contains(&index) {
+                        col_indices.push(index);
+                    }
+                }
+            }
             col_indices.sort();
             Projection::Columns(col_indices)
         } else {
@@ -158,6 +182,14 @@ impl PhysicalPlanBuilder {
                             col_indices.insert(*column_index, vec![*column_index]);
                         }
                     }
+                    ColumnEntry::VirtualColumn(VirtualColumn {
+                        source_column_name, ..
+                    }) => {
+                        if add_virtual_source_column {
+                            let idx = schema.index_of(source_column_name).unwrap();
+                            col_indices.insert(idx, vec![idx]);
+                        }
+                    }
                 }
             }
             Projection::InnerColumns(col_indices)
@@ -173,6 +205,7 @@ impl PhysicalPlanBuilder {
         match s_expr.plan() {
             RelOperator::Scan(scan) => {
                 let mut has_inner_column = false;
+                let mut has_virtual_column = false;
                 let mut name_mapping = BTreeMap::new();
                 let mut project_internal_columns = BTreeMap::new();
                 let metadata = self.metadata.read().clone();
@@ -191,26 +224,18 @@ impl PhysicalPlanBuilder {
                     }) = column
                     {
                         project_internal_columns.insert(*index, internal_column.to_owned());
+                    } else if let ColumnEntry::VirtualColumn(_) = column {
+                        has_virtual_column = true;
                     }
 
-                    let name = match column {
-                        ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => {
-                            column_name
-                        }
-                        ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
-                        ColumnEntry::InternalColumn(TableInternalColumn {
-                            internal_column,
-                            ..
-                        }) => internal_column.column_name(),
-                    };
                     if let Some(prewhere) = &scan.prewhere {
                         // if there is a prewhere optimization,
                         // we can prune `PhysicalScan`'s output schema.
                         if prewhere.output_columns.contains(index) {
-                            name_mapping.insert(name.to_string(), *index);
+                            name_mapping.insert(column.name().to_string(), *index);
                         }
                     } else {
-                        name_mapping.insert(name.to_string(), *index);
+                        name_mapping.insert(column.name().to_string(), *index);
                     }
                 }
 
@@ -229,7 +254,8 @@ impl PhysicalPlanBuilder {
                     table_schema = Arc::new(schema);
                 }
 
-                let push_downs = self.push_downs(scan, &table_schema, has_inner_column)?;
+                let push_downs =
+                    self.push_downs(scan, &table_schema, has_inner_column, has_virtual_column)?;
 
                 let source = table
                     .read_plan_with_catalog(
@@ -377,11 +403,8 @@ impl PhysicalPlanBuilder {
                                 .project_column_ref(|index| {
                                     build_schema.index_of(&index.to_string()).unwrap()
                                 });
-                            let (expr, _) = ConstantFolder::fold(
-                                &expr,
-                                self.ctx.get_function_context()?,
-                                &BUILTIN_FUNCTIONS,
-                            );
+                            let (expr, _) =
+                                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                             Ok(expr.as_remote_expr())
                         })
                         .collect::<Result<_>>()?,
@@ -393,11 +416,8 @@ impl PhysicalPlanBuilder {
                                 .project_column_ref(|index| {
                                     probe_schema.index_of(&index.to_string()).unwrap()
                                 });
-                            let (expr, _) = ConstantFolder::fold(
-                                &expr,
-                                self.ctx.get_function_context()?,
-                                &BUILTIN_FUNCTIONS,
-                            );
+                            let (expr, _) =
+                                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                             Ok(expr.as_remote_expr())
                         })
                         .collect::<Result<_>>()?,
@@ -410,11 +430,8 @@ impl PhysicalPlanBuilder {
                                 .project_column_ref(|index| {
                                     merged_schema.index_of(&index.to_string()).unwrap()
                                 });
-                            let (expr, _) = ConstantFolder::fold(
-                                &expr,
-                                self.ctx.get_function_context()?,
-                                &BUILTIN_FUNCTIONS,
-                            );
+                            let (expr, _) =
+                                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                             Ok(expr.as_remote_expr())
                         })
                         .collect::<Result<_>>()?,
@@ -439,11 +456,8 @@ impl PhysicalPlanBuilder {
                             .project_column_ref(|index| {
                                 input_schema.index_of(&index.to_string()).unwrap()
                             });
-                        let (expr, _) = ConstantFolder::fold(
-                            &expr,
-                            self.ctx.get_function_context()?,
-                            &BUILTIN_FUNCTIONS,
-                        );
+                        let (expr, _) =
+                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                         Ok((expr.as_remote_expr(), item.index))
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -471,11 +485,8 @@ impl PhysicalPlanBuilder {
                                     input_schema.index_of(&index.to_string()).unwrap()
                                 });
                             let expr = cast_expr_to_non_null_boolean(expr)?;
-                            let (expr, _) = ConstantFolder::fold(
-                                &expr,
-                                self.ctx.get_function_context()?,
-                                &BUILTIN_FUNCTIONS,
-                            );
+                            let (expr, _) =
+                                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                             Ok(expr.as_remote_expr())
                         })
                         .collect::<Result<_>>()?,
@@ -813,11 +824,8 @@ impl PhysicalPlanBuilder {
                                 .project_column_ref(|index| {
                                     input_schema.index_of(&index.to_string()).unwrap()
                                 });
-                            let (expr, _) = ConstantFolder::fold(
-                                &expr,
-                                self.ctx.get_function_context()?,
-                                &BUILTIN_FUNCTIONS,
-                            );
+                            let (expr, _) =
+                                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                             keys.push(expr.as_remote_expr());
                         }
                         FragmentKind::Normal
@@ -909,11 +917,8 @@ impl PhysicalPlanBuilder {
                             .project_column_ref(|index| {
                                 input_schema.index_of(&index.to_string()).unwrap()
                             });
-                        let (expr, _) = ConstantFolder::fold(
-                            &expr,
-                            self.ctx.get_function_context()?,
-                            &BUILTIN_FUNCTIONS,
-                        );
+                        let (expr, _) =
+                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                         Ok((expr.as_remote_expr(), item.index))
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -932,11 +937,33 @@ impl PhysicalPlanBuilder {
         }
     }
 
+    fn build_virtual_columns(&self, columns: &ColumnSet) -> Option<Vec<VirtualColumnInfo>> {
+        let mut virtual_column_infos = Vec::new();
+        for index in columns.iter() {
+            if let ColumnEntry::VirtualColumn(virtual_column) = self.metadata.read().column(*index)
+            {
+                let virtual_column_info = VirtualColumnInfo {
+                    source_name: virtual_column.source_column_name.clone(),
+                    name: virtual_column.column_name.clone(),
+                    paths: virtual_column.paths.clone(),
+                    data_type: Box::new(virtual_column.data_type.clone()),
+                };
+                virtual_column_infos.push(virtual_column_info);
+            }
+        }
+        if virtual_column_infos.is_empty() {
+            None
+        } else {
+            Some(virtual_column_infos)
+        }
+    }
+
     fn push_downs(
         &self,
         scan: &Scan,
         table_schema: &TableSchema,
         has_inner_column: bool,
+        has_virtual_column: bool,
     ) -> Result<PushDownInfo> {
         let metadata = self.metadata.read().clone();
         let projection = Self::build_projection(
@@ -947,7 +974,21 @@ impl PhysicalPlanBuilder {
             // for projection, we need to ignore read data from internal column,
             // or else in read_partition when search internal column from table schema will core.
             true,
+            true,
         );
+
+        let output_columns = if has_virtual_column {
+            Some(Self::build_projection(
+                &metadata,
+                table_schema,
+                &scan.columns,
+                has_inner_column,
+                true,
+                false,
+            ))
+        } else {
+            None
+        };
 
         let push_down_filter = scan
             .push_down_predicates
@@ -970,11 +1011,7 @@ impl PhysicalPlanBuilder {
 
                 let expr = cast_expr_to_non_null_boolean(expr)?;
 
-                let (expr, _) = ConstantFolder::fold(
-                    &expr,
-                    self.ctx.get_function_context()?,
-                    &BUILTIN_FUNCTIONS,
-                );
+                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 Ok(expr.as_remote_expr())
             })
             .transpose()?;
@@ -995,6 +1032,7 @@ impl PhysicalPlanBuilder {
                     &prewhere.output_columns,
                     has_inner_column,
                     false,
+                    false,
                 );
                 let prewhere_columns = Self::build_projection(
                     &metadata,
@@ -1002,6 +1040,7 @@ impl PhysicalPlanBuilder {
                     &prewhere.prewhere_columns,
                     has_inner_column,
                     false,
+                    true,
                 );
                 let remain_columns = Self::build_projection(
                     &metadata,
@@ -1009,6 +1048,7 @@ impl PhysicalPlanBuilder {
                     &remain_columns,
                     has_inner_column,
                     false,
+                    true,
                 );
 
                 let predicate = prewhere
@@ -1023,18 +1063,16 @@ impl PhysicalPlanBuilder {
                     })
                     .expect("there should be at least one predicate in prewhere");
                 let expr = cast_expr_to_non_null_boolean(predicate.as_expr_with_col_name()?)?;
-                let (filter, _) = ConstantFolder::fold(
-                    &expr,
-                    self.ctx.get_function_context()?,
-                    &BUILTIN_FUNCTIONS,
-                );
+                let (filter, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 let filter = filter.as_remote_expr();
+                let virtual_columns = self.build_virtual_columns(&prewhere.prewhere_columns);
 
                 Ok::<PrewhereInfo, ErrorCode>(PrewhereInfo {
                     output_columns,
                     prewhere_columns,
                     remain_columns,
                     filter,
+                    virtual_columns,
                 })
             })
             .transpose()?;
@@ -1064,6 +1102,11 @@ impl PhysicalPlanBuilder {
                                 internal_column.column_name().to_owned(),
                                 internal_column.data_type(),
                             ),
+                            ColumnEntry::VirtualColumn(VirtualColumn {
+                                column_name,
+                                data_type,
+                                ..
+                            }) => (column_name.clone(), DataType::from(data_type)),
                         };
 
                         // sort item is already a column
@@ -1080,12 +1123,16 @@ impl PhysicalPlanBuilder {
             })
             .transpose()?;
 
+        let virtual_columns = self.build_virtual_columns(&scan.columns);
+
         Ok(PushDownInfo {
             projection: Some(projection),
+            output_columns,
             filter: push_down_filter,
             prewhere: prewhere_info,
             limit: scan.limit,
             order_by: order_by.unwrap_or_default(),
+            virtual_columns,
         })
     }
 

@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::Semaphore;
-use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::Runtime;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
@@ -102,12 +101,16 @@ impl FusePruner {
         // Range filter.
         // if filter_expression is none, an dummy pruner will be returned, which prunes nothing
         let range_pruner =
-            RangePrunerCreator::try_create(func_ctx, &table_schema, filter_expr.as_ref())?;
+            RangePrunerCreator::try_create(func_ctx.clone(), &table_schema, filter_expr.as_ref())?;
 
         // Bloom pruner.
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
-        let bloom_pruner =
-            BloomPrunerCreator::create(func_ctx, &table_schema, dal.clone(), filter_expr.as_ref())?;
+        let bloom_pruner = BloomPrunerCreator::create(
+            func_ctx.clone(),
+            &table_schema,
+            dal.clone(),
+            filter_expr.as_ref(),
+        )?;
 
         // Page pruner, used in native format
         let page_pruner = PagePrunerCreator::try_create(
@@ -119,7 +122,7 @@ impl FusePruner {
         )?;
 
         // Constraint the degree of parallelism
-        // let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_concurrency = {
             let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
             // Prevent us from miss-configured max_storage_io_requests setting, e.g. 0
@@ -134,18 +137,17 @@ impl FusePruner {
         };
 
         // Pruning runtime.
-        // let pruning_runtime = Arc::new(Runtime::with_worker_threads(
-        //     max_threads,
-        //     Some("pruning-worker".to_owned()),
-        // )?);
+        let pruning_runtime = Arc::new(Runtime::with_worker_threads(
+            max_threads,
+            Some("pruning-worker".to_owned()),
+        )?);
         let pruning_semaphore = Arc::new(Semaphore::new(max_concurrency));
         let pruning_stats = Arc::new(FusePruningStatistics::default());
 
         let pruning_ctx = Arc::new(PruningContext {
             ctx: ctx.clone(),
             dal,
-            // TODO: we should switch back to pruning_runtime after we figure out the root cause of hang.
-            pruning_runtime: GlobalIORuntime::instance(),
+            pruning_runtime,
             pruning_semaphore,
             limit_pruner,
             range_pruner,

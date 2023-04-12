@@ -49,7 +49,7 @@ use common_expression::Value;
 use common_formats::FastFieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
-use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::FileFormatOptionsAst;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
 use common_pipeline_core::Pipeline;
@@ -217,7 +217,10 @@ impl InsertInterpreter {
         let (mut stage_info, path) = parse_stage_location(&self.ctx, &attachment.location).await?;
 
         if let Some(ref options) = attachment.file_format_options {
-            stage_info.file_format_options = FileFormatOptions::from_map(options)?;
+            stage_info.file_format_params = FileFormatOptionsAst {
+                options: options.clone(),
+            }
+            .try_into()?;
         }
         if let Some(ref options) = attachment.copy_options {
             stage_info.copy_options.apply(options, true)?;
@@ -395,7 +398,7 @@ impl Interpreter for InsertInterpreter {
                                     transform_input_port,
                                     transform_output_port,
                                     dest_schema.clone(),
-                                    func_ctx,
+                                    func_ctx.clone(),
                                 )
                             },
                         )?;
@@ -403,13 +406,13 @@ impl Interpreter for InsertInterpreter {
                     _ => {}
                 }
             }
-            InsertInputSource::StreamingWithFileFormat(format_options, _, input_context) => {
+            InsertInputSource::StreamingWithFileFormat(params, _, input_context) => {
                 let input_context = input_context.as_ref().expect("must success").clone();
                 input_context
                     .format
                     .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
 
-                if format_options.format.has_inner_schema() {
+                if params.get_type().has_inner_schema() {
                     let dest_schema = plan.schema();
                     let func_ctx = self.ctx.get_function_context()?;
 
@@ -419,7 +422,7 @@ impl Interpreter for InsertInterpreter {
                                 transform_input_port,
                                 transform_output_port,
                                 dest_schema.clone(),
-                                func_ctx,
+                                func_ctx.clone(),
                             )
                         },
                     )?;

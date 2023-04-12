@@ -22,6 +22,8 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::arithmetics_type::ResultTypeOfUnary;
+use common_expression::types::Number;
 use common_expression::types::NumberScalar;
 use common_expression::BlockEntry;
 use common_expression::Column;
@@ -34,9 +36,9 @@ use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::Processor;
-use common_sql::plans::WindowFuncFrame;
-use common_sql::plans::WindowFuncFrameBound;
+use common_sql::plans::WindowFuncFrameUnits;
 
+use super::frame_bound::FrameBound;
 use super::window_function::WindowFuncAggImpl;
 use super::window_function::WindowFunctionImpl;
 use super::WindowFunctionInfo;
@@ -63,7 +65,7 @@ struct WindowBlock {
 /// The input [`DataBlock`] of [`TransformWindow`] should be sorted by partition and order by columns.
 ///
 /// Window function will not change the rows count of the original data.
-pub struct TransformWindow {
+pub struct TransformWindow<T: Number> {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     state: ProcessorState,
@@ -72,7 +74,7 @@ pub struct TransformWindow {
     func: WindowFunctionImpl,
 
     partition_indices: Vec<usize>,
-    order_by: Vec<SortColumnDescription>,
+    order_by: Vec<SortColumnDescription>, /* The second field indicate if the order by column is nullable. */
 
     /// A queue of data blocks that we need to process.
     /// If partition is ended, we may free the data block from front of the queue.
@@ -90,7 +92,19 @@ pub struct TransformWindow {
     partition_ended: bool,
 
     // Frame: [`frame_start`, `frame_end`). `frame_end` is excluded.
-    frame_kind: WindowFuncFrame,
+    frame_unit: WindowFuncFrameUnits,
+    start_bound: FrameBound<T>,
+    end_bound: FrameBound<T>,
+
+    // Only used for ROWS frame, default value: 0. (when not used)
+    rows_start_bound: usize,
+    rows_end_bound: usize,
+
+    // NULL frame is a special RANGE frame, we need to check if the frame is a null frame.
+    need_check_null_frame: bool,
+    // If current frame is a null frame. This is only used when `need_check_null_frame` is true.
+    is_null_frame: bool,
+
     frame_start: RowPtr,
     frame_end: RowPtr,
     frame_started: bool,
@@ -113,69 +127,12 @@ pub struct TransformWindow {
     current_rank: usize,
     current_rank_count: usize,
     current_dense_rank: usize,
+
+    // If `is_empty_frame`, the window function result of non-NULL rows will be NULL.
+    is_empty_frame: bool,
 }
 
-impl TransformWindow {
-    /// Cannot be cloned because every [`TransformWindow`] has one independent `place`.
-    pub fn try_create(
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        func: WindowFunctionInfo,
-        partition_indices: Vec<usize>,
-        order_by_indices: Vec<SortColumnDescription>,
-        frame_kind: WindowFuncFrame,
-    ) -> Result<Box<dyn Processor>> {
-        let transform = Self::create(
-            input,
-            output,
-            func,
-            partition_indices,
-            order_by_indices,
-            frame_kind,
-        )?;
-        Ok(Box::new(transform))
-    }
-
-    pub fn create(
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        func: WindowFunctionInfo,
-        partition_indices: Vec<usize>,
-        order_by_indices: Vec<SortColumnDescription>,
-        frame_kind: WindowFuncFrame,
-    ) -> Result<Self> {
-        let func = WindowFunctionImpl::try_create(func)?;
-        Ok(Self {
-            input,
-            output,
-            state: ProcessorState::Consume,
-            func,
-            partition_indices,
-            order_by: order_by_indices,
-            blocks: VecDeque::new(),
-            outputs: VecDeque::new(),
-            first_block: 0,
-            next_output_block: 0,
-            partition_start: RowPtr::default(),
-            partition_end: RowPtr::default(),
-            partition_ended: false,
-            frame_kind,
-            frame_start: RowPtr::default(),
-            frame_end: RowPtr::default(),
-            frame_started: false,
-            frame_ended: false,
-            prev_frame_start: RowPtr::default(),
-            prev_frame_end: RowPtr::default(),
-            peer_group_start: RowPtr::default(),
-            current_row: RowPtr::default(),
-            current_row_in_partition: 1,
-            current_rank: 1,
-            current_rank_count: 1,
-            current_dense_rank: 1,
-            input_is_finished: false,
-        })
-    }
-
+impl<T: Number> TransformWindow<T> {
     #[inline(always)]
     fn blocks_end(&self) -> RowPtr {
         RowPtr::new(self.first_block + self.blocks.len(), 0)
@@ -298,117 +255,6 @@ impl TransformWindow {
         self.frame_started = self.partition_ended || self.frame_start < self.partition_end;
     }
 
-    /// Used for `RANGE` frame to compare the value of the column at `cmp_row` with the value of the column at `ref_row` add/sub `offset`.
-    ///
-    /// Currently, order by column in `RANGE` frame will be cast to Int64 Column (CAST operator will be added in planner).
-    ///
-    /// Returns the ordering of the value at `cmp_row` with the value at `ref_row` add/sub `offset`.
-    ///
-    /// TODO: no need to cast to i64 and use generic type to support this logic.
-    fn compare_value_with_offset(
-        cmp_col: &[i64],
-        cmp_row: usize,
-        ref_col: &[i64],
-        ref_row: usize,
-        offset: i64,
-        is_preceding: bool,
-    ) -> Ordering {
-        let cmp_v = unsafe { *cmp_col.get_unchecked(cmp_row) };
-        let ref_v = unsafe { *ref_col.get_unchecked(ref_row) };
-
-        let res = if is_preceding {
-            ref_v.checked_sub(offset)
-        } else {
-            ref_v.checked_add(offset)
-        };
-
-        if let Some(res) = res {
-            // Not overflow
-            cmp_v.cmp(&res)
-        } else if is_preceding {
-            Ordering::Greater
-        } else {
-            Ordering::Less
-        }
-    }
-
-    fn advance_frame_start_range(&mut self, n: usize, is_preceding: bool) {
-        let ref_idx = self.order_by[0].offset;
-        let asc = self.order_by[0].asc;
-        let preceding = asc == is_preceding;
-        let ref_col = self
-            .column_at(&self.current_row, ref_idx)
-            .as_number()
-            .unwrap()
-            .as_int64()
-            .unwrap()
-            .clone();
-        while self.frame_start < self.partition_end {
-            let cmp_col = self
-                .column_at(&self.frame_start, ref_idx)
-                .as_number()
-                .unwrap()
-                .as_int64()
-                .unwrap();
-
-            let mut ordering = Self::compare_value_with_offset(
-                cmp_col,
-                self.frame_start.row,
-                &ref_col,
-                self.current_row.row,
-                n as i64,
-                preceding,
-            );
-            if !asc {
-                ordering = ordering.reverse();
-            }
-
-            if ordering.is_ge() {
-                self.frame_started = true;
-                return;
-            }
-
-            self.frame_start = self.advance_row(self.frame_start);
-        }
-        self.frame_started = self.partition_ended;
-    }
-
-    fn advance_frame_start(&mut self) {
-        if self.frame_started {
-            return;
-        }
-        match &self.frame_kind.start_bound {
-            WindowFuncFrameBound::CurrentRow => {
-                debug_assert!(self.partition_start <= self.peer_group_start);
-                debug_assert!(self.peer_group_start < self.partition_end);
-                debug_assert!(self.peer_group_start <= self.current_row);
-
-                self.frame_started = true;
-                self.frame_start = self.peer_group_start;
-            }
-            WindowFuncFrameBound::Preceding(Some(n)) => {
-                if self.frame_kind.units.is_rows() {
-                    self.advance_frame_start_rows_preceding(*n);
-                } else {
-                    self.advance_frame_start_range(*n, true);
-                }
-            }
-            WindowFuncFrameBound::Preceding(_) => {
-                self.frame_started = true;
-            }
-            WindowFuncFrameBound::Following(Some(n)) => {
-                if self.frame_kind.units.is_rows() {
-                    self.advance_frame_start_rows_following(*n);
-                } else {
-                    self.advance_frame_start_range(*n, false);
-                }
-            }
-            WindowFuncFrameBound::Following(_) => {
-                unreachable!()
-            }
-        }
-    }
-
     fn advance_frame_end_rows_preceding(&mut self, n: usize) {
         match (self.current_row_in_partition - 1).cmp(&n) {
             Ordering::Less => {
@@ -459,7 +305,7 @@ impl TransformWindow {
 
         debug_assert!(self.frame_end.row < rows_end);
         while self.frame_end.row < rows_end {
-            if !self.are_peers(&self.current_row, &self.frame_end) {
+            if !self.are_peers(&self.current_row, &self.frame_end, true) {
                 self.frame_ended = true;
                 return;
             }
@@ -473,79 +319,6 @@ impl TransformWindow {
 
         debug_assert!(self.frame_end == self.partition_end);
         self.frame_ended = self.partition_ended;
-    }
-
-    fn advance_frame_end_range(&mut self, n: usize, is_preceding: bool) {
-        let ref_idx = self.order_by[0].offset;
-        let asc = self.order_by[0].asc;
-        let preceding = asc == is_preceding;
-        let ref_col = self
-            .column_at(&self.current_row, ref_idx)
-            .as_number()
-            .unwrap()
-            .as_int64()
-            .unwrap()
-            .clone();
-        while self.frame_end < self.partition_end {
-            let cmp_col = self
-                .column_at(&self.frame_end, ref_idx)
-                .as_number()
-                .unwrap()
-                .as_int64()
-                .unwrap();
-
-            let mut ordering = Self::compare_value_with_offset(
-                cmp_col,
-                self.frame_end.row,
-                &ref_col,
-                self.current_row.row,
-                n as i64,
-                preceding,
-            );
-            if !asc {
-                ordering = ordering.reverse();
-            }
-
-            if ordering.is_gt() {
-                // `self.frame_end` is excluded when aggregating.
-                self.frame_ended = true;
-                return;
-            }
-
-            self.frame_end = self.advance_row(self.frame_end);
-        }
-        self.frame_ended = self.partition_ended;
-    }
-
-    fn advance_frame_end(&mut self) {
-        debug_assert!(!self.frame_ended);
-
-        match &self.frame_kind.end_bound {
-            WindowFuncFrameBound::CurrentRow => {
-                self.advance_frame_end_current_row();
-            }
-            WindowFuncFrameBound::Preceding(Some(n)) => {
-                if self.frame_kind.units.is_rows() {
-                    self.advance_frame_end_rows_preceding(*n);
-                } else {
-                    self.advance_frame_end_range(*n, true)
-                }
-            }
-            WindowFuncFrameBound::Preceding(_) => {
-                unreachable!()
-            }
-            WindowFuncFrameBound::Following(Some(n)) => {
-                if self.frame_kind.units.is_rows() {
-                    self.advance_frame_end_rows_following(*n);
-                } else {
-                    self.advance_frame_end_range(*n, false);
-                }
-            }
-            WindowFuncFrameBound::Following(_) => {
-                self.frame_ended = self.partition_ended;
-                self.frame_end = self.partition_end;
-            }
-        }
     }
 
     // Advance the current row to the next row
@@ -566,11 +339,11 @@ impl TransformWindow {
     }
 
     /// If the two rows are within the same peer group.
-    fn are_peers(&self, lhs: &RowPtr, rhs: &RowPtr) -> bool {
+    fn are_peers(&self, lhs: &RowPtr, rhs: &RowPtr, for_computing_bound: bool) -> bool {
         if lhs == rhs {
             return true;
         }
-        if self.frame_kind.units.is_rows() {
+        if self.frame_unit.is_rows() && for_computing_bound {
             // For ROWS frame, the row's peer is only the row itself.
             return false;
         }
@@ -590,125 +363,6 @@ impl TransformWindow {
             i += 1;
         }
         true
-    }
-
-    /// When adding a [`DataBlock`], we compute the aggregations to the end.
-    ///
-    /// For each row in the input block,
-    /// compute the aggregation result of its window frame and add it intp result column buffer.
-    ///
-    /// If not reach the end bound of the window frame, hold the temporary aggregation value in `state_place`.
-    ///
-    /// Once collect all the results of one input [`DataBlock`], attach the corresponding result column to the input as output.
-    fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
-        if let Some(data) = data {
-            let num_rows = data.num_rows();
-            self.blocks.push_back(WindowBlock {
-                block: data.convert_to_full(),
-                builder: ColumnBuilder::with_capacity(&self.func.return_type()?, num_rows),
-            });
-        }
-
-        // Each loop will do:
-        // 1. Try to advance the partition.
-        // 2. Try to advance the frame (if the frame is not started or ended, break the loop and end the process).
-        // 3.1 Compute the aggregation for current frame.
-        // 3.2 Compute general information (row number, rank, ...)
-        // 4. If the partition is not ended, break the loop;
-        //    else start next partition.
-        loop {
-            // 1.
-            self.advance_partition();
-
-            debug_assert!(self.partition_ended || self.partition_end == self.blocks_end());
-            debug_assert!({
-                if self.partition_ended && self.partition_end == self.blocks_end() {
-                    self.input_is_finished
-                } else {
-                    true
-                }
-            });
-
-            while self.current_row < self.partition_end {
-                if !self.are_peers(&self.peer_group_start, &self.current_row) {
-                    self.peer_group_start = self.current_row;
-                    self.current_dense_rank += 1;
-                    self.current_rank = self.current_row_in_partition;
-                }
-
-                // 2.
-                self.advance_frame_start();
-                if !self.frame_started {
-                    debug_assert!(!self.input_is_finished);
-                    debug_assert!(!self.partition_ended);
-                    break;
-                }
-
-                if self.frame_end < self.frame_start {
-                    self.frame_end = self.frame_start;
-                }
-
-                self.advance_frame_end();
-                if !self.frame_ended {
-                    debug_assert!(!self.input_is_finished);
-                    debug_assert!(!self.partition_ended);
-                    break;
-                }
-
-                // 3.1
-                if let WindowFunctionImpl::Aggregate(agg) = &self.func {
-                    self.apply_aggregate(agg)?;
-                }
-
-                self.merge_result_of_current_row()?;
-
-                // 3.2
-                self.current_row = self.advance_row(self.current_row);
-                self.current_row_in_partition += 1;
-                self.prev_frame_start = self.frame_start;
-                self.prev_frame_end = self.frame_end;
-                self.frame_started = false;
-                self.frame_ended = false;
-            }
-
-            if self.input_is_finished {
-                return Ok(());
-            }
-
-            // 4.
-            if !self.partition_ended {
-                debug_assert!(self.partition_end == self.blocks_end());
-                break;
-            }
-
-            // start to new partition
-            {
-                // reset function
-                self.func.reset();
-
-                // reset partition
-                self.partition_start = self.partition_end;
-                self.partition_end = self.advance_row(self.partition_end);
-                self.partition_ended = false;
-
-                // reset frames
-                self.frame_start = self.partition_start;
-                self.frame_end = self.partition_start;
-                self.prev_frame_start = self.frame_start;
-                self.prev_frame_end = self.frame_end;
-
-                // reset peer group
-                self.peer_group_start = self.partition_start;
-
-                // reset row number, rank, ...
-                self.current_row_in_partition = 1;
-                self.current_rank = 1;
-                self.current_rank_count = 1;
-                self.current_dense_rank = 1;
-            }
-        }
-
-        Ok(())
     }
 
     fn check_outputs(&mut self) {
@@ -821,7 +475,500 @@ impl TransformWindow {
 
         Ok(())
     }
+
+    #[inline]
+    fn if_need_check_null_frame(&self) -> bool {
+        self.frame_unit.is_range() && self.order_by.len() == 1 && self.order_by[0].is_nullable
+    }
+
+    #[inline]
+    fn is_in_null_frame(&self) -> bool {
+        // Only RANGE frame could be null frame.
+        debug_assert!(self.frame_unit.is_range());
+        debug_assert!(self.order_by.len() == 1);
+        let col = self.column_at(&self.current_row, self.order_by[0].offset);
+        let value = unsafe { col.index_unchecked(self.current_row.row) };
+        if value.is_null() {
+            return true;
+        }
+        false
+    }
 }
+
+// For ROWS frame
+impl TransformWindow<u64> {
+    /// Cannot be cloned because every [`TransformWindow`] has one independent `place`.
+    pub fn try_create_rows(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        func: WindowFunctionInfo,
+        partition_indices: Vec<usize>,
+        order_by: Vec<SortColumnDescription>,
+        bounds: (FrameBound<u64>, FrameBound<u64>),
+    ) -> Result<Self> {
+        let func = WindowFunctionImpl::try_create(func)?;
+        let (start_bound, end_bound) = bounds;
+
+        let is_empty_frame = start_bound > end_bound;
+
+        let rows_start_bound = start_bound.get_inner().unwrap_or_default() as usize;
+        let rows_end_bound = end_bound.get_inner().unwrap_or_default() as usize;
+
+        Ok(Self {
+            input,
+            output,
+            state: ProcessorState::Consume,
+            func,
+            partition_indices,
+            order_by,
+            blocks: VecDeque::new(),
+            outputs: VecDeque::new(),
+            first_block: 0,
+            next_output_block: 0,
+            partition_start: RowPtr::default(),
+            partition_end: RowPtr::default(),
+            partition_ended: false,
+            frame_unit: WindowFuncFrameUnits::Rows,
+            start_bound,
+            end_bound,
+            rows_start_bound,
+            rows_end_bound,
+            need_check_null_frame: false,
+            is_null_frame: false,
+            frame_start: RowPtr::default(),
+            frame_end: RowPtr::default(),
+            frame_started: false,
+            frame_ended: false,
+            prev_frame_start: RowPtr::default(),
+            prev_frame_end: RowPtr::default(),
+            peer_group_start: RowPtr::default(),
+            current_row: RowPtr::default(),
+            current_row_in_partition: 1,
+            current_rank: 1,
+            current_rank_count: 1,
+            current_dense_rank: 1,
+            input_is_finished: false,
+            is_empty_frame,
+        })
+    }
+}
+
+// For RANGE frame
+impl<T> TransformWindow<T>
+where T: Number + ResultTypeOfUnary
+{
+    /// Cannot be cloned because every [`TransformWindow`] has one independent `place`.
+    pub fn try_create_range(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        func: WindowFunctionInfo,
+        partition_indices: Vec<usize>,
+        order_by: Vec<SortColumnDescription>,
+        bounds: (FrameBound<T>, FrameBound<T>),
+    ) -> Result<Self> {
+        let func = WindowFunctionImpl::try_create(func)?;
+        let (start_bound, end_bound) = bounds;
+
+        let is_empty_frame = start_bound > end_bound;
+
+        // If the window clause is a specific RANGE window, we should deal with the frame with all NULL values.
+        let need_check_null_frame = if order_by.len() == 1 {
+            order_by[0].is_nullable
+        } else {
+            false
+        };
+
+        Ok(Self {
+            input,
+            output,
+            state: ProcessorState::Consume,
+            func,
+            partition_indices,
+            order_by,
+            blocks: VecDeque::new(),
+            outputs: VecDeque::new(),
+            first_block: 0,
+            next_output_block: 0,
+            partition_start: RowPtr::default(),
+            partition_end: RowPtr::default(),
+            partition_ended: false,
+            frame_unit: WindowFuncFrameUnits::Range,
+            start_bound,
+            end_bound,
+            rows_start_bound: 0,
+            rows_end_bound: 0,
+            need_check_null_frame,
+            is_null_frame: false,
+            frame_start: RowPtr::default(),
+            frame_end: RowPtr::default(),
+            frame_started: false,
+            frame_ended: false,
+            prev_frame_start: RowPtr::default(),
+            prev_frame_end: RowPtr::default(),
+            peer_group_start: RowPtr::default(),
+            current_row: RowPtr::default(),
+            current_row_in_partition: 1,
+            current_rank: 1,
+            current_rank_count: 1,
+            current_dense_rank: 1,
+            input_is_finished: false,
+            is_empty_frame,
+        })
+    }
+
+    /// Used for `RANGE` frame to compare the value of the column at `cmp_row` with the value of the column at `ref_row` add/sub `offset`.
+    ///
+    /// Returns the ordering of the value at `cmp_row` with the value at `ref_row` add/sub `offset`.
+    #[inline]
+    fn compare_value_with_offset(cmp_v: T, ref_v: T, offset: T, is_preceding: bool) -> Ordering {
+        let res = if is_preceding {
+            ref_v.checked_sub(offset)
+        } else {
+            ref_v.checked_add(offset)
+        };
+
+        if let Some(res) = res {
+            // Not overflow
+            cmp_v.cmp(&res)
+        } else if is_preceding {
+            Ordering::Greater
+        } else {
+            Ordering::Less
+        }
+    }
+
+    fn advance_frame_start(&mut self) {
+        if self.frame_started {
+            return;
+        }
+        match &self.start_bound {
+            FrameBound::CurrentRow => {
+                debug_assert!(self.partition_start <= self.peer_group_start);
+                debug_assert!(self.peer_group_start < self.partition_end);
+                debug_assert!(self.peer_group_start <= self.current_row);
+
+                self.frame_started = true;
+                if self.frame_unit.is_range() {
+                    self.frame_start = self.peer_group_start;
+                } else {
+                    self.frame_start = self.current_row;
+                }
+            }
+            FrameBound::Preceding(Some(n)) => {
+                debug_assert!(self.frame_unit.is_rows() || self.order_by.len() == 1);
+
+                if self.is_null_frame {
+                    self.frame_started = true;
+                    self.frame_start = self.peer_group_start;
+                } else if self.frame_unit.is_rows() {
+                    self.advance_frame_start_rows_preceding(self.rows_start_bound);
+                } else if self.order_by[0].is_nullable {
+                    self.advance_frame_start_nullable_range(*n, true);
+                } else {
+                    self.advance_frame_start_range(*n, true);
+                }
+            }
+            FrameBound::Preceding(_) => {
+                self.frame_started = true;
+            }
+            FrameBound::Following(Some(n)) => {
+                debug_assert!(self.frame_unit.is_rows() || self.order_by.len() == 1);
+
+                if self.is_null_frame {
+                    self.frame_started = true;
+                    self.frame_start = self.peer_group_start;
+                } else if self.frame_unit.is_rows() {
+                    self.advance_frame_start_rows_following(self.rows_start_bound);
+                } else if self.order_by[0].is_nullable {
+                    self.advance_frame_start_nullable_range(*n, false);
+                } else {
+                    self.advance_frame_start_range(*n, false);
+                }
+            }
+            FrameBound::Following(_) => {
+                unreachable!()
+            }
+        }
+    }
+
+    fn advance_frame_end(&mut self) {
+        debug_assert!(!self.frame_ended);
+
+        match &self.end_bound {
+            FrameBound::CurrentRow => {
+                self.advance_frame_end_current_row();
+            }
+            FrameBound::Preceding(Some(n)) => {
+                debug_assert!(self.frame_unit.is_rows() || self.order_by.len() == 1);
+
+                if self.is_null_frame {
+                    self.advance_frame_end_current_row();
+                } else if self.frame_unit.is_rows() {
+                    self.advance_frame_end_rows_preceding(self.rows_end_bound);
+                } else if self.order_by[0].is_nullable {
+                    self.advance_frame_end_nullable_range(*n, true);
+                } else {
+                    self.advance_frame_end_range(*n, true)
+                }
+            }
+            FrameBound::Preceding(_) => {
+                unreachable!()
+            }
+            FrameBound::Following(Some(n)) => {
+                debug_assert!(self.frame_unit.is_rows() || self.order_by.len() == 1);
+
+                if self.is_null_frame {
+                    self.advance_frame_end_current_row();
+                } else if self.frame_unit.is_rows() {
+                    self.advance_frame_end_rows_following(self.rows_end_bound);
+                } else if self.order_by[0].is_nullable {
+                    self.advance_frame_end_nullable_range(*n, false);
+                } else {
+                    self.advance_frame_end_range(*n, false);
+                }
+            }
+            FrameBound::Following(_) => {
+                self.frame_ended = self.partition_ended;
+                self.frame_end = self.partition_end;
+            }
+        }
+    }
+
+    /// When adding a [`DataBlock`], we compute the aggregations to the end.
+    ///
+    /// For each row in the input block,
+    /// compute the aggregation result of its window frame and add it intp result column buffer.
+    ///
+    /// If not reach the end bound of the window frame, hold the temporary aggregation value in `state_place`.
+    ///
+    /// Once collect all the results of one input [`DataBlock`], attach the corresponding result column to the input as output.
+    fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
+        if let Some(data) = data {
+            let num_rows = data.num_rows();
+            self.blocks.push_back(WindowBlock {
+                block: data.convert_to_full(),
+                builder: ColumnBuilder::with_capacity(&self.func.return_type()?, num_rows),
+            });
+        }
+
+        // Each loop will do:
+        // 1. Try to advance the partition.
+        // 2. Try to advance the frame (if the frame is not started or ended, break the loop and end the process).
+        // 3.1 Compute the aggregation for current frame.
+        // 3.2 Compute general information (row number, rank, ...)
+        // 4. If the partition is not ended, break the loop;
+        //    else start next partition.
+        loop {
+            // 1.
+            self.advance_partition();
+
+            debug_assert!(self.partition_ended || self.partition_end == self.blocks_end());
+            debug_assert!({
+                if self.partition_ended && self.partition_end == self.blocks_end() {
+                    self.input_is_finished
+                } else {
+                    true
+                }
+            });
+
+            while self.current_row < self.partition_end {
+                if !self.are_peers(&self.peer_group_start, &self.current_row, false) {
+                    self.peer_group_start = self.current_row;
+                    self.current_dense_rank += 1;
+                    self.current_rank = self.current_row_in_partition;
+
+                    // If current peer group is a null frame, there will be no null frame in this partition again;
+                    // if current peer group is not a null frame, we may need to check it in the codes below.
+                    self.is_null_frame = false;
+                } else if self.is_null_frame {
+                    // Only one null frame can exist in one partition, so we don't need to check it again.
+                    self.need_check_null_frame = false;
+                }
+
+                // 2.
+                if self.need_check_null_frame {
+                    self.is_null_frame = self.is_in_null_frame();
+                }
+
+                if self.is_empty_frame && !self.is_null_frame {
+                    // Non-NULL empty frame, no need to advance bounds.
+                    self.func.reset();
+                } else {
+                    self.advance_frame_start();
+                    if !self.frame_started {
+                        debug_assert!(!self.input_is_finished);
+                        debug_assert!(!self.partition_ended);
+                        break;
+                    }
+
+                    if self.frame_end < self.frame_start {
+                        self.frame_end = self.frame_start;
+                    }
+
+                    self.advance_frame_end();
+                    if !self.frame_ended {
+                        debug_assert!(!self.input_is_finished);
+                        debug_assert!(!self.partition_ended);
+                        break;
+                    }
+
+                    // 3.1
+                    if let WindowFunctionImpl::Aggregate(agg) = &self.func {
+                        self.apply_aggregate(agg)?;
+                    }
+                }
+
+                self.merge_result_of_current_row()?;
+
+                // 3.2
+                self.current_row = self.advance_row(self.current_row);
+                self.current_row_in_partition += 1;
+                self.prev_frame_start = self.frame_start;
+                self.prev_frame_end = self.frame_end;
+                self.frame_started = false;
+                self.frame_ended = false;
+            }
+
+            if self.input_is_finished {
+                return Ok(());
+            }
+
+            // 4.
+            if !self.partition_ended {
+                debug_assert!(self.partition_end == self.blocks_end());
+                break;
+            }
+
+            // start to new partition
+            {
+                // reset function
+                self.func.reset();
+
+                // reset partition
+                self.partition_start = self.partition_end;
+                self.partition_end = self.advance_row(self.partition_end);
+                self.partition_ended = false;
+
+                // reset frames
+                self.need_check_null_frame = self.if_need_check_null_frame();
+                self.is_null_frame = false;
+                self.frame_start = self.partition_start;
+                self.frame_end = self.partition_start;
+                self.prev_frame_start = self.frame_start;
+                self.prev_frame_end = self.frame_end;
+
+                // reset peer group
+                self.peer_group_start = self.partition_start;
+
+                // reset row number, rank, ...
+                self.current_row_in_partition = 1;
+                self.current_rank = 1;
+                self.current_rank_count = 1;
+                self.current_dense_rank = 1;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+macro_rules! impl_advance_frame_bound_method {
+    ($bound: ident, $op: ident) => {
+        paste::paste! {
+            impl<T: Number + ResultTypeOfUnary> TransformWindow<T> {
+                fn [<advance_frame_ $bound _range>](&mut self, n: T, is_preceding: bool) {
+                    let SortColumnDescription {
+                        offset,
+                        asc,
+                        ..
+                    } = self.order_by[0];
+                    let preceding = asc == is_preceding;
+                    let ref_col = self
+                        .column_at(&self.current_row, offset)
+                        .as_number()
+                        .unwrap();
+                    let ref_col = T::try_downcast_column(ref_col).unwrap();
+                    let ref_v = unsafe { ref_col.get_unchecked(self.current_row.row) };
+                    while self.[<frame_ $bound>] < self.partition_end {
+                        let cmp_col = self
+                            .column_at(&self.[<frame_ $bound>], offset)
+                            .as_number()
+                            .unwrap();
+                        let cmp_col = T::try_downcast_column(cmp_col).unwrap();
+                        let cmp_v = unsafe { cmp_col.get_unchecked(self.[<frame_ $bound>].row) };
+                        let mut ordering = Self::compare_value_with_offset(*cmp_v, *ref_v, n, preceding);
+                        if !asc {
+                            ordering = ordering.reverse();
+                        }
+
+                        if ordering.$op() {
+                            // `self.frame_end` is excluded when aggregating.
+                            self.[<frame_ $bound ed>] = true;
+                            return;
+                        }
+
+                        self.[<frame_ $bound>] = self.advance_row(self.[<frame_ $bound>]);
+                    }
+                    self.[<frame_ $bound ed>] = self.partition_ended;
+                }
+
+                fn [<advance_frame_ $bound _nullable_range>](&mut self, n: T, is_preceding: bool) {
+                    let SortColumnDescription {
+                        offset: ref_idx,
+                        asc,
+                        nulls_first,
+                        ..
+                    } = self.order_by[0];
+                    let preceding = asc == is_preceding;
+                    // Current row should not be in the null frame.
+                    let ref_col = &self
+                        .column_at(&self.current_row, ref_idx)
+                        .as_nullable()
+                        .unwrap()
+                        .column;
+                    let ref_col = T::try_downcast_column(ref_col.as_number().unwrap()).unwrap();
+                    let ref_v = unsafe { ref_col.get_unchecked(self.current_row.row) };
+                    while self.[<frame_ $bound>] < self.partition_end {
+                        let col = self
+                            .column_at(&self.[<frame_ $bound>], ref_idx)
+                            .as_nullable()
+                            .unwrap();
+                        let valdity = &col.validity;
+                        if unsafe { !valdity.get_bit_unchecked(self.[<frame_ $bound>].row) } {
+                            // Need to skip null rows.
+                            if nulls_first {
+                                // The null rows are at front.
+                                self.[<frame_ $bound>] = self.advance_row(self.[<frame_ $bound>]);
+                                continue;
+                            } else {
+                                // The null rows are at back.
+                                self.[<frame_ $bound ed>] = true;
+                                return;
+                            }
+                        }
+                        let cmp_col = T::try_downcast_column(col.column.as_number().unwrap()).unwrap();
+                        let cmp_v = unsafe { cmp_col.get_unchecked(self.[<frame_ $bound>].row) };
+                        let mut ordering = Self::compare_value_with_offset(*cmp_v, *ref_v, n, preceding);
+                        if !asc {
+                            ordering = ordering.reverse();
+                        }
+
+                        if ordering.$op() {
+                            self.[<frame_ $bound ed>] = true;
+                            return;
+                        }
+
+                        self.[<frame_ $bound>] = self.advance_row(self.[<frame_ $bound>]);
+                    }
+                    self.[<frame_ $bound ed>] = self.partition_ended;
+                }
+            }
+        }
+    };
+}
+
+impl_advance_frame_bound_method!(start, is_ge);
+impl_advance_frame_bound_method!(end, is_gt);
 
 enum ProcessorState {
     Consume,
@@ -830,7 +977,9 @@ enum ProcessorState {
 }
 
 #[async_trait::async_trait]
-impl Processor for TransformWindow {
+impl<T> Processor for TransformWindow<T>
+where T: Number + ResultTypeOfUnary
+{
     fn name(&self) -> String {
         "Transform Window".to_string()
     }
@@ -925,38 +1074,39 @@ mod tests {
     use common_pipeline_core::processors::port::OutputPort;
     use common_pipeline_core::processors::processor::Event;
     use common_pipeline_core::processors::Processor;
-    use common_sql::plans::WindowFuncFrame;
-    use common_sql::plans::WindowFuncFrameBound;
     use common_sql::plans::WindowFuncFrameUnits;
 
     use super::TransformWindow;
     use super::WindowBlock;
     use crate::pipelines::processors::transforms::window::transform_window::RowPtr;
+    use crate::pipelines::processors::transforms::window::FrameBound;
     use crate::pipelines::processors::transforms::window::WindowFunctionInfo;
 
     fn get_transform_window(
-        window_frame: WindowFuncFrame,
+        _unit: WindowFuncFrameUnits,
+        bounds: (FrameBound<u64>, FrameBound<u64>),
         arg_type: DataType,
-    ) -> Result<TransformWindow> {
+    ) -> Result<TransformWindow<u64>> {
         let agg = AggregateFunctionFactory::instance().get("sum", vec![], vec![arg_type])?;
         let func = WindowFunctionInfo::Aggregate(agg, vec![0]);
-        TransformWindow::create(
+        TransformWindow::try_create_rows(
             InputPort::create(),
             OutputPort::create(),
             func,
             vec![0],
             vec![],
-            window_frame,
+            bounds,
         )
     }
 
     fn get_transform_window_with_data(
-        window_frame: WindowFuncFrame,
+        unit: WindowFuncFrameUnits,
+        bounds: (FrameBound<u64>, FrameBound<u64>),
         column: Column,
-    ) -> Result<TransformWindow> {
+    ) -> Result<TransformWindow<u64>> {
         let data_type = column.data_type();
         let num_rows = column.len();
-        let mut transform = get_transform_window(window_frame, data_type.clone())?;
+        let mut transform = get_transform_window(unit, bounds, data_type.clone())?;
         transform.blocks.push_back(WindowBlock {
             block: DataBlock::new_from_columns(vec![column]),
             builder: ColumnBuilder::with_capacity(&data_type, num_rows),
@@ -968,11 +1118,8 @@ mod tests {
     fn test_partition_advance() -> Result<()> {
         {
             let mut transform = get_transform_window_with_data(
-                WindowFuncFrame {
-                    units: WindowFuncFrameUnits::Rows,
-                    start_bound: WindowFuncFrameBound::CurrentRow,
-                    end_bound: WindowFuncFrameBound::CurrentRow,
-                },
+                WindowFuncFrameUnits::Rows,
+                (FrameBound::CurrentRow, FrameBound::CurrentRow),
                 Int32Type::from_data(vec![1, 1, 1]),
             )?;
 
@@ -984,11 +1131,8 @@ mod tests {
 
         {
             let mut transform = get_transform_window_with_data(
-                WindowFuncFrame {
-                    units: WindowFuncFrameUnits::Rows,
-                    start_bound: WindowFuncFrameBound::CurrentRow,
-                    end_bound: WindowFuncFrameBound::CurrentRow,
-                },
+                WindowFuncFrameUnits::Rows,
+                (FrameBound::CurrentRow, FrameBound::CurrentRow),
                 Int32Type::from_data(vec![1, 1, 2]),
             )?;
 
@@ -1004,11 +1148,11 @@ mod tests {
     fn test_frame_advance() -> Result<()> {
         {
             let mut transform = get_transform_window_with_data(
-                WindowFuncFrame {
-                    units: WindowFuncFrameUnits::Rows,
-                    start_bound: WindowFuncFrameBound::Following(Some(4)),
-                    end_bound: WindowFuncFrameBound::Following(Some(5)),
-                },
+                WindowFuncFrameUnits::Rows,
+                (
+                    FrameBound::Following(Some(4)),
+                    FrameBound::Following(Some(5)),
+                ),
                 Int32Type::from_data(vec![1, 1, 1]),
             )?;
 
@@ -1023,11 +1167,11 @@ mod tests {
 
         {
             let mut transform = get_transform_window_with_data(
-                WindowFuncFrame {
-                    units: WindowFuncFrameUnits::Rows,
-                    start_bound: WindowFuncFrameBound::Preceding(Some(2)),
-                    end_bound: WindowFuncFrameBound::Following(Some(5)),
-                },
+                WindowFuncFrameUnits::Rows,
+                (
+                    FrameBound::Preceding(Some(2)),
+                    FrameBound::Following(Some(5)),
+                ),
                 Int32Type::from_data(vec![1, 1, 1]),
             )?;
 
@@ -1047,11 +1191,11 @@ mod tests {
 
         {
             let mut transform = get_transform_window_with_data(
-                WindowFuncFrame {
-                    units: WindowFuncFrameUnits::Rows,
-                    start_bound: WindowFuncFrameBound::Preceding(Some(2)),
-                    end_bound: WindowFuncFrameBound::Following(Some(1)),
-                },
+                WindowFuncFrameUnits::Rows,
+                (
+                    FrameBound::Preceding(Some(2)),
+                    FrameBound::Following(Some(1)),
+                ),
                 Int32Type::from_data(vec![1, 1, 1]),
             )?;
 
@@ -1074,11 +1218,8 @@ mod tests {
 
         {
             let mut transform = get_transform_window_with_data(
-                WindowFuncFrame {
-                    units: WindowFuncFrameUnits::Rows,
-                    start_bound: WindowFuncFrameBound::Preceding(None),
-                    end_bound: WindowFuncFrameBound::Following(None),
-                },
+                WindowFuncFrameUnits::Rows,
+                (FrameBound::Preceding(None), FrameBound::Following(None)),
                 Int32Type::from_data(vec![1, 1, 1, 2]),
             )?;
 
@@ -1106,11 +1247,8 @@ mod tests {
     fn test_add_block() -> Result<()> {
         {
             let mut transform = get_transform_window(
-                WindowFuncFrame {
-                    units: WindowFuncFrameUnits::Rows,
-                    start_bound: WindowFuncFrameBound::Preceding(None),
-                    end_bound: WindowFuncFrameBound::Following(None),
-                },
+                WindowFuncFrameUnits::Rows,
+                (FrameBound::Preceding(None), FrameBound::Following(None)),
                 DataType::Number(NumberDataType::Int32),
             )?;
 
@@ -1142,11 +1280,8 @@ mod tests {
 
         {
             let mut transform = get_transform_window(
-                WindowFuncFrame {
-                    units: WindowFuncFrameUnits::Rows,
-                    start_bound: WindowFuncFrameBound::Preceding(None),
-                    end_bound: WindowFuncFrameBound::Following(None),
-                },
+                WindowFuncFrameUnits::Rows,
+                (FrameBound::Preceding(None), FrameBound::Following(None)),
                 DataType::Number(NumberDataType::Int32),
             )?;
 
@@ -1204,11 +1339,8 @@ mod tests {
 
         {
             let mut transform = get_transform_window(
-                WindowFuncFrame {
-                    units: WindowFuncFrameUnits::Rows,
-                    start_bound: WindowFuncFrameBound::Preceding(None),
-                    end_bound: WindowFuncFrameBound::Following(None),
-                },
+                WindowFuncFrameUnits::Rows,
+                (FrameBound::Preceding(None), FrameBound::Following(None)),
                 DataType::Number(NumberDataType::Int32),
             )?;
 
@@ -1266,11 +1398,8 @@ mod tests {
 
         {
             let mut transform = get_transform_window(
-                WindowFuncFrame {
-                    units: WindowFuncFrameUnits::Rows,
-                    start_bound: WindowFuncFrameBound::Preceding(None),
-                    end_bound: WindowFuncFrameBound::Following(None),
-                },
+                WindowFuncFrameUnits::Rows,
+                (FrameBound::Preceding(None), FrameBound::Following(None)),
                 DataType::Number(NumberDataType::Int32),
             )?;
 
@@ -1328,11 +1457,8 @@ mod tests {
 
         {
             let mut transform = get_transform_window(
-                WindowFuncFrame {
-                    units: WindowFuncFrameUnits::Rows,
-                    start_bound: WindowFuncFrameBound::Preceding(None),
-                    end_bound: WindowFuncFrameBound::Following(Some(1)),
-                },
+                WindowFuncFrameUnits::Rows,
+                (FrameBound::Preceding(None), FrameBound::Following(Some(1))),
                 DataType::Number(NumberDataType::Int32),
             )?;
 
@@ -1390,11 +1516,11 @@ mod tests {
 
         {
             let mut transform = get_transform_window(
-                WindowFuncFrame {
-                    units: WindowFuncFrameUnits::Rows,
-                    start_bound: WindowFuncFrameBound::Preceding(Some(1)),
-                    end_bound: WindowFuncFrameBound::Following(Some(1)),
-                },
+                WindowFuncFrameUnits::Rows,
+                (
+                    FrameBound::Preceding(Some(1)),
+                    FrameBound::Following(Some(1)),
+                ),
                 DataType::Number(NumberDataType::Int32),
             )?;
 
@@ -1452,11 +1578,8 @@ mod tests {
 
         {
             let mut transform = get_transform_window(
-                WindowFuncFrame {
-                    units: WindowFuncFrameUnits::Rows,
-                    start_bound: WindowFuncFrameBound::Preceding(None),
-                    end_bound: WindowFuncFrameBound::CurrentRow,
-                },
+                WindowFuncFrameUnits::Rows,
+                (FrameBound::Preceding(None), FrameBound::CurrentRow),
                 DataType::Number(NumberDataType::Int32),
             )?;
 
@@ -1514,11 +1637,8 @@ mod tests {
 
         {
             let mut transform = get_transform_window(
-                WindowFuncFrame {
-                    units: WindowFuncFrameUnits::Rows,
-                    start_bound: WindowFuncFrameBound::Preceding(Some(1)),
-                    end_bound: WindowFuncFrameBound::CurrentRow,
-                },
+                WindowFuncFrameUnits::Rows,
+                (FrameBound::Preceding(Some(1)), FrameBound::CurrentRow),
                 DataType::Number(NumberDataType::Int32),
             )?;
 
@@ -1579,20 +1699,21 @@ mod tests {
 
     #[allow(clippy::type_complexity)]
     fn get_transform_window_and_ports(
-        window_frame: WindowFuncFrame,
+        _unit: WindowFuncFrameUnits,
+        bounds: (FrameBound<u64>, FrameBound<u64>),
     ) -> Result<(Box<dyn Processor>, Arc<InputPort>, Arc<OutputPort>)> {
         let agg = AggregateFunctionFactory::instance()
             .get("sum", vec![], vec![DataType::Number(NumberDataType::Int32)])?;
         let func = WindowFunctionInfo::Aggregate(agg, vec![0]);
         let input = InputPort::create();
         let output = OutputPort::create();
-        let transform = TransformWindow::create(
+        let transform = TransformWindow::try_create_rows(
             input.clone(),
             output.clone(),
             func,
             vec![0],
             vec![],
-            window_frame,
+            bounds,
         )?;
 
         Ok((Box::new(transform), input, output))
@@ -1603,11 +1724,13 @@ mod tests {
         {
             let upstream_output = OutputPort::create();
             let downstream_input = InputPort::create();
-            let (mut transform, input, output) = get_transform_window_and_ports(WindowFuncFrame {
-                units: WindowFuncFrameUnits::Rows,
-                start_bound: WindowFuncFrameBound::Preceding(Some(1)),
-                end_bound: WindowFuncFrameBound::Following(Some(1)),
-            })?;
+            let (mut transform, input, output) = get_transform_window_and_ports(
+                WindowFuncFrameUnits::Rows,
+                (
+                    FrameBound::Preceding(Some(1)),
+                    FrameBound::Following(Some(1)),
+                ),
+            )?;
 
             unsafe {
                 connect(&input, &upstream_output);
@@ -1679,11 +1802,10 @@ mod tests {
         {
             let upstream_output = OutputPort::create();
             let downstream_input = InputPort::create();
-            let (mut transform, input, output) = get_transform_window_and_ports(WindowFuncFrame {
-                units: WindowFuncFrameUnits::Rows,
-                start_bound: WindowFuncFrameBound::Preceding(None),
-                end_bound: WindowFuncFrameBound::Following(None),
-            })?;
+            let (mut transform, input, output) = get_transform_window_and_ports(
+                WindowFuncFrameUnits::Rows,
+                (FrameBound::Preceding(None), FrameBound::Following(None)),
+            )?;
 
             unsafe {
                 connect(&input, &upstream_output);
@@ -1774,11 +1896,13 @@ mod tests {
         {
             let upstream_output = OutputPort::create();
             let downstream_input = InputPort::create();
-            let (mut transform, input, output) = get_transform_window_and_ports(WindowFuncFrame {
-                units: WindowFuncFrameUnits::Rows,
-                start_bound: WindowFuncFrameBound::Preceding(Some(3)),
-                end_bound: WindowFuncFrameBound::Preceding(Some(1)),
-            })?;
+            let (mut transform, input, output) = get_transform_window_and_ports(
+                WindowFuncFrameUnits::Rows,
+                (
+                    FrameBound::Preceding(Some(3)),
+                    FrameBound::Preceding(Some(1)),
+                ),
+            )?;
 
             unsafe {
                 connect(&input, &upstream_output);

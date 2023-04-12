@@ -53,8 +53,8 @@ pub fn via_exchange_source(
     let flight_receivers = exchange_manager.get_flight_receiver(&exchange_params)?;
 
     let last_output_len = pipeline.output_len();
-    let flight_exchanges_len = flight_receivers.len();
     exchange_source_reader::via_reader(last_output_len, pipeline, flight_receivers);
 
-    injector.apply_merge_deserializer(flight_exchanges_len, params, pipeline)
+    pipeline.resize(last_output_len)?;
+    injector.apply_merge_deserializer(params, pipeline)
 }

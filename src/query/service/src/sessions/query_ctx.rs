@@ -37,6 +37,7 @@ use common_catalog::plan::Partitions;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_context::StageAttachment;
+use common_config::GlobalConfig;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -44,12 +45,14 @@ use common_expression::date_helper::TzFactory;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
-use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::FileFormatParams;
+use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableInfo;
+use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::DataOperator;
@@ -60,6 +63,8 @@ use common_storages_parquet::ParquetTable;
 use common_storages_result_cache::ResultScan;
 use common_storages_stage::StageTable;
 use common_users::UserApiProvider;
+use dashmap::mapref::multiple::RefMulti;
+use dashmap::DashMap;
 use parking_lot::RwLock;
 use tracing::debug;
 
@@ -210,10 +215,6 @@ impl QueryContext {
 
     pub fn get_created_time(&self) -> SystemTime {
         self.shared.created_time
-    }
-
-    pub fn get_on_error_map(&self) -> Option<HashMap<String, ErrorCode>> {
-        self.shared.get_on_error_map()
     }
 }
 
@@ -398,7 +399,17 @@ impl TableContext for QueryContext {
     fn get_function_context(&self) -> Result<FunctionContext> {
         let tz = self.get_settings().get_timezone()?;
         let tz = TzFactory::instance().get_by_name(&tz)?;
-        Ok(FunctionContext { tz })
+
+        let query_config = &GlobalConfig::instance().query;
+
+        Ok(FunctionContext {
+            tz,
+
+            openai_api_key: query_config.openai_api_key.clone(),
+            openai_api_base_url: query_config.openai_api_base_url.clone(),
+            openai_api_embedding_model: query_config.openai_api_embedding_model.clone(),
+            openai_api_completion_model: query_config.openai_api_completion_model.clone(),
+        })
     }
 
     fn get_connection_id(&self) -> String {
@@ -445,8 +456,37 @@ impl TableContext for QueryContext {
             .update_query_ids_results(query_id, Some(result_cache_key))
     }
 
-    fn set_on_error_map(&self, map: Option<HashMap<String, ErrorCode>>) {
+    fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>> {
+        self.shared.get_on_error_map()
+    }
+
+    fn set_on_error_map(&self, map: Arc<DashMap<String, HashMap<u16, InputError>>>) {
         self.shared.set_on_error_map(map);
+    }
+
+    fn get_on_error_mode(&self) -> Option<OnErrorMode> {
+        self.shared.get_on_error_mode()
+    }
+    fn set_on_error_mode(&self, mode: OnErrorMode) {
+        self.shared.set_on_error_mode(mode)
+    }
+
+    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
+        if let Some(on_error_map) = self.get_on_error_map() {
+            if on_error_map.is_empty() {
+                return None;
+            }
+            let mut m = HashMap::<String, ErrorCode>::new();
+            on_error_map
+                .iter()
+                .for_each(|x: RefMulti<String, HashMap<u16, InputError>>| {
+                    if let Some(max_v) = x.value().iter().max_by_key(|entry| entry.1.num) {
+                        m.insert(x.key().to_string(), max_v.1.err.clone());
+                    }
+                });
+            return Some(m);
+        }
+        None
     }
 
     fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
@@ -471,19 +511,18 @@ impl TableContext for QueryContext {
     }
 
     #[async_backtrace::framed]
-    async fn get_file_format(&self, name: &str) -> Result<FileFormatOptions> {
-        let opt = match StageFileFormatType::from_str(name) {
-            Ok(typ) => FileFormatOptions::default_by_type(typ),
+    async fn get_file_format(&self, name: &str) -> Result<FileFormatParams> {
+        match StageFileFormatType::from_str(name) {
+            Ok(typ) => FileFormatParams::default_by_type(typ),
             Err(_) => {
                 let user_mgr = UserApiProvider::instance();
                 let tenant = self.get_tenant();
-                user_mgr
+                Ok(user_mgr
                     .get_file_format(&tenant, name)
                     .await?
-                    .file_format_options
+                    .file_format_params)
             }
-        };
-        Ok(opt)
+        }
     }
 
     /// Fetch a Table by db and table name.

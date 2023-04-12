@@ -21,6 +21,7 @@ use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
@@ -71,7 +72,7 @@ pub trait Catalog: DynClone + Send + Sync {
     // Operation with database.
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply>;
 
-    async fn drop_database(&self, req: DropDatabaseReq) -> Result<()>;
+    async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply>;
 
     async fn undrop_database(&self, req: UndropDatabaseReq) -> Result<UndropDatabaseReply>;
 
