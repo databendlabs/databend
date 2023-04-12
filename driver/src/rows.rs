@@ -21,14 +21,14 @@ use tokio_stream::Stream;
 use arrow::record_batch::RecordBatch;
 
 use crate::error::{Error, Result};
-use crate::schema::DataType;
+use crate::schema::SchemaRef;
 use crate::value::Value;
 
 pub type RowIterator = Pin<Box<dyn Stream<Item = Result<Row>> + Send>>;
 pub type RowProgressIterator = Pin<Box<dyn Stream<Item = Result<RowWithProgress>> + Send>>;
 
 #[derive(Deserialize, Clone, Debug, Default)]
-pub struct IterProgress {
+pub struct ScanProgress {
     pub total_rows: usize,
     pub total_bytes: usize,
 
@@ -39,19 +39,19 @@ pub struct IterProgress {
 #[derive(Clone, Debug)]
 pub enum RowWithProgress {
     Row(Row),
-    Progress(IterProgress),
+    Progress(ScanProgress),
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct Row(Vec<Value>);
 
-impl TryFrom<(Vec<DataType>, Vec<String>)> for Row {
+impl TryFrom<(SchemaRef, &Vec<String>)> for Row {
     type Error = Error;
 
-    fn try_from((schema, data): (Vec<DataType>, Vec<String>)) -> Result<Self> {
+    fn try_from((schema, data): (SchemaRef, &Vec<String>)) -> Result<Self> {
         let mut row: Vec<Value> = Vec::new();
-        for (i, value) in data.into_iter().enumerate() {
-            row.push(Value::try_from((schema[i].clone(), value))?);
+        for (i, field) in schema.fields().iter().enumerate() {
+            row.push(Value::try_from((&field.data_type, data[i].as_str()))?);
         }
         Ok(Self(row))
     }
@@ -60,6 +60,10 @@ impl TryFrom<(Vec<DataType>, Vec<String>)> for Row {
 impl Row {
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 }
 

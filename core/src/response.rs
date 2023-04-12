@@ -47,7 +47,8 @@ pub struct ProgressValues {
 #[derive(Deserialize, Debug)]
 pub struct SchemaField {
     pub name: String,
-    pub r#type: String,
+    #[serde(rename = "type")]
+    pub data_type: String,
 }
 
 #[derive(Deserialize, Debug)]

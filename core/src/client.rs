@@ -69,12 +69,13 @@ impl TryFrom<&str> for StageLocation {
 pub struct APIClient {
     cli: HttpClient,
     endpoint: Url,
-    host: String,
+    pub host: String,
+    pub port: u16,
 
     tenant: Option<String>,
     warehouse: Option<String>,
-    database: Option<String>,
-    user: String,
+    pub database: Option<String>,
+    pub user: String,
     password: Option<String>,
     session_settings: BTreeMap<String, String>,
 
@@ -139,7 +140,7 @@ impl APIClient {
                 }
             }
         }
-        let port = match u.port() {
+        client.port = match u.port() {
             Some(p) => p,
             None => match scheme {
                 "http" => 80,
@@ -147,7 +148,7 @@ impl APIClient {
                 _ => unreachable!(),
             },
         };
-        client.endpoint = Url::parse(&format!("{}://{}:{}", scheme, client.host, port))?;
+        client.endpoint = Url::parse(&format!("{}://{}:{}", scheme, client.host, client.port))?;
         client.session_settings = session_settings;
 
         Ok(client)
@@ -340,6 +341,7 @@ impl Default for APIClient {
             cli: HttpClient::new(),
             endpoint: Url::parse("http://localhost:8080").unwrap(),
             host: "localhost".to_string(),
+            port: 8000,
             tenant: None,
             warehouse: None,
             database: None,

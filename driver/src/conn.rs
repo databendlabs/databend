@@ -22,12 +22,21 @@ use crate::flight_sql::FlightSQLConnection;
 use crate::error::{Error, Result};
 use crate::rest_api::RestAPIConnection;
 use crate::rows::{Row, RowIterator, RowProgressIterator};
+use crate::schema::Schema;
+
+pub struct ConnectionInfo {
+    pub host: String,
+    pub port: u16,
+    pub user: String,
+    pub database: Option<String>,
+}
 
 #[async_trait]
 pub trait Connection: DynClone + Send + Sync {
+    fn info(&self) -> ConnectionInfo;
     async fn exec(&mut self, sql: &str) -> Result<()>;
     async fn query_iter(&mut self, sql: &str) -> Result<RowIterator>;
-    async fn query_iter_with_progress(&mut self, sql: &str) -> Result<RowProgressIterator>;
+    async fn query_iter_ext(&mut self, sql: &str) -> Result<(Schema, RowProgressIterator)>;
     async fn query_row(&mut self, sql: &str) -> Result<Option<Row>>;
 }
 dyn_clone::clone_trait_object!(Connection);

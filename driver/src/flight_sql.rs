@@ -21,40 +21,51 @@ use std::time::Duration;
 use arrow::ipc::{convert::fb_to_schema, root_as_message};
 use arrow_flight::utils::flight_data_to_arrow_batch;
 use arrow_flight::{sql::client::FlightSqlServiceClient, FlightData};
-use arrow_schema::SchemaRef;
+use arrow_schema::SchemaRef as ArrowSchemaRef;
 use async_trait::async_trait;
 use tokio_stream::{Stream, StreamExt};
 use tonic::transport::{Channel, ClientTlsConfig, Endpoint};
 use tonic::Streaming;
 use url::Url;
 
+use crate::conn::{Connection, ConnectionInfo};
 use crate::error::{Error, Result};
-use crate::rows::{IterProgress, Row, RowIterator, RowProgressIterator, RowWithProgress, Rows};
-use crate::Connection;
+use crate::rows::{Row, RowIterator, RowProgressIterator, RowWithProgress, Rows, ScanProgress};
+use crate::Schema;
 
 #[derive(Clone)]
 pub struct FlightSQLConnection {
     pub(crate) client: FlightSqlServiceClient<Channel>,
+    args: Args,
 }
 
 #[async_trait]
 impl Connection for FlightSQLConnection {
+    fn info(&self) -> ConnectionInfo {
+        ConnectionInfo {
+            host: self.args.host.clone(),
+            port: self.args.port,
+            user: self.args.user.clone(),
+            database: self.args.database.clone(),
+        }
+    }
+
     async fn exec(&mut self, sql: &str) -> Result<()> {
         let _info = self.client.execute_update(sql.to_string()).await?;
         Ok(())
     }
 
     async fn query_iter(&mut self, sql: &str) -> Result<RowIterator> {
-        let rows_with_progress = self.query_iter_with_progress(sql).await?;
+        let (_, rows_with_progress) = self.query_iter_ext(sql).await?;
         let rows = rows_with_progress.filter_map(|r| match r {
             Ok(RowWithProgress::Row(r)) => Some(Ok(r)),
-            Ok(RowWithProgress::Progress(_)) => None,
+            Ok(_) => None,
             Err(err) => Some(Err(err)),
         });
         Ok(Box::pin(rows))
     }
 
-    async fn query_iter_with_progress(&mut self, sql: &str) -> Result<RowProgressIterator> {
+    async fn query_iter_ext(&mut self, sql: &str) -> Result<(Schema, RowProgressIterator)> {
         let mut stmt = self.client.prepare(sql.to_string()).await?;
         let flight_info = stmt.execute().await?;
         let ticket = flight_info.endpoint[0]
@@ -62,8 +73,8 @@ impl Connection for FlightSQLConnection {
             .as_ref()
             .ok_or(Error::Protocol("Ticket is empty".to_string()))?;
         let flight_data = self.client.do_get(ticket.clone()).await?;
-        let rows = FlightSQLRows::from_flight_data(flight_data).await?;
-        Ok(Box::pin(rows))
+        let (schema, rows) = FlightSQLRows::try_from_flight_data(flight_data).await?;
+        Ok((schema, Box::pin(rows)))
     }
 
     async fn query_row(&mut self, sql: &str) -> Result<Option<Row>> {
@@ -81,7 +92,7 @@ impl FlightSQLConnection {
         // enable progress
         client.set_header("bendsql", "1");
         let _token = client.handshake(&args.user, &args.password).await?;
-        Ok(Self { client })
+        Ok(Self { client, args })
     }
 
     fn parse_dsn(dsn: &str) -> Result<(Args, Endpoint)> {
@@ -103,10 +114,14 @@ impl FlightSQLConnection {
     }
 }
 
+#[derive(Clone)]
 struct Args {
     uri: String,
+    host: String,
+    port: u16,
     user: String,
     password: String,
+    database: Option<String>,
     tls: bool,
     connect_timeout: Duration,
     query_timeout: Duration,
@@ -121,6 +136,9 @@ impl Default for Args {
     fn default() -> Self {
         Self {
             uri: "https://localhost:8900".to_string(),
+            host: "localhost".to_string(),
+            port: 8900,
+            database: None,
             tls: true,
             user: "root".to_string(),
             password: "".to_string(),
@@ -166,13 +184,23 @@ impl Args {
                 _ => {}
             }
         }
+        u.path().split('/').filter(|s| !s.is_empty()).for_each(|s| {
+            if args.database.is_none() {
+                args.database = Some(s.to_string());
+            }
+        });
         let host = u
             .host()
             .ok_or(Error::BadArgument("Host is empty".to_string()))?;
+        args.host = host.to_string();
         let port = u
             .port()
             .ok_or(Error::BadArgument("Port is empty".to_string()))?;
-        args.uri = format!("{}://{}:{}", scheme, host, port);
+        args.port = port;
+        args.uri = match args.database {
+            Some(ref db) => format!("{}://{}:{}/{}", scheme, host, port, db),
+            None => format!("{}://{}:{}", scheme, host, port),
+        };
         args.user = u.username().to_string();
         args.password = u.password().unwrap_or_default().to_string();
         Ok(args)
@@ -180,13 +208,13 @@ impl Args {
 }
 
 pub struct FlightSQLRows {
-    schema: SchemaRef,
+    schema: ArrowSchemaRef,
     data: Streaming<FlightData>,
     rows: VecDeque<Row>,
 }
 
 impl FlightSQLRows {
-    async fn from_flight_data(flight_data: Streaming<FlightData>) -> Result<Self> {
+    async fn try_from_flight_data(flight_data: Streaming<FlightData>) -> Result<(Schema, Self)> {
         let mut data = flight_data;
         let datum = data
             .try_next()
@@ -197,12 +225,14 @@ impl FlightSQLRows {
         let ipc_schema = message.header_as_schema().ok_or(Error::Protocol(
             "Invalid Message: Cannot get header as Schema".to_string(),
         ))?;
-        let schema = fb_to_schema(ipc_schema);
-        Ok(Self {
-            schema: Arc::new(schema),
-            data: data,
+        let arrow_schema = Arc::new(fb_to_schema(ipc_schema));
+        let schema = arrow_schema.clone().try_into()?;
+        let rows = Self {
+            schema: arrow_schema,
+            data,
             rows: VecDeque::new(),
-        })
+        };
+        Ok((schema, rows))
     }
 }
 
@@ -217,7 +247,7 @@ impl Stream for FlightSQLRows {
             Poll::Ready(Some(Ok(datum))) => {
                 // magic number 1 is used to indicate progress
                 if datum.app_metadata[..] == [0x01] {
-                    let progress: IterProgress = serde_json::from_slice(&datum.data_body)?;
+                    let progress: ScanProgress = serde_json::from_slice(&datum.data_body)?;
                     Poll::Ready(Some(Ok(RowWithProgress::Progress(progress))))
                 } else {
                     let dicitionaries_by_id = HashMap::new();

@@ -18,7 +18,6 @@ use crate::error::{ConvertError, Error, Result};
 
 #[cfg(feature = "flight-sql")]
 use {
-    arrow::array::AsArray,
     arrow_array::{
         Array as ArrowArray, BinaryArray, BooleanArray, Date32Array, Float32Array, Float64Array,
         Int16Array, Int32Array, Int64Array, Int8Array, LargeBinaryArray, LargeStringArray,
@@ -92,14 +91,14 @@ impl Value {
     }
 }
 
-impl TryFrom<(DataType, String)> for Value {
+impl TryFrom<(&DataType, &str)> for Value {
     type Error = Error;
 
-    fn try_from((t, v): (DataType, String)) -> Result<Self> {
+    fn try_from((t, v): (&DataType, &str)) -> Result<Self> {
         match t {
             DataType::Null => Ok(Self::Null),
             DataType::Boolean => Ok(Self::Boolean(v == "1")),
-            DataType::String => Ok(Self::String(v)),
+            DataType::String => Ok(Self::String(v.to_string())),
             DataType::Number(NumberDataType::Int8) => {
                 Ok(Self::Number(NumberValue::Int8(v.parse()?)))
             }
@@ -132,15 +131,15 @@ impl TryFrom<(DataType, String)> for Value {
             }
             // DataType::Decimal => Ok(Self::Decimal(v)),
             DataType::Timestamp => Ok(Self::Timestamp(
-                chrono::NaiveDateTime::parse_from_str(&v, "%Y-%m-%d %H:%M:%S%.6f")?
+                chrono::NaiveDateTime::parse_from_str(v, "%Y-%m-%d %H:%M:%S%.6f")?
                     .timestamp_micros(),
             )),
             DataType::Date => Ok(Self::Date(
                 // 719_163 is the number of days from 0000-01-01 to 1970-01-01
-                chrono::NaiveDate::parse_from_str(&v, "%Y-%m-%d")?.num_days_from_ce() - 719_163,
+                chrono::NaiveDate::parse_from_str(v, "%Y-%m-%d")?.num_days_from_ce() - 719_163,
             )),
             // TODO:(everpcpc) handle complex types
-            _ => Ok(Self::String(v)),
+            _ => Ok(Self::String(v.to_string())),
         }
     }
 }
@@ -250,10 +249,10 @@ impl TryFrom<(&ArrowField, &Arc<dyn ArrowArray>, usize)> for Value {
             | ArrowDataType::Duration(_) => {
                 Err(ConvertError::new("unsupported data type", format!("{:?}", array)).into())
             }
-            ArrowDataType::List(_) | ArrowDataType::LargeList(_) => {
-                let v = array.as_list_opt::<i64>().unwrap().value(seq);
-                Ok(Value::String(format!("{:?}", v)))
-            }
+            // ArrowDataType::List(_) | ArrowDataType::LargeList(_) => {
+            //     let v = array.as_list_opt::<i64>().unwrap().value(seq);
+            //     Ok(Value::String(format!("{:?}", v)))
+            // }
             // Struct(Vec<Field>),
             // Decimal128(u8, i8),
             // Decimal256(u8, i8),

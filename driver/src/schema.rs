@@ -12,7 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_client::response::SchemaField;
+use std::sync::Arc;
+
+#[cfg(feature = "flight-sql")]
+use arrow_schema::{DataType as ArrowDataType, Field as ArrowField, SchemaRef as ArrowSchemaRef};
+
+use databend_client::response::SchemaField as APISchemaField;
 
 use crate::error::{Error, Result};
 
@@ -63,89 +68,173 @@ pub enum DataType {
     // Generic(usize),
 }
 
-impl TryFrom<String> for DataType {
+#[derive(Debug, Clone)]
+pub struct Field {
+    pub name: String,
+    pub data_type: DataType,
+}
+
+#[derive(Debug, Clone)]
+pub struct Schema(Vec<Field>);
+
+pub type SchemaRef = Arc<Schema>;
+
+impl Schema {
+    pub fn fields(&self) -> &[Field] {
+        &self.0
+    }
+}
+
+impl IntoIterator for Schema {
+    type Item = Field;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl TryFrom<&TypeDesc<'_>> for DataType {
     type Error = Error;
 
-    fn try_from(s: String) -> Result<Self> {
-        let type_desc = parse_type_desc(&s)?;
-        match type_desc.name {
-            "Null" => Ok(Self::Null),
-            "Boolean" => Ok(Self::Boolean),
-            "String" => Ok(Self::String),
-            "Int8" => Ok(Self::Number(NumberDataType::Int8)),
-            "Int16" => Ok(Self::Number(NumberDataType::Int16)),
-            "Int32" => Ok(Self::Number(NumberDataType::Int32)),
-            "Int64" => Ok(Self::Number(NumberDataType::Int64)),
-            "UInt8" => Ok(Self::Number(NumberDataType::UInt8)),
-            "UInt16" => Ok(Self::Number(NumberDataType::UInt16)),
-            "UInt32" => Ok(Self::Number(NumberDataType::UInt32)),
-            "UInt64" => Ok(Self::Number(NumberDataType::UInt64)),
-            "Float32" => Ok(Self::Number(NumberDataType::Float32)),
-            "Float64" => Ok(Self::Number(NumberDataType::Float64)),
-            "Decimal" => Ok(Self::Decimal),
-            "Timestamp" => Ok(Self::Timestamp),
-            "Date" => Ok(Self::Date),
+    fn try_from(desc: &TypeDesc) -> Result<Self> {
+        let dt = match desc.name {
+            "Null" => DataType::Null,
+            "Boolean" => DataType::Boolean,
+            "String" => DataType::String,
+            "Int8" => DataType::Number(NumberDataType::Int8),
+            "Int16" => DataType::Number(NumberDataType::Int16),
+            "Int32" => DataType::Number(NumberDataType::Int32),
+            "Int64" => DataType::Number(NumberDataType::Int64),
+            "UInt8" => DataType::Number(NumberDataType::UInt8),
+            "UInt16" => DataType::Number(NumberDataType::UInt16),
+            "UInt32" => DataType::Number(NumberDataType::UInt32),
+            "UInt64" => DataType::Number(NumberDataType::UInt64),
+            "Float32" => DataType::Number(NumberDataType::Float32),
+            "Float64" => DataType::Number(NumberDataType::Float64),
+            "Decimal" => DataType::Decimal,
+            "Timestamp" => DataType::Timestamp,
+            "Date" => DataType::Date,
             "Nullable" => {
-                if type_desc.args.len() != 1 {
+                if desc.args.len() != 1 {
                     return Err(Error::Parsing(
                         "Nullable type must have one argument".to_string(),
                     ));
                 }
-                let inner = Self::try_from(type_desc.args[0].name.to_string())?;
-                Ok(Self::Nullable(Box::new(inner)))
+                let inner = Self::try_from(&desc.args[0])?;
+                DataType::Nullable(Box::new(inner))
             }
             "Array" => {
-                if type_desc.args.len() != 1 {
+                if desc.args.len() != 1 {
                     return Err(Error::Parsing(
                         "Array type must have one argument".to_string(),
                     ));
                 }
-                let inner = Self::try_from(type_desc.args[0].name.to_string())?;
-                Ok(Self::Array(Box::new(inner)))
+                let inner = Self::try_from(&desc.args[0])?;
+                DataType::Array(Box::new(inner))
             }
             "Map" => {
-                if type_desc.args.len() != 1 {
+                if desc.args.len() != 1 {
                     return Err(Error::Parsing(
                         "Map type must have one argument".to_string(),
                     ));
                 }
-                let inner = Self::try_from(type_desc.args[0].name.to_string())?;
-                Ok(Self::Map(Box::new(inner)))
+                let inner = Self::try_from(&desc.args[0])?;
+                DataType::Map(Box::new(inner))
             }
             "Tuple" => {
                 let mut inner = vec![];
-                for arg in type_desc.args {
-                    inner.push(Self::try_from(arg.name.to_string())?);
+                for arg in &desc.args {
+                    inner.push(Self::try_from(arg)?);
                 }
-                Ok(Self::Tuple(inner))
+                DataType::Tuple(inner)
             }
-            "Variant" => Ok(Self::Variant),
-            _ => Err(Error::Parsing(format!("Unknown type: {}", s))),
+            "Variant" => DataType::Variant,
+            _ => return Err(Error::Parsing(format!("Unknown type: {:?}", desc))),
+        };
+        Ok(dt)
+    }
+}
+
+impl TryFrom<APISchemaField> for Field {
+    type Error = Error;
+
+    fn try_from(f: APISchemaField) -> Result<Self> {
+        let type_desc = parse_type_desc(&f.data_type)?;
+        let dt = DataType::try_from(&type_desc)?;
+        let field = Self {
+            name: f.name,
+            data_type: dt,
+        };
+        Ok(field)
+    }
+}
+
+impl TryFrom<Vec<APISchemaField>> for Schema {
+    type Error = Error;
+
+    fn try_from(fields: Vec<APISchemaField>) -> Result<Self> {
+        let fields = fields
+            .into_iter()
+            .map(Field::try_from)
+            .collect::<Result<Vec<_>>>()?;
+        Ok(Self(fields))
+    }
+}
+
+#[cfg(feature = "flight-sql")]
+impl TryFrom<&Arc<ArrowField>> for Field {
+    type Error = Error;
+
+    fn try_from(f: &Arc<ArrowField>) -> Result<Self> {
+        let mut dt = match f.data_type() {
+            ArrowDataType::Null => DataType::Null,
+            ArrowDataType::Boolean => DataType::Boolean,
+            ArrowDataType::Int8 => DataType::Number(NumberDataType::Int8),
+            ArrowDataType::Int16 => DataType::Number(NumberDataType::Int16),
+            ArrowDataType::Int32 => DataType::Number(NumberDataType::Int32),
+            ArrowDataType::Int64 => DataType::Number(NumberDataType::Int64),
+            ArrowDataType::UInt8 => DataType::Number(NumberDataType::UInt8),
+            ArrowDataType::UInt16 => DataType::Number(NumberDataType::UInt16),
+            ArrowDataType::UInt32 => DataType::Number(NumberDataType::UInt32),
+            ArrowDataType::UInt64 => DataType::Number(NumberDataType::UInt64),
+            ArrowDataType::Float32 => DataType::Number(NumberDataType::Float32),
+            ArrowDataType::Float64 => DataType::Number(NumberDataType::Float64),
+            ArrowDataType::Utf8
+            | ArrowDataType::Binary
+            | ArrowDataType::LargeUtf8
+            | ArrowDataType::LargeBinary
+            | ArrowDataType::FixedSizeBinary(_) => DataType::String,
+            ArrowDataType::Timestamp(_, _) => DataType::Timestamp,
+            ArrowDataType::Date32 => DataType::Date,
+            _ => {
+                return Err(Error::Parsing(format!(
+                    "Unsupported datatype for arrow field: {:?}",
+                    f
+                )))
+            }
+        };
+        if f.is_nullable() {
+            dt = DataType::Nullable(Box::new(dt));
         }
+        Ok(Field {
+            name: f.name().to_string(),
+            data_type: dt,
+        })
     }
 }
 
-impl TryFrom<SchemaField> for DataType {
+#[cfg(feature = "flight-sql")]
+impl TryFrom<ArrowSchemaRef> for Schema {
     type Error = Error;
 
-    fn try_from(field: SchemaField) -> Result<Self> {
-        Self::try_from(field.r#type)
-    }
-}
-
-pub(crate) struct SchemaFieldList(Vec<SchemaField>);
-
-impl SchemaFieldList {
-    pub(crate) fn new(fields: Vec<SchemaField>) -> Self {
-        Self(fields)
-    }
-}
-
-impl TryFrom<SchemaFieldList> for Vec<DataType> {
-    type Error = Error;
-
-    fn try_from(fields: SchemaFieldList) -> Result<Self> {
-        fields.0.into_iter().map(DataType::try_from).collect()
+    fn try_from(schema_ref: ArrowSchemaRef) -> Result<Self> {
+        let fields = schema_ref
+            .fields()
+            .iter()
+            .map(|f| Field::try_from(f))
+            .collect::<Result<Vec<_>>>()?;
+        Ok(Self(fields))
     }
 }
 

@@ -23,10 +23,10 @@ use databend_client::response::QueryResponse;
 use databend_client::APIClient;
 use tokio_stream::{Stream, StreamExt};
 
-use crate::conn::Connection;
+use crate::conn::{Connection, ConnectionInfo};
 use crate::error::{Error, Result};
 use crate::rows::{Row, RowIterator, RowProgressIterator, RowWithProgress};
-use crate::schema::{DataType, SchemaFieldList};
+use crate::schema::{Schema, SchemaRef};
 
 #[derive(Clone)]
 pub struct RestAPIConnection {
@@ -35,6 +35,15 @@ pub struct RestAPIConnection {
 
 #[async_trait]
 impl Connection for RestAPIConnection {
+    fn info(&self) -> ConnectionInfo {
+        ConnectionInfo {
+            host: self.client.host.clone(),
+            port: self.client.port,
+            user: self.client.user.clone(),
+            database: self.client.database.clone(),
+        }
+    }
+
     async fn exec(&mut self, sql: &str) -> Result<()> {
         let mut resp = self.client.query(sql).await?;
         while let Some(next_uri) = resp.next_uri {
@@ -44,30 +53,30 @@ impl Connection for RestAPIConnection {
     }
 
     async fn query_iter(&mut self, sql: &str) -> Result<RowIterator> {
-        let rows_with_progress = self.query_iter_with_progress(sql).await?;
+        let (_, rows_with_progress) = self.query_iter_ext(sql).await?;
         let rows = rows_with_progress.filter_map(|r| match r {
             Ok(RowWithProgress::Row(r)) => Some(Ok(r)),
-            Ok(RowWithProgress::Progress(_)) => None,
+            Ok(_) => None,
             Err(err) => Some(Err(err)),
         });
         Ok(Box::pin(rows))
     }
 
-    async fn query_iter_with_progress(&mut self, sql: &str) -> Result<RowProgressIterator> {
+    async fn query_iter_ext(&mut self, sql: &str) -> Result<(Schema, RowProgressIterator)> {
         let resp = self.client.query(sql).await?;
-        let rows = RestAPIRows::try_from((self.client.clone(), resp))?;
-        Ok(Box::pin(rows))
+        let (schema, rows) = RestAPIRows::from_response(self.client.clone(), resp)?;
+        Ok((schema, Box::pin(rows)))
     }
 
     async fn query_row(&mut self, sql: &str) -> Result<Option<Row>> {
         let resp = self.client.query(sql).await?;
         let resp = self.wait_for_data(resp).await?;
         self.finish_query(resp.final_uri).await?;
-        let schema = SchemaFieldList::new(resp.schema).try_into()?;
+        let schema = resp.schema.try_into()?;
         if resp.data.is_empty() {
             Ok(None)
         } else {
-            let row = Row::try_from((schema, resp.data[0].clone()))?;
+            let row = Row::try_from((Arc::new(schema), &resp.data[0]))?;
             Ok(Some(row))
         }
     }
@@ -110,25 +119,23 @@ type PageFut = Pin<Box<dyn Future<Output = Result<QueryResponse>> + Send>>;
 
 pub struct RestAPIRows {
     client: Arc<APIClient>,
-    schema: Vec<DataType>,
+    schema: SchemaRef,
     data: VecDeque<Vec<String>>,
     next_uri: Option<String>,
     next_page: Option<PageFut>,
 }
 
-impl TryFrom<(Arc<APIClient>, QueryResponse)> for RestAPIRows {
-    type Error = Error;
-
-    fn try_from((client, resp): (Arc<APIClient>, QueryResponse)) -> Result<Self> {
-        let schema = SchemaFieldList::new(resp.schema).try_into()?;
+impl RestAPIRows {
+    fn from_response(client: Arc<APIClient>, resp: QueryResponse) -> Result<(Schema, Self)> {
+        let schema: Schema = resp.schema.try_into()?;
         let rows = Self {
             client,
             next_uri: resp.next_uri,
-            schema,
+            schema: Arc::new(schema.clone()),
             data: resp.data.into(),
             next_page: None,
         };
-        Ok(rows)
+        Ok((schema, rows))
     }
 }
 
@@ -137,7 +144,7 @@ impl Stream for RestAPIRows {
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if let Some(row) = self.data.pop_front() {
-            let row = Row::try_from((self.schema.clone(), row))?;
+            let row = Row::try_from((self.schema.clone(), &row))?;
             return Poll::Ready(Some(Ok(RowWithProgress::Row(row))));
         }
         match self.next_page {
