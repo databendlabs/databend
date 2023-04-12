@@ -27,6 +27,7 @@ use crate::conn::{Connection, ConnectionInfo};
 use crate::error::{Error, Result};
 use crate::rows::{Row, RowIterator, RowProgressIterator, RowWithProgress};
 use crate::schema::{Schema, SchemaRef};
+use crate::ScanProgress;
 
 #[derive(Clone)]
 pub struct RestAPIConnection {
@@ -153,7 +154,17 @@ impl Stream for RestAPIRows {
                     self.data = resp.data.into();
                     self.next_uri = resp.next_uri;
                     self.next_page = None;
-                    self.poll_next(cx)
+                    let mut progress = ScanProgress {
+                        total_rows: 0,
+                        total_bytes: 0,
+                        read_rows: resp.stats.progresses.scan_progress.rows,
+                        read_bytes: resp.stats.progresses.scan_progress.bytes,
+                    };
+                    if let Some(total_scan) = resp.stats.progresses.total_scan {
+                        progress.total_bytes = total_scan.bytes;
+                        progress.total_rows = total_scan.rows;
+                    }
+                    Poll::Ready(Some(Ok(RowWithProgress::Progress(progress))))
                 }
                 Poll::Ready(Err(e)) => Poll::Ready(Some(Err(e))),
                 Poll::Pending => {

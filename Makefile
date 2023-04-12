@@ -7,6 +7,9 @@ check:
 	cargo clippy --all-targets --all-features -- -D warnings
 	cargo audit
 
+build:
+	cargo build
+
 test:
 	cargo test --all --all-features --lib -- --nocapture
 
