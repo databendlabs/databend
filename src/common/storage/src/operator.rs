@@ -228,6 +228,7 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
     // Disable credential loader
     if cfg.disable_credential_loader {
         builder.disable_config_load();
+        builder.disable_ec2_metadata();
     }
 
     // Enable virtual host style
@@ -235,19 +236,8 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         builder.enable_virtual_host_style();
     }
 
-    let async_client = {
+    let http_builder = {
         let mut builder = reqwest::ClientBuilder::new();
-
-        // Make sure we don't enable auto gzip decompress.
-        builder = builder.no_gzip();
-        // Make sure we don't enable auto brotli decompress.
-        builder = builder.no_brotli();
-        // Make sure we don't enable auto deflate decompress.
-        builder = builder.no_deflate();
-        // Redirect will be handled by ourselves.
-        builder = builder.redirect(reqwest::redirect::Policy::none());
-        // Enable trust dns
-        builder = builder.trust_dns(true);
 
         // Pool max idle per host controls connection pool size.
         // Default to no limit, set to `0` for disable it.
@@ -272,12 +262,9 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         builder = builder.timeout(Duration::from_secs(timeout));
 
         builder
-            .build()
-            .map_err(|err| Error::new(ErrorKind::Other, err))?
     };
 
-    let client = HttpClient::with_client(async_client, ureq::Agent::new());
-    builder.http_client(client);
+    builder.http_client(HttpClient::build(http_builder)?);
 
     Ok(builder)
 }

@@ -124,3 +124,4 @@ ORDER BY cs1.product_name,
          cs1.s1,
          cs2.s1;
 
+set enable_dphyp=0;

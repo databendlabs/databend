@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use common_exception::Result;
 use common_storages_share::SHARE_CONFIG_PREFIX;
-use time::Duration;
 
 use crate::accessor::truncate_root;
 use crate::accessor::SharingAccessor;
@@ -53,11 +54,15 @@ impl SharingAccessor {
         let obj_path = format!("{}/{}", loc_prefix, file_path);
         let op = self.op.clone();
         if input.method == "HEAD" {
-            let s = op.presign_stat(obj_path.as_str(), Duration::hours(1))?;
+            let s = op
+                .presign_stat(obj_path.as_str(), Duration::from_secs(1))
+                .await?;
             return Ok(PresignFileResponse::new(&s, input.file_name.clone()));
         }
 
-        let s = op.presign_read(obj_path.as_str(), Duration::hours(1))?;
+        let s = op
+            .presign_read(obj_path.as_str(), Duration::from_secs(1))
+            .await?;
         Ok(PresignFileResponse::new(&s, input.file_name.clone()))
     }
 
