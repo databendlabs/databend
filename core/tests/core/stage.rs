@@ -27,7 +27,7 @@ fn get_dsn(presigned: bool) -> String {
     }
 }
 
-async fn upload_to_stage(client: APIClient) {
+async fn upload_to_stage(client: &mut APIClient) {
     let mut file = std::fs::File::open("tests/core/data/sample.csv").unwrap();
     let mut buf = Vec::new();
     file.read_to_end(&mut buf).unwrap();
@@ -42,13 +42,13 @@ async fn upload_to_stage(client: APIClient) {
 #[tokio::test]
 async fn upload_to_stage_with_presigned() {
     let dsn = get_dsn(true);
-    let client = APIClient::from_dsn(&dsn).unwrap();
-    upload_to_stage(client).await;
+    let mut client = APIClient::from_dsn(&dsn).unwrap();
+    upload_to_stage(&mut client).await;
 }
 
 #[tokio::test]
 async fn upload_to_stage_with_stream() {
     let dsn = get_dsn(false);
-    let client = APIClient::from_dsn(&dsn).unwrap();
-    upload_to_stage(client).await;
+    let mut client = APIClient::from_dsn(&dsn).unwrap();
+    upload_to_stage(&mut client).await;
 }

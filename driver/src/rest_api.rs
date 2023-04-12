@@ -31,7 +31,7 @@ use crate::ScanProgress;
 
 #[derive(Clone)]
 pub struct RestAPIConnection {
-    pub(crate) client: Arc<APIClient>,
+    pub(crate) client: APIClient,
 }
 
 #[async_trait]
@@ -86,9 +86,7 @@ impl Connection for RestAPIConnection {
 impl RestAPIConnection {
     pub fn try_create(dsn: &str) -> Result<Self> {
         let client = APIClient::from_dsn(dsn)?;
-        Ok(Self {
-            client: Arc::new(client),
-        })
+        Ok(Self { client })
     }
 
     async fn wait_for_data(&self, pre: QueryResponse) -> Result<QueryResponse> {
@@ -119,7 +117,7 @@ impl RestAPIConnection {
 type PageFut = Pin<Box<dyn Future<Output = Result<QueryResponse>> + Send>>;
 
 pub struct RestAPIRows {
-    client: Arc<APIClient>,
+    client: APIClient,
     schema: SchemaRef,
     data: VecDeque<Vec<String>>,
     next_uri: Option<String>,
@@ -127,7 +125,7 @@ pub struct RestAPIRows {
 }
 
 impl RestAPIRows {
-    fn from_response(client: Arc<APIClient>, resp: QueryResponse) -> Result<(Schema, Self)> {
+    fn from_response(client: APIClient, resp: QueryResponse) -> Result<(Schema, Self)> {
         let schema: Schema = resp.schema.try_into()?;
         let rows = Self {
             client,

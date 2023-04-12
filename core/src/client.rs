@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::{Arc, Mutex};
 use std::{collections::BTreeMap, fmt};
 
 use bytes::Bytes;
@@ -77,7 +78,7 @@ pub struct APIClient {
     pub database: Option<String>,
     pub user: String,
     password: Option<String>,
-    session_settings: BTreeMap<String, String>,
+    session_settings: Arc<Mutex<BTreeMap<String, String>>>,
 
     wait_time_secs: Option<i64>,
     max_rows_in_buffer: Option<i64>,
@@ -149,12 +150,12 @@ impl APIClient {
             },
         };
         client.endpoint = Url::parse(&format!("{}://{}:{}", scheme, client.host, client.port))?;
-        client.session_settings = session_settings;
+        client.session_settings = Arc::new(Mutex::new(session_settings));
 
         Ok(client)
     }
 
-    pub async fn query(&self, sql: &str) -> Result<QueryResponse> {
+    pub async fn query(&mut self, sql: &str) -> Result<QueryResponse> {
         let req = QueryRequest::new(sql)
             .with_pagination(self.make_pagination())
             .with_session(self.make_session());
@@ -175,11 +176,21 @@ impl APIClient {
             return Err(Error::InvalidResponse(resp_err));
         }
         let resp: QueryResponse = resp.json().await?;
-        match resp.error {
-            Some(err) => Err(Error::InvalidResponse(err)),
-            // TODO:(everpcpc) update session configs
-            None => Ok(resp),
+        if let Some(err) = resp.error {
+            return Err(Error::InvalidResponse(err));
         }
+        let mut session_settings = self.session_settings.lock().unwrap();
+        if let Some(session) = &resp.session {
+            if session.database.is_some() {
+                self.database = session.database.clone();
+            }
+            if let Some(settings) = &session.settings {
+                for (k, v) in settings {
+                    session_settings.insert(k.clone(), v.clone());
+                }
+            }
+        }
+        Ok(resp)
     }
 
     pub async fn query_page(&self, next_uri: &str) -> Result<QueryResponse> {
@@ -206,7 +217,8 @@ impl APIClient {
     }
 
     fn make_session(&self) -> Option<SessionConfig> {
-        if self.database.is_none() && self.session_settings.is_empty() {
+        let session_settings = self.session_settings.lock().unwrap();
+        if self.database.is_none() && session_settings.is_empty() {
             return None;
         }
         let mut session = SessionConfig {
@@ -216,8 +228,8 @@ impl APIClient {
         if self.database.is_some() {
             session.database = self.database.clone();
         }
-        if !self.session_settings.is_empty() {
-            session.settings = Some(self.session_settings.clone());
+        if !session_settings.is_empty() {
+            session.settings = Some(session_settings.clone());
         }
         Some(session)
     }
@@ -257,7 +269,7 @@ impl APIClient {
         Ok(headers)
     }
 
-    pub async fn upload_to_stage(&self, stage_location: &str, data: Bytes) -> Result<()> {
+    pub async fn upload_to_stage(&mut self, stage_location: &str, data: Bytes) -> Result<()> {
         if self.presigned_url_disabled {
             self.upload_to_stage_with_stream(stage_location, data).await
         } else {
@@ -293,7 +305,7 @@ impl APIClient {
     }
 
     async fn upload_to_stage_with_presigned(
-        &self,
+        &mut self,
         stage_location: &str,
         data: Bytes,
     ) -> Result<()> {
@@ -314,7 +326,7 @@ impl APIClient {
         }
     }
 
-    async fn get_presigned_url(&self, stage_location: &str) -> Result<PresignedResponse> {
+    async fn get_presigned_url(&mut self, stage_location: &str) -> Result<PresignedResponse> {
         let resp = self
             .query(format!("PRESIGN UPLOAD {}", stage_location).as_str())
             .await?;
@@ -359,7 +371,7 @@ impl Default for APIClient {
             database: None,
             user: "root".to_string(),
             password: None,
-            session_settings: BTreeMap::new(),
+            session_settings: Arc::new(Mutex::new(BTreeMap::new())),
             wait_time_secs: None,
             max_rows_in_buffer: None,
             max_rows_per_page: None,

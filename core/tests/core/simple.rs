@@ -19,7 +19,7 @@ use crate::common::DEFAULT_DSN;
 #[tokio::test]
 async fn select_simple() {
     let dsn = option_env!("TEST_DATABEND_DSN").unwrap_or(DEFAULT_DSN);
-    let client = APIClient::from_dsn(dsn).unwrap();
+    let mut client = APIClient::from_dsn(dsn).unwrap();
     let resp = client.query("select 15532").await.unwrap();
     assert_eq!(resp.data.len(), 1);
     assert_eq!(resp.data[0].len(), 1);
