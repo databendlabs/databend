@@ -24,7 +24,7 @@ use common_expression::DataBlock;
 use super::Compactor;
 use super::TransformCompact;
 
-pub struct BlockCompactorNoSplit {
+pub struct BlockCompactorForCopy {
     thresholds: BlockThresholds,
     aborting: Arc<AtomicBool>,
     // call block.memory_size() only once.
@@ -33,9 +33,9 @@ pub struct BlockCompactorNoSplit {
     accumulated_bytes: usize,
 }
 
-impl BlockCompactorNoSplit {
+impl BlockCompactorForCopy {
     pub fn new(thresholds: BlockThresholds) -> Self {
-        BlockCompactorNoSplit {
+        BlockCompactorForCopy {
             thresholds,
             accumulated_rows: 0,
             accumulated_bytes: 0,
@@ -44,7 +44,7 @@ impl BlockCompactorNoSplit {
     }
 }
 
-impl Compactor for BlockCompactorNoSplit {
+impl Compactor for BlockCompactorForCopy {
     fn name() -> &'static str {
         "BlockCompactTransform"
     }
@@ -113,4 +113,4 @@ impl Compactor for BlockCompactorNoSplit {
     }
 }
 
-pub type TransformBlockCompact = TransformCompact<BlockCompactorNoSplit>;
+pub type TransformBlockCompact = TransformCompact<BlockCompactorForCopy>;
