@@ -1,5 +1,5 @@
 {
-  "label": "Manage Databend Query Clusters",
+  "label": "Managing Query Service Clusters",
   "link": {
     "type": "generated-index",
     "slug": "/operations/query"
