@@ -2,7 +2,7 @@
 title: SET
 ---
 
-Changes the value of a setting. To show all the current settings, use [SHOW SETTINGS](show-settings.md).
+Changes the value and/or level of a system setting. To show all the current settings, use [SHOW SETTINGS](../40-show/show-settings.md).
 
 See also: [UNSET](02-unset.md)
 
@@ -12,11 +12,7 @@ See also: [UNSET](02-unset.md)
 SET [GLOBAL] <setting_name> = <new_value>;
 ```
 
-`GLOBAL`: If you include this option preceding a session-level setting, the setting will become a cluster-level (global-level) setting.
-
-:::note
-A cluster-level setting is a cluster setting and the value will be stored in the meta service.
-:::
+`GLOBAL`: If you include this option preceding a session-level setting, the setting will become a global-level setting. For more information about the setting levels, see [Managing Settings](../../10-deploy/06-manage-settings.md).
 
 ## Examples
 
@@ -32,7 +28,7 @@ The following example sets the `max_threads` setting to `4`:
 SET max_threads = 4;
 ```
 
-The following example sets the `max_threads` setting to `4` and changes it to be a cluster-level setting:
+The following example sets the `max_threads` setting to `4` and changes it to be a global-level setting:
 
 ```sql
 SET GLOBAL max_threads = 4;
