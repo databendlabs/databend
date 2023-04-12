@@ -2312,7 +2312,6 @@ dependencies = [
  "regex",
  "reqwest",
  "serde",
- "ureq",
 ]
 
 [[package]]

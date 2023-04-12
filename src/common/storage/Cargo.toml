@@ -28,6 +28,5 @@ opendal = { workspace = true }
 regex = "1.6.0"
 reqwest = { workspace = true }
 serde = { workspace = true }
-ureq = { version = "2", default-features = false }
 
 [dev-dependencies]
