@@ -27,7 +27,6 @@ use common_hashtable::HashtableLike;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_storage::DataOperator;
-use num::Zero;
 use strength_reduce::StrengthReducedU64;
 
 use crate::api::DataExchange;
@@ -247,11 +246,11 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
         let method = &self.method;
         let params = self.aggregator_params.clone();
 
-        if !self
+        if self
             .ctx
             .get_settings()
             .get_spilling_bytes_threshold_per_proc()?
-            .is_zero()
+            != 0
         {
             let operator = DataOperator::instance().operator();
             let location_prefix = format!("_aggregate_spill/{}", self.tenant);
