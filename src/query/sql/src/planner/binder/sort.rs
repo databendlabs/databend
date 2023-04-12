@@ -31,14 +31,10 @@ use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::GroupingChecker;
 use crate::plans::AggregateFunction;
-use crate::plans::AndExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
-use crate::plans::ComparisonExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
-use crate::plans::NotExpr;
-use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Sort;
@@ -393,57 +389,6 @@ impl Binder {
         match replacement_opt {
             Some(replacement) => Ok(replacement),
             None => match original_scalar {
-                ScalarExpr::AndExpr(AndExpr { left, right }) => {
-                    let left = Box::new(self.rewrite_scalar_with_replacement(
-                        bind_context,
-                        left,
-                        replacement_fn,
-                    )?);
-                    let right = Box::new(self.rewrite_scalar_with_replacement(
-                        bind_context,
-                        right,
-                        replacement_fn,
-                    )?);
-                    Ok(ScalarExpr::AndExpr(AndExpr { left, right }))
-                }
-                ScalarExpr::OrExpr(OrExpr { left, right }) => {
-                    let left = Box::new(self.rewrite_scalar_with_replacement(
-                        bind_context,
-                        left,
-                        replacement_fn,
-                    )?);
-                    let right = Box::new(self.rewrite_scalar_with_replacement(
-                        bind_context,
-                        right,
-                        replacement_fn,
-                    )?);
-                    Ok(ScalarExpr::OrExpr(OrExpr { left, right }))
-                }
-                ScalarExpr::NotExpr(NotExpr { argument }) => {
-                    let argument = Box::new(self.rewrite_scalar_with_replacement(
-                        bind_context,
-                        argument,
-                        replacement_fn,
-                    )?);
-                    Ok(ScalarExpr::NotExpr(NotExpr { argument }))
-                }
-                ScalarExpr::ComparisonExpr(ComparisonExpr { op, left, right }) => {
-                    let left = Box::new(self.rewrite_scalar_with_replacement(
-                        bind_context,
-                        left,
-                        replacement_fn,
-                    )?);
-                    let right = Box::new(self.rewrite_scalar_with_replacement(
-                        bind_context,
-                        right,
-                        replacement_fn,
-                    )?);
-                    Ok(ScalarExpr::ComparisonExpr(ComparisonExpr {
-                        op: op.clone(),
-                        left,
-                        right,
-                    }))
-                }
                 ScalarExpr::AggregateFunction(AggregateFunction {
                     display_name,
                     func_name,
@@ -471,23 +416,19 @@ impl Binder {
                     let mut rewriter = WindowRewriter::new(bind_context, self.metadata.clone());
                     rewriter.visit(window)
                 }
-                ScalarExpr::FunctionCall(FunctionCall {
-                    span,
-                    params,
-                    arguments,
-                    func_name,
-                }) => {
-                    let arguments = arguments
+                ScalarExpr::FunctionCall(func) => {
+                    let arguments = func
+                        .arguments
                         .iter()
                         .map(|arg| {
                             self.rewrite_scalar_with_replacement(bind_context, arg, replacement_fn)
                         })
                         .collect::<Result<Vec<_>>>()?;
                     Ok(ScalarExpr::FunctionCall(FunctionCall {
-                        span: *span,
-                        params: params.clone(),
+                        span: func.span,
+                        func_name: func.func_name.clone(),
+                        params: func.params.clone(),
                         arguments,
-                        func_name: func_name.clone(),
                     }))
                 }
                 ScalarExpr::CastExpr(CastExpr {

@@ -82,13 +82,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         // Get all outbound share accounts.
         let outbound_accounts = get_outbound_share_infos_by_tenant(self, &req.tenant).await?;
 
-        // Get all inbound share accounts.
-        let inbound_accounts = get_inbound_share_infos_by_tenant(self, &req.tenant).await?;
-
-        Ok(ShowSharesReply {
-            outbound_accounts,
-            inbound_accounts,
-        })
+        Ok(ShowSharesReply { outbound_accounts })
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
@@ -1386,71 +1380,6 @@ async fn get_outbound_share_infos_by_tenant(
     }
 
     Ok(outbound_share_accounts)
-}
-
-async fn get_inbound_share_info_by_tenant(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    tenant: &String,
-    share_account: ShareAccountNameIdent,
-) -> Result<ShareAccountReply, KVAppError> {
-    let share_id = share_account.share_id;
-    let (_share_meta_seq, share_meta) = get_share_meta_by_id_or_err(
-        kv_api,
-        share_id,
-        format!("get_inbound_share_infos_by_tenant: {}", share_id),
-    )
-    .await?;
-
-    let (_seq, share_name) = get_share_id_to_name_or_err(
-        kv_api,
-        share_id,
-        format!("get_inbound_share_infos_by_tenant: {}", share_id),
-    )
-    .await?;
-    let database_name = get_share_database_name(kv_api, &share_meta, &share_name).await?;
-
-    let share_account_key = ShareAccountNameIdent {
-        account: tenant.clone(),
-        share_id,
-    };
-    let (_seq, meta) = get_share_account_meta_or_err(
-        kv_api,
-        &share_account_key,
-        format!(
-            "get_inbound_share_infos_by_tenant's account: {}/{}",
-            share_id, tenant
-        ),
-    )
-    .await?;
-
-    Ok(ShareAccountReply {
-        share_name,
-        database_name,
-        create_on: meta.share_on,
-        accounts: None,
-        comment: share_meta.comment.clone(),
-    })
-}
-
-async fn get_inbound_share_infos_by_tenant(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    tenant: &String,
-) -> Result<Vec<ShareAccountReply>, KVAppError> {
-    let mut inbound_share_accounts: Vec<ShareAccountReply> = vec![];
-
-    let tenant_share_name_key = ShareAccountNameIdent {
-        account: tenant.clone(),
-        share_id: 0,
-    };
-    let share_accounts = list_keys(kv_api, &tenant_share_name_key).await?;
-    for share_account in share_accounts {
-        let reply = get_inbound_share_info_by_tenant(kv_api, tenant, share_account).await;
-
-        if let Ok(reply) = reply {
-            inbound_share_accounts.push(reply);
-        };
-    }
-    Ok(inbound_share_accounts)
 }
 
 async fn get_object_name_from_id(
