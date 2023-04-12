@@ -92,7 +92,7 @@ These tutorials are intended to help you get started with Databend:
 ## Backup & Restore
 
 * [How to Back Up Meta Data](../10-deploy/06-metasrv/30-metasrv-backup-restore.md)
-* [How to Back Up Databases](../10-deploy/08-backup-restore/10-backup-and-restore-schema.md)
+* [How to Back Up Databases](../10-deploy//09-upgrade/10-backup-and-restore-schema.md)
 
 ## Use Cases
 
