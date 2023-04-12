@@ -30,8 +30,8 @@ common-storages-result-cache = { path = "../result_cache" }
 common-storages-view = { path = "../view" }
 common-users = { path = "../../users" }
 jsonb = { workspace = true }
-storages-common-cache-manager = { path = "../common/cache-manager" }
 storages-common-cache = { path = "../common/cache" }
+storages-common-cache-manager = { path = "../common/cache-manager" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 chrono = { workspace = true }

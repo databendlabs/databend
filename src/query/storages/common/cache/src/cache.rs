@@ -37,6 +37,9 @@ where
     fn contains_key(&self, k: &str) -> bool;
     fn size(&self) -> u64;
     fn len(&self) -> usize;
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 /// Helper trait to convert a Cache into NamedCache
