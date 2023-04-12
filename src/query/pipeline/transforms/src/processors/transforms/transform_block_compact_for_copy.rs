@@ -69,7 +69,22 @@ impl Compactor for BlockCompactorForCopy {
         let num_rows = block.num_rows();
         let num_bytes = block.memory_size();
 
-        if self.thresholds.check_large_enough(num_rows, num_bytes) {
+        if num_rows > self.thresholds.max_rows_per_block
+            || num_bytes > self.thresholds.max_bytes_per_block * 2
+        {
+            let by_size = num_bytes / self.thresholds.max_bytes_per_block;
+            let by_rows = num_rows / self.thresholds.max_rows_per_block;
+            let rows_per_block = if by_size > by_rows {
+                num_rows / by_size
+            } else {
+                self.thresholds.max_rows_per_block
+            };
+            let (perfect, remain) = block.split_by_rows(rows_per_block);
+            res.extend(perfect);
+            if let Some(block) = remain {
+                blocks.push(block);
+            }
+        } else if self.thresholds.check_large_enough(num_rows, num_bytes) {
             // pass through the new data block just arrived
             res.push(block);
             blocks.remove(size - 1);
