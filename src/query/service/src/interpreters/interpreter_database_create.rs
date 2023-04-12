@@ -109,10 +109,8 @@ impl Interpreter for CreateDatabaseInterpreter {
         };
         // if create from other tenant, check from share endpoint
         if let Some(ref share_name) = self.plan.meta.from_share {
-            if share_name.tenant != tenant {
-                self.check_create_database_from_share(&tenant, share_name)
-                    .await?;
-            }
+            self.check_create_database_from_share(&tenant, share_name)
+                .await?;
         }
         catalog.create_database(self.plan.clone().into()).await?;
 

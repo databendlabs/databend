@@ -55,7 +55,7 @@ pub use util::is_all_db_data_removed;
 pub use util::is_db_need_to_be_remove;
 pub use util::list_keys;
 pub use util::list_u64_value;
-pub use util::revoke_db_from_share;
+pub use util::remove_db_from_share;
 pub use util::send_txn;
 pub use util::serialize_struct;
 pub use util::serialize_u64;

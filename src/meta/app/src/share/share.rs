@@ -86,8 +86,6 @@ pub struct ShareAccountReply {
 pub struct ShowSharesReply {
     // sharing to other accounts(outbound shares)
     pub outbound_accounts: Vec<ShareAccountReply>,
-    // be shared by other accounts(inbound shares)
-    pub inbound_accounts: Vec<ShareAccountReply>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

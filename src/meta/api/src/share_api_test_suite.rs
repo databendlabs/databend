@@ -150,7 +150,6 @@ impl ShareApiTestSuite {
             info!("show share res: {:?}", res);
             assert!(res.is_ok());
             let resp = res.unwrap();
-            assert!(resp.inbound_accounts.is_empty());
             assert!(resp.outbound_accounts.is_empty());
         }
 
@@ -187,7 +186,6 @@ impl ShareApiTestSuite {
             info!("show share res: {:?}", res);
             assert!(res.is_ok());
             let resp = res.unwrap();
-            assert!(resp.inbound_accounts.is_empty());
             assert_eq!(resp.outbound_accounts.len(), 1);
         }
 
@@ -556,10 +554,6 @@ impl ShareApiTestSuite {
             info!("show share res: {:?}", res);
             assert!(res.is_ok());
             let resp = res.unwrap();
-            assert_eq!(resp.inbound_accounts.len(), 1);
-            assert_eq!(resp.inbound_accounts[0].share_name, share_name3.clone());
-            assert_eq!(resp.inbound_accounts[0].create_on, share_on.clone());
-            assert_eq!(resp.inbound_accounts[0].comment, Some(comment3.to_string()));
 
             assert_eq!(resp.outbound_accounts.len(), 2);
             assert_eq!(resp.outbound_accounts[0].share_name, share_name.clone());
