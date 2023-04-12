@@ -12,77 +12,57 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use arrow::error::ArrowError;
-use arrow::ipc::convert::fb_to_schema;
-use arrow::ipc::root_as_message;
+use std::io::BufRead;
+use std::sync::Arc;
 
-use arrow_flight::sql::client::FlightSqlServiceClient;
-use futures::TryStreamExt;
+use anyhow::Result;
+use databend_driver::{new_connection, Connection};
 use rustyline::config::Builder;
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
 use rustyline::{CompletionType, Editor};
-use std::io::BufRead;
-
 use tokio::time::Instant;
-use tonic::transport::Endpoint;
 
 use crate::ast::{TokenKind, Tokenizer};
-use crate::config::Config;
-use crate::display::{format_error, ChunkDisplay, FormatDisplay, ReplDisplay};
+use crate::config::Settings;
+use crate::display::{ChunkDisplay, FormatDisplay, ReplDisplay};
 use crate::helper::CliHelper;
 
 pub struct Session {
-    client: FlightSqlServiceClient,
+    dsn: String,
+    conn: Box<dyn Connection>,
     is_repl: bool,
-    endpoint: Endpoint,
-    user: String,
-    password: String,
 
-    config: Config,
+    settings: Settings,
     prompt: String,
 }
 
 impl Session {
-    pub async fn try_new(
-        config: Config,
-        endpoint: Endpoint,
-        user: &str,
-        password: &str,
-        is_repl: bool,
-    ) -> Result<Self, ArrowError> {
+    pub async fn try_new(dsn: String, settings: Settings, is_repl: bool) -> Result<Self> {
+        let conn = new_connection(&dsn).await?;
+        let info = conn.info();
         if is_repl {
-            println!("Welcome to databend-cli.");
-            println!("Connecting to {} as user {}.", endpoint.uri(), user);
+            println!("Welcome to BendSQL.");
+            println!(
+                "Connecting to {}:{} as user {}.",
+                info.host, info.port, info.user
+            );
             println!();
         }
 
-        let channel = endpoint
-            .connect()
-            .await
-            .map_err(|err| ArrowError::IoError(err.to_string()))?;
-
-        let mut client = FlightSqlServiceClient::new(channel);
-
-        // enable progress
-        client.set_header("bendsql", "1");
-        let _token = client.handshake(user, password).await.unwrap();
-
-        let mut prompt = config.settings.prompt.clone();
+        let mut prompt = settings.prompt.clone();
 
         {
-            prompt = prompt.replace("{host}", endpoint.uri().host().unwrap());
-            prompt = prompt.replace("{user}", user);
+            prompt = prompt.replace("{host}", &info.host);
+            prompt = prompt.replace("{user}", &info.user);
         }
 
         Ok(Self {
-            config,
-            client,
+            dsn,
+            conn,
             is_repl,
+            settings,
             prompt,
-            user: user.to_owned(),
-            password: password.to_owned(),
-            endpoint,
         })
     }
 
@@ -134,16 +114,17 @@ impl Session {
                         break;
                     }
                     Ok(false) => {}
-                    Err(e) => match e {
-                        ArrowError::IoError(e) if e.contains("Unauthenticated") => {
+                    Err(e) => {
+                        if e.to_string().contains("Unauthenticated") {
                             if let Err(e) = self.reconnect().await {
-                                eprintln!("Reconnect error: {}", format_error(e));
+                                eprintln!("Reconnect error: {}", e);
                             } else if let Err(e) = self.handle_query(true, &query).await {
-                                eprintln!("{}", format_error(e));
+                                eprintln!("{}", e);
                             }
+                        } else {
+                            eprintln!("{}", e);
                         }
-                        e => eprintln!("{}", format_error(e)),
-                    },
+                    }
                 }
             }
             query.clear();
@@ -159,12 +140,12 @@ impl Session {
         while let Some(Ok(line)) = lines.next() {
             let line = line.trim_end();
             if let Err(e) = self.handle_query(false, line).await {
-                eprintln!("{}", format_error(e));
+                eprintln!("{}", e);
             }
         }
     }
 
-    pub async fn handle_query(&mut self, is_repl: bool, query: &str) -> Result<bool, ArrowError> {
+    pub async fn handle_query(&mut self, is_repl: bool, query: &str) -> Result<bool> {
         if is_repl && (query == "exit" || query == "quit") {
             return Ok(true);
         }
@@ -174,71 +155,42 @@ impl Session {
         let kind = QueryKind::from(query);
 
         if kind == QueryKind::Update {
-            let rows = self.client.execute_update(query.to_string()).await?;
+            self.conn.exec(query).await?;
             if is_repl {
                 println!(
                     "{} affected in ({:.3} sec)",
-                    rows,
+                    // FIXME:(everpcpc)
+                    0,
                     start.elapsed().as_secs_f64()
                 );
                 println!();
             }
             return Ok(false);
         }
-
-        let mut stmt = self.client.prepare(query.to_string()).await?;
-        let flight_info = stmt.execute().await?;
-        let ticket = flight_info.endpoint[0]
-            .ticket
-            .as_ref()
-            .ok_or_else(|| ArrowError::IoError("Ticket is empty".to_string()))?;
-
-        let mut flight_data = self.client.do_get(ticket.clone()).await?;
-        let datum = flight_data.try_next().await.unwrap().unwrap();
-
-        let message = root_as_message(&datum.data_header[..])
-            .map_err(|_| ArrowError::CastError("Cannot get root as message".to_string()))?;
-        let ipc_schema = message
-            .header_as_schema()
-            .ok_or_else(|| ArrowError::CastError("Cannot get header as Schema".to_string()))?;
-
-        let schema = fb_to_schema(ipc_schema);
+        let (schema, data) = self.conn.query_iter_ext(query).await?;
 
         if is_repl {
-            let mut displayer = ReplDisplay::new(&self.config, query, &schema, start, flight_data);
+            let mut displayer =
+                ReplDisplay::new(&self.settings, query, start, Arc::new(schema), data);
             displayer.display().await?;
         } else {
-            let mut displayer = FormatDisplay::new(schema, flight_data);
+            let mut displayer = FormatDisplay::new(Arc::new(schema), data);
             displayer.display().await?;
         }
 
         Ok(false)
     }
 
-    async fn reconnect(&mut self) -> Result<(), ArrowError> {
+    async fn reconnect(&mut self) -> Result<()> {
         if self.is_repl {
+            let info = self.conn.info();
             println!(
-                "Connecting to {} as user {}.",
-                self.endpoint.uri(),
-                self.user
+                "Connecting to {}:{} as user {}.",
+                info.host, info.port, info.user
             );
             println!();
         }
-
-        let channel = self
-            .endpoint
-            .connect()
-            .await
-            .map_err(|err| ArrowError::IoError(err.to_string()))?;
-
-        self.client = FlightSqlServiceClient::new(channel);
-        // enable progress
-        self.client.set_header("bendsql", "1");
-        let _token = self
-            .client
-            .handshake(&self.user, &self.password)
-            .await
-            .unwrap();
+        self.conn = new_connection(&self.dsn).await?;
         Ok(())
     }
 }

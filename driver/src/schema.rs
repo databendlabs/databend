@@ -68,6 +68,51 @@ pub enum DataType {
     // Generic(usize),
 }
 
+impl DataType {
+    pub fn is_numeric(&self) -> bool {
+        matches!(self, DataType::Number(_))
+    }
+}
+
+impl std::fmt::Display for DataType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            DataType::Null => write!(f, "Null"),
+            DataType::EmptyArray => write!(f, "EmptyArray"),
+            DataType::EmptyMap => write!(f, "EmptyMap"),
+            DataType::Boolean => write!(f, "Boolean"),
+            DataType::String => write!(f, "String"),
+            DataType::Number(n) => match n {
+                NumberDataType::UInt8 => write!(f, "UInt8"),
+                NumberDataType::UInt16 => write!(f, "UInt16"),
+                NumberDataType::UInt32 => write!(f, "UInt32"),
+                NumberDataType::UInt64 => write!(f, "UInt64"),
+                NumberDataType::Int8 => write!(f, "Int8"),
+                NumberDataType::Int16 => write!(f, "Int16"),
+                NumberDataType::Int32 => write!(f, "Int32"),
+                NumberDataType::Int64 => write!(f, "Int64"),
+                NumberDataType::Float32 => write!(f, "Float32"),
+                NumberDataType::Float64 => write!(f, "Float64"),
+            },
+            DataType::Decimal => write!(f, "Decimal"),
+            DataType::Timestamp => write!(f, "Timestamp"),
+            DataType::Date => write!(f, "Date"),
+            DataType::Nullable(inner) => write!(f, "Nullable({})", inner),
+            DataType::Array(inner) => write!(f, "Array({})", inner),
+            DataType::Map(inner) => write!(f, "Map({})", inner),
+            DataType::Tuple(inner) => {
+                let inner = inner
+                    .iter()
+                    .map(|x| x.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(f, "Tuple({})", inner)
+            }
+            DataType::Variant => write!(f, "Variant"),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Field {
     pub name: String,
@@ -232,7 +277,7 @@ impl TryFrom<ArrowSchemaRef> for Schema {
         let fields = schema_ref
             .fields()
             .iter()
-            .map(|f| Field::try_from(f))
+            .map(Field::try_from)
             .collect::<Result<Vec<_>>>()?;
         Ok(Self(fields))
     }

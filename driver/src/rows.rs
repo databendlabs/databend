@@ -27,6 +27,12 @@ use crate::value::Value;
 pub type RowIterator = Pin<Box<dyn Stream<Item = Result<Row>> + Send>>;
 pub type RowProgressIterator = Pin<Box<dyn Stream<Item = Result<RowWithProgress>> + Send>>;
 
+#[derive(Clone, Debug)]
+pub enum RowWithProgress {
+    Row(Row),
+    Progress(ScanProgress),
+}
+
 #[derive(Deserialize, Clone, Debug, Default)]
 pub struct ScanProgress {
     pub total_rows: usize,
@@ -36,12 +42,6 @@ pub struct ScanProgress {
     pub read_bytes: usize,
 }
 
-#[derive(Clone, Debug)]
-pub enum RowWithProgress {
-    Row(Row),
-    Progress(ScanProgress),
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct Row(Vec<Value>);
 
@@ -49,11 +49,11 @@ impl TryFrom<(SchemaRef, &Vec<String>)> for Row {
     type Error = Error;
 
     fn try_from((schema, data): (SchemaRef, &Vec<String>)) -> Result<Self> {
-        let mut row: Vec<Value> = Vec::new();
+        let mut values: Vec<Value> = Vec::new();
         for (i, field) in schema.fields().iter().enumerate() {
-            row.push(Value::try_from((&field.data_type, data[i].as_str()))?);
+            values.push(Value::try_from((&field.data_type, data[i].as_str()))?);
         }
-        Ok(Self(row))
+        Ok(Self(values))
     }
 }
 
@@ -64,6 +64,10 @@ impl Row {
 
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
+    }
+
+    pub fn values(&self) -> &[Value] {
+        &self.0
     }
 }
 
@@ -86,14 +90,14 @@ impl TryFrom<RecordBatch> for Rows {
         let schema = batch.schema();
         let mut rows: Vec<Row> = Vec::new();
         for i in 0..batch.num_rows() {
-            let mut row: Vec<Value> = Vec::new();
+            let mut values: Vec<Value> = Vec::new();
             for j in 0..schema.fields().len() {
                 let v = batch.column(j);
                 let field = schema.field(j);
                 let value = Value::try_from((field, v, i))?;
-                row.push(value);
+                values.push(value);
             }
-            rows.push(Row(row));
+            rows.push(Row(values));
         }
         Ok(Self(rows))
     }

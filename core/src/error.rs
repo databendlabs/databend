@@ -26,7 +26,7 @@ pub enum Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::Parsing(msg) => write!(f, "ParseError: {}", msg),
+            Error::Parsing(msg) => write!(f, "ParsingError: {}", msg),
             Error::BadArgument(msg) => write!(f, "BadArgument: {}", msg),
             Error::Request(msg) => write!(f, "RequestError: {}", msg),
             Error::InvalidResponse(e) => {
@@ -53,12 +53,6 @@ impl From<std::num::ParseIntError> for Error {
     }
 }
 
-impl From<reqwest::Error> for Error {
-    fn from(e: reqwest::Error) -> Self {
-        Error::Parsing(e.to_string())
-    }
-}
-
 impl From<reqwest::header::InvalidHeaderValue> for Error {
     fn from(e: reqwest::header::InvalidHeaderValue) -> Self {
         Error::Parsing(e.to_string())
@@ -68,5 +62,11 @@ impl From<reqwest::header::InvalidHeaderValue> for Error {
 impl From<serde_json::Error> for Error {
     fn from(e: serde_json::Error) -> Self {
         Error::Parsing(e.to_string())
+    }
+}
+
+impl From<reqwest::Error> for Error {
+    fn from(e: reqwest::Error) -> Self {
+        Error::Request(e.to_string())
     }
 }

@@ -73,10 +73,8 @@ impl<'a> Iterator for Tokenizer<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.lexer.next() {
-            Some(kind) if kind == TokenKind::Error => {
-                Some(Err("unable to recognize the rest tokens".to_string()))
-            }
-            Some(kind) => Some(Ok(Token {
+            Some(Err(_)) => Some(Err("unable to recognize the rest tokens".to_string())),
+            Some(Ok(kind)) => Some(Ok(Token {
                 source: self.source,
                 kind,
                 span: self.lexer.span(),
@@ -93,7 +91,6 @@ impl<'a> Iterator for Tokenizer<'a> {
 #[allow(non_camel_case_types)]
 #[derive(Logos, EnumIter, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TokenKind {
-    #[error]
     Error,
 
     EOI,

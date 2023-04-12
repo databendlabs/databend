@@ -1,28 +1,33 @@
 [package]
 name = "bendsql"
-version = "0.1.3"
+version = "0.2.0"
 edition = "2021"
 license = "Apache-2.0"
-description = "Databend Native Cli tool"
+description = "Databend Native Command Line Tool"
 categories = ["database"]
 keywords = ["databend", "database", "cli"]
 repository = "https://github.com/datafuselabs/databend-client"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-arrow = { version = "36.0.0" }
-arrow-cast = { version = "36.0.0", features = [
-    "prettyprint",
-] }
-arrow-flight = { version = "36.0.0", features = [
-    "flight-sql-experimental",
-] }
-
+anyhow = "1.0.70"
+async-trait = "0.1.68"
 atty = "0.2.14"
+clap = { version = "4.1.0", features = ["derive", "env"] }
+comfy-table = "6.1.4"
+csv = "1.2.1"
+databend-driver = { path = "../driver", version = "0.2.5", features = ["rustls", "flight-sql"] }
 futures = { version = "0.3", default-features = false, features = ["alloc"] }
+humantime-serde = "1.1.1"
+indicatif = "0.17.3"
+itertools = "0.10.5"
+logos = "0.13.0"
 rustyline = "11.0.0"
+serde = { version = "1.0.159", features = ["derive"] }
+serde_json = "1.0.95"
 shlex = "1.1.0"
+sqlformat = "0.2.1"
+strum = "0.24"
+strum_macros = "0.24"
 tokio = { version = "1.26", features = [
     "macros",
     "rt",
@@ -30,26 +35,8 @@ tokio = { version = "1.26", features = [
     "sync",
     "parking_lot",
 ] }
-
-async-trait = "0.1.68"
-clap = { version = "4.1.0", features = ["derive"] }
-comfy-table = "6.1.4"
-humantime-serde = "1.1.1"
-indicatif = "0.17.3"
-itertools = "0.10.5"
-logos = "0.12.1"
-serde = { version = "1.0.159", features = ["derive"] }
-serde_json = "1.0.95"
-sqlformat = "0.2.1"
-strum = "0.24"
-strum_macros = "0.24"
 toml = "0.7.3"
-tonic = { version = "0.8", default-features = false, features = [
-    "transport",
-    "codegen",
-    "tls",
-    "prost",
-] }
+url = { version = "2.3.1", default-features = false }
 
 [[bin]]
 name = "bendsql"

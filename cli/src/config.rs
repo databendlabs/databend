@@ -14,13 +14,13 @@
 
 // Loading from `$HOME/.config/bendsql/config.toml`
 
-use std::{path::Path, time::Duration};
+use std::{collections::BTreeMap, path::Path};
 
 use serde::Deserialize;
 
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct Config {
-    pub connection: Connection,
+    pub connection: ConnectionConfig,
     pub settings: Settings,
 }
 
@@ -34,19 +34,12 @@ pub struct Settings {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(default)]
-pub struct Connection {
-    #[serde(with = "humantime_serde")]
-    pub connect_timeout: Duration,
-    #[serde(with = "humantime_serde")]
-    pub query_timeout: Duration,
-    pub tcp_nodelay: bool,
-    #[serde(with = "humantime_serde")]
-    pub tcp_keepalive: Option<Duration>,
-    #[serde(with = "humantime_serde")]
-    pub http2_keep_alive_interval: Duration,
-    #[serde(with = "humantime_serde")]
-    pub keep_alive_timeout: Duration,
-    pub keep_alive_while_idle: bool,
+pub struct ConnectionConfig {
+    pub host: String,
+    pub port: u16,
+    pub user: String,
+    pub database: Option<String>,
+    pub args: BTreeMap<String, String>,
 }
 
 impl Config {
@@ -81,16 +74,14 @@ impl Default for Settings {
     }
 }
 
-impl Default for Connection {
+impl Default for ConnectionConfig {
     fn default() -> Self {
-        Connection {
-            connect_timeout: Duration::from_secs(20),
-            query_timeout: Duration::from_secs(60),
-            tcp_nodelay: true,
-            tcp_keepalive: Some(Duration::from_secs(3600)),
-            http2_keep_alive_interval: Duration::from_secs(300),
-            keep_alive_timeout: Duration::from_secs(20),
-            keep_alive_while_idle: true,
+        Self {
+            host: "localhost".to_string(),
+            port: 8000,
+            user: "root".to_string(),
+            database: None,
+            args: BTreeMap::new(),
         }
     }
 }

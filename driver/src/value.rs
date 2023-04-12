@@ -378,7 +378,7 @@ impl std::fmt::Display for NumberValue {
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Value::Null => write!(f, "null"),
+            Value::Null => write!(f, "NULL"),
             Value::Boolean(b) => write!(f, "{}", b),
             Value::Number(n) => write!(f, "{}", n),
             Value::String(s) => write!(f, "{}", s),
@@ -387,9 +387,3 @@ impl std::fmt::Display for Value {
         }
     }
 }
-
-// impl From<u8> for Value {
-//     fn from(v: u8) -> Self {
-//         Value::Number(NumberValue::UInt8(v))
-//     }
-// }
