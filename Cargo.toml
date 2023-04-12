@@ -120,7 +120,7 @@ thiserror = { version = "1" }
 clap = { version = "3.2.22", features = ["derive", "env"] }
 
 # server
-tonic = { version = "0.9.0", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
+tonic = { version = "0.8.3", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
 
 # serialization
 prost = { version = "0.11.0" }
@@ -196,7 +196,6 @@ rpath = false
 # For example:
 # arrow-format = { git = "https://github.com/datafuse-extras/arrow-format", rev = "78dacc1" }
 
-arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "73ed7c8" }
+arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "33f6ba1" }
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "ed0e1ff" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }
-arrow-format = { git = "https://github.com/datafuse-extras/arrow-format", rev = "8dc27b8e" }

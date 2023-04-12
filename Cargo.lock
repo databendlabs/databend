@@ -152,30 +152,14 @@ checksum = "8da52d66c7071e2e3fa2a1e5c6d088fec47b593032b254f5e980de8ea54454d6"
 
 [[package]]
 name = "arrow-array"
-version = "35.0.0"
+version = "36.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43489bbff475545b78b0e20bde1d22abd6c99e54499839f9e815a2fa5134a51b"
+checksum = "e10849b60c17dbabb334be1f4ef7550701aa58082b71335ce1ed586601b2f423"
 dependencies = [
  "ahash 0.8.3",
- "arrow-buffer 35.0.0",
- "arrow-data 35.0.0",
- "arrow-schema 35.0.0",
- "chrono",
- "half 2.2.1",
- "hashbrown 0.13.2",
- "num",
-]
-
-[[package]]
-name = "arrow-array"
-version = "37.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3190f208ee7aa0f3596fa0098d42911dec5e123ca88c002a08b24877ad14c71e"
-dependencies = [
- "ahash 0.8.3",
- "arrow-buffer 37.0.0",
- "arrow-data 37.0.0",
- "arrow-schema 37.0.0",
+ "arrow-buffer",
+ "arrow-data",
+ "arrow-schema",
  "chrono",
  "half 2.2.1",
  "hashbrown 0.13.2",
@@ -184,19 +168,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-buffer"
-version = "35.0.0"
+version = "36.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3759e4a52c593281184787af5435671dc8b1e78333e5a30242b2e2d6e3c9d1f"
-dependencies = [
- "half 2.2.1",
- "num",
-]
-
-[[package]]
-name = "arrow-buffer"
-version = "37.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d33c733c5b6c44a0fc526f29c09546e04eb56772a7a21e48e602f368be381f6"
+checksum = "b0746ae991b186be39933147117f8339eb1c4bbbea1c8ad37e7bf5851a1a06ba"
 dependencies = [
  "half 2.2.1",
  "num",
@@ -204,15 +178,15 @@ dependencies = [
 
 [[package]]
 name = "arrow-cast"
-version = "35.0.0"
+version = "36.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b30c01f06172d3e8306fcc885ee97dff55ba8d48dbc2ef5fee2e75b55b8170c4"
+checksum = "b88897802515d7b193e38b27ddd9d9e43923d410a9e46307582d756959ee9595"
 dependencies = [
- "arrow-array 35.0.0",
- "arrow-buffer 35.0.0",
- "arrow-data 35.0.0",
- "arrow-schema 35.0.0",
- "arrow-select 35.0.0",
+ "arrow-array",
+ "arrow-buffer",
+ "arrow-data",
+ "arrow-schema",
+ "arrow-select",
  "chrono",
  "comfy-table",
  "lexical-core",
@@ -220,138 +194,94 @@ dependencies = [
 ]
 
 [[package]]
-name = "arrow-cast"
-version = "37.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "abd349520b6a1ed4924ae2afc9d23330a3044319e4ec3d5b124c09e4d440ae87"
-dependencies = [
- "arrow-array 37.0.0",
- "arrow-buffer 37.0.0",
- "arrow-data 37.0.0",
- "arrow-schema 37.0.0",
- "arrow-select 37.0.0",
- "chrono",
- "lexical-core",
- "num",
-]
-
-[[package]]
 name = "arrow-data"
-version = "35.0.0"
+version = "36.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19c7787c6cdbf9539b1ffb860bfc18c5848926ec3d62cbd52dc3b1ea35c874fd"
+checksum = "533f937efa1aaad9dc86f6a0e382c2fa736a4943e2090c946138079bdf060cef"
 dependencies = [
- "arrow-buffer 35.0.0",
- "arrow-schema 35.0.0",
- "half 2.2.1",
- "num",
-]
-
-[[package]]
-name = "arrow-data"
-version = "37.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1c8361947aaa96d331da9df3f7a08bdd8ab805a449994c97f5c4d24c4b7e2cf"
-dependencies = [
- "arrow-buffer 37.0.0",
- "arrow-schema 37.0.0",
+ "arrow-buffer",
+ "arrow-schema",
  "half 2.2.1",
  "num",
 ]
 
 [[package]]
 name = "arrow-flight"
-version = "37.0.0"
+version = "36.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd1fc687f3e4ffe91ccb7f2ffb06143ff97029448d427a9641006242bcbd0c24"
+checksum = "cd1362a6a02e31734c67eb2e9a30dca1689d306cfe2fc00bc6430512091480ce"
 dependencies = [
- "arrow-array 37.0.0",
- "arrow-buffer 37.0.0",
- "arrow-cast 37.0.0",
+ "arrow-array",
+ "arrow-buffer",
+ "arrow-cast",
  "arrow-ipc",
- "arrow-schema 37.0.0",
+ "arrow-schema",
  "base64 0.21.0",
  "bytes",
  "futures",
- "paste",
  "prost",
+ "prost-derive",
  "tokio",
- "tonic 0.9.1",
+ "tonic",
 ]
 
 [[package]]
 name = "arrow-format"
 version = "0.8.1"
-source = "git+https://github.com/datafuse-extras/arrow-format?rev=8dc27b8e#8dc27b8e2a306848d9efa50a4121ce4d47b85fc9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07884ea216994cdc32a2d5f8274a8bee979cfe90274b83f86f440866ee3132c7"
 dependencies = [
  "planus",
  "prost",
  "prost-derive",
  "serde",
- "tonic 0.9.1",
+ "tonic",
 ]
 
 [[package]]
 name = "arrow-ipc"
-version = "37.0.0"
+version = "36.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a46ee000b9fbd1e8db6e8b26acb8c760838512b39d8c9f9d73892cb55351d50"
+checksum = "18b75296ff01833f602552dff26a423fc213db8e5049b540ca4a00b1c957e41c"
 dependencies = [
- "arrow-array 37.0.0",
- "arrow-buffer 37.0.0",
- "arrow-cast 37.0.0",
- "arrow-data 37.0.0",
- "arrow-schema 37.0.0",
+ "arrow-array",
+ "arrow-buffer",
+ "arrow-cast",
+ "arrow-data",
+ "arrow-schema",
  "flatbuffers",
 ]
 
 [[package]]
 name = "arrow-schema"
-version = "35.0.0"
+version = "36.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf6b26f6a6f8410e3b9531cbd1886399b99842701da77d4b4cf2013f7708f20f"
-
-[[package]]
-name = "arrow-schema"
-version = "37.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a16b88a93ac8350f0200b1cd336a1f887315925b8dd7aa145a37b8bdbd8497a4"
+checksum = "d04f17f7b86ded0b5baf98fe6123391c4343e031acc3ccc5fa604cc180bff220"
 
 [[package]]
 name = "arrow-select"
-version = "35.0.0"
+version = "36.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83deb30a09afdf654d346092ef03e965f9c05d9b0753164d531f41d290d553f4"
+checksum = "163e35de698098ff5f5f672ada9dc1f82533f10407c7a11e2cd09f3bcf31d18a"
 dependencies = [
- "arrow-array 35.0.0",
- "arrow-buffer 35.0.0",
- "arrow-data 35.0.0",
- "arrow-schema 35.0.0",
- "num",
-]
-
-[[package]]
-name = "arrow-select"
-version = "37.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98e8a4d6ca37d5212439b24caad4d80743fcbb706706200dd174bb98e68fe9d8"
-dependencies = [
- "arrow-array 37.0.0",
- "arrow-buffer 37.0.0",
- "arrow-data 37.0.0",
- "arrow-schema 37.0.0",
+ "arrow-array",
+ "arrow-buffer",
+ "arrow-data",
+ "arrow-schema",
  "num",
 ]
 
 [[package]]
 name = "arrow2"
 version = "0.17.0"
-source = "git+https://github.com/jorgecarleitao/arrow2?rev=73ed7c8#73ed7c83034ba5d13ffb643b3aec967074a331c3"
+source = "git+https://github.com/jorgecarleitao/arrow2?rev=33f6ba1#33f6ba1d5b825f3c458d7d3eaf66eec418780b40"
 dependencies = [
  "ahash 0.8.3",
- "arrow-buffer 35.0.0",
+ "arrow-array",
+ "arrow-buffer",
+ "arrow-data",
  "arrow-format",
- "arrow-schema 35.0.0",
+ "arrow-schema",
  "base64 0.21.0",
  "bytemuck",
  "chrono",
@@ -1694,17 +1624,17 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "tonic 0.9.1",
+ "tonic",
 ]
 
 [[package]]
 name = "common-expression"
 version = "0.1.0"
 dependencies = [
- "arrow-array 35.0.0",
- "arrow-buffer 35.0.0",
- "arrow-data 35.0.0",
- "arrow-schema 35.0.0",
+ "arrow-array",
+ "arrow-buffer",
+ "arrow-data",
+ "arrow-schema",
  "base64 0.21.0",
  "chrono",
  "chrono-tz",
@@ -1827,7 +1757,7 @@ dependencies = [
  "once_cell",
  "serde",
  "thiserror",
- "tonic 0.9.1",
+ "tonic",
  "tracing",
  "trust-dns-resolver",
 ]
@@ -1931,7 +1861,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "tonic 0.9.1",
+ "tonic",
  "tracing",
 ]
 
@@ -1986,7 +1916,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
- "tonic 0.9.1",
+ "tonic",
  "tracing",
 ]
 
@@ -2119,7 +2049,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "tonic 0.9.1",
+ "tonic",
  "tonic-build",
 ]
 
@@ -2257,7 +2187,7 @@ dependencies = [
  "prost",
  "prost-build",
  "semver",
- "tonic 0.9.1",
+ "tonic",
  "tonic-build",
 ]
 
@@ -2718,7 +2648,7 @@ dependencies = [
  "opentelemetry-jaeger",
  "sentry-tracing",
  "serde",
- "tonic 0.9.1",
+ "tonic",
  "tracing",
  "tracing-appender",
  "tracing-log",
@@ -2800,7 +2730,7 @@ checksum = "e57ff02e8ad8e06ab9731d5dc72dc23bef9200778eae1a89d555d8c42e5d4a86"
 dependencies = [
  "prost",
  "prost-types",
- "tonic 0.8.3",
+ "tonic",
  "tracing-core",
 ]
 
@@ -2822,7 +2752,7 @@ dependencies = [
  "thread_local",
  "tokio",
  "tokio-stream",
- "tonic 0.8.3",
+ "tonic",
  "tracing",
  "tracing-core",
  "tracing-subscriber",
@@ -3279,7 +3209,7 @@ dependencies = [
  "serde_json",
  "sharing-endpoint",
  "tokio-stream",
- "tonic 0.9.1",
+ "tonic",
  "tracing",
  "url",
 ]
@@ -3328,7 +3258,7 @@ dependencies = [
  "temp-env",
  "tempfile",
  "tokio-stream",
- "tonic 0.9.1",
+ "tonic",
  "tonic-reflection",
  "tracing",
  "tracing-appender",
@@ -3360,11 +3290,11 @@ name = "databend-query"
 version = "0.1.0"
 dependencies = [
  "aho-corasick",
- "arrow-array 37.0.0",
- "arrow-cast 35.0.0",
+ "arrow-array",
+ "arrow-cast",
  "arrow-flight",
  "arrow-ipc",
- "arrow-schema 37.0.0",
+ "arrow-schema",
  "async-backtrace",
  "async-channel",
  "async-stream",
@@ -3475,7 +3405,7 @@ dependencies = [
  "time 0.3.20",
  "tokio-stream",
  "toml 0.7.3",
- "tonic 0.9.1",
+ "tonic",
  "tower",
  "tracing",
  "typetag",
@@ -5696,9 +5626,9 @@ checksum = "1788965e61b367cd03a62950836d5cd41560c3577d90e40e0819373194d1661c"
 dependencies = [
  "http",
  "hyper",
- "rustls 0.20.8",
+ "rustls",
  "tokio",
- "tokio-rustls 0.23.4",
+ "tokio-rustls",
 ]
 
 [[package]]
@@ -6651,14 +6581,14 @@ dependencies = [
  "percent-encoding",
  "pin-project",
  "priority-queue",
- "rustls 0.20.8",
+ "rustls",
  "rustls-pemfile",
  "serde",
  "serde_json",
  "socket2",
  "thiserror",
  "tokio",
- "tokio-rustls 0.23.4",
+ "tokio-rustls",
  "tokio-util",
  "twox-hash",
  "url",
@@ -7061,7 +6991,7 @@ dependencies = [
  "nom 7.1.3",
  "pin-project-lite",
  "tokio",
- "tokio-rustls 0.23.4",
+ "tokio-rustls",
 ]
 
 [[package]]
@@ -7569,7 +7499,7 @@ dependencies = [
  "smallvec",
  "thiserror",
  "tokio",
- "tokio-rustls 0.23.4",
+ "tokio-rustls",
  "tokio-util",
  "tracing",
 ]
@@ -8329,14 +8259,14 @@ dependencies = [
  "once_cell",
  "percent-encoding",
  "pin-project-lite",
- "rustls 0.20.8",
+ "rustls",
  "rustls-native-certs",
  "rustls-pemfile",
  "serde",
  "serde_json",
  "serde_urlencoded",
  "tokio",
- "tokio-rustls 0.23.4",
+ "tokio-rustls",
  "tokio-util",
  "tower-service",
  "trust-dns-resolver",
@@ -8624,18 +8554,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rustls"
-version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07180898a28ed6a7f7ba2311594308f595e3dd2e3c3812fa0a80a47b45f17e5d"
-dependencies = [
- "log",
- "ring",
- "rustls-webpki",
- "sct",
-]
-
-[[package]]
 name = "rustls-native-certs"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8654,16 +8572,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d194b56d58803a43635bdc398cd17e383d6f71f9182b9a192c127ca42494a59b"
 dependencies = [
  "base64 0.21.0",
-]
-
-[[package]]
-name = "rustls-webpki"
-version = "0.100.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6207cd5ed3d8dca7816f8f3725513a34609c0c765bf652b8c3cb4cfd87db46b"
-dependencies = [
- "ring",
- "untrusted",
 ]
 
 [[package]]
@@ -8813,7 +8721,7 @@ checksum = "b5ce6d3512e2617c209ec1e86b0ca2fea06454cd34653c91092bf0f3ec41f8e3"
 dependencies = [
  "httpdate",
  "reqwest",
- "rustls 0.20.8",
+ "rustls",
  "sentry-backtrace",
  "sentry-contexts",
  "sentry-core",
@@ -9483,7 +9391,7 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 [[package]]
 name = "strawboat"
 version = "0.2.0"
-source = "git+https://github.com/sundy-li/strawboat?rev=7e1edb6#7e1edb640e8c076879d44e9d7c9bba8c32c33144"
+source = "git+https://github.com/sundy-li/strawboat?rev=0589e19#0589e193b796dbb490b30b4310e4240ba5e9d596"
 dependencies = [
  "arrow2",
  "bytemuck",
@@ -9914,19 +9822,9 @@ version = "0.23.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c43ee83903113e03984cb9e5cebe6c04a5116269e900e3ddba8f068a62adda59"
 dependencies = [
- "rustls 0.20.8",
+ "rustls",
  "tokio",
  "webpki",
-]
-
-[[package]]
-name = "tokio-rustls"
-version = "0.24.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0d409377ff5b1e3ca6437aa86c1eb7d40c134bfec254e44c830defa92669db5"
-dependencies = [
- "rustls 0.21.0",
- "tokio",
 ]
 
 [[package]]
@@ -10019,7 +9917,10 @@ dependencies = [
  "pin-project",
  "prost",
  "prost-derive",
+ "rustls-native-certs",
+ "rustls-pemfile",
  "tokio",
+ "tokio-rustls",
  "tokio-stream",
  "tokio-util",
  "tower",
@@ -10027,38 +9928,6 @@ dependencies = [
  "tower-service",
  "tracing",
  "tracing-futures",
-]
-
-[[package]]
-name = "tonic"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38bd8e87955eb13c1986671838177d6792cdc52af9bffced0d2c8a9a7f741ab3"
-dependencies = [
- "async-stream",
- "async-trait",
- "axum",
- "base64 0.21.0",
- "bytes",
- "futures-core",
- "futures-util",
- "h2",
- "http",
- "http-body",
- "hyper",
- "hyper-timeout",
- "percent-encoding",
- "pin-project",
- "prost",
- "rustls-native-certs",
- "rustls-pemfile",
- "tokio",
- "tokio-rustls 0.24.0",
- "tokio-stream",
- "tower",
- "tower-layer",
- "tower-service",
- "tracing",
 ]
 
 [[package]]
@@ -10076,15 +9945,16 @@ dependencies = [
 
 [[package]]
 name = "tonic-reflection"
-version = "0.9.1"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c6980583b9694a05bb2deb0678f72c44564ff52b91cd22642f2f992cd8dd02f"
+checksum = "67494bad4dda4c9bffae901dfe14e2b2c0f760adb4706dc10beeb81799f7f7b2"
 dependencies = [
+ "bytes",
  "prost",
  "prost-types",
  "tokio",
  "tokio-stream",
- "tonic 0.9.1",
+ "tonic",
 ]
 
 [[package]]
@@ -10441,7 +10311,7 @@ dependencies = [
  "flate2",
  "log",
  "once_cell",
- "rustls 0.20.8",
+ "rustls",
  "rustls-native-certs",
  "serde",
  "serde_json",
