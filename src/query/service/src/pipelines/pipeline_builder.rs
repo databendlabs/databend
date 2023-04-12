@@ -70,6 +70,7 @@ use common_sql::ColumnBinding;
 use common_sql::IndexType;
 use common_storage::DataOperator;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
+use petgraph::matrix_graph::Zero;
 
 use super::processors::transforms::FrameBound;
 use super::processors::transforms::WindowFunctionInfo;
@@ -588,7 +589,8 @@ impl PipelineBuilder {
             }
         })?;
 
-        if self.ctx.get_cluster().is_empty() {
+        let settings = self.ctx.get_settings();
+        if !settings.get_spilling_bytes_threshold_per_proc()?.is_zero() {
             let operator = DataOperator::instance().operator();
             let location_prefix = format!("_aggregate_spill/{}", self.ctx.get_tenant());
             self.main_pipeline.add_transform(|input, output| {
@@ -686,7 +688,12 @@ impl PipelineBuilder {
 
                     self.build_pipeline(&aggregate.input)?;
                     self.exchange_injector = old_inject;
-                    build_partition_bucket::<_, ()>(v, &mut self.main_pipeline, params.clone())
+                    build_partition_bucket::<_, ()>(
+                        &self.ctx,
+                        v,
+                        &mut self.main_pipeline,
+                        params.clone(),
+                    )
                 }
             }),
             false => with_hash_method!(|T| match method {
@@ -701,7 +708,12 @@ impl PipelineBuilder {
                     }
                     self.build_pipeline(&aggregate.input)?;
                     self.exchange_injector = old_inject;
-                    build_partition_bucket::<_, usize>(v, &mut self.main_pipeline, params.clone())
+                    build_partition_bucket::<_, usize>(
+                        &self.ctx,
+                        v,
+                        &mut self.main_pipeline,
+                        params.clone(),
+                    )
                 }
             }),
         }

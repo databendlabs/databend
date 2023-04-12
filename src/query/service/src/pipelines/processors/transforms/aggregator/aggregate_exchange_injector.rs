@@ -47,10 +47,8 @@ use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::HashTableCell;
 use crate::pipelines::processors::transforms::TransformAggregateDeserializer;
 use crate::pipelines::processors::transforms::TransformAggregateSerializer;
-use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::TransformGroupByDeserializer;
 use crate::pipelines::processors::transforms::TransformGroupBySerializer;
-use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
 use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
 
@@ -241,30 +239,6 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
     ) -> Result<()> {
         let method = &self.method;
         let params = self.aggregator_params.clone();
-        let operator = DataOperator::instance().operator();
-        let location_prefix = format!("_aggregate_spill/{}", self.tenant);
-
-        pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(
-                match params.aggregate_functions.is_empty() {
-                    true => TransformGroupBySpillWriter::create(
-                        input,
-                        output,
-                        method.clone(),
-                        operator.clone(),
-                        location_prefix.clone(),
-                    ),
-                    false => TransformAggregateSpillWriter::create(
-                        input,
-                        output,
-                        method.clone(),
-                        operator.clone(),
-                        params.clone(),
-                        location_prefix.clone(),
-                    ),
-                },
-            ))
-        })?;
 
         pipeline.add_transform(
             |input, output| match params.aggregate_functions.is_empty() {
