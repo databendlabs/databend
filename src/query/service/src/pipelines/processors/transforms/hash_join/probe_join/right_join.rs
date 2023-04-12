@@ -116,7 +116,7 @@ impl JoinHashTable {
                                 &data_blocks,
                                 &num_rows,
                             )?;
-                            let mut probe_block = DataBlock::probe_take(
+                            let mut probe_block = DataBlock::take_by_compressd_indices(
                                 input,
                                 local_probe_indexes,
                                 probe_indexes_len,
@@ -155,8 +155,12 @@ impl JoinHashTable {
             }
         }
 
-        let mut probe_block =
-            DataBlock::probe_take(input, local_probe_indexes, probe_indexes_len, probed_num)?;
+        let mut probe_block = DataBlock::take_by_compressd_indices(
+            input,
+            local_probe_indexes,
+            probe_indexes_len,
+            probed_num,
+        )?;
 
         // If join type is right join, need to wrap nullable for probe side
         // If join type is semi/anti right join, directly merge `build_block` and `probe_block`

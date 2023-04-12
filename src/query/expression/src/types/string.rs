@@ -104,14 +104,14 @@ impl ValueType for StringType {
         col.index_unchecked(index)
     }
 
-    unsafe fn probe_column_by_indices<'a>(
+    unsafe fn take_by_compressd_indices<'a>(
         col: &'a Self::Column,
         indices: &[(u32, u32)],
         indices_len: usize,
-        probe_num: usize,
+        row_num: usize,
     ) -> Self::Column {
         let mut data_capacity: u64 = 0;
-        let mut offsets: Vec<u64> = Vec::with_capacity(probe_num + 1);
+        let mut offsets: Vec<u64> = Vec::with_capacity(row_num + 1);
         offsets.push(0);
         let mut idx = 0;
         while idx < indices_len {
@@ -123,11 +123,8 @@ impl ValueType for StringType {
                 offsets.push(data_capacity);
             }
         }
-        let mut col_builder = StringColumnBuilder::with_capacity_and_offset(
-            probe_num,
-            data_capacity as usize,
-            offsets,
-        );
+        let mut col_builder =
+            StringColumnBuilder::with_capacity_and_offset(row_num, data_capacity as usize, offsets);
         let builder_ptr = col_builder.as_mut_data_ptr();
         let col_ptr = col.as_data_ptr();
         let mut offset = 0;

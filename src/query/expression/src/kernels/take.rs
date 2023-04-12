@@ -64,7 +64,7 @@ impl DataBlock {
         Ok(DataBlock::new(after_columns, indices.len()))
     }
 
-    pub fn probe_take(
+    pub fn take_by_compressd_indices(
         &self,
         indices: &[(u32, u32)],
         indices_len: usize,
@@ -84,7 +84,12 @@ impl DataBlock {
                 },
                 Value::Column(c) => BlockEntry {
                     data_type: entry.data_type.clone(),
-                    value: Value::Column(Column::probe_take(c, indices, indices_len, probe_num)),
+                    value: Value::Column(Column::take_by_compressd_indices(
+                        c,
+                        indices,
+                        indices_len,
+                        probe_num,
+                    )),
                 },
             })
             .collect();
@@ -173,7 +178,12 @@ impl Column {
         }
     }
 
-    pub fn probe_take(&self, indices: &[(u32, u32)], indices_len: usize, probe_num: usize) -> Self {
+    pub fn take_by_compressd_indices(
+        &self,
+        indices: &[(u32, u32)],
+        indices_len: usize,
+        row_num: usize,
+    ) -> Self {
         let length = indices.len();
         match self {
             Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {
@@ -181,16 +191,16 @@ impl Column {
             }
             Column::Number(column) => {
                 with_number_mapped_type!(|NUM_TYPE| match column {
-                    NumberColumn::NUM_TYPE(values) => Self::probe_take_arg_types::<
+                    NumberColumn::NUM_TYPE(values) => Self::take_arg_types_by_compressd_indices::<
                         NumberType<NUM_TYPE>,
                     >(
-                        values, indices, indices_len, probe_num
+                        values, indices, indices_len, row_num
                     ),
                 })
             }
             Column::Decimal(column) => with_decimal_type!(|DECIMAL_TYPE| match column {
                 DecimalColumn::Decimal128(values, size) => {
-                    let mut builder: Vec<i128> = Vec::with_capacity(probe_num);
+                    let mut builder: Vec<i128> = Vec::with_capacity(row_num);
                     let builder_ptr = builder.as_mut_ptr();
                     let col_ptr = values.as_ptr();
                     let mut offset = 0;
@@ -259,7 +269,7 @@ impl Column {
                     Column::Decimal(DecimalColumn::Decimal128(builder.into(), *size))
                 }
                 DecimalColumn::Decimal256(values, size) => {
-                    let mut builder: Vec<I256> = Vec::with_capacity(probe_num);
+                    let mut builder: Vec<I256> = Vec::with_capacity(row_num);
                     let builder_ptr = builder.as_mut_ptr();
                     let col_ptr = values.as_ptr();
                     let mut offset = 0;
@@ -328,18 +338,24 @@ impl Column {
                     Column::Decimal(DecimalColumn::Decimal256(builder.into(), *size))
                 }
             }),
-            Column::Boolean(bm) => {
-                Self::probe_take_arg_types::<BooleanType>(bm, indices, indices_len, probe_num)
-            }
-            Column::String(column) => {
-                Self::probe_take_arg_types::<StringType>(column, indices, indices_len, probe_num)
-            }
+            Column::Boolean(bm) => Self::take_arg_types_by_compressd_indices::<BooleanType>(
+                bm,
+                indices,
+                indices_len,
+                row_num,
+            ),
+            Column::String(column) => Self::take_arg_types_by_compressd_indices::<StringType>(
+                column,
+                indices,
+                indices_len,
+                row_num,
+            ),
             Column::Timestamp(column) => {
-                let ts = Self::probe_take_arg_types::<NumberType<i64>>(
+                let ts = Self::take_arg_types_by_compressd_indices::<NumberType<i64>>(
                     column,
                     indices,
                     indices_len,
-                    probe_num,
+                    row_num,
                 )
                 .into_number()
                 .unwrap()
@@ -348,11 +364,11 @@ impl Column {
                 Column::Timestamp(ts)
             }
             Column::Date(column) => {
-                let d = Self::probe_take_arg_types::<NumberType<i32>>(
+                let d = Self::take_arg_types_by_compressd_indices::<NumberType<i32>>(
                     column,
                     indices,
                     indices_len,
-                    probe_num,
+                    row_num,
                 )
                 .into_number()
                 .unwrap()
@@ -365,7 +381,12 @@ impl Column {
                 offsets.push(0);
                 let builder = ColumnBuilder::with_capacity(&column.values.data_type(), self.len());
                 let builder = ArrayColumnBuilder { builder, offsets };
-                Self::probe_take_value_types::<ArrayType<AnyType>>(column, builder, indices)
+                Self::take_value_types_by_compressd_indices::<ArrayType<AnyType>>(
+                    column,
+                    builder,
+                    indices,
+                    indices_len,
+                )
             }
             Column::Map(column) => {
                 let mut offsets = Vec::with_capacity(length + 1);
@@ -383,15 +404,22 @@ impl Column {
                 };
                 let builder = ArrayColumnBuilder { builder, offsets };
                 let column = ArrayColumn::try_downcast(column).unwrap();
-                Self::probe_take_value_types::<MapType<AnyType, AnyType>>(&column, builder, indices)
+                Self::take_value_types_by_compressd_indices::<MapType<AnyType, AnyType>>(
+                    &column,
+                    builder,
+                    indices,
+                    indices_len,
+                )
             }
             Column::Nullable(c) => {
-                let column = c.column.probe_take(indices, indices_len, probe_num);
-                let validity = Self::probe_take_arg_types::<BooleanType>(
+                let column = c
+                    .column
+                    .take_by_compressd_indices(indices, indices_len, row_num);
+                let validity = Self::take_arg_types_by_compressd_indices::<BooleanType>(
                     &c.validity,
                     indices,
                     indices_len,
-                    probe_num,
+                    row_num,
                 );
                 Column::Nullable(Box::new(NullableColumn {
                     column,
@@ -401,13 +429,16 @@ impl Column {
             Column::Tuple(fields) => {
                 let fields = fields
                     .iter()
-                    .map(|c| c.probe_take(indices, indices_len, probe_num))
+                    .map(|c| c.take_by_compressd_indices(indices, indices_len, row_num))
                     .collect();
                 Column::Tuple(fields)
             }
-            Column::Variant(column) => {
-                Self::probe_take_arg_types::<StringType>(column, indices, indices_len, probe_num)
-            }
+            Column::Variant(column) => Self::take_arg_types_by_compressd_indices::<StringType>(
+                column,
+                indices,
+                indices_len,
+                row_num,
+            ),
         }
     }
 
@@ -441,29 +472,30 @@ impl Column {
         T::upcast_column(T::build_column(builder))
     }
 
-    fn probe_take_arg_types<T: ArgType>(
+    fn take_arg_types_by_compressd_indices<T: ArgType>(
         col: &T::Column,
         indices: &[(u32, u32)],
         indices_len: usize,
-        probe_num: usize,
+        row_num: usize,
     ) -> Column {
         T::upcast_column(unsafe {
-            T::probe_column_by_indices(col, indices, indices_len, probe_num)
+            T::take_by_compressd_indices(col, indices, indices_len, row_num)
         })
     }
 
-    fn probe_take_value_types<T: ValueType>(
+    fn take_value_types_by_compressd_indices<T: ValueType>(
         col: &T::Column,
         mut builder: T::ColumnBuilder,
         indices: &[(u32, u32)],
+        indices_len: usize,
     ) -> Column {
         unsafe {
-            for (index, cnt) in indices {
-                for _ in 0..*cnt {
-                    T::push_item(
-                        &mut builder,
-                        T::index_column_unchecked(col, *index as usize),
-                    )
+            let mut idx = 0;
+            while idx < indices_len {
+                let (index, cnt) = indices[idx];
+                idx += 1;
+                for _ in 0..cnt {
+                    T::push_item(&mut builder, T::index_column_unchecked(col, index as usize));
                 }
             }
         }

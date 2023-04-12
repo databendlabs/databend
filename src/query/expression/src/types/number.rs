@@ -155,13 +155,13 @@ impl<Num: Number> ValueType for NumberType<Num> {
         *col.get_unchecked(index)
     }
 
-    unsafe fn probe_column_by_indices<'a>(
+    unsafe fn take_by_compressd_indices<'a>(
         col: &'a Self::Column,
         indices: &[(u32, u32)],
         indices_len: usize,
-        probe_num: usize,
+        row_num: usize,
     ) -> Self::Column {
-        let mut col_builder = Self::create_builder(probe_num, &[]);
+        let mut col_builder = Self::create_builder(row_num, &[]);
         let builder_ptr = col_builder.as_mut_ptr();
         let col_ptr = col.as_ptr();
         let mut offset = 0;
