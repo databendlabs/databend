@@ -26,7 +26,6 @@ pub use cache::Cache;
 pub use meter::bytes_meter::BytesMeter;
 pub use meter::count_meter::Count;
 pub use meter::count_meter::CountableMeter;
-pub use meter::count_meter::CountableMeterWithMeasure;
 pub use meter::file_meter::FileSize;
 #[cfg(feature = "heapsize")]
 #[cfg(not(target_os = "macos"))]
