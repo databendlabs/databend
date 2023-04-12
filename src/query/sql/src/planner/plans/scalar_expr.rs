@@ -17,11 +17,13 @@ use std::hash::Hasher;
 
 use common_ast::ast::BinaryOperator;
 use common_exception::ErrorCode;
+use common_exception::Range;
 use common_exception::Result;
 use common_exception::Span;
 use common_expression::types::DataType;
 use common_expression::Scalar;
 use educe::Educe;
+use itertools::Itertools;
 
 use super::WindowFuncFrame;
 use super::WindowFuncType;
@@ -37,15 +39,9 @@ pub enum ScalarExpr {
     BoundColumnRef(BoundColumnRef),
     BoundInternalColumnRef(BoundInternalColumnRef),
     ConstantExpr(ConstantExpr),
-    AndExpr(AndExpr),
-    OrExpr(OrExpr),
-    NotExpr(NotExpr),
-    ComparisonExpr(ComparisonExpr),
     WindowFunction(WindowFunc),
     AggregateFunction(AggregateFunction),
     FunctionCall(FunctionCall),
-    // TODO(leiysky): maybe we don't need this variant any more
-    // after making functions static typed?
     CastExpr(CastExpr),
     SubqueryExpr(SubqueryExpr),
 }
@@ -60,22 +56,6 @@ impl ScalarExpr {
             ScalarExpr::BoundColumnRef(scalar) => ColumnSet::from([scalar.column.index]),
             ScalarExpr::BoundInternalColumnRef(scalar) => ColumnSet::from([scalar.column.index]),
             ScalarExpr::ConstantExpr(_) => ColumnSet::new(),
-            ScalarExpr::AndExpr(scalar) => {
-                let left: ColumnSet = scalar.left.used_columns();
-                let right: ColumnSet = scalar.right.used_columns();
-                left.union(&right).cloned().collect()
-            }
-            ScalarExpr::OrExpr(scalar) => {
-                let left: ColumnSet = scalar.left.used_columns();
-                let right: ColumnSet = scalar.right.used_columns();
-                left.union(&right).cloned().collect()
-            }
-            ScalarExpr::NotExpr(scalar) => scalar.argument.used_columns(),
-            ScalarExpr::ComparisonExpr(scalar) => {
-                let left: ColumnSet = scalar.left.used_columns();
-                let right: ColumnSet = scalar.right.used_columns();
-                left.union(&right).cloned().collect()
-            }
             ScalarExpr::WindowFunction(scalar) => {
                 let mut result = scalar.func.used_columns();
                 for scalar in &scalar.partition_by {
@@ -116,25 +96,6 @@ impl ScalarExpr {
                 Ok(tables)
             }
             ScalarExpr::BoundInternalColumnRef(_) | ScalarExpr::ConstantExpr(_) => Ok(vec![]),
-            ScalarExpr::AndExpr(scalar) => {
-                let mut left: Vec<IndexType> = scalar.left.used_tables(metadata.clone())?;
-                let mut right: Vec<IndexType> = scalar.right.used_tables(metadata)?;
-                left.append(&mut right);
-                Ok(left)
-            }
-            ScalarExpr::OrExpr(scalar) => {
-                let mut left: Vec<IndexType> = scalar.left.used_tables(metadata.clone())?;
-                let mut right: Vec<IndexType> = scalar.right.used_tables(metadata)?;
-                left.append(&mut right);
-                Ok(left)
-            }
-            ScalarExpr::NotExpr(scalar) => scalar.argument.used_tables(metadata),
-            ScalarExpr::ComparisonExpr(scalar) => {
-                let mut left: Vec<IndexType> = scalar.left.used_tables(metadata.clone())?;
-                let mut right: Vec<IndexType> = scalar.right.used_tables(metadata)?;
-                left.append(&mut right);
-                Ok(left)
-            }
             ScalarExpr::AggregateFunction(scalar) => {
                 let mut result = vec![];
                 for scalar in &scalar.args {
@@ -162,8 +123,17 @@ impl ScalarExpr {
         match self {
             ScalarExpr::BoundColumnRef(expr) => expr.span,
             ScalarExpr::ConstantExpr(expr) => expr.span,
-            ScalarExpr::FunctionCall(expr) => expr.span,
-            ScalarExpr::CastExpr(expr) => expr.span,
+            ScalarExpr::FunctionCall(expr) => expr.span.or_else(|| {
+                let (start, end) = expr
+                    .arguments
+                    .iter()
+                    .filter_map(|x| x.span())
+                    .flat_map(|span| [span.start, span.end])
+                    .minmax()
+                    .into_option()?;
+                Some(Range { start, end })
+            }),
+            ScalarExpr::CastExpr(expr) => expr.span.or(expr.argument.span()),
             ScalarExpr::SubqueryExpr(expr) => expr.span,
             _ => None,
         }
@@ -209,76 +179,6 @@ impl TryFrom<ScalarExpr> for ConstantExpr {
         } else {
             Err(ErrorCode::Internal(
                 "Cannot downcast Scalar to ConstantExpr",
-            ))
-        }
-    }
-}
-
-impl From<AndExpr> for ScalarExpr {
-    fn from(v: AndExpr) -> Self {
-        Self::AndExpr(v)
-    }
-}
-
-impl TryFrom<ScalarExpr> for AndExpr {
-    type Error = ErrorCode;
-    fn try_from(value: ScalarExpr) -> Result<Self> {
-        if let ScalarExpr::AndExpr(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal("Cannot downcast Scalar to AndExpr"))
-        }
-    }
-}
-
-impl From<OrExpr> for ScalarExpr {
-    fn from(v: OrExpr) -> Self {
-        Self::OrExpr(v)
-    }
-}
-
-impl TryFrom<ScalarExpr> for OrExpr {
-    type Error = ErrorCode;
-    fn try_from(value: ScalarExpr) -> Result<Self> {
-        if let ScalarExpr::OrExpr(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal("Cannot downcast Scalar to OrExpr"))
-        }
-    }
-}
-
-impl From<NotExpr> for ScalarExpr {
-    fn from(v: NotExpr) -> Self {
-        Self::NotExpr(v)
-    }
-}
-
-impl TryFrom<ScalarExpr> for NotExpr {
-    type Error = ErrorCode;
-    fn try_from(value: ScalarExpr) -> Result<Self> {
-        if let ScalarExpr::NotExpr(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal("Cannot downcast Scalar to NotExpr"))
-        }
-    }
-}
-
-impl From<ComparisonExpr> for ScalarExpr {
-    fn from(v: ComparisonExpr) -> Self {
-        Self::ComparisonExpr(v)
-    }
-}
-
-impl TryFrom<ScalarExpr> for ComparisonExpr {
-    type Error = ErrorCode;
-    fn try_from(value: ScalarExpr) -> Result<Self> {
-        if let ScalarExpr::ComparisonExpr(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(
-                "Cannot downcast Scalar to ComparisonExpr",
             ))
         }
     }
@@ -397,24 +297,7 @@ pub struct ConstantExpr {
     pub value: Scalar,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct AndExpr {
-    pub left: Box<ScalarExpr>,
-    pub right: Box<ScalarExpr>,
-}
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct OrExpr {
-    pub left: Box<ScalarExpr>,
-    pub right: Box<ScalarExpr>,
-}
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct NotExpr {
-    pub argument: Box<ScalarExpr>,
-}
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum ComparisonOp {
     Equal,
     NotEqual,
@@ -429,17 +312,15 @@ pub enum ComparisonOp {
 }
 
 impl ComparisonOp {
-    pub fn try_from_binary_op(op: &BinaryOperator) -> Result<Self> {
-        match op {
-            BinaryOperator::Gt => Ok(Self::GT),
-            BinaryOperator::Lt => Ok(Self::LT),
-            BinaryOperator::Gte => Ok(Self::GTE),
-            BinaryOperator::Lte => Ok(Self::LTE),
-            BinaryOperator::Eq => Ok(Self::Equal),
-            BinaryOperator::NotEq => Ok(Self::NotEqual),
-            _ => Err(ErrorCode::SemanticError(format!(
-                "Unsupported comparison operator {op}"
-            ))),
+    pub fn try_from_func_name(name: &str) -> Option<Self> {
+        match name {
+            "eq" => Some(Self::Equal),
+            "noteq" => Some(Self::NotEqual),
+            "gt" => Some(Self::GT),
+            "lt" => Some(Self::LT),
+            "gte" => Some(Self::GTE),
+            "lte" => Some(Self::LTE),
+            _ => None,
         }
     }
 
@@ -458,16 +339,19 @@ impl ComparisonOp {
 impl<'a> TryFrom<&'a BinaryOperator> for ComparisonOp {
     type Error = ErrorCode;
 
-    fn try_from(value: &'a BinaryOperator) -> Result<Self> {
-        Self::try_from_binary_op(value)
+    fn try_from(op: &'a BinaryOperator) -> Result<Self> {
+        match op {
+            BinaryOperator::Gt => Ok(Self::GT),
+            BinaryOperator::Lt => Ok(Self::LT),
+            BinaryOperator::Gte => Ok(Self::GTE),
+            BinaryOperator::Lte => Ok(Self::LTE),
+            BinaryOperator::Eq => Ok(Self::Equal),
+            BinaryOperator::NotEq => Ok(Self::NotEqual),
+            _ => Err(ErrorCode::SemanticError(format!(
+                "Unsupported comparison operator {op}"
+            ))),
+        }
     }
-}
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct ComparisonExpr {
-    pub op: ComparisonOp,
-    pub left: Box<ScalarExpr>,
-    pub right: Box<ScalarExpr>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]

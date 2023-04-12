@@ -14,8 +14,7 @@
 
 use common_exception::Result;
 
-use crate::plans::ComparisonExpr;
-use crate::plans::ComparisonOp;
+use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::ScalarExpr;
 
@@ -25,10 +24,11 @@ pub fn get_join_predicates(join: &Join) -> Result<Vec<ScalarExpr>> {
         .iter()
         .zip(join.right_conditions.iter())
         .map(|(left_cond, right_cond)| {
-            Ok(ScalarExpr::ComparisonExpr(ComparisonExpr {
-                left: Box::new(left_cond.clone()),
-                right: Box::new(right_cond.clone()),
-                op: ComparisonOp::Equal,
+            Ok(ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "eq".to_string(),
+                params: vec![],
+                arguments: vec![left_cond.clone(), right_cond.clone()],
             }))
         })
         .collect::<Result<Vec<_>>>()?
