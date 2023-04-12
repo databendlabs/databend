@@ -6,16 +6,16 @@ Calculates the `arg` value for a maximum `val` value. If there are several value
 
 ## Syntax
 
-```
+```sql
 ARG_MAX(arg, val)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| arg | Argument of [any data type that Databend supports](../../13-sql-reference/10-data-types/index.md) |
-| val | Value of [any data type that Databend supports](../../13-sql-reference/10-data-types/index.md)|
+| Arguments | Description                                                                                       |
+|-----------|---------------------------------------------------------------------------------------------------|
+| arg       | Argument of [any data type that Databend supports](../../13-sql-reference/10-data-types/index.md) |
+| val       | Value of [any data type that Databend supports](../../13-sql-reference/10-data-types/index.md)    |
 
 ## Return Type
 
@@ -23,32 +23,39 @@ ARG_MAX(arg, val)
 
  matches `arg` type.
 
-## Examples
+## Example
 
-:::tip
-numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
-:::
+**Creating a Table and Inserting Sample Data**
 
-Input table:
-
+Let's create a table named "sales" and insert some sample data:
 ```sql
-SELECT sum(number) AS salary, number%3 AS user FROM numbers_mt(10000) GROUP BY user ORDER BY salary ASC;
-+----------+------+
-| salary   | user |
-+----------+------+
-| 16661667 |    1 |
-| 16665000 |    2 |
-| 16668333 |    0 |
-+----------+------+
+CREATE TABLE sales (
+  id INTEGER,
+  product VARCHAR(50),
+  price FLOAT
+);
+
+INSERT INTO sales (id, product, price)
+VALUES (1, 'Product A', 10.5),
+       (2, 'Product B', 20.75),
+       (3, 'Product C', 30.0),
+       (4, 'Product D', 15.25),
+       (5, 'Product E', 25.5);
 ```
 
-```sql
-SELECT arg_max(user, salary)  FROM (SELECT sum(number) AS salary, number%3 AS user FROM numbers_mt(10000) GROUP BY user);
+**Query: Using ARG_MAX() Function**
 
-+-----------------------+
-| arg_max(user, salary) |
-+-----------------------+
-|                     0 |
-+-----------------------+
+Now, let's use the ARG_MAX() function to find the product that has the maximum price:
+```sql
+SELECT ARG_MAX(product, price) AS max_price_product
+FROM sales;
+
+```
+
+The result should look like this:
+```sql
+| max_price_product |
+| ----------------- |
+| Product C         |
 
 ```

@@ -30,29 +30,35 @@ UNIQ(arguments)
 
 UInt64
 
-## Examples
+## Example
 
+**Create a Table and Insert Sample Data**
 ```sql
-SELECT count(distinct number % 3) FROM numbers(1000);
-+------------------------------+
-| count(distinct (number % 3)) |
-+------------------------------+
-|                            3 |
-+------------------------------+
+CREATE TABLE products (
+  id INT,
+  name VARCHAR,
+  category VARCHAR,
+  price FLOAT
+);
 
- SELECT uniq(number % 3, number) FROM numbers(1000);
-+----------------------------+
-| uniq((number % 3), number) |
-+----------------------------+
-|                       1000 |
-+----------------------------+
-
-
- SELECT uniq(number % 3, number) = count(distinct number %3, number)  FROM numbers(1000);
-+---------------------------------------------------------------------+
-| (uniq((number % 3), number) = count(distinct (number % 3), number)) |
-+---------------------------------------------------------------------+
-|                                                                true |
-+---------------------------------------------------------------------+
+INSERT INTO products (id, name, category, price)
+VALUES (1, 'Laptop', 'Electronics', 1000),
+       (2, 'Smartphone', 'Electronics', 800),
+       (3, 'Tablet', 'Electronics', 600),
+       (4, 'Chair', 'Furniture', 150),
+       (5, 'Table', 'Furniture', 300);
 ```
 
+**Query Demo: Count Distinct Categories**
+
+```sql
+SELECT COUNT(DISTINCT category) AS unique_categories
+FROM products;
+```
+
+**Result**
+```sql
+| unique_categories |
+|-------------------|
+|         2         |
+```

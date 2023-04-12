@@ -6,7 +6,7 @@ Calculates the `arg` value for a minimum `val` value. If there are several diffe
 
 ## Syntax
 
-```
+```sql
 ARG_MIN(arg, val)
 ```
 
@@ -23,31 +23,33 @@ ARG_MIN(arg, val)
 
  matches `arg` type.
 
-## Examples
+## Example
 
-:::tip
-numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
-:::
-
-Input table:
-
+Let's create a table students with columns id, name, and score, and insert some data:
 ```sql
-SELECT sum(number) AS salary, number%3 AS user FROM numbers_mt(10000) GROUP BY user ORDER BY salary ASC;
-+----------+------+
-| salary   | user |
-+----------+------+
-| 16661667 |    1 |
-| 16665000 |    2 |
-| 16668333 |    0 |
-+----------+------+
+CREATE TABLE students (
+  id INT,
+  name VARCHAR,
+  score INT
+);
+
+INSERT INTO students (id, name, score) VALUES
+  (1, 'Alice', 80),
+  (2, 'Bob', 75),
+  (3, 'Charlie', 90),
+  (4, 'Dave', 80);
+
 ```
 
+Now, we can use ARG_MIN to find the name of the student with the lowest score:
 ```sql
-SELECT arg_min(user, salary)  FROM (SELECT sum(number) AS salary, number%3 AS user FROM numbers_mt(10000) GROUP BY user);
-+-----------------------+
-| arg_min(user, salary) |
-+-----------------------+
-|                     1 |
-+-----------------------+
+SELECT ARG_MIN(name, score) AS student_name
+FROM students;
+```
 
+Result:
+```sql
+| student_name |
+|--------------|
+| Charlie      |
 ```
