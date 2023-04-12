@@ -95,11 +95,7 @@ impl JoinHashTable {
         let probe_indexes = &mut probe_state.probe_indexes;
         let mut build_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
 
-        let chunks = &self.row_space.chunks.read().unwrap();
-        let data_blocks = chunks
-            .iter()
-            .map(|c| c.data_block.clone())
-            .collect::<Vec<DataBlock>>();
+        let data_blocks = self.row_space.datablocks();
         let num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
@@ -114,9 +110,7 @@ impl JoinHashTable {
                 let probed_rows = v.get();
 
                 if probed_num + probed_rows.len() < JOIN_MAX_BLOCK_SIZE {
-                    for it in probed_rows {
-                        build_indexes.push(it);
-                    }
+                    build_indexes.extend_from_slice(probed_rows);
                     probe_indexes[probe_indexes_len] = (i as u32, probed_rows.len() as u32);
                     probe_indexes_len += 1;
                     probed_num += probed_rows.len();
@@ -126,9 +120,7 @@ impl JoinHashTable {
 
                     while index < probed_rows.len() {
                         if probed_num + remain < JOIN_MAX_BLOCK_SIZE {
-                            for it in &probed_rows[index..] {
-                                build_indexes.push(it);
-                            }
+                            build_indexes.extend_from_slice(&probed_rows[index..]);
                             probe_indexes[probe_indexes_len] = (i as u32, remain as u32);
                             probe_indexes_len += 1;
                             probed_num += remain;
@@ -143,9 +135,7 @@ impl JoinHashTable {
                             let addition = JOIN_MAX_BLOCK_SIZE - probed_num;
                             let new_index = index + addition;
 
-                            for it in &probed_rows[index..new_index] {
-                                build_indexes.push(it);
-                            }
+                            build_indexes.extend_from_slice(&probed_rows[index..new_index]);
                             probe_indexes[probe_indexes_len] = (i as u32, addition as u32);
                             probe_indexes_len += 1;
                             probed_num += addition;
@@ -155,11 +145,9 @@ impl JoinHashTable {
                                 &probe_indexes[0..probe_indexes_len],
                                 probed_num,
                             )?;
-                            let build_block = self.row_space.gather_build(
-                                &build_indexes,
-                                &data_blocks,
-                                &num_rows,
-                            )?;
+                            let build_block =
+                                self.row_space
+                                    .gather(&build_indexes, &data_blocks, &num_rows)?;
                             let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
 
                             let filter =
@@ -206,7 +194,7 @@ impl JoinHashTable {
         )?;
         let build_block = self
             .row_space
-            .gather_build(&build_indexes, &data_blocks, &num_rows)?;
+            .gather(&build_indexes, &data_blocks, &num_rows)?;
         let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
 
         let filter = self.get_nullable_filter_column(&merged_block, other_predicate)?;

@@ -62,11 +62,7 @@ impl JoinHashTable {
         let mut local_build_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
         let mut validity = MutableBitmap::with_capacity(JOIN_MAX_BLOCK_SIZE);
 
-        let chunks = &self.row_space.chunks.read().unwrap();
-        let data_blocks = chunks
-            .iter()
-            .map(|c| c.data_block.clone())
-            .collect::<Vec<DataBlock>>();
+        let data_blocks = self.row_space.datablocks();
         let num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
@@ -105,9 +101,7 @@ impl JoinHashTable {
                         marker: Some(MarkerKind::False),
                     }),
                     Some(_) => {
-                        for it in probed_rows {
-                            build_indexes.push(*it);
-                        }
+                        build_indexes.extend_from_slice(probed_rows);
                     }
                 };
             }
@@ -123,9 +117,7 @@ impl JoinHashTable {
             }
 
             if probed_num + probed_rows.len() < JOIN_MAX_BLOCK_SIZE {
-                for it in probed_rows {
-                    local_build_indexes.push(it);
-                }
+                local_build_indexes.extend_from_slice(probed_rows);
                 probe_indexes[probe_indexes_len] = (i as u32, probed_rows.len() as u32);
                 probe_indexes_len += 1;
                 probed_num += probed_rows.len();
@@ -136,9 +128,7 @@ impl JoinHashTable {
 
                 while index < probed_rows.len() {
                     if probed_num + remain < JOIN_MAX_BLOCK_SIZE {
-                        for it in &probed_rows[index..] {
-                            local_build_indexes.push(it);
-                        }
+                        local_build_indexes.extend_from_slice(&probed_rows[index..]);
                         probe_indexes[probe_indexes_len] = (i as u32, remain as u32);
                         probe_indexes_len += 1;
                         probed_num += remain;
@@ -155,9 +145,7 @@ impl JoinHashTable {
                         let addition = JOIN_MAX_BLOCK_SIZE - probed_num;
                         let new_index = index + addition;
 
-                        for it in &probed_rows[index..new_index] {
-                            local_build_indexes.push(it);
-                        }
+                        local_build_indexes.extend_from_slice(&probed_rows[index..new_index]);
                         probe_indexes[probe_indexes_len] = (i as u32, addition as u32);
                         probe_indexes_len += 1;
                         probed_num += addition;
@@ -181,11 +169,8 @@ impl JoinHashTable {
                                 .collect::<Vec<_>>();
                             DataBlock::new(columns, input.num_rows())
                         } else {
-                            self.row_space.gather_build(
-                                &local_build_indexes,
-                                &data_blocks,
-                                &num_rows,
-                            )?
+                            self.row_space
+                                .gather(&local_build_indexes, &data_blocks, &num_rows)?
                         };
 
                         // For left join, wrap nullable for build block
@@ -312,7 +297,7 @@ impl JoinHashTable {
             DataBlock::new(columns, input.num_rows())
         } else {
             self.row_space
-                .gather_build(&local_build_indexes, &data_blocks, &num_rows)?
+                .gather(&local_build_indexes, &data_blocks, &num_rows)?
         };
 
         // For left join, wrap nullable for build chunk
