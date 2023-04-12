@@ -348,6 +348,16 @@ impl Scalar {
             _ => unimplemented!(),
         }
     }
+
+    pub fn is_positive(&self) -> bool {
+        match self {
+            Scalar::Number(n) => n.is_positive(),
+            Scalar::Decimal(d) => d.is_positive(),
+            Scalar::Timestamp(t) => *t > 0,
+            Scalar::Date(d) => *d > 0,
+            _ => unreachable!("is_positive() called on non-numeric scalar"),
+        }
+    }
 }
 
 impl<'a> ScalarRef<'a> {
@@ -645,6 +655,7 @@ impl PartialEq for Column {
     }
 }
 
+pub const EXTENSION_KEY: &str = "Extension";
 pub const ARROW_EXT_TYPE_EMPTY_ARRAY: &str = "EmptyArray";
 pub const ARROW_EXT_TYPE_EMPTY_MAP: &str = "EmptyMap";
 pub const ARROW_EXT_TYPE_VARIANT: &str = "Variant";
@@ -882,14 +893,6 @@ impl Column {
                 DataType::Tuple(inner)
             }
             Column::Variant(_) => DataType::Variant,
-        }
-    }
-
-    /// Unnest a nested column into one column.
-    pub fn unnest(&self) -> Self {
-        match self {
-            Column::Array(array) => array.underlying_column().unnest(),
-            col => col.clone(),
         }
     }
 

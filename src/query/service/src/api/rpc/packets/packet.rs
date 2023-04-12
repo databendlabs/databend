@@ -26,6 +26,7 @@ pub trait Packet: Send + Sync {
 
 #[async_trait::async_trait]
 impl<T: Packet> Packet for Vec<T> {
+    #[async_backtrace::framed]
     async fn commit(&self, config: &InnerConfig, timeout: u64) -> Result<()> {
         for packet in self.iter() {
             packet.commit(config, timeout).await?;
@@ -35,6 +36,7 @@ impl<T: Packet> Packet for Vec<T> {
     }
 }
 
+#[async_backtrace::framed]
 pub async fn create_client(config: &InnerConfig, address: &str) -> Result<FlightClient> {
     match config.tls_query_cli_enabled() {
         true => Ok(FlightClient::new(FlightServiceClient::new(

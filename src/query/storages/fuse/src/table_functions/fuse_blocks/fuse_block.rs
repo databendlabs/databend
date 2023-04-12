@@ -45,6 +45,7 @@ pub struct FuseBlock<'a> {
     pub ctx: Arc<dyn TableContext>,
     pub table: &'a FuseTable,
     pub snapshot_id: Option<String>,
+    pub limit: Option<usize>,
 }
 
 impl<'a> FuseBlock<'a> {
@@ -52,14 +53,17 @@ impl<'a> FuseBlock<'a> {
         ctx: Arc<dyn TableContext>,
         table: &'a FuseTable,
         snapshot_id: Option<String>,
+        limit: Option<usize>,
     ) -> Self {
         Self {
             ctx,
             table,
             snapshot_id,
+            limit,
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn get_blocks(&self) -> Result<DataBlock> {
         let tbl = self.table;
         let maybe_snapshot = tbl.read_table_snapshot().await?;
@@ -93,8 +97,11 @@ impl<'a> FuseBlock<'a> {
         )))
     }
 
+    #[async_backtrace::framed]
     async fn to_block(&self, snapshot: Arc<TableSnapshot>) -> Result<DataBlock> {
-        let len = snapshot.summary.block_count as usize;
+        let limit = self.limit.unwrap_or(usize::MAX);
+        let len = std::cmp::min(snapshot.segments.len(), limit);
+
         let snapshot_id = snapshot.snapshot_id.simple().to_string().into_bytes();
         let timestamp = snapshot.timestamp.unwrap_or_default().timestamp_micros();
         let mut block_location = StringColumnBuilder::with_capacity(len, len);
@@ -110,7 +117,9 @@ impl<'a> FuseBlock<'a> {
             self.table.operator.clone(),
             self.table.schema(),
         );
-        let segments = segments_io.read_segments(&snapshot.segments).await?;
+        let segments = segments_io
+            .read_segments(&snapshot.segments[..len], true)
+            .await?;
         for segment in segments {
             let segment = segment?;
             segment.blocks.iter().for_each(|block| {

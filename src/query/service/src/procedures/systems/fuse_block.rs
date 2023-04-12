@@ -44,6 +44,7 @@ impl OneBlockProcedure for FuseBlockProcedure {
         ProcedureFeatures::default().variadic_arguments(2, 3)
     }
 
+    #[async_backtrace::framed]
     async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let database_name = args[0].clone();
         let table_name = args[1].clone();
@@ -64,7 +65,9 @@ impl OneBlockProcedure for FuseBlockProcedure {
 
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
 
-        Ok(FuseBlock::new(ctx, tbl, snapshot_id).get_blocks().await?)
+        Ok(FuseBlock::new(ctx, tbl, snapshot_id, None)
+            .get_blocks()
+            .await?)
     }
 
     fn schema(&self) -> Arc<DataSchema> {

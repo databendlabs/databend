@@ -42,6 +42,7 @@ impl Interpreter for DropViewInterpreter {
         "DropViewInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let catalog_name = self.plan.catalog.clone();
         let db_name = self.plan.database.clone();
@@ -51,6 +52,13 @@ impl Interpreter for DropViewInterpreter {
             .get_table(&catalog_name, &db_name, &view_name)
             .await
             .ok();
+
+        if tbl.is_none() && !self.plan.if_exists {
+            return Err(ErrorCode::UnknownTable(format!(
+                "unknown view {}.{}",
+                db_name, view_name
+            )));
+        }
 
         if let Some(table) = &tbl {
             if table.get_table_info().engine() != VIEW_ENGINE {

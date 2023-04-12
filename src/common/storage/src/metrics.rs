@@ -176,6 +176,7 @@ impl<A: Accessor> LayeredAccessor for StorageMetricsAccessor<A> {
         &self.inner
     }
 
+    #[async_backtrace::framed]
     async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::Reader)> {
         self.inner
             .read(path, args)
@@ -183,6 +184,7 @@ impl<A: Accessor> LayeredAccessor for StorageMetricsAccessor<A> {
             .map(|(rp, r)| (rp, StorageMetricsWrapper::new(r, self.metrics.clone())))
     }
 
+    #[async_backtrace::framed]
     async fn write(&self, path: &str, args: OpWrite) -> Result<(RpWrite, Self::Writer)> {
         self.inner
             .write(path, args)
@@ -190,10 +192,12 @@ impl<A: Accessor> LayeredAccessor for StorageMetricsAccessor<A> {
             .map(|(rp, r)| (rp, StorageMetricsWrapper::new(r, self.metrics.clone())))
     }
 
+    #[async_backtrace::framed]
     async fn list(&self, path: &str, args: OpList) -> Result<(RpList, Self::Pager)> {
         self.inner.list(path, args).await
     }
 
+    #[async_backtrace::framed]
     async fn scan(&self, path: &str, args: OpScan) -> Result<(RpScan, Self::Pager)> {
         self.inner.scan(path, args).await
     }
@@ -287,6 +291,7 @@ impl<R: oio::BlockingRead> oio::BlockingRead for StorageMetricsWrapper<R> {
 
 #[async_trait]
 impl<R: oio::Write> oio::Write for StorageMetricsWrapper<R> {
+    #[async_backtrace::framed]
     async fn write(&mut self, bs: Bytes) -> Result<()> {
         let size = bs.len();
         let start = Instant::now();
@@ -300,6 +305,7 @@ impl<R: oio::Write> oio::Write for StorageMetricsWrapper<R> {
         result
     }
 
+    #[async_backtrace::framed]
     async fn append(&mut self, bs: Bytes) -> Result<()> {
         let size = bs.len();
         let start = Instant::now();
@@ -313,6 +319,7 @@ impl<R: oio::Write> oio::Write for StorageMetricsWrapper<R> {
         result
     }
 
+    #[async_backtrace::framed]
     async fn close(&mut self) -> Result<()> {
         self.inner.close().await
     }

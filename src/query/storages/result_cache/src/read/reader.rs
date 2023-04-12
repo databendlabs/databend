@@ -67,11 +67,13 @@ impl ResultCacheReader {
         self.meta_key.clone()
     }
 
+    #[async_backtrace::framed]
     pub async fn try_read_cached_result(&self) -> Result<Option<Vec<DataBlock>>> {
         self.try_read_cached_result_with_meta_key(self.meta_key.clone())
             .await
     }
 
+    #[async_backtrace::framed]
     pub async fn try_read_cached_result_with_meta_key(
         &self,
         meta_key: String,
@@ -93,6 +95,7 @@ impl ResultCacheReader {
         }
     }
 
+    #[async_backtrace::framed]
     async fn read_result_from_cache(&self, location: &str) -> Result<Vec<DataBlock>> {
         let data = self.operator.read(location).await?;
         let mut reader = Cursor::new(data);
@@ -113,6 +116,7 @@ impl ResultCacheReader {
         Ok(blocks)
     }
 
+    #[async_backtrace::framed]
     pub async fn read_table_schema_and_data(
         operator: Operator,
         location: &str,

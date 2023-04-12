@@ -66,6 +66,7 @@ use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
+use tracing::error;
 use uuid::Uuid;
 
 use crate::io::MetaReaders;
@@ -218,6 +219,7 @@ impl FuseTable {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
+    #[async_backtrace::framed]
     pub(crate) async fn read_table_snapshot_statistics(
         &self,
         snapshot: Option<&Arc<TableSnapshot>>,
@@ -245,6 +247,7 @@ impl FuseTable {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
+    #[async_backtrace::framed]
     pub async fn read_table_snapshot(&self) -> Result<Option<Arc<TableSnapshot>>> {
         if let Some(loc) = self.snapshot_loc().await? {
             let reader = MetaReaders::table_snapshot_reader(self.get_operator());
@@ -261,6 +264,7 @@ impl FuseTable {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn snapshot_format_version(&self) -> Result<u64> {
         match self.snapshot_loc().await? {
             Some(loc) => Ok(TableMetaLocationGenerator::snapshot_version(loc.as_str())),
@@ -272,13 +276,21 @@ impl FuseTable {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn snapshot_loc(&self) -> Result<Option<String>> {
         match self.table_info.db_type {
             DatabaseType::ShareDB(_) => {
                 let url = FUSE_TBL_LAST_SNAPSHOT_HINT;
-                let data = self.operator.read(url).await?;
-                let s = str::from_utf8(&data)?;
-                Ok(Some(s.to_string()))
+                match self.operator.read(url).await {
+                    Ok(data) => {
+                        let s = str::from_utf8(&data)?;
+                        Ok(Some(s.to_string()))
+                    }
+                    Err(e) => {
+                        error!("read share snapshot location error: {:?}", e);
+                        Ok(None)
+                    }
+                }
             }
             DatabaseType::NormalDB => {
                 let options = self.table_info.options();
@@ -366,6 +378,7 @@ impl Table for FuseTable {
         vec![]
     }
 
+    #[async_backtrace::framed]
     async fn alter_table_cluster_keys(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -415,6 +428,7 @@ impl Table for FuseTable {
         .await
     }
 
+    #[async_backtrace::framed]
     async fn drop_table_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
         if self.cluster_key_meta.is_none() {
             return Ok(());
@@ -466,6 +480,7 @@ impl Table for FuseTable {
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_read_partitions", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    #[async_backtrace::framed]
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -494,6 +509,7 @@ impl Table for FuseTable {
         self.do_append_data(ctx, pipeline, append_mode, need_output)
     }
 
+    #[async_backtrace::framed]
     async fn replace_into(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -505,6 +521,7 @@ impl Table for FuseTable {
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_commit_insertion", skip(self, ctx, operations), fields(ctx.id = ctx.get_id().as_str()))]
+    #[async_backtrace::framed]
     async fn commit_insertion(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -522,16 +539,19 @@ impl Table for FuseTable {
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_truncate", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    #[async_backtrace::framed]
     async fn truncate(&self, ctx: Arc<dyn TableContext>, purge: bool) -> Result<()> {
         self.do_truncate(ctx, purge).await
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_optimize", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    #[async_backtrace::framed]
     async fn purge(&self, ctx: Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
         self.do_purge(&ctx, keep_last_snapshot).await
     }
 
     #[tracing::instrument(level = "debug", name = "analyze", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    #[async_backtrace::framed]
     async fn analyze(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
         self.do_analyze(&ctx).await
     }
@@ -546,6 +566,7 @@ impl Table for FuseTable {
         }))
     }
 
+    #[async_backtrace::framed]
     async fn column_statistics_provider(&self) -> Result<Box<dyn ColumnStatisticsProvider>> {
         let provider = if let Some(snapshot) = self.read_table_snapshot().await? {
             let stats = &snapshot.summary.col_stats;
@@ -571,6 +592,7 @@ impl Table for FuseTable {
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_navigate_to", skip_all)]
+    #[async_backtrace::framed]
     async fn navigate_to(&self, point: &NavigationPoint) -> Result<Arc<dyn Table>> {
         match point {
             NavigationPoint::SnapshotID(snapshot_id) => {
@@ -582,6 +604,7 @@ impl Table for FuseTable {
         }
     }
 
+    #[async_backtrace::framed]
     async fn delete(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -592,6 +615,7 @@ impl Table for FuseTable {
         self.do_delete(ctx, filter, col_indices, pipeline).await
     }
 
+    #[async_backtrace::framed]
     async fn update(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -615,16 +639,18 @@ impl Table for FuseTable {
         BlockThresholds::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
     }
 
+    #[async_backtrace::framed]
     async fn compact(
         &self,
         ctx: Arc<dyn TableContext>,
         target: CompactTarget,
         limit: Option<usize>,
         pipeline: &mut Pipeline,
-    ) -> Result<bool> {
+    ) -> Result<()> {
         self.do_compact(ctx, target, limit, pipeline).await
     }
 
+    #[async_backtrace::framed]
     async fn recluster(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -634,6 +660,7 @@ impl Table for FuseTable {
         self.do_recluster(ctx, pipeline, push_downs).await
     }
 
+    #[async_backtrace::framed]
     async fn revert_to(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -643,6 +670,10 @@ impl Table for FuseTable {
     }
 
     fn support_prewhere(&self) -> bool {
+        matches!(self.storage_format, FuseStorageFormat::Native)
+    }
+
+    fn support_virtual_columns(&self) -> bool {
         matches!(self.storage_format, FuseStorageFormat::Native)
     }
 }

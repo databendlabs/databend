@@ -53,6 +53,7 @@ impl ShutdownHandle {
             shutdown: Arc::new(AtomicBool::new(false)),
         })
     }
+    #[async_backtrace::framed]
     async fn shutdown_services(&mut self, graceful: bool) {
         let mut shutdown_jobs = vec![];
         for service in &mut self.services {
@@ -61,6 +62,7 @@ impl ShutdownHandle {
         futures::future::join_all(shutdown_jobs).await;
     }
 
+    #[async_backtrace::framed]
     pub async fn shutdown(&mut self, mut signal: SignalStream) {
         self.shutdown_services(true).await;
         ClusterDiscovery::instance()
@@ -70,6 +72,7 @@ impl ShutdownHandle {
         self.shutdown_services(false).await;
     }
 
+    #[async_backtrace::framed]
     pub async fn wait_for_termination_request(&mut self) {
         match signal_stream() {
             Err(cause) => {

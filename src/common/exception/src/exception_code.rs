@@ -72,7 +72,7 @@ build_exceptions! {
     ///
     /// # Notes
     ///
-    /// It's OK to use this error code for not implemetned feature in
+    /// It's OK to use this error code for not implemented feature in
     /// our dependences. For example, in arrow.
     Unimplemented(1002),
 
@@ -249,6 +249,10 @@ build_exceptions! {
     WrongShare(2711),
     ShareHasNoGrantedDatabase(2712),
     ShareHasNoGrantedPrivilege(2713),
+    ShareEndpointAlreadyExists(2714),
+    UnknownShareEndpoint(2715),
+    UnknownShareEndpointId(2716),
+    UnknownShareTable(2717),
 
     // Variable error codes.
     UnknownVariable(2801),

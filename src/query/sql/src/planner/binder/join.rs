@@ -54,6 +54,7 @@ pub struct JoinConditions {
 
 impl Binder {
     #[async_recursion]
+    #[async_backtrace::framed]
     pub(super) async fn bind_join(
         &mut self,
         bind_context: &BindContext,
@@ -392,6 +393,7 @@ impl<'a> JoinConditionResolver<'a> {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn resolve(
         &mut self,
         left_join_conditions: &mut Vec<ScalarExpr>,
@@ -456,6 +458,7 @@ impl<'a> JoinConditionResolver<'a> {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn resolve_on(
         &mut self,
         condition: &Expr,
@@ -484,6 +487,7 @@ impl<'a> JoinConditionResolver<'a> {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn resolve_predicate(
         &self,
         predicate: &Expr,
@@ -534,6 +538,7 @@ impl<'a> JoinConditionResolver<'a> {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn resolve_using(
         &mut self,
         using_columns: Vec<(Span, String)>,
@@ -636,22 +641,25 @@ impl<'a> JoinConditionResolver<'a> {
             right = wrap_cast(&right, &least_super_type);
         }
 
-        if left_used_columns.is_subset(&left_columns)
-            && right_used_columns.is_subset(&right_columns)
-        {
-            left_join_conditions.push(left);
-            right_join_conditions.push(right);
-            return Ok(true);
-        } else if left_used_columns.is_subset(&right_columns)
-            && right_used_columns.is_subset(&left_columns)
-        {
-            left_join_conditions.push(right);
-            right_join_conditions.push(left);
-            return Ok(true);
+        if !left_used_columns.is_empty() && !right_used_columns.is_empty() {
+            if left_used_columns.is_subset(&left_columns)
+                && right_used_columns.is_subset(&right_columns)
+            {
+                left_join_conditions.push(left);
+                right_join_conditions.push(right);
+                return Ok(true);
+            } else if left_used_columns.is_subset(&right_columns)
+                && right_used_columns.is_subset(&left_columns)
+            {
+                left_join_conditions.push(right);
+                right_join_conditions.push(left);
+                return Ok(true);
+            }
         }
         Ok(false)
     }
 
+    #[async_backtrace::framed]
     async fn add_other_conditions(
         &self,
         predicate: &Expr,

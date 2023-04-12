@@ -103,12 +103,14 @@ impl TableMutationAggregator {
 impl AsyncAccumulatingTransform for TableMutationAggregator {
     const NAME: &'static str = "MutationAggregator";
 
+    #[async_backtrace::framed]
     async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
         let mutation = MutationLogs::try_from(data)?;
         self.accumulate_mutation(mutation);
         Ok(None)
     }
 
+    #[async_backtrace::framed]
     async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
         let mutations: CommitMeta = self.apply_mutations().await?;
         debug!("mutations {:?}", mutations);
@@ -118,6 +120,7 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
 }
 
 impl TableMutationAggregator {
+    #[async_backtrace::framed]
     async fn apply_mutations(&mut self) -> Result<CommitMeta> {
         let base_segments_paths = self.base_segments.clone();
         // NOTE: order matters!
@@ -134,12 +137,13 @@ impl TableMutationAggregator {
         Ok::<_, ErrorCode>(commit_meta)
     }
 
+    #[async_backtrace::framed]
     async fn read_segments(&self) -> Result<Vec<Arc<SegmentInfo>>> {
         let segments_io =
             SegmentsIO::create(self.ctx.clone(), self.dal.clone(), self.schema.clone());
         let segment_locations = self.base_segments.as_slice();
         let segments = segments_io
-            .read_segments(segment_locations)
+            .read_segments(segment_locations, true)
             .await?
             .into_iter()
             .collect::<Result<Vec<_>>>()?;
@@ -147,6 +151,7 @@ impl TableMutationAggregator {
     }
 
     // TODO use batch_meta_writer
+    #[async_backtrace::framed]
     async fn write_segments(&self, segments: Vec<SerializedSegment>) -> Result<()> {
         let mut tasks = Vec::with_capacity(segments.len());
         for segment in segments {

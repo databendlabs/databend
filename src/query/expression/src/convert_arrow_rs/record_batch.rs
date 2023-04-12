@@ -17,6 +17,7 @@ use std::sync::Arc;
 use arrow_array::RecordBatch;
 use arrow_schema::ArrowError;
 
+use crate::Column;
 use crate::DataBlock;
 use crate::DataSchema;
 
@@ -29,5 +30,14 @@ impl DataBlock {
         }
         let schema = Arc::new(data_schema.into());
         RecordBatch::try_new(schema, arrays)
+    }
+
+    pub fn from_record_batch(batch: &RecordBatch) -> Result<(Self, DataSchema), ArrowError> {
+        let mut columns = Vec::with_capacity(batch.columns().len());
+        for (array, field) in batch.columns().iter().zip(batch.schema().fields().iter()) {
+            columns.push(Column::from_arrow_rs(array.clone(), field)?)
+        }
+        let schema = DataSchema::try_from(&(*batch.schema()))?;
+        Ok((DataBlock::new_from_columns(columns), schema))
     }
 }

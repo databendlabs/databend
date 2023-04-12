@@ -164,6 +164,7 @@ Query {
             selection: None,
             group_by: None,
             having: None,
+            window_list: None,
         },
     ),
     order_by: [],
@@ -260,6 +261,7 @@ Query {
             selection: None,
             group_by: None,
             having: None,
+            window_list: None,
         },
     ),
     order_by: [],
@@ -347,6 +349,130 @@ Query {
             selection: None,
             group_by: None,
             having: None,
+            window_list: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+select * from customer inner join orders on (a = b)
+---------- Output ---------
+SELECT * FROM customer INNER JOIN orders ON (a = b)
+---------- AST ------------
+Query {
+    span: Some(
+        0..51,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..51,
+            ),
+            distinct: false,
+            select_list: [
+                QualifiedName {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    exclude: None,
+                },
+            ],
+            from: [
+                Join {
+                    span: Some(
+                        23..33,
+                    ),
+                    join: Join {
+                        op: Inner,
+                        condition: On(
+                            BinaryOp {
+                                span: Some(
+                                    47..48,
+                                ),
+                                op: Eq,
+                                left: ColumnRef {
+                                    span: Some(
+                                        45..46,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                        span: Some(
+                                            45..46,
+                                        ),
+                                    },
+                                },
+                                right: ColumnRef {
+                                    span: Some(
+                                        49..50,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "b",
+                                        quote: None,
+                                        span: Some(
+                                            49..50,
+                                        ),
+                                    },
+                                },
+                            },
+                        ),
+                        left: Table {
+                            span: Some(
+                                14..22,
+                            ),
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                name: "customer",
+                                quote: None,
+                                span: Some(
+                                    14..22,
+                                ),
+                            },
+                            alias: None,
+                            travel_point: None,
+                            pivot: None,
+                            unpivot: None,
+                        },
+                        right: Table {
+                            span: Some(
+                                34..40,
+                            ),
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                name: "orders",
+                                quote: None,
+                                span: Some(
+                                    34..40,
+                                ),
+                            },
+                            alias: None,
+                            travel_point: None,
+                            pivot: None,
+                            unpivot: None,
+                        },
+                    },
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
         },
     ),
     order_by: [],
@@ -469,6 +595,7 @@ Query {
             selection: None,
             group_by: None,
             having: None,
+            window_list: None,
         },
     ),
     order_by: [],
@@ -600,6 +727,7 @@ Query {
             selection: None,
             group_by: None,
             having: None,
+            window_list: None,
         },
     ),
     order_by: [],
@@ -705,6 +833,7 @@ Query {
             selection: None,
             group_by: None,
             having: None,
+            window_list: None,
         },
     ),
     order_by: [],
@@ -829,6 +958,7 @@ Query {
             selection: None,
             group_by: None,
             having: None,
+            window_list: None,
         },
     ),
     order_by: [],
@@ -929,6 +1059,7 @@ Query {
                                 selection: None,
                                 group_by: None,
                                 having: None,
+                                window_list: None,
                             },
                         ),
                         order_by: [],
@@ -1033,6 +1164,7 @@ Query {
             ),
             group_by: None,
             having: None,
+            window_list: None,
         },
     ),
     order_by: [],
@@ -1125,6 +1257,7 @@ Query {
                                 selection: None,
                                 group_by: None,
                                 having: None,
+                                window_list: None,
                             },
                         ),
                         order_by: [],
@@ -1229,6 +1362,7 @@ Query {
             ),
             group_by: None,
             having: None,
+            window_list: None,
         },
     ),
     order_by: [],
@@ -1329,6 +1463,7 @@ Query {
                                 selection: None,
                                 group_by: None,
                                 having: None,
+                                window_list: None,
                             },
                         ),
                         order_by: [],
@@ -1397,6 +1532,7 @@ Query {
                                 selection: None,
                                 group_by: None,
                                 having: None,
+                                window_list: None,
                             },
                         ),
                         order_by: [],
@@ -1501,6 +1637,7 @@ Query {
                                 ),
                                 group_by: None,
                                 having: None,
+                                window_list: None,
                             },
                         ),
                         order_by: [],
@@ -1691,6 +1828,7 @@ Query {
             ),
             group_by: None,
             having: None,
+            window_list: None,
         },
     ),
     order_by: [],
@@ -1798,6 +1936,7 @@ Query {
                                         selection: None,
                                         group_by: None,
                                         having: None,
+                                        window_list: None,
                                     },
                                 ),
                                 right: Select(
@@ -1848,6 +1987,7 @@ Query {
                                         selection: None,
                                         group_by: None,
                                         having: None,
+                                        window_list: None,
                                     },
                                 ),
                             },
@@ -1917,6 +2057,7 @@ Query {
             selection: None,
             group_by: None,
             having: None,
+            window_list: None,
         },
     ),
     order_by: [],
@@ -2296,6 +2437,7 @@ Query {
                                     ),
                                 ),
                                 having: None,
+                                window_list: None,
                             },
                         ),
                         order_by: [],
@@ -2339,6 +2481,7 @@ Query {
                 ),
             ),
             having: None,
+            window_list: None,
         },
     ),
     order_by: [
@@ -2492,6 +2635,7 @@ Query {
                     selection: None,
                     group_by: None,
                     having: None,
+                    window_list: None,
                 },
             ),
             right: Select(
@@ -2535,6 +2679,7 @@ Query {
                     selection: None,
                     group_by: None,
                     having: None,
+                    window_list: None,
                 },
             ),
         },
@@ -2604,6 +2749,7 @@ Query {
                     selection: None,
                     group_by: None,
                     having: None,
+                    window_list: None,
                 },
             ),
             right: Select(
@@ -2647,6 +2793,7 @@ Query {
                     selection: None,
                     group_by: None,
                     having: None,
+                    window_list: None,
                 },
             ),
         },
@@ -2723,6 +2870,7 @@ Query {
                             selection: None,
                             group_by: None,
                             having: None,
+                            window_list: None,
                         },
                     ),
                     right: Select(
@@ -2766,6 +2914,7 @@ Query {
                             selection: None,
                             group_by: None,
                             having: None,
+                            window_list: None,
                         },
                     ),
                 },
@@ -2811,6 +2960,7 @@ Query {
                     selection: None,
                     group_by: None,
                     having: None,
+                    window_list: None,
                 },
             ),
         },
@@ -2887,6 +3037,7 @@ Query {
                             selection: None,
                             group_by: None,
                             having: None,
+                            window_list: None,
                         },
                     ),
                     right: Select(
@@ -2930,6 +3081,7 @@ Query {
                             selection: None,
                             group_by: None,
                             having: None,
+                            window_list: None,
                         },
                     ),
                 },
@@ -2975,6 +3127,7 @@ Query {
                     selection: None,
                     group_by: None,
                     having: None,
+                    window_list: None,
                 },
             ),
         },
@@ -3044,6 +3197,7 @@ Query {
                     selection: None,
                     group_by: None,
                     having: None,
+                    window_list: None,
                 },
             ),
             right: SetOperation(
@@ -3094,6 +3248,7 @@ Query {
                             selection: None,
                             group_by: None,
                             having: None,
+                            window_list: None,
                         },
                     ),
                     right: Select(
@@ -3137,6 +3292,7 @@ Query {
                             selection: None,
                             group_by: None,
                             having: None,
+                            window_list: None,
                         },
                     ),
                 },
@@ -3215,6 +3371,7 @@ Query {
                             selection: None,
                             group_by: None,
                             having: None,
+                            window_list: None,
                         },
                     ),
                     right: Select(
@@ -3258,6 +3415,7 @@ Query {
                             selection: None,
                             group_by: None,
                             having: None,
+                            window_list: None,
                         },
                     ),
                 },
@@ -3303,6 +3461,7 @@ Query {
                     selection: None,
                     group_by: None,
                     having: None,
+                    window_list: None,
                 },
             ),
         },
@@ -3372,6 +3531,7 @@ Query {
                     selection: None,
                     group_by: None,
                     having: None,
+                    window_list: None,
                 },
             ),
             right: SetOperation(
@@ -3422,6 +3582,7 @@ Query {
                             selection: None,
                             group_by: None,
                             having: None,
+                            window_list: None,
                         },
                     ),
                     right: Select(
@@ -3465,10 +3626,420 @@ Query {
                             selection: None,
                             group_by: None,
                             having: None,
+                            window_list: None,
                         },
                     ),
                 },
             ),
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+SELECT * FROM ((SELECT *) EXCEPT (SELECT *)) foo
+---------- Output ---------
+SELECT * FROM (SELECT * EXCEPT SELECT *) AS foo
+---------- AST ------------
+Query {
+    span: Some(
+        0..48,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..48,
+            ),
+            distinct: false,
+            select_list: [
+                QualifiedName {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    exclude: None,
+                },
+            ],
+            from: [
+                Subquery {
+                    span: Some(
+                        14..48,
+                    ),
+                    subquery: Query {
+                        span: Some(
+                            15..43,
+                        ),
+                        with: None,
+                        body: SetOperation(
+                            SetOperation {
+                                span: Some(
+                                    26..32,
+                                ),
+                                op: Except,
+                                all: false,
+                                left: Select(
+                                    SelectStmt {
+                                        span: Some(
+                                            16..24,
+                                        ),
+                                        distinct: false,
+                                        select_list: [
+                                            QualifiedName {
+                                                qualified: [
+                                                    Star(
+                                                        Some(
+                                                            23..24,
+                                                        ),
+                                                    ),
+                                                ],
+                                                exclude: None,
+                                            },
+                                        ],
+                                        from: [],
+                                        selection: None,
+                                        group_by: None,
+                                        having: None,
+                                        window_list: None,
+                                    },
+                                ),
+                                right: Select(
+                                    SelectStmt {
+                                        span: Some(
+                                            34..42,
+                                        ),
+                                        distinct: false,
+                                        select_list: [
+                                            QualifiedName {
+                                                qualified: [
+                                                    Star(
+                                                        Some(
+                                                            41..42,
+                                                        ),
+                                                    ),
+                                                ],
+                                                exclude: None,
+                                            },
+                                        ],
+                                        from: [],
+                                        selection: None,
+                                        group_by: None,
+                                        having: None,
+                                        window_list: None,
+                                    },
+                                ),
+                            },
+                        ),
+                        order_by: [],
+                        limit: [],
+                        offset: None,
+                        ignore_result: false,
+                    },
+                    alias: Some(
+                        TableAlias {
+                            name: Identifier {
+                                name: "foo",
+                                quote: None,
+                                span: Some(
+                                    45..48,
+                                ),
+                            },
+                            columns: [],
+                        },
+                    ),
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+SELECT * FROM (((SELECT *) EXCEPT (SELECT *))) foo
+---------- Output ---------
+SELECT * FROM (SELECT * EXCEPT SELECT *) AS foo
+---------- AST ------------
+Query {
+    span: Some(
+        0..50,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..50,
+            ),
+            distinct: false,
+            select_list: [
+                QualifiedName {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    exclude: None,
+                },
+            ],
+            from: [
+                Subquery {
+                    span: Some(
+                        14..50,
+                    ),
+                    subquery: Query {
+                        span: Some(
+                            15..45,
+                        ),
+                        with: None,
+                        body: SetOperation(
+                            SetOperation {
+                                span: Some(
+                                    27..33,
+                                ),
+                                op: Except,
+                                all: false,
+                                left: Select(
+                                    SelectStmt {
+                                        span: Some(
+                                            17..25,
+                                        ),
+                                        distinct: false,
+                                        select_list: [
+                                            QualifiedName {
+                                                qualified: [
+                                                    Star(
+                                                        Some(
+                                                            24..25,
+                                                        ),
+                                                    ),
+                                                ],
+                                                exclude: None,
+                                            },
+                                        ],
+                                        from: [],
+                                        selection: None,
+                                        group_by: None,
+                                        having: None,
+                                        window_list: None,
+                                    },
+                                ),
+                                right: Select(
+                                    SelectStmt {
+                                        span: Some(
+                                            35..43,
+                                        ),
+                                        distinct: false,
+                                        select_list: [
+                                            QualifiedName {
+                                                qualified: [
+                                                    Star(
+                                                        Some(
+                                                            42..43,
+                                                        ),
+                                                    ),
+                                                ],
+                                                exclude: None,
+                                            },
+                                        ],
+                                        from: [],
+                                        selection: None,
+                                        group_by: None,
+                                        having: None,
+                                        window_list: None,
+                                    },
+                                ),
+                            },
+                        ),
+                        order_by: [],
+                        limit: [],
+                        offset: None,
+                        ignore_result: false,
+                    },
+                    alias: Some(
+                        TableAlias {
+                            name: Identifier {
+                                name: "foo",
+                                quote: None,
+                                span: Some(
+                                    47..50,
+                                ),
+                            },
+                            columns: [],
+                        },
+                    ),
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+SELECT * FROM (SELECT * FROM xyu ORDER BY x, y) AS xyu
+---------- Output ---------
+SELECT * FROM (SELECT * FROM xyu ORDER BY x, y) AS xyu
+---------- AST ------------
+Query {
+    span: Some(
+        0..54,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..54,
+            ),
+            distinct: false,
+            select_list: [
+                QualifiedName {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    exclude: None,
+                },
+            ],
+            from: [
+                Subquery {
+                    span: Some(
+                        14..54,
+                    ),
+                    subquery: Query {
+                        span: Some(
+                            15..46,
+                        ),
+                        with: None,
+                        body: Select(
+                            SelectStmt {
+                                span: Some(
+                                    15..32,
+                                ),
+                                distinct: false,
+                                select_list: [
+                                    QualifiedName {
+                                        qualified: [
+                                            Star(
+                                                Some(
+                                                    22..23,
+                                                ),
+                                            ),
+                                        ],
+                                        exclude: None,
+                                    },
+                                ],
+                                from: [
+                                    Table {
+                                        span: Some(
+                                            29..32,
+                                        ),
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            name: "xyu",
+                                            quote: None,
+                                            span: Some(
+                                                29..32,
+                                            ),
+                                        },
+                                        alias: None,
+                                        travel_point: None,
+                                        pivot: None,
+                                        unpivot: None,
+                                    },
+                                ],
+                                selection: None,
+                                group_by: None,
+                                having: None,
+                                window_list: None,
+                            },
+                        ),
+                        order_by: [
+                            OrderByExpr {
+                                expr: ColumnRef {
+                                    span: Some(
+                                        42..43,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "x",
+                                        quote: None,
+                                        span: Some(
+                                            42..43,
+                                        ),
+                                    },
+                                },
+                                asc: None,
+                                nulls_first: None,
+                            },
+                            OrderByExpr {
+                                expr: ColumnRef {
+                                    span: Some(
+                                        45..46,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "y",
+                                        quote: None,
+                                        span: Some(
+                                            45..46,
+                                        ),
+                                    },
+                                },
+                                asc: None,
+                                nulls_first: None,
+                            },
+                        ],
+                        limit: [],
+                        offset: None,
+                        ignore_result: false,
+                    },
+                    alias: Some(
+                        TableAlias {
+                            name: Identifier {
+                                name: "xyu",
+                                quote: None,
+                                span: Some(
+                                    51..54,
+                                ),
+                            },
+                            columns: [],
+                        },
+                    ),
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
         },
     ),
     order_by: [],
@@ -3604,6 +4175,7 @@ Query {
             selection: None,
             group_by: None,
             having: None,
+            window_list: None,
         },
     ),
     order_by: [
@@ -3730,6 +4302,7 @@ Query {
             selection: None,
             group_by: None,
             having: None,
+            window_list: None,
         },
     ),
     order_by: [
@@ -3745,6 +4318,559 @@ Query {
                     quote: None,
                     span: Some(
                         90..95,
+                    ),
+                },
+            },
+            asc: None,
+            nulls_first: None,
+        },
+    ],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+select * from range(1, 2)
+---------- Output ---------
+SELECT * FROM range(1, 2)
+---------- AST ------------
+Query {
+    span: Some(
+        0..25,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..25,
+            ),
+            distinct: false,
+            select_list: [
+                QualifiedName {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    exclude: None,
+                },
+            ],
+            from: [
+                TableFunction {
+                    span: Some(
+                        14..25,
+                    ),
+                    name: Identifier {
+                        name: "range",
+                        quote: None,
+                        span: Some(
+                            14..19,
+                        ),
+                    },
+                    params: [
+                        Literal {
+                            span: Some(
+                                20..21,
+                            ),
+                            lit: UInt64(
+                                1,
+                            ),
+                        },
+                        Literal {
+                            span: Some(
+                                23..24,
+                            ),
+                            lit: UInt64(
+                                2,
+                            ),
+                        },
+                    ],
+                    named_params: [],
+                    alias: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+select sum(a) over w from customer window w as (partition by a order by b)
+---------- Output ---------
+SELECT sum(a) OVER (WINDOW w) FROM customer
+---------- AST ------------
+Query {
+    span: Some(
+        0..74,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..74,
+            ),
+            distinct: false,
+            select_list: [
+                AliasedExpr {
+                    expr: FunctionCall {
+                        span: Some(
+                            7..20,
+                        ),
+                        distinct: false,
+                        name: Identifier {
+                            name: "sum",
+                            quote: None,
+                            span: Some(
+                                7..10,
+                            ),
+                        },
+                        args: [
+                            ColumnRef {
+                                span: Some(
+                                    11..12,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Some(
+                                        11..12,
+                                    ),
+                                },
+                            },
+                        ],
+                        params: [],
+                        window: Some(
+                            WindowReference(
+                                WindowRef {
+                                    window_name: Identifier {
+                                        name: "w",
+                                        quote: None,
+                                        span: Some(
+                                            19..20,
+                                        ),
+                                    },
+                                },
+                            ),
+                        ),
+                    },
+                    alias: None,
+                },
+            ],
+            from: [
+                Table {
+                    span: Some(
+                        26..34,
+                    ),
+                    catalog: None,
+                    database: None,
+                    table: Identifier {
+                        name: "customer",
+                        quote: None,
+                        span: Some(
+                            26..34,
+                        ),
+                    },
+                    alias: None,
+                    travel_point: None,
+                    pivot: None,
+                    unpivot: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: Some(
+                [
+                    WindowDefinition {
+                        name: Identifier {
+                            name: "w",
+                            quote: None,
+                            span: Some(
+                                42..43,
+                            ),
+                        },
+                        spec: WindowSpec {
+                            existing_window_name: None,
+                            partition_by: [
+                                ColumnRef {
+                                    span: Some(
+                                        61..62,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                        span: Some(
+                                            61..62,
+                                        ),
+                                    },
+                                },
+                            ],
+                            order_by: [
+                                OrderByExpr {
+                                    expr: ColumnRef {
+                                        span: Some(
+                                            72..73,
+                                        ),
+                                        database: None,
+                                        table: None,
+                                        column: Identifier {
+                                            name: "b",
+                                            quote: None,
+                                            span: Some(
+                                                72..73,
+                                            ),
+                                        },
+                                    },
+                                    asc: None,
+                                    nulls_first: None,
+                                },
+                            ],
+                            window_frame: None,
+                        },
+                    },
+                ],
+            ),
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+select a, sum(a) over w, sum(a) over w1, sum(a) over w2 from t1 window w as (partition by a), w2 as (w1 rows current row), w1 as (w order by a) order by a
+---------- Output ---------
+SELECT a, sum(a) OVER (WINDOW w), sum(a) OVER (WINDOW w1), sum(a) OVER (WINDOW w2) FROM t1 ORDER BY a
+---------- AST ------------
+Query {
+    span: Some(
+        0..154,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..143,
+            ),
+            distinct: false,
+            select_list: [
+                AliasedExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            7..8,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Some(
+                                7..8,
+                            ),
+                        },
+                    },
+                    alias: None,
+                },
+                AliasedExpr {
+                    expr: FunctionCall {
+                        span: Some(
+                            10..23,
+                        ),
+                        distinct: false,
+                        name: Identifier {
+                            name: "sum",
+                            quote: None,
+                            span: Some(
+                                10..13,
+                            ),
+                        },
+                        args: [
+                            ColumnRef {
+                                span: Some(
+                                    14..15,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Some(
+                                        14..15,
+                                    ),
+                                },
+                            },
+                        ],
+                        params: [],
+                        window: Some(
+                            WindowReference(
+                                WindowRef {
+                                    window_name: Identifier {
+                                        name: "w",
+                                        quote: None,
+                                        span: Some(
+                                            22..23,
+                                        ),
+                                    },
+                                },
+                            ),
+                        ),
+                    },
+                    alias: None,
+                },
+                AliasedExpr {
+                    expr: FunctionCall {
+                        span: Some(
+                            25..39,
+                        ),
+                        distinct: false,
+                        name: Identifier {
+                            name: "sum",
+                            quote: None,
+                            span: Some(
+                                25..28,
+                            ),
+                        },
+                        args: [
+                            ColumnRef {
+                                span: Some(
+                                    29..30,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Some(
+                                        29..30,
+                                    ),
+                                },
+                            },
+                        ],
+                        params: [],
+                        window: Some(
+                            WindowReference(
+                                WindowRef {
+                                    window_name: Identifier {
+                                        name: "w1",
+                                        quote: None,
+                                        span: Some(
+                                            37..39,
+                                        ),
+                                    },
+                                },
+                            ),
+                        ),
+                    },
+                    alias: None,
+                },
+                AliasedExpr {
+                    expr: FunctionCall {
+                        span: Some(
+                            41..55,
+                        ),
+                        distinct: false,
+                        name: Identifier {
+                            name: "sum",
+                            quote: None,
+                            span: Some(
+                                41..44,
+                            ),
+                        },
+                        args: [
+                            ColumnRef {
+                                span: Some(
+                                    45..46,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Some(
+                                        45..46,
+                                    ),
+                                },
+                            },
+                        ],
+                        params: [],
+                        window: Some(
+                            WindowReference(
+                                WindowRef {
+                                    window_name: Identifier {
+                                        name: "w2",
+                                        quote: None,
+                                        span: Some(
+                                            53..55,
+                                        ),
+                                    },
+                                },
+                            ),
+                        ),
+                    },
+                    alias: None,
+                },
+            ],
+            from: [
+                Table {
+                    span: Some(
+                        61..63,
+                    ),
+                    catalog: None,
+                    database: None,
+                    table: Identifier {
+                        name: "t1",
+                        quote: None,
+                        span: Some(
+                            61..63,
+                        ),
+                    },
+                    alias: None,
+                    travel_point: None,
+                    pivot: None,
+                    unpivot: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: Some(
+                [
+                    WindowDefinition {
+                        name: Identifier {
+                            name: "w",
+                            quote: None,
+                            span: Some(
+                                71..72,
+                            ),
+                        },
+                        spec: WindowSpec {
+                            existing_window_name: None,
+                            partition_by: [
+                                ColumnRef {
+                                    span: Some(
+                                        90..91,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                        span: Some(
+                                            90..91,
+                                        ),
+                                    },
+                                },
+                            ],
+                            order_by: [],
+                            window_frame: None,
+                        },
+                    },
+                    WindowDefinition {
+                        name: Identifier {
+                            name: "w2",
+                            quote: None,
+                            span: Some(
+                                94..96,
+                            ),
+                        },
+                        spec: WindowSpec {
+                            existing_window_name: Some(
+                                Identifier {
+                                    name: "w1",
+                                    quote: None,
+                                    span: Some(
+                                        101..103,
+                                    ),
+                                },
+                            ),
+                            partition_by: [],
+                            order_by: [],
+                            window_frame: Some(
+                                WindowFrame {
+                                    units: Rows,
+                                    start_bound: CurrentRow,
+                                    end_bound: CurrentRow,
+                                },
+                            ),
+                        },
+                    },
+                    WindowDefinition {
+                        name: Identifier {
+                            name: "w1",
+                            quote: None,
+                            span: Some(
+                                123..125,
+                            ),
+                        },
+                        spec: WindowSpec {
+                            existing_window_name: Some(
+                                Identifier {
+                                    name: "w",
+                                    quote: None,
+                                    span: Some(
+                                        130..131,
+                                    ),
+                                },
+                            ),
+                            partition_by: [],
+                            order_by: [
+                                OrderByExpr {
+                                    expr: ColumnRef {
+                                        span: Some(
+                                            141..142,
+                                        ),
+                                        database: None,
+                                        table: None,
+                                        column: Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Some(
+                                                141..142,
+                                            ),
+                                        },
+                                    },
+                                    asc: None,
+                                    nulls_first: None,
+                                },
+                            ],
+                            window_frame: None,
+                        },
+                    },
+                ],
+            ),
+        },
+    ),
+    order_by: [
+        OrderByExpr {
+            expr: ColumnRef {
+                span: Some(
+                    153..154,
+                ),
+                database: None,
+                table: None,
+                column: Identifier {
+                    name: "a",
+                    quote: None,
+                    span: Some(
+                        153..154,
                     ),
                 },
             },

@@ -60,6 +60,7 @@ pub struct Progresses {
     pub scan_progress: ProgressValues,
     pub write_progress: ProgressValues,
     pub result_progress: ProgressValues,
+    pub total_scan: ProgressValues,
 }
 
 impl Progresses {
@@ -68,6 +69,7 @@ impl Progresses {
             scan_progress: ctx.get_scan_progress_value(),
             write_progress: ctx.get_write_progress_value(),
             result_progress: ctx.get_result_progress_value(),
+            total_scan: ctx.get_total_scan_value(),
         }
     }
 }
@@ -138,6 +140,7 @@ impl Executor {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn start_to_running(this: &Arc<RwLock<Executor>>, state: ExecuteState) {
         let mut guard = this.write().await;
         if let Starting(_) = &guard.state {
@@ -145,12 +148,14 @@ impl Executor {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn start_to_stop(this: &Arc<RwLock<Executor>>, state: ExecuteState) {
         let mut guard = this.write().await;
         if let Starting(_) = &guard.state {
             guard.state = state
         }
     }
+    #[async_backtrace::framed]
     pub async fn stop(this: &Arc<RwLock<Executor>>, reason: Result<()>, kill: bool) {
         {
             let guard = this.read().await;
@@ -204,12 +209,14 @@ impl Executor {
 }
 
 impl ExecuteState {
+    #[async_backtrace::framed]
     pub(crate) async fn get_schema(sql: &str, ctx: Arc<QueryContext>) -> Result<DataSchemaRef> {
         let mut planner = Planner::new(ctx.clone());
         let (plan, _) = planner.plan_sql(sql).await?;
         Ok(InterpreterFactory::get_schema(ctx, &plan))
     }
 
+    #[async_backtrace::framed]
     pub(crate) async fn try_start_query(
         executor: Arc<RwLock<Executor>>,
         sql: &str,
@@ -219,7 +226,7 @@ impl ExecuteState {
     ) -> Result<()> {
         let mut planner = Planner::new(ctx.clone());
         let (plan, extras) = planner.plan_sql(sql).await?;
-        ctx.attach_query_str(plan.to_string(), extras.stament.to_mask_sql());
+        ctx.attach_query_str(plan.to_string(), extras.statement.to_mask_sql());
 
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let running_state = ExecuteRunning {
@@ -239,10 +246,10 @@ impl ExecuteState {
                 Executor::stop(&executor_clone, Err(err), false).await;
                 block_sender_closer.close();
             }
-            Err(_) => {
+            Err(e) => {
                 Executor::stop(
                     &executor_clone,
-                    Err(ErrorCode::PanicError("interpreter panic!")),
+                    Err(ErrorCode::PanicError(format!("interpreter panic: {e:?}"))),
                     false,
                 )
                 .await;

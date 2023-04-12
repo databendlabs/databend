@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Raft state includes some enssential information about raft, such as term, voted_for
+//! Raft state includes some essential information about raft, such as term, voted_for
 mod raft_state;
 pub(crate) mod raft_state_kv;
 

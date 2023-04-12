@@ -31,7 +31,6 @@ use crate::sessions::SessionType;
 
 impl FlightSqlServiceImpl {
     pub(super) fn get_session<T>(&self, req: &Request<T>) -> Result<Arc<Session>, Status> {
-        println!("{:?}", req.metadata());
         let auth = req
             .metadata()
             .get("authorization")
@@ -46,8 +45,8 @@ impl FlightSqlServiceImpl {
         }
         let session_id = authorization[bearer.len()..].to_string();
 
-        if let Some(session) = self.sessions.get(&session_id) {
-            Ok(session.clone())
+        if let Some(session) = self.sessions.lock().get(&session_id) {
+            Ok(session)
         } else {
             Err(Status::unauthenticated(format!(
                 "session_id not found: {session_id}"
@@ -55,13 +54,18 @@ impl FlightSqlServiceImpl {
         }
     }
 
+    pub(super) fn get_header_value(metadata: &MetadataMap, key: &str) -> Option<String> {
+        metadata
+            .get(key)
+            .and_then(|v| v.to_str().ok())
+            .map(|v| v.to_string())
+    }
+
     pub(super) fn get_user_password(metadata: &MetadataMap) -> Result<(String, String), String> {
         let basic = "Basic ";
-        let authorization = metadata
-            .get("authorization")
-            .ok_or("authorization field not present")?
-            .to_str()
-            .map_err(|e| format!("authorization not parsable: {}", e))?;
+        let authorization = Self::get_header_value(metadata, "authorization")
+            .ok_or_else(|| "authorization not parsable".to_string())?;
+
         if !authorization.starts_with(basic) {
             return Err(format!("Auth type not implemented: {authorization}"));
         }
@@ -79,6 +83,7 @@ impl FlightSqlServiceImpl {
         Ok((user.to_string(), pass.to_string()))
     }
 
+    #[async_backtrace::framed]
     pub(super) async fn auth_user_password(
         user: String,
         password: String,

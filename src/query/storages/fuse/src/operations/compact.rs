@@ -44,23 +44,24 @@ pub struct CompactOptions {
 }
 
 impl FuseTable {
+    #[async_backtrace::framed]
     pub(crate) async fn do_compact(
         &self,
         ctx: Arc<dyn TableContext>,
         target: CompactTarget,
         limit: Option<usize>,
         pipeline: &mut Pipeline,
-    ) -> Result<bool> {
+    ) -> Result<()> {
         let snapshot_opt = self.read_table_snapshot().await?;
         let base_snapshot = if let Some(val) = snapshot_opt {
             val
         } else {
             // no snapshot, no compaction.
-            return Ok(false);
+            return Ok(());
         };
 
         if base_snapshot.summary.block_count <= 1 {
-            return Ok(false);
+            return Ok(());
         }
 
         let block_per_seg =
@@ -75,15 +76,17 @@ impl FuseTable {
         match target {
             CompactTarget::Blocks => self.compact_blocks(ctx, pipeline, compact_params).await,
             CompactTarget::Segments => self.compact_segments(ctx, pipeline, compact_params).await,
+            CompactTarget::None => Ok(()),
         }
     }
 
+    #[async_backtrace::framed]
     async fn compact_segments(
         &self,
         ctx: Arc<dyn TableContext>,
         _pipeline: &mut Pipeline,
         options: CompactOptions,
-    ) -> Result<bool> {
+    ) -> Result<()> {
         let mut segment_mutator = SegmentCompactMutator::try_create(
             ctx.clone(),
             options,
@@ -92,13 +95,11 @@ impl FuseTable {
         )?;
 
         if !segment_mutator.target_select().await? {
-            return Ok(false);
+            return Ok(());
         }
 
         let mutator = Box::new(segment_mutator);
-        mutator.try_commit(Arc::new(self.clone())).await?;
-
-        Ok(true)
+        mutator.try_commit(Arc::new(self.clone())).await
     }
 
     /// The flow of Pipeline is as follows:
@@ -109,15 +110,16 @@ impl FuseTable {
     /// +--------------+        |      +-----------------+      +------------+
     /// |CompactSourceN|  ------
     /// +--------------+
+    #[async_backtrace::framed]
     async fn compact_blocks(
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         options: CompactOptions,
-    ) -> Result<bool> {
+    ) -> Result<()> {
         // skip cluster table.
         if self.cluster_key_meta.is_some() {
-            return Ok(false);
+            return Ok(());
         }
 
         let thresholds = self.get_block_compact_thresholds();
@@ -128,7 +130,7 @@ impl FuseTable {
             BlockCompactMutator::new(ctx.clone(), thresholds, options, self.operator.clone());
         mutator.target_select().await?;
         if mutator.compact_tasks.is_empty() {
-            return Ok(false);
+            return Ok(());
         }
 
         // Status.
@@ -183,6 +185,6 @@ impl FuseTable {
             )
         })?;
 
-        Ok(true)
+        Ok(())
     }
 }

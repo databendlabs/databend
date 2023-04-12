@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use common_base::base::ProgressValues;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::InternalColumn;
 use common_catalog::plan::PartStatistics;
@@ -26,10 +27,12 @@ use common_exception::Result;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
+use common_expression::TableField;
 
 #[async_trait::async_trait]
 pub trait ToReadDataSourcePlan {
     /// Real read_plan to access partitions/push_downs
+    #[async_backtrace::framed]
     async fn read_plan(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -50,6 +53,7 @@ pub trait ToReadDataSourcePlan {
 
 #[async_trait::async_trait]
 impl ToReadDataSourcePlan for dyn Table {
+    #[async_backtrace::framed]
     async fn read_plan_with_catalog(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -71,6 +75,11 @@ impl ToReadDataSourcePlan for dyn Table {
             self.read_partitions(ctx.clone(), push_downs.clone()).await
         }?;
 
+        ctx.incr_total_scan_value(ProgressValues {
+            rows: statistics.read_rows,
+            bytes: statistics.read_bytes,
+        });
+
         // We need the partition sha256 to specify the result cache.
         if ctx.get_settings().get_enable_query_result_cache()? {
             let sha = parts.compute_sha256()?;
@@ -81,17 +90,33 @@ impl ToReadDataSourcePlan for dyn Table {
 
         let schema = &source_info.schema();
         let description = statistics.get_description(&source_info.desc());
-
         let mut output_schema = match (self.benefit_column_prune(), &push_downs) {
             (true, Some(push_downs)) => match &push_downs.prewhere {
                 Some(prewhere) => Arc::new(prewhere.output_columns.project_schema(schema)),
-                _ => match &push_downs.projection {
-                    Some(projection) => Arc::new(projection.project_schema(schema)),
-                    _ => schema.clone(),
-                },
+                _ => {
+                    if let Some(output_columns) = &push_downs.output_columns {
+                        Arc::new(output_columns.project_schema(schema))
+                    } else if let Some(projection) = &push_downs.projection {
+                        Arc::new(projection.project_schema(schema))
+                    } else {
+                        schema.clone()
+                    }
+                }
             },
             _ => schema.clone(),
         };
+
+        if let Some(ref push_downs) = push_downs {
+            if let Some(ref virtual_columns) = push_downs.virtual_columns {
+                let mut schema = output_schema.as_ref().clone();
+                let fields = virtual_columns
+                    .iter()
+                    .map(|c| TableField::new(&c.name, *c.data_type.clone()))
+                    .collect::<Vec<_>>();
+                schema.add_columns(&fields)?;
+                output_schema = Arc::new(schema);
+            }
+        }
 
         if let Some(ref internal_columns) = internal_columns {
             let mut schema = output_schema.as_ref().clone();

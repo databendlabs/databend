@@ -42,6 +42,7 @@ impl<E: Endpoint> Endpoint for SharingAuthImpl<E> {
 
     // TODO(zhihanz) current implementation only used for stateless test
     // for production usage, we need to implement a middleware with JWT authentication
+    #[async_backtrace::framed]
     async fn call(&self, mut req: Request) -> Result<Self::Output> {
         // decode auth header from bearer base64
         let auth_header = req
@@ -69,7 +70,7 @@ impl<E: Endpoint> Endpoint for SharingAuthImpl<E> {
                 Ok(resp)
             }
             Err(err) => {
-                println!("err: {:?}", err);
+                // println!("err: {:?}", err);
                 Err(err)
             }
         }

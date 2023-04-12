@@ -22,11 +22,11 @@ done
 echo 'Start databend-meta...'
 nohup target/${BUILD_PROFILE}/databend-meta --single --log-level=ERROR &
 echo "Waiting on databend-meta 10 seconds..."
-python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
+python3 scripts/ci/wait_tcp.py --timeout 10 --port 9191
 
 echo 'Start databend-query management-mode node'
 nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-management-mode.toml &
 echo "Waiting on databend-query 10 seconds..."
-python3 scripts/ci/wait_tcp.py --timeout 5 --port 9091
+python3 scripts/ci/wait_tcp.py --timeout 30 --port 9091
 
 echo "All done..."

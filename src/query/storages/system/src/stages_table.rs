@@ -48,6 +48,7 @@ impl AsyncSystemTable for StagesTable {
         &self.table_info
     }
 
+    #[async_backtrace::framed]
     async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let stages = UserApiProvider::instance().get_stages(&tenant).await?;
@@ -64,7 +65,7 @@ impl AsyncSystemTable for StagesTable {
             stage_type.push(stage.stage_type.clone().to_string().into_bytes());
             stage_params.push(format!("{:?}", stage.stage_params).into_bytes());
             copy_options.push(format!("{:?}", stage.copy_options).into_bytes());
-            file_format_options.push(format!("{:?}", stage.file_format_options).into_bytes());
+            file_format_options.push(format!("{:?}", stage.file_format_params).into_bytes());
             // TODO(xuanwo): we will remove this line.
             match stage.stage_type {
                 StageType::LegacyInternal | StageType::Internal | StageType::User => {

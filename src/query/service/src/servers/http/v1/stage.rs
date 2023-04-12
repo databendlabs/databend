@@ -37,6 +37,7 @@ pub struct UploadToStageResponse {
 }
 
 #[poem::handler]
+#[async_backtrace::framed]
 pub async fn upload_to_stage(
     ctx: &HttpQueryContext,
     req: &Request,

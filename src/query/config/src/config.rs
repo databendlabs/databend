@@ -103,7 +103,7 @@ pub struct Config {
 
     /// Note: Legacy Config API
     ///
-    /// When setting its all feilds to empty strings, it will be ignored
+    /// When setting its all fields to empty strings, it will be ignored
     ///
     /// external catalog config.
     /// - Later, catalog information SHOULD be kept in KV Service
@@ -1154,7 +1154,7 @@ pub struct QueryConfig {
     #[clap(long, default_value = "127.0.0.1")]
     pub flight_sql_handler_host: String,
 
-    #[clap(long, default_value = "7000")]
+    #[clap(long, default_value = "8900")]
     pub flight_sql_handler_port: u16,
 
     #[clap(long, default_value = "127.0.0.1:9090")]
@@ -1308,9 +1308,20 @@ pub struct QueryConfig {
     #[clap(long)]
     pub disable_system_table_load: bool,
 
+    #[clap(long, default_value = "https://api.openai.com/v1/")]
+    pub openai_api_base_url: String,
+
     // This will not show in system.configs, put it to mask.rs.
     #[clap(long, default_value = "")]
     pub openai_api_key: String,
+
+    /// https://platform.openai.com/docs/models/embeddings
+    #[clap(long, default_value = "text-embedding-ada-002")]
+    pub openai_api_embedding_model: String,
+
+    /// https://platform.openai.com/docs/guides/chat
+    #[clap(long, default_value = "gpt-3.5-turbo")]
+    pub openai_api_completion_model: String,
 }
 
 impl Default for QueryConfig {
@@ -1372,7 +1383,10 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             internal_enable_sandbox_tenant: self.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: self.internal_merge_on_read_mutation,
             disable_system_table_load: self.disable_system_table_load,
+            openai_api_base_url: self.openai_api_base_url,
             openai_api_key: self.openai_api_key,
+            openai_api_completion_model: self.openai_api_completion_model,
+            openai_api_embedding_model: self.openai_api_embedding_model,
         })
     }
 }
@@ -1446,7 +1460,10 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_cache_bloom_index_filter_count: None,
             table_cache_bloom_index_data_bytes: None,
             disable_system_table_load: inner.disable_system_table_load,
+            openai_api_base_url: inner.openai_api_base_url,
             openai_api_key: inner.openai_api_key,
+            openai_api_completion_model: inner.openai_api_completion_model,
+            openai_api_embedding_model: inner.openai_api_embedding_model,
         }
     }
 }
@@ -1647,6 +1664,10 @@ pub struct MetaConfig {
     #[serde(alias = "auto_sync_interval")]
     pub auto_sync_interval: u64,
 
+    #[clap(long = "unhealth-endpoint-evict-time", default_value = "120")]
+    #[serde(alias = "unhealth_endpoint_evict_time")]
+    pub unhealth_endpoint_evict_time: u64,
+
     /// Certificate for client to identify meta rpc serve
     #[clap(long = "meta-rpc-tls-meta-server-root-ca-cert", default_value_t)]
     pub rpc_tls_meta_server_root_ca_cert: String,
@@ -1675,6 +1696,7 @@ impl TryInto<InnerMetaConfig> for MetaConfig {
             password: self.password,
             client_timeout_in_second: self.client_timeout_in_second,
             auto_sync_interval: self.auto_sync_interval,
+            unhealth_endpoint_evict_time: self.unhealth_endpoint_evict_time,
             rpc_tls_meta_server_root_ca_cert: self.rpc_tls_meta_server_root_ca_cert,
             rpc_tls_meta_service_domain_name: self.rpc_tls_meta_service_domain_name,
         })
@@ -1690,6 +1712,7 @@ impl From<InnerMetaConfig> for MetaConfig {
             password: inner.password,
             client_timeout_in_second: inner.client_timeout_in_second,
             auto_sync_interval: inner.auto_sync_interval,
+            unhealth_endpoint_evict_time: inner.unhealth_endpoint_evict_time,
             rpc_tls_meta_server_root_ca_cert: inner.rpc_tls_meta_server_root_ca_cert,
             rpc_tls_meta_service_domain_name: inner.rpc_tls_meta_service_domain_name,
         }
@@ -1705,6 +1728,10 @@ impl Debug for MetaConfig {
             .field("embedded_dir", &self.embedded_dir)
             .field("client_timeout_in_second", &self.client_timeout_in_second)
             .field("auto_sync_interval", &self.auto_sync_interval)
+            .field(
+                "unhealth_endpoint_evict_time",
+                &self.unhealth_endpoint_evict_time,
+            )
             .field(
                 "rpc_tls_meta_server_root_ca_cert",
                 &self.rpc_tls_meta_server_root_ca_cert,

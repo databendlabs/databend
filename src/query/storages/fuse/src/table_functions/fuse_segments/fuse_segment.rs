@@ -49,6 +49,7 @@ impl<'a> FuseSegment<'a> {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn get_segments(&self) -> Result<DataBlock> {
         let tbl = self.table;
         let maybe_snapshot = tbl.read_table_snapshot().await?;
@@ -78,6 +79,7 @@ impl<'a> FuseSegment<'a> {
         )))
     }
 
+    #[async_backtrace::framed]
     async fn to_block(&self, segment_locations: &[Location]) -> Result<DataBlock> {
         let len = segment_locations.len();
         let mut format_versions: Vec<u64> = Vec::with_capacity(len);
@@ -92,7 +94,7 @@ impl<'a> FuseSegment<'a> {
             self.table.operator.clone(),
             self.table.schema(),
         );
-        let segments = segments_io.read_segments(segment_locations).await?;
+        let segments = segments_io.read_segments(segment_locations, true).await?;
         for (idx, segment) in segments.iter().enumerate() {
             let segment = segment.clone()?;
             format_versions.push(segment_locations[idx].1);

@@ -25,6 +25,7 @@ use crate::Binder;
 use crate::SelectBuilder;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_show_columns(
         &mut self,
         bind_context: &mut BindContext,
@@ -80,7 +81,7 @@ impl Binder {
             select_builder
                 .with_column("collation_name AS `Collation`")
                 .with_column("privileges AS `Privileges`")
-                .with_column("column_comment AS Comment");
+                .with_column("column_comment AS `Comment`");
         }
 
         select_builder

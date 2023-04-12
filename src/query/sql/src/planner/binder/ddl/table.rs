@@ -106,6 +106,7 @@ use crate::ScalarExpr;
 use crate::SelectBuilder;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_show_tables(
         &mut self,
         bind_context: &mut BindContext,
@@ -179,6 +180,7 @@ impl Binder {
             .await
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_show_create_table(
         &mut self,
         stmt: &ShowCreateTableStmt,
@@ -204,6 +206,7 @@ impl Binder {
         })))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_describe_table(
         &mut self,
         stmt: &DescribeTableStmt,
@@ -232,6 +235,7 @@ impl Binder {
         })))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_show_tables_status(
         &mut self,
         bind_context: &mut BindContext,
@@ -276,6 +280,7 @@ impl Binder {
         self.bind_statement(bind_context, &stmt).await
     }
 
+    #[async_backtrace::framed]
     async fn check_database_exist(
         &mut self,
         catalog: &Option<Identifier>,
@@ -298,6 +303,7 @@ impl Binder {
         }
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_create_table(
         &mut self,
         stmt: &CreateTableStmt,
@@ -510,6 +516,7 @@ impl Binder {
         Ok(Plan::CreateTable(Box::new(plan)))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_drop_table(
         &mut self,
         stmt: &DropTableStmt,
@@ -536,6 +543,7 @@ impl Binder {
         })))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_undrop_table(
         &mut self,
         stmt: &UndropTableStmt,
@@ -558,6 +566,7 @@ impl Binder {
         })))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_alter_table(
         &mut self,
         bind_context: &mut BindContext,
@@ -690,6 +699,7 @@ impl Binder {
         }
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_rename_table(
         &mut self,
         stmt: &RenameTableStmt,
@@ -728,6 +738,7 @@ impl Binder {
         })))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_truncate_table(
         &mut self,
         stmt: &TruncateTableStmt,
@@ -750,6 +761,7 @@ impl Binder {
         })))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_optimize_table(
         &mut self,
         bind_context: &mut BindContext,
@@ -801,6 +813,7 @@ impl Binder {
         })))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_analyze_table(
         &mut self,
         stmt: &AnalyzeTableStmt,
@@ -821,6 +834,7 @@ impl Binder {
         })))
     }
 
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_exists_table(
         &mut self,
         stmt: &ExistsTableStmt,
@@ -841,6 +855,7 @@ impl Binder {
         })))
     }
 
+    #[async_backtrace::framed]
     async fn analyze_create_table_schema_by_columns(
         &self,
         columns: &[ColumnDefinition],
@@ -872,9 +887,16 @@ impl Binder {
                         argument: Box::new(expr),
                     })
                     .as_expr_with_col_index()?;
+
+                    if !cast_expr_to_field_type.is_deterministic(&BUILTIN_FUNCTIONS) {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "default expression {cast_expr_to_field_type} is a valid constant",
+                        )));
+                    }
+
                     let (fold_to_constant, _) = ConstantFolder::fold(
                         &cast_expr_to_field_type,
-                        self.ctx.get_function_context()?,
+                        &self.ctx.get_function_context()?,
                         &BUILTIN_FUNCTIONS,
                     );
                     if let common_expression::Expr::Constant { .. } = fold_to_constant {
@@ -895,6 +917,7 @@ impl Binder {
         Ok((schema, fields_default_expr, fields_comments))
     }
 
+    #[async_backtrace::framed]
     async fn analyze_create_table_schema(
         &self,
         source: &CreateTableSource,
@@ -959,6 +982,7 @@ impl Binder {
         }
     }
 
+    #[async_backtrace::framed]
     async fn analyze_cluster_keys(
         &mut self,
         cluster_by: &[Expr],
@@ -970,6 +994,7 @@ impl Binder {
             let column = ColumnBinding {
                 database_name: None,
                 table_name: None,
+                table_index: None,
                 column_name: field.name().clone(),
                 index,
                 data_type: Box::new(DataType::from(field.data_type())),

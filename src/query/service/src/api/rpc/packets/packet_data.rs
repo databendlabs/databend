@@ -14,6 +14,7 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::vec;
 
 use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
@@ -49,34 +50,20 @@ impl Debug for FragmentData {
 
 pub enum DataPacket {
     ErrorCode(ErrorCode),
+    Dictionary(FlightData),
     FragmentData(FragmentData),
     FetchProgressAndPrecommit,
     ProgressAndPrecommit {
         progress: Vec<ProgressInfo>,
         precommit: Vec<PrecommitBlock>,
     },
-    // NOTE: Unknown reason. This may be tonic's bug.
-    // when we use two-way streaming grpc for data exchange,
-    // if the client side is closed and the server side reads data immediately.
-    // we will get a broken pipe or connect reset error.
-    // we use the ClosingClient to notify the server side to close the connection for avoid errors.
-    ClosingOutput,
-    ClosingInput,
 }
 
-impl DataPacket {
-    pub fn is_closing_input(data: &FlightData) -> bool {
-        data.app_metadata.last() == Some(&0x06)
-    }
+impl TryFrom<DataPacket> for FlightData {
+    type Error = ErrorCode;
 
-    pub fn is_closing_output(data: &FlightData) -> bool {
-        data.app_metadata.last() == Some(&0x05)
-    }
-}
-
-impl From<DataPacket> for FlightData {
-    fn from(packet: DataPacket) -> Self {
-        match packet {
+    fn try_from(packet: DataPacket) -> Result<Self> {
+        Ok(match packet {
             DataPacket::ErrorCode(error) => {
                 error!("Got error code data packet: {:?}", error);
                 FlightData::from(error)
@@ -93,23 +80,17 @@ impl From<DataPacket> for FlightData {
                 precommit,
             } => {
                 let mut data_body = vec![];
-                data_body
-                    .write_u64::<BigEndian>(progress.len() as u64)
-                    .unwrap();
-                data_body
-                    .write_u64::<BigEndian>(precommit.len() as u64)
-                    .unwrap();
+                data_body.write_u64::<BigEndian>(progress.len() as u64)?;
+                data_body.write_u64::<BigEndian>(precommit.len() as u64)?;
 
                 // Progress.
-                // TODO(winter): remove unwrap.
                 for progress_info in progress {
-                    progress_info.write(&mut data_body).unwrap();
+                    progress_info.write(&mut data_body)?;
                 }
 
                 // Pre-commit.
-                // TODO(winter): remove unwrap.
                 for precommit_block in precommit {
-                    precommit_block.write(&mut data_body).unwrap();
+                    precommit_block.write(&mut data_body)?;
                 }
 
                 FlightData {
@@ -119,19 +100,11 @@ impl From<DataPacket> for FlightData {
                     app_metadata: vec![0x04],
                 }
             }
-            DataPacket::ClosingOutput => FlightData {
-                data_body: vec![],
-                data_header: vec![],
-                flight_descriptor: None,
-                app_metadata: vec![0x05],
-            },
-            DataPacket::ClosingInput => FlightData {
-                data_body: vec![],
-                data_header: vec![],
-                flight_descriptor: None,
-                app_metadata: vec![0x06],
-            },
-        }
+            DataPacket::Dictionary(mut flight_data) => {
+                flight_data.app_metadata.push(0x05);
+                flight_data
+            }
+        })
     }
 }
 
@@ -183,8 +156,7 @@ impl TryFrom<FlightData> for DataPacket {
                     progress: progress_info,
                 })
             }
-            0x05 => Ok(DataPacket::ClosingOutput),
-            0x06 => Ok(DataPacket::ClosingInput),
+            0x05 => Ok(DataPacket::Dictionary(flight_data)),
             _ => Err(ErrorCode::BadBytes("Unknown flight data packet type.")),
         }
     }

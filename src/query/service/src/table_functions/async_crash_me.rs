@@ -106,6 +106,7 @@ impl Table for AsyncCrashMeTable {
         &self.table_info
     }
 
+    #[async_backtrace::framed]
     async fn read_partitions(
         &self,
         _: Arc<dyn TableContext>,
@@ -157,6 +158,7 @@ impl AsyncSource for AsyncCrashMeSource {
     const NAME: &'static str = "async_crash_me";
 
     #[async_trait::unboxed_simple]
+    #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         match &self.message {
             None => panic!("async crash me panic"),

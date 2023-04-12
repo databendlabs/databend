@@ -50,6 +50,7 @@ impl Interpreter for ShowFileFormatsInterpreter {
     }
 
     #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let user_mgr = UserApiProvider::instance();
         let tenant = self.ctx.get_tenant();
@@ -64,7 +65,7 @@ impl Interpreter for ShowFileFormatsInterpreter {
 
         let options = formats
             .iter()
-            .map(|x| x.file_format_options.to_string().as_bytes().to_vec())
+            .map(|x| x.file_format_params.to_string().as_bytes().to_vec())
             .collect::<Vec<_>>();
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![

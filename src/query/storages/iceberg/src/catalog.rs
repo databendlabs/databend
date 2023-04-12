@@ -29,6 +29,7 @@ use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
@@ -100,6 +101,7 @@ impl IcebergCatalog {
 
     /// list read databases
     #[tracing::instrument(level = "debug", skip(self))]
+    #[async_backtrace::framed]
     pub async fn list_database_from_read(&self) -> Result<Vec<Arc<dyn Database>>> {
         if self.flatten {
             // is flatten catalog, return `default` catalog
@@ -132,6 +134,7 @@ impl IcebergCatalog {
 #[async_trait]
 impl Catalog for IcebergCatalog {
     #[tracing::instrument(level = "debug", skip(self))]
+    #[async_backtrace::framed]
     async fn get_database(&self, _tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
         if self.flatten {
             // is flatten catalog, must return `default` catalog
@@ -167,22 +170,27 @@ impl Catalog for IcebergCatalog {
         )))
     }
 
+    #[async_backtrace::framed]
     async fn list_databases(&self, _tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
         self.list_database_from_read().await
     }
 
+    #[async_backtrace::framed]
     async fn create_database(&self, _req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
         unimplemented!()
     }
 
-    async fn drop_database(&self, _req: DropDatabaseReq) -> Result<()> {
+    #[async_backtrace::framed]
+    async fn drop_database(&self, _req: DropDatabaseReq) -> Result<DropDatabaseReply> {
         unimplemented!()
     }
 
+    #[async_backtrace::framed]
     async fn undrop_database(&self, _req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
         unimplemented!()
     }
 
+    #[async_backtrace::framed]
     async fn rename_database(&self, _req: RenameDatabaseReq) -> Result<RenameDatabaseReply> {
         unimplemented!()
     }
@@ -191,6 +199,7 @@ impl Catalog for IcebergCatalog {
         unimplemented!()
     }
 
+    #[async_backtrace::framed]
     async fn get_table_meta_by_id(
         &self,
         _table_id: MetaId,
@@ -199,6 +208,7 @@ impl Catalog for IcebergCatalog {
     }
 
     #[tracing::instrument(level = "info", skip(self))]
+    #[async_backtrace::framed]
     async fn get_table(
         &self,
         tenant: &str,
@@ -209,11 +219,13 @@ impl Catalog for IcebergCatalog {
         db.get_table(table_name).await
     }
 
+    #[async_backtrace::framed]
     async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         let db = self.get_database(tenant, db_name).await?;
         db.list_tables().await
     }
 
+    #[async_backtrace::framed]
     async fn list_tables_history(
         &self,
         _tenant: &str,
@@ -222,22 +234,27 @@ impl Catalog for IcebergCatalog {
         unimplemented!()
     }
 
+    #[async_backtrace::framed]
     async fn create_table(&self, _req: CreateTableReq) -> Result<()> {
         unimplemented!()
     }
 
+    #[async_backtrace::framed]
     async fn drop_table_by_id(&self, _req: DropTableByIdReq) -> Result<DropTableReply> {
         unimplemented!()
     }
 
+    #[async_backtrace::framed]
     async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
         unimplemented!()
     }
 
+    #[async_backtrace::framed]
     async fn rename_table(&self, _req: RenameTableReq) -> Result<RenameTableReply> {
         unimplemented!()
     }
 
+    #[async_backtrace::framed]
     async fn exists_table(&self, tenant: &str, db_name: &str, table_name: &str) -> Result<bool> {
         let db = self.get_database(tenant, db_name).await?;
         match db.get_table(table_name).await {
@@ -249,6 +266,7 @@ impl Catalog for IcebergCatalog {
         }
     }
 
+    #[async_backtrace::framed]
     async fn upsert_table_option(
         &self,
         _tenant: &str,
@@ -258,6 +276,7 @@ impl Catalog for IcebergCatalog {
         unimplemented!()
     }
 
+    #[async_backtrace::framed]
     async fn update_table_meta(
         &self,
         _table_info: &TableInfo,
@@ -266,10 +285,12 @@ impl Catalog for IcebergCatalog {
         unimplemented!()
     }
 
+    #[async_backtrace::framed]
     async fn count_tables(&self, _req: CountTablesReq) -> Result<CountTablesReply> {
         unimplemented!()
     }
 
+    #[async_backtrace::framed]
     async fn get_table_copied_file_info(
         &self,
         _tenant: &str,
@@ -279,6 +300,7 @@ impl Catalog for IcebergCatalog {
         unimplemented!()
     }
 
+    #[async_backtrace::framed]
     async fn truncate_table(
         &self,
         _table_info: &TableInfo,

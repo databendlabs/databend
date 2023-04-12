@@ -16,8 +16,8 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_base::base::Progress;
 use common_base::base::ProgressValues;
+use common_base::runtime::GlobalIORuntime;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -41,7 +41,6 @@ use crate::pipelines::processors::Processor;
 pub struct CompactSource {
     ctx: Arc<dyn TableContext>,
     dal: Operator,
-    scan_progress: Arc<Progress>,
 
     block_reader: Arc<BlockReader>,
     block_builder: BlockBuilder,
@@ -61,7 +60,6 @@ impl CompactSource {
         block_reader: Arc<BlockReader>,
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
-        let scan_progress = ctx.get_scan_progress();
         let block_builder = BlockBuilder {
             ctx: ctx.clone(),
             meta_locations,
@@ -71,7 +69,6 @@ impl CompactSource {
         Ok(ProcessorPtr::create(Box::new(CompactSource {
             ctx,
             dal,
-            scan_progress,
             block_reader,
             block_builder,
             output,
@@ -115,6 +112,7 @@ impl Processor for CompactSource {
         Ok(Event::Async)
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match self.ctx.get_partition() {
             Some(part) => {
@@ -126,12 +124,6 @@ impl Processor for CompactSource {
                 let part = CompactPartInfo::from_part(&part)?;
                 let mut stats = Vec::with_capacity(part.blocks.len());
                 for block in &part.blocks {
-                    let progress_values = ProgressValues {
-                        rows: block.row_count as usize,
-                        bytes: block.block_size as usize,
-                    };
-                    self.scan_progress.incr(&progress_values);
-
                     stats.push(block.col_stats.clone());
 
                     let settings = ReadSettings::from_ctx(&self.ctx)?;
@@ -159,9 +151,15 @@ impl Processor for CompactSource {
                 }
 
                 // concat blocks.
-                let new_block = DataBlock::concat(&blocks)?;
+                let new_block = if blocks.len() == 1 {
+                    blocks[0].convert_to_full()
+                } else {
+                    DataBlock::concat(&blocks)?
+                };
                 // build block serialization.
-                let serialized = tokio_rayon::spawn(move || block_builder.build(new_block)).await?;
+                let serialized = GlobalIORuntime::instance()
+                    .spawn_blocking(move || block_builder.build(new_block))
+                    .await?;
 
                 let start = Instant::now();
 
@@ -188,6 +186,12 @@ impl Processor for CompactSource {
                 {
                     metrics_inc_compact_block_write_milliseconds(start.elapsed().as_millis() as u64);
                 }
+
+                let progress_values = ProgressValues {
+                    rows: serialized.block_meta.row_count as usize,
+                    bytes: serialized.block_meta.block_size as usize,
+                };
+                self.ctx.get_write_progress().incr(&progress_values);
 
                 self.output_data = Some(DataBlock::empty_with_meta(CompactSourceMeta::create(
                     part.index.clone(),

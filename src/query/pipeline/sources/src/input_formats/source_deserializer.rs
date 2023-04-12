@@ -50,7 +50,7 @@ impl<I: InputFormatPipe> DeserializeSource<I> {
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(Self {
             ctx: ctx.clone(),
-            block_builder: I::BlockBuilder::create(ctx),
+            block_builder: I::try_create_block_builder(&ctx)?,
             output,
             input_rx: rx,
             input_buffer: Default::default(),
@@ -116,6 +116,7 @@ impl<I: InputFormatPipe> Processor for DeserializeSource<I> {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         assert!(self.input_buffer.is_none() && !self.input_finished);
         match self.input_rx.recv().await {

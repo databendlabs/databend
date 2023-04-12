@@ -18,6 +18,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
 use crate::optimizer::ColumnSet;
+use crate::optimizer::ColumnStatSet;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
@@ -94,10 +95,17 @@ impl Operator for EvalScalar {
         // Derive cardinality
         let cardinality = input_prop.cardinality;
         let precise_cardinality = input_prop.statistics.precise_cardinality;
-        let is_accurate = input_prop.statistics.is_accurate;
         // Derive used columns
         let mut used_columns = self.used_columns()?;
         used_columns.extend(input_prop.used_columns);
+
+        let mut column_stats: ColumnStatSet = Default::default();
+        for (k, v) in input_prop.statistics.column_stats {
+            if !used_columns.contains(&k) {
+                continue;
+            }
+            column_stats.insert(k as IndexType, v);
+        }
 
         Ok(RelationalProperty {
             output_columns,
@@ -106,8 +114,7 @@ impl Operator for EvalScalar {
             cardinality,
             statistics: Statistics {
                 precise_cardinality,
-                column_stats: Default::default(),
-                is_accurate,
+                column_stats,
             },
         })
     }

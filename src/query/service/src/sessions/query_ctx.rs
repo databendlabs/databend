@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
@@ -37,6 +37,7 @@ use common_catalog::plan::Partitions;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_context::StageAttachment;
+use common_config::GlobalConfig;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -44,27 +45,30 @@ use common_expression::date_helper::TzFactory;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
-use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::FileFormatParams;
+use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableInfo;
+use common_pipeline_core::InputError;
+use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
-use common_storage::StageFileStatus;
 use common_storage::StorageMetrics;
 use common_storages_fuse::TableContext;
 use common_storages_parquet::ParquetTable;
 use common_storages_result_cache::ResultScan;
 use common_storages_stage::StageTable;
 use common_users::UserApiProvider;
+use dashmap::mapref::multiple::RefMulti;
+use dashmap::DashMap;
 use parking_lot::RwLock;
 use tracing::debug;
 
 use crate::api::DataExchangeManager;
-use crate::auth::AuthMgr;
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
@@ -136,6 +140,7 @@ impl QueryContext {
         StageTable::try_create(table_info.clone())
     }
 
+    #[async_backtrace::framed]
     pub async fn set_current_database(&self, new_database_name: String) -> Result<()> {
         let tenant_id = self.get_tenant();
         let catalog = self.get_catalog(self.get_current_catalog().as_str())?;
@@ -157,10 +162,6 @@ impl QueryContext {
 
     pub fn get_exchange_manager(&self) -> Arc<DataExchangeManager> {
         DataExchangeManager::instance()
-    }
-
-    pub fn get_auth_manager(&self) -> Arc<AuthMgr> {
-        self.shared.get_auth_manager()
     }
 
     // Get the current session.
@@ -215,10 +216,6 @@ impl QueryContext {
     pub fn get_created_time(&self) -> SystemTime {
         self.shared.created_time
     }
-
-    pub fn get_on_error_map(&self) -> Option<HashMap<String, ErrorCode>> {
-        self.shared.get_on_error_map()
-    }
 }
 
 #[async_trait::async_trait]
@@ -238,6 +235,14 @@ impl TableContext for QueryContext {
             DataSourceInfo::ParquetSource(table_info) => ParquetTable::from_info(table_info),
             DataSourceInfo::ResultScanSource(table_info) => ResultScan::from_info(table_info),
         }
+    }
+
+    fn incr_total_scan_value(&self, value: ProgressValues) {
+        self.shared.total_scan_values.as_ref().incr(&value);
+    }
+
+    fn get_total_scan_value(&self) -> ProgressValues {
+        self.shared.total_scan_values.as_ref().get_values()
     }
 
     fn get_scan_progress(&self) -> Arc<Progress> {
@@ -394,7 +399,17 @@ impl TableContext for QueryContext {
     fn get_function_context(&self) -> Result<FunctionContext> {
         let tz = self.get_settings().get_timezone()?;
         let tz = TzFactory::instance().get_by_name(&tz)?;
-        Ok(FunctionContext { tz })
+
+        let query_config = &GlobalConfig::instance().query;
+
+        Ok(FunctionContext {
+            tz,
+
+            openai_api_key: query_config.openai_api_key.clone(),
+            openai_api_base_url: query_config.openai_api_base_url.clone(),
+            openai_api_embedding_model: query_config.openai_api_embedding_model.clone(),
+            openai_api_completion_model: query_config.openai_api_completion_model.clone(),
+        })
     }
 
     fn get_connection_id(&self) -> String {
@@ -441,15 +456,44 @@ impl TableContext for QueryContext {
             .update_query_ids_results(query_id, Some(result_cache_key))
     }
 
-    fn set_on_error_map(&self, map: Option<HashMap<String, ErrorCode>>) {
+    fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>> {
+        self.shared.get_on_error_map()
+    }
+
+    fn set_on_error_map(&self, map: Arc<DashMap<String, HashMap<u16, InputError>>>) {
         self.shared.set_on_error_map(map);
     }
 
-    fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
-        self.shared.apply_changed_settings(changed_settings)
+    fn get_on_error_mode(&self) -> Option<OnErrorMode> {
+        self.shared.get_on_error_mode()
+    }
+    fn set_on_error_mode(&self, mode: OnErrorMode) {
+        self.shared.set_on_error_mode(mode)
     }
 
-    fn get_changed_settings(&self) -> Arc<Settings> {
+    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
+        if let Some(on_error_map) = self.get_on_error_map() {
+            if on_error_map.is_empty() {
+                return None;
+            }
+            let mut m = HashMap::<String, ErrorCode>::new();
+            on_error_map
+                .iter()
+                .for_each(|x: RefMulti<String, HashMap<u16, InputError>>| {
+                    if let Some(max_v) = x.value().iter().max_by_key(|entry| entry.1.num) {
+                        m.insert(x.key().to_string(), max_v.1.err.clone());
+                    }
+                });
+            return Some(m);
+        }
+        None
+    }
+
+    fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
+        self.shared.apply_changed_settings(changes)
+    }
+
+    fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
         self.shared.get_changed_settings()
     }
 
@@ -466,19 +510,19 @@ impl TableContext for QueryContext {
         self.shared.consume_precommit_blocks()
     }
 
-    async fn get_file_format(&self, name: &str) -> Result<FileFormatOptions> {
-        let opt = match StageFileFormatType::from_str(name) {
-            Ok(typ) => FileFormatOptions::default_by_type(typ),
+    #[async_backtrace::framed]
+    async fn get_file_format(&self, name: &str) -> Result<FileFormatParams> {
+        match StageFileFormatType::from_str(name) {
+            Ok(typ) => FileFormatParams::default_by_type(typ),
             Err(_) => {
                 let user_mgr = UserApiProvider::instance();
                 let tenant = self.get_tenant();
-                user_mgr
+                Ok(user_mgr
                     .get_file_format(&tenant, name)
                     .await?
-                    .file_format_options
+                    .file_format_params)
             }
-        };
-        Ok(opt)
+        }
     }
 
     /// Fetch a Table by db and table name.
@@ -488,6 +532,7 @@ impl TableContext for QueryContext {
     /// ```sql
     /// SELECT * FROM (SELECT * FROM db.table_name) as subquery_1, (SELECT * FROM db.table_name) AS subquery_2
     /// ```
+    #[async_backtrace::framed]
     async fn get_table(
         &self,
         catalog: &str,
@@ -497,12 +542,14 @@ impl TableContext for QueryContext {
         self.shared.get_table(catalog, database, table).await
     }
 
-    async fn color_copied_files(
+    #[async_backtrace::framed]
+    async fn filter_out_copied_files(
         &self,
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
-        files: Vec<StageFileInfo>,
+        files: &[StageFileInfo],
+        max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
         let tenant = self.get_tenant();
         let catalog = self.get_catalog(catalog_name)?;
@@ -511,40 +558,48 @@ impl TableContext for QueryContext {
             .await?;
         let table_id = table.get_id();
 
-        let mut copied_files = BTreeMap::new();
-        for chunk in files.chunks(MAX_QUERY_COPIED_FILES_NUM) {
+        let mut limit: usize = 0;
+        let max_files = max_files.unwrap_or(usize::MAX);
+        let batch_size = min(MAX_QUERY_COPIED_FILES_NUM, max_files);
+
+        let mut results = Vec::with_capacity(files.len());
+
+        for chunk in files.chunks(batch_size) {
             let files = chunk.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
             let req = GetTableCopiedFileReq { table_id, files };
-            let resp = catalog
+            let copied_files = catalog
                 .get_table_copied_file_info(&tenant, database_name, req)
-                .await?;
-            copied_files.extend(resp.file_info);
-        }
-
-        // Colored.
-        let mut results = Vec::with_capacity(files.len());
-        for mut file in files {
-            if let Some(copied_file) = copied_files.get(&file.path) {
-                match &copied_file.etag {
-                    Some(copied_etag) => {
-                        if let Some(file_etag) = &file.etag {
-                            // Check the 7 bytes etag prefix.
-                            if file_etag.starts_with(copied_etag) {
-                                file.status = StageFileStatus::AlreadyCopied;
+                .await?
+                .file_info;
+            // Colored
+            for file in chunk {
+                if let Some(copied_file) = copied_files.get(&file.path) {
+                    match &copied_file.etag {
+                        Some(copied_etag) => {
+                            if let Some(file_etag) = &file.etag {
+                                // Check the 7 bytes etag prefix.
+                                if file_etag.starts_with(copied_etag) {
+                                    continue;
+                                }
+                            }
+                        }
+                        None => {
+                            // etag is none, compare with content_length and last_modified.
+                            if copied_file.content_length == file.size
+                                && copied_file.last_modified == Some(file.last_modified)
+                            {
+                                continue;
                             }
                         }
                     }
-                    None => {
-                        // etag is none, compare with content_length and last_modified.
-                        if copied_file.content_length == file.size
-                            && copied_file.last_modified == Some(file.last_modified)
-                        {
-                            file.status = StageFileStatus::AlreadyCopied;
-                        }
-                    }
+                }
+
+                results.push(file.clone());
+                limit += 1;
+                if limit == max_files {
+                    return Ok(results);
                 }
             }
-            results.push(file);
         }
         Ok(results)
     }

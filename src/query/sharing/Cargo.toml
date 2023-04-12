@@ -14,8 +14,15 @@ anyhow = { workspace = true }
 async-trait = "0.1"
 bytes = "1"
 common-auth = { path = "../../common/auth" }
+common-base = { path = "../../common/base" }
 common-config = { path = "../config" }
+common-exception = { path = "../../common/exception" }
+common-meta-api = { path = "../../meta/api" }
+common-meta-app = { path = "../../meta/app" }
+common-storage = { path = "../../common/storage" }
+common-users = { path = "../users" }
 
+async-backtrace = { workspace = true }
 http = "0.2"
 log = "0.4"
 moka = "0.10"
@@ -23,3 +30,4 @@ opendal = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+tracing = "0.1.36"

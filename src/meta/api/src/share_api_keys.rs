@@ -15,3 +15,4 @@
 //! Defines structured keys used by ShareApi
 
 pub(crate) const ID_GEN_SHARE: &str = "share_id";
+pub(crate) const ID_GEN_SHARE_ENDPOINT: &str = "share_endpoint_id";

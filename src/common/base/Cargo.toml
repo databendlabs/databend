@@ -23,9 +23,10 @@ memory-profiling = [
 # Workspace dependencies
 common-exception = { path = "../exception" }
 
-# Github dependencies
+# GitHub dependencies
 
 # Crates.io dependencies
+async-backtrace = "0.2.2"
 async-channel = "1.7.1"
 async-trait = "0.1.57"
 bytesize = "1.1.0"

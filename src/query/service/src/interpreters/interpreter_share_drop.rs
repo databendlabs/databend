@@ -42,6 +42,7 @@ impl Interpreter for DropShareInterpreter {
         "DropShareInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let resp = meta_api.drop_share(self.plan.clone().into()).await?;
@@ -50,7 +51,7 @@ impl Interpreter for DropShareInterpreter {
             &self.ctx.get_tenant(),
             self.ctx.get_data_operator()?.operator(),
             resp.spec_vec,
-            Some(&(self.plan.share.clone(), None)),
+            Some(vec![(self.plan.share.clone(), None)]),
         )
         .await?;
 

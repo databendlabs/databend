@@ -44,9 +44,10 @@ use common_exception::Span;
 use common_expression::types::DataType;
 use common_expression::ColumnId;
 use common_expression::ConstantFolder;
+use common_expression::FunctionKind;
 use common_expression::Scalar;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::principal::StageFileFormatType;
+use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageInfo;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
@@ -78,8 +79,10 @@ use crate::ColumnEntry;
 use crate::DerivedColumn;
 use crate::IndexType;
 use crate::TableInternalColumn;
+use crate::VirtualColumn;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(super) async fn bind_one_table(
         &mut self,
         bind_context: &BindContext,
@@ -138,6 +141,7 @@ impl Binder {
     }
 
     #[async_recursion]
+    #[async_backtrace::framed]
     async fn bind_single_table(
         &mut self,
         bind_context: &mut BindContext,
@@ -354,32 +358,68 @@ impl Binder {
                     return Ok((s_expr, bind_context));
                 }
 
-                // Table functions always reside is default catalog
-                let table_meta: Arc<dyn TableFunction> = self
-                    .catalogs
-                    .get_catalog(CATALOG_DEFAULT)?
-                    .get_table_function(&func_name.name, table_args)?;
-                let table = table_meta.as_table();
-                let table_alias_name = if let Some(table_alias) = alias {
-                    Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
+                if BUILTIN_FUNCTIONS
+                    .get_property(&func_name.name)
+                    .map(|p| p.kind == FunctionKind::SRF)
+                    .unwrap_or(false)
+                {
+                    // If it is a set-returning function, we bind it as a subquery.
+                    let mut bind_context = BindContext::new();
+                    let stmt = SelectStmt {
+                        span: *span,
+                        distinct: false,
+                        select_list: vec![SelectTarget::AliasedExpr {
+                            expr: Box::new(common_ast::ast::Expr::FunctionCall {
+                                span: *span,
+                                distinct: false,
+                                name: common_ast::ast::Identifier {
+                                    span: *span,
+                                    name: func_name.name.clone(),
+                                    quote: None,
+                                },
+                                params: vec![],
+                                args: params.clone(),
+                                window: None,
+                            }),
+                            alias: None,
+                        }],
+                        from: vec![],
+                        selection: None,
+                        group_by: None,
+                        having: None,
+                        window_list: None,
+                    };
+                    self.bind_select_stmt(&mut bind_context, &stmt, &[]).await
                 } else {
-                    None
-                };
-                let table_index = self.metadata.write().add_table(
-                    CATALOG_DEFAULT.to_string(),
-                    "system".to_string(),
-                    table.clone(),
-                    table_alias_name,
-                    false,
-                );
+                    // Other table functions always reside is default catalog
+                    let table_meta: Arc<dyn TableFunction> = self
+                        .catalogs
+                        .get_catalog(CATALOG_DEFAULT)?
+                        .get_table_function(&func_name.name, table_args)?;
+                    let table = table_meta.as_table();
+                    let table_alias_name = if let Some(table_alias) = alias {
+                        Some(
+                            normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name,
+                        )
+                    } else {
+                        None
+                    };
+                    let table_index = self.metadata.write().add_table(
+                        CATALOG_DEFAULT.to_string(),
+                        "system".to_string(),
+                        table.clone(),
+                        table_alias_name,
+                        false,
+                    );
 
-                let (s_expr, mut bind_context) = self
-                    .bind_base_table(bind_context, "system", table_index)
-                    .await?;
-                if let Some(alias) = alias {
-                    bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    let (s_expr, mut bind_context) = self
+                        .bind_base_table(bind_context, "system", table_index)
+                        .await?;
+                    if let Some(alias) = alias {
+                        bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    }
+                    Ok((s_expr, bind_context))
                 }
-                Ok((s_expr, bind_context))
             }
             TableReference::Subquery {
                 span: _,
@@ -404,7 +444,7 @@ impl Binder {
                 let (mut stage_info, path) =
                     parse_file_location(&self.ctx, location, options.connection.clone()).await?;
                 if let Some(f) = &options.file_format {
-                    stage_info.file_format_options = self.ctx.get_file_format(f).await?;
+                    stage_info.file_format_params = self.ctx.get_file_format(f).await?;
                 }
                 let files_info = StageFilesInfo {
                     path,
@@ -418,6 +458,7 @@ impl Binder {
         }
     }
 
+    #[async_backtrace::framed]
     pub(crate) async fn bind_stage_table(
         &mut self,
         bind_context: &BindContext,
@@ -426,10 +467,7 @@ impl Binder {
         alias: &Option<TableAlias>,
         files_to_copy: Option<Vec<StageFileInfo>>,
     ) -> Result<(SExpr, BindContext)> {
-        if matches!(
-            stage_info.file_format_options.format,
-            StageFileFormatType::Parquet
-        ) {
+        if matches!(stage_info.file_format_params, FileFormatParams::Parquet(..)) {
             let read_options = ParquetReadOptions::default();
 
             let table =
@@ -464,6 +502,7 @@ impl Binder {
         }
     }
 
+    #[async_backtrace::framed]
     pub(super) async fn bind_table_reference(
         &mut self,
         bind_context: &mut BindContext,
@@ -537,6 +576,7 @@ impl Binder {
         Ok((result_expr, result_ctx))
     }
 
+    #[async_backtrace::framed]
     async fn bind_cte(
         &mut self,
         span: Span,
@@ -550,7 +590,7 @@ impl Binder {
             bound_internal_columns: BTreeMap::new(),
             columns: vec![],
             aggregate_info: Default::default(),
-            windows: vec![],
+            windows: Default::default(),
             in_grouping: false,
             ctes_map: Box::new(DashMap::new()),
             view_info: None,
@@ -593,6 +633,7 @@ impl Binder {
         Ok((s_expr, new_bind_context))
     }
 
+    #[async_backtrace::framed]
     async fn bind_base_table(
         &mut self,
         bind_context: &BindContext,
@@ -613,11 +654,13 @@ impl Binder {
                     path_indices,
                     data_type,
                     leaf_index,
+                    table_index,
                     ..
                 }) => {
                     let column_binding = ColumnBinding {
                         database_name: Some(database_name.to_string()),
                         table_name: Some(table.name().to_string()),
+                        table_index: Some(*table_index),
                         column_name: column_name.clone(),
                         index: *column_index,
                         data_type: Box::new(DataType::from(data_type)),
@@ -642,7 +685,6 @@ impl Binder {
             }
         }
 
-        let is_accurate = table.table().engine().to_lowercase() == "fuse";
         let stat = table.table().table_statistics()?;
 
         Ok((
@@ -662,6 +704,9 @@ impl Binder {
                                 column_index,
                                 ..
                             }) => column_index,
+                            ColumnEntry::VirtualColumn(VirtualColumn { column_index, .. }) => {
+                                column_index
+                            }
                         })
                         .collect(),
                     push_down_predicates: None,
@@ -670,7 +715,6 @@ impl Binder {
                     statistics: Statistics {
                         statistics: stat,
                         col_stats,
-                        is_accurate,
                     },
                     prewhere: None,
                 }
@@ -680,6 +724,7 @@ impl Binder {
         ))
     }
 
+    #[async_backtrace::framed]
     async fn resolve_data_source(
         &self,
         tenant: &str,
@@ -698,6 +743,7 @@ impl Binder {
         Ok(table_meta)
     }
 
+    #[async_backtrace::framed]
     pub(crate) async fn resolve_data_travel_point(
         &self,
         bind_context: &mut BindContext,
@@ -718,7 +764,7 @@ impl Binder {
 
                 let (new_expr, _) = ConstantFolder::fold(
                     &scalar_expr,
-                    self.ctx.get_function_context()?,
+                    &self.ctx.get_function_context()?,
                     &BUILTIN_FUNCTIONS,
                 );
 

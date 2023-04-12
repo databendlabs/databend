@@ -76,6 +76,7 @@ pub struct PartitionPruner {
 impl PartitionPruner {
     /// Try to read parquet meta to generate row-group-wise partitions.
     /// And prune row groups an pages to generate the final row group partitions.
+    #[async_backtrace::framed]
     pub async fn read_and_prune_partitions(&self) -> Result<(PartStatistics, Partitions)> {
         let PartitionPruner {
             schema,
@@ -120,8 +121,6 @@ impl PartitionPruner {
         // 2. Use file meta to prune row groups or pages.
 
         // If one row group does not have stats, we cannot use the stats for topk optimization.
-        let mut all_have_minmax = true;
-
         for (file_id, file_meta) in file_metas.iter().enumerate() {
             partitions_total += file_meta.row_groups.len();
             let mut row_group_pruned = vec![false; file_meta.row_groups.len()];
@@ -157,9 +156,6 @@ impl PartitionPruner {
             } else {
                 None
             };
-
-            // If one row group does not have stats, we cannot use the stats for topk optimization.
-            all_have_minmax &= row_group_stats.is_some();
 
             for (rg_idx, rg) in file_meta.row_groups.iter().enumerate() {
                 if row_group_pruned[rg_idx] {
@@ -220,45 +216,7 @@ impl PartitionPruner {
             }
         }
 
-        // 3. Check if can conduct topk push down optimization.
-        // Only all row groups have min/max stats can we use topk optimization.
-        // If we can use topk optimization, we should use `PartitionsShuffleKind::Seq`.
-        let partition_kind = if let (Some((top_k, _)), true) = (top_k, all_have_minmax) {
-            partitions.sort_by(|a, b| {
-                let (a_min, a_max) = a
-                    .column_metas
-                    .get(&(top_k.column_id as usize))
-                    .unwrap()
-                    .min_max
-                    .as_ref()
-                    .unwrap();
-                let (b_min, b_max) = b
-                    .column_metas
-                    .get(&(top_k.column_id as usize))
-                    .unwrap()
-                    .min_max
-                    .as_ref()
-                    .unwrap();
-
-                if top_k.asc {
-                    (a_min.as_ref(), a_max.as_ref()).cmp(&(b_min.as_ref(), b_max.as_ref()))
-                } else {
-                    (b_max.as_ref(), b_min.as_ref()).cmp(&(a_max.as_ref(), a_min.as_ref()))
-                }
-            });
-            for part in partitions.iter_mut() {
-                part.sort_min_max = part
-                    .column_metas
-                    .get(&(top_k.column_id as usize))
-                    .unwrap()
-                    .min_max
-                    .clone();
-            }
-            PartitionsShuffleKind::Seq
-        } else {
-            PartitionsShuffleKind::Mod
-        };
-
+        let partition_kind = PartitionsShuffleKind::Mod;
         let partitions = partitions
             .into_iter()
             .map(|p| p.convert_to_part_info())
@@ -289,8 +247,8 @@ pub fn build_column_page_pruners(
     let mut results = vec![];
     for (column, _) in filter.column_refs() {
         let col_idx = schema.index_of(&column)?;
-        let range_prunner = RangePrunerCreator::try_create(func_ctx, schema, Some(filter))?;
-        results.push((col_idx, range_prunner));
+        let range_pruner = RangePrunerCreator::try_create(func_ctx.clone(), schema, Some(filter))?;
+        results.push((col_idx, range_pruner));
     }
     Ok(results)
 }
@@ -549,7 +507,7 @@ mod tests {
     fn unzip_option<T: NativeType>(
         array: &[Option<T>],
     ) -> common_arrow::parquet::error::Result<(Vec<u8>, Vec<u8>)> {
-        // leave the first 4 bytes anouncing the length of the def level
+        // leave the first 4 bytes announcing the length of the def level
         // this will be overwritten at the end, once the length is known.
         // This is unknown at this point because of the uleb128 encoding,
         // whose length is variable.
@@ -682,6 +640,7 @@ mod tests {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: "col1".to_string(),
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
@@ -712,6 +671,7 @@ mod tests {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: "col1".to_string(),
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
@@ -742,6 +702,7 @@ mod tests {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: "col1".to_string(),
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
@@ -782,6 +743,7 @@ mod tests {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: "col1".to_string(),
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
@@ -813,6 +775,7 @@ mod tests {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: "col1".to_string(),
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
@@ -844,6 +807,7 @@ mod tests {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: "col1".to_string(),
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
@@ -875,6 +839,7 @@ mod tests {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            table_index: None,
                             column_name: "col1".to_string(),
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),

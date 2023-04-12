@@ -36,8 +36,16 @@ async fn test_grpc_client_action_timeout() {
     // server's handshake impl will sleep 2secs.
     let timeout = Duration::from_secs(3);
 
-    let client =
-        MetaGrpcClient::try_create(vec![srv_addr], "", "", Some(timeout), None, None).unwrap();
+    let client = MetaGrpcClient::try_create(
+        vec![srv_addr],
+        "",
+        "",
+        Some(timeout),
+        None,
+        Duration::from_secs(10),
+        None,
+    )
+    .unwrap();
 
     let res = client
         .get_database(GetDatabaseReq::new("tenant1", "xx"))

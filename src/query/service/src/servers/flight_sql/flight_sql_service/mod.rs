@@ -14,21 +14,27 @@
 
 // The servers module used for external communication with user, such as MySQL wired protocol, etc.
 
+mod catalog;
 mod query;
 mod service;
 mod session;
+mod sql_info;
 
 use std::pin::Pin;
 use std::sync::Arc;
 
 use arrow_flight::FlightData;
+use catalog::CatalogInfoProvider;
 use common_sql::plans::Plan;
 use common_sql::PlanExtras;
 use dashmap::DashMap;
 use futures::Stream;
+use parking_lot::Mutex;
+use sql_info::SqlInfoProvider;
 use tonic::Status;
 use uuid::Uuid;
 
+use crate::servers::http::v1::ExpiringMap;
 use crate::sessions::Session;
 
 #[macro_export]
@@ -43,9 +49,8 @@ pub(crate) use status;
 
 type DoGetStream = Pin<Box<dyn Stream<Item = Result<FlightData, Status>> + Send + 'static>>;
 
-#[derive(Clone)]
 pub struct FlightSqlServiceImpl {
-    sessions: Arc<DashMap<String, Arc<Session>>>,
+    pub sessions: Mutex<ExpiringMap<String, Arc<Session>>>,
     statements: Arc<DashMap<Uuid, (Plan, PlanExtras)>>,
 }
 
@@ -53,7 +58,7 @@ pub struct FlightSqlServiceImpl {
 impl FlightSqlServiceImpl {
     pub fn create() -> Self {
         FlightSqlServiceImpl {
-            sessions: Arc::new(Default::default()),
+            sessions: Mutex::new(Default::default()),
             statements: Arc::new(Default::default()),
         }
     }

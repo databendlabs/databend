@@ -17,40 +17,44 @@ use std::sync::Arc;
 use arrow_array::make_array;
 use arrow_array::Array;
 use arrow_array::ArrowPrimitiveType;
-use arrow_array::LargeStringArray;
+use arrow_array::BooleanArray;
+use arrow_array::LargeBinaryArray;
 use arrow_array::NullArray;
 use arrow_array::PrimitiveArray;
-use arrow_buffer::i256;
+use arrow_array::StructArray;
+use arrow_buffer::buffer::BooleanBuffer;
+use arrow_buffer::buffer::NullBuffer;
 use arrow_buffer::ArrowNativeType;
 use arrow_buffer::Buffer;
 use arrow_data::ArrayData;
 use arrow_data::ArrayDataBuilder;
 use arrow_schema::ArrowError;
 use arrow_schema::DataType;
+use arrow_schema::Field;
 use arrow_schema::TimeUnit;
+use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer as Buffer2;
-use common_arrow::arrow::Either;
+use common_arrow::arrow::types::NativeType;
 use ordered_float::OrderedFloat;
 
 use crate::types::decimal::DecimalColumn;
+use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
+use crate::types::string::StringColumn;
+use crate::types::F32;
+use crate::types::F64;
 use crate::Column;
+use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
+use crate::ARROW_EXT_TYPE_EMPTY_MAP;
+use crate::ARROW_EXT_TYPE_VARIANT;
+use crate::EXTENSION_KEY;
 
-fn try_take_buffer<T: Clone>(buffer: Buffer2<T>) -> Vec<T> {
-    // currently need a copy if buffer has more then 1 reference
-    match buffer.into_mut() {
-        Either::Left(b) => b.as_slice().to_vec(),
-        Either::Right(v) => v,
-    }
-}
-
-fn numbers_into<TN: ArrowNativeType, TA: ArrowPrimitiveType>(
+fn numbers_into<TN: ArrowNativeType + NativeType, TA: ArrowPrimitiveType>(
     buf: Buffer2<TN>,
     data_type: DataType,
 ) -> Result<Arc<dyn Array>, ArrowError> {
-    let v: Vec<TN> = try_take_buffer(buf);
-    let len = v.len();
-    let buf = Buffer::from_vec(v);
+    let len = buf.len();
+    let buf = Buffer::from(buf);
     let data = ArrayData::builder(data_type)
         .len(len)
         .offset(0)
@@ -61,21 +65,41 @@ fn numbers_into<TN: ArrowNativeType, TA: ArrowPrimitiveType>(
 
 impl Column {
     pub fn into_arrow_rs(self) -> Result<Arc<dyn Array>, ArrowError> {
+        let data_type = DataType::from(&self.data_type());
         let array: Arc<dyn Array> = match self {
             Column::Null { len } => Arc::new(NullArray::new(len)),
             Column::EmptyArray { len } => Arc::new(NullArray::new(len)),
             Column::EmptyMap { len } => Arc::new(NullArray::new(len)),
+            Column::Boolean(bitmap) => {
+                let len = bitmap.len();
+                let null_buffer = NullBuffer::from(bitmap);
+                let array_data = ArrayData::builder(DataType::Boolean)
+                    .len(len)
+                    .add_buffer(null_buffer.buffer().clone())
+                    .build()?;
+                Arc::new(BooleanArray::from(array_data))
+            }
             Column::String(col) => {
                 let len = col.len();
-                let values: Vec<u8> = try_take_buffer(col.data);
-                let offsets: Vec<u64> = try_take_buffer(col.offsets);
-                let offsets = Buffer::from_vec(offsets);
-                let array_data = ArrayData::builder(DataType::LargeUtf8)
+                let values = Buffer::from(col.data);
+                let offsets = Buffer::from(col.offsets);
+                let array_data = ArrayData::builder(DataType::LargeBinary)
                     .len(len)
                     .add_buffer(offsets)
-                    .add_buffer(values.into());
+                    .add_buffer(values);
                 let array_data = unsafe { array_data.build_unchecked() };
-                Arc::new(LargeStringArray::from(array_data))
+                Arc::new(LargeBinaryArray::from(array_data))
+            }
+            Column::Variant(col) => {
+                let len = col.len();
+                let values = Buffer::from(col.data);
+                let offsets = Buffer::from(col.offsets);
+                let array_data = ArrayData::builder(DataType::LargeBinary)
+                    .len(len)
+                    .add_buffer(offsets)
+                    .add_buffer(values);
+                let array_data = unsafe { array_data.build_unchecked() };
+                Arc::new(LargeBinaryArray::from(array_data))
             }
             Column::Number(NumberColumn::UInt8(buf)) => {
                 numbers_into::<u8, arrow_array::types::UInt8Type>(buf, DataType::UInt8)?
@@ -118,17 +142,12 @@ impl Column {
                 )?
             }
             Column::Decimal(DecimalColumn::Decimal256(buf, size)) => {
-                let v: Vec<ethnum::i256> = try_take_buffer(buf);
                 // todo(youngsofun): arrow_rs use u128 for lo while arrow2 use i128, recheck it later.
-                let v: Vec<i256> = v
-                    .into_iter()
-                    .map(|i| {
-                        let (hi, lo) = i.into_words();
-                        i256::from_parts(lo as u128, hi)
-                    })
-                    .collect();
-                let len = v.len();
-                let buf = Buffer::from_vec(v);
+                let buf = unsafe {
+                    std::mem::transmute::<_, Buffer2<common_arrow::arrow::types::i256>>(buf)
+                };
+                let len = buf.len();
+                let buf = Buffer::from(buf);
                 let data =
                     ArrayData::builder(DataType::Decimal256(size.precision, size.scale as i8))
                         .len(len)
@@ -140,30 +159,219 @@ impl Column {
             }
 
             Column::Timestamp(buf) => {
-                numbers_into::<i64, arrow_array::types::Time64NanosecondType>(
+                numbers_into::<i64, arrow_array::types::TimestampMicrosecondType>(
                     buf,
-                    DataType::Timestamp(TimeUnit::Nanosecond, None),
+                    DataType::Timestamp(TimeUnit::Microsecond, None),
                 )?
             }
             Column::Date(buf) => {
                 numbers_into::<i32, arrow_array::types::Date32Type>(buf, DataType::Date32)?
             }
             Column::Nullable(col) => {
-                let arrow_array = col.column.into_arrow_rs()?;
-                let data = arrow_array.into_data();
-                let buf = col.validity.as_slice().0;
-                let builder = ArrayDataBuilder::from(data);
-                // bitmap copied here
-                let data = builder.null_bit_buffer(Some(buf.into())).build()?;
+                let null_buffer = NullBuffer::from(col.validity);
+                let inner = col.column.into_arrow_rs()?;
+                let builder = ArrayDataBuilder::from(inner.data().clone());
+
+                let data = builder
+                    .null_bit_buffer(Some(null_buffer.buffer().clone()))
+                    .build()?;
                 make_array(data)
             }
-            _ => {
-                let data_type = self.data_type();
-                Err(ArrowError::NotYetImplemented(format!(
-                    "Column::into_arrow_rs()  for {data_type} not implemented yet"
-                )))?
+            Column::Array(col) => {
+                let len = col.len();
+                let offsets = Buffer::from(col.offsets);
+                let values = col.values.into_arrow_rs()?.into_data();
+                let field = Field::new("_array", values.data_type().clone(), false);
+                let array_data = ArrayData::builder(DataType::LargeList(Box::new(field)))
+                    .len(len)
+                    .add_buffer(offsets)
+                    .child_data(vec![values]);
+                let array_data = unsafe { array_data.build_unchecked() };
+                make_array(array_data)
             }
+            Column::Tuple(cols) => match data_type {
+                DataType::Struct(fields) => {
+                    let cols = cols
+                        .into_iter()
+                        .map(|col| col.into_arrow_rs())
+                        .collect::<Result<Vec<_>, ArrowError>>()?;
+                    let data = fields.into_iter().zip(cols).collect::<Vec<_>>();
+                    Arc::new(StructArray::from(data))
+                }
+                _ => unreachable!(),
+            },
+            Column::Map(col) => match data_type {
+                DataType::Map(field, _) => {
+                    let len = col.len();
+                    let offsets: Buffer2<i32> = col
+                        .offsets
+                        .iter()
+                        .map(|x| *x as i32)
+                        .collect::<Vec<_>>()
+                        .into();
+                    let offsets = Buffer::from(offsets);
+                    match col.values {
+                        Column::Tuple(cols) => {
+                            let cols = cols
+                                .into_iter()
+                                .map(|col| col.into_arrow_rs())
+                                .collect::<Result<Vec<_>, ArrowError>>()?;
+                            let data = vec!["key", "value"]
+                                .into_iter()
+                                .zip(cols)
+                                .collect::<Vec<_>>();
+                            let array = StructArray::try_from(data)?;
+
+                            let array_data =
+                                ArrayData::builder(DataType::Map(Box::new(*field), false))
+                                    .len(len)
+                                    .add_buffer(offsets)
+                                    .child_data(vec![array.into_data()]);
+                            let array_data = unsafe { array_data.build_unchecked() };
+                            make_array(array_data)
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+                _ => unreachable!(),
+            },
         };
         Ok(array)
+    }
+
+    pub fn from_arrow_rs(array: Arc<dyn Array>, field: &Field) -> Result<Self, ArrowError> {
+        if let Some(extent) = field.metadata().get(EXTENSION_KEY).map(|v| v.as_str()) {
+            match extent {
+                ARROW_EXT_TYPE_EMPTY_ARRAY => return Ok(Column::EmptyArray { len: array.len() }),
+                ARROW_EXT_TYPE_EMPTY_MAP => return Ok(Column::EmptyMap { len: array.len() }),
+                _ => {}
+            }
+        }
+
+        let data_type = array.data_type();
+        let data = array.data_ref();
+        let column = match data_type {
+            DataType::Null => Column::Null { len: array.len() },
+            DataType::LargeUtf8 => {
+                let offsets =
+                    unsafe { std::mem::transmute::<_, Buffer2<u64>>(data.buffers()[0].clone()) };
+                let values =
+                    unsafe { std::mem::transmute::<_, Buffer2<u8>>(data.buffers()[1].clone()) };
+
+                Column::Variant(StringColumn {
+                    offsets,
+                    data: values,
+                })
+            }
+
+            DataType::LargeBinary => {
+                let offsets =
+                    unsafe { std::mem::transmute::<_, Buffer2<u64>>(data.buffers()[0].clone()) };
+                let values =
+                    unsafe { std::mem::transmute::<_, Buffer2<u8>>(data.buffers()[1].clone()) };
+
+                match field.metadata().get(EXTENSION_KEY).map(|v| v.as_str()) {
+                    Some(ARROW_EXT_TYPE_VARIANT) => Column::Variant(StringColumn {
+                        offsets,
+                        data: values,
+                    }),
+                    _ => Column::String(StringColumn {
+                        offsets,
+                        data: values,
+                    }),
+                }
+            }
+
+            DataType::Utf8 => {
+                let offsets =
+                    unsafe { std::mem::transmute::<_, Buffer2<i32>>(data.buffers()[0].clone()) };
+                let offsets: Vec<u64> = offsets.iter().map(|x| *x as u64).collect::<Vec<_>>();
+                let values =
+                    unsafe { std::mem::transmute::<_, Buffer2<u8>>(data.buffers()[1].clone()) };
+
+                Column::String(StringColumn {
+                    offsets: offsets.into(),
+                    data: values,
+                })
+            }
+
+            DataType::Binary => {
+                let offsets =
+                    unsafe { std::mem::transmute::<_, Buffer2<i32>>(data.buffers()[0].clone()) };
+                let offsets: Vec<u64> = offsets.iter().map(|x| *x as u64).collect::<Vec<_>>();
+                let values =
+                    unsafe { std::mem::transmute::<_, Buffer2<u8>>(data.buffers()[1].clone()) };
+
+                Column::String(StringColumn {
+                    offsets: offsets.into(),
+                    data: values,
+                })
+            }
+            DataType::Boolean => {
+                let boolean_buffer =
+                    BooleanBuffer::new(data.buffers()[0].clone(), data.offset(), data.len());
+
+                let null_buffer = NullBuffer::new(boolean_buffer);
+
+                let bitmap = Bitmap::from_null_buffer(null_buffer);
+                Column::Boolean(bitmap)
+            }
+            DataType::Int8 => {
+                let buffer2 = Buffer2::from(data.buffers()[0].clone());
+                Column::Number(NumberColumn::Int8(buffer2))
+            }
+            DataType::UInt8 => {
+                let buffer2 = Buffer2::from(data.buffers()[0].clone());
+                Column::Number(NumberColumn::UInt8(buffer2))
+            }
+            DataType::Int16 => {
+                let buffer2 = Buffer2::from(data.buffers()[0].clone());
+                Column::Number(NumberColumn::Int16(buffer2))
+            }
+            DataType::UInt16 => {
+                let buffer2 = Buffer2::from(data.buffers()[0].clone());
+                Column::Number(NumberColumn::UInt16(buffer2))
+            }
+            DataType::Int32 => {
+                let buffer2 = Buffer2::from(data.buffers()[0].clone());
+                Column::Number(NumberColumn::Int32(buffer2))
+            }
+            DataType::UInt32 => {
+                let buffer2 = Buffer2::from(data.buffers()[0].clone());
+                Column::Number(NumberColumn::UInt32(buffer2))
+            }
+            DataType::Int64 => {
+                let buffer2 = Buffer2::from(data.buffers()[0].clone());
+                Column::Number(NumberColumn::Int64(buffer2))
+            }
+            DataType::UInt64 => {
+                let buffer2 = Buffer2::from(data.buffers()[0].clone());
+                Column::Number(NumberColumn::UInt64(buffer2))
+            }
+
+            DataType::Float32 => {
+                let buffer2: Buffer2<f32> = Buffer2::from(data.buffers()[0].clone());
+                let buffer = unsafe { std::mem::transmute::<_, Buffer2<F32>>(buffer2) };
+                Column::Number(NumberColumn::Float32(buffer))
+            }
+
+            DataType::Float64 => {
+                let buffer2: Buffer2<f32> = Buffer2::from(data.buffers()[0].clone());
+                let buffer = unsafe { std::mem::transmute::<_, Buffer2<F64>>(buffer2) };
+
+                Column::Number(NumberColumn::Float64(buffer))
+            }
+
+            _ => Err(ArrowError::NotYetImplemented(format!(
+                "Column::from_arrow_rs() for {data_type} not implemented yet"
+            )))?,
+        };
+        if let Some(nulls) = array.into_data().nulls() {
+            let validity = Bitmap::from_null_buffer(nulls.clone());
+            let column = NullableColumn { column, validity };
+            Ok(Column::Nullable(Box::new(column)))
+        } else {
+            Ok(column)
+        }
     }
 }

@@ -12,11 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::Scalar;
+use enum_as_inner::EnumAsInner;
+use serde::Deserialize;
+use serde::Serialize;
 
+use super::AggregateFunction;
+use crate::binder::WindowOrderByInfo;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::Distribution;
 use crate::optimizer::PhysicalProperty;
@@ -27,14 +38,19 @@ use crate::optimizer::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
-use crate::plans::WindowFuncFrame;
+use crate::IndexType;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Window {
     // aggregate scalar expressions, such as: sum(col1), count(*);
-    pub aggregate_function: ScalarItem,
+    // or general window functions, such as: row_number(), rank();
+    pub index: IndexType,
+    pub function: WindowFuncType,
+
     // partition by scalar expressions
     pub partition_by: Vec<ScalarItem>,
+    // order by
+    pub order_by: Vec<WindowOrderByInfo>,
     // window frames
     pub frame: WindowFuncFrame,
 }
@@ -43,12 +59,25 @@ impl Window {
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
 
-        used_columns.insert(self.aggregate_function.index);
-        used_columns.extend(self.aggregate_function.scalar.used_columns());
+        used_columns.insert(self.index);
+
+        if let WindowFuncType::Aggregate(agg) = &self.function {
+            for scalar in &agg.args {
+                used_columns = used_columns
+                    .union(&scalar.used_columns())
+                    .cloned()
+                    .collect();
+            }
+        }
 
         for part in self.partition_by.iter() {
             used_columns.insert(part.index);
             used_columns.extend(part.scalar.used_columns())
+        }
+
+        for sort in self.order_by.iter() {
+            used_columns.insert(sort.order_by_item.index);
+            used_columns.extend(sort.order_by_item.scalar.used_columns())
         }
 
         Ok(used_columns)
@@ -67,25 +96,12 @@ impl Operator for Window {
     fn compute_required_prop_child(
         &self,
         _ctx: Arc<dyn TableContext>,
-        rel_expr: &RelExpr,
+        _rel_expr: &RelExpr,
         _child_index: usize,
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
         let mut required = required.clone();
-        let child_physical_prop = rel_expr.derive_physical_prop_child(0)?;
-
-        if child_physical_prop.distribution == Distribution::Serial {
-            return Ok(required);
-        }
-
-        if self.partition_by.is_empty() {
-            // Scalar aggregation
-            required.distribution = Distribution::Any;
-        } else {
-            // Partition aggregation, enforce `Hash` distribution
-            required.distribution = Distribution::Hash(vec![self.partition_by[0].scalar.clone()]);
-        }
-
+        required.distribution = Distribution::Serial;
         Ok(required)
     }
 
@@ -93,7 +109,7 @@ impl Operator for Window {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
 
         // Derive output columns
-        let output_columns = ColumnSet::from([self.aggregate_function.index]);
+        let output_columns = ColumnSet::from([self.index]);
 
         // Derive outer columns
         let outer_columns = input_prop
@@ -133,7 +149,6 @@ impl Operator for Window {
         let mut used_columns = self.used_columns()?;
         used_columns.extend(input_prop.used_columns);
         let column_stats = input_prop.statistics.column_stats;
-        let is_accurate = input_prop.statistics.is_accurate;
 
         Ok(RelationalProperty {
             output_columns,
@@ -143,8 +158,90 @@ impl Operator for Window {
             statistics: Statistics {
                 precise_cardinality,
                 column_stats,
-                is_accurate,
             },
         })
+    }
+}
+
+#[derive(Default, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+pub struct WindowFuncFrame {
+    pub units: WindowFuncFrameUnits,
+    pub start_bound: WindowFuncFrameBound,
+    pub end_bound: WindowFuncFrameBound,
+}
+
+impl Display for WindowFuncFrame {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{:?}: {:?} ~ {:?}",
+            self.units, self.start_bound, self.end_bound
+        )
+    }
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, EnumAsInner)]
+pub enum WindowFuncFrameUnits {
+    #[default]
+    Rows,
+    Range,
+}
+
+#[derive(Default, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+pub enum WindowFuncFrameBound {
+    /// `CURRENT ROW`
+    #[default]
+    CurrentRow,
+    /// `<N> PRECEDING` or `UNBOUNDED PRECEDING`
+    Preceding(Option<Scalar>),
+    /// `<N> FOLLOWING` or `UNBOUNDED FOLLOWING`.
+    Following(Option<Scalar>),
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub enum WindowFuncType {
+    Aggregate(AggregateFunction),
+    RowNumber,
+    Rank,
+    DenseRank,
+}
+
+impl WindowFuncType {
+    pub fn from_name(name: &str) -> Result<WindowFuncType> {
+        match name {
+            "row_number" => Ok(WindowFuncType::RowNumber),
+            "rank" => Ok(WindowFuncType::Rank),
+            "dense_rank" => Ok(WindowFuncType::DenseRank),
+            _ => Err(ErrorCode::UnknownFunction(format!(
+                "Unknown window function: {}",
+                name
+            ))),
+        }
+    }
+    pub fn func_name(&self) -> String {
+        match self {
+            WindowFuncType::Aggregate(agg) => agg.func_name.to_string(),
+            WindowFuncType::RowNumber => "row_number".to_string(),
+            WindowFuncType::Rank => "rank".to_string(),
+            WindowFuncType::DenseRank => "dense_rank".to_string(),
+        }
+    }
+
+    pub fn used_columns(&self) -> ColumnSet {
+        match self {
+            WindowFuncType::Aggregate(agg) => {
+                agg.args.iter().flat_map(|arg| arg.used_columns()).collect()
+            }
+            _ => ColumnSet::new(),
+        }
+    }
+
+    pub fn return_type(&self) -> DataType {
+        match self {
+            WindowFuncType::Aggregate(agg) => *agg.return_type.clone(),
+            WindowFuncType::RowNumber | WindowFuncType::Rank | WindowFuncType::DenseRank => {
+                DataType::Number(NumberDataType::UInt64)
+            }
+        }
     }
 }

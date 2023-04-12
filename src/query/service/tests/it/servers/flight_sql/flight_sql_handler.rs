@@ -38,6 +38,7 @@ use tokio_stream::wrappers::UnixListenerStream;
 use tonic::transport::Endpoint;
 use tonic::transport::Server;
 use tower::service_fn;
+use tracing::debug;
 
 use crate::tests::ConfigBuilder;
 use crate::tests::TestGlobalServices;
@@ -60,12 +61,18 @@ async fn run_query(
     sql: &str,
 ) -> std::result::Result<String, ArrowError> {
     let mut stmt = client.prepare(sql.to_string()).await?;
-    let flight_info = stmt.execute().await?;
-    let ticket = flight_info.endpoint[0].ticket.as_ref().unwrap().clone();
-    let flight_data = client.do_get(ticket).await?;
-    let flight_data: Vec<FlightData> = flight_data.try_collect().await.unwrap();
-    let batches = flight_data_to_batches(&flight_data)?;
-    let res = pretty_format_batches(batches.as_slice())?.to_string();
+    let res = if stmt.dataset_schema()?.fields.is_empty() {
+        // there is a bug in FlightSqlServiceClient::execute_update(), which lead to panic
+        let affected_rows = client.execute_update(sql.to_string()).await?;
+        affected_rows.to_string()
+    } else {
+        let flight_info = stmt.execute().await?;
+        let ticket = flight_info.endpoint[0].ticket.as_ref().unwrap().clone();
+        let flight_data = client.do_get(ticket).await?;
+        let flight_data: Vec<FlightData> = flight_data.try_collect().await.unwrap();
+        let batches = flight_data_to_batches(&flight_data)?;
+        pretty_format_batches(batches.as_slice())?.to_string()
+    };
     Ok(res)
 }
 
@@ -95,18 +102,27 @@ async fn test_query() -> Result<()> {
 
     // We would just listen on TCP, but it seems impossible to know when tonic is ready to serve
     let service = FlightSqlServiceImpl::create();
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let serve_future = Server::builder()
         .add_service(FlightServiceServer::new(service))
-        .serve_with_incoming(stream);
+        .serve_with_incoming_shutdown(stream, async { shutdown_rx.await.unwrap() });
 
     let request_future = async {
         let mut mint = Mint::new("tests/it/servers/flight_sql/testdata");
         let mut file = mint.new_goldenfile("query.txt").unwrap();
         let mut client = client_with_uds(path).await;
         let token = client.handshake(TEST_USER, TEST_PASSWORD).await.unwrap();
-        println!("Auth succeeded with token: {:?}", token);
+        debug!("Auth succeeded with token: {:?}", token);
         let cases = [
-            "select 1, 'abc', 1.1, 1.1::float32, 1::nullable(int)", // types
+            "select 1, 'abc', 1.1, 1.1::float32, 1::nullable(int)",
+            "select [1, 2]",
+            "select (1, 1.1)",
+            "select {1: 11, 2: 22}",
+            "show tables",
+            // "drop table if exists test1",
+            // "create table test1(a int, b string)",
+            // "insert into table test1(a, b) values (1, 'x'), (2, 'y')",
+            // "select * from table test1",
         ];
         for case in cases {
             writeln!(file, "---------- Input ----------").unwrap();
@@ -119,10 +135,17 @@ async fn test_query() -> Result<()> {
             writeln!(file, "{}", res).unwrap();
         }
     };
+    tokio::pin!(serve_future);
 
     tokio::select! {
-        _ = serve_future => panic!("server returned first"),
-        _ = request_future => println!("Client finished!"),
+        _ = &mut serve_future => panic!("server returned first"),
+        _ = request_future => {
+            debug!("Client finished!");
+        }
     }
+    shutdown_tx.send(()).unwrap();
+    serve_future.await.unwrap();
+    debug!("Server shutdown!");
+
     Ok(())
 }

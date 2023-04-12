@@ -29,6 +29,7 @@ use crate::plans::FunctionCall;
 use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
+use crate::plans::WindowFuncType;
 
 // Visitor that find Expressions that match a particular predicate
 struct Finder<'a, F>
@@ -105,6 +106,7 @@ pub enum JoinPredicate<'a> {
     Both {
         left: &'a ScalarExpr,
         right: &'a ScalarExpr,
+        equal: bool,
     },
     Other(&'a ScalarExpr),
 }
@@ -127,20 +129,22 @@ impl<'a> JoinPredicate<'a> {
         }
 
         if let ScalarExpr::ComparisonExpr(ComparisonExpr {
-            op: ComparisonOp::Equal,
-            left,
-            right,
-            ..
+            op, left, right, ..
         }) = scalar
         {
             if satisfied_by(left, left_prop) && satisfied_by(right, right_prop) {
-                return Self::Both { left, right };
+                return Self::Both {
+                    left,
+                    right,
+                    equal: op == &ComparisonOp::Equal,
+                };
             }
 
             if satisfied_by(right, left_prop) && satisfied_by(left, right_prop) {
                 return Self::Both {
                     left: right,
                     right: left,
+                    equal: op == &ComparisonOp::Equal,
                 };
             }
         }
@@ -195,11 +199,22 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
         ScalarExpr::ComparisonExpr(scalar) => {
             prune_by_children(&scalar.left, columns) && prune_by_children(&scalar.right, columns)
         }
-        ScalarExpr::WindowFunction(scalar) => scalar
-            .agg_func
-            .args
-            .iter()
-            .all(|arg| prune_by_children(arg, columns)),
+        ScalarExpr::WindowFunction(scalar) => {
+            let flag = match &scalar.func {
+                WindowFuncType::Aggregate(agg) => {
+                    agg.args.iter().all(|arg| prune_by_children(arg, columns))
+                }
+                _ => false,
+            };
+            flag || scalar
+                .partition_by
+                .iter()
+                .all(|arg| prune_by_children(arg, columns))
+                || scalar
+                    .order_by
+                    .iter()
+                    .all(|arg| prune_by_children(&arg.expr, columns))
+        }
         ScalarExpr::AggregateFunction(scalar) => scalar
             .args
             .iter()

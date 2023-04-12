@@ -16,7 +16,6 @@ use std::any::Any;
 use std::ops::Not;
 use std::sync::Arc;
 
-use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
@@ -73,7 +72,6 @@ enum State {
 pub struct MutationSource {
     state: State,
     output: Arc<OutputPort>,
-    scan_progress: Arc<Progress>,
 
     ctx: Arc<dyn TableContext>,
     filter: Arc<Option<Expr>>,
@@ -99,11 +97,9 @@ impl MutationSource {
         operators: Vec<BlockOperator>,
         storage_format: FuseStorageFormat,
     ) -> Result<ProcessorPtr> {
-        let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(MutationSource {
             state: State::ReadData(None),
             output,
-            scan_progress,
             ctx: ctx.clone(),
             filter,
             block_reader,
@@ -184,7 +180,7 @@ impl Processor for MutationSource {
                     assert_eq!(filter.data_type(), &DataType::Boolean);
 
                     let func_ctx = self.ctx.get_function_context()?;
-                    let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
+                    let evaluator = Evaluator::new(&data_block, &func_ctx, &BUILTIN_FUNCTIONS);
 
                     let predicates = evaluator
                         .run(filter)
@@ -208,7 +204,7 @@ impl Processor for MutationSource {
                             rows: affect_rows,
                             bytes: 0,
                         };
-                        self.scan_progress.incr(&progress_values);
+                        self.ctx.get_write_progress().incr(&progress_values);
 
                         match self.action {
                             MutationAction::Deletion => {
@@ -260,9 +256,10 @@ impl Processor for MutationSource {
                 } else {
                     let progress_values = ProgressValues {
                         rows: num_rows,
+                        // ignore the bytes.
                         bytes: 0,
                     };
-                    self.scan_progress.incr(&progress_values);
+                    self.ctx.get_write_progress().incr(&progress_values);
                     self.state = State::PerformOperator(data_block);
                 }
             }
@@ -314,6 +311,7 @@ impl Processor for MutationSource {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::ReadData(Some(part)) => {

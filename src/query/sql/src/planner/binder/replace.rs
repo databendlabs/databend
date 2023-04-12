@@ -19,7 +19,7 @@ use common_ast::ast::ReplaceStmt;
 use common_ast::ast::Statement;
 use common_exception::Result;
 use common_expression::TableSchemaRefExt;
-use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::FileFormatOptionsAst;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;
@@ -32,6 +32,7 @@ use crate::plans::Replace;
 use crate::BindContext;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_replace(
         &mut self,
         bind_context: &mut BindContext,
@@ -101,9 +102,9 @@ impl Binder {
                 }
             }
             InsertSource::StreamingV2 { settings, start } => {
-                let opts = FileFormatOptions::from_map(&settings)?;
+                let params = FileFormatOptionsAst { options: settings }.try_into()?;
                 Ok(InsertInputSource::StreamingWithFileFormat(
-                    opts, start, None,
+                    params, start, None,
                 ))
             }
             InsertSource::Values { rest_str } => {

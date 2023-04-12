@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use common_exception::Result;
 use common_storages_share::SHARE_CONFIG_PREFIX;
-use time::Duration;
 
 use crate::accessor::truncate_root;
 use crate::accessor::SharingAccessor;
@@ -25,6 +26,7 @@ use crate::models::SharedTableResponse;
 // Methods for access share table spec.
 impl SharingAccessor {
     // read share table spec from S3 and check whether requester has permission on the table
+    #[async_backtrace::framed]
     async fn get_shared_table_spec(
         &self,
         input: &models::LambdaInput,
@@ -39,6 +41,7 @@ impl SharingAccessor {
     // presign_file would be separated into two steps:
     // 1. fetch the table location
     // 2. form the final path and presign it
+    #[async_backtrace::framed]
     async fn share_table_spec_presign_file(
         &self,
         table: &SharedTableResponse,
@@ -51,21 +54,26 @@ impl SharingAccessor {
         let obj_path = format!("{}/{}", loc_prefix, file_path);
         let op = self.op.clone();
         if input.method == "HEAD" {
-            let s = op.presign_stat(obj_path.as_str(), Duration::hours(1))?;
+            let s = op
+                .presign_stat(obj_path.as_str(), Duration::from_secs(1))
+                .await?;
             return Ok(PresignFileResponse::new(&s, input.file_name.clone()));
         }
 
-        let s = op.presign_read(obj_path.as_str(), Duration::hours(1))?;
+        let s = op
+            .presign_read(obj_path.as_str(), Duration::from_secs(1))
+            .await?;
         Ok(PresignFileResponse::new(&s, input.file_name.clone()))
     }
 
-    fn get_share_spec_location(&self) -> String {
+    pub fn get_share_spec_location(&self) -> String {
         format!(
             "{}/{}/share_specs.json",
             self.config.tenant, SHARE_CONFIG_PREFIX
         )
     }
 
+    #[async_backtrace::framed]
     pub async fn get_share_table_spec_presigned_files(
         input: &models::LambdaInput,
     ) -> Result<Vec<PresignFileResponse>> {

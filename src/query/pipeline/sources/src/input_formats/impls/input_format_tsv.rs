@@ -26,14 +26,18 @@ use common_formats::FieldDecoderTSV;
 use common_formats::FileFormatOptionsExt;
 use common_io::cursor_ext::*;
 use common_io::format_diagnostic::verbose_string;
+use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageFileFormatType;
+use common_meta_app::principal::TsvFileFormatParams;
+use common_pipeline_core::InputError;
 
 use crate::input_formats::AligningStateRowDelimiter;
 use crate::input_formats::BlockBuilder;
-use crate::input_formats::InputError;
+use crate::input_formats::InputContext;
 use crate::input_formats::InputFormatTextBase;
 use crate::input_formats::RowBatch;
+use crate::input_formats::SplitInfo;
 
 pub struct InputFormatTSV {}
 
@@ -124,8 +128,25 @@ impl InputFormatTextBase for InputFormatTSV {
         true
     }
 
-    fn create_field_decoder(options: &FileFormatOptionsExt) -> Arc<dyn FieldDecoder> {
-        Arc::new(FieldDecoderTSV::create(options))
+    fn create_field_decoder(
+        params: &FileFormatParams,
+        options: &FileFormatOptionsExt,
+    ) -> Arc<dyn FieldDecoder> {
+        let tsv_params = TsvFileFormatParams::downcast_unchecked(params);
+        Arc::new(FieldDecoderTSV::create(tsv_params, options))
+    }
+
+    fn try_create_align_state(
+        ctx: &Arc<InputContext>,
+        split_info: &Arc<SplitInfo>,
+    ) -> Result<Self::AligningState> {
+        let tsv_params = TsvFileFormatParams::downcast_unchecked(&ctx.file_format_params);
+        AligningStateRowDelimiter::try_create(
+            ctx,
+            split_info,
+            tsv_params.record_delimiter.as_bytes()[0],
+            tsv_params.headers as usize,
+        )
     }
 
     fn deserialize(
@@ -144,6 +165,10 @@ impl InputFormatTextBase for InputFormatTSV {
             .as_any()
             .downcast_ref::<FieldDecoderTSV>()
             .expect("must success");
+        let field_delimiter =
+            TsvFileFormatParams::downcast_unchecked(&builder.ctx.file_format_params)
+                .field_delimiter
+                .as_bytes()[0];
         let schema = &builder.ctx.schema;
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
@@ -151,13 +176,7 @@ impl InputFormatTextBase for InputFormatTSV {
         let mut error_map: HashMap<u16, InputError> = HashMap::new();
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end]; // include \n
-            if let Err(e) = Self::read_row(
-                builder.ctx.format_options.get_field_delimiter(),
-                field_decoder,
-                buf,
-                columns,
-                schema,
-            ) {
+            if let Err(e) = Self::read_row(field_delimiter, field_decoder, buf, columns, schema) {
                 match builder.ctx.on_error_mode {
                     OnErrorMode::Continue => {
                         Self::on_error_continue(columns, num_rows, e.clone(), &mut error_map);

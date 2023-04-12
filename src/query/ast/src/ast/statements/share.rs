@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -19,7 +20,38 @@ use common_meta_app::share::ShareGrantObjectName;
 use common_meta_app::share::ShareGrantObjectPrivilege;
 use itertools::Itertools;
 
+use super::UriLocation;
 use crate::ast::Identifier;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreateShareEndpointStmt {
+    pub if_not_exists: bool,
+    pub endpoint: Identifier,
+    pub url: UriLocation,
+    pub tenant: Identifier,
+    pub args: BTreeMap<String, String>,
+    pub comment: Option<String>,
+}
+
+impl Display for CreateShareEndpointStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "CREATE SHARE ENDPOINT ")?;
+        if self.if_not_exists {
+            write!(f, "IF NOT EXISTS ")?;
+        }
+        write!(f, "{}", self.endpoint)?;
+        write!(f, " URL={}", self.url)?;
+        write!(f, " TENANT={} ARGS=(", self.tenant)?;
+        for (k, v) in self.args.iter() {
+            write!(f, "{}={},", k, v)?;
+        }
+        write!(f, ")")?;
+        if let Some(comment) = &self.comment {
+            write!(f, " COMMENT = '{comment}'")?;
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateShareStmt {
@@ -147,6 +179,31 @@ pub struct ShowSharesStmt {}
 impl Display for ShowSharesStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "SHOW SHARES")?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShowShareEndpointStmt {}
+
+impl Display for ShowShareEndpointStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "SHOW SHARE ENDPOINT")?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DropShareEndpointStmt {
+    pub if_exists: bool,
+    pub endpoint: Identifier,
+}
+
+impl Display for DropShareEndpointStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "DROP SHARE ENDPOINT {}", self.endpoint)?;
 
         Ok(())
     }

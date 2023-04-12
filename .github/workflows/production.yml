@@ -76,7 +76,7 @@ jobs:
 
   test_unit:
     timeout-minutes: 30
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 8c16g]
     env:
       RUNNER_PROVIDER: aws
     steps:
@@ -85,8 +85,6 @@ jobs:
           # fetch all tags,  metasrv and metaclient need tag as its version.
           fetch-depth: 0
       - uses: ./.github/actions/test_unit
-        with:
-          codecov_token: ${{ secrets.CODECOV_TOKEN }}
 
   test_stateless_standalone_linux:
     runs-on: ubuntu-latest

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_exception::Span;
-use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::FileFormatOptionsAst;
 use common_meta_app::principal::PrincipalIdentity;
 use common_meta_app::principal::UserIdentity;
 
@@ -208,23 +208,30 @@ pub trait VisitorMut: Sized {
         _name: &mut Identifier,
         args: &mut [Expr],
         _params: &mut [Literal],
-        over: &mut Option<WindowSpec>,
+        over: &mut Option<Window>,
     ) {
         for arg in args.iter_mut() {
             walk_expr_mut(self, arg);
         }
 
         if let Some(over) = over {
-            over.partition_by
-                .iter_mut()
-                .for_each(|expr| walk_expr_mut(self, expr));
-            over.order_by
-                .iter_mut()
-                .for_each(|expr| walk_expr_mut(self, &mut expr.expr));
+            match over {
+                Window::WindowReference(reference) => {
+                    self.visit_identifier(&mut reference.window_name);
+                }
+                Window::WindowSpec(spec) => {
+                    spec.partition_by
+                        .iter_mut()
+                        .for_each(|expr| walk_expr_mut(self, expr));
+                    spec.order_by
+                        .iter_mut()
+                        .for_each(|expr| walk_expr_mut(self, &mut expr.expr));
 
-            if let Some(frame) = &mut over.window_frame {
-                self.visit_frame_bound(&mut frame.start_bound);
-                self.visit_frame_bound(&mut frame.end_bound);
+                    if let Some(frame) = &mut spec.window_frame {
+                        self.visit_frame_bound(&mut frame.start_bound);
+                        self.visit_frame_bound(&mut frame.end_bound);
+                    }
+                }
             }
         }
     }
@@ -503,7 +510,7 @@ pub trait VisitorMut: Sized {
         &mut self,
         _if_not_exists: bool,
         _name: &mut String,
-        _file_format_options: &mut FileFormatOptions,
+        _file_format_options: &mut FileFormatOptionsAst,
     ) {
     }
 
@@ -512,6 +519,12 @@ pub trait VisitorMut: Sized {
     fn visit_show_file_formats(&mut self) {}
 
     fn visit_presign(&mut self, _presign: &mut PresignStmt) {}
+
+    fn visit_create_share_endpoint(&mut self, _stmt: &mut CreateShareEndpointStmt) {}
+
+    fn visit_show_share_endpoint(&mut self, _stmt: &mut ShowShareEndpointStmt) {}
+
+    fn visit_drop_share_endpoint(&mut self, _stmt: &mut DropShareEndpointStmt) {}
 
     fn visit_create_share(&mut self, _stmt: &mut CreateShareStmt) {}
 

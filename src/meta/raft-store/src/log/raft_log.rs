@@ -96,7 +96,10 @@ impl RaftLog {
     /// There is no overriding check either. It always overrides the existent ones.
     ///
     /// When this function returns the logs are guaranteed to be fsync-ed.
-    pub async fn append(&self, logs: &[Entry]) -> Result<(), MetaStorageError> {
+    pub async fn append<I: IntoIterator<Item = Entry>>(
+        &self,
+        logs: I,
+    ) -> Result<(), MetaStorageError> {
         self.logs().append(logs).await
     }
 

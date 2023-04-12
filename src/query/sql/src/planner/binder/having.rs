@@ -31,6 +31,7 @@ use crate::Binder;
 impl Binder {
     /// Analyze aggregates in having clause, this will rewrite aggregate functions.
     /// See `AggregateRewriter` for more details.
+    #[async_backtrace::framed]
     pub(super) async fn analyze_aggregate_having<'a>(
         &mut self,
         bind_context: &mut BindContext,
@@ -54,6 +55,7 @@ impl Binder {
         Ok((rewriter.visit(&scalar)?, having.span()))
     }
 
+    #[async_backtrace::framed]
     pub(super) async fn bind_having(
         &mut self,
         bind_context: &mut BindContext,
@@ -65,7 +67,7 @@ impl Binder {
 
         let scalar = if bind_context.in_grouping {
             // If we are in grouping context, we will perform the grouping check
-            let mut grouping_checker = GroupingChecker::new(bind_context);
+            let grouping_checker = GroupingChecker::new(bind_context);
             grouping_checker.resolve(&having, span)?
         } else {
             // Otherwise we just fallback to a normal selection as `WHERE` clause.

@@ -27,7 +27,7 @@ use crate::plans::UnionAll;
 
 pub struct RulePushDownLimitUnion {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RulePushDownLimitUnion {
@@ -39,7 +39,7 @@ impl RulePushDownLimitUnion {
             //   UnionAll
             //     /  \
             //   ...   ...
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Limit,
                 }
@@ -62,7 +62,7 @@ impl RulePushDownLimitUnion {
                         .into(),
                     ),
                 ),
-            ),
+            )],
         }
     }
 }
@@ -107,7 +107,7 @@ impl Rule for RulePushDownLimitUnion {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }

@@ -52,6 +52,7 @@ impl Interpreter for ReplaceInterpreter {
         "ReplaceIntoInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         self.check_on_conflicts()?;
 
@@ -105,6 +106,7 @@ impl ReplaceInterpreter {
             Ok(())
         }
     }
+    #[async_backtrace::framed]
     async fn connect_input_source<'a>(
         &'a self,
         ctx: Arc<QueryContext>,
@@ -150,6 +152,7 @@ impl ReplaceInterpreter {
         Ok(build_res)
     }
 
+    #[async_backtrace::framed]
     async fn connect_query_plan_source<'a>(
         &'a self,
         ctx: Arc<QueryContext>,
@@ -189,7 +192,7 @@ impl ReplaceInterpreter {
                         transform_output_port,
                         select_schema.clone(),
                         target_schema.clone(),
-                        func_ctx,
+                        func_ctx.clone(),
                     )
                 },
             )?;

@@ -42,6 +42,7 @@ use opendal::layers::LoggingLayer;
 use opendal::layers::MetricsLayer;
 use opendal::layers::RetryLayer;
 use opendal::layers::TracingLayer;
+use opendal::raw::HttpClient;
 use opendal::services;
 use opendal::Builder;
 use opendal::Operator;
@@ -84,6 +85,12 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
     let ob = Operator::new(builder)?;
 
     let op = ob
+        // NOTE
+        //
+        // Magic happens here. We will add a layer upon original
+        // storage operator so that all underlying storage operations
+        // will send to storage runtime.
+        .layer(RuntimeLayer::new(GlobalIORuntime::instance().inner()))
         // Add retry
         .layer(RetryLayer::new().with_jitter())
         // Add metrics
@@ -92,12 +99,6 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         .layer(LoggingLayer::default())
         // Add tracing
         .layer(TracingLayer)
-        // NOTE
-        //
-        // Magic happens here. We will add a layer upon original
-        // storage operator so that all underlying storage operations
-        // will send to storage runtime.
-        .layer(RuntimeLayer::new(GlobalIORuntime::instance().inner()))
         .finish();
 
     Ok(op)
@@ -227,12 +228,43 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
     // Disable credential loader
     if cfg.disable_credential_loader {
         builder.disable_config_load();
+        builder.disable_ec2_metadata();
     }
 
     // Enable virtual host style
     if cfg.enable_virtual_host_style {
         builder.enable_virtual_host_style();
     }
+
+    let http_builder = {
+        let mut builder = reqwest::ClientBuilder::new();
+
+        // Pool max idle per host controls connection pool size.
+        // Default to no limit, set to `0` for disable it.
+        let pool_max_idle_per_host = env::var("_DATABEND_INTERNAL_POOL_MAX_IDLE_PER_HOST")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(usize::MAX);
+        builder = builder.pool_max_idle_per_host(pool_max_idle_per_host);
+
+        // Connect timeout default to 30s.
+        let connect_timeout = env::var("_DATABEND_INTERNAL_CONNECT_TIMEOUT")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(30);
+        builder = builder.connect_timeout(Duration::from_secs(connect_timeout));
+
+        // Timeout default to 120s.
+        let timeout = env::var("_DATABEND_INTERNAL_TIMEOUT")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(120);
+        builder = builder.timeout(Duration::from_secs(timeout));
+
+        builder
+    };
+
+    builder.http_client(HttpClient::build(http_builder)?);
 
     Ok(builder)
 }
@@ -331,12 +363,14 @@ impl DataOperator {
         self.params.clone()
     }
 
+    #[async_backtrace::framed]
     pub async fn init(conf: &StorageConfig) -> common_exception::Result<()> {
         GlobalInstance::set(Self::try_create(&conf.params).await?);
 
         Ok(())
     }
 
+    #[async_backtrace::framed]
     pub async fn try_create(sp: &StorageParams) -> common_exception::Result<DataOperator> {
         let operator = init_operator(sp)?;
 

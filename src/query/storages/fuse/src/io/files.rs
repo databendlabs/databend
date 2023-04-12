@@ -33,6 +33,7 @@ impl Files {
     /// Removes a batch of files asynchronously by splitting a list of file locations into smaller groups of size 1000,
     /// and then deleting each group of files using the delete_files function.
     #[tracing::instrument(level = "debug", skip_all)]
+    #[async_backtrace::framed]
     pub async fn remove_file_in_batch(
         &self,
         file_locations: impl IntoIterator<Item = impl AsRef<str>>,
@@ -65,6 +66,7 @@ impl Files {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn delete_files(op: Operator, locations: Vec<String>) -> Result<()> {
         op.remove(locations).await?;
         Ok(())

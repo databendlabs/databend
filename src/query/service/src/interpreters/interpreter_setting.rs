@@ -42,6 +42,7 @@ impl Interpreter for SettingInterpreter {
         "SettingInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.set.clone();
         let mut keys: Vec<String> = vec![];
@@ -57,19 +58,31 @@ impl Interpreter for SettingInterpreter {
                     let _ = tz.parse::<Tz>().map_err(|_| {
                         ErrorCode::InvalidTimezone(format!("Invalid Timezone: {}", var.value))
                     })?;
-                    self.ctx.get_settings().set_settings(
-                        var.variable.clone(),
-                        tz.to_string(),
-                        var.is_global,
-                    )?;
+                    let settings = self.ctx.get_settings();
+
+                    match var.is_global {
+                        true => {
+                            settings
+                                .set_global_setting(var.variable.clone(), tz.to_string())
+                                .await
+                        }
+                        false => settings.set_setting(var.variable.clone(), tz.to_string()),
+                    }?;
+
                     true
                 }
                 _ => {
-                    self.ctx.get_settings().set_settings(
-                        var.variable.clone(),
-                        var.value.clone(),
-                        var.is_global,
-                    )?;
+                    let settings = self.ctx.get_settings();
+
+                    match var.is_global {
+                        true => {
+                            settings
+                                .set_global_setting(var.variable.clone(), var.value.clone())
+                                .await
+                        }
+                        false => settings.set_setting(var.variable.clone(), var.value.clone()),
+                    }?;
+
                     true
                 }
             };

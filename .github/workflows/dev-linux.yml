@@ -6,7 +6,7 @@ on:
       - opened
       - synchronize
       - reopened
-      - labeled
+      # - labeled
     branches:
       - main
     paths-ignore:
@@ -30,135 +30,135 @@ env:
 
 jobs:
   check:
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 8c16g]
     steps:
       - uses: actions/checkout@v3
         with:
-          # fetch all tags,  metasrv and metaclient need tag as its version.
+          # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
       - uses: ./.github/actions/check
         timeout-minutes: 30
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
-  build_gnu:
+  build:
     timeout-minutes: 30
-    name: build_${{ matrix.arch }}_gnu
-    runs-on: [self-hosted, X64, Linux, dev]
+    name: build_${{ matrix.arch }}_${{ matrix.libc }}
+    runs-on: [self-hosted, X64, Linux, 16c32g]
     strategy:
       matrix:
-        arch:
-          - x86_64
-          - aarch64
+        include:
+          - { arch: x86_64, libc: gnu }
     steps:
       - uses: actions/checkout@v3
         with:
-          # fetch all tags,  metasrv and metaclient need tag as its version.
+          # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
       - uses: ./.github/actions/build_linux
         with:
-          target: ${{ matrix.arch }}-unknown-linux-gnu
+          target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
           profile: debug
 
-  build_musl:
+  build_other:
     timeout-minutes: 30
-    name: build_${{ matrix.arch }}_musl
-    runs-on: [self-hosted, X64, Linux, dev]
+    name: build_${{ matrix.arch }}_${{ matrix.libc }}
+    runs-on: [self-hosted, X64, Linux, 8c16g]
     strategy:
       matrix:
-        arch:
-          - x86_64
-          - aarch64
+        include:
+          - { arch: x86_64, libc: musl }
+          - { arch: aarch64, libc: musl }
+          - { arch: aarch64, libc: gnu }
     steps:
       - uses: actions/checkout@v3
         with:
-          # fetch all tags,  metasrv and metaclient need tag as its version.
+          # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
       - uses: ./.github/actions/build_linux
-        env:
-          # To avoid the `undefined reference to pthread_getname_np` error during linking,
-          # here we override set config environment var `je_cv_pthread_getname_np` to `no`,
-          # as suggested by tikv-jemalloc-sys's maintainer @BusyJay:
-          # https://github.com/tikv/jemallocator/issues/30#issuecomment-1183786410
-          #
-          # Hopefully this trick can be removed when rust upgraded to musl 1.2.3
-          # https://github.com/rust-lang/rust/pull/102891
-          je_cv_pthread_getname_np: no
         with:
-          target: ${{ matrix.arch }}-unknown-linux-musl
+          target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
+          profile: debug
+
+  build_hive:
+    timeout-minutes: 30
+    runs-on: [self-hosted, X64, Linux, 8c16g]
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags, metasrv and metaclient need tag as its version.
+          fetch-depth: 0
+      - uses: ./.github/actions/build_linux_hive
+        with:
+          target: x86_64-unknown-linux-gnu
           profile: debug
 
   test_unit:
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 8c16g]
     steps:
       - uses: actions/checkout@v3
         with:
-          # fetch all tags,  metasrv and metaclient need tag as its version.
+          # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
       - uses: ./.github/actions/test_unit
         timeout-minutes: 30
-        with:
-          codecov_token: ${{ secrets.CODECOV_TOKEN }}
 
   test_metactl:
-    runs-on: [self-hosted, X64, Linux, dev]
-    needs: build_gnu
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_metactl
         timeout-minutes: 10
 
   test_meta-upgrade-09:
-    runs-on: [self-hosted, X64, Linux, dev]
-    needs: build_gnu
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_meta-upgrade-09
         timeout-minutes: 10
 
   test_meta-data-compat-openraft-07:
-    runs-on: [self-hosted, X64, Linux, dev]
-    needs: build_gnu
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_meta_data_compat_openraft_07
         timeout-minutes: 10
 
   test_compat:
-    runs-on: [self-hosted, X64, Linux, dev]
-    needs: build_gnu
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_compat
         timeout-minutes: 10
 
-  fuse_compat:
-    runs-on: [self-hosted, X64, Linux, dev]
-    needs: build_gnu
+  test_compat_fuse:
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/fuse_compat
         timeout-minutes: 10
 
   test_meta_cluster:
-    runs-on: [self-hosted, X64, Linux, dev]
-    needs: build_gnu
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_meta_cluster
         timeout-minutes: 10
 
-  test_sqllogic_standalone_linux:
-    name: test_sqllogic_${{ matrix.dirs }}_standalone_linux
-    runs-on: [self-hosted, X64, Linux, dev]
-    needs: build_gnu
+  test_sqllogic_standalone:
+    name: test_sqllogic_standalone_${{ matrix.dirs }}
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    needs: build
     strategy:
       matrix:
         dirs:
-          - "base"
           - "query"
           - "standalone"
-          - "ydb"
           - "crdb"
           - "duckdb"
         handlers:
@@ -170,17 +170,47 @@ jobs:
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handlers }}
+          storage-format: all
       - name: Upload failure
         if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure
         with:
           name: test-sqllogic-standalone-${{ matrix.handlers }}-${{ matrix.dirs }}
 
-  test_sqllogic_management_mode_linux:
+  test_sqllogic_standalone_with_native:
+    name: test_sqllogic_standalone_${{ matrix.dirs }}_${{ matrix.format }}
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    needs: build
+    strategy:
+      matrix:
+        dirs:
+          - "base"
+          - "ydb"
+        format:
+          - "parquet"
+          - "native"
+        handlers:
+          - "mysql,http,clickhouse"
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/test_sqllogic_standalone_linux
+        timeout-minutes: 30
+        with:
+          dirs: ${{ matrix.dirs }}
+          handlers: ${{ matrix.handlers }}
+          storage-format: ${{ matrix.format }}
+      - name: Upload failure
+        if: failure() || cancelled()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-sqllogic-standalone-${{ matrix.handlers }}-${{ matrix.dirs }}_${{ matrix.format }}
+
+
+  test_sqllogic_management_mode:
     timeout-minutes: 30
-    name: test_sqllogic_${{ matrix.dirs }}_linux
-    runs-on: [self-hosted, X64, Linux, dev]
-    needs: build_gnu
+    name: test_sqllogic_${{ matrix.dirs }}
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    needs: build
     strategy:
       matrix:
         dirs:
@@ -194,10 +224,10 @@ jobs:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handlers }}
 
-  test_sqllogic_cluster_linux:
-    name: test_sqllogic_${{ matrix.dirs }}_cluster_linux
-    runs-on: [self-hosted, X64, Linux, dev]
-    needs: build_gnu
+  test_sqllogic_cluster:
+    name: test_sqllogic_cluster_${{ matrix.dirs }}
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    needs: build
     strategy:
       matrix:
         dirs:
@@ -222,34 +252,34 @@ jobs:
         with:
           name: test-sqllogic-cluster-${{ matrix.handlers }}-${{ matrix.dirs }}
 
-  test_stateless_standalone_linux:
+  test_stateless_standalone:
     timeout-minutes: 20
-    runs-on: [self-hosted, X64, Linux, dev]
-    needs: build_gnu
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateless_standalone_linux
 
-  test_stateless_cluster_linux:
+  test_stateless_cluster:
     timeout-minutes: 30
-    runs-on: [self-hosted, X64, Linux, dev]
-    needs: build_gnu
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateless_cluster_linux
 
-  test_stateful_standalone_linux:
+  test_stateful_standalone:
     timeout-minutes: 20
-    runs-on: [self-hosted, X64, Linux, dev]
-    needs: build_gnu
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_standalone_linux
 
-  test_stateful_cluster_linux:
+  test_stateful_cluster:
     timeout-minutes: 20
-    runs-on: [self-hosted, X64, Linux, dev]
-    needs: build_gnu
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_cluster_linux
@@ -257,37 +287,24 @@ jobs:
   test_stateful_large_data:
     timeout-minutes: 60
     if: contains(github.event.pull_request.labels.*.name, 'ci-largedata')
-    runs-on: [self-hosted, X64, Linux, dev]
-    needs: build_gnu
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_large_data
 
-  test_fuzz_standalone_linux:
+  test_fuzz_standalone:
     timeout-minutes: 10
-    runs-on: [self-hosted, X64, Linux, dev]
-    needs: build_gnu
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_fuzz_standalone_linux
         continue-on-error: true
 
-  build_hive:
-    timeout-minutes: 30
-    runs-on: [self-hosted, X64, Linux, dev]
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          # fetch all tags,  metasrv and metaclient need tag as its version.
-          fetch-depth: 0
-      - uses: ./.github/actions/build_linux_hive
-        with:
-          target: x86_64-unknown-linux-gnu
-          profile: debug
-
   test_stateful_hive_standalone:
     timeout-minutes: 10
-    runs-on: [self-hosted, X64, Linux, dev]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build_hive
     steps:
       - uses: actions/checkout@v3

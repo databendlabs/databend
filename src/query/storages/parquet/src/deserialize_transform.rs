@@ -77,8 +77,6 @@ pub struct ParquetDeserializeTransform {
 
     // Used for remain reading
     remain_reader: Arc<ParquetReader>,
-    // Used for top k optimization
-    top_k_finished: bool,
 }
 
 impl ParquetDeserializeTransform {
@@ -108,8 +106,6 @@ impl ParquetDeserializeTransform {
 
                 prewhere_info,
                 remain_reader,
-
-                top_k_finished: false,
             },
         )))
     }
@@ -126,26 +122,6 @@ impl ParquetDeserializeTransform {
         self.scan_progress.incr(&progress_values);
         self.output_data = Some(data_block);
         Ok(())
-    }
-
-    /// check topk should return finished or not
-    fn check_topn(&mut self) {
-        if let Some(ParquetPrewhereInfo {
-            top_k: Some((_, sorter)),
-            ..
-        }) = &mut self.prewhere_info.as_mut()
-        {
-            if let Some(next_part) = self.parts.front() {
-                let next_part = next_part
-                    .as_any()
-                    .downcast_ref::<ParquetRowGroupPart>()
-                    .unwrap();
-
-                if let Some(sort_min_max) = &next_part.sort_min_max {
-                    self.top_k_finished = sorter.never_match(sort_min_max);
-                }
-            }
-        }
     }
 }
 
@@ -181,26 +157,12 @@ impl Processor for ParquetDeserializeTransform {
             return Ok(Event::Sync);
         }
 
-        if self.top_k_finished {
-            self.input.finish();
-            self.output.finish();
-            return Ok(Event::Finished);
-        }
-
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
             let source_meta = data_block.take_meta().unwrap();
             let source_meta = ParquetSourceMeta::downcast_from(source_meta).unwrap();
 
             self.parts = VecDeque::from(source_meta.parts);
-
-            self.check_topn();
-            if self.top_k_finished {
-                self.input.finish();
-                self.output.finish();
-                return Ok(Event::Finished);
-            }
-
             self.data_readers = VecDeque::from(source_meta.readers);
             return Ok(Event::Sync);
         }
@@ -263,7 +225,7 @@ impl Processor for ParquetDeserializeTransform {
                     }
 
                     // Step 2: Read Prewhere columns and get the filter
-                    let evaluator = Evaluator::new(&prewhere_block, *func_ctx, &BUILTIN_FUNCTIONS);
+                    let evaluator = Evaluator::new(&prewhere_block, func_ctx, &BUILTIN_FUNCTIONS);
                     let filter = evaluator
                         .run(filter)
                         .map_err(|e| e.add_message("eval prewhere filter failed:"))?
@@ -294,7 +256,7 @@ impl Processor for ParquetDeserializeTransform {
                         return Ok(());
                     }
 
-                    // Step 5 Remove columns that are not needed for output. Use dummy column to replce them.
+                    // Step 5 Remove columns that are not needed for output. Use dummy column to replace them.
                     let mut columns = prewhere_block.columns().to_vec();
                     for (col, f) in columns.iter_mut().zip(reader.output_schema.fields()) {
                         if !self.output_schema.has_field(f.name()) {

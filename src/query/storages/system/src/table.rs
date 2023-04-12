@@ -104,6 +104,7 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
         self.inner_table.get_table_info()
     }
 
+    #[async_backtrace::framed]
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -133,6 +134,7 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn truncate(&self, ctx: Arc<dyn TableContext>, _purge: bool) -> Result<()> {
         self.inner_table.truncate(ctx)
     }
@@ -180,6 +182,7 @@ pub trait AsyncSystemTable: Send + Sync {
     fn get_table_info(&self) -> &TableInfo;
     async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock>;
 
+    #[async_backtrace::framed]
     async fn get_partitions(
         &self,
         _ctx: Arc<dyn TableContext>,
@@ -218,6 +221,7 @@ impl<TTable: 'static + AsyncSystemTable> Table for AsyncOneBlockSystemTable<TTab
         self.inner_table.get_table_info()
     }
 
+    #[async_backtrace::framed]
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -269,6 +273,7 @@ impl<TTable: 'static + AsyncSystemTable> AsyncSource for SystemTableAsyncSource<
     const NAME: &'static str = TTable::NAME;
 
     #[async_trait::unboxed_simple]
+    #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.finished {
             return Ok(None);

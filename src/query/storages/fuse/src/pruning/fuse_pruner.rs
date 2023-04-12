@@ -89,7 +89,7 @@ impl FusePruner {
             .as_ref()
             .and_then(|extra| extra.filter.as_ref().map(|f| f.as_expr(&BUILTIN_FUNCTIONS)));
 
-        // Limit prunner.
+        // Limit pruner.
         // if there are ordering/filter clause, ignore limit, even it has been pushed down
         let limit = push_down
             .as_ref()
@@ -101,12 +101,16 @@ impl FusePruner {
         // Range filter.
         // if filter_expression is none, an dummy pruner will be returned, which prunes nothing
         let range_pruner =
-            RangePrunerCreator::try_create(func_ctx, &table_schema, filter_expr.as_ref())?;
+            RangePrunerCreator::try_create(func_ctx.clone(), &table_schema, filter_expr.as_ref())?;
 
         // Bloom pruner.
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
-        let bloom_pruner =
-            BloomPrunerCreator::create(func_ctx, &table_schema, dal.clone(), filter_expr.as_ref())?;
+        let bloom_pruner = BloomPrunerCreator::create(
+            func_ctx.clone(),
+            &table_schema,
+            dal.clone(),
+            filter_expr.as_ref(),
+        )?;
 
         // Page pruner, used in native format
         let page_pruner = PagePrunerCreator::try_create(
@@ -161,6 +165,7 @@ impl FusePruner {
 
     // Pruning chain:
     // segment pruner -> block pruner -> topn pruner
+    #[async_backtrace::framed]
     pub async fn pruning(
         &self,
         segment_locs: Vec<Location>,

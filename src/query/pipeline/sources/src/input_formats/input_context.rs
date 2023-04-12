@@ -30,11 +30,11 @@ use common_expression::DataSchema;
 use common_expression::TableSchemaRef;
 use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;
-use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageFileCompression;
-use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
+use common_pipeline_core::InputError;
 use common_settings::Settings;
 use dashmap::DashMap;
 use opendal::Operator;
@@ -44,7 +44,6 @@ use crate::input_formats::impls::InputFormatNDJson;
 use crate::input_formats::impls::InputFormatParquet;
 use crate::input_formats::impls::InputFormatTSV;
 use crate::input_formats::impls::InputFormatXML;
-use crate::input_formats::InputError;
 use crate::input_formats::InputFormat;
 use crate::input_formats::SplitInfo;
 use crate::input_formats::StreamingReadBatch;
@@ -113,7 +112,8 @@ pub struct InputContext {
     pub format: Arc<dyn InputFormat>,
     pub splits: Vec<Arc<SplitInfo>>,
 
-    pub format_options: FileFormatOptionsExt,
+    pub file_format_params: FileFormatParams,
+    pub file_format_options_ext: FileFormatOptionsExt,
     // runtime config
     pub settings: Arc<Settings>,
 
@@ -123,7 +123,7 @@ pub struct InputContext {
     pub scan_progress: Arc<Progress>,
     pub on_error_mode: OnErrorMode,
     pub on_error_count: AtomicU64,
-    pub on_error_map: Option<DashMap<String, HashMap<u16, InputError>>>,
+    pub on_error_map: Option<Arc<DashMap<String, HashMap<u16, InputError>>>>,
 }
 
 impl Debug for InputContext {
@@ -138,13 +138,13 @@ impl Debug for InputContext {
 }
 
 impl InputContext {
-    pub fn get_input_format(format: &StageFileFormatType) -> Result<Arc<dyn InputFormat>> {
-        match format {
-            StageFileFormatType::Tsv => Ok(Arc::new(InputFormatTSV::create())),
-            StageFileFormatType::Csv => Ok(Arc::new(InputFormatCSV::create())),
-            StageFileFormatType::NdJson => Ok(Arc::new(InputFormatNDJson::create())),
-            StageFileFormatType::Parquet => Ok(Arc::new(InputFormatParquet {})),
-            StageFileFormatType::Xml => Ok(Arc::new(InputFormatXML::create())),
+    pub fn get_input_format(params: &FileFormatParams) -> Result<Arc<dyn InputFormat>> {
+        match params {
+            FileFormatParams::Tsv(_) => Ok(Arc::new(InputFormatTSV::create())),
+            FileFormatParams::Csv(_) => Ok(Arc::new(InputFormatCSV::create())),
+            FileFormatParams::NdJson(_) => Ok(Arc::new(InputFormatNDJson::create())),
+            FileFormatParams::Parquet(_) => Ok(Arc::new(InputFormatParquet {})),
+            FileFormatParams::Xml(_) => Ok(Arc::new(InputFormatXML::create())),
             format => Err(ErrorCode::Internal(format!(
                 "Unsupported file format: {:?}",
                 format
@@ -152,6 +152,7 @@ impl InputContext {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn try_create_from_copy(
         operator: Operator,
         settings: Arc<Settings>,
@@ -160,19 +161,15 @@ impl InputContext {
         splits: Vec<Arc<SplitInfo>>,
         scan_progress: Arc<Progress>,
         block_compact_thresholds: BlockThresholds,
+        on_error_map: Arc<DashMap<String, HashMap<u16, InputError>>>,
     ) -> Result<Self> {
         let on_error_mode = stage_info.copy_options.on_error.clone();
         let plan = Box::new(CopyIntoPlan { stage_info });
+        let file_format_params = plan.stage_info.file_format_params.clone();
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
-        let file_format_options = &plan.stage_info.file_format_options;
-        let format_typ = file_format_options.format.clone();
-        let mut file_format_options = FileFormatOptionsExt::create_from_file_format_options(
-            file_format_options.clone(),
-            &settings,
-        )?;
-        file_format_options.check()?;
+        let file_format_options_ext = FileFormatOptionsExt::create_from_settings(&settings)?;
 
-        let format = Self::get_input_format(&format_typ)?;
+        let format = Self::get_input_format(&file_format_params)?;
 
         Ok(InputContext {
             format,
@@ -184,13 +181,15 @@ impl InputContext {
             source: InputSource::Operator(operator),
             plan: InputPlan::CopyInto(plan),
             block_compact_thresholds,
-            format_options: file_format_options,
+            file_format_params,
+            file_format_options_ext,
             on_error_mode,
             on_error_count: AtomicU64::new(0),
-            on_error_map: Some(DashMap::new()),
+            on_error_map: Some(on_error_map),
         })
     }
 
+    #[async_backtrace::framed]
     pub async fn try_create_from_insert_clickhouse(
         format_name: &str,
         stream_receiver: Receiver<Result<StreamingReadBatch>>,
@@ -199,16 +198,25 @@ impl InputContext {
         scan_progress: Arc<Progress>,
         block_compact_thresholds: BlockThresholds,
     ) -> Result<Self> {
-        let (format_name, rows_to_skip) = remove_clickhouse_format_suffix(format_name);
-
         let typ = ClickhouseFormatType::parse_clickhouse_format(format_name)?;
-        let mut file_format_options =
-            FileFormatOptionsExt::create_from_clickhouse_format(typ, &settings)?;
-        file_format_options.stage.skip_header = rows_to_skip as u64;
+        let file_format_options_ext =
+            FileFormatOptionsExt::create_from_clickhouse_format(typ.clone(), &settings)?;
+        let mut file_format_params = FileFormatParams::default_by_type(typ.typ)?;
 
-        let format_type = file_format_options.stage.format.clone();
-        file_format_options.check()?;
-        let format = Self::get_input_format(&format_type)?;
+        let headers = file_format_options_ext.headers as u64;
+        if headers > 0 {
+            match &mut file_format_params {
+                FileFormatParams::Csv(p) => {
+                    p.headers = headers;
+                }
+                FileFormatParams::Tsv(p) => {
+                    p.headers = headers;
+                }
+                _ => {}
+            }
+        }
+
+        let format = Self::get_input_format(&file_format_params)?;
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
         let compression = StageFileCompression::Auto;
         let plan = StreamPlan {
@@ -226,33 +234,31 @@ impl InputContext {
             plan: InputPlan::StreamingLoad(plan),
             splits: vec![],
             block_compact_thresholds,
-            format_options: file_format_options,
+            file_format_params,
+            file_format_options_ext,
             on_error_mode: OnErrorMode::AbortNum(1),
             on_error_count: AtomicU64::new(0),
             on_error_map: None,
         })
     }
 
+    #[async_backtrace::framed]
     pub async fn try_create_from_insert_file_format(
         stream_receiver: Receiver<Result<StreamingReadBatch>>,
         settings: Arc<Settings>,
-        file_format_options: FileFormatOptions,
+        file_format_params: FileFormatParams,
         schema: TableSchemaRef,
         scan_progress: Arc<Progress>,
         is_multi_part: bool,
         block_compact_thresholds: BlockThresholds,
     ) -> Result<Self> {
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
-        let format_typ = file_format_options.format.clone();
-        let mut file_format_options =
-            FileFormatOptionsExt::create_from_file_format_options(file_format_options, &settings)?;
-        file_format_options.check()?;
-        let format = Self::get_input_format(&format_typ)?;
-        let compression = file_format_options.stage.compression;
+        let file_format_options_ext = FileFormatOptionsExt::create_from_settings(&settings)?;
+        let format = Self::get_input_format(&file_format_params)?;
 
         let plan = StreamPlan {
             is_multi_part,
-            compression,
+            compression: file_format_params.compression(),
         };
 
         Ok(InputContext {
@@ -265,7 +271,8 @@ impl InputContext {
             plan: InputPlan::StreamingLoad(plan),
             splits: vec![],
             block_compact_thresholds,
-            format_options: file_format_options,
+            file_format_options_ext,
+            file_format_params,
             on_error_mode: OnErrorMode::AbortNum(1),
             on_error_count: AtomicU64::new(0),
             on_error_map: None,
@@ -286,7 +293,7 @@ impl InputContext {
 
     pub fn get_compression_alg(&self, path: &str) -> Result<Option<CompressAlgorithm>> {
         let opt = match &self.plan {
-            InputPlan::CopyInto(p) => p.stage_info.file_format_options.compression,
+            InputPlan::CopyInto(p) => p.stage_info.file_format_params.compression(),
             InputPlan::StreamingLoad(p) => p.compression,
         };
         Self::get_compression_alg_copy(opt, path)
@@ -347,7 +354,7 @@ impl InputContext {
         let msg = format!(
             "{reason}, split {}, {pos}, options={:?}, schema={:?}",
             split_info,
-            self.format_options,
+            self.file_format_params,
             self.schema.fields()
         );
         ErrorCode::BadBytes(msg)
@@ -368,19 +375,4 @@ impl InputContext {
         }
         None
     }
-}
-
-const WITH_NAMES_AND_TYPES: &str = "withnamesandtypes";
-const WITH_NAMES: &str = "withnames";
-
-fn remove_clickhouse_format_suffix(name: &str) -> (&str, usize) {
-    let s = name.to_lowercase();
-    let (suf_len, skip) = if s.ends_with(WITH_NAMES_AND_TYPES) {
-        (WITH_NAMES_AND_TYPES.len(), 2)
-    } else if s.ends_with(WITH_NAMES) {
-        (WITH_NAMES.len(), 1)
-    } else {
-        (0, 0)
-    };
-    (&name[0..(s.len() - suf_len)], skip)
 }

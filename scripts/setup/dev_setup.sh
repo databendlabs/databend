@@ -96,6 +96,32 @@ function install_build_essentials {
 	esac
 }
 
+function install_python3 {
+	PACKAGE_MANAGER=$1
+
+	echo "==> installing python3..."
+
+	case "$PACKAGE_MANAGER" in
+	apt-get)
+		install_pkg python3-all-dev "$PACKAGE_MANAGER"
+		install_pkg python3-setuptools "$PACKAGE_MANAGER"
+		install_pkg python3-pip "$PACKAGE_MANAGER"
+		;;
+	apk)
+		install_pkg python3-dev "$PACKAGE_MANAGER"
+		install_pkg py3-pip "$PACKAGE_MANAGER"
+		install_pkg libffi-dev "$PACKAGE_MANAGER"
+		;;
+	brew | pacman | yum | dnf)
+		install_pkg python3 "$PACKAGE_MANAGER"
+		;;
+	*)
+		echo "Unable to install python3 with package manager: $PACKAGE_MANAGER"
+		exit 1
+		;;
+	esac
+}
+
 function install_openssl {
 	PACKAGE_MANAGER=$1
 
@@ -321,7 +347,7 @@ Build tools (since -b or no option was provided):
   * protobuf-compiler
   * thrift-compiler
   * openjdk
-  * tpch dataset for benchmark
+  * python3-dev
 EOF
 	fi
 
@@ -339,7 +365,6 @@ Development tools (since -d was provided):
   * mysql client
   * python3 (boto3, black, yamllint, ...)
   * python database drivers (mysql-connector-python, pymysql, sqlalchemy, clickhouse_driver)
-  * sqllogic test dependencies (PyHamcrest, environs, fire, ...)
   * fuzz test dependencies (fuzzingbook)
 EOF
 	fi
@@ -500,12 +525,13 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	install_pkg cmake "$PACKAGE_MANAGER"
 	install_pkg clang "$PACKAGE_MANAGER"
 	install_pkg llvm "$PACKAGE_MANAGER"
+	install_python3 "$PACKAGE_MANAGER"
 
 	# Any call to cargo will make rustup install the correct toolchain
 	cargo version
 
 	# Install tools that needed in build
-	cargo install sccache@0.4.0-pre.7 --git https://github.com/mozilla/sccache --tag "v0.4.0-pre.7"
+	cargo install sccache
 fi
 
 if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then
@@ -526,47 +552,25 @@ fi
 if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 	install_mysql_client "$PACKAGE_MANAGER"
 	install_pkg git "$PACKAGE_MANAGER"
-	install_pkg python3 "$PACKAGE_MANAGER"
+	install_python3 "$PACKAGE_MANAGER"
 	if [[ "$PACKAGE_MANAGER" == "apt-get" ]]; then
 		# for killall & timeout
 		install_pkg psmisc "$PACKAGE_MANAGER"
 		install_pkg coreutils "$PACKAGE_MANAGER"
-		install_pkg python3-all-dev "$PACKAGE_MANAGER"
-		install_pkg python3-setuptools "$PACKAGE_MANAGER"
-		install_pkg python3-pip "$PACKAGE_MANAGER"
-	elif [[ "$PACKAGE_MANAGER" == "apk" ]]; then
-		# no wheel package for alpine
-		install_pkg python3-dev "$PACKAGE_MANAGER"
-		install_pkg py3-pip "$PACKAGE_MANAGER"
-		install_pkg libffi-dev "$PACKAGE_MANAGER"
 	fi
 	python3 -m pip install --quiet boto3 "moto[all]" black shfmt-py toml yamllint
 	# drivers
 	python3 -m pip install --quiet pymysql sqlalchemy clickhouse_driver
 	# sqllogic dependencies
-	python3 -m pip install --quiet mysql-connector-python==8.0.30 six PyHamcrest requests environs fire
+	python3 -m pip install --quiet mysql-connector-python==8.0.30
 	# fuzz dependencies
 	python3 -m pip install --quiet fuzzingbook
-
-	# sqllogic clickhouse dependencies
-	# a temp hack only to make logic test work on click house as quickly as possible
-	# we need another way to support session on clickhouse-sqlalchemy
-	python3 -m pip install https://github.com/youngsofun/clickhouse-sqlalchemy/archive/a116e3162c699c12e63a689385b547f639c13018.zip
 fi
 
 if [[ "$INSTALL_CODEGEN" == "true" ]]; then
 	install_pkg clang "$PACKAGE_MANAGER"
 	install_pkg llvm "$PACKAGE_MANAGER"
-	if [[ "$PACKAGE_MANAGER" == "apt-get" ]]; then
-		install_pkg python3-all-dev "$PACKAGE_MANAGER"
-		install_pkg python3-setuptools "$PACKAGE_MANAGER"
-		install_pkg python3-pip "$PACKAGE_MANAGER"
-	elif [[ "$PACKAGE_MANAGER" == "apk" ]]; then
-		install_pkg python3-dev "$PACKAGE_MANAGER"
-		install_pkg py3-pip "$PACKAGE_MANAGER"
-	else
-		install_pkg python3 "$PACKAGE_MANAGER"
-	fi
+	install_python3 "$PACKAGE_MANAGER"
 	"${PRE_COMMAND[@]}" python3 -m pip install --quiet coscmd PyYAML
 fi
 

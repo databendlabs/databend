@@ -42,14 +42,16 @@ impl ExchangeWriterSink {
 impl AsyncSink for ExchangeWriterSink {
     const NAME: &'static str = "ExchangeWriterSink";
 
+    #[async_backtrace::framed]
     async fn on_finish(&mut self) -> Result<()> {
         self.flight_sender.close();
         Ok(())
     }
 
     #[async_trait::unboxed_simple]
+    #[async_backtrace::framed]
     async fn consume(&mut self, mut data_block: DataBlock) -> Result<bool> {
-        let mut serialize_meta = match data_block.take_meta() {
+        let serialize_meta = match data_block.take_meta() {
             None => Err(ErrorCode::Internal(
                 "ExchangeWriterSink only recv ExchangeSerializeMeta.",
             )),
@@ -61,14 +63,17 @@ impl AsyncSink for ExchangeWriterSink {
             },
         }?;
 
-        match serialize_meta.packet.take() {
-            None => Ok(false),
-            Some(packet) => match self.flight_sender.send(packet).await {
-                Ok(_) => Ok(false),
-                Err(error) if error.code() == ErrorCode::ABORTED_QUERY => Ok(true),
-                Err(error) => Err(error),
-            },
+        for packet in serialize_meta.packet {
+            if let Err(error) = self.flight_sender.send(packet).await {
+                if error.code() == ErrorCode::ABORTED_QUERY {
+                    return Ok(true);
+                }
+
+                return Err(error);
+            }
         }
+
+        Ok(false)
     }
 }
 

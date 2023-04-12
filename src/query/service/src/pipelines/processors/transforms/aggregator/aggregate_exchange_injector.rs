@@ -15,6 +15,7 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
@@ -23,13 +24,8 @@ use common_hashtable::FastHash;
 use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
-use common_pipeline_core::pipe::Pipe;
-use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::transforms::TransformDummy;
 use common_storage::DataOperator;
 use strength_reduce::StrengthReducedU64;
 
@@ -191,6 +187,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
 }
 
 pub struct AggregateInjector<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> {
+    ctx: Arc<QueryContext>,
     method: Method,
     tenant: String,
     aggregator_params: Arc<AggregatorParams>,
@@ -199,6 +196,7 @@ pub struct AggregateInjector<Method: HashMethodBounds, V: Copy + Send + Sync + '
 
 impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> AggregateInjector<Method, V> {
     pub fn create(
+        ctx: &Arc<QueryContext>,
         tenant: String,
         method: Method,
         params: Arc<AggregatorParams>,
@@ -206,6 +204,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> AggregateInjecto
         Arc::new(AggregateInjector::<Method, V> {
             method,
             tenant,
+            ctx: ctx.clone(),
             aggregator_params: params,
             _phantom: Default::default(),
         })
@@ -246,30 +245,38 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
     ) -> Result<()> {
         let method = &self.method;
         let params = self.aggregator_params.clone();
-        let operator = DataOperator::instance().operator();
-        let location_prefix = format!("_aggregate_spill/{}", self.tenant);
 
-        pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(
-                match params.aggregate_functions.is_empty() {
-                    true => TransformGroupBySpillWriter::create(
-                        input,
-                        output,
-                        method.clone(),
-                        operator.clone(),
-                        location_prefix.clone(),
-                    ),
-                    false => TransformAggregateSpillWriter::create(
-                        input,
-                        output,
-                        method.clone(),
-                        operator.clone(),
-                        params.clone(),
-                        location_prefix.clone(),
-                    ),
-                },
-            ))
-        })?;
+        if self
+            .ctx
+            .get_settings()
+            .get_spilling_bytes_threshold_per_proc()?
+            != 0
+        {
+            let operator = DataOperator::instance().operator();
+            let location_prefix = format!("_aggregate_spill/{}", self.tenant);
+
+            pipeline.add_transform(|input, output| {
+                Ok(ProcessorPtr::create(
+                    match params.aggregate_functions.is_empty() {
+                        true => TransformGroupBySpillWriter::create(
+                            input,
+                            output,
+                            method.clone(),
+                            operator.clone(),
+                            location_prefix.clone(),
+                        ),
+                        false => TransformAggregateSpillWriter::create(
+                            input,
+                            output,
+                            method.clone(),
+                            operator.clone(),
+                            params.clone(),
+                            location_prefix.clone(),
+                        ),
+                    },
+                ))
+            })?;
+        }
 
         pipeline.add_transform(
             |input, output| match params.aggregate_functions.is_empty() {
@@ -347,139 +354,43 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
 
     fn apply_merge_deserializer(
         &self,
-        remote_inputs: usize,
         params: &MergeExchangeParams,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let local_inputs = pipeline.output_len() - remote_inputs;
-        let mut items = Vec::with_capacity(pipeline.output_len());
+        pipeline.add_transform(|input, output| {
+            Ok(TransformExchangeDeserializer::create(
+                input,
+                output,
+                &params.schema,
+            ))
+        })?;
 
-        for _index in 0..local_inputs {
-            let input = InputPort::create();
-            let output = OutputPort::create();
-
-            items.push(PipeItem::create(
-                TransformDummy::create(input.clone(), output.clone()),
-                vec![input],
-                vec![output],
-            ));
-        }
-
-        for _index in 0..remote_inputs {
-            let input = InputPort::create();
-            let output = OutputPort::create();
-
-            let schema = &params.schema;
-            items.push(PipeItem::create(
-                TransformExchangeDeserializer::create(input.clone(), output.clone(), schema),
-                vec![input],
-                vec![output],
-            ));
-        }
-
-        pipeline.add_pipe(Pipe::create(items.len(), items.len(), items));
-
-        let mut items = Vec::with_capacity(pipeline.output_len());
-
-        for _index in 0..local_inputs {
-            let input = InputPort::create();
-            let output = OutputPort::create();
-
-            items.push(PipeItem::create(
-                TransformDummy::create(input.clone(), output.clone()),
-                vec![input],
-                vec![output],
-            ));
-        }
-
-        for _index in 0..remote_inputs {
-            let input = InputPort::create();
-            let output = OutputPort::create();
-
-            let proc = match self.aggregator_params.aggregate_functions.is_empty() {
-                true => TransformGroupByDeserializer::<Method>::try_create(
-                    input.clone(),
-                    output.clone(),
-                ),
-                false => TransformAggregateDeserializer::<Method>::try_create(
-                    input.clone(),
-                    output.clone(),
-                ),
-            }?;
-
-            items.push(PipeItem::create(proc, vec![input], vec![output]));
-        }
-
-        pipeline.add_pipe(Pipe::create(items.len(), items.len(), items));
-        Ok(())
+        pipeline.add_transform(|input, output| {
+            match self.aggregator_params.aggregate_functions.is_empty() {
+                true => TransformGroupByDeserializer::<Method>::try_create(input, output),
+                false => TransformAggregateDeserializer::<Method>::try_create(input, output),
+            }
+        })
     }
 
     fn apply_shuffle_deserializer(
         &self,
-        remote_inputs: usize,
         params: &ShuffleExchangeParams,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let local_inputs = pipeline.output_len() - remote_inputs;
-        let mut items = Vec::with_capacity(pipeline.output_len());
+        pipeline.add_transform(|input, output| {
+            Ok(TransformExchangeDeserializer::create(
+                input,
+                output,
+                &params.schema,
+            ))
+        })?;
 
-        for _index in 0..local_inputs {
-            let input = InputPort::create();
-            let output = OutputPort::create();
-
-            items.push(PipeItem::create(
-                TransformDummy::create(input.clone(), output.clone()),
-                vec![input],
-                vec![output],
-            ));
-        }
-
-        for _index in 0..remote_inputs {
-            let input = InputPort::create();
-            let output = OutputPort::create();
-
-            let schema = &params.schema;
-            items.push(PipeItem::create(
-                TransformExchangeDeserializer::create(input.clone(), output.clone(), schema),
-                vec![input],
-                vec![output],
-            ));
-        }
-
-        pipeline.add_pipe(Pipe::create(items.len(), items.len(), items));
-
-        let mut items = Vec::with_capacity(pipeline.output_len());
-
-        for _index in 0..local_inputs {
-            let input = InputPort::create();
-            let output = OutputPort::create();
-
-            items.push(PipeItem::create(
-                TransformDummy::create(input.clone(), output.clone()),
-                vec![input],
-                vec![output],
-            ));
-        }
-
-        for _index in 0..remote_inputs {
-            let input = InputPort::create();
-            let output = OutputPort::create();
-
-            let proc = match self.aggregator_params.aggregate_functions.is_empty() {
-                true => TransformGroupByDeserializer::<Method>::try_create(
-                    input.clone(),
-                    output.clone(),
-                ),
-                false => TransformAggregateDeserializer::<Method>::try_create(
-                    input.clone(),
-                    output.clone(),
-                ),
-            }?;
-
-            items.push(PipeItem::create(proc, vec![input], vec![output]));
-        }
-
-        pipeline.add_pipe(Pipe::create(items.len(), items.len(), items));
-        Ok(())
+        pipeline.add_transform(|input, output| {
+            match self.aggregator_params.aggregate_functions.is_empty() {
+                true => TransformGroupByDeserializer::<Method>::try_create(input, output),
+                false => TransformAggregateDeserializer::<Method>::try_create(input, output),
+            }
+        })
     }
 }

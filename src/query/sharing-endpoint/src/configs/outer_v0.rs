@@ -28,7 +28,7 @@ use super::inner::Config as InnerConfig;
 pub struct Config {
     #[clap(long, default_value = "")]
     pub tenant: String,
-    #[clap(long, default_value = "127.0.0.1:33003")]
+    #[clap(long, default_value = "127.0.0.1:13003")]
     pub share_endpoint_address: String,
     // Storage backend config.
     #[clap(flatten)]

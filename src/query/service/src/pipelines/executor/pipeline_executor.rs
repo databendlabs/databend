@@ -28,7 +28,9 @@ use common_exception::Result;
 use futures::future::select;
 use futures_util::future::Either;
 use parking_lot::Mutex;
+use petgraph::matrix_graph::Zero;
 use tracing::info;
+use tracing::warn;
 
 use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_graph::RunningGraph;
@@ -62,17 +64,29 @@ impl PipelineExecutor {
         settings: ExecutorSettings,
     ) -> Result<Arc<PipelineExecutor>> {
         let threads_num = pipeline.get_max_threads();
+
+        if threads_num.is_zero() {
+            return Err(ErrorCode::Internal(
+                "Pipeline max threads cannot equals zero.",
+            ));
+        }
+
         let on_init_callback = pipeline.take_on_init();
         let on_finished_callback = pipeline.take_on_finished();
 
-        assert_ne!(threads_num, 0, "Pipeline max threads cannot equals zero.");
-        Self::try_create(
-            RunningGraph::create(pipeline)?,
-            threads_num,
-            Mutex::new(Some(on_init_callback)),
-            Mutex::new(Some(on_finished_callback)),
-            settings,
-        )
+        match RunningGraph::create(pipeline) {
+            Err(cause) => {
+                let _ = on_finished_callback(&Some(cause.clone()));
+                Err(cause)
+            }
+            Ok(running_graph) => Self::try_create(
+                running_graph,
+                threads_num,
+                Mutex::new(Some(on_init_callback)),
+                Mutex::new(Some(on_finished_callback)),
+                settings,
+            ),
+        }
     }
 
     pub fn from_pipelines(
@@ -88,6 +102,12 @@ impl PipelineExecutor {
             .map(|x| x.get_max_threads())
             .max()
             .unwrap_or(0);
+
+        if threads_num.is_zero() {
+            return Err(ErrorCode::Internal(
+                "Pipeline max threads cannot equals zero.",
+            ));
+        }
 
         let on_init_callback = {
             let pipelines_callback = pipelines
@@ -117,14 +137,22 @@ impl PipelineExecutor {
             })
         };
 
-        assert_ne!(threads_num, 0, "Pipeline max threads cannot equals zero.");
-        Self::try_create(
-            RunningGraph::from_pipelines(pipelines)?,
-            threads_num,
-            Mutex::new(on_init_callback),
-            Mutex::new(on_finished_callback),
-            settings,
-        )
+        match RunningGraph::from_pipelines(pipelines) {
+            Err(cause) => {
+                if let Some(on_finished_callback) = on_finished_callback {
+                    let _ = on_finished_callback(&Some(cause.clone()));
+                }
+
+                Err(cause)
+            }
+            Ok(running_graph) => Self::try_create(
+                running_graph,
+                threads_num,
+                Mutex::new(on_init_callback),
+                Mutex::new(on_finished_callback),
+                settings,
+            ),
+        }
     }
 
     fn try_create(
@@ -155,7 +183,7 @@ impl PipelineExecutor {
         let mut guard = self.on_finished_callback.lock();
         if let Some(on_finished_callback) = guard.take() {
             drop(guard);
-            (on_finished_callback)(error)?;
+            catch_unwind(move || on_finished_callback(error))??;
         }
 
         Ok(())
@@ -221,13 +249,14 @@ impl PipelineExecutor {
                 let mut guard = self.on_init_callback.lock();
                 if let Some(callback) = guard.take() {
                     drop(guard);
-                    if let Err(cause) = callback() {
+                    if let Err(cause) = Result::flatten(catch_unwind(callback)) {
                         return Err(cause.add_message_back("(while in query pipeline init)"));
                     }
                 }
 
                 info!(
-                    "Init pipeline successfully, elapsed: {:?}",
+                    "Init pipeline successfully, query_id: {:?}, elapsed: {:?}",
+                    self.settings.query_id,
                     instant.elapsed()
                 );
             }
@@ -367,5 +396,16 @@ impl PipelineExecutor {
 impl Drop for PipelineExecutor {
     fn drop(&mut self) {
         self.finish(None);
+
+        let mut guard = self.on_finished_callback.lock();
+        if let Some(on_finished_callback) = guard.take() {
+            drop(guard);
+            let cause = Some(ErrorCode::Internal(
+                "Pipeline illegal state: not successfully shutdown.",
+            ));
+            if let Err(cause) = catch_unwind(move || on_finished_callback(&cause)).flatten() {
+                warn!("Pipeline executor shutdown failure, {:?}", cause);
+            }
+        }
     }
 }

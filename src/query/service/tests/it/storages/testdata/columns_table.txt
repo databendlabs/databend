@@ -41,6 +41,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | "database"                 | "system" | "processes"           | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "database"                 | "system" | "tables"              | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "database"                 | "system" | "tables_with_history" | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
+| "database_id"              | "system" | "databases"           | "UInt64"           | "BIGINT UNSIGNED"   | ""       | ""       | "NO"     | ""       |
 | "databases"                | "system" | "query_log"           | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "default"                  | "system" | "settings"            | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "default_expression"       | "system" | "columns"             | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
@@ -79,6 +80,8 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | "is_aggregate"             | "system" | "functions"           | "Boolean"          | "BOOLEAN"           | ""       | ""       | "NO"     | ""       |
 | "is_builtin"               | "system" | "functions"           | "Boolean"          | "BOOLEAN"           | ""       | ""       | "NO"     | ""       |
 | "is_nullable"              | "system" | "columns"             | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
+| "is_transient"             | "system" | "tables"              | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
+| "is_transient"             | "system" | "tables_with_history" | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "kind"                     | "system" | "metrics"             | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "labels"                   | "system" | "metrics"             | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "level"                    | "system" | "settings"            | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
@@ -148,6 +151,8 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | "syntax"                   | "system" | "functions"           | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "table"                    | "system" | "clustering_history"  | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "table"                    | "system" | "columns"             | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
+| "table_id"                 | "system" | "tables"              | "UInt64"           | "BIGINT UNSIGNED"   | ""       | ""       | "NO"     | ""       |
+| "table_id"                 | "system" | "tables_with_history" | "UInt64"           | "BIGINT UNSIGNED"   | ""       | ""       | "NO"     | ""       |
 | "tables"                   | "system" | "query_log"           | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "target_features"          | "system" | "build_options"       | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "tenant_id"                | "system" | "query_log"           | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |

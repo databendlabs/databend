@@ -18,6 +18,7 @@ enable-histogram-metrics = ["metrics/enable-histogram"]
 common-cache = { path = "../../../../common/cache" }
 common-exception = { path = "../../../../common/exception" }
 
+async-backtrace = { workspace = true }
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 crc32fast = "1.3.2"
 crossbeam-channel = "0.5.6"

@@ -45,6 +45,7 @@ impl Interpreter for RemoveUserStageInterpreter {
     }
 
     #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.plan.clone();
         let op = StageTable::get_op(&self.plan.stage)?;
@@ -59,7 +60,7 @@ impl Interpreter for RemoveUserStageInterpreter {
             pattern,
         };
         let files: Vec<String> = files_info
-            .list(&op, false)
+            .list(&op, false, None)
             .await?
             .into_iter()
             .map(|file_with_meta| file_with_meta.path)

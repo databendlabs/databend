@@ -18,26 +18,73 @@ explain select t1.a from t1 where a > 0;
 ----
 Exchange
 ├── exchange type: Merge
-└── Filter
-    ├── filters: [t1.a (#0) > 0]
+└── EvalScalar
+    ├── expressions: [t1.a (#0)]
     ├── estimated rows: 0.00
-    └── TableScan
-        ├── table: default.default.t1
-        ├── read rows: 0
-        ├── read bytes: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        ├── push downs: [filters: [t1.a (#0) > 0], limit: NONE]
-        ├── output columns: [a]
-        └── estimated rows: 0.00
+    └── Filter
+        ├── filters: [t1.a (#0) > 0]
+        ├── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.default.t1
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [t1.a (#0) > 0], limit: NONE]
+            ├── output columns: [a]
+            └── estimated rows: 0.00
 
 query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1);
 ----
 Exchange
 ├── exchange type: Merge
-└── Filter
-    ├── filters: [t1.a (#0) > 3 OR t2.a (#2) > 5 AND t1.a (#0) > 1]
+└── EvalScalar
+    ├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+    ├── estimated rows: 0.00
+    └── Filter
+        ├── filters: [t1.a (#0) > 3 OR t2.a (#2) > 5 AND t1.a (#0) > 1]
+        ├── estimated rows: 0.00
+        └── HashJoin
+            ├── join type: INNER
+            ├── build keys: [t2.a (#2)]
+            ├── probe keys: [t1.a (#0)]
+            ├── filters: []
+            ├── estimated rows: 0.00
+            ├── Exchange(Build)
+            │   ├── exchange type: Hash(t2.a (#2))
+            │   └── Filter
+            │       ├── filters: [t2.a (#2) > 3 OR t2.a (#2) > 1]
+            │       ├── estimated rows: 0.00
+            │       └── TableScan
+            │           ├── table: default.default.t2
+            │           ├── read rows: 0
+            │           ├── read bytes: 0
+            │           ├── partitions total: 0
+            │           ├── partitions scanned: 0
+            │           ├── push downs: [filters: [t2.a (#2) > 3 OR t2.a (#2) > 1], limit: NONE]
+            │           └── estimated rows: 0.00
+            └── Exchange(Probe)
+                ├── exchange type: Hash(t1.a (#0))
+                └── Filter
+                    ├── filters: [t1.a (#0) > 3 OR t1.a (#0) > 1]
+                    ├── estimated rows: 0.00
+                    └── TableScan
+                        ├── table: default.default.t1
+                        ├── read rows: 0
+                        ├── read bytes: 0
+                        ├── partitions total: 0
+                        ├── partitions scanned: 0
+                        ├── push downs: [filters: [t1.a (#0) > 3 OR t1.a (#0) > 1], limit: NONE]
+                        └── estimated rows: 0.00
+
+query T
+explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
+----
+Exchange
+├── exchange type: Merge
+└── EvalScalar
+    ├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
     ├── estimated rows: 0.00
     └── HashJoin
         ├── join type: INNER
@@ -47,62 +94,24 @@ Exchange
         ├── estimated rows: 0.00
         ├── Exchange(Build)
         │   ├── exchange type: Hash(t2.a (#2))
-        │   └── Filter
-        │       ├── filters: [t2.a (#2) > 3 OR t2.a (#2) > 1]
-        │       ├── estimated rows: 0.00
-        │       └── TableScan
-        │           ├── table: default.default.t2
-        │           ├── read rows: 0
-        │           ├── read bytes: 0
-        │           ├── partitions total: 0
-        │           ├── partitions scanned: 0
-        │           ├── push downs: [filters: [t2.a (#2) > 3 OR t2.a (#2) > 1], limit: NONE]
-        │           └── estimated rows: 0.00
+        │   └── TableScan
+        │       ├── table: default.default.t2
+        │       ├── read rows: 0
+        │       ├── read bytes: 0
+        │       ├── partitions total: 0
+        │       ├── partitions scanned: 0
+        │       ├── push downs: [filters: [], limit: NONE]
+        │       └── estimated rows: 0.00
         └── Exchange(Probe)
             ├── exchange type: Hash(t1.a (#0))
-            └── Filter
-                ├── filters: [t1.a (#0) > 3 OR t1.a (#0) > 1]
-                ├── estimated rows: 0.00
-                └── TableScan
-                    ├── table: default.default.t1
-                    ├── read rows: 0
-                    ├── read bytes: 0
-                    ├── partitions total: 0
-                    ├── partitions scanned: 0
-                    ├── push downs: [filters: [t1.a (#0) > 3 OR t1.a (#0) > 1], limit: NONE]
-                    └── estimated rows: 0.00
-
-query T
-explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
-----
-Exchange
-├── exchange type: Merge
-└── HashJoin
-    ├── join type: INNER
-    ├── build keys: [t2.a (#2)]
-    ├── probe keys: [t1.a (#0)]
-    ├── filters: []
-    ├── estimated rows: 0.00
-    ├── Exchange(Build)
-    │   ├── exchange type: Hash(t2.a (#2))
-    │   └── TableScan
-    │       ├── table: default.default.t2
-    │       ├── read rows: 0
-    │       ├── read bytes: 0
-    │       ├── partitions total: 0
-    │       ├── partitions scanned: 0
-    │       ├── push downs: [filters: [], limit: NONE]
-    │       └── estimated rows: 0.00
-    └── Exchange(Probe)
-        ├── exchange type: Hash(t1.a (#0))
-        └── TableScan
-            ├── table: default.default.t1
-            ├── read rows: 0
-            ├── read bytes: 0
-            ├── partitions total: 0
-            ├── partitions scanned: 0
-            ├── push downs: [filters: [], limit: NONE]
-            └── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.default.t1
+                ├── read rows: 0
+                ├── read bytes: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 0.00
 
 query T
 explain raw select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
@@ -169,14 +178,17 @@ Limit
                     ├── group by: []
                     ├── aggregate functions: [count(), count(b), max(a)]
                     ├── estimated rows: 1.00
-                    └── TableScan
-                        ├── table: default.default.t1
-                        ├── read rows: 0
-                        ├── read bytes: 0
-                        ├── partitions total: 0
-                        ├── partitions scanned: 0
-                        ├── push downs: [filters: [], limit: NONE]
-                        └── estimated rows: 0.00
+                    └── EvalScalar
+                        ├── expressions: [t1.b (#1), t1.a (#0)]
+                        ├── estimated rows: 0.00
+                        └── TableScan
+                            ├── table: default.default.t1
+                            ├── read rows: 0
+                            ├── read bytes: 0
+                            ├── partitions total: 0
+                            ├── partitions scanned: 0
+                            ├── push downs: [filters: [], limit: NONE]
+                            └── estimated rows: 0.00
 
 query T
 explain select (t1.a + 1) as c,(t1.b+1) as d, (t2.a+1) as e from t1 join t2 on t1.a = t2.a order by c, d, e limit 10;
@@ -232,32 +244,35 @@ explain select * from t1 join t2 on t1.a = t2.a;
 ----
 Exchange
 ├── exchange type: Merge
-└── HashJoin
-    ├── join type: INNER
-    ├── build keys: [t2.a (#2)]
-    ├── probe keys: [t1.a (#0)]
-    ├── filters: []
+└── EvalScalar
+    ├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
     ├── estimated rows: 0.00
-    ├── Exchange(Build)
-    │   ├── exchange type: Broadcast
-    │   └── TableScan
-    │       ├── table: default.default.t2
-    │       ├── read rows: 0
-    │       ├── read bytes: 0
-    │       ├── partitions total: 0
-    │       ├── partitions scanned: 0
-    │       ├── push downs: [filters: [], limit: NONE]
-    │       └── estimated rows: 0.00
-    └── Exchange(Probe)
-        ├── exchange type: Init-Partition
-        └── TableScan
-            ├── table: default.default.t1
-            ├── read rows: 0
-            ├── read bytes: 0
-            ├── partitions total: 0
-            ├── partitions scanned: 0
-            ├── push downs: [filters: [], limit: NONE]
-            └── estimated rows: 0.00
+    └── HashJoin
+        ├── join type: INNER
+        ├── build keys: [t2.a (#2)]
+        ├── probe keys: [t1.a (#0)]
+        ├── filters: []
+        ├── estimated rows: 0.00
+        ├── Exchange(Build)
+        │   ├── exchange type: Broadcast
+        │   └── TableScan
+        │       ├── table: default.default.t2
+        │       ├── read rows: 0
+        │       ├── read bytes: 0
+        │       ├── partitions total: 0
+        │       ├── partitions scanned: 0
+        │       ├── push downs: [filters: [], limit: NONE]
+        │       └── estimated rows: 0.00
+        └── Exchange(Probe)
+            ├── exchange type: Init-Partition
+            └── TableScan
+                ├── table: default.default.t1
+                ├── read rows: 0
+                ├── read bytes: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 0.00
 
 statement ok
 set prefer_broadcast_join = 0;
@@ -265,42 +280,45 @@ set prefer_broadcast_join = 0;
 query T
 explain select * from (SELECT number AS a FROM numbers(10)) x  order by x.a limit 3;
 ----
-Limit
-├── limit: 3
-├── offset: 0
+EvalScalar
+├── expressions: [x.a (#0)]
 ├── estimated rows: 3.00
-└── Sort
-    ├── sort keys: [number ASC NULLS LAST]
-    ├── estimated rows: 10.00
-    └── Exchange
-        ├── exchange type: Merge
-        └── Sort
-            ├── sort keys: [number ASC NULLS LAST]
-            ├── estimated rows: 10.00
-            └── TableScan
-                ├── table: default.system.numbers
-                ├── read rows: 10
-                ├── read bytes: 80
-                ├── partitions total: 1
-                ├── partitions scanned: 1
-                ├── push downs: [filters: [], limit: 3]
-                └── estimated rows: 10.00
+└── Limit
+    ├── limit: 3
+    ├── offset: 0
+    ├── estimated rows: 3.00
+    └── Sort
+        ├── sort keys: [number ASC NULLS LAST]
+        ├── estimated rows: 10.00
+        └── Exchange
+            ├── exchange type: Merge
+            └── EvalScalar
+                ├── expressions: [numbers.number (#0)]
+                ├── estimated rows: 10.00
+                └── TableScan
+                    ├── table: default.system.numbers
+                    ├── read rows: 10
+                    ├── read bytes: 80
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 10.00
 
 query T
 explain select * from (SELECT number AS a FROM numbers(10)) x right join (SELECT number AS a FROM numbers(5)) y using(a) order by x.a limit 3;
 ----
-Limit
-├── limit: 3
-├── offset: 0
+EvalScalar
+├── expressions: [y.a (#1)]
 ├── estimated rows: 3.00
-└── Sort
-    ├── sort keys: [number ASC NULLS LAST]
-    ├── estimated rows: 50.00
-    └── Exchange
-        ├── exchange type: Merge
-        └── Sort
-            ├── sort keys: [number ASC NULLS LAST]
-            ├── estimated rows: 50.00
+└── Limit
+    ├── limit: 3
+    ├── offset: 0
+    ├── estimated rows: 3.00
+    └── Sort
+        ├── sort keys: [number ASC NULLS LAST]
+        ├── estimated rows: 50.00
+        └── Exchange
+            ├── exchange type: Merge
             └── HashJoin
                 ├── join type: RIGHT OUTER
                 ├── build keys: [CAST(y.a (#1) AS UInt64 NULL)]
@@ -309,24 +327,30 @@ Limit
                 ├── estimated rows: 50.00
                 ├── Exchange(Build)
                 │   ├── exchange type: Hash(CAST(y.a (#1) AS UInt64 NULL))
-                │   └── TableScan
-                │       ├── table: default.system.numbers
-                │       ├── read rows: 5
-                │       ├── read bytes: 40
-                │       ├── partitions total: 1
-                │       ├── partitions scanned: 1
-                │       ├── push downs: [filters: [], limit: NONE]
-                │       └── estimated rows: 5.00
+                │   └── EvalScalar
+                │       ├── expressions: [numbers.number (#1)]
+                │       ├── estimated rows: 5.00
+                │       └── TableScan
+                │           ├── table: default.system.numbers
+                │           ├── read rows: 5
+                │           ├── read bytes: 40
+                │           ├── partitions total: 1
+                │           ├── partitions scanned: 1
+                │           ├── push downs: [filters: [], limit: NONE]
+                │           └── estimated rows: 5.00
                 └── Exchange(Probe)
                     ├── exchange type: Hash(CAST(x.a (#0) AS UInt64 NULL))
-                    └── TableScan
-                        ├── table: default.system.numbers
-                        ├── read rows: 10
-                        ├── read bytes: 80
-                        ├── partitions total: 1
-                        ├── partitions scanned: 1
-                        ├── push downs: [filters: [], limit: NONE]
-                        └── estimated rows: 10.00
+                    └── EvalScalar
+                        ├── expressions: [numbers.number (#0)]
+                        ├── estimated rows: 10.00
+                        └── TableScan
+                            ├── table: default.system.numbers
+                            ├── read rows: 10
+                            ├── read bytes: 80
+                            ├── partitions total: 1
+                            ├── partitions scanned: 1
+                            ├── push downs: [filters: [], limit: NONE]
+                            └── estimated rows: 10.00
 
 statement ok
 drop table t1;

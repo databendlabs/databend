@@ -80,7 +80,7 @@ impl HivePartitionPruner {
             self.full_schema.clone(),
         )?;
         let column_stats = self.get_column_stats(&partitions)?;
-        let mut filted_partitions = vec![];
+        let mut filtered_partitions = vec![];
         for (idx, stats) in column_stats.into_iter().enumerate() {
             let block_stats = stats
                 .iter()
@@ -93,10 +93,10 @@ impl HivePartitionPruner {
                 .collect();
 
             if range_filter.apply(&block_stats)? {
-                filted_partitions.push(partitions[idx].clone());
+                filtered_partitions.push(partitions[idx].clone());
             }
         }
-        tracing::debug!("hive pruned partitinos: {:?}", filted_partitions);
-        Ok(filted_partitions)
+        tracing::debug!("hive pruned partitions: {:?}", filtered_partitions);
+        Ok(filtered_partitions)
     }
 }

@@ -15,7 +15,7 @@
 use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
 use common_ast::ast::Literal;
-use common_ast::ast::WindowSpec;
+use common_ast::ast::Window;
 use common_ast::Visitor;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -49,11 +49,10 @@ impl<'a> Visitor<'a> for SrfCollector {
         name: &'a Identifier,
         args: &'a [Expr],
         params: &'a [Literal],
-        over: &'a Option<WindowSpec>,
+        over: &'a Option<Window>,
     ) {
         if BUILTIN_FUNCTIONS
-            .properties
-            .get(&name.name.to_lowercase())
+            .get_property(&name.name)
             .map(|property| property.kind == FunctionKind::SRF)
             .unwrap_or(false)
         {
@@ -85,6 +84,7 @@ impl SrfCollector {
 }
 
 impl Binder {
+    #[async_backtrace::framed]
     pub async fn bind_project_set(
         &mut self,
         bind_context: &mut BindContext,
@@ -151,6 +151,7 @@ impl Binder {
             let column = ColumnBinding {
                 database_name: None,
                 table_name: None,
+                table_index: None,
                 column_name: name.clone(),
                 index: column_index,
                 data_type: Box::new(srf_expr.data_type().clone()),

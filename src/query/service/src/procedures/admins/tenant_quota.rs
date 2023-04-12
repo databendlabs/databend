@@ -63,6 +63,7 @@ impl OneBlockProcedure for TenantQuotaProcedure {
     /// max_tables_per_database: u32
     /// max_stages: u32
     /// max_files_per_stage: u32
+    #[async_backtrace::framed]
     async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let mut tenant = ctx.get_tenant();
         if !args.is_empty() {

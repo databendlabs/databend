@@ -56,6 +56,7 @@ impl Interpreter for PresignInterpreter {
     }
 
     #[tracing::instrument(level = "debug", name = "presign_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let op = StageTable::get_op(&self.plan.stage)?;
         if !op.info().can_presign() {
@@ -65,13 +66,14 @@ impl Interpreter for PresignInterpreter {
         }
 
         let presigned_req = match self.plan.action {
-            PresignAction::Download => op.presign_read(&self.plan.path, self.plan.expire)?,
+            PresignAction::Download => op.presign_read(&self.plan.path, self.plan.expire).await?,
             PresignAction::Upload => {
                 let mut presign_args = OpWrite::new();
                 if let Some(content_type) = &self.plan.content_type {
                     presign_args = presign_args.with_content_type(content_type);
                 }
-                op.presign_write_with(&self.plan.path, presign_args, self.plan.expire)?
+                op.presign_write_with(&self.plan.path, presign_args, self.plan.expire)
+                    .await?
             }
         };
 

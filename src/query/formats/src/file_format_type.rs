@@ -16,12 +16,10 @@ use chrono_tz::Tz;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
-use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageFileFormatType;
 use common_settings::Settings;
 
-use crate::delimiter::RecordDelimiter;
-use crate::format_option_checker::get_format_option_checker;
 use crate::output_format::CSVOutputFormat;
 use crate::output_format::CSVWithNamesAndTypesOutputFormat;
 use crate::output_format::CSVWithNamesOutputFormat;
@@ -40,7 +38,6 @@ pub trait FileFormatTypeExt {
 
 #[derive(Clone, Debug)]
 pub struct FileFormatOptionsExt {
-    pub stage: FileFormatOptions,
     pub ident_case_sensitive: bool,
     pub headers: usize,
     pub json_compact: bool,
@@ -49,13 +46,9 @@ pub struct FileFormatOptionsExt {
 }
 
 impl FileFormatOptionsExt {
-    pub fn create_from_file_format_options(
-        stage: FileFormatOptions,
-        settings: &Settings,
-    ) -> Result<FileFormatOptionsExt> {
+    pub fn create_from_settings(settings: &Settings) -> Result<FileFormatOptionsExt> {
         let timezone = parse_timezone(settings)?;
         let options = FileFormatOptionsExt {
-            stage,
             ident_case_sensitive: false,
             headers: 0,
             json_compact: false,
@@ -71,10 +64,7 @@ impl FileFormatOptionsExt {
     ) -> Result<FileFormatOptionsExt> {
         let timezone = parse_timezone(settings)?;
 
-        let mut stage = FileFormatOptions::new();
-        stage.format = clickhouse_type.typ;
         let mut options = FileFormatOptionsExt {
-            stage,
             ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
             headers: 0,
             json_compact: false,
@@ -90,68 +80,39 @@ impl FileFormatOptionsExt {
         Ok(options)
     }
 
-    pub fn check(&mut self) -> Result<()> {
-        let checker = get_format_option_checker(&self.stage.format)?;
-        checker.check_options_ext(self)
-    }
-
-    pub fn get_quote_char(&self) -> u8 {
-        self.stage.quote.as_bytes()[0]
-    }
-
-    pub fn get_field_delimiter(&self) -> u8 {
-        let fd = &self.stage.field_delimiter;
-        if fd.is_empty() {
-            0 // dummy
-        } else {
-            fd.as_bytes()[0]
-        }
-    }
-
-    pub fn get_record_delimiter(&self) -> Result<RecordDelimiter> {
-        let fd = &self.stage.record_delimiter;
-        if fd.is_empty() {
-            Ok(RecordDelimiter::Any(0)) // dummy
-        } else {
-            RecordDelimiter::try_from(fd.as_bytes())
-        }
-    }
-
     pub fn get_output_format_from_clickhouse_format(
         typ: ClickhouseFormatType,
         schema: TableSchemaRef,
         settings: &Settings,
     ) -> Result<Box<dyn OutputFormat>> {
+        let params = FileFormatParams::default_by_type(typ.typ.clone())?;
         let mut options = FileFormatOptionsExt::create_from_clickhouse_format(typ, settings)?;
-        options.get_output_format(schema)
+        options.get_output_format(schema, params)
     }
 
-    pub fn get_output_format_from_format_options(
+    pub fn get_output_format(
+        &mut self,
         schema: TableSchemaRef,
-        options: FileFormatOptions,
-        settings: &Settings,
+        params: FileFormatParams,
     ) -> Result<Box<dyn OutputFormat>> {
-        let mut options = FileFormatOptionsExt::create_from_file_format_options(options, settings)?;
-        options.get_output_format(schema)
-    }
-
-    pub fn get_output_format(&mut self, schema: TableSchemaRef) -> Result<Box<dyn OutputFormat>> {
-        self.check()?;
-        // println!("format {:?} {:?} {:?}", fmt, options, format_settings);
-        let output: Box<dyn OutputFormat> = match &self.stage.format {
-            StageFileFormatType::Csv => match self.headers {
-                0 => Box::new(CSVOutputFormat::create(schema, self)),
-                1 => Box::new(CSVWithNamesOutputFormat::create(schema, self)),
-                2 => Box::new(CSVWithNamesAndTypesOutputFormat::create(schema, self)),
+        let output: Box<dyn OutputFormat> = match &params {
+            FileFormatParams::Csv(params) => match self.headers {
+                0 => Box::new(CSVOutputFormat::create(schema, params, self)),
+                1 => Box::new(CSVWithNamesOutputFormat::create(schema, params, self)),
+                2 => Box::new(CSVWithNamesAndTypesOutputFormat::create(
+                    schema, params, self,
+                )),
                 _ => unreachable!(),
             },
-            StageFileFormatType::Tsv => match self.headers {
-                0 => Box::new(TSVOutputFormat::create(schema, self)),
-                1 => Box::new(TSVWithNamesOutputFormat::create(schema, self)),
-                2 => Box::new(TSVWithNamesAndTypesOutputFormat::create(schema, self)),
+            FileFormatParams::Tsv(params) => match self.headers {
+                0 => Box::new(TSVOutputFormat::create(schema, params, self)),
+                1 => Box::new(TSVWithNamesOutputFormat::create(schema, params, self)),
+                2 => Box::new(TSVWithNamesAndTypesOutputFormat::create(
+                    schema, params, self,
+                )),
                 _ => unreachable!(),
             },
-            StageFileFormatType::NdJson => {
+            FileFormatParams::NdJson(_params) => {
                 match (self.headers, self.json_strings, self.json_compact) {
                     // string, compact, name, type
                     // not compact
@@ -186,8 +147,8 @@ impl FileFormatOptionsExt {
                     _ => unreachable!(),
                 }
             }
-            StageFileFormatType::Parquet => Box::new(ParquetOutputFormat::create(schema, self)),
-            StageFileFormatType::Json => Box::new(JSONOutputFormat::create(schema, self)),
+            FileFormatParams::Parquet(_) => Box::new(ParquetOutputFormat::create(schema, self)),
+            FileFormatParams::Json(_) => Box::new(JSONOutputFormat::create(schema, self)),
             others => {
                 return Err(ErrorCode::InvalidArgument(format!(
                     "Unsupported output file format:{:?}",

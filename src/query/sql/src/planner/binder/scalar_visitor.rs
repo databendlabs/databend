@@ -23,6 +23,7 @@ use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
 use crate::plans::WindowFunc;
+use crate::plans::WindowFuncType;
 
 /// Controls how the visitor recursion should proceed.
 pub enum Recursion<V: ScalarVisitor> {
@@ -38,7 +39,7 @@ pub enum Recursion<V: ScalarVisitor> {
 /// recursively on all nodes of an scalar tree. See the comments
 /// on `Scalar::accept` for details on its use
 pub trait ScalarVisitor: Sized {
-    /// Invoked before any children of `expr` are visisted.
+    /// Invoked before any children of `expr` are visited.
     fn pre_visit(self, scalar: &ScalarExpr) -> Result<Recursion<Self>>;
 
     fn visit(mut self, predecessor_scalar: &ScalarExpr) -> Result<Self> {
@@ -61,9 +62,22 @@ pub trait ScalarVisitor: Sized {
                                         stack.push(RecursionProcessing::Call(arg));
                                     }
                                 }
-                                ScalarExpr::WindowFunction(WindowFunc { agg_func, .. }) => {
-                                    for arg in &agg_func.args {
+                                ScalarExpr::WindowFunction(WindowFunc {
+                                    func,
+                                    partition_by,
+                                    order_by,
+                                    ..
+                                }) => {
+                                    if let WindowFuncType::Aggregate(agg) = func {
+                                        for arg in &agg.args {
+                                            stack.push(RecursionProcessing::Call(arg));
+                                        }
+                                    }
+                                    for arg in partition_by.iter() {
                                         stack.push(RecursionProcessing::Call(arg));
+                                    }
+                                    for arg in order_by.iter() {
+                                        stack.push(RecursionProcessing::Call(&arg.expr));
                                     }
                                 }
                                 ScalarExpr::ComparisonExpr(ComparisonExpr {

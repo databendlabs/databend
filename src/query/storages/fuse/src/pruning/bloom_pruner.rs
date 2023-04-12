@@ -78,7 +78,8 @@ impl BloomPrunerCreator {
                     if let Ok(field) = schema.field_with_name(col_name) {
                         filter_fields.push(field.clone());
                         if !scalar_map.contains_key(scalar) {
-                            let digest = BloomIndex::calculate_scalar_digest(func_ctx, scalar, ty)?;
+                            let digest =
+                                BloomIndex::calculate_scalar_digest(&func_ctx, scalar, ty)?;
                             scalar_map.insert(scalar.clone(), digest);
                         }
                     }
@@ -99,6 +100,7 @@ impl BloomPrunerCreator {
     }
 
     // Check a location file is hit or not by bloom filter.
+    #[async_backtrace::framed]
     pub async fn apply(
         &self,
         index_location: &Location,
@@ -124,7 +126,7 @@ impl BloomPrunerCreator {
 
         match maybe_filter {
             Ok(filter) => Ok(BloomIndex::from_filter_block(
-                self.func_ctx,
+                self.func_ctx.clone(),
                 self.data_schema.clone(),
                 filter.filter_schema,
                 filter.filters,
@@ -145,6 +147,7 @@ impl BloomPrunerCreator {
 
 #[async_trait::async_trait]
 impl BloomPruner for BloomPrunerCreator {
+    #[async_backtrace::framed]
     async fn should_keep(
         &self,
         index_location: &Option<Location>,

@@ -185,7 +185,7 @@ async fn test_watch() -> anyhow::Result<()> {
         // update kv
         let updates = vec![
             UpsertKVReq::new("a", MatchSeq::GE(0), Operation::Update(val_a), None),
-            // upsert key z, because z in key_end and the range is [key_start, key_end), so key z MUST not be notified in watche events.
+            // upsert key z, because z in key_end and the range is [key_start, key_end), so key z MUST not be notified in watch events.
             UpsertKVReq::new("z", MatchSeq::GE(0), Operation::Update(val_z), None),
             UpsertKVReq::new("b", MatchSeq::GE(0), Operation::Update(val_b), None),
             UpsertKVReq::new("b", MatchSeq::GE(0), Operation::Update(val_new), None),
@@ -605,6 +605,7 @@ fn make_client(addr: impl ToString) -> anyhow::Result<Arc<ClientHandle>> {
         "xxx",
         None,
         Some(Duration::from_secs(10)),
+        Duration::from_secs(10),
         None,
     )?;
 

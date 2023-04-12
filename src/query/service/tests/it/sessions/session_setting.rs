@@ -29,7 +29,7 @@ async fn test_session_setting() -> Result<()> {
     // Settings.
     {
         let settings = session.get_settings();
-        settings.set_settings("max_threads".to_string(), "3".to_string(), true)?;
+        settings.set_setting("max_threads".to_string(), "3".to_string())?;
         let actual = settings.get_max_threads()?;
         let expect = 3;
         assert_eq!(actual, expect);

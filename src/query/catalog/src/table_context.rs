@@ -27,13 +27,17 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
-use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::FileFormatParams;
+use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
+use common_pipeline_core::InputError;
+use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
+use dashmap::DashMap;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
@@ -76,6 +80,9 @@ pub trait TableContext: Send + Sync {
     /// A plan just contains raw information about a table or table function.
     /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
     fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>>;
+
+    fn incr_total_scan_value(&self, value: ProgressValues);
+    fn get_total_scan_value(&self) -> ProgressValues;
 
     fn get_scan_progress(&self) -> Arc<Progress>;
     fn get_scan_progress_value(&self) -> ProgressValues;
@@ -120,26 +127,31 @@ pub trait TableContext: Send + Sync {
     fn get_query_id_history(&self) -> HashSet<String>;
     fn get_result_cache_key(&self, query_id: &str) -> Option<String>;
     fn set_query_id_result_cache(&self, query_id: String, result_cache_key: String);
-    fn set_on_error_map(&self, map: Option<HashMap<String, ErrorCode>>);
+    fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>>;
+    fn set_on_error_map(&self, map: Arc<DashMap<String, HashMap<u16, InputError>>>);
+    fn get_on_error_mode(&self) -> Option<OnErrorMode>;
+    fn set_on_error_mode(&self, mode: OnErrorMode);
+    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>>;
 
-    fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()>;
-    fn get_changed_settings(&self) -> Arc<Settings>;
+    fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()>;
+    fn get_changed_settings(&self) -> HashMap<String, ChangeValue>;
 
     // Get the storage data accessor operator from the session manager.
     fn get_data_operator(&self) -> Result<DataOperator>;
     fn push_precommit_block(&self, block: DataBlock);
     fn consume_precommit_blocks(&self) -> Vec<DataBlock>;
 
-    async fn get_file_format(&self, name: &str) -> Result<FileFormatOptions>;
+    async fn get_file_format(&self, name: &str) -> Result<FileFormatParams>;
 
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;
 
-    async fn color_copied_files(
+    async fn filter_out_copied_files(
         &self,
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
-        files: Vec<StageFileInfo>,
+        files: &[StageFileInfo],
+        max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>>;
 }

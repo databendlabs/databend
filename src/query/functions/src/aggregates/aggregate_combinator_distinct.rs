@@ -64,15 +64,15 @@ where State: DistinctStateFunc
     fn init_state(&self, place: StateAddr) {
         place.write(|| State::new());
         let layout = Layout::new::<State>();
-        let netest_place = place.next(layout.size());
-        self.nested.init_state(netest_place);
+        let nested_place = place.next(layout.size());
+        self.nested.init_state(nested_place);
     }
 
     fn state_layout(&self) -> Layout {
         let layout = Layout::new::<State>();
 
-        let netesed = self.nested.state_layout();
-        Layout::from_size_align(layout.size() + netesed.size(), layout.align()).unwrap()
+        let nested = self.nested.state_layout();
+        Layout::from_size_align(layout.size() + nested.size(), layout.align()).unwrap()
     }
 
     fn accumulate(
@@ -112,7 +112,7 @@ where State: DistinctStateFunc
         let state = place.get::<State>();
 
         let layout = Layout::new::<State>();
-        let netest_place = place.next(layout.size());
+        let nested_place = place.next(layout.size());
 
         // faster path for count
         if self.nested.name() == "AggregateCountFunction" {
@@ -125,14 +125,14 @@ where State: DistinctStateFunc
             Ok(())
         } else {
             if state.is_empty() {
-                return self.nested.merge_result(netest_place, builder);
+                return self.nested.merge_result(nested_place, builder);
             }
             let columns = state.build_columns(&self.arguments).unwrap();
 
             self.nested
-                .accumulate(netest_place, &columns, None, state.len())?;
+                .accumulate(nested_place, &columns, None, state.len())?;
             // merge_result
-            self.nested.merge_result(netest_place, builder)
+            self.nested.merge_result(nested_place, builder)
         }
     }
 
@@ -146,8 +146,8 @@ where State: DistinctStateFunc
 
         if self.nested.need_manual_drop_state() {
             let layout = Layout::new::<State>();
-            let netest_place = place.next(layout.size());
-            self.nested.drop_state(netest_place);
+            let nested_place = place.next(layout.size());
+            self.nested.drop_state(nested_place);
         }
     }
 

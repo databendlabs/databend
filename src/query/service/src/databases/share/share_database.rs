@@ -15,10 +15,7 @@
 use std::str;
 use std::sync::Arc;
 
-use bytes::Bytes;
-use common_auth::RefreshableToken;
 use common_catalog::table::Table;
-use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
@@ -41,19 +38,10 @@ use common_meta_app::schema::UpsertTableCopiedFileReply;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
-use common_meta_app::share::TableInfoMap;
-use common_storage::ShareTableConfig;
-use http::header::AUTHORIZATION;
-use http::header::CONTENT_LENGTH;
-use http::Method;
-use http::Request;
-use opendal::raw::AsyncBody;
-use opendal::raw::HttpClient;
+use common_sharing::ShareEndpointManager;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
-
-const TENANT_HEADER: &str = "X-DATABEND-TENANT";
 
 // Share Database implementation for `Database` trait.
 #[derive(Clone)]
@@ -61,37 +49,12 @@ pub struct ShareDatabase {
     ctx: DatabaseContext,
 
     db_info: DatabaseInfo,
-
-    client: HttpClient,
-
-    token: RefreshableToken,
-
-    endpoint: String,
 }
 
 impl ShareDatabase {
     pub const NAME: &'static str = "SHARE";
     pub fn try_create(ctx: DatabaseContext, db_info: DatabaseInfo) -> Result<Box<dyn Database>> {
-        let share_endpoint_address = match ShareTableConfig::share_endpoint_address() {
-            Some(share_endpoint_address) => share_endpoint_address,
-            None => {
-                return Err(ErrorCode::EmptyShareEndpointConfig(
-                    "EmptyShareEndpointConfig, cannot query share databases".to_string(),
-                ));
-            }
-        };
-        let share_name = db_info.meta.from_share.clone().unwrap();
-        let endpoint = format!(
-            "http://{}/tenant/{}/{}/meta",
-            share_endpoint_address, share_name.tenant, share_name.share_name,
-        );
-        Ok(Box::new(Self {
-            ctx,
-            db_info,
-            client: HttpClient::new()?,
-            token: ShareTableConfig::share_endpoint_token(),
-            endpoint,
-        }))
+        Ok(Box::new(Self { ctx, db_info }))
     }
 
     fn load_tables(&self, table_infos: Vec<Arc<TableInfo>>) -> Result<Vec<Arc<dyn Table>>> {
@@ -102,28 +65,12 @@ impl ShareDatabase {
         })
     }
 
-    // Read table info map from operator
-    async fn get_table_info_map(&self, req: Vec<String>) -> Result<TableInfoMap> {
-        let bs = Bytes::from(serde_json::to_vec(&req)?);
-        let auth = self.token.to_header().await?;
-        let requester = GlobalConfig::instance().as_ref().query.tenant_id.clone();
-        let req = Request::builder()
-            .method(Method::POST)
-            .uri(&self.endpoint)
-            .header(AUTHORIZATION, auth)
-            .header(CONTENT_LENGTH, bs.len())
-            .header(TENANT_HEADER, requester)
-            .body(AsyncBody::Bytes(bs))?;
-        let resp = self.client.send_async(req).await?;
-        let bs = resp.into_body().bytes().await?;
-        let table_info_map: TableInfoMap = serde_json::from_slice(&bs)?;
-
-        Ok(table_info_map)
-    }
-
+    #[async_backtrace::framed]
     async fn get_table_info(&self, table_name: &str) -> Result<Arc<TableInfo>> {
-        let table_info_map = self
-            .get_table_info_map(vec![table_name.to_string()])
+        let table_info_map = ShareEndpointManager::instance()
+            .get_table_info_map(&self.ctx.tenant, &self.db_info, vec![
+                table_name.to_string(),
+            ])
             .await?;
         match table_info_map.get(table_name) {
             None => Err(ErrorCode::UnknownTable(format!(
@@ -134,8 +81,11 @@ impl ShareDatabase {
         }
     }
 
+    #[async_backtrace::framed]
     async fn list_tables(&self) -> Result<Vec<Arc<TableInfo>>> {
-        let table_info_map = self.get_table_info_map(vec![]).await?;
+        let table_info_map = ShareEndpointManager::instance()
+            .get_table_info_map(&self.ctx.tenant, &self.db_info, vec![])
+            .await?;
         let table_infos: Vec<Arc<TableInfo>> = table_info_map
             .values()
             .map(|table_info| Arc::new(table_info.to_owned()))
@@ -160,47 +110,55 @@ impl Database for ShareDatabase {
     }
 
     // Get one table by db and table name.
+    #[async_backtrace::framed]
     async fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
         let table_info = self.get_table_info(table_name).await?;
         self.get_table_by_info(table_info.as_ref())
     }
 
+    #[async_backtrace::framed]
     async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
         let table_infos = self.list_tables().await?;
 
         self.load_tables(table_infos)
     }
 
+    #[async_backtrace::framed]
     async fn list_tables_history(&self) -> Result<Vec<Arc<dyn Table>>> {
         Err(ErrorCode::PermissionDenied(
             "Permission denied, cannot list table history from a shared database".to_string(),
         ))
     }
 
+    #[async_backtrace::framed]
     async fn create_table(&self, _req: CreateTableReq) -> Result<()> {
         Err(ErrorCode::PermissionDenied(
             "Permission denied, cannot create table from a shared database".to_string(),
         ))
     }
 
+    #[async_backtrace::framed]
     async fn drop_table_by_id(&self, _req: DropTableByIdReq) -> Result<DropTableReply> {
         Err(ErrorCode::PermissionDenied(
             "Permission denied, cannot drop table from a shared database".to_string(),
         ))
     }
 
+    #[async_backtrace::framed]
     async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
         Err(ErrorCode::PermissionDenied(
             "Permission denied, cannot undrop table from a shared database".to_string(),
         ))
     }
 
+    #[async_backtrace::framed]
     async fn rename_table(&self, _req: RenameTableReq) -> Result<RenameTableReply> {
         Err(ErrorCode::PermissionDenied(
             "Permission denied, cannot rename table from a shared database".to_string(),
         ))
     }
 
+    #[async_backtrace::framed]
     async fn upsert_table_option(
         &self,
         _req: UpsertTableOptionReq,
@@ -210,12 +168,14 @@ impl Database for ShareDatabase {
         ))
     }
 
+    #[async_backtrace::framed]
     async fn update_table_meta(&self, _req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
         Err(ErrorCode::PermissionDenied(
             "Permission denied, cannot upsert table meta from a shared database".to_string(),
         ))
     }
 
+    #[async_backtrace::framed]
     async fn get_table_copied_file_info(
         &self,
         req: GetTableCopiedFileReq,
@@ -224,6 +184,7 @@ impl Database for ShareDatabase {
         Ok(res)
     }
 
+    #[async_backtrace::framed]
     async fn upsert_table_copied_file_info(
         &self,
         req: UpsertTableCopiedFileReq,
@@ -232,6 +193,7 @@ impl Database for ShareDatabase {
         Ok(res)
     }
 
+    #[async_backtrace::framed]
     async fn truncate_table(&self, _req: TruncateTableReq) -> Result<TruncateTableReply> {
         Err(ErrorCode::PermissionDenied(
             "Permission denied, cannot truncate table from a shared database".to_string(),

@@ -47,6 +47,7 @@ mod regexp;
 mod string;
 mod tuple;
 mod variant;
+mod vector;
 
 pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, Column)]) {
     let text = text.as_ref();
@@ -70,7 +71,7 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
         let (optimized_expr, output_domain) = ConstantFolder::fold_with_domain(
             &expr,
             input_domains.clone(),
-            FunctionContext::default(),
+            &FunctionContext::default(),
             &BUILTIN_FUNCTIONS,
         );
 
@@ -93,7 +94,8 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
             test_arrow_conversion(col);
         });
 
-        let evaluator = Evaluator::new(&block, FunctionContext::default(), &BUILTIN_FUNCTIONS);
+        let func_ctx = FunctionContext::default();
+        let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
         let result = evaluator.run(&expr);
         let optimized_result = evaluator.run(&optimized_expr);
         match &result {

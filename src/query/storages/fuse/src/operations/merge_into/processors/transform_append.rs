@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
+use common_base::runtime::GlobalIORuntime;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::BlockThresholds;
@@ -95,6 +96,7 @@ impl AppendTransform {
         self.block_builder.clone()
     }
 
+    #[async_backtrace::framed]
     pub async fn try_output_mutation(&mut self) -> Result<Option<AppendOperationLogEntry>> {
         if self.accumulator.summary_block_count >= self.write_settings.block_per_seg as u64 {
             self.output_mutation().await
@@ -103,6 +105,7 @@ impl AppendTransform {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn output_mutation(&mut self) -> Result<Option<AppendOperationLogEntry>> {
         let acc = std::mem::take(&mut self.accumulator);
 
@@ -158,11 +161,19 @@ impl AppendTransform {
 impl AsyncAccumulatingTransform for AppendTransform {
     const NAME: &'static str = "AppendTransform";
 
+    #[async_backtrace::framed]
     async fn transform(&mut self, data_block: DataBlock) -> Result<Option<DataBlock>> {
+        if data_block.is_empty() {
+            // data source like
+            //  `select number from numbers(3000000) where number >=2000000 and number < 3000000`
+            // may generate empty data blocks
+            return Ok(None);
+        }
         // 1. serialize block and index
         let block_builder = self.block_builder.clone();
-        let serialized_block_state =
-            tokio_rayon::spawn(move || block_builder.build(data_block)).await?;
+        let serialized_block_state = GlobalIORuntime::instance()
+            .spawn_blocking(move || block_builder.build(data_block))
+            .await?;
 
         let start = Instant::now();
 
@@ -209,6 +220,7 @@ impl AsyncAccumulatingTransform for AppendTransform {
         self.output_mutation_block(append_log)
     }
 
+    #[async_backtrace::framed]
     async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
         // output final operation log if any
         let append_log = self.output_mutation().await?;

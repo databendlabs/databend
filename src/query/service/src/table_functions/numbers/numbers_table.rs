@@ -73,7 +73,7 @@ impl NumbersTable {
         let args = table_args.expect_all_positioned(table_func_name, Some(1))?;
         let total = check_number(
             None,
-            FunctionContext::default(),
+            &FunctionContext::default(),
             &Expr::<usize>::Cast {
                 span: None,
                 is_try: false,
@@ -132,6 +132,7 @@ impl Table for NumbersTable {
         &self.table_info
     }
 
+    #[async_backtrace::framed]
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,

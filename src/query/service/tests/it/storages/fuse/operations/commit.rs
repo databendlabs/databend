@@ -33,10 +33,12 @@ use common_catalog::table_context::StageAttachment;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
-use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::FileFormatParams;
+use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::CountTablesReply;
@@ -44,6 +46,7 @@ use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
@@ -67,18 +70,28 @@ use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
+use common_pipeline_core::InputError;
+use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
+use common_storages_fuse::io::SegmentWriter;
+use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::operations::AppendOperationLogEntry;
+use common_storages_fuse::statistics::reducers::reduce_block_metas;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
+use dashmap::DashMap;
 use databend_query::sessions::QueryContext;
 use futures::TryStreamExt;
+use rand::thread_rng;
+use rand::Rng;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use walkdir::WalkDir;
 
+use crate::storages::fuse::block_writer::BlockWriter;
+use crate::storages::fuse::operations::mutation::CompactSegmentTestFixture;
 use crate::storages::fuse::table_test_fixture::execute_query;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
@@ -300,6 +313,48 @@ async fn test_abort_on_error() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_merge_segments() -> common_exception::Result<()> {
+    let fixture = TestFixture::new().await;
+    let ctx = fixture.ctx();
+
+    let operator = ctx.get_data_operator()?.operator();
+    let data_accessor = operator.clone();
+    let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
+    let block_writer = BlockWriter::new(&data_accessor, &location_gen);
+    let segment_writer = SegmentWriter::new(&data_accessor, &location_gen);
+
+    let mut rand = thread_rng();
+    let number_of_segments: usize = rand.gen_range(1..10);
+    let mut block_number_of_segments = Vec::with_capacity(number_of_segments);
+    let mut rows_per_blocks = Vec::with_capacity(number_of_segments);
+    for _ in 0..number_of_segments {
+        block_number_of_segments.push(rand.gen_range(10..30));
+        rows_per_blocks.push(rand.gen_range(1..8));
+    }
+
+    let threshold = BlockThresholds {
+        max_rows_per_block: 5,
+        min_rows_per_block: 4,
+        max_bytes_per_block: 1024,
+    };
+
+    let (locations, block_metas, segment_infos) = CompactSegmentTestFixture::gen_segments(
+        &block_writer,
+        &segment_writer,
+        &block_number_of_segments,
+        &rows_per_blocks,
+        threshold,
+    )
+    .await?;
+
+    let expect = reduce_block_metas(&block_metas, threshold)?;
+    let iter = locations.iter().zip(segment_infos.iter());
+    let (_, results) = FuseTable::merge_segments(iter)?;
+    assert_eq!(expect, results);
+    Ok(())
+}
+
 struct CtxDelegation {
     ctx: Arc<dyn TableContext>,
     catalog: Arc<FakedCatalog>,
@@ -317,6 +372,14 @@ impl CtxDelegation {
 #[async_trait::async_trait]
 impl TableContext for CtxDelegation {
     fn build_table_from_source_plan(&self, _plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
+        todo!()
+    }
+
+    fn incr_total_scan_value(&self, _value: ProgressValues) {
+        todo!()
+    }
+
+    fn get_total_scan_value(&self) -> ProgressValues {
         todo!()
     }
 
@@ -471,15 +534,27 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_on_error_map(&self, _map: Option<HashMap<String, ErrorCode>>) {
+    fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>> {
+        todo!()
+    }
+    fn set_on_error_map(&self, _map: Arc<DashMap<String, HashMap<u16, InputError>>>) {
+        todo!()
+    }
+    fn get_on_error_mode(&self) -> Option<OnErrorMode> {
+        todo!()
+    }
+    fn set_on_error_mode(&self, _mode: OnErrorMode) {
+        todo!()
+    }
+    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
         todo!()
     }
 
-    fn apply_changed_settings(&self, _changed_settings: Arc<Settings>) -> Result<()> {
+    fn apply_changed_settings(&self, _changes: HashMap<String, ChangeValue>) -> Result<()> {
         todo!()
     }
 
-    fn get_changed_settings(&self) -> Arc<Settings> {
+    fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
         todo!()
     }
 
@@ -495,7 +570,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    async fn get_file_format(&self, _name: &str) -> Result<FileFormatOptions> {
+    async fn get_file_format(&self, _name: &str) -> Result<FileFormatParams> {
         todo!()
     }
 
@@ -508,12 +583,13 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    async fn color_copied_files(
+    async fn filter_out_copied_files(
         &self,
         _catalog_name: &str,
         _database_name: &str,
         _table_name: &str,
-        _files: Vec<StageFileInfo>,
+        _files: &[StageFileInfo],
+        _max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
         todo!()
     }
@@ -539,7 +615,7 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
-    async fn drop_database(&self, _req: DropDatabaseReq) -> Result<()> {
+    async fn drop_database(&self, _req: DropDatabaseReq) -> Result<DropDatabaseReply> {
         todo!()
     }
 

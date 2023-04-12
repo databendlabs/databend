@@ -37,14 +37,14 @@ use crate::plans::Scan;
 
 pub struct RulePushDownLimitScan {
     id: RuleID,
-    pattern: SExpr,
+    patterns: Vec<SExpr>,
 }
 
 impl RulePushDownLimitScan {
     pub fn new() -> Self {
         Self {
             id: RuleID::PushDownLimitScan,
-            pattern: SExpr::create_unary(
+            patterns: vec![SExpr::create_unary(
                 PatternPlan {
                     plan_type: RelOp::Limit,
                 }
@@ -55,7 +55,7 @@ impl RulePushDownLimitScan {
                     }
                     .into(),
                 ),
-            ),
+            )],
         }
     }
 }
@@ -81,7 +81,7 @@ impl Rule for RulePushDownLimitScan {
         Ok(())
     }
 
-    fn pattern(&self) -> &SExpr {
-        &self.pattern
+    fn patterns(&self) -> &Vec<SExpr> {
+        &self.patterns
     }
 }

@@ -12,12 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use chrono::Utc;
 use common_exception::ErrorCode;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::*;
@@ -31,7 +35,6 @@ use crate::get_share_account_meta_or_err;
 use crate::get_share_id_to_name_or_err;
 use crate::get_share_meta_by_id_or_err;
 use crate::get_share_or_err;
-use crate::is_all_db_data_removed;
 use crate::kv_app_error::KVAppError;
 use crate::testing::get_kv_data;
 use crate::SchemaApi;
@@ -95,12 +98,6 @@ async fn is_all_share_data_removed(
         }
     }
 
-    for db_id in &share_meta.share_from_db_ids {
-        if !is_all_db_data_removed(kv_api, *db_id).await? {
-            return Ok(false);
-        }
-    }
-
     Ok(true)
 }
 
@@ -114,11 +111,17 @@ impl ShareApiTestSuite {
         let suite = ShareApiTestSuite {};
 
         suite.share_create_show_drop(&b.build().await).await?;
+        suite
+            .share_endpoint_create_show_drop(&b.build().await)
+            .await?;
         suite.share_add_remove_account(&b.build().await).await?;
         suite.share_grant_revoke_object(&b.build().await).await?;
         suite.get_share_grant_objects(&b.build().await).await?;
         suite
             .get_grant_privileges_of_object(&b.build().await)
+            .await?;
+        suite
+            .drop_share_database_and_table(&b.build().await)
             .await?;
 
         Ok(())
@@ -188,6 +191,196 @@ impl ShareApiTestSuite {
             assert_eq!(resp.outbound_accounts.len(), 1);
         }
 
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn share_endpoint_create_show_drop<MT: ShareApi + kvapi::AsKVApi<Error = MetaError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let tenant2 = "tenant2";
+        let tenant3 = "tenant3";
+        let endpoint1 = "endpoint1";
+        let endpoint2 = "endpoint2";
+
+        info!("--- create share endpoints");
+        let create_on = Utc::now();
+        {
+            let req = CreateShareEndpointReq {
+                if_not_exists: false,
+                endpoint: ShareEndpointIdent {
+                    tenant: tenant.to_string(),
+                    endpoint: endpoint1.to_string(),
+                },
+                url: "http://127.0.0.1:22222".to_string(),
+                tenant: tenant2.to_string(),
+                comment: None,
+                create_on,
+                args: BTreeMap::new(),
+            };
+
+            let res = mt.create_share_endpoint(req).await;
+            info!("create create_share_endpoint res: {:?}", res);
+            assert!(res.is_ok());
+
+            let req = CreateShareEndpointReq {
+                if_not_exists: false,
+                endpoint: ShareEndpointIdent {
+                    tenant: tenant.to_string(),
+                    endpoint: endpoint1.to_string(),
+                },
+                url: "http://127.0.0.1:21111".to_string(),
+                tenant: tenant2.to_string(),
+                comment: None,
+                args: BTreeMap::new(),
+                create_on,
+            };
+
+            let res = mt.create_share_endpoint(req).await;
+            info!("create create_share_endpoint res: {:?}", res);
+            assert!(res.is_err());
+            let err = res.unwrap_err();
+            assert_eq!(
+                ErrorCode::ShareEndpointAlreadyExists("").code(),
+                ErrorCode::from(err).code()
+            );
+
+            let req = CreateShareEndpointReq {
+                if_not_exists: false,
+                endpoint: ShareEndpointIdent {
+                    tenant: tenant.to_string(),
+                    endpoint: endpoint2.to_string(),
+                },
+                url: "http://127.0.0.1:21111".to_string(),
+                tenant: tenant3.to_string(),
+                comment: None,
+                create_on,
+                args: BTreeMap::new(),
+            };
+
+            let res = mt.create_share_endpoint(req).await;
+            info!("create create_share_endpoint res: {:?}", res);
+            assert!(res.is_ok());
+        }
+
+        info!("--- upsert share endpoints");
+        {
+            let upsert_tenant = "upsert_tenant";
+            let upsert_req = UpsertShareEndpointReq {
+                endpoint: ShareEndpointIdent {
+                    tenant: upsert_tenant.to_string(),
+                    endpoint: endpoint2.to_string(),
+                },
+                url: "http://127.0.0.1:21111".to_string(),
+                tenant: tenant3.to_string(),
+                create_on,
+                args: BTreeMap::new(),
+            };
+            let res = mt.upsert_share_endpoint(upsert_req.clone()).await;
+            assert!(res.is_ok());
+            let upsert_share_endpoint_id = res.unwrap().share_endpoint_id;
+
+            let req = GetShareEndpointReq {
+                tenant: upsert_tenant.to_string(),
+                endpoint: None,
+                to_tenant: None,
+            };
+            let res = mt.get_share_endpoint(req).await;
+            assert!(res.is_ok());
+            assert_eq!(res.clone().unwrap().share_endpoint_meta_vec.len(), 1);
+            assert_eq!(
+                res.unwrap().share_endpoint_meta_vec[0].1.url,
+                "http://127.0.0.1:21111".to_string()
+            );
+
+            let res = mt.upsert_share_endpoint(upsert_req).await;
+            assert!(res.is_ok());
+            assert_eq!(upsert_share_endpoint_id, res.unwrap().share_endpoint_id);
+
+            let upsert_req = UpsertShareEndpointReq {
+                endpoint: ShareEndpointIdent {
+                    tenant: upsert_tenant.to_string(),
+                    endpoint: endpoint2.to_string(),
+                },
+                url: "http://127.0.0.1:22222".to_string(),
+                tenant: tenant3.to_string(),
+                create_on,
+                args: BTreeMap::new(),
+            };
+            let res = mt.upsert_share_endpoint(upsert_req).await;
+            assert!(res.is_ok());
+            assert_eq!(upsert_share_endpoint_id, res.unwrap().share_endpoint_id);
+
+            let req = GetShareEndpointReq {
+                tenant: upsert_tenant.to_string(),
+                endpoint: None,
+                to_tenant: None,
+            };
+            let res = mt.get_share_endpoint(req).await;
+            assert!(res.is_ok());
+            assert_eq!(res.clone().unwrap().share_endpoint_meta_vec.len(), 1);
+            assert_eq!(
+                res.unwrap().share_endpoint_meta_vec[0].1.url,
+                "http://127.0.0.1:22222".to_string()
+            );
+        }
+        info!("--- get share endpoints");
+        {
+            let req = GetShareEndpointReq {
+                tenant: tenant.to_string(),
+                endpoint: None,
+                to_tenant: None,
+            };
+
+            let res = mt.get_share_endpoint(req).await;
+            assert!(res.is_ok());
+            assert_eq!(res.unwrap().share_endpoint_meta_vec.len(), 2);
+
+            let req = GetShareEndpointReq {
+                tenant: tenant.to_string(),
+                endpoint: Some(endpoint1.to_string()),
+                to_tenant: None,
+            };
+
+            let res = mt.get_share_endpoint(req).await;
+            assert!(res.is_ok());
+            assert_eq!(res.unwrap().share_endpoint_meta_vec.len(), 1);
+        }
+
+        info!("--- drop share endpoints");
+        {
+            let req = DropShareEndpointReq {
+                if_exists: true,
+                endpoint: ShareEndpointIdent {
+                    tenant: tenant.to_string(),
+                    endpoint: endpoint1.to_string(),
+                },
+            };
+            let res = mt.drop_share_endpoint(req).await;
+            assert!(res.is_ok());
+
+            let req = GetShareEndpointReq {
+                tenant: tenant.to_string(),
+                endpoint: None,
+                to_tenant: None,
+            };
+
+            let res = mt.get_share_endpoint(req).await;
+            assert!(res.is_ok());
+            assert_eq!(res.unwrap().share_endpoint_meta_vec.len(), 1);
+
+            let req = GetShareEndpointReq {
+                tenant: tenant.to_string(),
+                endpoint: Some(endpoint1.to_string()),
+                to_tenant: None,
+            };
+
+            let res = mt.get_share_endpoint(req).await;
+            assert!(res.is_ok());
+            assert_eq!(res.unwrap().share_endpoint_meta_vec.len(), 0);
+        }
         Ok(())
     }
 
@@ -1156,7 +1349,7 @@ impl ShareApiTestSuite {
 
         info!("--- drop share1 and check objects");
         {
-            let tenant2 = "tenant2";
+            let tenant2 = "tenant1";
             let db2 = "db2";
 
             let db_name2 = DatabaseNameIdent {
@@ -1187,8 +1380,6 @@ impl ShareApiTestSuite {
             let res = mt.create_database(req).await;
             info!("create database res: {:?}", res);
             assert!(res.is_ok());
-            // save the db id
-            let db_id = res.unwrap().db_id;
 
             let req = DropShareReq {
                 if_exists: true,
@@ -1206,9 +1397,6 @@ impl ShareApiTestSuite {
             let res =
                 is_all_share_data_removed(mt.as_kv_api(), &share_name1, share_id, &share_meta)
                     .await?;
-            assert!(res);
-
-            let res = is_all_db_data_removed(mt.as_kv_api(), db_id).await?;
             assert!(res);
 
             // get_grant_privileges_of_object of db and table again
@@ -1231,6 +1419,139 @@ impl ShareApiTestSuite {
             assert!(res.is_ok());
             let res = res.unwrap();
             assert_eq!(res.privileges.len(), 0);
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn drop_share_database_and_table<
+        MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi,
+    >(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let share1 = "drop_share_database_and_table_share";
+        let db_name = "drop_share_database_and_table_db";
+        let tbl_name = "drop_share_database_and_table_table";
+        let share_id: u64;
+        let table_id: u64;
+
+        let share_name = ShareNameIdent {
+            tenant: tenant.to_string(),
+            share_name: share1.to_string(),
+        };
+
+        info!("--- create share1");
+        let create_on = Utc::now();
+        {
+            let req = CreateShareReq {
+                if_not_exists: false,
+                share_name: share_name.clone(),
+                comment: None,
+                create_on,
+            };
+
+            let res = mt.create_share(req).await;
+            info!("create share res: {:?}", res);
+            let res = res.unwrap();
+            assert_eq!(1, res.share_id, "first share id is 1");
+            share_id = res.share_id;
+        }
+
+        info!("--- create db1,table1");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta::default(),
+            };
+
+            let res = mt.create_database(plan).await?;
+            info!("create database res: {:?}", res);
+
+            let req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: TableMeta::default(),
+            };
+
+            let res = mt.create_table(req.clone()).await?;
+            info!("create table res: {:?}", res);
+            table_id = res.table_id;
+        }
+
+        info!("--- share db1 and table1");
+        {
+            let req = GrantShareObjectReq {
+                share_name: share_name.clone(),
+                object: ShareGrantObjectName::Database(db_name.to_string()),
+                grant_on: create_on,
+                privilege: ShareGrantObjectPrivilege::Usage,
+            };
+
+            let res = mt.grant_share_object(req).await?;
+            info!("grant object res: {:?}", res);
+            assert_eq!(1, res.spec_vec.unwrap().len());
+
+            let tbl_ob_name =
+                ShareGrantObjectName::Table(db_name.to_string(), tbl_name.to_string());
+            let req = GrantShareObjectReq {
+                share_name: share_name.clone(),
+                object: tbl_ob_name.clone(),
+                grant_on: create_on,
+                privilege: ShareGrantObjectPrivilege::Usage,
+            };
+
+            let res = mt.grant_share_object(req).await?;
+            info!("grant object res: {:?}", res);
+            assert_eq!(1, res.spec_vec.unwrap().len());
+        }
+
+        info!("--- drop share table");
+        {
+            let (_share_meta_seq, share_meta) =
+                get_share_meta_by_id_or_err(mt.as_kv_api(), share_id, "").await?;
+            let table_key_name = ShareGrantObject::Table(table_id).to_string();
+            assert!(share_meta.entries.contains_key(&table_key_name));
+
+            let plan = DropTableByIdReq {
+                if_exists: false,
+                tb_id: table_id,
+            };
+            let _res = mt.drop_table_by_id(plan).await;
+
+            let (_share_meta_seq, share_meta) =
+                get_share_meta_by_id_or_err(mt.as_kv_api(), share_id, "").await?;
+            assert!(!share_meta.entries.contains_key(&table_key_name));
+        }
+
+        info!("--- drop share database");
+        {
+            let (_share_meta_seq, share_meta) =
+                get_share_meta_by_id_or_err(mt.as_kv_api(), share_id, "").await?;
+            assert!(share_meta.database.is_some());
+
+            mt.drop_database(DropDatabaseReq {
+                if_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+            })
+            .await?;
+
+            let (_share_meta_seq, share_meta) =
+                get_share_meta_by_id_or_err(mt.as_kv_api(), share_id, "").await?;
+            assert!(share_meta.database.is_none());
         }
 
         Ok(())

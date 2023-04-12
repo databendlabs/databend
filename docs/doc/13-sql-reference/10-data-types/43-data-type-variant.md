@@ -8,26 +8,29 @@ Here's an example of inserting and querying Variant data in Databend:
 
 Create a table:
 ```sql
-CREATE TABLE variant_table(var VARIANT NULL);
+-- Create a table for storing customer orders
+CREATE TABLE customer_orders(id INT64, order_data VARIANT);
 ```
 
 Insert a value with different type into the table:
 ```sql
-INSERT INTO variant_table VALUES(1),(1.34),(true),(parse_json('[1,2,3,["a","b","c"]]')),(parse_json('{"a":1,"b":{"c":2}}'));
+-- Insert sample data containing customer ID, order ID, and the list of purchased items
+INSERT INTO customer_orders VALUES(1, parse_json('{"customer_id": 123, "order_id": 1001, "items": [{"name": "Shoes", "price": 59.99}, {"name": "T-shirt", "price": 19.99}]}')),
+                                  (2, parse_json('{"customer_id": 456, "order_id": 1002, "items": [{"name": "Backpack", "price": 79.99}, {"name": "Socks", "price": 4.99}]}')),
+                                  (3, parse_json('{"customer_id": 123, "order_id": 1003, "items": [{"name": "Shoes", "price": 59.99}, {"name": "Socks", "price": 4.99}]}'));
 ```
 
 Query the result:
 ```sql
-SELECT * FROM variant_table;
-+-----------------------+
-| var                   |
-+-----------------------+
-| 1                     |
-| 1.34                  |
-| true                  |
-| [1,2,3,["a","b","c"]] |
-| {"a":1,"b":{"c":2}}   |
-+-----------------------+
+SELECT * FROM custom_orders;
+
++------+---------------------------------------------------------------------------------------------------------------+
+| id   | order_data                                                                                                    |
++------+---------------------------------------------------------------------------------------------------------------+
+|    1 | {"customer_id":123,"items":[{"name":"Shoes","price":59.99},{"name":"T-shirt","price":19.99}],"order_id":1001} |
+|    2 | {"customer_id":456,"items":[{"name":"Backpack","price":79.99},{"name":"Socks","price":4.99}],"order_id":1002} |
+|    3 | {"customer_id":123,"items":[{"name":"Shoes","price":59.99},{"name":"Socks","price":4.99}],"order_id":1003}    |
++------+---------------------------------------------------------------------------------------------------------------+
 ```
 
 ## Get by index
@@ -37,53 +40,54 @@ Element can be accessed by its index.
 
 ### Example
 
+In this example, we demonstrate how to access elements within a VARIANT column that contains an ARRAY.
+
+Create the table:
 ```sql
-CREATE TABLE array_table(arr VARIANT NULL);
+-- Create a table to store user hobbies
+CREATE TABLE user_hobbies(user_id INT64, hobbies VARIANT NULL);
 ```
 
-Desc the `array_table`:
+Insert sample data into the table:
 ```sql
-DESC array_table;
-+-------+---------+------+---------+
-| Field | Type    | Null | Default |
-+-------+---------+------+---------+
-| arr   | Variant | YES  | NULL    |
-+-------+---------+------+---------+
+INSERT INTO user_hobbies VALUES(1, parse_json('["Cooking", "Reading", "Cycling"]')),
+                                (2, parse_json('["Photography", "Travel", "Swimming"]'));
 ```
 
-Insert a value into the table, `[1,2,3,["a","b","c"]]`:
+Retrieve the first hobby for each user:
 ```sql
-INSERT INTO array_table VALUES(parse_json('[1,2,3,["a","b","c"]]'));
+SELECT user_id, hobbies[0] as first_hobby FROM user_hobbies;
+
++---------+-------------+
+| user_id | first_hobby |
++---------+-------------+
+|       1 | Cooking     |
+|       2 | Photography |
++---------+-------------+
 ```
 
-Get the element at index 0 of the array:
+Retrieve the third hobby for each user:
 ```sql
-SELECT arr[0] FROM array_table;
-+--------+
-| arr[0] |
-+--------+
-| 1      |
-+--------+
+SELECT user_id, hobbies[2] as third_hobby FROM user_hobbies;
+
++---------+------------+
+| user_id | third_hobby|
++---------+------------+
+|       1 | Cycling    |
+|       2 | Swimming   |
++---------+------------+
 ```
 
-Get the element at index 3 of the array:
+Retrieve hobbies with group by:
 ```sql
-SELECT arr[3] FROM array_table;
-+---------------+
-| arr[3]        |
-+---------------+
-| ["a","b","c"] |
-+---------------+
-```
+mysql> SELECT hobbies[2], count() as third_hobby FROM user_hobbies GROUP BY hobbies[2];
 
-`arr[3]` value is a ARRAY type too, we can get the sub elements like:
-```sql
-SELECT arr[3][0] FROM array_table;
-+-----------+
-| arr[3][0] |
-+-----------+
-| "a"       |
-+-----------+
++------------+-------------+
+| hobbies[2] | third_hobby |
++------------+-------------+
+| "Cycling"  |           1 |
+| "Swimming" |           1 |
++------------+-------------+
 ```
 
 ## Get by field name
@@ -93,133 +97,53 @@ Value can be accessed by the field name.
 
 ### Example 1
 
-This example shows how to access the values at each hierarchical level of a Variant:
-
-Create a table with VARIANT type:
+Create a table to store user preferences with VARIANT type:
 ```sql
-CREATE TABLE object_table(obj VARIANT NULL);
+CREATE TABLE user_preferences(user_id INT64, preferences VARIANT NULL);
 ```
 
-Desc the `object_table`:
+Insert sample data into the table:
 ```sql
-DESC object_table;
-+-------+---------+------+---------+
-| Field | Type    | Null | Default |
-+-------+---------+------+---------+
-| obj   | Variant | YES  | NULL    |
-+-------+---------+------+---------+
+INSERT INTO user_preferences VALUES(1, parse_json('{"color":"red", "fontSize":16, "theme":"dark"}')),
+                                    (2, parse_json('{"color":"blue", "fontSize":14, "theme":"light"}'));
 ```
 
-Insert a value into the table, `{"a":1,"b":{"c":2}}`:
+Retrieve the preferred color for each user:
 ```sql
-INSERT INTO object_table VALUES(parse_json('{"a":1,"b":{"c":2}}'));
-```
-
-Get the value by key `a`:
-```sql
-SELECT obj:a FROM object_table;
-+-------+
-| obj:a |
-+-------+
-| 1     |
-+-------+
-```
-
-Get the value by key `b`:
-
-```sql
-SELECT obj:b FROM object_table;
-+---------+
-| obj:b   |
-+---------+
-| {"c":2} |
-+---------+
-```
-
-Get the sub value by the key `b:c`:
-```sql
-SELECT obj:b:c FROM object_table;
-+---------+
-| obj:b:c |
-+---------+
-| 2       |
-+---------+
-```
-
-### Example 2
-
-This example shows how to query with data of the VARIANT type:
-
-Create a table with an VARIANT column to hold the employee's contact information including name and Email address:
-
-```sql
-CREATE TABLE employees (id INT, info VARIANT);
-```
-
-Insert two rows to the table:
-
-```sql
-INSERT INTO employees VALUES (1, parse_json('{"Email": "amy@databend.com", "Name":"Amy"}'));
-INSERT INTO employees VALUES (2, parse_json('{"Email": "bob@databend.com", "Name":"Bob"}'));
-```
-
-The following statement lists all the Email addresses of the the employees with an ID smaller than 3:
-
-```sql
-SELECT info:Email FROM employees WHERE id < 3;
-
-+------------------+
-| info:Email       |
-+------------------+
-| amy@databend.com |
-| bob@databend.com |
-+------------------+
-```
-
-The following statement returns Bob's Email address by his name:
-
-```sql
-SELECT info:Email FROM employees WHERE info:Name = 'Bob';
-
-+------------------+
-| info:Email       |
-+------------------+
-| bob@databend.com |
-+------------------+
-```
-The following statement returns Bob's Email address by his ID and name:
-
-```sql
-SELECT info:Email FROM employees WHERE id = 2 and info:Name = 'Bob';
-
-+------------------+
-| info:Email       |
-+------------------+
-| bob@databend.com |
-+------------------+
+SELECT user_id, preferences:color as color FROM user_preferences;
++---------+-------+
+| user_id | color |
++---------+-------+
+|       1 | red   |
+|       2 | blue  |
++---------+-------+
 ```
 
 ## Data Type Conversion
 
 By default, elements retrieved from a VARIANT column are returned. To convert a returned element to a specific type, add the `::` operator and the target data type (e.g. expression::type).
 
+Create a table to store user preferences with a VARIANT column:
 ```sql
-SELECT Arr[0]::INT FROM array_table
-+---------------+
-| arr[0]::Int32 |
-+---------------+
-|             1 |
-+---------------+
+CREATE TABLE user_pref(user_id INT64, pref VARIANT NULL);
 ```
 
-Let's do a more complex query:
+Insert sample data into the table:
 ```sql
-SELECT sum(arr[0]::INT) FROM array_table GROUP BY arr[0]::INT;
-+--------------------+
-| sum(arr[0]::Int32) |
-+--------------------+
-|                  1 |
-+--------------------+
+INSERT INTO user_pref VALUES(1, parse_json('{"age": 25, "isPremium": "true", "lastActive": "2023-04-10"}')),
+                             (2, parse_json('{"age": 30, "isPremium": "false", "lastActive": "2023-03-15"}'));
+```
+
+Convert the age to an INT64:
+```sql
+SELECT user_id, pref:age::INT64 as age FROM user_pref;
+
++---------+-----+
+| user_id | age |
++---------+-----+
+|       1 |  25 |
+|       2 |  30 |
++---------+-----+
 ```
 
 ## Functions

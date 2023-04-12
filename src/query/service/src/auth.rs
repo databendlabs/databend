@@ -14,10 +14,12 @@
 
 use std::sync::Arc;
 
-pub use common_config::InnerConfig;
+use common_base::base::GlobalInstance;
+use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::AuthInfo;
+use common_meta_app::principal::UserIdentity;
 use common_meta_app::principal::UserInfo;
 use common_users::JwtAuthenticator;
 use common_users::UserApiProvider;
@@ -31,7 +33,6 @@ pub struct AuthMgr {
 pub enum Credential {
     Jwt {
         token: String,
-        hostname: Option<String>,
     },
     Password {
         name: String,
@@ -41,7 +42,16 @@ pub enum Credential {
 }
 
 impl AuthMgr {
-    pub fn create(cfg: &InnerConfig) -> Arc<AuthMgr> {
+    pub fn init(cfg: &InnerConfig) -> Result<()> {
+        GlobalInstance::set(AuthMgr::create(cfg));
+        Ok(())
+    }
+
+    pub fn instance() -> Arc<AuthMgr> {
+        GlobalInstance::get()
+    }
+
+    fn create(cfg: &InnerConfig) -> Arc<AuthMgr> {
         Arc::new(AuthMgr {
             jwt_auth: JwtAuthenticator::create(
                 cfg.query.jwt_key_file.clone(),
@@ -50,12 +60,11 @@ impl AuthMgr {
         })
     }
 
+    #[async_backtrace::framed]
     pub async fn auth(&self, session: Arc<Session>, credential: &Credential) -> Result<()> {
+        let user_api = UserApiProvider::instance();
         match credential {
-            Credential::Jwt {
-                token: t,
-                hostname: h,
-            } => {
+            Credential::Jwt { token: t } => {
                 let jwt_auth = self
                     .jwt_auth
                     .as_ref()
@@ -71,33 +80,40 @@ impl AuthMgr {
                 if let Some(tenant) = jwt.custom.tenant_id {
                     session.set_current_tenant(tenant);
                 };
+
                 let tenant = session.get_current_tenant();
+                let identity = UserIdentity::new(&user_name, "%");
 
-                // create user if not exists when the JWT claims contains ensure_user
-                if let Some(ref ensure_user) = jwt.custom.ensure_user {
-                    let mut user_info = UserInfo::new(&user_name, "%", AuthInfo::JWT);
-                    if let Some(ref roles) = ensure_user.roles {
-                        for role in roles.clone().into_iter() {
-                            user_info.grants.grant_role(role);
+                // ensure the builtin roles like ACCOUNT_ADMIN, PUBLIC exists
+                user_api.ensure_builtin_roles(&tenant).await?;
+
+                // create a new user for this identity if not exists
+                let user = match user_api.get_user(&tenant, identity.clone()).await {
+                    Ok(user_info) => match user_info.auth_info {
+                        AuthInfo::JWT => user_info,
+                        _ => return Err(ErrorCode::AuthenticateFailure("wrong auth type")),
+                    },
+                    Err(e) => {
+                        if e.code() != ErrorCode::UNKNOWN_USER {
+                            return Err(ErrorCode::AuthenticateFailure(e.message()));
                         }
+                        let ensure_user = jwt
+                            .custom
+                            .ensure_user
+                            .ok_or(ErrorCode::AuthenticateFailure(e.message()))?;
+                        // create a new user if not exists
+                        let mut user_info = UserInfo::new(&user_name, "%", AuthInfo::JWT);
+                        if let Some(ref roles) = ensure_user.roles {
+                            for role in roles.clone().into_iter() {
+                                user_info.grants.grant_role(role);
+                            }
+                        }
+                        user_api.add_user(&tenant, user_info.clone(), true).await?;
+                        user_info
                     }
-                    UserApiProvider::instance()
-                        .ensure_builtin_roles(&tenant)
-                        .await?;
-                    UserApiProvider::instance()
-                        .add_user(&tenant, user_info.clone(), true)
-                        .await?;
-                }
+                };
 
-                let auth_role = jwt.custom.role.clone();
-                let user_info = UserApiProvider::instance()
-                    .get_user_with_client_ip(
-                        &tenant,
-                        &user_name,
-                        h.as_ref().unwrap_or(&"%".to_string()),
-                    )
-                    .await?;
-                session.set_authed_user(user_info, auth_role).await?;
+                session.set_authed_user(user, jwt.custom.role).await?;
             }
             Credential::Password {
                 name: n,
@@ -105,7 +121,7 @@ impl AuthMgr {
                 hostname: h,
             } => {
                 let tenant = session.get_current_tenant();
-                let user = UserApiProvider::instance()
+                let user = user_api
                     .get_user_with_client_ip(&tenant, n, h.as_ref().unwrap_or(&"%".to_string()))
                     .await?;
                 let user = match &user.auth_info {

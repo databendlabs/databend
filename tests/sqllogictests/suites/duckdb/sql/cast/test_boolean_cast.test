@@ -127,4 +127,3 @@ query I
 SELECT CAST(CAST('0' AS BIGINT) AS BOOLEAN)
 ----
 0
-

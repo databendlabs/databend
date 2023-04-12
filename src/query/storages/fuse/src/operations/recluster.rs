@@ -43,6 +43,7 @@ use crate::DEFAULT_AVG_DEPTH_THRESHOLD;
 use crate::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 
 impl FuseTable {
+    #[async_backtrace::framed]
     pub(crate) async fn do_recluster(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -158,6 +159,7 @@ impl FuseTable {
                 offset: *offset,
                 asc: true,
                 nulls_first: false,
+                is_nullable: false, // This information is not needed here.
             })
             .collect();
 

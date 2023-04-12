@@ -100,7 +100,6 @@ fn auth_by_header(
         match Bearer::decode(value) {
             Some(bearer) => Ok(Credential::Jwt {
                 token: bearer.token().to_string(),
-                hostname: client_ip,
             }),
             None => Err(ErrorCode::AuthenticateFailure("bad Bearer auth header")),
         }
@@ -157,6 +156,7 @@ pub struct HTTPSessionEndpoint<E> {
     pub auth_manager: Arc<AuthMgr>,
 }
 impl<E> HTTPSessionEndpoint<E> {
+    #[async_backtrace::framed]
     async fn auth(&self, req: &Request) -> Result<HttpQueryContext> {
         let credential = get_credential(req, self.kind)?;
         let session_manager = SessionManager::instance();
@@ -178,6 +178,7 @@ impl<E> HTTPSessionEndpoint<E> {
 impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
     type Output = Response;
 
+    #[async_backtrace::framed]
     async fn call(&self, mut req: Request) -> PoemResult<Self::Output> {
         // method, url, version, header
         info!("receive http handler request: {req:?},");

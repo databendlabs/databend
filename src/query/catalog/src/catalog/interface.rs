@@ -21,6 +21,7 @@ use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
@@ -71,10 +72,11 @@ pub trait Catalog: DynClone + Send + Sync {
     // Operation with database.
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply>;
 
-    async fn drop_database(&self, req: DropDatabaseReq) -> Result<()>;
+    async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply>;
 
     async fn undrop_database(&self, req: UndropDatabaseReq) -> Result<UndropDatabaseReply>;
 
+    #[async_backtrace::framed]
     async fn exists_database(&self, tenant: &str, db_name: &str) -> Result<bool> {
         match self.get_database(tenant, db_name).await {
             Ok(_) => Ok(true),
@@ -119,6 +121,7 @@ pub trait Catalog: DynClone + Send + Sync {
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply>;
 
     // Check a db.table is exists or not.
+    #[async_backtrace::framed]
     async fn exists_table(&self, tenant: &str, db_name: &str, table_name: &str) -> Result<bool> {
         match self.get_table(tenant, db_name, table_name).await {
             Ok(_) => Ok(true),

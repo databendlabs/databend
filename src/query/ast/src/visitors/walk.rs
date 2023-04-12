@@ -298,6 +298,35 @@ pub fn walk_cte<'a, V: Visitor<'a>>(visitor: &mut V, cte: &'a CTE) {
     visitor.visit_query(query);
 }
 
+pub fn walk_window_definition<'a, V: Visitor<'a>>(
+    visitor: &mut V,
+    window_definition: &'a WindowDefinition,
+) {
+    let WindowDefinition { name, spec: window } = window_definition;
+
+    visitor.visit_identifier(name);
+
+    let WindowSpec {
+        partition_by,
+        order_by,
+        window_frame,
+        ..
+    } = window;
+
+    for expr in partition_by {
+        visitor.visit_expr(expr);
+    }
+
+    for order_by in order_by {
+        visitor.visit_order_by(order_by);
+    }
+
+    if let Some(frame) = window_frame {
+        visitor.visit_frame_bound(&frame.start_bound);
+        visitor.visit_frame_bound(&frame.end_bound);
+    }
+}
+
 pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statement) {
     match statement {
         Statement::Explain { kind, query } => visitor.visit_explain(kind, query),
@@ -421,6 +450,9 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::DescribeStage { stage_name } => visitor.visit_describe_stage(stage_name),
         Statement::Call(stmt) => visitor.visit_call(stmt),
         Statement::Presign(stmt) => visitor.visit_presign(stmt),
+        Statement::CreateShareEndpoint(stmt) => visitor.visit_create_share_endpoint(stmt),
+        Statement::ShowShareEndpoint(stmt) => visitor.visit_show_share_endpoint(stmt),
+        Statement::DropShareEndpoint(stmt) => visitor.visit_drop_share_endpoint(stmt),
         Statement::CreateShare(stmt) => visitor.visit_create_share(stmt),
         Statement::DropShare(stmt) => visitor.visit_drop_share(stmt),
         Statement::GrantShareObject(stmt) => visitor.visit_grant_share_object(stmt),

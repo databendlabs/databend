@@ -203,6 +203,12 @@ impl DecimalScalar {
             DecimalScalar::Decimal256(v, size) => i256::to_float64(*v, size.scale),
         }
     }
+    pub fn is_positive(&self) -> bool {
+        match self {
+            DecimalScalar::Decimal128(v, _) => i128::is_positive(*v),
+            DecimalScalar::Decimal256(v, _) => i256::is_positive(*v),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, EnumAsInner)]
@@ -695,7 +701,7 @@ impl DecimalDataType {
         Self::from_size(DecimalSize { precision, scale })
     }
 
-    // Decimal X Number or Nunmber X Decimal
+    // Decimal X Number or Number X Decimal
     pub fn binary_upgrade_to_max_precision(&self) -> Result<DecimalDataType> {
         let scale = self.scale();
         let precision = self.max_precision();

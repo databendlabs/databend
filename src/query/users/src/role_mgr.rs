@@ -31,6 +31,7 @@ pub const BUILTIN_ROLE_PUBLIC: &str = "public";
 
 impl UserApiProvider {
     // Get one role from by tenant.
+    #[async_backtrace::framed]
     pub async fn get_role(&self, tenant: &str, role: String) -> Result<RoleInfo> {
         let client = self.get_role_api_client(tenant)?;
         let role_data = client.get_role(&role, MatchSeq::GE(0)).await?.data;
@@ -38,6 +39,7 @@ impl UserApiProvider {
     }
 
     // Get the tenant all roles list.
+    #[async_backtrace::framed]
     pub async fn get_roles(&self, tenant: &str) -> Result<Vec<RoleInfo>> {
         let client = self.get_role_api_client(tenant)?;
         let get_roles = client.get_roles();
@@ -55,13 +57,32 @@ impl UserApiProvider {
         }
     }
 
+    #[async_backtrace::framed]
+    pub async fn exists_role(&self, tenant: &str, role: String) -> Result<bool> {
+        match self.get_role(tenant, role).await {
+            Ok(_) => Ok(true),
+            Err(e) => {
+                if e.code() == ErrorCode::UNKNOWN_ROLE {
+                    Ok(false)
+                } else {
+                    Err(e)
+                }
+            }
+        }
+    }
+
     // Add a new role info.
+    #[async_backtrace::framed]
     pub async fn add_role(
         &self,
         tenant: &str,
         role_info: RoleInfo,
         if_not_exists: bool,
     ) -> Result<u64> {
+        if if_not_exists && self.exists_role(tenant, role_info.name.clone()).await? {
+            return Ok(0);
+        }
+
         let client = self.get_role_api_client(tenant)?;
         let add_role = client.add_role(role_info);
         match add_role.await {
@@ -81,7 +102,8 @@ impl UserApiProvider {
     //    it also contains all roles. ACCOUNT_ADMIN can access the data objects which owned by any role.
     // 2. PUBLIC, on the other side only includes the public accessible privileges, but every role
     //    contains the PUBLIC role. The data objects which owned by PUBLIC can be accessed by any role.
-    pub async fn ensure_builtin_roles(&self, tenant: &str) -> Result<u64> {
+    #[async_backtrace::framed]
+    pub async fn ensure_builtin_roles(&self, tenant: &str) -> Result<()> {
         let mut account_admin = RoleInfo::new(BUILTIN_ROLE_ACCOUNT_ADMIN);
         account_admin.grants.grant_privileges(
             &GrantObject::Global,
@@ -98,9 +120,12 @@ impl UserApiProvider {
             ),
             UserPrivilegeType::Select.into(),
         );
-        self.add_role(tenant, public, true).await
+        self.add_role(tenant, public, true).await?;
+
+        Ok(())
     }
 
+    #[async_backtrace::framed]
     pub async fn grant_privileges_to_role(
         &self,
         tenant: &str,
@@ -117,6 +142,7 @@ impl UserApiProvider {
             .map_err(|e| e.add_message_back("(while set role privileges)"))
     }
 
+    #[async_backtrace::framed]
     pub async fn revoke_privileges_from_role(
         &self,
         tenant: &str,
@@ -134,6 +160,7 @@ impl UserApiProvider {
     }
 
     // the grant_role can not have cycle with target_role.
+    #[async_backtrace::framed]
     pub async fn grant_role_to_role(
         &self,
         tenant: &str,
@@ -160,6 +187,7 @@ impl UserApiProvider {
             .map_err(|e| e.add_message_back("(while grant role to role)"))
     }
 
+    #[async_backtrace::framed]
     pub async fn revoke_role_from_role(
         &self,
         tenant: &str,
@@ -176,6 +204,7 @@ impl UserApiProvider {
     }
 
     // Drop a role by name
+    #[async_backtrace::framed]
     pub async fn drop_role(&self, tenant: &str, role: String, if_exists: bool) -> Result<()> {
         let client = self.get_role_api_client(tenant)?;
         let drop_role = client.drop_role(role, MatchSeq::GE(1));
@@ -193,6 +222,7 @@ impl UserApiProvider {
 
     // Find all related roles by role names. Every role have a PUBLIC role, and ACCOUNT_ADMIN
     // default contains every role.
+    #[async_backtrace::framed]
     async fn find_related_roles(
         &self,
         tenant: &str,

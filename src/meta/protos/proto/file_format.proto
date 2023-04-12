@@ -1,0 +1,139 @@
+// Copyright 2023 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+package databend_proto;
+
+import "user.proto";
+
+enum StageFileFormatType {
+  Csv = 0;
+  Json = 1;
+  Avro = 2;
+  Orc = 3;
+  Parquet = 4;
+  Xml = 5;
+  NdJson = 6;
+  Tsv = 7;
+}
+
+enum StageFileCompression {
+  Auto = 0;
+  Gzip = 1;
+  Bz2 = 2;
+  Brotli = 3;
+  Zstd = 4;
+  Deflate = 5;
+  RawDeflate = 6;
+  Lzo = 7;
+  Snappy = 8;
+  // We used to assign `None` as 9, it's a mistake.
+  // Please change this value to 0 instead in next version bump.
+  None = 9;
+  Xz = 10;
+}
+
+message UserDefinedFileFormat {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  string name = 1;
+  FileFormatParams file_format_params = 2;
+  UserIdentity creator = 3;
+}
+
+message FileFormatOptions {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  StageFileFormatType format = 1;
+  // Number of lines at the start of the file to skip.
+  uint64 skip_header = 2;
+
+  string field_delimiter = 3;
+
+  string record_delimiter = 4;
+
+  StageFileCompression compression = 5;
+
+  string escape = 6;
+
+  string row_tag = 7;
+
+  string nan_display = 8;
+
+  string quote = 9;
+}
+
+message FileFormatParams {
+  oneof format {
+    ParquetFileFormatParams parquet = 1;
+    CsvFileFormatParams csv = 2;
+    TsvFileFormatParams tsv = 3;
+    JsonFileFormatParams json = 4;
+    NdJsonFileFormatParams nd_json = 5;
+    XmlFileFormatParams xml = 6;
+  }
+}
+
+message ParquetFileFormatParams {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+}
+
+message CsvFileFormatParams {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  StageFileCompression compression =1;
+  uint64 headers = 2;
+  string field_delimiter = 3;
+  string record_delimiter = 4;
+  string nan_display = 5;
+  string escape = 6;
+  string quote = 7;
+}
+
+message TsvFileFormatParams {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  StageFileCompression compression = 1;
+  uint64 headers = 2;
+  string field_delimiter = 3;
+  string record_delimiter = 4;
+  string nan_display = 5;
+  string escape = 6;
+  string quote = 7;
+}
+
+message XmlFileFormatParams {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+  StageFileCompression compression = 1;
+  string row_tag = 2;
+}
+
+message NdJsonFileFormatParams {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+  StageFileCompression compression = 1;
+}
+
+message JsonFileFormatParams {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+  StageFileCompression compression = 1;
+
+}

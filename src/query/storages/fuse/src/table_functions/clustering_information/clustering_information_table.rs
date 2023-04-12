@@ -93,6 +93,7 @@ impl Table for ClusteringInformationTable {
         &self.table_info
     }
 
+    #[async_backtrace::framed]
     async fn read_partitions(
         &self,
         _ctx: Arc<dyn TableContext>,
@@ -162,6 +163,7 @@ impl AsyncSource for ClusteringInformationSource {
     const NAME: &'static str = "clustering_information";
 
     #[async_trait::unboxed_simple]
+    #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.finish {
             return Ok(None);

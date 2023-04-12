@@ -21,13 +21,19 @@ use crate::pipelines::processors::transforms::Compactor;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::processors::TransformCompact;
 
+const JOIN_MAX_BLOCK_SIZE: usize = 65535;
+
 pub struct RightJoinCompactor {
+    use_partial_compact: bool,
     hash_join_state: Arc<dyn HashJoinState>,
 }
 
 impl RightJoinCompactor {
-    pub fn create(hash_join_state: Arc<dyn HashJoinState>) -> Self {
-        RightJoinCompactor { hash_join_state }
+    pub fn create(hash_join_state: Arc<dyn HashJoinState>, use_partial_compact: bool) -> Self {
+        RightJoinCompactor {
+            use_partial_compact,
+            hash_join_state,
+        }
     }
 }
 
@@ -36,8 +42,22 @@ impl Compactor for RightJoinCompactor {
         "RightJoinCompactor"
     }
 
+    fn use_partial_compact(&self) -> bool {
+        self.use_partial_compact
+    }
+
     fn interrupt(&self) {
         self.hash_join_state.interrupt();
+    }
+
+    fn compact_partial(&mut self, blocks: &mut Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+        let rest_len = self.hash_join_state.join_state().rest_pairs.read().1.len();
+        let mut res = blocks.clone();
+        blocks.clear();
+        if rest_len >= JOIN_MAX_BLOCK_SIZE {
+            res.extend(self.hash_join_state.left_join_blocks(&[])?);
+        }
+        Ok(res)
     }
 
     // `compact_final` is called when all the blocks are pushed

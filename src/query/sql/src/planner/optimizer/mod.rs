@@ -18,6 +18,7 @@ mod distributed;
 mod format;
 mod group;
 mod heuristic;
+mod hyper_dp;
 mod m_expr;
 mod memo;
 #[allow(clippy::module_inception)]

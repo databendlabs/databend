@@ -328,7 +328,7 @@ drop stage test_stage
 ###############################################################
 
 # with 5 segments and max_threads set to 3, `replace into` leads to
-# ERROR HY000 (1105): Code: 1068, displayText = Cannot join handle from context's runtime
+# ERROR HY000 (1105): Code: 1068, Text = Cannot join handle from context's runtime
 
 statement ok
 CREATE TABLE test(a int);
@@ -351,7 +351,7 @@ insert into test values(5);
 statement ok
 set max_threads = 3;
 
-# if not fixed: ERROR HY000 (1105): Code: 1068, displayText = Cannot join handle from context's runtime
+# if not fixed: ERROR HY000 (1105): Code: 1068, Text = Cannot join handle from context's runtime
 statement ok
 replace into test on(a) values(6);
 

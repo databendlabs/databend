@@ -21,7 +21,8 @@ use common_expression::FromOptData;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_formats::FileFormatOptionsExt;
-use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::FileFormatOptionsAst;
+use common_meta_app::principal::FileFormatParams;
 use common_settings::Settings;
 use pretty_assertions::assert_eq;
 
@@ -61,16 +62,17 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
     }
 
     {
-        let settings = Settings::default_test_settings()?;
+        let settings = Settings::create("default".to_string());
         let mut options = BTreeMap::<String, String>::new();
         options.insert("type".to_string(), "csv".to_string());
         options.insert("field_delimiter".to_string(), "$".to_string());
         options.insert("record_delimiter".to_string(), "\r\n".to_string());
-        let options = FileFormatOptions::from_map(&options)?;
-        let mut options =
-            FileFormatOptionsExt::create_from_file_format_options(options, &settings)?;
-        let mut formatter = options.get_output_format(schema)?;
-        let buffer = formatter.serialize_block(&block)?;
+
+        let params =
+            FileFormatParams::try_from_ast(FileFormatOptionsAst::new(options.clone()), false)?;
+        let mut options = FileFormatOptionsExt::create_from_settings(&settings)?;
+        let mut output_format = options.get_output_format(schema, params)?;
+        let buffer = output_format.serialize_block(&block)?;
 
         let csv_block = String::from_utf8(buffer)?;
         let expect = "1$\"a\"$true$1.1$\"1970-01-02\"\r\n2$\"b\"\"\"$true$2.2$\"1970-01-03\"\r\n3$\"c'\"$false$NaN$\"1970-01-04\"\r\n";
@@ -123,15 +125,15 @@ fn test_data_block_not_nullable() -> Result<()> {
 fn test_field_delimiter_with_ascii_control_code() -> Result<()> {
     let (schema, block) = get_simple_block(false);
 
-    let settings = Settings::default_test_settings()?;
+    let settings = Settings::create("default".to_string());
     let mut options = BTreeMap::<String, String>::new();
     options.insert("type".to_string(), "csv".to_string());
     options.insert("field_delimiter".to_string(), "\x01".to_string());
     options.insert("record_delimiter".to_string(), "\r\n".to_string());
-    let options = FileFormatOptions::from_map(&options)?;
-    let mut options = FileFormatOptionsExt::create_from_file_format_options(options, &settings)?;
-    let mut formatter = options.get_output_format(schema)?;
-    let buffer = formatter.serialize_block(&block)?;
+    let params = FileFormatParams::try_from_ast(FileFormatOptionsAst::new(options.clone()), false)?;
+    let mut options = FileFormatOptionsExt::create_from_settings(&settings)?;
+    let mut output_format = options.get_output_format(schema, params)?;
+    let buffer = output_format.serialize_block(&block)?;
 
     let csv_block = String::from_utf8(buffer)?;
     let expect = "1\x01\"a\"\x01true\x011.1\x01\"1970-01-02\"\r\n2\x01\"b\"\"\"\x01true\x012.2\x01\"1970-01-03\"\r\n3\x01\"c'\"\x01false\x01NaN\x01\"1970-01-04\"\r\n";

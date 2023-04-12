@@ -193,6 +193,7 @@ impl Processor for CommitSink {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::TryCommit(new_snapshot) => {
@@ -248,7 +249,7 @@ impl Processor for CommitSink {
                     let segments_io =
                         SegmentsIO::create(self.ctx.clone(), self.dal.clone(), self.table.schema());
                     let append_segment_infos =
-                        segments_io.read_segments(&appended_segments).await?;
+                        segments_io.read_segments(&appended_segments, true).await?;
                     for result in append_segment_infos.into_iter() {
                         let appended_segment = result?;
                         merge_statistics_mut(

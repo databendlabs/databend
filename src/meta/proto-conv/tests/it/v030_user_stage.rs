@@ -54,21 +54,15 @@ fn test_decode_v30_user_stage() -> anyhow::Result<()> {
                 delegation: "<delegation_token>".to_string(),
             }),
         },
-        file_format_options: mt::principal::FileFormatOptions {
-            format: mt::principal::StageFileFormatType::Json,
-            skip_header: 1024,
-            field_delimiter: "|".to_string(),
-            record_delimiter: "//".to_string(),
-            nan_display: "NaN".to_string(),
-            escape: "".to_string(),
-            compression: mt::principal::StageFileCompression::Bz2,
-            row_tag: "row".to_string(),
-            quote: "".to_string(),
-            name: None,
-        },
+        file_format_params: mt::principal::FileFormatParams::Json(
+            mt::principal::JsonFileFormatParams {
+                compression: mt::principal::StageFileCompression::Bz2,
+            },
+        ),
         copy_options: mt::principal::CopyOptions {
             on_error: mt::principal::OnErrorMode::SkipFileNum(3141),
             size_limit: 1038,
+            max_files: 0,
             split_size: 0,
             purge: true,
             single: false,

@@ -46,6 +46,9 @@ use crate::plans::NotExpr;
 use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
+use crate::plans::WindowFunc;
+use crate::plans::WindowFuncType;
+use crate::plans::WindowOrderBy;
 use crate::BindContext;
 use crate::IndexType;
 use crate::MetadataRef;
@@ -84,6 +87,9 @@ pub struct AggregateInfo {
 pub(super) struct AggregateRewriter<'a> {
     pub bind_context: &'a mut BindContext,
     pub metadata: MetadataRef,
+    // If the aggregate function is in the arguments of window function,
+    // ignore it here, it will be processed later when analyzing window.
+    in_window: bool,
 }
 
 impl<'a> AggregateRewriter<'a> {
@@ -91,6 +97,7 @@ impl<'a> AggregateRewriter<'a> {
         Self {
             bind_context,
             metadata,
+            in_window: false,
         }
     }
 
@@ -149,9 +156,55 @@ impl<'a> AggregateRewriter<'a> {
 
             ScalarExpr::AggregateFunction(agg_func) => self.replace_aggregate_function(agg_func),
 
-            ScalarExpr::WindowFunction(_) => Err(ErrorCode::SemanticError(
-                "bind aggregate functions should not reach to window functions.",
-            )),
+            ScalarExpr::WindowFunction(window) => {
+                self.in_window = true;
+
+                let partition_by = window
+                    .partition_by
+                    .iter()
+                    .map(|part| self.visit(part))
+                    .collect::<Result<Vec<_>>>()?;
+                let order_by = window
+                    .order_by
+                    .iter()
+                    .map(|order| {
+                        Ok(WindowOrderBy {
+                            expr: self.visit(&order.expr)?,
+                            asc: order.asc,
+                            nulls_first: order.nulls_first,
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                let func = match &window.func {
+                    WindowFuncType::Aggregate(agg) => {
+                        let new_args = agg
+                            .args
+                            .iter()
+                            .map(|arg| self.visit(arg))
+                            .collect::<Result<Vec<_>>>()?;
+                        WindowFuncType::Aggregate(AggregateFunction {
+                            func_name: agg.func_name.clone(),
+                            args: new_args,
+                            display_name: agg.display_name.clone(),
+                            distinct: agg.distinct,
+                            params: agg.params.clone(),
+                            return_type: agg.return_type.clone(),
+                        })
+                    }
+                    func => func.clone(),
+                };
+
+                self.in_window = false;
+
+                Ok(WindowFunc {
+                    display_name: window.display_name.clone(),
+                    func,
+                    partition_by,
+                    order_by,
+                    frame: window.frame.clone(),
+                }
+                .into())
+            }
         }
     }
 
@@ -182,6 +235,7 @@ impl<'a> AggregateRewriter<'a> {
 
                     // TODO(leiysky): use a more reasonable name, since aggregate arguments
                     // can not be referenced, the name is only for debug
+                    table_index: None,
                     column_name: name,
                     index,
                     data_type: Box::new(arg.data_type()?),
@@ -269,10 +323,9 @@ impl<'a> AggregateRewriter<'a> {
         Ok(replaced_func.into())
     }
 }
-
 impl Binder {
     /// Analyze aggregates in select clause, this will rewrite aggregate functions.
-    /// See `AggregateRewriter` for more details.
+    /// See [`AggregateRewriter`] for more details.
     pub(crate) fn analyze_aggregate_select(
         &mut self,
         bind_context: &mut BindContext,
@@ -295,6 +348,7 @@ impl Binder {
     ///     `SELECT a as b, COUNT(a) FROM t GROUP BY b`.
     ///   - Scalar expressions that can be evaluated in current scope(doesn't contain aliases), e.g.
     ///     column `a` and expression `a+1` in `SELECT a as b, COUNT(a) FROM t GROUP BY a, a+1`.
+    #[async_backtrace::framed]
     pub async fn analyze_group_items<'a>(
         &mut self,
         bind_context: &mut BindContext,
@@ -312,6 +366,7 @@ impl Binder {
                     column
                 } else {
                     self.create_column_binding(
+                        None,
                         None,
                         None,
                         item.alias.clone(),
@@ -359,6 +414,7 @@ impl Binder {
         }
     }
 
+    #[async_backtrace::framed]
     pub(super) async fn bind_aggregate(
         &mut self,
         bind_context: &mut BindContext,
@@ -375,6 +431,11 @@ impl Binder {
             scalar_items.push(arg.clone());
         }
         for item in agg_info.group_items.iter() {
+            if let ScalarExpr::BoundColumnRef(col) = &item.scalar {
+                if col.column.column_name.eq("_grouping_id") {
+                    continue;
+                }
+            }
             scalar_items.push(item.clone());
         }
 
@@ -404,6 +465,7 @@ impl Binder {
         Ok(new_expr)
     }
 
+    #[async_backtrace::framed]
     async fn resolve_grouping_sets(
         &mut self,
         bind_context: &mut BindContext,
@@ -446,6 +508,7 @@ impl Binder {
         let grouping_id_column = self.create_column_binding(
             None,
             None,
+            None,
             "_grouping_id".to_string(),
             DataType::Number(NumberDataType::UInt32),
         );
@@ -468,6 +531,7 @@ impl Binder {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn resolve_group_items(
         &mut self,
         bind_context: &mut BindContext,
@@ -500,7 +564,7 @@ impl Binder {
                     {
                         column_ref.column.clone()
                     } else {
-                        self.create_column_binding(None, None, alias, scalar.data_type()?)
+                        self.create_column_binding(None, None, None, alias, scalar.data_type()?)
                     };
                     bind_context.aggregate_info.group_items.push(ScalarItem {
                         scalar: scalar.clone(),

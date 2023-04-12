@@ -39,6 +39,7 @@ storages-common-index = { path = "../common/index" }
 storages-common-pruner = { path = "../common/pruner" }
 storages-common-table-meta = { path = "../common/table-meta" }
 
+async-backtrace = { workspace = true }
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 chrono = { workspace = true }
@@ -52,7 +53,6 @@ serde_json = { workspace = true }
 sha2 = "0.10.6"
 siphasher = "0.3.10"
 streaming-decompression = "0.1.2"
-tokio-rayon = "2.1.0"
 tracing = "0.1.36"
 typetag = "0.2.3"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }

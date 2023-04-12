@@ -18,6 +18,7 @@ common-expression = { path = "../../query/expression" }
 common-meta-app = { path = "../../meta/app" }
 
 anyhow = { workspace = true }
+async-backtrace = { workspace = true }
 async-trait = "0.1"
 bytes = "1"
 chrono = { workspace = true }
@@ -25,6 +26,7 @@ flagset = "0.4"
 futures = "0.3"
 opendal = { workspace = true }
 regex = "1.6.0"
+reqwest = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]

@@ -24,6 +24,7 @@ common-meta-types = { path = "../../meta/types" }
 common-proto-conv = { path = "../../meta/proto-conv" }
 common-protos = { path = "../../meta/protos" }
 
+async-backtrace = { workspace = true }
 async-trait = "0.1.57"
 serde_json = { workspace = true }
 

@@ -27,6 +27,7 @@ use serde::Serialize;
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Default)]
 pub struct TenantTablesResponse {
     pub tables: Vec<TenantTableInfo>,
+    pub warnings: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Default)]
@@ -42,13 +43,25 @@ pub struct TenantTableInfo {
     pub index_bytes: u64,
 }
 
-async fn load_tenant_tables(tenant: &str) -> Result<Vec<TenantTableInfo>> {
+async fn load_tenant_tables(tenant: &str) -> Result<TenantTablesResponse> {
     let catalog = CatalogManager::instance().get_catalog(CATALOG_DEFAULT)?;
     let databases = catalog.list_databases(tenant).await?;
 
     let mut table_infos: Vec<TenantTableInfo> = vec![];
+    let mut warnings: Vec<String> = vec![];
     for database in databases {
-        let tables = catalog.list_tables(tenant, database.name()).await?;
+        let tables = match catalog.list_tables(tenant, database.name()).await {
+            Ok(v) => v,
+            Err(err) => {
+                warnings.push(format!(
+                    "failed to list tables of database {}.{}: {}",
+                    tenant,
+                    database.name(),
+                    err
+                ));
+                continue;
+            }
+        };
         for table in tables {
             let stats = &table.get_table_info().meta.statistics;
             table_infos.push(TenantTableInfo {
@@ -64,30 +77,38 @@ async fn load_tenant_tables(tenant: &str) -> Result<Vec<TenantTableInfo>> {
             });
         }
     }
-    Ok(table_infos)
+    Ok(TenantTablesResponse {
+        tables: table_infos,
+        warnings,
+    })
 }
 
 // This handler returns the statistics about the tables of a tenant. It's only enabled in management mode.
 #[poem::handler]
+#[async_backtrace::framed]
 pub async fn list_tenant_tables_handler(
     Path(tenant): Path<String>,
 ) -> poem::Result<impl IntoResponse> {
-    let tables = load_tenant_tables(&tenant)
+    let resp = load_tenant_tables(&tenant)
         .await
         .map_err(poem::error::InternalServerError)?;
-    Ok(Json(TenantTablesResponse { tables }))
+    Ok(Json(resp))
 }
 
 // This handler returns the statistics about the tables of the current tenant.
 #[poem::handler]
+#[async_backtrace::framed]
 pub async fn list_tables_handler() -> poem::Result<impl IntoResponse> {
     let tenant = &GlobalConfig::instance().query.tenant_id;
     if tenant.is_empty() {
-        return Ok(Json(TenantTablesResponse { tables: vec![] }));
+        return Ok(Json(TenantTablesResponse {
+            tables: vec![],
+            warnings: vec![],
+        }));
     }
 
-    let tables = load_tenant_tables(tenant)
+    let resp = load_tenant_tables(tenant)
         .await
         .map_err(poem::error::InternalServerError)?;
-    Ok(Json(TenantTablesResponse { tables }))
+    Ok(Json(resp))
 }

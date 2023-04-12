@@ -49,7 +49,7 @@ use common_expression::Value;
 use common_formats::FastFieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
-use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::FileFormatOptionsAst;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
 use common_pipeline_core::Pipeline;
@@ -125,6 +125,7 @@ impl InsertInterpreter {
         Ok(cast_needed)
     }
 
+    #[async_backtrace::framed]
     async fn try_purge_files(
         ctx: Arc<QueryContext>,
         stage_info: &StageInfo,
@@ -149,6 +150,7 @@ impl InsertInterpreter {
         }
     }
 
+    #[async_backtrace::framed]
     async fn prepared_values(&self, values_str: &str) -> Result<(DataSchemaRef, Vec<Scalar>)> {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
@@ -192,6 +194,7 @@ impl InsertInterpreter {
         Ok((Arc::new(DataSchema::new(attachment_fields)), const_values))
     }
 
+    #[async_backtrace::framed]
     async fn build_insert_from_stage_pipeline(
         &self,
         table: Arc<dyn Table>,
@@ -214,7 +217,10 @@ impl InsertInterpreter {
         let (mut stage_info, path) = parse_stage_location(&self.ctx, &attachment.location).await?;
 
         if let Some(ref options) = attachment.file_format_options {
-            stage_info.file_format_options = FileFormatOptions::from_map(options)?;
+            stage_info.file_format_params = FileFormatOptionsAst {
+                options: options.clone(),
+            }
+            .try_into()?;
         }
         if let Some(ref options) = attachment.copy_options {
             stage_info.copy_options.apply(options, true)?;
@@ -232,7 +238,7 @@ impl InsertInterpreter {
             files_to_copy: None,
         };
 
-        let all_source_files = StageTable::list_files(&stage_table_info).await?;
+        let all_source_files = StageTable::list_files(&stage_table_info, None).await?;
 
         info!(
             "insert: read all stage attachment files finished: {}, elapsed:{}",
@@ -346,6 +352,7 @@ impl Interpreter for InsertInterpreter {
         "InsertIntoInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
         let table = self
@@ -391,7 +398,7 @@ impl Interpreter for InsertInterpreter {
                                     transform_input_port,
                                     transform_output_port,
                                     dest_schema.clone(),
-                                    func_ctx,
+                                    func_ctx.clone(),
                                 )
                             },
                         )?;
@@ -399,13 +406,13 @@ impl Interpreter for InsertInterpreter {
                     _ => {}
                 }
             }
-            InsertInputSource::StreamingWithFileFormat(format_options, _, input_context) => {
+            InsertInputSource::StreamingWithFileFormat(params, _, input_context) => {
                 let input_context = input_context.as_ref().expect("must success").clone();
                 input_context
                     .format
                     .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
 
-                if format_options.format.has_inner_schema() {
+                if params.get_type().has_inner_schema() {
                     let dest_schema = plan.schema();
                     let func_ctx = self.ctx.get_function_context()?;
 
@@ -415,7 +422,7 @@ impl Interpreter for InsertInterpreter {
                                 transform_input_port,
                                 transform_output_port,
                                 dest_schema.clone(),
-                                func_ctx,
+                                func_ctx.clone(),
                             )
                         },
                     )?;
@@ -552,6 +559,7 @@ impl AsyncSource for ValueSource {
     const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
     #[async_trait::unboxed_simple]
+    #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.is_finished {
             return Ok(None);
@@ -601,6 +609,7 @@ impl ValueSource {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn read<R: AsRef<[u8]>>(
         &self,
         estimated_rows: usize,
@@ -648,6 +657,7 @@ impl ValueSource {
     }
 
     /// Parse single row value, like ('111', 222, 1 + 1)
+    #[async_backtrace::framed]
     async fn parse_next_row<R: AsRef<[u8]>>(
         &self,
         field_decoder: &FastFieldDecoderValues,

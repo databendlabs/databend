@@ -23,13 +23,16 @@ members = [
     "src/common/http",
     "src/common/io",
     "src/common/metrics",
+    "src/common/openai",
     "src/common/tracing",
     "src/common/storage",
     "src/common/profile",
+    "src/common/vector",
     # Query
     "src/query/ast",
     "src/query/codegen",
     "src/query/config",
+    "src/query/constraint",
     "src/query/catalog",
     "src/query/sharing",
     "src/query/sharing-endpoint",
@@ -90,7 +93,7 @@ members = [
 [workspace.dependencies]
 # databend maintains:
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
-opendal = { version = "0.30", features = [
+opendal = { version = "0.31", features = [
     "layers-tracing",
     "layers-metrics",
     "services-ipfs",
@@ -103,18 +106,21 @@ jsonb = { version = "0.1.1" }
 
 # openraft = { version = "0.8.2", features = ["compat-07"] }
 # For debugging
-openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.8.3-alpha.2", features = ["compat-07"] }
+openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.8.4-alpha.1", features = ["compat-07"] }
 
 # type helper
 derive_more = "0.99.17"
 
 # error
 anyhow = { version = "1.0.65" }
-anyerror = { version = "=0.1.7" }
+anyerror = { version = "=0.1.8" }
 thiserror = { version = "1" }
 
 # CLI
 clap = { version = "3.2.22", features = ["derive", "env"] }
+
+# server
+tonic = { version = "0.8.3", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
 
 # serialization
 prost = { version = "0.11.0" }
@@ -141,7 +147,10 @@ reqwest = { version = "0.11", default-features = false, features = [
 ] }
 
 # runtime
-tokio = { version = "1.24.2", features = ["full"] }
+tokio = { version = "1.26.0", features = ["full"] }
+
+# backtrace
+async-backtrace = "0.2.2"
 
 [profile.release]
 debug = 1
@@ -187,6 +196,6 @@ rpath = false
 # For example:
 # arrow-format = { git = "https://github.com/datafuse-extras/arrow-format", rev = "78dacc1" }
 
-arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "db87f71" }
+arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "33f6ba1" }
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "ed0e1ff" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }

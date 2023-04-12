@@ -16,7 +16,6 @@ use common_ast::ast::PresignAction as AstPresignAction;
 use common_ast::ast::PresignLocation;
 use common_ast::ast::PresignStmt;
 use common_exception::Result;
-use time::Duration;
 
 use super::copy::parse_stage_location_v2;
 use crate::binder::Binder;
@@ -26,6 +25,7 @@ use crate::plans::PresignPlan;
 use crate::BindContext;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_presign(
         &mut self,
         _: &BindContext,
@@ -44,7 +44,7 @@ impl Binder {
                         AstPresignAction::Download => PresignAction::Download,
                         AstPresignAction::Upload => PresignAction::Upload,
                     },
-                    expire: Duration::seconds(stmt.expire.as_secs() as i64),
+                    expire: stmt.expire,
                     content_type: stmt.content_type.clone(),
                 })))
             }

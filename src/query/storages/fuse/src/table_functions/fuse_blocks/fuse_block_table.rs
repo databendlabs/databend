@@ -92,6 +92,7 @@ impl Table for FuseBlockTable {
         &self.table_info
     }
 
+    #[async_backtrace::framed]
     async fn read_partitions(
         &self,
         _ctx: Arc<dyn TableContext>,
@@ -115,7 +116,7 @@ impl Table for FuseBlockTable {
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _: &DataSourcePlan,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_source(
@@ -126,6 +127,7 @@ impl Table for FuseBlockTable {
                     self.arg_database_name.to_owned(),
                     self.arg_table_name.to_owned(),
                     self.arg_snapshot_id.to_owned(),
+                    plan.push_downs.as_ref().and_then(|x| x.limit),
                 )
             },
             1,
@@ -141,6 +143,7 @@ struct FuseBlockSource {
     arg_database_name: String,
     arg_table_name: String,
     arg_snapshot_id: Option<String>,
+    limit: Option<usize>,
 }
 
 impl FuseBlockSource {
@@ -150,6 +153,7 @@ impl FuseBlockSource {
         arg_database_name: String,
         arg_table_name: String,
         arg_snapshot_id: Option<String>,
+        limit: Option<usize>,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx.clone(), output, FuseBlockSource {
             ctx,
@@ -157,6 +161,7 @@ impl FuseBlockSource {
             arg_table_name,
             arg_database_name,
             arg_snapshot_id,
+            limit,
         })
     }
 }
@@ -166,6 +171,7 @@ impl AsyncSource for FuseBlockSource {
     const NAME: &'static str = "fuse_block";
 
     #[async_trait::unboxed_simple]
+    #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.finish {
             return Ok(None);
@@ -182,12 +188,16 @@ impl AsyncSource for FuseBlockSource {
                 self.arg_table_name.as_str(),
             )
             .await?;
-
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
         Ok(Some(
-            FuseBlock::new(self.ctx.clone(), tbl, self.arg_snapshot_id.clone())
-                .get_blocks()
-                .await?,
+            FuseBlock::new(
+                self.ctx.clone(),
+                tbl,
+                self.arg_snapshot_id.clone(),
+                self.limit,
+            )
+            .get_blocks()
+            .await?,
         ))
     }
 }

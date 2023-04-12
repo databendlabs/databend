@@ -3,7 +3,7 @@
 [default.extend-words]
 # Preserved for NdJson
 "Nd" = "Nd"
-# Microsoft K8s Servier
+# Microsoft K8s Server
 "AKS" = "AKS"
 # Wrong cases
 "ba" = "ba"

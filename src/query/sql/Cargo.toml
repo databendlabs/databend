@@ -16,6 +16,7 @@ common-ast = { path = "../ast" }
 common-base = { path = "../../common/base" }
 common-catalog = { path = "../catalog" }
 common-config = { path = "../config" }
+common-constraint = { path = "../constraint" }
 common-exception = { path = "../../common/exception" }
 common-expression = { path = "../expression" }
 common-functions = { path = "../functions" }
@@ -35,17 +36,19 @@ common-storages-view = { path = "../storages/view" }
 common-users = { path = "../users" }
 storages-common-table-meta = { path = "../storages/common/table-meta" }
 
-# Github dependencies
+# GitHub dependencies
 
 # Crates.io dependencies
 ahash = { version = "0.8.2", features = ["no-rng"] }
 anyhow = { workspace = true }
+async-backtrace = { workspace = true }
 async-recursion = "1.0.0"
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 chrono = { workspace = true }
 ctor = "0.1.26"
 dashmap = "5.4"
 educe = "0.4"
+enum-as-inner = "0.5"
 globiter = "0.1"
 itertools = "0.10.5"
 num-derive = "0.3.3"
@@ -58,6 +61,8 @@ percent-encoding = "2"
 regex = "1.6.0"
 roaring = "0.10.1"
 serde = { workspace = true }
+simsearch = "0.2"
 time = "0.3.14"
 tracing = "0.1.36"
 url = { version = "2.3" }
+z3 = { version = "0.11.2", features = ["static-link-z3"] }

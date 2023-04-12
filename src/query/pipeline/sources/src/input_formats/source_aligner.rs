@@ -150,12 +150,13 @@ impl<I: InputFormatPipe> Processor for Aligner<I> {
         }
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if !self.no_more_split {
             match &self.state {
                 None => match self.split_rx.recv().await {
                     Ok(Ok(split)) => {
-                        self.state = Some(I::AligningState::try_create(&self.ctx, &split.info)?);
+                        self.state = Some(I::try_create_align_state(&self.ctx, &split.info)?);
                         self.batch_rx = Some(split.rx);
                         tracing::debug!("aligner recv new split {}", &split.info);
                     }

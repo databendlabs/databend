@@ -29,7 +29,7 @@ http_handler_port = 8000
 
 # Databend Query FlightSQL Handler.
 flight_sql_handler_host = "0.0.0.0"
-flight_sql_handler_port = 50050
+flight_sql_handler_port = 8900
 
 tenant_id = "test_tenant"
 cluster_id = "test_cluster"

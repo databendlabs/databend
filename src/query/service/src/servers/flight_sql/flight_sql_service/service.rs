@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Cursor;
 use std::pin::Pin;
+use std::sync::Arc;
+use std::time::Duration;
 
 use arrow_flight::flight_descriptor::DescriptorType;
 use arrow_flight::flight_service_server::FlightService;
@@ -35,6 +36,7 @@ use arrow_flight::sql::CommandPreparedStatementQuery;
 use arrow_flight::sql::CommandPreparedStatementUpdate;
 use arrow_flight::sql::CommandStatementQuery;
 use arrow_flight::sql::CommandStatementUpdate;
+use arrow_flight::sql::DoPutUpdateResult;
 use arrow_flight::sql::ProstMessageExt;
 use arrow_flight::sql::SqlInfo;
 use arrow_flight::sql::TicketStatementQuery;
@@ -47,13 +49,14 @@ use arrow_flight::HandshakeRequest;
 use arrow_flight::HandshakeResponse;
 use arrow_flight::IpcMessage;
 use arrow_flight::Location;
+use arrow_flight::PutResult;
 use arrow_flight::SchemaAsIpc;
 use arrow_flight::Ticket;
 use arrow_ipc::writer::IpcWriteOptions;
 use common_base::base::uuid::Uuid;
 use common_exception::Result;
+use common_expression::DataSchema;
 use futures::Stream;
-use prost::bytes::Buf;
 use prost::Message;
 use tonic::metadata::MetadataValue;
 use tonic::Request;
@@ -64,10 +67,52 @@ use tonic::Streaming;
 use super::status;
 use crate::servers::flight_sql::flight_sql_service::FlightSqlServiceImpl;
 
+fn try_unpack_any<T: ProstMessageExt>(message: Any) -> std::result::Result<T, Status> {
+    message
+        .unpack()
+        .map_err(|e| Status::invalid_argument(format!("{e:?}")))?
+        .ok_or_else(|| {
+            Status::invalid_argument(format!(
+                "expect {}, got {}",
+                T::type_url(),
+                message.type_url
+            ))
+        })
+}
+
+fn simple_flight_info<T: ProstMessageExt>(message: T) -> Response<FlightInfo> {
+    let loc = Location {
+        uri: "location_not_used".to_string(),
+    };
+
+    let buf = message.as_any().encode_to_vec().into();
+    let ticket = Ticket { ticket: buf };
+    let endpoint = FlightEndpoint {
+        ticket: Some(ticket),
+        location: vec![loc],
+    };
+    let endpoints = vec![endpoint];
+
+    let flight_desc = FlightDescriptor {
+        r#type: DescriptorType::Cmd.into(),
+        cmd: Default::default(),
+        path: vec![],
+    };
+    let info = FlightInfo {
+        schema: Default::default(),
+        flight_descriptor: Some(flight_desc),
+        endpoint: endpoints,
+        total_records: -1,
+        total_bytes: -1,
+    };
+    Response::new(info)
+}
+
 #[tonic::async_trait]
 impl FlightSqlService for FlightSqlServiceImpl {
     type FlightService = FlightSqlServiceImpl;
 
+    #[async_backtrace::framed]
     async fn do_handshake(
         &self,
         request: Request<Streaming<HandshakeRequest>>,
@@ -76,6 +121,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         Status,
     > {
         let remote_addr = request.remote_addr();
+
         let (user, password) = FlightSqlServiceImpl::get_user_password(request.metadata())
             .map_err(Status::invalid_argument)?;
         let session = FlightSqlServiceImpl::auth_user_password(user, password, remote_addr).await?;
@@ -92,24 +138,37 @@ impl FlightSqlService for FlightSqlServiceImpl {
         let metadata = MetadataValue::try_from(str)
             .map_err(|_| Status::internal("authorization not parsable"))?;
         resp.metadata_mut().insert("authorization", metadata);
-        self.sessions.insert(token, session);
+
+        session.get_status().write().is_native_client =
+            FlightSqlServiceImpl::get_header_value(request.metadata(), "bendsql").is_some();
+
+        let session_keep_alive =
+            FlightSqlServiceImpl::get_header_value(request.metadata(), "session_keep_alive")
+                .map(|v| v.parse::<u64>().unwrap_or(360))
+                .unwrap_or(360);
+
+        self.sessions.lock().insert(
+            token,
+            session,
+            Some(Duration::from_secs(session_keep_alive)),
+        );
+
         Ok(resp)
     }
 
+    #[async_backtrace::framed]
     async fn do_get_fallback(
         &self,
         request: Request<Ticket>,
-        _message: Any,
+        message: Any,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
         let session = self.get_session(&request)?;
-        let ticket = &request.get_ref().ticket.chunk().to_vec();
-        let mut buf = Cursor::new(&ticket);
-        let any = Any::decode(&mut buf).unwrap();
-        let fetch_results: FetchResults = any.unpack().unwrap().unwrap();
+        let fetch_results: FetchResults = try_unpack_any(message)?;
 
         let handle = Uuid::try_parse(&fetch_results.handle).map_err(|e| {
             Status::internal(format!(
-                "do_get_fallback Error decoding handle: {e} {ticket:?}"
+                "do_get_fallback Error decoding handle: {e} {:?}",
+                fetch_results.handle
             ))
         })?;
 
@@ -117,23 +176,25 @@ impl FlightSqlService for FlightSqlServiceImpl {
 
         let handle_plan = self.statements.get(&handle).unwrap();
         let stream = self
-            .execute_plan(session, &handle_plan.value().0, &handle_plan.value().1)
+            .execute_query(session, &handle_plan.value().0, &handle_plan.value().1)
             .await
             .map_err(|e| status!("fail to execute", e))?;
         let resp = Response::new(stream);
         Ok(resp)
     }
 
+    #[async_backtrace::framed]
     async fn get_flight_info_statement(
         &self,
-        _query: CommandStatementQuery,
-        _request: Request<FlightDescriptor>,
+        query: CommandStatementQuery,
+        request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
-        Err(Status::unimplemented(
-            "get_flight_info_statement not implemented",
-        ))
+        tracing::info!("get_flight_info_sql_info(query={})", query.query);
+        let _session = self.get_session(&request)?;
+        Ok(simple_flight_info(query))
     }
 
+    #[async_backtrace::framed]
     async fn get_flight_info_prepared_statement(
         &self,
         cmd: CommandPreparedStatementQuery,
@@ -175,231 +236,314 @@ impl FlightSqlService for FlightSqlServiceImpl {
             schema: schema_bytes,
             flight_descriptor: Some(flight_desc),
             endpoint: endpoints,
-            total_records: 0,
-            total_bytes: 0,
+            total_records: -1,
+            total_bytes: -1,
         };
         let resp = Response::new(info);
         Ok(resp)
     }
 
+    #[async_backtrace::framed]
     async fn get_flight_info_catalogs(
         &self,
-        _query: CommandGetCatalogs,
-        _request: Request<FlightDescriptor>,
+        query: CommandGetCatalogs,
+        request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
-        Err(Status::unimplemented(
-            "get_flight_info_catalogs not implemented",
-        ))
+        tracing::info!("get_flight_info_catalogs()");
+        let _session = self.get_session(&request)?;
+        Ok(simple_flight_info(query))
     }
 
+    #[async_backtrace::framed]
     async fn get_flight_info_schemas(
         &self,
-        _query: CommandGetDbSchemas,
-        _request: Request<FlightDescriptor>,
+        query: CommandGetDbSchemas,
+        request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
-        Err(Status::unimplemented(
-            "get_flight_info_schemas not implemented",
-        ))
+        tracing::info!("get_flight_info_schemas({query:?})");
+        let _session = self.get_session(&request)?;
+        Ok(simple_flight_info(query))
     }
 
+    #[async_backtrace::framed]
     async fn get_flight_info_tables(
         &self,
-        _query: CommandGetTables,
-        _request: Request<FlightDescriptor>,
+        query: CommandGetTables,
+        request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
-        Err(Status::unimplemented(
-            "get_flight_info_tables not implemented",
-        ))
+        tracing::info!("get_flight_info_tables({query:?})");
+        let _session = self.get_session(&request)?;
+        Ok(simple_flight_info(query))
     }
 
+    #[async_backtrace::framed]
     async fn get_flight_info_table_types(
         &self,
-        _query: CommandGetTableTypes,
-        _request: Request<FlightDescriptor>,
+        query: CommandGetTableTypes,
+        request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
-        Err(Status::unimplemented(
-            "get_flight_info_table_types not implemented",
-        ))
+        tracing::info!("get_flight_info_table_types()");
+        let _session = self.get_session(&request)?;
+        Ok(simple_flight_info(query))
     }
 
+    #[async_backtrace::framed]
     async fn get_flight_info_sql_info(
         &self,
-        _query: CommandGetSqlInfo,
-        _request: Request<FlightDescriptor>,
+        query: CommandGetSqlInfo,
+        request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
-        Err(Status::unimplemented(
-            "get_flight_info_sql_info not implemented",
-        ))
+        tracing::info!("get_flight_info_sql_info({query:?})");
+        let _session = self.get_session(&request)?;
+        Ok(simple_flight_info(query))
     }
 
+    #[async_backtrace::framed]
     async fn get_flight_info_primary_keys(
         &self,
-        _query: CommandGetPrimaryKeys,
+        query: CommandGetPrimaryKeys,
         _request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
+        tracing::info!("get_flight_info_primary_keys({query:?})",);
         Err(Status::unimplemented(
             "get_flight_info_primary_keys not implemented",
         ))
     }
 
+    #[async_backtrace::framed]
     async fn get_flight_info_exported_keys(
         &self,
-        _query: CommandGetExportedKeys,
+        query: CommandGetExportedKeys,
         _request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
+        tracing::info!("get_flight_info_exported_keys({query:?})");
         Err(Status::unimplemented(
             "get_flight_info_exported_keys not implemented",
         ))
     }
 
+    #[async_backtrace::framed]
     async fn get_flight_info_imported_keys(
         &self,
-        _query: CommandGetImportedKeys,
+        query: CommandGetImportedKeys,
         _request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
+        tracing::info!("get_flight_info_imported_keys({query:?})");
         Err(Status::unimplemented(
             "get_flight_info_imported_keys not implemented",
         ))
     }
 
+    #[async_backtrace::framed]
     async fn get_flight_info_cross_reference(
         &self,
-        _query: CommandGetCrossReference,
+        query: CommandGetCrossReference,
         _request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
+        tracing::info!("get_flight_info_cross_reference({query:?})");
         Err(Status::unimplemented(
             "get_flight_info_imported_keys not implemented",
         ))
     }
 
     // do_get
+    #[async_backtrace::framed]
     async fn do_get_statement(
         &self,
-        _ticket: TicketStatementQuery,
+        ticket: TicketStatementQuery,
         _request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+        tracing::info!("do_get_statement({ticket:?}");
         Err(Status::unimplemented("do_get_statement not implemented"))
     }
 
+    #[async_backtrace::framed]
     async fn do_get_prepared_statement(
         &self,
-        _query: CommandPreparedStatementQuery,
+        query: CommandPreparedStatementQuery,
         _request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+        tracing::info!("do_get_prepared_statement({query:?}");
         Err(Status::unimplemented(
             "do_get_prepared_statement not implemented",
         ))
     }
 
+    #[async_backtrace::framed]
     async fn do_get_catalogs(
         &self,
         _query: CommandGetCatalogs,
         _request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+        tracing::info!("do_get_catalogs()");
         Err(Status::unimplemented("do_get_catalogs not implemented"))
     }
 
+    #[async_backtrace::framed]
     async fn do_get_schemas(
         &self,
-        _query: CommandGetDbSchemas,
+        query: CommandGetDbSchemas,
         _request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+        tracing::info!("do_get_schemas({query:?}");
         Err(Status::unimplemented("do_get_schemas not implemented"))
     }
 
+    #[async_backtrace::framed]
     async fn do_get_tables(
         &self,
-        _query: CommandGetTables,
-        _request: Request<Ticket>,
+        query: CommandGetTables,
+        request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
-        Err(Status::unimplemented("do_get_tables not implemented"))
+        tracing::info!("do_get_tables({query:?})");
+        let session = self.get_session(&request)?;
+        let context = session
+            .create_query_context()
+            .await
+            .map_err(|e| status!("Could not create_query_context", e))?;
+        Ok(Response::new(
+            super::CatalogInfoProvider::get_tables(context.clone(), query.catalog.clone(), None)
+                .await?,
+        ))
     }
 
+    #[async_backtrace::framed]
     async fn do_get_table_types(
         &self,
         _query: CommandGetTableTypes,
         _request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+        tracing::info!("do_get_table_types()");
         Err(Status::unimplemented("do_get_table_types not implemented"))
     }
 
+    #[async_backtrace::framed]
     async fn do_get_sql_info(
         &self,
-        _query: CommandGetSqlInfo,
+        query: CommandGetSqlInfo,
         _request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
-        Err(Status::unimplemented("do_get_sql_info not implemented"))
+        tracing::info!("do_get_sql_info({query:?})");
+        Ok(Response::new(super::SqlInfoProvider::all_info()?))
     }
 
+    #[async_backtrace::framed]
     async fn do_get_primary_keys(
         &self,
-        _query: CommandGetPrimaryKeys,
+        query: CommandGetPrimaryKeys,
         _request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+        tracing::info!("do_get_primary_keys({query:?})");
         Err(Status::unimplemented("do_get_primary_keys not implemented"))
     }
 
+    #[async_backtrace::framed]
     async fn do_get_exported_keys(
         &self,
-        _query: CommandGetExportedKeys,
+        query: CommandGetExportedKeys,
         _request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+        tracing::info!("do_get_exported_keys({query:?})");
         Err(Status::unimplemented(
             "do_get_exported_keys not implemented",
         ))
     }
 
+    #[async_backtrace::framed]
     async fn do_get_imported_keys(
         &self,
-        _query: CommandGetImportedKeys,
+        query: CommandGetImportedKeys,
         _request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+        tracing::info!("do_get_imported_keys({query:?})");
         Err(Status::unimplemented(
             "do_get_imported_keys not implemented",
         ))
     }
 
+    #[async_backtrace::framed]
     async fn do_get_cross_reference(
         &self,
-        _query: CommandGetCrossReference,
+        query: CommandGetCrossReference,
         _request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+        tracing::info!("do_get_cross_reference({query:?})");
         Err(Status::unimplemented(
             "do_get_cross_reference not implemented",
         ))
     }
 
-    // do_put
+    // called by rust FlightSqlServiceClient, which is used in unit test.
+    #[async_backtrace::framed]
     async fn do_put_statement_update(
         &self,
-        _ticket: CommandStatementUpdate,
-        _request: Request<Streaming<FlightData>>,
+        ticket: CommandStatementUpdate,
+        request: Request<Streaming<FlightData>>,
     ) -> Result<i64, Status> {
-        Err(Status::unimplemented(
-            "do_put_statement_update not implemented",
-        ))
+        let session = self.get_session(&request)?;
+        let query = ticket.query;
+        tracing::info!("do_put_statement_update with query = {query}");
+
+        let (plan, plan_extras) = self
+            .plan_sql(&session, &query)
+            .await
+            .map_err(|e| status!("Error getting result schema", e))?;
+        let res = self
+            .execute_update(session, &plan, &plan_extras)
+            .await
+            .map_err(|e| status!("fail to execute", e))?;
+        Ok(res)
     }
 
+    #[async_backtrace::framed]
     async fn do_put_prepared_statement_query(
         &self,
-        _query: CommandPreparedStatementQuery,
-        _request: Request<Streaming<FlightData>>,
+        query: CommandPreparedStatementQuery,
+        request: Request<Streaming<FlightData>>,
     ) -> Result<Response<<Self as FlightService>::DoPutStream>, Status> {
-        Err(Status::unimplemented(
-            "do_put_prepared_statement_query not implemented",
-        ))
+        let session = self.get_session(&request)?;
+        let handle = Uuid::from_slice(query.prepared_statement_handle.as_ref())
+            .map_err(|e| Status::internal(format!("Error decoding handle: {e}")))?;
+
+        tracing::info!("do_put_prepared_statement_query with handle={handle}");
+
+        let handle_plan = self.statements.get(&handle).unwrap();
+        let record_count = self
+            .execute_update(session, &handle_plan.value().0, &handle_plan.value().1)
+            .await
+            .map_err(|e| status!("fail to execute", e))?;
+        let result = DoPutUpdateResult { record_count };
+        let result = PutResult {
+            app_metadata: result.as_any().encode_to_vec().into(),
+        };
+        let result = futures::stream::iter(vec![Ok(result)]);
+        return Ok(Response::new(Box::pin(result)));
     }
 
+    // called by JDBC
+    #[async_backtrace::framed]
     async fn do_put_prepared_statement_update(
         &self,
-        _query: CommandPreparedStatementUpdate,
-        _request: Request<Streaming<FlightData>>,
+        query: CommandPreparedStatementUpdate,
+        request: Request<Streaming<FlightData>>,
     ) -> Result<i64, Status> {
-        Err(Status::unimplemented(
-            "do_put_prepared_statement_update not implemented",
-        ))
+        let session = self.get_session(&request)?;
+        let handle = Uuid::from_slice(query.prepared_statement_handle.as_ref())
+            .map_err(|e| Status::internal(format!("Error decoding handle: {e}")))?;
+
+        tracing::info!("do_put_prepared_statement_update with handle={handle}");
+
+        let handle_plan = self.statements.get(&handle).unwrap();
+        let res = self
+            .execute_update(session, &handle_plan.value().0, &handle_plan.value().1)
+            .await
+            .map_err(|e| status!("fail to execute", e))?;
+
+        tracing::info!("do_put_prepared_statement_update with handle={handle} return {res}");
+        Ok(res)
     }
 
+    #[async_backtrace::framed]
     async fn do_action_create_prepared_statement(
         &self,
         query: ActionCreatePreparedStatementRequest,
@@ -413,10 +557,19 @@ impl FlightSqlService for FlightSqlServiceImpl {
             .await
             .map_err(|e| status!("Error getting result schema", e))?;
         tracing::info!(
-            "do_action_create_prepared_statement with query={:?}",
+            "do_action_create_prepared_statement with handler={handle} query={:?}",
             query.query
         );
-        let data_schema = plan.0.schema();
+        // JDBC client use call put when schema.fields == 0
+        let data_schema = if plan.0.has_result_set() {
+            plan.0.schema()
+        } else {
+            Arc::new(DataSchema::empty())
+        };
+        tracing::info!(
+            "do_action_create_prepared_statement with handler={handle}, query={:?}, return schema={data_schema:?}",
+            query.query
+        );
         let schema = (&*data_schema).into();
         self.statements.insert(handle, plan);
         let message = SchemaAsIpc::new(&schema, &IpcWriteOptions::default())
@@ -431,37 +584,39 @@ impl FlightSqlService for FlightSqlServiceImpl {
         Ok(res)
     }
 
+    #[async_backtrace::framed]
     async fn do_action_close_prepared_statement(
         &self,
         query: ActionClosePreparedStatementRequest,
         request: Request<Action>,
     ) {
-        tracing::info!(
-            "do_action_close_prepared_statement with handle {:?}",
-            query.prepared_statement_handle
-        );
-        if self.get_session(&request).is_ok() {
-            let handle = query.prepared_statement_handle.as_ref();
-            if let Ok(handle) = std::str::from_utf8(handle) {
-                match Uuid::try_parse(handle) {
-                    Ok(handle) => {
+        let handle = query.prepared_statement_handle.as_ref();
+        if let Ok(handle) = std::str::from_utf8(handle) {
+            tracing::info!(
+                "do_action_close_prepared_statement with handle {:?}",
+                handle
+            );
+            match Uuid::try_parse(handle) {
+                Ok(handle) => {
+                    if self.get_session(&request).is_ok() {
                         self.statements.remove(&handle);
                     }
-                    Err(e) => {
-                        Status::internal(format!(
-                            "do_get_fallback Error decoding handle: {e} {handle:?}"
-                        ));
-                    }
+                }
+                Err(e) => {
+                    Status::internal(format!(
+                        "do_action_close_prepared_statement Error decoding handle: {e} {handle:?}"
+                    ));
                 }
             }
         }
     }
 
-    async fn register_sql_info(&self, _id: i32, _result: &SqlInfo) {}
+    #[async_backtrace::framed]
+    async fn register_sql_info(&self, id: i32, result: &SqlInfo) {
+        tracing::info!("register_sql_info({id}, {result:?})");
+    }
 }
 
-// not sure why we have to do this, but ticket cannot be correctly parsed by GRPC when communicate
-// with JDBC driver.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FetchResults {
     #[prost(string, tag = "1")]

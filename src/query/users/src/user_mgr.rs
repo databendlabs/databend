@@ -28,6 +28,7 @@ use crate::UserApiProvider;
 
 impl UserApiProvider {
     // Get one user from by tenant.
+    #[async_backtrace::framed]
     pub async fn get_user(&self, tenant: &str, user: UserIdentity) -> Result<UserInfo> {
         if user.is_root() {
             let mut user_info = UserInfo::new_no_auth(&user.username, &user.hostname);
@@ -66,6 +67,7 @@ impl UserApiProvider {
 
     /// find the matched user with the client ip address, like 'u1'@'127.0.0.1', if the specific
     /// user@host is not found, try 'u1'@'%'.
+    #[async_backtrace::framed]
     pub async fn get_user_with_client_ip(
         &self,
         tenant: &str,
@@ -93,6 +95,7 @@ impl UserApiProvider {
     }
 
     // Get the tenant all users list.
+    #[async_backtrace::framed]
     pub async fn get_users(&self, tenant: &str) -> Result<Vec<UserInfo>> {
         let client = self.get_user_api_client(tenant)?;
         let get_users = client.get_users();
@@ -111,6 +114,7 @@ impl UserApiProvider {
     }
 
     // Add a new user info.
+    #[async_backtrace::framed]
     pub async fn add_user(
         &self,
         tenant: &str,
@@ -136,6 +140,7 @@ impl UserApiProvider {
         }
     }
 
+    #[async_backtrace::framed]
     pub async fn grant_privileges_to_user(
         &self,
         tenant: &str,
@@ -152,6 +157,7 @@ impl UserApiProvider {
             .map_err(|e| e.add_message_back("(while set user privileges)"))
     }
 
+    #[async_backtrace::framed]
     pub async fn revoke_privileges_from_user(
         &self,
         tenant: &str,
@@ -168,6 +174,7 @@ impl UserApiProvider {
             .map_err(|e| e.add_message_back("(while revoke user privileges)"))
     }
 
+    #[async_backtrace::framed]
     pub async fn grant_role_to_user(
         &self,
         tenant: &str,
@@ -183,6 +190,7 @@ impl UserApiProvider {
             .map_err(|e| e.add_message_back("(while grant role to user)"))
     }
 
+    #[async_backtrace::framed]
     pub async fn revoke_role_from_user(
         &self,
         tenant: &str,
@@ -199,6 +207,7 @@ impl UserApiProvider {
     }
 
     // Drop a user by name and hostname.
+    #[async_backtrace::framed]
     pub async fn drop_user(&self, tenant: &str, user: UserIdentity, if_exists: bool) -> Result<()> {
         let client = self.get_user_api_client(tenant)?;
         let drop_user = client.drop_user(user, MatchSeq::GE(1));
@@ -215,6 +224,7 @@ impl UserApiProvider {
     }
 
     // Update an user by name and hostname.
+    #[async_backtrace::framed]
     pub async fn update_user(
         &self,
         tenant: &str,
@@ -236,6 +246,7 @@ impl UserApiProvider {
     }
 
     // Update an user's default role
+    #[async_backtrace::framed]
     pub async fn update_user_default_role(
         &self,
         tenant: &str,

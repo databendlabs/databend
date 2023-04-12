@@ -165,7 +165,7 @@ chmod +x server.sh
 ./server.sh
 ```
 
-e. In your browser, go to <http://127.0.0.1:9900> and enter the credentials (`minioadmin` / `minioadmin`) to log in to the MinIO Console.
+e. In your browser, go to <http://127.0.0.1:9900> and enter the credentials (`minioadmin` / `minioadmin`) to log into the MinIO Console.
 
 f. In the MinIO Console, create a bucket named `databend`.
 
@@ -190,7 +190,7 @@ For information about how to enable and manage WebHDFS on Apache Hadoop, please 
 
 a. Create a folder named `databend` in the directory `/usr/local`.
 
-b. Download and extract the latest Databend release for your platform from [Github Release](https://github.com/datafuselabs/databend/releases):
+b. Download and extract the latest Databend release for your platform from [GitHub Release](https://github.com/datafuselabs/databend/releases):
 
 <Tabs groupId="operating-systems">
 <TabItem value="linux-x86_64" label="Linux(x86)">
@@ -657,7 +657,7 @@ In case you encounter the subsequent error messages while attempting to start Da
 ==> query.log <==
 : No getcpu support: percpu_arena:percpu
 : option background_thread currently supports pthread only
-Databend Query start failure, cause: Code: 1104, displayText = failed to create appender: Os { code: 13, kind: PermissionDenied, message: "Permission denied" }.
+Databend Query start failure, cause: Code: 1104, Text = failed to create appender: Os { code: 13, kind: PermissionDenied, message: "Permission denied" }.
 ```
 Run the following commands and try starting Databend again:
 

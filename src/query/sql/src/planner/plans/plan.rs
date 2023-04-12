@@ -22,6 +22,8 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 
+use super::CreateShareEndpointPlan;
+use super::DropShareEndpointPlan;
 use crate::optimizer::SExpr;
 use crate::plans::copy::CopyPlan;
 use crate::plans::insert::Insert;
@@ -85,6 +87,7 @@ use crate::plans::ShowCreateTablePlan;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowGrantsPlan;
 use crate::plans::ShowRolesPlan;
+use crate::plans::ShowShareEndpointPlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UnSettingPlan;
 use crate::plans::UndropDatabasePlan;
@@ -209,6 +212,9 @@ pub enum Plan {
     Kill(Box<KillPlan>),
 
     // Share
+    CreateShareEndpoint(Box<CreateShareEndpointPlan>),
+    ShowShareEndpoint(Box<ShowShareEndpointPlan>),
+    DropShareEndpoint(Box<DropShareEndpointPlan>),
     CreateShare(Box<CreateSharePlan>),
     DropShare(Box<DropSharePlan>),
     GrantShareObject(Box<GrantShareObjectPlan>),
@@ -307,6 +313,9 @@ impl Display for Plan {
             Plan::UnSetVariable(_) => write!(f, "UnSetVariable"),
             Plan::SetRole(_) => write!(f, "SetRole"),
             Plan::Kill(_) => write!(f, "Kill"),
+            Plan::CreateShareEndpoint(_) => write!(f, "CreateShareEndpoint"),
+            Plan::ShowShareEndpoint(_) => write!(f, "ShowShareEndpoint"),
+            Plan::DropShareEndpoint(_) => write!(f, "DropShareEndpoint"),
             Plan::CreateShare(_) => write!(f, "CreateShare"),
             Plan::DropShare(_) => write!(f, "DropShare"),
             Plan::GrantShareObject(_) => write!(f, "GrantShareObject"),
@@ -398,6 +407,9 @@ impl Plan {
             Plan::UnSetVariable(plan) => plan.schema(),
             Plan::SetRole(plan) => plan.schema(),
             Plan::Kill(_) => Arc::new(DataSchema::empty()),
+            Plan::CreateShareEndpoint(plan) => plan.schema(),
+            Plan::ShowShareEndpoint(plan) => plan.schema(),
+            Plan::DropShareEndpoint(plan) => plan.schema(),
             Plan::CreateShare(plan) => plan.schema(),
             Plan::DropShare(plan) => plan.schema(),
             Plan::GrantShareObject(plan) => plan.schema(),
@@ -409,5 +421,29 @@ impl Plan {
             Plan::ShowGrantTenantsOfShare(plan) => plan.schema(),
             Plan::RevertTable(plan) => plan.schema(),
         }
+    }
+
+    pub fn has_result_set(&self) -> bool {
+        matches!(
+            self,
+            Plan::Query { .. }
+                | Plan::Explain { .. }
+                | Plan::ExplainAst { .. }
+                | Plan::ExplainSyntax { .. }
+                | Plan::ExplainAnalyze { .. }
+                | Plan::Call(_)
+                | Plan::ShowCreateDatabase(_)
+                | Plan::ShowCreateTable(_)
+                | Plan::ShowFileFormats(_)
+                | Plan::ShowRoles(_)
+                | Plan::DescShare(_)
+                | Plan::ShowShares(_)
+                | Plan::ShowShareEndpoint(_)
+                | Plan::ShowObjectGrantPrivileges(_)
+                | Plan::ShowGrantTenantsOfShare(_)
+                | Plan::DescribeTable(_)
+                | Plan::ShowGrants(_)
+                | Plan::Presign(_)
+        )
     }
 }

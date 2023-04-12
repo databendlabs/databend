@@ -48,10 +48,10 @@ impl StatisticsSender {
 
         let (tx, rx) = match (exchanges.remove(0), exchanges.remove(0)) {
             (tx @ FlightExchange::Sender { .. }, rx @ FlightExchange::Receiver { .. }) => {
-                (tx.as_sender(), rx.as_receiver())
+                (tx.convert_to_sender(), rx.convert_to_receiver())
             }
             (rx @ FlightExchange::Receiver { .. }, tx @ FlightExchange::Sender { .. }) => {
-                (tx.as_sender(), rx.as_receiver())
+                (tx.convert_to_sender(), rx.convert_to_receiver())
             }
             _ => unreachable!(),
         };
@@ -138,6 +138,7 @@ impl StatisticsSender {
         });
     }
 
+    #[async_backtrace::framed]
     async fn on_command(
         ctx: &Arc<QueryContext>,
         command: DataPacket,
@@ -145,10 +146,9 @@ impl StatisticsSender {
     ) -> Result<()> {
         match command {
             DataPacket::ErrorCode(_) => unreachable!(),
+            DataPacket::Dictionary(_) => unreachable!(),
             DataPacket::FragmentData(_) => unreachable!(),
             DataPacket::ProgressAndPrecommit { .. } => unreachable!(),
-            DataPacket::ClosingInput => unreachable!(),
-            DataPacket::ClosingOutput => unreachable!(),
             DataPacket::FetchProgressAndPrecommit => {
                 flight_sender
                     .send(DataPacket::ProgressAndPrecommit {
@@ -160,6 +160,7 @@ impl StatisticsSender {
         }
     }
 
+    #[async_backtrace::framed]
     async fn fetch_progress(ctx: &Arc<QueryContext>) -> Result<Vec<ProgressInfo>> {
         let mut progress_info = vec![];
 
@@ -187,6 +188,7 @@ impl StatisticsSender {
         Ok(progress_info)
     }
 
+    #[async_backtrace::framed]
     async fn fetch_precommit(ctx: &Arc<QueryContext>) -> Result<Vec<PrecommitBlock>> {
         Ok(ctx
             .consume_precommit_blocks()

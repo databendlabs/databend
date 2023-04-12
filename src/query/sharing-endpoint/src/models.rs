@@ -16,9 +16,13 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+use chrono::DateTime;
+use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::share::ShareGrantObjectPrivilege;
+use enumflags2::BitFlags;
 use poem::async_trait;
 use poem::error::Result as PoemResult;
 use poem::http;
@@ -174,6 +178,7 @@ pub struct Credentials {
 
 #[async_trait]
 impl<'a> FromRequest<'a> for &'a Credentials {
+    #[async_backtrace::framed]
     async fn from_request(req: &'a Request, _body: &mut RequestBody) -> PoemResult<Self> {
         Ok(req
             .extensions()
@@ -229,9 +234,12 @@ pub struct ShareSpec {
     pub name: String,
     pub share_id: u64,
     pub version: u64,
-    pub database: DatabaseSpec,
+    pub database: Option<DatabaseSpec>,
     pub tables: Vec<TableSpec>,
     pub tenants: Vec<String>,
+    pub db_privileges: Option<BitFlags<ShareGrantObjectPrivilege>>,
+    pub comment: Option<String>,
+    pub share_on: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

@@ -40,48 +40,50 @@ for more advanced configs, see the Reference below:
 
 you are expected to get JSON like this (formatted):
 
-```
+```json
 {
-  "id": "3cd25ab7-c3a4-42ce-9e02-e1b354d91f06",
-  "session_id": "8d3a737d-2f6c-4df7-ba44-6dfc818255ce",
-  "session": {},
-  "schema": {
-    "fields": [
-      {
-        "name": "avg(number)",
-        "default_expr": null,
-        "data_type": {
-          "type": "Float64Type"
-        }
-      }
-    ],
-    "metadata": {}
+  "id":"b22c5bba-5e78-4e50-87b0-ec3855c757f5",
+  "session_id":"5643627c-a900-43ac-978f-8c76026d9944",
+  "session":{
+    
   },
-  "data": [
+  "schema":[
+    {
+      "name":"avg(number)",
+      "type":"Nullable(Float64)"
+    }
+  ],
+  "data":[
     [
       "49999999.5"
     ]
   ],
-  "state": "Succeeded",
-  "error": null,
-  "stats": {
-    "scan_progress": {
-      "rows": 100000000,
-      "bytes": 800000000
+  "state":"Succeeded",
+  "error":null,
+  "stats":{
+    "scan_progress":{
+      "rows":100000000,
+      "bytes":800000000
     },
-    "write_progress": {
-      "rows": 0,
-      "bytes": 0
+    "write_progress":{
+      "rows":0,
+      "bytes":0
     },
-    "result_progress": {
-      "rows": 0,
-      "bytes": 0 
+    "result_progress":{
+      "rows":1,
+      "bytes":9
     },
-    "running_time_ms": 466.85395800000003
+    "total_scan":{
+      "rows":100000000,
+      "bytes":800000000
+    },
+    "running_time_ms":446.748083
   },
-  "stats_uri": "/v1/query/3cd25ab7-c3a4-42ce-9e02-e1b354d91f06",
-  "next_uri": null
-  "affect": null
+  "affect":null,
+  "stats_uri":"/v1/query/b22c5bba-5e78-4e50-87b0-ec3855c757f5",
+  "final_uri":"/v1/query/b22c5bba-5e78-4e50-87b0-ec3855c757f5/final",
+  "next_uri":"/v1/query/b22c5bba-5e78-4e50-87b0-ec3855c757f5/final",
+  "kill_uri":"/v1/query/b22c5bba-5e78-4e50-87b0-ec3855c757f5/kill"
 }
 ```
 
@@ -121,31 +123,23 @@ Pagination: critical conditions for each HTTP request to return (before all rema
 
 QueryResponse:
 
-| field      | type         | description                              |
-|------------|--------------|------------------------------------------|
-| state      | string       | choices: "Running","Failed", "Succeeded" |
-| error      | QueryError   | error of the sql parsing or execution    |
-| id         | string       | a uniq query_id for this POST request    |
-| data       | array        | each item is a row of results            |
-| schema     | Schema       | the schema of the results                |
-| affect     | Affect       | the affect of some queries               |
-| session_id | String       |                                          |
-| session    | SessionState |                                          |
-
-Schema:
-
-| field    | type   | description                                               |
-|----------|--------|-----------------------------------------------------------|
-| fields   | array  | An ordered sequence of Field                              |
-| metadata | object | A map of key-value pairs containing additional meta data. |
+| field      | type          | description                              |
+|------------|---------------|------------------------------------------|
+| state      | string        | choices: "Running","Failed", "Succeeded" |
+| error      | QueryError    | error of the sql parsing or execution    |
+| id         | string        | a uniq query_id for this POST request    |
+| data       | array         | each item is a row of results            |
+| schema     | array         | An ordered sequence of Field             |
+| affect     | Affect        | the affect of some queries               |
+| session_id | String        |                                          |
+| session    | SessionState  |                                          |
 
 Field:
 
-| field     | type   |
-|-----------|--------|
-| name      | string |
-| data_type | string |
-| nullable  | bool   |
+| field    | type   |
+|----------|--------|
+| name     | string |
+| type     | string |
 
 Stats:
 

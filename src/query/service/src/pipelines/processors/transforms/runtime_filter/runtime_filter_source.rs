@@ -92,6 +92,7 @@ impl RuntimeFilterConnector for RuntimeFilterState {
         Ok(*self.finished.lock())
     }
 
+    #[async_backtrace::framed]
     async fn wait_finish(&self) -> Result<()> {
         if !self.is_finished()? {
             self.finished_notify.notified().await;
@@ -109,7 +110,7 @@ impl RuntimeFilterConnector for RuntimeFilterState {
         let func_ctx = self.ctx.get_function_context()?;
         for (id, remote_expr) in self.left_runtime_filters.iter() {
             let expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);
-            let evaluator = Evaluator::new(data, func_ctx, &BUILTIN_FUNCTIONS);
+            let evaluator = Evaluator::new(data, &func_ctx, &BUILTIN_FUNCTIONS);
             let column = evaluator
                 .run(&expr)?
                 .convert_to_full_column(expr.data_type(), data.num_rows());
@@ -131,7 +132,7 @@ impl RuntimeFilterConnector for RuntimeFilterState {
             // Such as: `select * from t1 inner join t2 on t1.a + 1 = t2.a + 2`
             // expr is `t2.a + 2`
             // First we need get expected values from data by expr
-            let evaluator = Evaluator::new(data, func_ctx, &BUILTIN_FUNCTIONS);
+            let evaluator = Evaluator::new(data, &func_ctx, &BUILTIN_FUNCTIONS);
             let column = evaluator
                 .run(&expr)?
                 .convert_to_full_column(expr.data_type(), data.num_rows());

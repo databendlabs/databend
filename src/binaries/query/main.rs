@@ -54,7 +54,7 @@ fn main() {
             std::process::exit(cause.code() as i32);
         }
         Ok(rt) => {
-            if let Err(cause) = rt.block_on(main_entrypoint()) {
+            if let Err(cause) = rt.block_on(async_backtrace::location!().frame(main_entrypoint())) {
                 eprintln!("Databend Query start failure, cause: {:?}", cause);
                 std::process::exit(cause.code() as i32);
             }
@@ -319,6 +319,15 @@ async fn main_entrypoint() -> Result<()> {
             .parse()?
         )
     );
+    for (idx, (k, v)) in env::vars()
+        .filter(|(k, _)| k.starts_with("_DATABEND"))
+        .enumerate()
+    {
+        if idx == 0 {
+            println!("Databend Internal:");
+        }
+        println!("    {}={}", k, v);
+    }
 
     info!("Ready for connections.");
     shutdown_handle.wait_for_termination_request().await;

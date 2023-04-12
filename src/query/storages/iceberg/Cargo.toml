@@ -16,6 +16,7 @@ common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
 common-storage = { path = "../../../common/storage" }
 
+async-backtrace = { workspace = true }
 async-trait = "0.1"
 chrono = { workspace = true }
 futures = "0.3"

@@ -157,6 +157,7 @@ impl<Method: HashMethodBounds> Processor for TransformGroupBySpillWriter<Method>
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if let Some(spilling_future) = self.spilling_future.take() {
             return spilling_future.await;

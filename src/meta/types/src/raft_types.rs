@@ -25,7 +25,7 @@ pub type LogIndex = u64;
 pub type Term = u64;
 
 openraft::declare_raft_types!(
-    pub TypeConfig: D = LogEntry, R = AppliedState, NodeId = NodeId, Node = MembershipNode
+    pub TypeConfig: D = LogEntry, R = AppliedState, NodeId = NodeId, Node = MembershipNode, Entry = openraft::entry::Entry<TypeConfig>
 );
 
 pub type CommittedLeaderId = openraft::CommittedLeaderId<NodeId>;

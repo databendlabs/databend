@@ -56,6 +56,7 @@ pub trait HistoryAware {
 #[async_trait::async_trait]
 impl HistoryAware for TablesTable<true> {
     const TABLE_NAME: &'static str = "tables_with_history";
+    #[async_backtrace::framed]
     async fn list_tables(
         catalog: &Arc<dyn Catalog>,
         tenant: &str,
@@ -68,6 +69,7 @@ impl HistoryAware for TablesTable<true> {
 #[async_trait::async_trait]
 impl HistoryAware for TablesTable<false> {
     const TABLE_NAME: &'static str = "tables";
+    #[async_backtrace::framed]
     async fn list_tables(
         catalog: &Arc<dyn Catalog>,
         tenant: &str,
@@ -87,6 +89,7 @@ where TablesTable<T>: HistoryAware
         &self.table_info
     }
 
+    #[async_backtrace::framed]
     async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
@@ -98,6 +101,7 @@ where TablesTable<T>: HistoryAware
 
         let mut catalogs = vec![];
         let mut databases = vec![];
+
         let mut database_tables = vec![];
         for (ctl_name, ctl) in ctls.into_iter() {
             let dbs = ctl.list_databases(tenant.as_str()).await?;
@@ -106,7 +110,23 @@ where TablesTable<T>: HistoryAware
             for db in dbs {
                 let name = db.name().to_string().into_boxed_str();
                 let name: &str = Box::leak(name);
-                let tables = Self::list_tables(&ctl, tenant.as_str(), name).await?;
+                let tables = match Self::list_tables(&ctl, tenant.as_str(), name).await {
+                    Ok(tables) => tables,
+                    Err(err) => {
+                        // Swallow the errors related with sharing. Listing tables in a shared database
+                        // is easy to get errors with invalid configs, but system.tables is better not
+                        // to be affected by it.
+                        if db.get_db_info().meta.from_share.is_some() {
+                            tracing::warn!(
+                                "list tables failed on sharing db {}: {}",
+                                db.name(),
+                                err
+                            );
+                            continue;
+                        }
+                        return Err(err);
+                    }
+                };
                 for table in tables {
                     catalogs.push(ctl_name.as_bytes().to_vec());
                     databases.push(name.as_bytes().to_vec());
@@ -131,6 +151,10 @@ where TablesTable<T>: HistoryAware
         let names: Vec<Vec<u8>> = database_tables
             .iter()
             .map(|v| v.name().as_bytes().to_vec())
+            .collect();
+        let table_id: Vec<u64> = database_tables
+            .iter()
+            .map(|v| v.get_table_info().ident.table_id)
             .collect();
         let engines: Vec<Vec<u8>> = database_tables
             .iter()
@@ -172,14 +196,26 @@ where TablesTable<T>: HistoryAware
             })
             .collect();
         let cluster_bys: Vec<Vec<u8>> = cluster_bys.iter().map(|s| s.as_bytes().to_vec()).collect();
+        let is_transient: Vec<Vec<u8>> = database_tables
+            .iter()
+            .map(|v| {
+                if v.options().contains_key("TRANSIENT") {
+                    "TRANSIENT".as_bytes().to_vec()
+                } else {
+                    vec![]
+                }
+            })
+            .collect();
 
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(catalogs),
             StringType::from_data(databases),
             StringType::from_data(names),
+            UInt64Type::from_data(table_id),
             StringType::from_data(engines),
             StringType::from_data(engines_full),
             StringType::from_data(cluster_bys),
+            StringType::from_data(is_transient),
             StringType::from_data(created_owns),
             StringType::from_data(dropped_owns),
             UInt64Type::from_opt_data(num_rows),
@@ -198,9 +234,11 @@ where TablesTable<T>: HistoryAware
             TableField::new("catalog", TableDataType::String),
             TableField::new("database", TableDataType::String),
             TableField::new("name", TableDataType::String),
+            TableField::new("table_id", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("engine", TableDataType::String),
             TableField::new("engine_full", TableDataType::String),
             TableField::new("cluster_by", TableDataType::String),
+            TableField::new("is_transient", TableDataType::String),
             TableField::new("created_on", TableDataType::String),
             TableField::new("dropped_on", TableDataType::String),
             TableField::new(

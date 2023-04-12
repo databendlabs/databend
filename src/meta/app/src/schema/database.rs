@@ -23,6 +23,7 @@ use chrono::DateTime;
 use chrono::Utc;
 
 use crate::share::ShareNameIdent;
+use crate::share::ShareSpec;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatabaseNameIdent {
@@ -232,7 +233,9 @@ impl Display for DropDatabaseReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct DropDatabaseReply {}
+pub struct DropDatabaseReply {
+    pub spec_vec: Option<Vec<ShareSpec>>,
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UndropDatabaseReq {

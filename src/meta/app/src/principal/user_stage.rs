@@ -25,6 +25,7 @@ use common_exception::Result;
 use common_io::constants::NAN_BYTES_SNAKE;
 use common_io::escape_string;
 
+use crate::principal::FileFormatParams;
 use crate::principal::UserIdentity;
 use crate::storage::StorageParams;
 
@@ -262,6 +263,29 @@ impl FileFormatOptions {
         Ok(file_format_options)
     }
 
+    pub fn to_map(&self) -> BTreeMap<String, String> {
+        let mut opts = BTreeMap::new();
+        opts.insert("format".to_string(), self.format.to_string());
+        opts.insert("skip_header".to_string(), self.skip_header.to_string());
+        opts.insert(
+            "field_delimiter".to_string(),
+            self.field_delimiter.to_string(),
+        );
+        opts.insert(
+            "record_delimiter".to_string(),
+            self.record_delimiter.to_string(),
+        );
+        opts.insert("nan_display".to_string(), self.nan_display.to_string());
+        opts.insert("escape".to_string(), self.escape.to_string());
+        opts.insert("compression".to_string(), self.compression.to_string());
+        opts.insert("row_tag".to_string(), self.row_tag.to_string());
+        opts.insert("quote".to_string(), self.quote.to_string());
+        if let Some(name) = &self.name {
+            opts.insert("name".to_string(), name.to_string());
+        }
+        opts
+    }
+
     pub fn default_by_type(format_type: StageFileFormatType) -> Self {
         let mut options = Self::default();
         match &format_type {
@@ -445,6 +469,7 @@ impl FromStr for OnErrorMode {
 pub struct CopyOptions {
     pub on_error: OnErrorMode,
     pub size_limit: usize,
+    pub max_files: usize,
     pub split_size: usize,
     pub purge: bool,
     pub single: bool,
@@ -465,6 +490,10 @@ impl CopyOptions {
                 "size_limit" => {
                     let size_limit = usize::from_str(v)?;
                     self.size_limit = size_limit;
+                }
+                "max_files" => {
+                    let max_files = usize::from_str(v)?;
+                    self.max_files = max_files;
                 }
                 "split_size" => {
                     let split_size = usize::from_str(v)?;
@@ -506,7 +535,7 @@ pub struct StageInfo {
     pub stage_name: String,
     pub stage_type: StageType,
     pub stage_params: StageParams,
-    pub file_format_options: FileFormatOptions,
+    pub file_format_params: FileFormatParams,
     pub copy_options: CopyOptions,
     pub comment: String,
     /// TODO(xuanwo): stage doesn't have this info anymore, remove it.

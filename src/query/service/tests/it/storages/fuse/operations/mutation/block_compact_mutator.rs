@@ -108,17 +108,17 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let settings = ctx.get_settings();
     let mut pipeline = common_pipeline_core::Pipeline::create();
-    if fuse_table
+    fuse_table
         .compact(ctx.clone(), CompactTarget::Blocks, None, &mut pipeline)
-        .await?
-    {
+        .await?;
+
+    if !pipeline.is_empty() {
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
         let query_id = ctx.get_id();
         let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
         let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
         ctx.set_executor(Arc::downgrade(&executor.get_inner()));
         executor.execute()?;
-        drop(executor);
         Ok(true)
     } else {
         Ok(false)
@@ -130,6 +130,9 @@ async fn test_safety() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
     let operator = ctx.get_data_operator()?.operator();
+    let settings = ctx.get_settings();
+    settings.set_max_threads(2)?;
+    settings.set_max_storage_io_requests(4)?;
 
     let threshold = BlockThresholds {
         max_rows_per_block: 5,
@@ -153,7 +156,7 @@ async fn test_safety() -> Result<()> {
         let mut rows_per_blocks = Vec::with_capacity(number_of_segments);
 
         for _ in 0..number_of_segments {
-            block_number_of_segments.push(rand.gen_range(1..30));
+            block_number_of_segments.push(rand.gen_range(1..25));
             rows_per_blocks.push(rand.gen_range(1..8));
         }
 
@@ -171,6 +174,7 @@ async fn test_safety() -> Result<()> {
             &segment_writer,
             &block_number_of_segments,
             &rows_per_blocks,
+            threshold,
         )
         .await?;
 
@@ -200,10 +204,11 @@ async fn test_safety() -> Result<()> {
             None,
         );
 
+        let limit: usize = rand.gen_range(1..15);
         let compact_params = CompactOptions {
             base_snapshot: Arc::new(snapshot),
-            block_per_seg: 20,
-            limit: None,
+            block_per_seg: 10,
+            limit: Some(limit),
         };
 
         eprintln!("running target select");

@@ -9,37 +9,9 @@ echo "###############################################"
 echo "Running benchmark for databend local storage..."
 
 echo "Checking script dependencies..."
-# OpenBSD netcat do not have a version arg
-# nc --version
-bc --version
-jq --version
+python3 --version
+yq --version
 bendsql version
-
-function wait_for_port() {
-    # Wait for a port to be open
-    # Usage: wait_for_port 8080 10
-    # Args:
-    #     $1: port
-    #     $2: timeout in seconds
-    local port=$1
-    local timeout=$2
-    local start_time
-    start_time=$(date +%s)
-    local end_time
-    end_time=$((start_time + timeout))
-    while true; do
-        if nc -z localhost "$port"; then
-            echo "OK: ${port} is listening"
-            return 0
-        fi
-        if [[ $(date +%s) -gt $end_time ]]; then
-            echo "Wait for port ${port} time out!"
-            return 2
-        fi
-        echo "Waiting for port ${port} up..."
-        sleep 1
-    done
-}
 
 killall databend-query || true
 killall databend-meta || true
@@ -53,7 +25,7 @@ done
 echo 'Start databend-meta...'
 nohup databend-meta --single &
 echo "Waiting on databend-meta 10 seconds..."
-wait_for_port 9191 10
+./wait_tcp.py --port 9191 --timeout 10
 echo 'Start databend-query...'
 
 nohup databend-query \
@@ -65,7 +37,7 @@ nohup databend-query \
     --storage-allow-insecure &
 
 echo "Waiting on databend-query 10 seconds..."
-wait_for_port 8000 10
+./wait_tcp.py --port 8000 --timeout 10
 
 # Connect to databend-query
 bendsql connect --database "${BENCHMARK_DATASET}"
@@ -75,30 +47,28 @@ echo "CREATE DATABASE ${BENCHMARK_DATASET};" | bendsql query
 echo "Creating table for benchmark with native storage format..."
 bendsql query <"${BENCHMARK_DATASET}/create_local.sql"
 
+# Detect instance type with AWS metadata
+token=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
+instance_type=$(curl -H "X-aws-ec2-metadata-token: $token" http://169.254.169.254/latest/meta-data/instance-type)
+echo "Instance type: ${instance_type}"
+
 echo "Loading data..."
 load_start=$(date +%s)
 bendsql query <"${BENCHMARK_DATASET}/load.sql"
 load_end=$(date +%s)
-load_time=$(echo "$load_end - $load_start" | bc -l)
+load_time=$(python3 -c "print($load_end - $load_start)")
 echo "Data loaded in ${load_time}s."
 
 data_size=$(echo "select sum(data_compressed_size) from system.tables where database = '${BENCHMARK_DATASET}';" | bendsql query -f unaligned -t)
 
 echo '{}' >result.json
-jq ".load_time = ${load_time} | .data_size = ${data_size} | .result = []" <result.json >result.json.tmp && mv result.json.tmp result.json
+yq -i ".date = \"$(date -u +%Y-%m-%d)\"" result.json
+yq -i ".load_time = ${load_time} | .data_size = ${data_size} | .result = []" result.json
+yq -i ".machine = \"${instance_type}\"" result.json
+yq -i '.cluster_size = 1' result.json
+yq -i '.tags = ["gp3"]' result.json
 
 echo "Running queries..."
-
-function append_result() {
-    local query_num=$1
-    local seq=$2
-    local value=$3
-    if [[ $seq -eq 1 ]]; then
-        jq ".result += [[${value}]]" <result.json >result.json.tmp && mv result.json.tmp result.json
-    else
-        jq ".result[${query_num} - 1] += [${value}]" <result.json >result.json.tmp && mv result.json.tmp result.json
-    fi
-}
 
 function run_query() {
     local query_num=$1
@@ -110,21 +80,21 @@ function run_query() {
     q_start=$(date +%s.%N)
     if echo "$query" | bendsql query --format csv --rows-only >/dev/null; then
         q_end=$(date +%s.%N)
-        q_time=$(echo "$q_end - $q_start" | bc -l)
-        echo "Q${QUERY_NUM}[$seq] succeeded in $q_time seconds"
-        append_result "$query_num" "$seq" "$q_time"
+        q_time=$(python3 -c "print($q_end - $q_start)")
+        echo "Q${query_num}[$seq] succeeded in $q_time seconds"
+        yq -i ".result[${query_num}] += [${q_time}]" result.json
     else
-        echo "Q${QUERY_NUM}[$seq] failed"
-        append_result "$query_num" "$seq" "null"
+        echo "Q${query_num}[$seq] failed"
     fi
 }
 
-TRIES=6
-QUERY_NUM=1
+TRIES=5
+QUERY_NUM=0
 while read -r query; do
     echo "Running Q${QUERY_NUM}: ${query}"
     sync
     echo 3 | sudo tee /proc/sys/vm/drop_caches
+    yq -i ".result += [[]]" result.json
     for i in $(seq 1 $TRIES); do
         run_query "$QUERY_NUM" "$i" "$query"
     done

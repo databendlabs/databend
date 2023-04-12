@@ -24,14 +24,17 @@ use common_expression::TableSchemaRef;
 use common_formats::FieldDecoder;
 use common_formats::FieldJsonAstDecoder;
 use common_formats::FileFormatOptionsExt;
+use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageFileFormatType;
+use common_pipeline_core::InputError;
 
 use crate::input_formats::AligningStateRowDelimiter;
 use crate::input_formats::BlockBuilder;
-use crate::input_formats::InputError;
+use crate::input_formats::InputContext;
 use crate::input_formats::InputFormatTextBase;
 use crate::input_formats::RowBatch;
+use crate::input_formats::SplitInfo;
 
 pub struct InputFormatNDJson {}
 
@@ -85,7 +88,17 @@ impl InputFormatTextBase for InputFormatNDJson {
         true
     }
 
-    fn create_field_decoder(options: &FileFormatOptionsExt) -> Arc<dyn FieldDecoder> {
+    fn try_create_align_state(
+        ctx: &Arc<InputContext>,
+        split_info: &Arc<SplitInfo>,
+    ) -> Result<Self::AligningState> {
+        AligningStateRowDelimiter::try_create(ctx, split_info, b'\n', 0)
+    }
+
+    fn create_field_decoder(
+        _params: &FileFormatParams,
+        options: &FileFormatOptionsExt,
+    ) -> Arc<dyn FieldDecoder> {
         Arc::new(FieldJsonAstDecoder::create(options))
     }
 

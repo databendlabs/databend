@@ -239,7 +239,7 @@ statement ok
 insert into t2 values(1),(2),(null)
 
 
-query IF
+query IR
 select * from t inner join t1 on t.a = t1.b order by a, b
 ----
 1 1.0
@@ -268,7 +268,7 @@ select * from t inner join t2 on t.a = t2.c + 1 and t.a - 1 = t2.c order by a, c
 3 2
 
 
-query FI
+query RI
 select * from t1 inner join t on t.a = t1.b order by a, b
 ----
 1.0 1

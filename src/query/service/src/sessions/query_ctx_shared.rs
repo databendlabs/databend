@@ -23,20 +23,22 @@ use std::time::SystemTime;
 use common_base::base::Progress;
 use common_base::runtime::Runtime;
 use common_catalog::table_context::StageAttachment;
-use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
+use common_pipeline_core::InputError;
+use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
+use dashmap::DashMap;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
 
-use crate::auth::AuthMgr;
 use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
@@ -56,6 +58,8 @@ type DatabaseAndTable = (String, String, String);
 ///     FROM table_name_4;
 /// For each subquery, they will share a runtime, session, progress, init_query_id
 pub struct QueryContextShared {
+    /// total_scan_values for scan stats
+    pub(in crate::sessions) total_scan_values: Arc<Progress>,
     /// scan_progress for scan metrics of datablocks (uncompressed)
     pub(in crate::sessions) scan_progress: Arc<Progress>,
     /// write_progress for write/commit metrics of datablocks (uncompressed)
@@ -71,7 +75,6 @@ pub struct QueryContextShared {
     pub(in crate::sessions) running_query_kind: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) aborting: Arc<AtomicBool>,
     pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
-    pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
     pub(in crate::sessions) affect: Arc<Mutex<Option<QueryAffect>>>,
     pub(in crate::sessions) catalog_manager: Arc<CatalogManager>,
     pub(in crate::sessions) data_operator: DataOperator,
@@ -79,7 +82,12 @@ pub struct QueryContextShared {
     pub(in crate::sessions) precommit_blocks: Arc<RwLock<Vec<DataBlock>>>,
     pub(in crate::sessions) stage_attachment: Arc<RwLock<Option<StageAttachment>>>,
     pub(in crate::sessions) created_time: SystemTime,
-    pub(in crate::sessions) on_error_map: Arc<RwLock<Option<HashMap<String, ErrorCode>>>>,
+    // DashMap<file_path, HashMap<ErrorCode::code, (ErrorCode, Number of occurrences)>>
+    // We use this field to count maximum of one error found per data file.
+    #[allow(clippy::type_complexity)]
+    pub(in crate::sessions) on_error_map:
+        Arc<RwLock<Option<Arc<DashMap<String, HashMap<u16, InputError>>>>>>,
+    pub(in crate::sessions) on_error_mode: Arc<RwLock<Option<OnErrorMode>>>,
     /// partitions_sha for each table in the query. Not empty only when enabling query result cache.
     pub(in crate::sessions) partitions_shas: Arc<RwLock<Vec<String>>>,
     pub(in crate::sessions) cacheable: Arc<AtomicBool>,
@@ -89,7 +97,6 @@ pub struct QueryContextShared {
 
 impl QueryContextShared {
     pub fn try_create(
-        config: &InnerConfig,
         session: Arc<Session>,
         cluster_cache: Arc<Cluster>,
     ) -> Result<Arc<QueryContextShared>> {
@@ -99,6 +106,7 @@ impl QueryContextShared {
             catalog_manager: CatalogManager::instance(),
             data_operator: DataOperator::instance(),
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
+            total_scan_values: Arc::new(Progress::create()),
             scan_progress: Arc::new(Progress::create()),
             result_progress: Arc::new(Progress::create()),
             write_progress: Arc::new(Progress::create()),
@@ -108,13 +116,13 @@ impl QueryContextShared {
             running_query_kind: Arc::new(RwLock::new(None)),
             aborting: Arc::new(AtomicBool::new(false)),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
-            auth_manager: AuthMgr::create(config),
             affect: Arc::new(Mutex::new(None)),
             executor: Arc::new(RwLock::new(Weak::new())),
             precommit_blocks: Arc::new(RwLock::new(vec![])),
             stage_attachment: Arc::new(RwLock::new(None)),
             created_time: SystemTime::now(),
             on_error_map: Arc::new(RwLock::new(None)),
+            on_error_mode: Arc::new(RwLock::new(None)),
             partitions_shas: Arc::new(RwLock::new(vec![])),
             cacheable: Arc::new(AtomicBool::new(true)),
             status: Arc::new(RwLock::new("null".to_string())),
@@ -126,13 +134,21 @@ impl QueryContextShared {
         *guard = Some(err);
     }
 
-    pub fn set_on_error_map(&self, map: Option<HashMap<String, ErrorCode>>) {
+    pub fn set_on_error_map(&self, map: Arc<DashMap<String, HashMap<u16, InputError>>>) {
         let mut guard = self.on_error_map.write();
-        *guard = map;
+        *guard = Some(map);
     }
 
-    pub fn get_on_error_map(&self) -> Option<HashMap<String, ErrorCode>> {
+    pub fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>> {
         self.on_error_map.read().as_ref().cloned()
+    }
+
+    pub fn get_on_error_mode(&self) -> Option<OnErrorMode> {
+        self.on_error_mode.read().clone()
+    }
+    pub fn set_on_error_mode(&self, mode: OnErrorMode) {
+        let mut guard = self.on_error_mode.write();
+        *guard = Some(mode);
     }
 
     pub fn kill(&self, cause: ErrorCode) {
@@ -195,22 +211,19 @@ impl QueryContextShared {
         self.session.get_current_tenant()
     }
 
-    pub fn get_auth_manager(&self) -> Arc<AuthMgr> {
-        self.auth_manager.clone()
-    }
-
     pub fn get_settings(&self) -> Arc<Settings> {
         self.session.get_settings()
     }
 
-    pub fn get_changed_settings(&self) -> Arc<Settings> {
+    pub fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
         self.session.get_changed_settings()
     }
 
-    pub fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
-        self.session.apply_changed_settings(changed_settings)
+    pub fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()> {
+        self.session.apply_changed_settings(changes)
     }
 
+    #[async_backtrace::framed]
     pub async fn get_table(
         &self,
         catalog: &str,
@@ -233,6 +246,7 @@ impl QueryContextShared {
         }
     }
 
+    #[async_backtrace::framed]
     async fn get_table_to_cache(
         &self,
         catalog: &str,

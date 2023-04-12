@@ -66,6 +66,7 @@ impl FuseTable {
     /// +---------------+      +-----------------------+         |      +-----------------+      +------------+
     /// |MutationSourceN| ---> |SerializeDataTransformN|   ------
     /// +---------------+      +-----------------------+
+    #[async_backtrace::framed]
     pub async fn do_delete(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -88,14 +89,13 @@ impl FuseTable {
             return Ok(());
         }
 
-        let scan_progress = ctx.get_scan_progress();
         // check if unconditional deletion
         if filter.is_none() {
             let progress_values = ProgressValues {
                 rows: snapshot.summary.row_count as usize,
                 bytes: snapshot.summary.uncompressed_byte_size as usize,
             };
-            scan_progress.incr(&progress_values);
+            ctx.get_write_progress().incr(&progress_values);
             // deleting the whole table... just a truncate
             let purge = false;
             return self.do_truncate(ctx.clone(), purge).await;
@@ -116,7 +116,7 @@ impl FuseTable {
                     rows: snapshot.summary.row_count as usize,
                     bytes: snapshot.summary.uncompressed_byte_size as usize,
                 };
-                scan_progress.incr(&progress_values);
+                ctx.get_write_progress().incr(&progress_values);
 
                 // deleting the whole table... just a truncate
                 let purge = false;
@@ -172,7 +172,7 @@ impl FuseTable {
         assert_eq!(filter.data_type(), &DataType::Boolean);
 
         let func_ctx = ctx.get_function_context()?;
-        let evaluator = Evaluator::new(&dummy_block, func_ctx, &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(&dummy_block, &func_ctx, &BUILTIN_FUNCTIONS);
         let predicates = evaluator
             .run(&filter)
             .map_err(|e| e.add_message("eval try eval const failed:"))?
@@ -185,6 +185,7 @@ impl FuseTable {
         })
     }
 
+    #[async_backtrace::framed]
     async fn try_add_deletion_source(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -254,6 +255,7 @@ impl FuseTable {
         )
     }
 
+    #[async_backtrace::framed]
     pub async fn mutation_block_pruning(
         &self,
         ctx: Arc<dyn TableContext>,

@@ -41,6 +41,7 @@ use common_pipeline_sources::input_formats::InputContext;
 use common_pipeline_sources::input_formats::SplitInfo;
 use common_storage::init_stage_operator;
 use common_storage::StageFileInfo;
+use dashmap::DashMap;
 use opendal::Operator;
 use parking_lot::Mutex;
 
@@ -72,11 +73,15 @@ impl StageTable {
         init_stage_operator(stage)
     }
 
-    pub async fn list_files(stage_info: &StageTableInfo) -> Result<Vec<StageFileInfo>> {
+    #[async_backtrace::framed]
+    pub async fn list_files(
+        stage_info: &StageTableInfo,
+        max_files: Option<usize>,
+    ) -> Result<Vec<StageFileInfo>> {
         let op = Self::get_op(&stage_info.stage_info)?;
         let infos = stage_info
             .files_info
-            .list(&op, false)
+            .list(&op, false, max_files)
             .await?
             .into_iter()
             .collect::<Vec<_>>();
@@ -107,6 +112,7 @@ impl Table for StageTable {
         DataSourceInfo::StageSource(self.table_info.clone())
     }
 
+    #[async_backtrace::framed]
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -117,10 +123,9 @@ impl Table for StageTable {
         let files = if let Some(files) = &stage_info.files_to_copy {
             files.clone()
         } else {
-            StageTable::list_files(stage_info).await?
+            StageTable::list_files(stage_info, None).await?
         };
-        let format =
-            InputContext::get_input_format(&stage_info.stage_info.file_format_options.format)?;
+        let format = InputContext::get_input_format(&stage_info.stage_info.file_format_params)?;
         let operator = StageTable::get_op(&stage_info.stage_info)?;
         let splits = format
             .get_splits(
@@ -170,6 +175,14 @@ impl Table for StageTable {
         let stage_info = stage_table_info.stage_info.clone();
         let operator = StageTable::get_op(&stage_table_info.stage_info)?;
         let compact_threshold = self.get_block_compact_thresholds_with_default();
+        let on_error_map = match ctx.get_on_error_map() {
+            Some(m) => m,
+            None => {
+                let m = Arc::new(DashMap::new());
+                ctx.set_on_error_map(m.clone());
+                m
+            }
+        };
         let input_ctx = Arc::new(InputContext::try_create_from_copy(
             operator,
             settings,
@@ -178,10 +191,10 @@ impl Table for StageTable {
             splits,
             ctx.get_scan_progress(),
             compact_threshold,
+            on_error_map,
         )?);
 
         input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;
-        ctx.set_on_error_map(input_ctx.get_maximum_error_per_file());
         Ok(())
     }
 
@@ -233,6 +246,7 @@ impl Table for StageTable {
     }
 
     // TODO use tmp file_name & rename to have atomic commit
+    #[async_backtrace::framed]
     async fn commit_insertion(
         &self,
         _ctx: Arc<dyn TableContext>,
@@ -244,6 +258,7 @@ impl Table for StageTable {
     }
 
     // Truncate the stage file.
+    #[async_backtrace::framed]
     async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
         Err(ErrorCode::Unimplemented(
             "S3 external table truncate() unimplemented yet!",

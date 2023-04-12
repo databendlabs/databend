@@ -15,7 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::FileFormatOptionsAst;
 use common_meta_app::principal::PrincipalIdentity;
 use common_meta_app::principal::UserIdentity;
 
@@ -187,7 +187,7 @@ pub enum Statement {
     CreateFileFormat {
         if_not_exists: bool,
         name: String,
-        file_format_options: FileFormatOptions,
+        file_format_options: FileFormatOptionsAst,
     },
     DropFileFormat {
         if_exists: bool,
@@ -197,6 +197,9 @@ pub enum Statement {
     Presign(PresignStmt),
 
     // share
+    CreateShareEndpoint(CreateShareEndpointStmt),
+    ShowShareEndpoint(ShowShareEndpointStmt),
+    DropShareEndpoint(DropShareEndpointStmt),
     CreateShare(CreateShareStmt),
     DropShare(DropShareStmt),
     GrantShareObject(GrantShareObjectStmt),
@@ -489,6 +492,9 @@ impl Display for Statement {
             Statement::ShowFileFormats => write!(f, "SHOW FILE FORMATS")?,
             Statement::Call(stmt) => write!(f, "{stmt}")?,
             Statement::Presign(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateShareEndpoint(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowShareEndpoint(stmt) => write!(f, "{stmt}")?,
+            Statement::DropShareEndpoint(stmt) => write!(f, "{stmt}")?,
             Statement::CreateShare(stmt) => write!(f, "{stmt}")?,
             Statement::DropShare(stmt) => write!(f, "{stmt}")?,
             Statement::GrantShareObject(stmt) => write!(f, "{stmt}")?,

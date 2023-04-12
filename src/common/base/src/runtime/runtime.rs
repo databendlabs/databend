@@ -155,6 +155,8 @@ impl Runtime {
                     runtime_builder.thread_name(thread_name);
                 }
             }
+
+            runtime_builder.thread_stack_size(5 * 1024 * 1024);
         }
 
         Self::create(None, mem_stat, &mut runtime_builder)
@@ -179,6 +181,8 @@ impl Runtime {
                     thread_name = Some(cur_thread_name.to_string());
                 }
             }
+
+            runtime_builder.thread_stack_size(5 * 1024 * 1024);
         }
 
         if let Some(thread_name) = &thread_name {
@@ -255,14 +259,27 @@ impl Runtime {
             let permit = semaphore.acquire_owned().await.map_err(|e| {
                 ErrorCode::Internal(format!("semaphore closed, acquire permit failure. {}", e))
             })?;
-            let handler = self.handle.spawn(async move {
-                // take the ownership of the permit, (implicitly) drop it when task is done
-                fut(permit).await
-            });
+            let handler = self
+                .handle
+                .spawn(async_backtrace::location!().frame(async move {
+                    // take the ownership of the permit, (implicitly) drop it when task is done
+                    fut(permit).await
+                }));
             handlers.push(handler)
         }
 
         Ok(handlers)
+    }
+
+    // TODO(Winter): remove
+    // Please do not use this method(it's temporary)
+    #[async_backtrace::framed]
+    pub async fn spawn_blocking<F, R>(&self, f: F) -> Result<R>
+    where
+        F: FnOnce() -> Result<R> + Send + 'static,
+        R: Send + 'static,
+    {
+        match_join_handle(self.handle.spawn_blocking(f)).await
     }
 }
 
@@ -273,7 +290,7 @@ impl TrySpawn for Runtime {
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
-        Ok(self.handle.spawn(task))
+        Ok(self.handle.spawn(async_backtrace::location!().frame(task)))
     }
 }
 

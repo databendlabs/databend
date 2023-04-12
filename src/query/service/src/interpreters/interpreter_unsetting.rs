@@ -42,6 +42,7 @@ impl Interpreter for UnSettingInterpreter {
         "SettingInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.set.clone();
         let mut keys: Vec<String> = vec![];
@@ -54,7 +55,10 @@ impl Interpreter for UnSettingInterpreter {
                 "sql_mode" | "autocommit" => (false, String::from("")),
                 setting => {
                     if matches!(settings.get_setting_level(setting)?, Global) {
-                        self.ctx.get_settings().try_drop_setting(setting).await?;
+                        self.ctx
+                            .get_settings()
+                            .try_drop_global_setting(setting)
+                            .await?;
                     }
                     let default_val = {
                         if setting == "max_memory_usage" {
@@ -82,7 +86,7 @@ impl Interpreter for UnSettingInterpreter {
                 // reset the current ctx settings to default val
                 self.ctx
                     .get_settings()
-                    .set_settings(var.clone(), value.clone(), false)?;
+                    .set_setting(var.clone(), value.clone())?;
                 // set affect
                 keys.push(var);
                 values.push(value);

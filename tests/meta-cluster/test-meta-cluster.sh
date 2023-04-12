@@ -54,19 +54,19 @@ run_test() {
     echo ' === Start databend-meta 1...'
 
     nohup "$metasrv" -c scripts/ci/deploy/config/databend-meta-node-1.toml --log-level=DEBUG &
-    python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
+    python3 scripts/ci/wait_tcp.py --timeout 10 --port 9191
 
     echo ' === Start databend-meta 2...'
 
     nohup "$metasrv" -c scripts/ci/deploy/config/databend-meta-node-2.toml --log-level=DEBUG &
-    python3 scripts/ci/wait_tcp.py --timeout 5 --port 28202
+    python3 scripts/ci/wait_tcp.py --timeout 10 --port 28202
 
     echo ' === Start databend-meta 3...'
 
     nohup "$metasrv" -c scripts/ci/deploy/config/databend-meta-node-3.toml --log-level=DEBUG &
-    python3 scripts/ci/wait_tcp.py --timeout 5 --port 28302
+    python3 scripts/ci/wait_tcp.py --timeout 10 --port 28302
 
-    sleep 1
+    sleep 5
     echo " === node 1 in cluster"
     curl -s localhost:28101/v1/cluster/nodes | grep 28103
     echo " === node 2 in cluster"
@@ -78,7 +78,7 @@ run_test() {
 
     "$metasrv" --leave-id 3 --leave-via 127.0.0.1:28103
 
-    sleep 1
+    sleep 5
     echo " === node 3 NOT in cluster"
     { curl -s localhost:28101/v1/cluster/nodes | grep 28303; } && {
         echo "node 3 still in cluster"

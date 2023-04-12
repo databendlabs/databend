@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::DropTableByIdReq;
 use common_sql::plans::DropTablePlan;
+use common_storages_share::save_share_spec;
 use common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::interpreters::Interpreter;
@@ -43,6 +44,7 @@ impl Interpreter for DropTableInterpreter {
         "DropTableInterpreter"
     }
 
+    #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let catalog_name = self.plan.catalog.as_str();
         let db_name = self.plan.database.as_str();
@@ -53,6 +55,12 @@ impl Interpreter for DropTableInterpreter {
             .await
             .ok();
 
+        if tbl.is_none() && !self.plan.if_exists {
+            return Err(ErrorCode::UnknownTable(format!(
+                "unknown table {}.{}",
+                db_name, tbl_name
+            )));
+        }
         if let Some(tbl) = tbl {
             if tbl.get_table_info().engine() == VIEW_ENGINE {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
@@ -62,7 +70,7 @@ impl Interpreter for DropTableInterpreter {
             }
             let catalog = self.ctx.get_catalog(catalog_name)?;
 
-            catalog
+            let resp = catalog
                 .drop_table_by_id(DropTableByIdReq {
                     if_exists: self.plan.if_exists,
                     tb_id: tbl.get_table_info().ident.table_id,
@@ -76,6 +84,16 @@ impl Interpreter for DropTableInterpreter {
                 // thus if we do not refresh the table instance, `truncate` will fail
                 let latest = tbl.as_ref().refresh(self.ctx.as_ref()).await?;
                 latest.truncate(self.ctx.clone(), purge).await?
+            }
+
+            if let Some((spec_vec, share_table_info)) = resp.spec_vec {
+                save_share_spec(
+                    &self.ctx.get_tenant(),
+                    self.ctx.get_data_operator()?.operator(),
+                    Some(spec_vec),
+                    Some(share_table_info),
+                )
+                .await?;
             }
         }
 

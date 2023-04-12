@@ -28,6 +28,7 @@ use crate::plans::UpdatePlan;
 use crate::BindContext;
 
 impl Binder {
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_update(
         &mut self,
         bind_context: &mut BindContext,

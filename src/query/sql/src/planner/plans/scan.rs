@@ -31,8 +31,10 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
+use crate::optimizer::SelectivityEstimator;
 use crate::optimizer::Statistics as OpStatistics;
 use crate::optimizer::DEFAULT_HISTOGRAM_BUCKETS;
+use crate::optimizer::MAX_SELECTIVITY;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -55,7 +57,6 @@ pub struct Statistics {
     pub statistics: Option<TableStatistics>,
     // statistics will be ignored in comparison and hashing
     pub col_stats: HashMap<IndexType, Option<ColumnStatistics>>,
-    pub is_accurate: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -89,7 +90,6 @@ impl Scan {
             statistics: Statistics {
                 statistics: self.statistics.statistics,
                 col_stats,
-                is_accurate: self.statistics.is_accurate,
             },
             prewhere,
         }
@@ -150,8 +150,8 @@ impl Operator for Scan {
             if let Some(col_stat) = v {
                 let min = col_stat.min.clone();
                 let max = col_stat.max.clone();
-                let min_datum = Datum::from_data_value(&min);
-                let max_datum = Datum::from_data_value(&max);
+                let min_datum = Datum::from_scalar(&min);
+                let max_datum = Datum::from_scalar(&max);
                 if let (Some(min), Some(max)) = (min_datum, max_datum) {
                     let histogram = histogram_from_ndv(
                         col_stat.number_of_distinct_values,
@@ -172,12 +172,35 @@ impl Operator for Scan {
             }
         }
 
+        let precise_cardinality = self
+            .statistics
+            .statistics
+            .as_ref()
+            .and_then(|stat| stat.num_rows);
+
+        let cardinality = match (precise_cardinality, &self.prewhere) {
+            (Some(precise_cardinality), Some(ref prewhere)) => {
+                let statistics = OpStatistics {
+                    precise_cardinality: Some(precise_cardinality),
+                    column_stats: column_stats.clone(),
+                };
+
+                // Derive cardinality
+                let sb = SelectivityEstimator::new(&statistics);
+                let mut selectivity = MAX_SELECTIVITY;
+                for pred in prewhere.predicates.iter() {
+                    // Compute selectivity for each conjunction
+                    selectivity *= sb.compute_selectivity(pred);
+                }
+                (precise_cardinality as f64) * selectivity
+            }
+            (Some(precise_cardinality), None) => precise_cardinality as f64,
+            (_, _) => 0.0,
+        };
+
         // If prewhere is not none, we can't get precise cardinality
         let precise_cardinality = if self.prewhere.is_none() {
-            self.statistics
-                .statistics
-                .as_ref()
-                .and_then(|stat| stat.num_rows)
+            precise_cardinality
         } else {
             None
         };
@@ -186,15 +209,10 @@ impl Operator for Scan {
             output_columns: self.columns.clone(),
             outer_columns: Default::default(),
             used_columns,
-            cardinality: self
-                .statistics
-                .statistics
-                .as_ref()
-                .map_or(0.0, |stat| stat.num_rows.map_or(0.0, |num| num as f64)),
+            cardinality,
             statistics: OpStatistics {
                 precise_cardinality,
                 column_stats,
-                is_accurate: self.statistics.is_accurate,
             },
         })
     }

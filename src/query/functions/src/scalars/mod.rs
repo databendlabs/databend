@@ -25,6 +25,7 @@ mod map;
 mod math;
 mod tuple;
 mod variant;
+mod vector;
 
 mod comparison;
 mod decimal;
@@ -55,4 +56,5 @@ pub fn register(registry: &mut FunctionRegistry) {
     hash::register(registry);
     other::register(registry);
     decimal::register(registry);
+    vector::register(registry);
 }

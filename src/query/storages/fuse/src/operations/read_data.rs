@@ -112,9 +112,9 @@ impl FuseTable {
                         if let Some(snapshot) = snapshot {
                             let segment_count = snapshot.segments.len();
                             let mut segment_id_map = HashMap::new();
-                            for (i, segmennt_loc) in snapshot.segments.iter().enumerate() {
+                            for (i, segment_loc) in snapshot.segments.iter().enumerate() {
                                 segment_id_map
-                                    .insert(segmennt_loc.0.to_string(), segment_count - i - 1);
+                                    .insert(segment_loc.0.to_string(), segment_count - i - 1);
                             }
                             Some(segment_id_map)
                         } else {

@@ -225,7 +225,7 @@ pub struct SerializedError {
 
 impl Display for SerializedError {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "Code: {}, displayText = {}.", self.code, self.message,)
+        write!(f, "Code: {}, Text = {}.", self.code, self.message,)
     }
 }
 

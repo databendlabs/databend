@@ -74,6 +74,8 @@ pub struct ColumnBinding {
     pub database_name: Option<String>,
     /// Table name of this `ColumnBinding` in current context
     pub table_name: Option<String>,
+    /// Table index of this `ColumnBinding` in current context
+    pub table_index: Option<IndexType>,
     /// Column name of this `ColumnBinding` in current context
     pub column_name: String,
     /// Column index of ColumnBinding
@@ -143,7 +145,7 @@ pub struct BindContext {
 
     pub aggregate_info: AggregateInfo,
 
-    pub windows: Vec<WindowInfo>,
+    pub windows: WindowInfo,
 
     /// True if there is aggregation in current context, which means
     /// non-grouping columns cannot be referenced outside aggregation
@@ -177,7 +179,7 @@ impl BindContext {
             columns: Vec::new(),
             bound_internal_columns: BTreeMap::new(),
             aggregate_info: AggregateInfo::default(),
-            windows: Vec::new(),
+            windows: WindowInfo::default(),
             in_grouping: false,
             ctes_map: Box::new(DashMap::new()),
             view_info: None,
@@ -192,7 +194,7 @@ impl BindContext {
             columns: vec![],
             bound_internal_columns: BTreeMap::new(),
             aggregate_info: Default::default(),
-            windows: vec![],
+            windows: Default::default(),
             in_grouping: false,
             ctes_map: parent.ctes_map.clone(),
             view_info: None,
@@ -438,6 +440,7 @@ impl BindContext {
             self.columns.push(ColumnBinding {
                 database_name,
                 table_name,
+                table_index: Some(table_index),
                 column_name: column_binding.internal_column.column_name().clone(),
                 index: column_binding.index,
                 data_type: Box::new(column_binding.internal_column.data_type()),

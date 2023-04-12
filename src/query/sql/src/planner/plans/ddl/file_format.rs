@@ -20,13 +20,13 @@ use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
-use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::FileFormatParams;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateFileFormatPlan {
     pub if_not_exists: bool,
     pub name: String,
-    pub file_format_options: FileFormatOptions,
+    pub file_format_params: FileFormatParams,
 }
 
 impl CreateFileFormatPlan {
