@@ -538,6 +538,7 @@ pub enum BinaryOperator {
     RLike,
     NotRegexp,
     NotRLike,
+    SoundsLike,
     BitwiseOr,
     BitwiseAnd,
     BitwiseXor,
@@ -566,6 +567,7 @@ impl BinaryOperator {
             BinaryOperator::NotLike => "NOT LIKE".to_string(),
             BinaryOperator::NotRegexp => "NOT REGEXP".to_string(),
             BinaryOperator::NotRLike => "NOT RLIKE".to_string(),
+            BinaryOperator::SoundsLike => "SOUNDS LIKE".to_string(),
             BinaryOperator::BitwiseOr => "bit_or".to_string(),
             BinaryOperator::BitwiseAnd => "bit_and".to_string(),
             BinaryOperator::BitwiseXor => "bit_xor".to_string(),
@@ -770,6 +772,9 @@ impl Display for BinaryOperator {
             }
             BinaryOperator::NotRLike => {
                 write!(f, "NOT RLIKE")
+            }
+            BinaryOperator::SoundsLike => {
+                write!(f, "SOUNDS LIKE")
             }
             BinaryOperator::BitwiseOr => {
                 write!(f, "|")
