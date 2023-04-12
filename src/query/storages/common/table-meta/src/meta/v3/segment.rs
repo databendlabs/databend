@@ -44,6 +44,11 @@ impl SegmentInfo {
     pub fn version(&self) -> FormatVersion {
         self.format_version
     }
+
+    #[inline]
+    pub fn encoding() -> Encoding {
+        Encoding::default()
+    }
 }
 
 use super::super::v0;

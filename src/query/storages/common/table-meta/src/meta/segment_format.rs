@@ -38,7 +38,6 @@ pub enum Compression {
     Snappy = 2,
 }
 
-/// Convert from str.
 impl TryFrom<u64> for Compression {
     type Error = ErrorCode;
 
@@ -107,6 +106,16 @@ impl TryFrom<u64> for Encoding {
                 "unsupported encoding: {}",
                 other
             ))),
+        }
+    }
+}
+
+impl Encoding {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Encoding::Bincode => "bincode",
+            Encoding::MessagePack => "messagepack",
+            Encoding::Json => "json",
         }
     }
 }
