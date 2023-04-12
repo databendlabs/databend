@@ -37,6 +37,8 @@ where
     fn put(&self, key: K, value: Arc<V>);
     fn evict(&self, k: &str) -> bool;
     fn contains_key(&self, k: &str) -> bool;
+    fn size(&self) -> u64;
+    fn len(&self) -> usize;
 }
 
 /// Helper trait to convert a Cache into NamedCache
@@ -104,6 +106,14 @@ where
 
     fn evict(&self, k: &str) -> bool {
         self.cache.evict(k)
+    }
+
+    fn size(&self) -> u64 {
+        self.cache.size()
+    }
+
+    fn len(&self) -> usize {
+        self.cache.len()
     }
 
     fn contains_key(&self, k: &str) -> bool {

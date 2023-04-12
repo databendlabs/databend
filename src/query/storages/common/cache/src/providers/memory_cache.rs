@@ -93,6 +93,16 @@ mod impls {
             let guard = self.read();
             guard.contains(k)
         }
+
+        fn size(&self) -> u64 {
+            let guard = self.read();
+            guard.size()
+        }
+
+        fn len(&self) -> usize {
+            let guard = self.read();
+            guard.len()
+        }
     }
 
     // Wrap an Option<CacheAccessor>, and impl CacheAccessor for it
@@ -125,6 +135,22 @@ mod impls {
                 cache.contains_key(k)
             } else {
                 false
+            }
+        }
+
+        fn size(&self) -> u64 {
+            if let Some(cache) = self {
+                cache.size()
+            } else {
+                0
+            }
+        }
+
+        fn len(&self) -> usize {
+            if let Some(cache) = self {
+                cache.len()
+            } else {
+                0
             }
         }
     }
