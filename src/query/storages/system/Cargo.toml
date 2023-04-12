@@ -31,6 +31,7 @@ common-storages-view = { path = "../view" }
 common-users = { path = "../../users" }
 jsonb = { workspace = true }
 storages-common-cache-manager = { path = "../common/cache-manager" }
+storages-common-cache = { path = "../common/cache" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 chrono = { workspace = true }

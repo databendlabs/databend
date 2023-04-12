@@ -16,6 +16,7 @@
 #![feature(type_alias_impl_trait)]
 
 mod build_options_table;
+mod caches_table;
 mod catalogs_table;
 mod clustering_history_table;
 mod clusters_table;
@@ -26,7 +27,6 @@ mod credits_table;
 mod databases_table;
 mod engines_table;
 mod functions_table;
-mod in_memory_caches_table;
 mod log_queue;
 mod malloc_stats_table;
 mod malloc_stats_totals_table;
@@ -45,6 +45,7 @@ mod tracing_table;
 mod users_table;
 
 pub use build_options_table::BuildOptionsTable;
+pub use caches_table::CachesTable;
 pub use catalogs_table::CatalogsTable;
 pub use clustering_history_table::ClusteringHistoryLogElement;
 pub use clustering_history_table::ClusteringHistoryQueue;
@@ -81,4 +82,3 @@ pub use tables_table::TablesTableWithHistory;
 pub use tables_table::TablesTableWithoutHistory;
 pub use tracing_table::TracingTable;
 pub use users_table::UsersTable;
-pub use in_memory_caches_table::InMemoryCacheTable;

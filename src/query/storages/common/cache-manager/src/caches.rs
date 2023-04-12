@@ -16,8 +16,6 @@ use std::borrow::Borrow;
 use std::sync::Arc;
 
 use common_arrow::parquet::metadata::FileMetaData;
-use common_cache::CountableMeter;
-use common_cache::CountableMeterWithMeasure;
 use common_cache::DefaultHashBuilder;
 use common_cache::Meter;
 use common_catalog::plan::PartStatistics;
@@ -124,18 +122,5 @@ impl<K, V> Meter<K, Arc<(V, usize)>> for ColumnArrayMeter {
     fn measure<Q: ?Sized>(&self, _: &Q, v: &Arc<(V, usize)>) -> usize
     where K: Borrow<Q> {
         v.1
-    }
-}
-impl<K,V> CountableMeter<K,V> for ColumnArrayMeter {
-    fn add(&self, current: Self::Measure, amount: Self::Measure) -> Self::Measure {
-        todo!()
-    }
-
-    fn sub(&self, current: Self::Measure, amount: Self::Measure) -> Self::Measure {
-        todo!()
-    }
-
-    fn size(&self, current: Self::Measure) -> Option<u64> {
-        todo!()
     }
 }

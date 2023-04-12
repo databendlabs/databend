@@ -21,6 +21,7 @@ use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_storages_system::BuildOptionsTable;
+use common_storages_system::CachesTable;
 use common_storages_system::CatalogsTable;
 use common_storages_system::ClusteringHistoryTable;
 use common_storages_system::ClustersTable;
@@ -46,7 +47,6 @@ use common_storages_system::TablesTableWithHistory;
 use common_storages_system::TablesTableWithoutHistory;
 use common_storages_system::TracingTable;
 use common_storages_system::UsersTable;
-use common_storages_system::InMemoryCacheTable;
 
 use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
@@ -100,7 +100,7 @@ impl SystemDatabase {
             CatalogsTable::create(sys_db_meta.next_table_id()),
             QueryCacheTable::create(sys_db_meta.next_table_id()),
             TableFunctionsTable::create(sys_db_meta.next_table_id()),
-            InMemoryCacheTable::create(sys_db_meta.next_table_id()),
+            CachesTable::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_tables = Self::disable_system_tables();

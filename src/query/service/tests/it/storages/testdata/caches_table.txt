@@ -1,5 +1,5 @@
 ---------- TABLE INFO ------------
-DB.Table: 'system'.'in_memory_caches', Table: in_memory_caches-table_id:1, ver:0, Engine: SystemCache
+DB.Table: 'system'.'caches', Table: caches-table_id:1, ver:0, Engine: SystemCache
 -------- TABLE CONTENTS ----------
 +----------------------------------+----------+----------+
 | Column 0                         | Column 1 | Column 2 |

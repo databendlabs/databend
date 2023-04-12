@@ -32,6 +32,7 @@ use common_meta_app::storage::StorageS3Config;
 use common_metrics::init_default_metrics_recorder;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_storages_system::BuildOptionsTable;
+use common_storages_system::CachesTable;
 use common_storages_system::CatalogsTable;
 use common_storages_system::ClustersTable;
 use common_storages_system::ColumnsTable;
@@ -41,7 +42,6 @@ use common_storages_system::CreditsTable;
 use common_storages_system::DatabasesTable;
 use common_storages_system::EnginesTable;
 use common_storages_system::FunctionsTable;
-use common_storages_system::InMemoryCacheTable;
 use common_storages_system::MetricsTable;
 use common_storages_system::RolesTable;
 use common_storages_system::SettingsTable;
@@ -395,13 +395,13 @@ async fn test_users_table() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_in_memory_caches_table() -> Result<()> {
+async fn test_caches_table() -> Result<()> {
     let mut mint = Mint::new("tests/it/storages/testdata");
-    let file = &mut mint.new_goldenfile("in_memory_caches_table.txt").unwrap();
+    let file = &mut mint.new_goldenfile("caches_table.txt").unwrap();
 
     let (_guard, ctx) = crate::tests::create_query_context().await?;
 
-    let table = InMemoryCacheTable::create(1);
+    let table = CachesTable::create(1);
 
     run_table_tests(file, ctx, table).await?;
     Ok(())
