@@ -56,11 +56,13 @@ pub enum SegmentInfoVersion {
 impl Versioned<0> for v0::TableSnapshot {}
 impl Versioned<1> for v1::TableSnapshot {}
 impl Versioned<2> for v2::TableSnapshot {}
+impl Versioned<3> for v3::TableSnapshot {}
 
 pub enum SnapshotVersion {
     V0(PhantomData<v0::TableSnapshot>),
     V1(PhantomData<v1::TableSnapshot>),
     V2(PhantomData<v2::TableSnapshot>),
+    V3(PhantomData<v3::TableSnapshot>),
 }
 
 impl SnapshotVersion {
@@ -69,6 +71,7 @@ impl SnapshotVersion {
             SnapshotVersion::V0(a) => Self::ver(a),
             SnapshotVersion::V1(a) => Self::ver(a),
             SnapshotVersion::V2(a) => Self::ver(a),
+            SnapshotVersion::V3(a) => Self::ver(a),
         }
     }
 
@@ -134,8 +137,9 @@ mod converters {
                 0 => Ok(SnapshotVersion::V0(testify_version::<_, 0>(PhantomData))),
                 1 => Ok(SnapshotVersion::V1(testify_version::<_, 1>(PhantomData))),
                 2 => Ok(SnapshotVersion::V2(testify_version::<_, 2>(PhantomData))),
+                3 => Ok(SnapshotVersion::V3(testify_version::<_, 3>(PhantomData))),
                 _ => Err(ErrorCode::Internal(format!(
-                    "unknown snapshot segment version {value}, versions supported: 0, 1, 2"
+                    "unknown snapshot segment version {value}, versions supported: 0, 1, 2, 3"
                 ))),
             }
         }

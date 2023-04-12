@@ -29,6 +29,7 @@ use storages_common_table_meta::meta::TableSnapshotStatistics;
 use storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 
 use crate::io::read::meta::segment_reader::load_segment_v3;
+use crate::io::read::meta::snapshot_reader::load_snapshot_v3;
 
 #[async_trait::async_trait]
 pub trait VersionedReader<T> {
@@ -42,10 +43,11 @@ impl VersionedReader<TableSnapshot> for SnapshotVersion {
     async fn read<R>(&self, reader: R) -> Result<TableSnapshot>
     where R: AsyncRead + Unpin + Send {
         let r = match self {
+            SnapshotVersion::V3(v) => load_snapshot_v3(reader, v).await?,
             SnapshotVersion::V2(v) => {
                 let mut ts = load_by_version(reader, v).await?;
                 ts.schema = TableSchema::init_if_need(ts.schema);
-                ts
+                ts.into()
             }
             SnapshotVersion::V1(v) => load_by_version(reader, v).await?.into(),
             SnapshotVersion::V0(v) => load_by_version(reader, v).await?.into(),

@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-use std::io::Cursor;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Read;
@@ -19,18 +18,22 @@ use std::io::Write;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+#[cfg(feature = "dev")]
 use rmp_serde::Deserializer;
+#[cfg(feature = "dev")]
 use rmp_serde::Serializer;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::from_slice;
+#[cfg(feature = "dev")]
 use snap::raw::Decoder as SnapDecoder;
+#[cfg(feature = "dev")]
 use snap::raw::Encoder as SnapEncoder;
 use zstd::Decoder as ZstdDecoder;
 use zstd::Encoder as ZstdEncoder;
 
-#[repr(u64)]
-#[derive(Default)]
+#[repr(u8)]
+#[derive(Default, Debug)]
 pub enum Compression {
     None = 0,
     #[default]
@@ -38,10 +41,10 @@ pub enum Compression {
     Snappy = 2,
 }
 
-impl TryFrom<u64> for Compression {
+impl TryFrom<u8> for Compression {
     type Error = ErrorCode;
 
-    fn try_from(value: u64) -> Result<Self, Self::Error> {
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(Compression::None),
             1 => Ok(Compression::Zstd),
@@ -62,9 +65,14 @@ pub fn compress(compression: &Compression, data: Vec<u8>) -> Result<Vec<u8>> {
             encoder.write_all(&data)?;
             Ok(encoder.finish()?)
         }
+        #[cfg(feature = "dev")]
         Compression::Snappy => Ok(SnapEncoder::new()
             .compress_vec(&data)
             .map_err(|e| Error::new(ErrorKind::InvalidData, e))?),
+        _ => Err(ErrorCode::UnknownFormat(format!(
+            "unsupported compression: {:?}",
+            compression
+        ))),
     }
 }
 
@@ -79,14 +87,19 @@ pub fn decompress(compression: &Compression, data: Vec<u8>) -> Result<Vec<u8>> {
                 .map_err(|e| Error::new(ErrorKind::InvalidData, e))?;
             Ok(decompressed_data)
         }
+        #[cfg(feature = "dev")]
         Compression::Snappy => Ok(SnapDecoder::new()
             .decompress_vec(&data)
             .map_err(|e| Error::new(ErrorKind::InvalidData, e))?),
+        _ => Err(ErrorCode::UnknownFormat(format!(
+            "unsupported compression: {:?}",
+            compression
+        ))),
     }
 }
 
-#[repr(u64)]
-#[derive(Default)]
+#[repr(u8)]
+#[derive(Default, Debug)]
 pub enum Encoding {
     #[default]
     Bincode = 1,
@@ -94,10 +107,10 @@ pub enum Encoding {
     Json = 3,
 }
 
-impl TryFrom<u64> for Encoding {
+impl TryFrom<u8> for Encoding {
     type Error = ErrorCode;
 
-    fn try_from(value: u64) -> Result<Self, Self::Error> {
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
             1 => Ok(Encoding::Bincode),
             2 => Ok(Encoding::MessagePack),
@@ -125,6 +138,7 @@ pub fn encode<T: Serialize>(encoding: &Encoding, data: &T) -> Result<Vec<u8>> {
         Encoding::Bincode => {
             Ok(bincode::serialize(data).map_err(|e| Error::new(ErrorKind::InvalidData, e))?)
         }
+        #[cfg(feature = "dev")]
         Encoding::MessagePack => {
             let mut bs = Vec::new();
             data.serialize(&mut Serializer::new(&mut bs))
@@ -132,6 +146,10 @@ pub fn encode<T: Serialize>(encoding: &Encoding, data: &T) -> Result<Vec<u8>> {
             Ok(bs)
         }
         Encoding::Json => Ok(serde_json::to_vec(&data)?),
+        _ => Err(ErrorCode::UnknownFormat(format!(
+            "unsupported encoding: {:?}",
+            encoding
+        ))),
     }
 }
 
@@ -140,11 +158,16 @@ pub fn decode<'a, T: Deserialize<'a>>(encoding: &Encoding, data: &'a Vec<u8>) ->
         Encoding::Bincode => {
             Ok(bincode::deserialize(data).map_err(|e| Error::new(ErrorKind::InvalidData, e))?)
         }
+        #[cfg(feature = "dev")]
         Encoding::MessagePack => {
             let mut deserializer = Deserializer::new(Cursor::new(data));
             Ok(Deserialize::deserialize(&mut deserializer)
                 .map_err(|e| Error::new(ErrorKind::InvalidData, e))?)
         }
         Encoding::Json => Ok(from_slice::<T>(data)?),
+        _ => Err(ErrorCode::UnknownFormat(format!(
+            "unsupported encoding: {:?}",
+            encoding
+        ))),
     }
 }

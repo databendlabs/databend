@@ -18,9 +18,9 @@ use common_expression::TableField;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::meta::segment_format::compress;
-use crate::meta::segment_format::encode;
-use crate::meta::segment_format::Compression;
+use crate::meta::format::compress;
+use crate::meta::format::encode;
+use crate::meta::format::Compression;
 use crate::meta::statistics::FormatVersion;
 use crate::meta::v2::BlockMeta;
 use crate::meta::Encoding;
@@ -112,16 +112,12 @@ impl SegmentInfo {
         let summary = encode(&encoding, &self.summary)?;
         let summary_compress = compress(&compression, summary)?;
 
-        buf.extend(
-            vec![
-                self.format_version.to_le_bytes(),
-                (encoding as u64).to_le_bytes(),
-                (compression as u64).to_le_bytes(),
-                blocks_compress.len().to_le_bytes(),
-                summary_compress.len().to_le_bytes(),
-            ]
-            .concat(),
-        );
+        buf.extend_from_slice(&self.format_version.to_le_bytes());
+        buf.push(encoding as u8);
+        buf.push(compression as u8);
+        buf.extend_from_slice(&blocks_compress.len().to_le_bytes());
+        buf.extend_from_slice(&summary_compress.len().to_le_bytes());
+
         buf.extend(blocks_compress);
         buf.extend(summary_compress);
 

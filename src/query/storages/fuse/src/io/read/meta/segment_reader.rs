@@ -13,58 +13,31 @@
 // limitations under the License.
 //
 
-use std::io::SeekFrom;
+use std::io::Cursor;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_io::prelude::BinaryRead;
 use futures::AsyncRead;
-use futures_util::AsyncSeek;
-use futures_util::AsyncSeekExt;
+use futures_util::AsyncReadExt;
 use serde::de::DeserializeOwned;
-use storages_common_table_meta::meta::decode;
-use storages_common_table_meta::meta::decompress;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Encoding;
-use storages_common_table_meta::meta::SegmentCompression;
+use storages_common_table_meta::meta::MetaCompression;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::Versioned;
 
-async fn read_u64_exact<R>(reader: &mut R) -> Result<u64>
-where R: AsyncRead + Unpin + Send {
-    let mut buffer = [0; 8];
-    use futures::AsyncReadExt;
-    reader.read_exact(&mut buffer).await?;
-    Ok(u64::from_le_bytes(buffer))
-}
-
-async fn read_and_deserialize<R, T>(
-    reader: &mut R,
-    size: u64,
-    encoding: &Encoding,
-    compression: &SegmentCompression,
-) -> Result<T>
-where
-    R: AsyncRead + Unpin + Send,
-    T: DeserializeOwned,
-{
-    let mut compressed_data = vec![0; size as usize];
-    use futures::AsyncReadExt;
-    reader.read_exact(&mut compressed_data).await?;
-
-    let decompressed_data = decompress(compression, compressed_data)?;
-
-    decode(encoding, &decompressed_data)
-}
+use crate::io::read::meta::meta_readers::read_and_deserialize;
 
 /// Reads a segment header from a binary stream and returns a `SegmentInfo` object.
 ///
 /// This function reads the following fields from the stream and constructs a `SegmentInfo` object:
 ///
-/// * `version` (u64): The version number of the segment.
-/// * `encoding` (u64): The encoding format used to serialize the segment's data.
-/// * `compression` (u64): The compression format used to compress the segment's data.
+/// * `version` (u16): The version number of the segment.
+/// * `encoding` (u8): The encoding format used to serialize the segment's data.
+/// * `compression` (u8): The compression format used to compress the segment's data.
 /// * `blocks_size` (u64): The size (in bytes) of the compressed block metadata.
 /// * `summary_size` (u64): The size (in bytes) of the compressed segment summary.
 ///
@@ -77,47 +50,21 @@ where
     T: DeserializeOwned,
     R: AsyncRead + Unpin + Send,
 {
-    let version: u64 = read_u64_exact(&mut reader).await?;
+    let mut buffer: Vec<u8> = vec![];
+    reader.read_to_end(&mut buffer).await?;
+
+    let mut cursor = Cursor::new(buffer);
+    let version = cursor.read_scalar::<u64>()?;
     assert_eq!(version, SegmentInfo::VERSION);
-    let encoding = Encoding::try_from(read_u64_exact(&mut reader).await?)?;
-    let compression = SegmentCompression::try_from(read_u64_exact(&mut reader).await?)?;
-    let blocks_size: u64 = read_u64_exact(&mut reader).await?;
-    let summary_size: u64 = read_u64_exact(&mut reader).await?;
+    let encoding = Encoding::try_from(cursor.read_scalar::<u8>()?)?;
+    let compression = MetaCompression::try_from(cursor.read_scalar::<u8>()?)?;
+    let blocks_size: u64 = cursor.read_scalar::<u64>()?;
+    let summary_size: u64 = cursor.read_scalar::<u64>()?;
 
     let blocks: Vec<Arc<BlockMeta>> =
-        read_and_deserialize(&mut reader, blocks_size, &encoding, &compression).await?;
+        read_and_deserialize(&mut cursor, blocks_size, &encoding, &compression)?;
     let summary: Statistics =
-        read_and_deserialize(&mut reader, summary_size, &encoding, &compression).await?;
+        read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
 
     Ok(SegmentInfo::new(blocks, summary))
-}
-
-pub async fn load_segment_blocks_v3<R>(mut reader: R) -> Result<Vec<Arc<BlockMeta>>>
-where R: AsyncSeek + AsyncRead + Unpin + Send {
-    let version: u64 = read_u64_exact(&mut reader).await?;
-    assert_eq!(version, SegmentInfo::VERSION);
-    let encoding = Encoding::try_from(read_u64_exact(&mut reader).await?)?;
-    let compression = SegmentCompression::try_from(read_u64_exact(&mut reader).await?)?;
-    let blocks_size: u64 = read_u64_exact(&mut reader).await?;
-
-    let blocks: Vec<Arc<BlockMeta>> =
-        read_and_deserialize(&mut reader, blocks_size, &encoding, &compression).await?;
-
-    Ok(blocks)
-}
-
-pub async fn load_segment_summary_v3<R>(mut reader: R) -> Result<Statistics>
-where R: AsyncSeek + AsyncRead + Unpin + Send {
-    let version: u64 = read_u64_exact(&mut reader).await?;
-    assert_eq!(version, SegmentInfo::VERSION);
-    let encoding = Encoding::try_from(read_u64_exact(&mut reader).await?)?;
-    let compression = SegmentCompression::try_from(read_u64_exact(&mut reader).await?)?;
-    let blocks_size: u64 = read_u64_exact(&mut reader).await?;
-    let summary_size: u64 = read_u64_exact(&mut reader).await?;
-
-    reader.seek(SeekFrom::Current(blocks_size as i64)).await?;
-    let summary: Statistics =
-        read_and_deserialize(&mut reader, summary_size, &encoding, &compression).await?;
-
-    Ok(summary)
 }

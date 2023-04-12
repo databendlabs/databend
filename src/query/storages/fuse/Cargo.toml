@@ -56,4 +56,5 @@ streaming-decompression = "0.1.2"
 tokio-rayon = "2.1.0"
 tracing = "0.1.36"
 typetag = "0.2.3"
+micromarshal = "0.3.0"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
