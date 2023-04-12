@@ -23,10 +23,9 @@ use crate::ScalarExpr;
 pub fn convert_mark_to_semi_join(s_expr: &SExpr) -> Result<SExpr> {
     let mut filter: Filter = s_expr.plan().clone().try_into()?;
     let mut join: Join = s_expr.child(0)?.plan().clone().try_into()?;
-    let has_disjunction = filter
-        .predicates
-        .iter()
-        .any(|predicate| matches!(predicate, ScalarExpr::OrExpr(_)));
+    let has_disjunction = filter.predicates.iter().any(
+        |predicate| matches!(predicate, ScalarExpr::FunctionCall(func) if func.func_name == "or"),
+    );
     if !join.join_type.is_mark_join() || has_disjunction {
         return Ok(s_expr.clone());
     }
@@ -36,20 +35,21 @@ pub fn convert_mark_to_semi_join(s_expr: &SExpr) -> Result<SExpr> {
 
     // remove mark index filter
     for (idx, predicate) in filter.predicates.iter().enumerate() {
-        if let ScalarExpr::BoundColumnRef(col) = predicate {
-            if col.column.index == mark_index {
+        match predicate {
+            ScalarExpr::BoundColumnRef(col) if col.column.index == mark_index => {
                 find_mark_index = true;
                 filter.predicates.remove(idx);
                 break;
             }
-        }
-        if let ScalarExpr::NotExpr(not_expr) = predicate {
-            // Check if the argument is mark index, if so, we won't convert it to semi join
-            if let ScalarExpr::BoundColumnRef(col) = not_expr.argument.as_ref() {
-                if col.column.index == mark_index {
-                    return Ok(s_expr.clone());
+            ScalarExpr::FunctionCall(func) if func.func_name == "not" => {
+                // Check if the argument is mark index, if so, we won't convert it to semi join
+                if let ScalarExpr::BoundColumnRef(col) = &func.arguments[0] {
+                    if col.column.index == mark_index {
+                        return Ok(s_expr.clone());
+                    }
                 }
             }
+            _ => (),
         }
     }
 

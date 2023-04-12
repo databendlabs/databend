@@ -14,13 +14,6 @@
 
 use common_exception::Result;
 
-use crate::plans::AggregateFunction;
-use crate::plans::AndExpr;
-use crate::plans::CastExpr;
-use crate::plans::ComparisonExpr;
-use crate::plans::FunctionCall;
-use crate::plans::NotExpr;
-use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncType;
@@ -55,10 +48,8 @@ pub trait ScalarVisitor: Sized {
                         Recursion::Stop(visitor) => visitor,
                         Recursion::Continue(visitor) => {
                             match scalar {
-                                ScalarExpr::AggregateFunction(AggregateFunction {
-                                    args, ..
-                                }) => {
-                                    for arg in args {
+                                ScalarExpr::AggregateFunction(func) => {
+                                    for arg in &func.args {
                                         stack.push(RecursionProcessing::Call(arg));
                                     }
                                 }
@@ -80,33 +71,16 @@ pub trait ScalarVisitor: Sized {
                                         stack.push(RecursionProcessing::Call(&arg.expr));
                                     }
                                 }
-                                ScalarExpr::ComparisonExpr(ComparisonExpr {
-                                    left, right, ..
-                                }) => {
-                                    stack.push(RecursionProcessing::Call(left));
-                                    stack.push(RecursionProcessing::Call(right));
-                                }
-                                ScalarExpr::AndExpr(AndExpr { left, right, .. }) => {
-                                    stack.push(RecursionProcessing::Call(left));
-                                    stack.push(RecursionProcessing::Call(right));
-                                }
-                                ScalarExpr::OrExpr(OrExpr { left, right, .. }) => {
-                                    stack.push(RecursionProcessing::Call(left));
-                                    stack.push(RecursionProcessing::Call(right));
-                                }
-                                ScalarExpr::NotExpr(NotExpr { argument, .. }) => {
-                                    stack.push(RecursionProcessing::Call(argument));
-                                }
-                                ScalarExpr::FunctionCall(FunctionCall { arguments, .. }) => {
-                                    for arg in arguments.iter() {
+                                ScalarExpr::FunctionCall(func) => {
+                                    for arg in func.arguments.iter() {
                                         stack.push(RecursionProcessing::Call(arg));
                                     }
                                 }
                                 ScalarExpr::BoundColumnRef(_)
                                 | ScalarExpr::BoundInternalColumnRef(_)
                                 | ScalarExpr::ConstantExpr(_) => {}
-                                ScalarExpr::CastExpr(CastExpr { argument, .. }) => {
-                                    stack.push(RecursionProcessing::Call(argument))
+                                ScalarExpr::CastExpr(cast) => {
+                                    stack.push(RecursionProcessing::Call(&cast.argument))
                                 }
                                 ScalarExpr::SubqueryExpr(_) => {}
                             }
