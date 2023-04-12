@@ -983,7 +983,7 @@ impl<'a> TypeChecker<'a> {
         .set_span(expr.span()))
     }
 
-    fn resolve_window_rows_frame(&self, span: Span, frame: WindowFrame) -> Result<WindowFuncFrame> {
+    fn resolve_window_rows_frame(&self, frame: WindowFrame) -> Result<WindowFuncFrame> {
         let units = match frame.units {
             WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,
             WindowFrameUnits::Range => WindowFuncFrameUnits::Range,
@@ -1022,14 +1022,6 @@ impl<'a> TypeChecker<'a> {
                 }
             }
         };
-
-        if start > end {
-            return Err(ErrorCode::SemanticError(format!(
-                "frame start bound should be less then the end bound, start: {:?}, end: {:?}",
-                start, end
-            ))
-            .set_span(span));
-        }
 
         Ok(WindowFuncFrame {
             units,
@@ -1079,7 +1071,8 @@ impl<'a> TypeChecker<'a> {
         frame: WindowFrame,
     ) -> Result<WindowFuncFrame> {
         let order_by_type = order_by.expr.data_type()?;
-        let mut common_type = order_by_type.clone();
+        let is_nullable = order_by_type.is_nullable();
+        let mut common_type = order_by_type.remove_nullable();
         let start_offset = self.resolve_range_offset(&frame.start_bound).await?;
         let end_offset = self.resolve_range_offset(&frame.end_bound).await?;
         if let Some((_, data_type)) = &start_offset {
@@ -1104,9 +1097,6 @@ impl<'a> TypeChecker<'a> {
         }
 
         // Unify ORDER BY and RANGE offsets types.
-        if order_by_type != common_type {
-            order_by.expr = wrap_cast(&order_by.expr, &common_type);
-        }
         let start_offset = start_offset
             .map(|(mut expr, _)| {
                 expr = wrap_cast(&expr, &common_type);
@@ -1142,6 +1132,13 @@ impl<'a> TypeChecker<'a> {
             })
             .transpose()?;
 
+        if is_nullable {
+            common_type = common_type.wrap_nullable();
+        }
+        if order_by_type != common_type {
+            order_by.expr = wrap_cast(&order_by.expr, &common_type);
+        }
+
         let units = match frame.units {
             WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,
             WindowFrameUnits::Range => WindowFuncFrameUnits::Range,
@@ -1156,14 +1153,6 @@ impl<'a> TypeChecker<'a> {
             WindowFrameBound::Preceding(_) => WindowFuncFrameBound::Preceding(end_offset),
             WindowFrameBound::Following(_) => WindowFuncFrameBound::Following(end_offset),
         };
-
-        if start > end {
-            return Err(ErrorCode::SemanticError(format!(
-                "frame start bound should be less then the end bound, start: {:?}, end: {:?}",
-                start, end
-            ))
-            .set_span(span));
-        }
 
         Ok(WindowFuncFrame {
             units,
@@ -1190,7 +1179,7 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_window_range_frame(span, &mut order_by[0], frame)
                     .await
             } else {
-                self.resolve_window_rows_frame(span, frame)
+                self.resolve_window_rows_frame(frame)
             }
         } else if order_by.is_empty() {
             Ok(WindowFuncFrame {

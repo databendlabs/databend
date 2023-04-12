@@ -159,6 +159,7 @@ impl FuseTable {
                 offset: *offset,
                 asc: true,
                 nulls_first: false,
+                is_nullable: false, // This information is not needed here.
             })
             .collect();
 

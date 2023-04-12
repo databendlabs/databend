@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::Number;
 use common_expression::Scalar;
 use common_sql::plans::WindowFuncFrameBound;
 
-pub enum FrameBound<T> {
+#[derive(PartialEq)]
+pub enum FrameBound<T: Number> {
     CurrentRow,
     Preceding(Option<T>),
     Following(Option<T>),
@@ -65,6 +68,34 @@ impl<T: Number> TryFrom<&WindowFuncFrameBound> for FrameBound<T> {
                     })
                     .transpose()?,
             )),
+        }
+    }
+}
+
+impl<T: Number> PartialOrd for FrameBound<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            (FrameBound::CurrentRow, FrameBound::CurrentRow) => Some(Ordering::Equal),
+            (FrameBound::CurrentRow, FrameBound::Preceding(_)) => Some(Ordering::Greater),
+            (FrameBound::CurrentRow, FrameBound::Following(_)) => Some(Ordering::Less),
+            (FrameBound::Preceding(_), FrameBound::CurrentRow) => Some(Ordering::Less),
+            (FrameBound::Preceding(None), FrameBound::Preceding(None)) => Some(Ordering::Equal),
+            (FrameBound::Preceding(None), FrameBound::Preceding(_)) => Some(Ordering::Less),
+            (FrameBound::Preceding(Some(_)), FrameBound::Preceding(None)) => {
+                Some(Ordering::Greater)
+            }
+            (FrameBound::Preceding(Some(lhs)), FrameBound::Preceding(Some(rhs))) => {
+                lhs.partial_cmp(rhs).map(Ordering::reverse)
+            }
+            (FrameBound::Preceding(_), FrameBound::Following(_)) => Some(Ordering::Less),
+            (FrameBound::Following(_), FrameBound::CurrentRow) => Some(Ordering::Greater),
+            (FrameBound::Following(_), FrameBound::Preceding(_)) => Some(Ordering::Greater),
+            (FrameBound::Following(None), FrameBound::Following(None)) => Some(Ordering::Equal),
+            (FrameBound::Following(None), FrameBound::Following(_)) => Some(Ordering::Greater),
+            (FrameBound::Following(Some(_)), FrameBound::Following(None)) => Some(Ordering::Less),
+            (FrameBound::Following(Some(lhs)), FrameBound::Following(Some(rhs))) => {
+                lhs.partial_cmp(rhs)
+            }
         }
     }
 }

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -197,60 +196,6 @@ pub enum WindowFuncFrameBound {
     Preceding(Option<Scalar>),
     /// `<N> FOLLOWING` or `UNBOUNDED FOLLOWING`.
     Following(Option<Scalar>),
-}
-
-impl PartialOrd for WindowFuncFrameBound {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        match (self, other) {
-            (WindowFuncFrameBound::CurrentRow, WindowFuncFrameBound::CurrentRow) => {
-                Some(Ordering::Equal)
-            }
-            (WindowFuncFrameBound::CurrentRow, WindowFuncFrameBound::Preceding(_)) => {
-                Some(Ordering::Greater)
-            }
-            (WindowFuncFrameBound::CurrentRow, WindowFuncFrameBound::Following(_)) => {
-                Some(Ordering::Less)
-            }
-            (WindowFuncFrameBound::Preceding(_), WindowFuncFrameBound::CurrentRow) => {
-                Some(Ordering::Less)
-            }
-            (WindowFuncFrameBound::Preceding(None), WindowFuncFrameBound::Preceding(None)) => {
-                Some(Ordering::Equal)
-            }
-            (WindowFuncFrameBound::Preceding(None), WindowFuncFrameBound::Preceding(_)) => {
-                Some(Ordering::Less)
-            }
-            (WindowFuncFrameBound::Preceding(Some(_)), WindowFuncFrameBound::Preceding(None)) => {
-                Some(Ordering::Greater)
-            }
-            (
-                WindowFuncFrameBound::Preceding(Some(lhs)),
-                WindowFuncFrameBound::Preceding(Some(rhs)),
-            ) => lhs.partial_cmp(rhs).map(Ordering::reverse),
-            (WindowFuncFrameBound::Preceding(_), WindowFuncFrameBound::Following(_)) => {
-                Some(Ordering::Less)
-            }
-            (WindowFuncFrameBound::Following(_), WindowFuncFrameBound::CurrentRow) => {
-                Some(Ordering::Greater)
-            }
-            (WindowFuncFrameBound::Following(_), WindowFuncFrameBound::Preceding(_)) => {
-                Some(Ordering::Greater)
-            }
-            (WindowFuncFrameBound::Following(None), WindowFuncFrameBound::Following(None)) => {
-                Some(Ordering::Equal)
-            }
-            (WindowFuncFrameBound::Following(None), WindowFuncFrameBound::Following(_)) => {
-                Some(Ordering::Greater)
-            }
-            (WindowFuncFrameBound::Following(Some(_)), WindowFuncFrameBound::Following(None)) => {
-                Some(Ordering::Less)
-            }
-            (
-                WindowFuncFrameBound::Following(Some(lhs)),
-                WindowFuncFrameBound::Following(Some(rhs)),
-            ) => lhs.partial_cmp(rhs),
-        }
-    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
