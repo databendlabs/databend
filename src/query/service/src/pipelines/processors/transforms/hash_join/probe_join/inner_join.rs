@@ -52,11 +52,7 @@ impl JoinHashTable {
         let probe_indexes = &mut probe_state.probe_indexes;
         let mut build_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
 
-        let chunks = &self.row_space.chunks.read().unwrap();
-        let data_blocks = chunks
-            .iter()
-            .map(|c| c.data_block.clone())
-            .collect::<Vec<DataBlock>>();
+        let data_blocks = self.row_space.datablocks()
         let num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
