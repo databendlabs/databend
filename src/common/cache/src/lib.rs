@@ -32,3 +32,4 @@ pub use meter::file_meter::FileSize;
 pub use meter::heap_meter::HeapSize;
 pub use meter::Meter;
 pub use ritelinked::DefaultHashBuilder;
+pub use meter::count_meter::CountableMeterWithMeasure;

@@ -16,10 +16,12 @@ use std::hash::BuildHasher;
 use std::hash::Hash;
 use std::sync::Arc;
 
+use common_cache::Cache;
 use common_cache::Count;
 use common_cache::CountableMeter;
 use common_cache::DefaultHashBuilder;
 
+use crate::InMemoryItemCacheHolder;
 use crate::metrics_inc_cache_access_count;
 use crate::metrics_inc_cache_hit_count;
 use crate::metrics_inc_cache_miss_count;
@@ -62,6 +64,16 @@ impl<C> NamedCache<C> {
     #[inline]
     pub fn name(&self) -> &str {
         &self.name
+    }    
+}
+
+impl<T> NamedCache<InMemoryItemCacheHolder<T>>{
+    pub fn len(&self) -> usize {
+        self.cache.read().len()
+    }
+
+    pub fn size(&self) -> u64 {
+        self.cache.read().size()
     }
 }
 

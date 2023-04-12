@@ -2,8 +2,6 @@
 DB.Table: 'system'.'engines', Table: engines-table_id:1, ver:0, Engine: SystemEngines
 -------- TABLE CONTENTS ----------
 +----------+-------------------------------+
-| Column 0 | Column 1                      |
-+----------+-------------------------------+
 | "FUSE"   | "FUSE Storage Engine"         |
 | "MEMORY" | "MEMORY Storage Engine"       |
 | "NULL"   | "NULL Storage Engine"         |

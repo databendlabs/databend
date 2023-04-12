@@ -41,6 +41,7 @@ use common_storages_system::CreditsTable;
 use common_storages_system::DatabasesTable;
 use common_storages_system::EnginesTable;
 use common_storages_system::FunctionsTable;
+use common_storages_system::InMemoryCacheTable;
 use common_storages_system::MetricsTable;
 use common_storages_system::RolesTable;
 use common_storages_system::SettingsTable;
@@ -388,6 +389,19 @@ async fn test_users_table() -> Result<()> {
         .await?;
 
     let table = UsersTable::create(1);
+
+    run_table_tests(file, ctx, table).await?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_in_memory_caches_table() -> Result<()> {
+    let mut mint = Mint::new("tests/it/storages/testdata");
+    let file = &mut mint.new_goldenfile("in_memory_caches_table.txt").unwrap();
+
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
+
+    let table = InMemoryCacheTable::create(1);
 
     run_table_tests(file, ctx, table).await?;
     Ok(())
