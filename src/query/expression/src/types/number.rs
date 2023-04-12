@@ -32,6 +32,7 @@ use crate::types::DataType;
 use crate::types::GenericMap;
 use crate::types::ValueType;
 use crate::utils::arrow::buffer_into_mut;
+use crate::utils::copy::copy_numeric_by_compressd_indices;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
@@ -229,58 +230,8 @@ impl<Num: Number> ArgType for NumberType<Num> {
         indices: &[(u32, u32)],
         row_num: usize,
     ) -> Self::Column {
-        let mut col_builder = Self::create_builder(row_num, &[]);
-        let builder_ptr = col_builder.as_mut_ptr();
-        let col_ptr = col.as_ptr();
-        let mut offset = 0;
-        for (index, cnt) in indices {
-            if *cnt == 1 {
-                std::ptr::copy_nonoverlapping(
-                    col_ptr.add(*index as usize),
-                    builder_ptr.add(offset),
-                    1,
-                );
-                offset += 1;
-                continue;
-            }
-            // Using the doubling method to copy memory.
-            let base_offset = offset;
-            std::ptr::copy_nonoverlapping(
-                col_ptr.add(*index as usize),
-                builder_ptr.add(base_offset),
-                1,
-            );
-            let mut remain = *cnt as usize;
-            // Since cnt > 0, then 31 - cnt.leading_zeros() >= 0.
-            let max_segment = 1 << (31 - cnt.leading_zeros());
-            let mut cur_segment = 1;
-            while cur_segment < max_segment {
-                std::ptr::copy_nonoverlapping(
-                    builder_ptr.add(base_offset),
-                    builder_ptr.add(base_offset + cur_segment),
-                    cur_segment,
-                );
-                cur_segment <<= 1;
-            }
-            remain -= max_segment;
-            offset += max_segment;
-            let mut power = 0;
-            while remain > 0 {
-                if remain & 1 == 1 {
-                    let cur_segment = 1 << power;
-                    std::ptr::copy_nonoverlapping(
-                        builder_ptr.add(base_offset),
-                        builder_ptr.add(offset),
-                        cur_segment,
-                    );
-                    offset += cur_segment;
-                }
-                power += 1;
-                remain >>= 1;
-            }
-        }
-        col_builder.set_len(offset);
-        Self::build_column(col_builder)
+        let builder = copy_numeric_by_compressd_indices(col, indices, row_num);
+        Self::column_from_vec(builder, &[])
     }
 }
 

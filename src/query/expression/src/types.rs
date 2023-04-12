@@ -369,14 +369,11 @@ pub trait ArgType: ValueType {
         row_num: usize,
     ) -> Self::Column {
         let mut builder = Self::create_builder(row_num, &[]);
-        unsafe {
-            for (index, cnt) in indices {
-                for _ in 0..*cnt {
-                    Self::push_item(
-                        &mut builder,
-                        Self::index_column_unchecked(col, *index as usize),
-                    );
-                }
+        for (index, cnt) in indices {
+            for _ in 0..*cnt {
+                Self::push_item(&mut builder, unsafe {
+                    Self::index_column_unchecked(col, *index as usize)
+                });
             }
         }
         Self::build_column(builder)

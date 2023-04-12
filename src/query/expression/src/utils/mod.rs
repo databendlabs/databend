@@ -17,6 +17,7 @@ pub mod arrow;
 pub mod block_debug;
 pub mod block_thresholds;
 mod column_from;
+pub mod copy;
 pub mod date_helper;
 pub mod display;
 pub mod filter_helper;

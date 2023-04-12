@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_exception::Result;
-use ethnum::I256;
 use itertools::Itertools;
 
 use crate::types::array::ArrayColumn;
@@ -31,6 +30,7 @@ use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::ValueType;
 use crate::types::VariantType;
+use crate::utils::copy::copy_numeric_by_compressd_indices;
 use crate::with_decimal_type;
 use crate::with_number_mapped_type;
 use crate::BlockEntry;
@@ -188,135 +188,13 @@ impl Column {
             }
             Column::Decimal(column) => with_decimal_type!(|DECIMAL_TYPE| match column {
                 DecimalColumn::Decimal128(values, size) => {
-                    let mut builder: Vec<i128> = Vec::with_capacity(row_num);
-                    let builder_ptr = builder.as_mut_ptr();
-                    let col_ptr = values.as_ptr();
-                    let mut offset = 0;
-                    let mut remain;
-                    let mut power;
-                    for (index, cnt) in indices {
-                        if *cnt == 1 {
-                            unsafe {
-                                std::ptr::copy_nonoverlapping(
-                                    col_ptr.add(*index as usize),
-                                    builder_ptr.add(offset),
-                                    1,
-                                );
-                            }
-                            offset += 1;
-                            continue;
-                        }
-                        // Using the doubling method to copy memory.
-                        let base_offset = offset;
-                        unsafe {
-                            std::ptr::copy_nonoverlapping(
-                                col_ptr.add(*index as usize),
-                                builder_ptr.add(base_offset),
-                                1,
-                            );
-                        }
-                        remain = *cnt as usize;
-                        // Since cnt > 0, then 31 - cnt.leading_zeros() >= 0.
-                        let max_segment = 1 << (31 - cnt.leading_zeros());
-                        let mut cur_segment = 1;
-                        while cur_segment < max_segment {
-                            unsafe {
-                                std::ptr::copy_nonoverlapping(
-                                    builder_ptr.add(base_offset),
-                                    builder_ptr.add(base_offset + cur_segment),
-                                    cur_segment,
-                                );
-                            }
-                            cur_segment <<= 1;
-                        }
-                        remain -= max_segment;
-                        offset += max_segment;
-                        power = 0;
-                        while remain > 0 {
-                            if remain & 1 == 1 {
-                                let cur_segment = 1 << power;
-                                unsafe {
-                                    std::ptr::copy_nonoverlapping(
-                                        builder_ptr.add(base_offset),
-                                        builder_ptr.add(offset),
-                                        cur_segment,
-                                    );
-                                }
-                                offset += cur_segment;
-                            }
-                            power += 1;
-                            remain >>= 1;
-                        }
-                    }
-                    unsafe {
-                        builder.set_len(offset);
-                    }
+                    let builder =
+                        unsafe { copy_numeric_by_compressd_indices(values, indices, row_num) };
                     Column::Decimal(DecimalColumn::Decimal128(builder.into(), *size))
                 }
                 DecimalColumn::Decimal256(values, size) => {
-                    let mut builder: Vec<I256> = Vec::with_capacity(row_num);
-                    let builder_ptr = builder.as_mut_ptr();
-                    let col_ptr = values.as_ptr();
-                    let mut offset = 0;
-                    let mut remain;
-                    let mut power;
-                    for (index, cnt) in indices {
-                        if *cnt == 1 {
-                            unsafe {
-                                std::ptr::copy_nonoverlapping(
-                                    col_ptr.add(*index as usize),
-                                    builder_ptr.add(offset),
-                                    1,
-                                );
-                            }
-                            offset += 1;
-                            continue;
-                        }
-                        // Using the doubling method to copy memory.
-                        let base_offset = offset;
-                        unsafe {
-                            std::ptr::copy_nonoverlapping(
-                                col_ptr.add(*index as usize),
-                                builder_ptr.add(base_offset),
-                                1,
-                            );
-                        }
-                        remain = *cnt as usize;
-                        // Since cnt > 0, then 31 - cnt.leading_zeros() >= 0.
-                        let max_segment = 1 << (31 - cnt.leading_zeros());
-                        let mut cur_segment = 1;
-                        while cur_segment < max_segment {
-                            unsafe {
-                                std::ptr::copy_nonoverlapping(
-                                    builder_ptr.add(base_offset),
-                                    builder_ptr.add(base_offset + cur_segment),
-                                    cur_segment,
-                                );
-                            }
-                            cur_segment <<= 1;
-                        }
-                        remain -= max_segment;
-                        offset += max_segment;
-                        power = 0;
-                        while remain > 0 {
-                            if remain & 1 == 1 {
-                                let cur_segment = 1 << power;
-                                unsafe {
-                                    std::ptr::copy_nonoverlapping(
-                                        builder_ptr.add(base_offset),
-                                        builder_ptr.add(offset),
-                                        cur_segment,
-                                    );
-                                }
-                                offset += cur_segment;
-                            }
-                            power += 1;
-                            remain >>= 1;
-                        }
-                    }
-                    unsafe {
-                        builder.set_len(offset);
-                    }
+                    let builder =
+                        unsafe { copy_numeric_by_compressd_indices(values, indices, row_num) };
                     Column::Decimal(DecimalColumn::Decimal256(builder.into(), *size))
                 }
             }),
