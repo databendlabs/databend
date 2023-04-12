@@ -34,7 +34,7 @@ prost = { workspace = true }
 semver = "1.0.14"
 serde = { workspace = true }
 serde_json = { workspace = true }
-tonic = { version = "0.8.1", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
+tonic = { workspace = true }
 tracing = "0.1.36"
 
 [dev-dependencies]

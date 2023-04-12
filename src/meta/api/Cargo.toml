@@ -31,5 +31,5 @@ maplit = "1.0.2"
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tonic = { version = "0.8.1", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
+tonic = { workspace = true }
 tracing = "0.1.36"

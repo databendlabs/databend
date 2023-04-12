@@ -24,7 +24,7 @@ opentelemetry = { version = "0.18.0", default-features = false, features = ["tra
 opentelemetry-jaeger = { version = "0.17.0", features = ["rt-tokio"] }
 sentry-tracing = "0.30.0"
 serde = { workspace = true }
-tonic = "0.8.1"
+tonic = { workspace = true }
 tracing = "0.1.36"
 tracing-appender = "0.2.2"
 tracing-log = "0.1.3"

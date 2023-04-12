@@ -119,6 +119,9 @@ thiserror = { version = "1" }
 # CLI
 clap = { version = "3.2.22", features = ["derive", "env"] }
 
+# server
+tonic = { version = "0.9.0", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
+
 # serialization
 prost = { version = "0.11.0" }
 # 1.0.153 adds a new feature which will allow `serde(alias = "…")` inside a flattened struct.
@@ -196,3 +199,4 @@ rpath = false
 arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "73ed7c8" }
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "ed0e1ff" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }
+arrow-format = { git = "https://github.com/datafuse-extras/arrow-format", rev = "8dc27b8e" }
