@@ -253,14 +253,6 @@ impl StringColumnBuilder {
         }
     }
 
-    pub fn with_capacity_and_offset(len: usize, data_capacity: usize, offsets: Vec<u64>) -> Self {
-        StringColumnBuilder {
-            need_estimated: data_capacity == 0 && len > 0,
-            data: Vec::with_capacity(data_capacity),
-            offsets,
-        }
-    }
-
     pub fn from_column(col: StringColumn) -> Self {
         StringColumnBuilder {
             need_estimated: col.data.is_empty(),
@@ -402,11 +394,6 @@ impl StringColumnBuilder {
         } else {
             None
         }
-    }
-
-    #[inline]
-    pub fn as_mut_data_ptr(&mut self) -> *mut u8 {
-        self.data.as_mut_ptr()
     }
 }
 
