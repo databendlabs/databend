@@ -176,16 +176,16 @@ impl QueryFragmentsActions {
         let mut query_fragments_plan_packets = Vec::with_capacity(fragments_packets.len());
 
         let cluster = self.ctx.get_cluster();
+        let changed_settings = self.ctx.get_changed_settings();
         let local_query_fragments_plan_packet = QueryFragmentsPlanPacket::create(
             self.ctx.get_id(),
             cluster.local_id.clone(),
             fragments_packets.remove(&cluster.local_id).unwrap(),
             nodes_info.clone(),
-            HashMap::new(),
+            changed_settings.clone(),
             cluster.local_id(),
         );
 
-        let changed_settings = self.ctx.get_changed_settings();
         for (executor, fragments) in fragments_packets.into_iter() {
             let query_id = self.ctx.get_id();
             let executors_info = nodes_info.clone();
