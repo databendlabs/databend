@@ -933,10 +933,10 @@ EvalScalar
                         ├── output columns: [a]
                         └── estimated rows: 1.00
 
-statement error Http client error(from reqwest crate): error sending request for url (http://127.0.0.1:8124/?database=default&sandbox_tenant=Q89P6kw&query=drop+table+t1): error trying to connect: tcp connect error: Connection refused (os error 61)
+statement ok
 drop table t1
 
-statement error Http client error(from reqwest crate): error sending request for url (http://127.0.0.1:8124/?query=drop+table+t2&sandbox_tenant=Q89P6kw&database=default): error trying to connect: tcp connect error: Connection refused (os error 61)
+statement ok
 drop table t2
 
 query 
@@ -1003,7 +1003,7 @@ EvalScalar
 statement ok
 drop view if exists v4
 
-statement error Http client error(from reqwest crate): error sending request for url (http://127.0.0.1:8124/?query=create+view+v4+as+select+a+as+a%2C+try_cast%28get%28try_parse_json%28b%29%2C+%27bb%27%29+as+varchar%29+as+b+from+t4&database=default&sandbox_tenant=Q89P6kw): error trying to connect: tcp connect error: Connection refused (os error 61)
+statement ok
 create view v4 as select a as a, try_cast(get(try_parse_json(b), 'bb') as varchar) as b from t4;
 
 query 
