@@ -471,7 +471,7 @@ impl SubqueryRewriter {
                             span: subquery.span,
                             func_name: op.to_func_name().to_string(),
                             params: vec![],
-                            arguments: vec![left_condition, right_condition],
+                            arguments: vec![right_condition, left_condition],
                         });
                         (vec![], vec![], vec![other_condition])
                     };
