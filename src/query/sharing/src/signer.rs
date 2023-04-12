@@ -164,7 +164,7 @@ impl SharedSigner {
             .header(CONTENT_LENGTH, bs.len())
             .header(TENANT_HEADER, requester)
             .body(AsyncBody::Bytes(bs))?;
-        let resp = self.client.send_async(req).await?;
+        let resp = self.client.send(req).await?;
         let bs = resp.into_body().bytes().await?;
         let items: Vec<PresignResponseItem> = serde_json::from_slice(&bs)?;
 

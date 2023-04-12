@@ -67,7 +67,6 @@ impl Interpreter for ShowSharesInterpreter {
         let share_specs = ShareEndpointManager::instance()
             .get_inbound_shares(&tenant, None, None)
             .await?;
-        println!("INBOUND share: {:?}", share_specs);
         for (from_tenant, share_spec) in share_specs {
             names.push(share_spec.name.clone().as_bytes().to_vec());
             kinds.push("INBOUND".to_string().as_bytes().to_vec());

@@ -137,7 +137,7 @@ impl ShareEndpointManager {
             .header(CONTENT_LENGTH, bs.len())
             .header(TENANT_HEADER, requester)
             .body(AsyncBody::Bytes(bs))?;
-        let resp = self.client.send_async(req).await;
+        let resp = self.client.send(req).await;
         match resp {
             Ok(resp) => {
                 let bs = resp.into_body().bytes().await?;
@@ -184,7 +184,7 @@ impl ShareEndpointManager {
                 .header(CONTENT_LENGTH, bs.len())
                 .header(TENANT_HEADER, requester)
                 .body(AsyncBody::Bytes(bs))?;
-            let resp = self.client.send_async(req).await;
+            let resp = self.client.send(req).await;
             match resp {
                 Ok(resp) => {
                     let bs = resp.into_body().bytes().await?;

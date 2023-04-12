@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use common_expression::types::DataType;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_meta_app::principal::StageInfo;
-use time::Duration;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PresignAction {
