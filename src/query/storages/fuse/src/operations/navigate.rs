@@ -40,18 +40,10 @@ impl FuseTable {
     #[async_backtrace::framed]
     pub async fn navigate_to_time_point(
         &self,
+        location: String,
         time_point: DateTime<Utc>,
     ) -> Result<Arc<FuseTable>> {
-        let snapshot_location = if let Some(loc) = self.snapshot_loc().await? {
-            loc
-        } else {
-            // not an error?
-            return Err(ErrorCode::TableHistoricalDataNotFound(
-                "Empty Table has no historical data",
-            ));
-        };
-
-        self.find(snapshot_location, |snapshot| {
+        self.find(location, |snapshot| {
             if let Some(ts) = snapshot.timestamp {
                 ts <= time_point
             } else {
@@ -62,63 +54,18 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
-    pub async fn navigate_to_snapshot(&self, snapshot_id: &str) -> Result<Arc<FuseTable>> {
-        let snapshot_location = if let Some(loc) = self.snapshot_loc().await? {
-            loc
-        } else {
-            // not an error?
-            return Err(ErrorCode::TableHistoricalDataNotFound(
-                "Empty Table has no historical data",
-            ));
-        };
-
-        self.find(snapshot_location, |snapshot| {
+    pub async fn navigate_to_snapshot(
+        &self,
+        location: String,
+        snapshot_id: &str,
+    ) -> Result<Arc<FuseTable>> {
+        self.find(location, |snapshot| {
             snapshot
                 .snapshot_id
                 .simple()
                 .to_string()
                 .as_str()
                 .starts_with(snapshot_id)
-        })
-        .await
-    }
-
-    #[async_backtrace::framed]
-    pub async fn navigate_with_retention(
-        &self,
-        snapshot_id: &str,
-        retention_point: Option<DateTime<Utc>>,
-    ) -> Result<Arc<FuseTable>> {
-        assert!(retention_point.is_some());
-        let snapshot_location = if let Some(loc) = self.snapshot_loc().await? {
-            loc
-        } else {
-            // not an error?
-            return Err(ErrorCode::TableHistoricalDataNotFound(
-                "Empty Table has no historical data",
-            ));
-        };
-
-        let mut find_id = false;
-        self.find(snapshot_location, |snapshot| {
-            if find_id {
-                snapshot.timestamp <= retention_point
-            } else if snapshot
-                .snapshot_id
-                .simple()
-                .to_string()
-                .as_str()
-                .starts_with(snapshot_id)
-            {
-                if snapshot.timestamp > retention_point {
-                    find_id = true;
-                    false
-                } else {
-                    true
-                }
-            } else {
-                false
-            }
         })
         .await
     }

@@ -83,7 +83,11 @@ async fn test_fuse_navigate() -> Result<()> {
     assert_eq!(second_snapshot, loc);
     let version = TableMetaLocationGenerator::snapshot_version(loc.as_str());
     let snapshots: Vec<_> = reader
-        .snapshot_history(loc, version, fuse_table.meta_location_generator().clone())
+        .snapshot_history(
+            loc.clone(),
+            version,
+            fuse_table.meta_location_generator().clone(),
+        )
         .try_collect()
         .await?;
 
@@ -98,7 +102,9 @@ async fn test_fuse_navigate() -> Result<()> {
         .unwrap()
         .sub(chrono::Duration::milliseconds(1));
     // navigate from the instant that is just one ms before the timestamp of the latest snapshot
-    let tbl = fuse_table.navigate_to_time_point(instant).await?;
+    let tbl = fuse_table
+        .navigate_to_time_point(loc.clone(), instant)
+        .await?;
 
     // check we got the snapshot of the first insertion
     assert_eq!(first_snapshot, tbl.snapshot_loc().await?.unwrap());
@@ -110,7 +116,7 @@ async fn test_fuse_navigate() -> Result<()> {
         .unwrap()
         .sub(chrono::Duration::milliseconds(1));
     // navigate from the instant that is just one ms before the timestamp of the last insertion
-    let res = fuse_table.navigate_to_time_point(instant).await;
+    let res = fuse_table.navigate_to_time_point(loc, instant).await;
     match res {
         Ok(_) => panic!("historical data should not exist"),
         Err(e) => assert_eq!(e.code(), ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND),
