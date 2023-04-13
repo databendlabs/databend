@@ -22,28 +22,36 @@ KURTOSIS(expression)
 
 Nullable Float64.
 
-## Examples
+## Example
+
+**Create a Table and Insert Sample Data**
+```sql
+CREATE TABLE stock_prices (
+  id INT,
+  stock_symbol VARCHAR,
+  price FLOAT
+);
+
+INSERT INTO stock_prices (id, stock_symbol, price)
+VALUES (1, 'AAPL', 150),
+       (2, 'AAPL', 152),
+       (3, 'AAPL', 148),
+       (4, 'AAPL', 160),
+       (5, 'AAPL', 155);
+```
+
+**Query Demo: Calculate Excess Kurtosis for Apple Stock Prices**
 
 ```sql
-create table aggr(k int, v int, v2 int null);
+SELECT KURTOSIS(price) AS excess_kurtosis
+FROM stock_prices
+WHERE stock_symbol = 'AAPL';
+```
 
-insert into aggr values
-    (1, 10, null),
-    (2, 10, 11),
-    (2, 10, 15),
-    (2, 10, 18),
-    (2, 20, 22),
-    (2, 20, 25),
-    (2, 25, null),
-    (2, 30, 35),
-    (2, 30, 40),
-    (2, 30, 50),
-    (2, 30, 51);
+**Result**
 
-select kurtosis(k), kurtosis(v), kurtosis(v2) from aggr;
-+-------------------+---------------------+---------------------+
-| kurtosis(k)       | kurtosis(v)         | kurtosis(v2)        |
-+-------------------+---------------------+---------------------+
-| 10.99999999999836 | -1.9614277138467147 | -1.4451196915855287 |
-+-------------------+---------------------+---------------------+
+```sql
+|     excess_kurtosis     |
+|-------------------------|
+| 0.06818181325581445     |
 ```

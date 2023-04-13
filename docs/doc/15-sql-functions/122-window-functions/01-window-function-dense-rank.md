@@ -42,9 +42,14 @@ INSERT INTO employees (employee_id, first_name, last_name, department, salary) V
 **Calculating the total salary per department using DENSE_RANK**
 
 ```sql
-SELECT department, SUM(salary) AS total_salary, DENSE_RANK() OVER (ORDER BY SUM(salary) DESC) AS dense_rank
-FROM employees
-GROUP BY department;
+SELECT
+    department,
+    SUM(salary) AS total_salary,
+    DENSE_RANK() OVER (ORDER BY SUM(salary) DESC) AS dense_rank
+FROM
+    employees
+GROUP BY
+    department;
 ```
 
 Result:
