@@ -32,6 +32,7 @@ use common_meta_app::storage::StorageS3Config;
 use common_metrics::init_default_metrics_recorder;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_storages_system::BuildOptionsTable;
+use common_storages_system::CachesTable;
 use common_storages_system::CatalogsTable;
 use common_storages_system::ClustersTable;
 use common_storages_system::ColumnsTable;
@@ -388,6 +389,19 @@ async fn test_users_table() -> Result<()> {
         .await?;
 
     let table = UsersTable::create(1);
+
+    run_table_tests(file, ctx, table).await?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_caches_table() -> Result<()> {
+    let mut mint = Mint::new("tests/it/storages/testdata");
+    let file = &mut mint.new_goldenfile("caches_table.txt").unwrap();
+
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
+
+    let table = CachesTable::create(1);
 
     run_table_tests(file, ctx, table).await?;
     Ok(())
