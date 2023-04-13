@@ -17,5 +17,6 @@
 mod share;
 
 pub use share::save_share_spec;
+pub use share::save_share_table_info;
 pub use share::share_table_info_location;
 pub use share::SHARE_CONFIG_PREFIX;
