@@ -49,8 +49,6 @@ use memchr::memmem;
 use regex::bytes::Regex;
 
 use crate::scalars::decimal::register_decimal_compare_op;
-use crate::scalars::string::soundex;
-use crate::scalars::string::vectorize_string_to_string;
 use crate::scalars::string_multi_args::regexp;
 
 pub fn register(registry: &mut FunctionRegistry) {
@@ -62,7 +60,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_boolean_cmp(registry);
     register_array_cmp(registry);
     register_tuple_cmp(registry);
-    register_sounds_like(registry);
     register_like(registry);
 }
 
@@ -437,60 +434,6 @@ fn register_tuple_cmp(registry: &mut FunctionRegistry) {
             _ => None,
         }
     });
-}
-
-fn register_sounds_like(registry: &mut FunctionRegistry) {
-    registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
-        "sounds_like",
-        |_, _| FunctionDomain::Full,
-        vectorize_sounds_like(),
-    );
-}
-
-fn vectorize_sounds_like()
--> impl Fn(ValueRef<StringType>, ValueRef<StringType>, &mut EvalContext) -> Value<BooleanType> + Copy
-{
-    move |arg1, arg2, ctx| {
-        let soundex_func = vectorize_string_to_string(
-            |col| usize::max(col.data.len(), 4 * col.len()),
-            soundex::soundex,
-        );
-
-        let left: Value<StringType> = soundex_func(arg1, ctx);
-        let right: Value<StringType> = soundex_func(arg2, ctx);
-        match (left, right) {
-            (Value::Scalar(arg1), Value::Scalar(arg2)) => Value::Scalar(arg1 == arg2),
-            (Value::Column(arg1), Value::Column(arg2)) => {
-                let mut builder = MutableBitmap::with_capacity(arg2.len());
-                let arg1_iter = StringType::iter_column(&arg1);
-                let mut arg2_iter = StringType::iter_column(&arg2);
-
-                for arg1 in arg1_iter {
-                    let arg2 = arg2_iter.next().expect("Should be same length");
-                    builder.push(arg1 == arg2);
-                }
-                Value::Column(builder.into())
-            }
-            (Value::Column(arg1), Value::Scalar(arg2)) => {
-                let mut builder = MutableBitmap::with_capacity(arg1.len());
-                let arg1_iter = StringType::iter_column(&arg1);
-
-                for arg1 in arg1_iter {
-                    builder.push(arg1 == arg2);
-                }
-                Value::Column(builder.into())
-            }
-            (Value::Scalar(arg2), Value::Column(arg1)) => {
-                let mut builder = MutableBitmap::with_capacity(arg1.len());
-                let arg1_iter = StringType::iter_column(&arg1);
-
-                for arg1 in arg1_iter {
-                    builder.push(arg1 == arg2);
-                }
-                Value::Column(builder.into())
-            }
-        }
-    }
 }
 
 fn register_like(registry: &mut FunctionRegistry) {
