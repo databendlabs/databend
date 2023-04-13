@@ -2163,7 +2163,7 @@ checked expr   : array_sort_desc_null_first<T0=UInt8><Array(T0)>(array<T0=UInt8>
 optimized expr : [20, 8, 7, 6, 5, 4, 3, 2, 1]
 output type    : Array(UInt8)
 output domain  : [{1..=20}]
-optimized expr : [20, 8, 7, 6, 5, 4, 3, 2, 1]
+output         : [20, 8, 7, 6, 5, 4, 3, 2, 1]
 
 
 ast            : array_sort_desc_null_last([8, 20, 1, 2, 3, 4, 5, 6, 7])
@@ -2172,7 +2172,7 @@ checked expr   : array_sort_desc_null_last<T0=UInt8><Array(T0)>(array<T0=UInt8><
 optimized expr : [20, 8, 7, 6, 5, 4, 3, 2, 1]
 output type    : Array(UInt8)
 output domain  : [{1..=20}]
-optimized expr : [20, 8, 7, 6, 5, 4, 3, 2, 1]
+output         : [20, 8, 7, 6, 5, 4, 3, 2, 1]
 
 
 ast            : array_sort_asc_null_first([1.2, NULL, 3.4, 5.6, '2.2', NULL])
