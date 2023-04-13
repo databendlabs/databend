@@ -19,7 +19,6 @@ use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::RuleID;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::SExpr;
-use crate::plans::ComparisonOp;
 use crate::plans::Filter;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
@@ -72,18 +71,17 @@ impl Rule for RuleEliminateFilter {
         let predicates = predicates
             .into_iter()
             .filter(|predicate| match predicate {
-                ScalarExpr::ComparisonExpr(comparison_expr) => {
-                    let left_column = match &*comparison_expr.left {
-                        ScalarExpr::BoundColumnRef(left_col) => left_col,
-                        _ => return true,
-                    };
-                    let right_column = match &*comparison_expr.right {
-                        ScalarExpr::BoundColumnRef(right_col) => right_col,
-                        _ => return true,
-                    };
-                    !(comparison_expr.op == ComparisonOp::Equal
-                        && left_column.column.index == right_column.column.index
-                        && !left_column.column.data_type.is_nullable())
+                ScalarExpr::FunctionCall(func) if func.func_name == "eq" => {
+                    if let (
+                        ScalarExpr::BoundColumnRef(left_col),
+                        ScalarExpr::BoundColumnRef(right_col),
+                    ) = (&func.arguments[0], &func.arguments[1])
+                    {
+                        left_col.column.index != right_col.column.index
+                            || left_col.column.data_type.is_nullable()
+                    } else {
+                        true
+                    }
                 }
                 _ => true,
             })

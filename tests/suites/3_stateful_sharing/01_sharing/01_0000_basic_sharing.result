@@ -1,5 +1,16 @@
-INBOUND test_share test_database shared_tenant shared_tenant
+drop test share and database
+prepare shared database and table
 OUTBOUND test_share test_database shared_tenant shared_tenant,to_tenant
+get shared database and table from same tenant
+INBOUND test_share test_database shared_tenant shared_tenant
+1
+2
+3
+4
+5
+6
+get shared database and table from another tenant
+INBOUND test_share test_database to_tenant to_tenant
 INBOUND test_share test_database shared_tenant to_tenant
 1
 2
@@ -7,6 +18,7 @@ INBOUND test_share test_database shared_tenant to_tenant
 4
 5
 6
+drop shared table and query data from share
 ERROR 1105 (HY000) at line 1: Code: 1025, Text = error: 
   --> SQL:1:15
   |
@@ -14,6 +26,17 @@ ERROR 1105 (HY000) at line 1: Code: 1025, Text = error:
   |               ^^^^^^^^^^^^ Unknown table 't1'
 
 .
+ERROR 1105 (HY000) at line 1: Code: 1025, Text = error: 
+  --> SQL:1:15
+  |
+1 | SELECT * FROM shared_db.t1
+  |               ^^^^^^^^^^^^ Unknown table 't1'
+
+.
+drop shared database and query data from share
+4
+5
+6
 4
 5
 6
@@ -24,3 +47,11 @@ ERROR 1105 (HY000) at line 1: Code: 1025, Text = error:
   |               ^^^^^^^^^^^^ Unknown table 't2'
 
 .
+ERROR 1105 (HY000) at line 1: Code: 1025, Text = error: 
+  --> SQL:1:15
+  |
+1 | SELECT * FROM shared_db.t2
+  |               ^^^^^^^^^^^^ Unknown table 't2'
+
+.
+all is good

@@ -34,18 +34,14 @@ use crate::planner::binder::wrap_cast;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
-use crate::plans::AndExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
-use crate::plans::ComparisonExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::NotExpr;
-use crate::plans::OrExpr;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
@@ -166,8 +162,10 @@ impl SubqueryRewriter {
                     non_equi_conditions.push(pred.clone());
                 }
 
-                JoinPredicate::Both { left, right, equal } => {
-                    if equal {
+                JoinPredicate::Both {
+                    left, right, op, ..
+                } => {
+                    if op == ComparisonOp::Equal {
                         if left.data_type()?.eq(&right.data_type()?) {
                             left_conditions.push(left.clone());
                             right_conditions.push(right.clone());
@@ -345,13 +343,14 @@ impl SubqueryRewriter {
                     &subquery.data_type,
                 );
                 let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
-                let op = subquery.compare_op.as_ref().unwrap().clone();
+                let op = *subquery.compare_op.as_ref().unwrap();
                 // Make <child_expr op right_condition> as non_equi_conditions even if op is equal operator.
                 // Because it's not null-safe.
-                let non_equi_conditions = vec![ScalarExpr::ComparisonExpr(ComparisonExpr {
-                    op,
-                    left: Box::new(child_expr),
-                    right: Box::new(right_condition),
+                let non_equi_conditions = vec![ScalarExpr::FunctionCall(FunctionCall {
+                    span: subquery.span,
+                    func_name: op.to_func_name().to_string(),
+                    params: vec![],
+                    arguments: vec![child_expr, right_condition],
                 })];
                 let marker_index = if let Some(idx) = subquery.projection_index {
                     idx
@@ -720,37 +719,6 @@ impl SubqueryRewriter {
                 Ok(scalar.clone())
             }
             ScalarExpr::ConstantExpr(_) => Ok(scalar.clone()),
-            ScalarExpr::AndExpr(and_expr) => {
-                let left = self.flatten_scalar(&and_expr.left, correlated_columns)?;
-                let right = self.flatten_scalar(&and_expr.right, correlated_columns)?;
-                Ok(ScalarExpr::AndExpr(AndExpr {
-                    left: Box::new(left),
-                    right: Box::new(right),
-                }))
-            }
-            ScalarExpr::OrExpr(or_expr) => {
-                let left = self.flatten_scalar(&or_expr.left, correlated_columns)?;
-                let right = self.flatten_scalar(&or_expr.right, correlated_columns)?;
-                Ok(ScalarExpr::OrExpr(OrExpr {
-                    left: Box::new(left),
-                    right: Box::new(right),
-                }))
-            }
-            ScalarExpr::NotExpr(not_expr) => {
-                let argument = self.flatten_scalar(&not_expr.argument, correlated_columns)?;
-                Ok(ScalarExpr::NotExpr(NotExpr {
-                    argument: Box::new(argument),
-                }))
-            }
-            ScalarExpr::ComparisonExpr(comparison_expr) => {
-                let left = self.flatten_scalar(&comparison_expr.left, correlated_columns)?;
-                let right = self.flatten_scalar(&comparison_expr.right, correlated_columns)?;
-                Ok(ScalarExpr::ComparisonExpr(ComparisonExpr {
-                    op: comparison_expr.op.clone(),
-                    left: Box::new(left),
-                    right: Box::new(right),
-                }))
-            }
             ScalarExpr::AggregateFunction(agg) => {
                 let mut args = Vec::with_capacity(agg.args.len());
                 for arg in &agg.args {
@@ -765,16 +733,17 @@ impl SubqueryRewriter {
                     return_type: agg.return_type.clone(),
                 }))
             }
-            ScalarExpr::FunctionCall(fun_call) => {
-                let mut arguments = Vec::with_capacity(fun_call.arguments.len());
-                for arg in &fun_call.arguments {
-                    arguments.push(self.flatten_scalar(arg, correlated_columns)?);
-                }
+            ScalarExpr::FunctionCall(func) => {
+                let arguments = func
+                    .arguments
+                    .iter()
+                    .map(|arg| self.flatten_scalar(arg, correlated_columns))
+                    .collect::<Result<Vec<_>>>()?;
                 Ok(ScalarExpr::FunctionCall(FunctionCall {
-                    span: fun_call.span,
-                    params: fun_call.params.clone(),
+                    span: func.span,
+                    func_name: func.func_name.clone(),
+                    params: func.params.clone(),
                     arguments,
-                    func_name: fun_call.func_name.clone(),
                 }))
             }
             ScalarExpr::CastExpr(cast_expr) => {
@@ -848,15 +817,12 @@ impl SubqueryRewriter {
                 .iter()
                 .any(|column| correlated_columns.contains(column))
             {
-                if let ScalarExpr::ComparisonExpr(ComparisonExpr {
-                    left, right, op, ..
-                }) = predicate
-                {
-                    if op == &ComparisonOp::Equal {
+                if let ScalarExpr::FunctionCall(func) = predicate {
+                    if func.func_name == "eq" {
                         if let (
                             ScalarExpr::BoundColumnRef(left),
                             ScalarExpr::BoundColumnRef(right),
-                        ) = (&**left, &**right)
+                        ) = (&func.arguments[0], &func.arguments[1])
                         {
                             if correlated_columns.contains(&left.column.index)
                                 && !correlated_columns.contains(&right.column.index)

@@ -20,14 +20,9 @@ use common_expression::types::DataType;
 use crate::binder::scalar_visitor::Recursion;
 use crate::binder::scalar_visitor::ScalarVisitor;
 use crate::optimizer::RelationalProperty;
-use crate::plans::AndExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
-use crate::plans::ComparisonExpr;
 use crate::plans::ComparisonOp;
-use crate::plans::FunctionCall;
-use crate::plans::NotExpr;
-use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
 use crate::plans::WindowFuncType;
 
@@ -70,9 +65,11 @@ where F: Fn(&ScalarExpr) -> bool
 
 pub fn split_conjunctions(scalar: &ScalarExpr) -> Vec<ScalarExpr> {
     match scalar {
-        ScalarExpr::AndExpr(AndExpr { left, right, .. }) => {
-            vec![split_conjunctions(left), split_conjunctions(right)].concat()
-        }
+        ScalarExpr::FunctionCall(func) if func.func_name == "and" => vec![
+            split_conjunctions(&func.arguments[0]),
+            split_conjunctions(&func.arguments[1]),
+        ]
+        .concat(),
         _ => {
             vec![scalar.clone()]
         }
@@ -81,9 +78,9 @@ pub fn split_conjunctions(scalar: &ScalarExpr) -> Vec<ScalarExpr> {
 
 pub fn split_equivalent_predicate(scalar: &ScalarExpr) -> Option<(ScalarExpr, ScalarExpr)> {
     match scalar {
-        ScalarExpr::ComparisonExpr(ComparisonExpr {
-            op, left, right, ..
-        }) if *op == ComparisonOp::Equal => Some((*left.clone(), *right.clone())),
+        ScalarExpr::FunctionCall(func) if func.func_name == "eq" => {
+            Some((func.arguments[0].clone(), func.arguments[1].clone()))
+        }
         _ => None,
     }
 }
@@ -106,7 +103,7 @@ pub enum JoinPredicate<'a> {
     Both {
         left: &'a ScalarExpr,
         right: &'a ScalarExpr,
-        equal: bool,
+        op: ComparisonOp,
     },
     Other(&'a ScalarExpr),
 }
@@ -128,24 +125,21 @@ impl<'a> JoinPredicate<'a> {
             return Self::Right(scalar);
         }
 
-        if let ScalarExpr::ComparisonExpr(ComparisonExpr {
-            op, left, right, ..
-        }) = scalar
-        {
-            if satisfied_by(left, left_prop) && satisfied_by(right, right_prop) {
-                return Self::Both {
-                    left,
-                    right,
-                    equal: op == &ComparisonOp::Equal,
-                };
-            }
+        if let ScalarExpr::FunctionCall(func) = scalar {
+            if let Some(op) = ComparisonOp::try_from_func_name(func.func_name.as_str()) {
+                let left = &func.arguments[0];
+                let right = &func.arguments[1];
+                if satisfied_by(left, left_prop) && satisfied_by(right, right_prop) {
+                    return Self::Both { left, right, op };
+                }
 
-            if satisfied_by(right, left_prop) && satisfied_by(left, right_prop) {
-                return Self::Both {
-                    left: right,
-                    right: left,
-                    equal: op == &ComparisonOp::Equal,
-                };
+                if satisfied_by(right, left_prop) && satisfied_by(left, right_prop) {
+                    return Self::Both {
+                        left: right,
+                        right: left,
+                        op,
+                    };
+                }
             }
         }
 
@@ -161,19 +155,7 @@ pub fn contain_subquery(scalar: &ScalarExpr) -> bool {
             // TODO(xudong963): need a better way to handle this, such as add a field to predicate to indicate if it derives from subquery.
             column.column_name == format!("scalar_subquery_{}", column.index)
         }
-        ScalarExpr::ComparisonExpr(ComparisonExpr { left, right, .. }) => {
-            contain_subquery(left) || contain_subquery(right)
-        }
-        ScalarExpr::AndExpr(AndExpr { left, right, .. }) => {
-            contain_subquery(left) || contain_subquery(right)
-        }
-        ScalarExpr::OrExpr(OrExpr { left, right, .. }) => {
-            contain_subquery(left) || contain_subquery(right)
-        }
-        ScalarExpr::NotExpr(NotExpr { argument, .. }) => contain_subquery(argument),
-        ScalarExpr::FunctionCall(FunctionCall { arguments, .. }) => {
-            arguments.iter().any(contain_subquery)
-        }
+        ScalarExpr::FunctionCall(func) => func.arguments.iter().any(contain_subquery),
         ScalarExpr::CastExpr(CastExpr { argument, .. }) => contain_subquery(argument),
         _ => false,
     }
@@ -189,16 +171,6 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
         ScalarExpr::BoundColumnRef(_) => false,
         ScalarExpr::BoundInternalColumnRef(_) => false,
         ScalarExpr::ConstantExpr(_) => true,
-        ScalarExpr::AndExpr(scalar) => {
-            prune_by_children(&scalar.left, columns) && prune_by_children(&scalar.right, columns)
-        }
-        ScalarExpr::OrExpr(scalar) => {
-            prune_by_children(&scalar.left, columns) && prune_by_children(&scalar.right, columns)
-        }
-        ScalarExpr::NotExpr(scalar) => prune_by_children(&scalar.argument, columns),
-        ScalarExpr::ComparisonExpr(scalar) => {
-            prune_by_children(&scalar.left, columns) && prune_by_children(&scalar.right, columns)
-        }
         ScalarExpr::WindowFunction(scalar) => {
             let flag = match &scalar.func {
                 WindowFuncType::Aggregate(agg) => {

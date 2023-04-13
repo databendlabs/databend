@@ -11,24 +11,35 @@ The suffix `_IF` can be appended to the name of any aggregate function. In this 
 MIN_IF(column, cond)
 ```
 
-## Examples
+## Example
 
-:::tip
-numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
-:::
+**Create a Table and Insert Sample Data**
+```sql
+CREATE TABLE project_budgets (
+  id INT,
+  project_id INT,
+  department VARCHAR,
+  budget FLOAT
+);
+
+INSERT INTO project_budgets (id, project_id, department, budget)
+VALUES (1, 1, 'HR', 1000),
+       (2, 1, 'IT', 2000),
+       (3, 1, 'Marketing', 3000),
+       (4, 2, 'HR', 1500),
+       (5, 2, 'IT', 2500);
+```
+
+**Query Demo: Find Minimum Budget for IT Department**
 
 ```sql
-SELECT min(number) FROM numbers(10);
-+-------------+
-| min(number) |
-+-------------+
-|           0 |
-+-------------+
+SELECT MIN_IF(budget, department = 'IT') AS min_it_budget
+FROM project_budgets;
+```
 
-SELECT min_if(number, number > 7) FROM numbers(10);
-+------------------------------+
-| min_if(number, (number > 7)) |
-+------------------------------+
-|                            8 |
-+------------------------------+
+**Result**
+```sql
+| min_it_budget |
+|---------------|
+|     2000      |
 ```

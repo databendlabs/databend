@@ -1,6 +1,6 @@
 ---
 title: Access Control Privileges
-sidebar_label: Privileges
+sidebar_label: Access Control Privileges
 description:
   Databend Access Control Privileges
 ---

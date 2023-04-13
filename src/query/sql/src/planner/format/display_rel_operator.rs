@@ -20,12 +20,10 @@ use itertools::Itertools;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::AggregateMode;
-use crate::plans::AndExpr;
-use crate::plans::ComparisonExpr;
-use crate::plans::ComparisonOp;
 use crate::plans::EvalScalar;
 use crate::plans::Exchange;
 use crate::plans::Filter;
+use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Limit;
@@ -116,23 +114,6 @@ pub fn format_scalar(_metadata: &MetadataRef, scalar: &ScalarExpr) -> String {
             }
         }
         ScalarExpr::ConstantExpr(constant) => constant.value.to_string(),
-        ScalarExpr::AndExpr(and) => format!(
-            "({}) AND ({})",
-            format_scalar(_metadata, &and.left),
-            format_scalar(_metadata, &and.right)
-        ),
-        ScalarExpr::OrExpr(or) => format!(
-            "({}) OR ({})",
-            format_scalar(_metadata, &or.left),
-            format_scalar(_metadata, &or.right)
-        ),
-        ScalarExpr::NotExpr(not) => format!("NOT ({})", format_scalar(_metadata, &not.argument),),
-        ScalarExpr::ComparisonExpr(comp) => format!(
-            "{} {} {}",
-            format_scalar(_metadata, &comp.left),
-            comp.op.to_func_name(),
-            format_scalar(_metadata, &comp.right)
-        ),
         ScalarExpr::WindowFunction(win) => win.display_name.clone(),
         ScalarExpr::AggregateFunction(agg) => agg.display_name.clone(),
         ScalarExpr::FunctionCall(func) => {
@@ -360,10 +341,11 @@ pub fn logical_join_to_format_tree(
         .iter()
         .zip(op.right_conditions.iter())
         .map(|(left, right)| {
-            ComparisonExpr {
-                op: ComparisonOp::Equal,
-                left: Box::new(left.clone()),
-                right: Box::new(right.clone()),
+            FunctionCall {
+                span: None,
+                func_name: "eq".to_string(),
+                params: vec![],
+                arguments: vec![left.clone(), right.clone()],
             }
             .into()
         })
@@ -376,9 +358,11 @@ pub fn logical_join_to_format_tree(
 
     let equi_conditions = if !preds.is_empty() {
         let pred = preds.iter().skip(1).fold(preds[0].clone(), |prev, next| {
-            ScalarExpr::AndExpr(AndExpr {
-                left: Box::new(prev),
-                right: Box::new(next.clone()),
+            ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "and".to_string(),
+                params: vec![],
+                arguments: vec![prev, next.clone()],
             })
         });
         format_scalar(&metadata, &pred)

@@ -7,28 +7,38 @@ title: AVG_IF
 
 The suffix -If can be appended to the name of any aggregate function. In this case, the aggregate function accepts an extra argument – a condition.
 
-```
+```sql
 AVG_IF(column, cond)
 ```
 
-## Examples
+## Example
 
-:::tip
-numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
-:::
+**Create a Table and Insert Sample Data**
+```sql
+CREATE TABLE employees (
+  id INT,
+  salary INT,
+  department VARCHAR
+);
+
+INSERT INTO employees (id, salary, department)
+VALUES (1, 50000, 'HR'),
+       (2, 60000, 'IT'),
+       (3, 55000, 'HR'),
+       (4, 70000, 'IT'),
+       (5, 65000, 'IT');
+```
+
+**Query Demo: Calculate Average Salary for IT Department**
 
 ```sql
-SELECT avg(number) FROM numbers(10);
-+-------------+
-| avg(number) |
-+-------------+
-|         4.5 |
-+-------------+
+SELECT AVG_IF(salary, department = 'IT') AS avg_salary_it
+FROM employees;
+```
 
-SELECT avg_if(number, number > 7) FROM numbers(10);
-+-----------------------------+
-| avg_if(number, (number > 7)) |
-+-----------------------------+
-|                         8.5 |
-+-----------------------------+
+**Result**
+```sql
+| avg_salary_it   |
+|-----------------|
+|     65000.0     |
 ```

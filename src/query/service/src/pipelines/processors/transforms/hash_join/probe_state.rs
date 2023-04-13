@@ -16,11 +16,12 @@ use common_arrow::arrow::bitmap::Bitmap;
 
 use super::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
+use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 
 /// ProbeState used for probe phase of hash join.
 /// We may need some reuseable state for probe phase.
 pub struct ProbeState {
-    pub(crate) probe_indexes: Vec<u32>,
+    pub(crate) probe_indexes: Vec<(u32, u32)>,
     pub(crate) build_indexes: Vec<RowPtr>,
     pub(crate) valids: Option<Bitmap>,
     // In the probe phase, the probe block with N rows could join result into M rows
@@ -33,7 +34,6 @@ pub struct ProbeState {
 
 impl ProbeState {
     pub fn clear(&mut self) {
-        self.probe_indexes.clear();
         self.build_indexes.clear();
         self.row_state.clear();
         self.valids = None;
@@ -41,7 +41,7 @@ impl ProbeState {
 
     pub fn with_capacity(capacity: usize) -> Self {
         ProbeState {
-            probe_indexes: Vec::with_capacity(capacity),
+            probe_indexes: vec![(0, 0); JOIN_MAX_BLOCK_SIZE],
             build_indexes: Vec::with_capacity(capacity),
             row_state: Vec::with_capacity(capacity),
             valids: None,
