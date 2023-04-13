@@ -37,3 +37,14 @@ query B
 SELECT 'bough' SOUNDS LIKE 'bow';
 ----
 0
+
+query B
+SELECT CONCAT('A', 'B') SOUNDS LIKE 'AB';
+----
+1
+
+
+query B
+SELECT CONCAT('A', 'B') SOUNDS LIKE CONCAT('A', 'B');
+----
+1
