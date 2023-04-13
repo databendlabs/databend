@@ -52,7 +52,7 @@ FROM exam_scores;
 
 **Result**
 ```sql
-| median_score |
-|--------------|
-|      85      |
+|  median_score  |
+|----------------|
+|      85.0      |
 ```

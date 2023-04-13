@@ -54,5 +54,5 @@ FROM height_data;
 ```sql
 | height_stddev_samp |
 |--------------------|
-|      0.23717       |
+|      0.240         |
 ```

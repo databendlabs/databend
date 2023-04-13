@@ -12,7 +12,7 @@ The conditions, except the first, apply in pairs: the result of the second will 
 
 ## Syntax
 
-```
+```sql
 RETENTION( <cond1> , <cond2> , ..., <cond32> );
 ```
 

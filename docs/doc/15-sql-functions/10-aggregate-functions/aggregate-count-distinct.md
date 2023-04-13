@@ -15,7 +15,7 @@ To obtain an estimated result from large data sets with little memory and time, 
 
 ## Syntax
 
-```
+```sql
 COUNT(distinct arguments ...)
 UNIQ(arguments)
 ```

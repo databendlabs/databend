@@ -24,7 +24,6 @@ QUANTILE_DISC(level1, level2, ...)(expression)
 | Arguments   | Description                                                                                                                                   |
 |-------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
 | level(s)    | level(s) of quantile. Each level is constant floating-point number from 0 to 1. We recommend using a level value in the range of [0.01, 0.99] |
-| ----------- | -----------                                                                                                                                   |
 | expression  | Any numerical expression                                                                                                                      |
 
 ## Return Type
@@ -57,7 +56,7 @@ FROM salary_data;
 
 **Result**
 ```sql
-| salary_quantiles |
-|------------------|
-| [55000, 65000]   |
+|  salary_quantiles   |
+|---------------------|
+| [55000.0, 65000.0]  |
 ```

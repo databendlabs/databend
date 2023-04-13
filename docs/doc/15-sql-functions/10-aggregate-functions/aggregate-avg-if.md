@@ -38,7 +38,7 @@ FROM employees;
 
 **Result**
 ```sql
-| avg_salary_it |
-|---------------|
-|     65000     |
+| avg_salary_it   |
+|-----------------|
+|     65000.0     |
 ```

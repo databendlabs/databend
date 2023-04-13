@@ -59,5 +59,5 @@ FROM store_sales;
 ```sql
 | covar_samp_items_profit |
 |-------------------------|
-|        312500           |
+|        250000.0         |
 ```

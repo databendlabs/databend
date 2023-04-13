@@ -51,5 +51,5 @@ FROM product_sales;
 ```sql
 | covar_pop_units_revenue |
 |-------------------------|
-|        250000           |
+|        20000.0          |
 ```

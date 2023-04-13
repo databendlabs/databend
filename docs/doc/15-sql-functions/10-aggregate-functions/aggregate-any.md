@@ -8,7 +8,7 @@ The ANY() function selects the first encountered (non-NULL) value, unless all ro
 
 ## Syntax
 
-```
+```sql
 ANY(expression)
 ```
 
@@ -28,8 +28,8 @@ The first encountered (non-NULL) value, in the type of the value. If all values 
 ```sql
 CREATE TABLE product_data (
   id INT,
-  product_name VARCHAR,
-  price FLOAT
+  product_name VARCHAR NULL,
+  price FLOAT NULL
 );
 
 INSERT INTO product_data (id, product_name, price)

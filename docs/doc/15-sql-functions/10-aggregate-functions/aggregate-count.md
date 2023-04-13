@@ -32,7 +32,7 @@ CREATE TABLE students (
   id INT,
   name VARCHAR,
   age INT,
-  grade FLOAT
+  grade FLOAT NULL
 );
 
 INSERT INTO students (id, name, age, grade)

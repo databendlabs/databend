@@ -51,7 +51,7 @@ FROM temperature_data;
 ```sql
 | temperature_skewness |
 |----------------------|
-|      -0.45390        |
+|      0.68            |
 ```
 
 

@@ -51,7 +51,7 @@ WHERE stock_symbol = 'AAPL';
 **Result**
 
 ```sql
-| excess_kurtosis |
-|-----------------|
-| -1.28691376     |
+|     excess_kurtosis     |
+|-------------------------|
+| 0.06818181325581445     |
 ```

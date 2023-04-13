@@ -56,5 +56,5 @@ The result should look like this:
 ```sql
 | avg_price |
 | --------- |
-| 20.6      |
+| 20.4      |
 ```
