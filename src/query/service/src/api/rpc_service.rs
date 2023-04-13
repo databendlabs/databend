@@ -89,7 +89,6 @@ impl RpcService {
             builder
         };
 
-        let sr = FlightServiceServer::new(flight_api_service);
         let server = builder
             .add_service(FlightServiceServer::new(flight_api_service))
             .serve_with_incoming_shutdown(listener_stream, self.shutdown_notify());
