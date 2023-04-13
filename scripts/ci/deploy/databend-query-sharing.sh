@@ -43,4 +43,3 @@ python3 scripts/ci/wait_tcp.py --timeout 10 --port 23103
 echo "Start query node3 with the same tenant and meta server for sharding data"
 nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-share-3.toml &
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 13317
-
