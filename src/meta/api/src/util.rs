@@ -1041,3 +1041,51 @@ pub async fn remove_table_from_share(
 
     Ok((share_name.share_name, share_meta, share_table_info))
 }
+
+pub async fn get_share_table_info(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    share_name: &ShareNameIdent,
+    share_meta: &ShareMeta,
+) -> Result<ShareTableInfoMap, KVAppError> {
+    let mut db_name = None;
+    let mut shared_db_id = 0;
+    if let Some(ref entry) = share_meta.database {
+        if let ShareGrantObject::Database(db_id) = entry.object {
+            let db_id_key = DatabaseIdToName { db_id };
+            let (_db_name_seq, db_name_ident): (_, Option<DatabaseNameIdent>) =
+                get_pb_value(kv_api, &db_id_key).await?;
+            db_name = db_name_ident;
+            shared_db_id = db_id;
+        } else {
+            unreachable!();
+        }
+    }
+
+    match db_name {
+        Some(db_name) => {
+            let mut table_ids = HashSet::new();
+            for entry in share_meta.entries.values() {
+                if let ShareGrantObject::Table(table_id) = entry.object {
+                    table_ids.insert(table_id);
+                } else {
+                    unreachable!();
+                }
+            }
+            let all_tables = list_tables_from_unshare_db(kv_api, shared_db_id, &db_name).await?;
+            let table_infos = BTreeMap::from_iter(
+                all_tables
+                    .iter()
+                    .filter(|table_info| table_ids.contains(&table_info.ident.table_id))
+                    .map(|table_info| {
+                        let mut table_info = table_info.as_ref().clone();
+                        table_info.db_type = DatabaseType::ShareDB(share_name.to_owned());
+                        (table_info.name.clone(), table_info)
+                    })
+                    .collect::<Vec<_>>(),
+            );
+
+            Ok((share_name.share_name.clone(), Some(table_infos)))
+        }
+        None => Ok((share_name.share_name.clone(), None)),
+    }
+}

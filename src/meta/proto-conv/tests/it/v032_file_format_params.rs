@@ -49,7 +49,7 @@ fn test_decode_v32_csv_file_format_params() -> anyhow::Result<()> {
             quote: "\'".to_string(),
         })
     };
-    common::test_load_old(func_name!(), file_format_params_v32.as_slice(), 32, want())?;
+    common::test_load_old(func_name!(), file_format_params_v32.as_slice(), 0, want())?;
     common::test_pb_from_to(func_name!(), want())?;
     Ok(())
 }
@@ -73,7 +73,7 @@ fn test_decode_v32_tsv_file_format_params() -> anyhow::Result<()> {
         })
     };
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), file_format_params_v32.as_slice(), 32, want())?;
+    common::test_load_old(func_name!(), file_format_params_v32.as_slice(), 0, want())?;
     Ok(())
 }
 
@@ -87,7 +87,7 @@ fn test_decode_v32_ndjson_file_format_params() -> anyhow::Result<()> {
         })
     };
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), file_format_params_v32.as_slice(), 32, want())?;
+    common::test_load_old(func_name!(), file_format_params_v32.as_slice(), 0, want())?;
     Ok(())
 }
 
@@ -99,7 +99,7 @@ fn test_decode_v32_json_file_format_params() -> anyhow::Result<()> {
             compression: StageFileCompression::Gzip,
         })
     };
-    common::test_load_old(func_name!(), file_format_params_v32.as_slice(), 32, want())?;
+    common::test_load_old(func_name!(), file_format_params_v32.as_slice(), 0, want())?;
     common::test_pb_from_to(func_name!(), want())?;
     Ok(())
 }
@@ -116,7 +116,7 @@ fn test_decode_v32_xml_file_format_params() -> anyhow::Result<()> {
             row_tag: "row_tag".to_string(),
         })
     };
-    common::test_load_old(func_name!(), file_format_params_v32.as_slice(), 32, want())?;
+    common::test_load_old(func_name!(), file_format_params_v32.as_slice(), 0, want())?;
     common::test_pb_from_to(func_name!(), want())?;
     Ok(())
 }
@@ -126,7 +126,7 @@ fn test_decode_v32_parquet_file_format_params() -> anyhow::Result<()> {
     let file_format_params_v32 = vec![10, 6, 160, 6, 32, 168, 6, 24];
 
     let want = || mt::principal::FileFormatParams::Parquet(ParquetFileFormatParams {});
-    common::test_load_old(func_name!(), file_format_params_v32.as_slice(), 32, want())?;
+    common::test_load_old(func_name!(), file_format_params_v32.as_slice(), 0, want())?;
     common::test_pb_from_to(func_name!(), want())?;
     Ok(())
 }

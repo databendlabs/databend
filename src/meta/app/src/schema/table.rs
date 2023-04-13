@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
@@ -227,6 +228,8 @@ pub struct TableMeta {
     // if used in CreateTableReq, this field MUST set to None.
     pub drop_on: Option<DateTime<Utc>>,
     pub statistics: TableStatistics,
+    // shared by share_id
+    pub shared_by: BTreeSet<u64>,
 }
 
 impl TableMeta {
@@ -322,6 +325,7 @@ impl Default for TableMeta {
             field_comments: vec![],
             drop_on: None,
             statistics: Default::default(),
+            shared_by: BTreeSet::new(),
         }
     }
 }
@@ -590,10 +594,14 @@ impl Display for UpsertTableOptionReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct UpsertTableOptionReply {}
+pub struct UpsertTableOptionReply {
+    pub share_table_info: Option<Vec<ShareTableInfoMap>>,
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct UpdateTableMetaReply {}
+pub struct UpdateTableMetaReply {
+    pub share_table_info: Option<Vec<ShareTableInfoMap>>,
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GetTableReq {

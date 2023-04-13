@@ -13,15 +13,18 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use chrono::Utc;
 use common_exception::ErrorCode;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::DatabaseId;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableByIdReq;
+use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::share::*;
@@ -960,6 +963,26 @@ impl ShareApiTestSuite {
             );
         }
 
+        info!("--- check db and table shared_by field");
+        {
+            let mut shared_by = BTreeSet::new();
+            shared_by.insert(share_id);
+
+            {
+                let id_key = DatabaseId { db_id };
+
+                let db_meta: DatabaseMeta = get_kv_data(mt.as_kv_api(), &id_key).await?;
+                assert_eq!(db_meta.shared_by, shared_by);
+            }
+
+            {
+                let id_key = TableId { table_id };
+
+                let table_meta: TableMeta = get_kv_data(mt.as_kv_api(), &id_key).await?;
+                assert_eq!(table_meta.shared_by, shared_by);
+            }
+        }
+
         info!("--- revoke share of table");
         {
             let req = RevokeShareObjectReq {
@@ -1001,6 +1024,26 @@ impl ShareApiTestSuite {
             assert!(share_meta.entries.get(&object.to_string()).is_none());
         }
 
+        info!("--- check db and table shared_by field");
+        {
+            let mut shared_by = BTreeSet::new();
+            shared_by.insert(share_id);
+
+            {
+                let id_key = DatabaseId { db_id };
+
+                let db_meta: DatabaseMeta = get_kv_data(mt.as_kv_api(), &id_key).await?;
+                assert_eq!(db_meta.shared_by, shared_by);
+            }
+
+            {
+                let id_key = TableId { table_id };
+
+                let table_meta: TableMeta = get_kv_data(mt.as_kv_api(), &id_key).await?;
+                assert_eq!(table_meta.shared_by, BTreeSet::new());
+            }
+        }
+
         info!("--- grant share of table again, and revoke the database");
         {
             // first grant share table again
@@ -1038,6 +1081,23 @@ impl ShareApiTestSuite {
                 get_share_meta_by_id_or_err(mt.as_kv_api(), share_id, "").await?;
             assert!(share_meta.database.is_none());
             assert!(share_meta.entries.is_empty());
+        }
+
+        info!("--- check db and table shared_by field");
+        {
+            {
+                let id_key = DatabaseId { db_id };
+
+                let db_meta: DatabaseMeta = get_kv_data(mt.as_kv_api(), &id_key).await?;
+                assert_eq!(db_meta.shared_by, BTreeSet::new());
+            }
+
+            {
+                let id_key = TableId { table_id };
+
+                let table_meta: TableMeta = get_kv_data(mt.as_kv_api(), &id_key).await?;
+                assert_eq!(table_meta.shared_by, BTreeSet::new());
+            }
         }
 
         Ok(())
@@ -1427,17 +1487,24 @@ impl ShareApiTestSuite {
     ) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let share1 = "drop_share_database_and_table_share";
+        let share2 = "drop_share_database_and_table_share2";
         let db_name = "drop_share_database_and_table_db";
         let tbl_name = "drop_share_database_and_table_table";
         let share_id: u64;
+        let share_id2: u64;
+        let db_id: u64;
         let table_id: u64;
 
         let share_name = ShareNameIdent {
             tenant: tenant.to_string(),
             share_name: share1.to_string(),
         };
+        let share_name2 = ShareNameIdent {
+            tenant: tenant.to_string(),
+            share_name: share2.to_string(),
+        };
 
-        info!("--- create share1");
+        info!("--- create share1 and share2");
         let create_on = Utc::now();
         {
             let req = CreateShareReq {
@@ -1452,6 +1519,18 @@ impl ShareApiTestSuite {
             let res = res.unwrap();
             assert_eq!(1, res.share_id, "first share id is 1");
             share_id = res.share_id;
+
+            let req = CreateShareReq {
+                if_not_exists: false,
+                share_name: share_name2.clone(),
+                comment: None,
+                create_on,
+            };
+
+            let res = mt.create_share(req).await;
+            info!("create share res: {:?}", res);
+            let res = res.unwrap();
+            share_id2 = res.share_id;
         }
 
         info!("--- create db1,table1");
@@ -1467,6 +1546,7 @@ impl ShareApiTestSuite {
 
             let res = mt.create_database(plan).await?;
             info!("create database res: {:?}", res);
+            db_id = res.db_id;
 
             let req = CreateTableReq {
                 if_not_exists: false,
@@ -1483,7 +1563,7 @@ impl ShareApiTestSuite {
             table_id = res.table_id;
         }
 
-        info!("--- share db1 and table1");
+        info!("--- share db1 and table1 to share1 and share2");
         {
             let req = GrantShareObjectReq {
                 share_name: share_name.clone(),
@@ -1494,7 +1574,7 @@ impl ShareApiTestSuite {
 
             let res = mt.grant_share_object(req).await?;
             info!("grant object res: {:?}", res);
-            assert_eq!(1, res.spec_vec.unwrap().len());
+            assert_eq!(2, res.spec_vec.unwrap().len());
 
             let tbl_ob_name =
                 ShareGrantObjectName::Table(db_name.to_string(), tbl_name.to_string());
@@ -1507,7 +1587,79 @@ impl ShareApiTestSuite {
 
             let res = mt.grant_share_object(req).await?;
             info!("grant object res: {:?}", res);
-            assert_eq!(1, res.spec_vec.unwrap().len());
+            assert_eq!(2, res.spec_vec.unwrap().len());
+
+            let req = GrantShareObjectReq {
+                share_name: share_name2.clone(),
+                object: ShareGrantObjectName::Database(db_name.to_string()),
+                grant_on: create_on,
+                privilege: ShareGrantObjectPrivilege::Usage,
+            };
+
+            let res = mt.grant_share_object(req).await?;
+            assert_eq!(2, res.spec_vec.unwrap().len());
+
+            let tbl_ob_name =
+                ShareGrantObjectName::Table(db_name.to_string(), tbl_name.to_string());
+            let req = GrantShareObjectReq {
+                share_name: share_name2.clone(),
+                object: tbl_ob_name.clone(),
+                grant_on: create_on,
+                privilege: ShareGrantObjectPrivilege::Usage,
+            };
+
+            let res = mt.grant_share_object(req).await?;
+            info!("grant object res: {:?}", res);
+            assert_eq!(2, res.spec_vec.unwrap().len());
+        }
+
+        info!("--- check db and table shared_by field");
+        {
+            let mut shared_by = BTreeSet::new();
+            shared_by.insert(share_id);
+            shared_by.insert(share_id2);
+
+            {
+                let id_key = DatabaseId { db_id };
+
+                let db_meta: DatabaseMeta = get_kv_data(mt.as_kv_api(), &id_key).await?;
+                assert_eq!(db_meta.shared_by, shared_by);
+            }
+
+            {
+                let id_key = TableId { table_id };
+
+                let table_meta: TableMeta = get_kv_data(mt.as_kv_api(), &id_key).await?;
+                assert_eq!(table_meta.shared_by, shared_by);
+            }
+        }
+
+        info!("--- drop share2 and check db\table shared_by field");
+        {
+            let req = DropShareReq {
+                if_exists: true,
+                share_name: share_name2.clone(),
+            };
+
+            let res = mt.drop_share(req).await;
+            assert!(res.is_ok());
+
+            let mut shared_by = BTreeSet::new();
+            shared_by.insert(share_id);
+
+            {
+                let id_key = DatabaseId { db_id };
+
+                let db_meta: DatabaseMeta = get_kv_data(mt.as_kv_api(), &id_key).await?;
+                assert_eq!(db_meta.shared_by, shared_by);
+            }
+
+            {
+                let id_key = TableId { table_id };
+
+                let table_meta: TableMeta = get_kv_data(mt.as_kv_api(), &id_key).await?;
+                assert_eq!(table_meta.shared_by, shared_by);
+            }
         }
 
         info!("--- drop share table");

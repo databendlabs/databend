@@ -1,7 +1,7 @@
-## Databend TPCH-Benchmark
+# Databend TPCH-Benchmark
 
 
-### Preparing the Table and Data
+## Preparing the Table and Data
 
 To prepare the table and data for the TPC-H Benchmark, run the following command in your shell:
 
@@ -21,16 +21,16 @@ More information about the scale factor:
 
 
 
-### Benchmark
+## Benchmark
 
-To run the TPC-H Benchmark, first generate `databend-sqllogictests` binary.
+To run the TPC-H Benchmark, first build `databend-sqllogictests` binary.
 
 Then, execute the following command in your shell:
 
 ```shell
-databend-sqllogictests --handlers mysql --run_dir tpch --tpch
+databend-sqllogictests --handlers mysql --database tpch --run_dir tpch --bench
 ```
 
-### More
+## More
 
 [Benchmarking Databend using TPC-H](https://databend.rs/blog/2022/08/08/benchmark-tpc-h)

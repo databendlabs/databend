@@ -23,6 +23,7 @@ use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
+use crate::plans::ComparisonOp;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::PatternPlan;
@@ -142,8 +143,8 @@ impl Rule for RuleRightExchangeJoin {
                 JoinPredicate::Right(pred) => {
                     join_4_preds.push(pred.clone());
                 }
-                JoinPredicate::Both { left, right, equal } => {
-                    if equal {
+                JoinPredicate::Both { left, right, op } => {
+                    if op == ComparisonOp::Equal {
                         join_3.left_conditions.push(left.clone());
                         join_3.right_conditions.push(right.clone());
                     } else {
