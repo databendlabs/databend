@@ -28,7 +28,6 @@ VALUES (1, 1, 'HR', 1000),
        (3, 1, 'Marketing', 3000),
        (4, 2, 'HR', 1500),
        (5, 2, 'IT', 2500);
-
 ```
 
 **Query Demo: Find Minimum Budget for IT Department**

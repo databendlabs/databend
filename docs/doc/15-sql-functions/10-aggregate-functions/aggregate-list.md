@@ -39,7 +39,6 @@ VALUES (1, 'Inception', 1, 5),
        (3, 'Inception', 3, 5),
        (4, 'Interstellar', 1, 4),
        (5, 'Interstellar', 2, 3);
-
 ```
 
 **Query Demo: List All Ratings for Inception Movie**

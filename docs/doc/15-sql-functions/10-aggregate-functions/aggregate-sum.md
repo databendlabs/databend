@@ -26,31 +26,33 @@ SUM(expression)
 
 A double if the input type is double, otherwise integer.
 
-## Examples
+## Example
 
-:::tip
-numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
-:::
-
+**Create a Table and Insert Sample Data**
 ```sql
-SELECT SUM(number) FROM numbers(3);
-+-------------+
-| sum(number) |
-+-------------+
-|           3 |
-+-------------+
+CREATE TABLE sales_data (
+  id INT,
+  product_id INT,
+  quantity INT
+);
 
-SELECT SUM(number) AS sum FROM numbers(3);
-+------+
-| sum  |
-+------+
-|    3 |
-+------+
+INSERT INTO sales_data (id, product_id, quantity)
+VALUES (1, 1, 10),
+       (2, 2, 5),
+       (3, 3, 8),
+       (4, 4, 3),
+       (5, 5, 15);
+```
 
-SELECT SUM(number+2) AS sum FROM numbers(3);
-+------+
-| sum  |
-+------+
-|    9 |
-+------+
+**Query Demo: Calculate the Total Quantity of Products Sold**
+```sql
+SELECT SUM(quantity) AS total_quantity_sold
+FROM sales_data;
+```
+
+**Result**
+```sql
+| total_quantity_sold |
+|---------------------|
+|         41          |
 ```

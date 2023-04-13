@@ -54,5 +54,4 @@ GROUP BY city;
 |    city    | max_temperature |
 |------------|-----------------|
 | New York   |       32        |
-
 ```

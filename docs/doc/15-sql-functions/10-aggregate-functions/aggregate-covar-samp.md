@@ -45,7 +45,6 @@ VALUES (1, 1, 100, 1000),
        (3, 3, 300, 3000),
        (4, 4, 400, 4000),
        (5, 5, 500, 5000);
-
 ```
 
 **Query Demo: Calculate Sample Covariance between Items Sold and Profit**
@@ -61,5 +60,4 @@ FROM store_sales;
 | covar_samp_items_profit |
 |-------------------------|
 |        312500           |
-
 ```

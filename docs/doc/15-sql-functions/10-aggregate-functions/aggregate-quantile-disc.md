@@ -31,26 +31,33 @@ QUANTILE_DISC(level1, level2, ...)(expression)
 
 InputType or array of InputType based on level number.
 
-## Examples
+## Example
 
-:::tip
-QUANTILE_DISC(0.6)(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
-:::
-
+**Create a Table and Insert Sample Data**
 ```sql
-SELECT QUANTILE_DISC(0.6)(number) FROM numbers(10000);
-+----------------------------+
-| QUANTILE_DISC(0.6)(number) |
-+----------------------------+
-|       5999                 |
-+----------------------------+
+CREATE TABLE salary_data (
+  id INT,
+  employee_id INT,
+  salary FLOAT
+);
+
+INSERT INTO salary_data (id, employee_id, salary)
+VALUES (1, 1, 50000),
+       (2, 2, 55000),
+       (3, 3, 60000),
+       (4, 4, 65000),
+       (5, 5, 70000);
 ```
 
+**Query Demo: Calculate 25th and 75th Percentile of Salaries**
 ```sql
-SELECT QUANTILE_DISC(0, 0.5, 0.6, 1)(number) FROM numbers_mt(10000);
-+---------------------------------------+
-| QUANTILE_DISC(0, 0.5, 0.6, 1)(number) |
-+---------------------------------------+
-|      [0, 4999 ,5999 ,9999 ]           |
-+---------------------------------------+
+SELECT QUANTILE_DISC(0.25, 0.75)(salary) AS salary_quantiles
+FROM salary_data;
+```
+
+**Result**
+```sql
+| salary_quantiles |
+|------------------|
+| [55000, 65000]   |
 ```

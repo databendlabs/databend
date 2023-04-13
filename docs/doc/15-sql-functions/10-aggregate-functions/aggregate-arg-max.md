@@ -49,7 +49,6 @@ Now, let's use the ARG_MAX() function to find the product that has the maximum p
 ```sql
 SELECT ARG_MAX(product, price) AS max_price_product
 FROM sales;
-
 ```
 
 The result should look like this:
@@ -57,5 +56,4 @@ The result should look like this:
 | max_price_product |
 | ----------------- |
 | Product C         |
-
 ```

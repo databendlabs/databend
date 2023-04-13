@@ -55,5 +55,4 @@ FROM exam_scores;
 | median_score |
 |--------------|
 |      85      |
-
 ```

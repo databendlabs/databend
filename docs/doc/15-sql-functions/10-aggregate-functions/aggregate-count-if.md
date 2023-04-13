@@ -34,7 +34,6 @@ VALUES (1, 1, 'completed', 100),
 ```sql
 SELECT COUNT_IF(status, status = 'completed') AS completed_orders
 FROM orders;
-
 ```
 
 **Result**

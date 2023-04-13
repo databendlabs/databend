@@ -38,7 +38,6 @@ VALUES (1, 'AAPL', 150),
        (3, 'AAPL', 148),
        (4, 'AAPL', 160),
        (5, 'AAPL', 155);
-
 ```
 
 **Query Demo: Calculate Excess Kurtosis for Apple Stock Prices**
@@ -55,5 +54,4 @@ WHERE stock_symbol = 'AAPL';
 | excess_kurtosis |
 |-----------------|
 | -1.28691376     |
-
 ```

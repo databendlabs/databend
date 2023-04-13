@@ -27,7 +27,6 @@ VALUES (1, 50000, 'HR'),
        (3, 55000, 'HR'),
        (4, 70000, 'IT'),
        (5, 65000, 'IT');
-
 ```
 
 **Query Demo: Calculate Average Salary for IT Department**
@@ -42,5 +41,4 @@ FROM employees;
 | avg_salary_it |
 |---------------|
 |     65000     |
-
 ```

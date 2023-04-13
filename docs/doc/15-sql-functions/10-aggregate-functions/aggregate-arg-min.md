@@ -12,10 +12,10 @@ ARG_MIN(arg, val)
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| arg | Argument of [any data type that Databend supports](../../13-sql-reference/10-data-types/index.md)|
-| val | Value of [any data type that Databend supports](../../13-sql-reference/10-data-types/index.md)|
+| Arguments | Description                                                                                       |
+|-----------|---------------------------------------------------------------------------------------------------|
+| arg       | Argument of [any data type that Databend supports](../../13-sql-reference/10-data-types/index.md) |
+| val       | Value of [any data type that Databend supports](../../13-sql-reference/10-data-types/index.md)    |
 
 ## Return Type
 
@@ -38,7 +38,6 @@ INSERT INTO students (id, name, score) VALUES
   (2, 'Bob', 75),
   (3, 'Charlie', 90),
   (4, 'Dave', 80);
-
 ```
 
 Now, we can use ARG_MIN to find the name of the student with the lowest score:

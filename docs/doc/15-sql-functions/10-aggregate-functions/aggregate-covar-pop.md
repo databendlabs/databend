@@ -38,7 +38,6 @@ VALUES (1, 1, 10, 1000),
        (3, 3, 30, 3000),
        (4, 4, 40, 4000),
        (5, 5, 50, 5000);
-
 ```
 
 **Query Demo: Calculate Population Covariance between Units Sold and Revenue**
@@ -53,5 +52,4 @@ FROM product_sales;
 | covar_pop_units_revenue |
 |-------------------------|
 |        250000           |
-
 ```

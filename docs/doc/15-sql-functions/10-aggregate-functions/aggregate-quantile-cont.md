@@ -30,26 +30,34 @@ QUANTILE_CONT(level1, level2, ...)(expression)
 
 Float64 or float64 array based on level number.
 
-## Examples
+## Example
 
-:::tip
-QUANTILE_CONT(0.6)(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
-:::
-
+**Create a Table and Insert Sample Data**
 ```sql
-SELECT QUANTILE_CONT(0.6)(number) FROM numbers(10000);
-+----------------------------+
-| quantile_cont(0.6)(number) |
-+----------------------------+
-|       5999.4               |
-+----------------------------+
+CREATE TABLE sales_data (
+  id INT,
+  sales_person_id INT,
+  sales_amount FLOAT
+);
+
+INSERT INTO sales_data (id, sales_person_id, sales_amount)
+VALUES (1, 1, 5000),
+       (2, 2, 5500),
+       (3, 3, 6000),
+       (4, 4, 6500),
+       (5, 5, 7000);
 ```
 
+**Query Demo: Calculate 50th Percentile (Median) of Sales Amount using Interpolation**
 ```sql
-SELECT QUANTILE_CONT(0, 0.5, 0.6, 1)(number) FROM numbers_mt(10000);
-+---------------------------------------+
-| quantile_cont(0, 0.5, 0.6, 1)(number) |
-+---------------------------------------+
-|      [0.0,4999.5,5999.4,9999.0]       |
-+---------------------------------------+
+SELECT QUANTILE_CONT(0.5)(sales_amount) AS median_sales_amount
+FROM sales_data;
 ```
+
+**Result**
+```sql
+| median_sales_amount |
+|---------------------|
+|        6000         |
+```
+

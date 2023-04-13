@@ -55,5 +55,4 @@ FROM students;
 | count_valid_grades |
 |--------------------|
 |          4         |
-
 ```

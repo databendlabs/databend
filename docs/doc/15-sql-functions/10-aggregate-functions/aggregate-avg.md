@@ -16,9 +16,9 @@ AVG(expression)
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| expression  | Any numerical expression |
+| Arguments  | Description              |
+|------------|--------------------------|
+| expression | Any numerical expression |
 
 ## Return Type
 
@@ -42,7 +42,6 @@ VALUES (1, 'Product A', 10.5),
        (3, 'Product C', 30.0),
        (4, 'Product D', 15.25),
        (5, 'Product E', 25.5);
-
 ```
 
 **Query: Using AVG() Function**
