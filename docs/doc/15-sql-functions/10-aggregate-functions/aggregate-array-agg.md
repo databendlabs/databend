@@ -1,14 +1,20 @@
 ---
-title: LIST
+title: ARRAY_AGG
+title_includes: LIST
 ---
 
 Aggregate function.
 
-The LIST() function converts all the values of a column to an Array.
+The `ARRAY_AGG()` function converts all the values of a column to an Array.
+
+:::tip
+The `LIST` function is alias to `ARRAY_AGG`.
+:::
 
 ## Syntax
 
 ```sql
+ARRAY_AGG(expression)
 LIST(expression)
 ```
 
@@ -25,9 +31,9 @@ the Array type that use the type of the value as inner type.
 ## Examples
 
 ```sql
-SELECT LIST(number) FROM numbers(10);
+SELECT ARRAY_AGG(number) FROM numbers(10);
 +-----------------------+
-| list(number)          |
+| array_agg(number)     |
 +-----------------------+
 | [0,1,2,3,4,5,6,7,8,9] |
 +-----------------------+
