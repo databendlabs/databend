@@ -458,9 +458,16 @@ fn vectorize_sounds_like()
 
         let left: Value<StringType> = soundex_func(arg1, ctx);
         let right: Value<StringType> = soundex_func(arg2, ctx);
+        let vec1: Vec<i32> = Vec::new();
+        let vec2: Vec<i32> = Vec::new();
+        if (vec1.eq(&vec2)) {
 
+        }
+        if vec1 == vec2 {
+
+        }
         match (left, right) {
-            (Value::Scalar(arg1), Value::Scalar(arg2)) => Value::Scalar(&arg1 == &arg2),
+            (Value::Scalar(arg1), Value::Scalar(arg2)) => Value::Scalar(arg1 == arg2),
             (Value::Column(arg1), Value::Column(arg2)) => {
                 let mut builder = MutableBitmap::with_capacity(arg2.len());
                 let arg1_iter = StringType::iter_column(&arg1);
@@ -477,7 +484,7 @@ fn vectorize_sounds_like()
                 let arg1_iter = StringType::iter_column(&arg1);
 
                 for arg1 in arg1_iter {
-                    builder.push(arg1 == &arg2);
+                    builder.push(arg1 == arg2);
                 }
                 Value::Column(builder.into())
             }
@@ -486,7 +493,7 @@ fn vectorize_sounds_like()
                 let arg1_iter = StringType::iter_column(&arg1);
 
                 for arg1 in arg1_iter {
-                    builder.push(arg1 == &arg2);
+                    builder.push(arg1 == arg2);
                 }
                 Value::Column(builder.into())
             }
