@@ -23,6 +23,7 @@ use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
+use crate::plans::ComparisonOp;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::PatternPlan;
@@ -170,8 +171,8 @@ impl Rule for RuleExchangeJoin {
                 JoinPredicate::Right(pred) => {
                     join_6_preds.push(pred.clone());
                 }
-                JoinPredicate::Both { left, right, equal } => {
-                    if equal {
+                JoinPredicate::Both { left, right, op } => {
+                    if op == ComparisonOp::Equal {
                         join_4.left_conditions.push(left.clone());
                         join_4.right_conditions.push(right.clone());
                     } else {
@@ -197,9 +198,9 @@ impl Rule for RuleExchangeJoin {
                     join_5.non_equi_conditions.push(predicate.clone());
                 }
                 JoinPredicate::Both {
-                    left, right, equal, ..
+                    left, right, op, ..
                 } => {
-                    if equal {
+                    if op == ComparisonOp::Equal {
                         join_5.left_conditions.push(left.clone());
                         join_5.right_conditions.push(right.clone());
                     } else {
@@ -221,8 +222,8 @@ impl Rule for RuleExchangeJoin {
                     // TODO(leiysky): push down the predicate
                     join_6.non_equi_conditions.push(predicate.clone());
                 }
-                JoinPredicate::Both { left, right, equal } => {
-                    if equal {
+                JoinPredicate::Both { left, right, op } => {
+                    if op == ComparisonOp::Equal {
                         join_6.left_conditions.push(left.clone());
                         join_6.right_conditions.push(right.clone());
                     } else {
