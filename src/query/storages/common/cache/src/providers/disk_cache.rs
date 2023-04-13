@@ -374,6 +374,16 @@ impl CacheAccessor<String, Vec<u8>, common_cache::DefaultHashBuilder, Count>
         let cache = self.read();
         cache.contains_key(k)
     }
+
+    fn size(&self) -> u64 {
+        let cache = self.read();
+        cache.size()
+    }
+
+    fn len(&self) -> usize {
+        let cache = self.read();
+        cache.len()
+    }
 }
 
 /// The crc32 checksum is stored at the end of `bytes` and encoded as le u32.

@@ -2620,6 +2620,8 @@ dependencies = [
  "serde_json",
  "serde_repr",
  "snailquote",
+ "storages-common-cache",
+ "storages-common-cache-manager",
  "tikv-jemalloc-ctl",
  "tracing",
  "typetag",
