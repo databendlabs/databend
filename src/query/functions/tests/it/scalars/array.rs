@@ -577,8 +577,6 @@ fn test_array_kurtosis(file: &mut impl Write) {
     run_ast(file, "array_kurtosis([])", &[]);
     run_ast(file, "array_kurtosis([1, 2, 3])", &[]);
     run_ast(file, "array_kurtosis([NULL, 3, 2, 1])", &[]);
-    run_ast(file, "array_kurtosis(['a', 'b', 'c'])", &[]);
-    run_ast(file, "array_kurtosis([NULL, 'x', 'y', 'z'])", &[]);
 
     run_ast(file, "array_kurtosis([a, b, c, d])", &[
         ("a", Int16Type::from_data(vec![1i16, 5, 8, 3])),
@@ -611,8 +609,6 @@ fn test_array_skewness(file: &mut impl Write) {
     run_ast(file, "array_skewness([])", &[]);
     run_ast(file, "array_skewness([1, 2, 3])", &[]);
     run_ast(file, "array_skewness([NULL, 3, 2, 1])", &[]);
-    run_ast(file, "array_skewness(['a', 'b', 'c'])", &[]);
-    run_ast(file, "array_skewness([NULL, 'x', 'y', 'z'])", &[]);
 
     run_ast(file, "array_skewness([a, b, c, d])", &[
         ("a", Int16Type::from_data(vec![1i16, 5, 8, 3])),
@@ -642,37 +638,47 @@ fn test_array_skewness(file: &mut impl Write) {
 }
 
 fn test_array_sort(file: &mut impl Write) {
-    run_ast(file, "array_sort([])", &[]);
-    run_ast(file, "array_sort(NULL)", &[]);
-    run_ast(file, "array_sort([8, 20, 1, 2, 3, 4, 5, 6, 7], 'ASC')", &[]);
-    run_ast(file, "array_sort([], 'ASC')", &[]);
-    run_ast(file, "array_sort([], 'DESC')", &[]);
-    run_ast(file, "array_sort([8, 20, 1, 2, 3, 4, 5, 6, 7], 'DESC')", &[
-    ]);
-    run_ast(file, "array_sort([9.32, 0, 1.2, 3.4, 5.6, 7.8])", &[]);
-    run_ast(file, "array_sort(['x', 0, 1.2, 3.4, 5.6, 7.8])", &[]);
+    run_ast(file, "array_sort_asc_null_first([])", &[]);
+    run_ast(file, "array_sort_desc_null_first([])", &[]);
+    run_ast(file, "array_sort_asc_null_first(NULL)", &[]);
     run_ast(
         file,
-        "array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'DESC', 'NULLS FIRST')",
+        "array_sort_asc_null_first([8, 20, 1, 2, 3, 4, 5, 6, 7])",
         &[],
     );
-    run_ast(file, "array_sort([], 'DESC', 'NULLS FIRST')", &[]);
     run_ast(
         file,
-        "array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'DESC', 'NULLS LAST')",
+        "array_sort_asc_null_last([8, 20, 1, 2, 3, 4, 5, 6, 7])",
         &[],
     );
-    run_ast(file, "array_sort([], 'DESC', 'NULLS LAST')", &[]);
     run_ast(
         file,
-        "array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'ASC', 'NULLS FIRST')",
+        "array_sort_desc_null_first([8, 20, 1, 2, 3, 4, 5, 6, 7])",
         &[],
     );
-    run_ast(file, "array_sort([], 'ASC', 'NULLS FIRST')", &[]);
     run_ast(
         file,
-        "array_sort(['z', 'a', NULL, 'v', 'd', NULL], 'ASC', 'NULLS LAST')",
+        "array_sort_desc_null_last([8, 20, 1, 2, 3, 4, 5, 6, 7])",
         &[],
     );
-    run_ast(file, "array_sort([], 'ASC', 'NULLS LAST')", &[]);
+    run_ast(
+        file,
+        "array_sort_asc_null_first([1.2, NULL, 3.4, 5.6, '2.2', NULL])",
+        &[],
+    );
+    run_ast(
+        file,
+        "array_sort_asc_null_last(['z', 'a', NULL, 'v', 'd', NULL])",
+        &[],
+    );
+    run_ast(
+        file,
+        "array_sort_desc_null_first([1.2, NULL, 3.4, 5.6, '2.2', NULL])",
+        &[],
+    );
+    run_ast(
+        file,
+        "array_sort_desc_null_last([1.2, NULL, 3.4, 5.6, '2.2', NULL])",
+        &[],
+    );
 }
