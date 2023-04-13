@@ -8,7 +8,7 @@ The ANY() function selects the first encountered (non-NULL) value, unless all ro
 
 ## Syntax
 
-```
+```sql
 ANY(expression)
 ```
 
@@ -22,50 +22,33 @@ ANY(expression)
 
 The first encountered (non-NULL) value, in the type of the value. If all values are NULL, the return value is NULL.
 
-## Examples
+## Example
 
-:::tip
-    numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
-:::
-
+**Create a Table and Insert Sample Data*
 ```sql
-SELECT ANY(number) FROM numbers(3);
-+-------------+
-| any(number) |
-+-------------+
-|           0 |
-+-------------+
+CREATE TABLE product_data (
+  id INT,
+  product_name VARCHAR NULL,
+  price FLOAT NULL
+);
 
--- Table t1:
--- +------+
--- | a    |
--- +------+
--- | NULL |
--- | NULL |
--- |    1 |
--- |    2 |
--- | NULL |
--- |    3 |
--- +------+
-SELECT ANY(a) FROM t1;
-+--------+
-| any(a) |
-+--------+
-|      1 |
-+--------+
+INSERT INTO product_data (id, product_name, price)
+VALUES (1, 'Laptop', 1000),
+       (2, NULL, 800),
+       (3, 'Keyboard', NULL),
+       (4, 'Mouse', 25),
+       (5, 'Monitor', 150);
+```
 
--- Table t2:
--- +------+
--- | a    |
--- +------+
--- | NULL |
--- | NULL |
--- | NULL |
--- +------+
-SELECT ANY(a) FROM t1;
-+--------+
-| any(a) |
-+--------+
-|   NULL |
-+--------+
+**Query Demo: Retrieve the First Encountered Non-NULL Product Name**
+```sql
+SELECT ANY(product_name) AS any_product_name
+FROM product_data;
+```
+
+**Result**
+```sql
+| any_product_name |
+|------------------|
+| Laptop           |
 ```
