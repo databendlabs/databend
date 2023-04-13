@@ -36,6 +36,7 @@ use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
+use crate::plans::ComparisonOp;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
@@ -161,8 +162,10 @@ impl SubqueryRewriter {
                     non_equi_conditions.push(pred.clone());
                 }
 
-                JoinPredicate::Both { left, right, equal } => {
-                    if equal {
+                JoinPredicate::Both {
+                    left, right, op, ..
+                } => {
+                    if op == ComparisonOp::Equal {
                         if left.data_type()?.eq(&right.data_type()?) {
                             left_conditions.push(left.clone());
                             right_conditions.push(right.clone());
