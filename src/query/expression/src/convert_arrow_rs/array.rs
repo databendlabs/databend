@@ -14,41 +14,12 @@
 
 use std::sync::Arc;
 
-use arrow_array::make_array;
 use arrow_array::Array;
-use arrow_array::ArrowPrimitiveType;
-use arrow_array::BooleanArray;
-use arrow_array::LargeBinaryArray;
-use arrow_array::NullArray;
-use arrow_array::PrimitiveArray;
-use arrow_array::StructArray;
-use arrow_buffer::buffer::BooleanBuffer;
-use arrow_buffer::buffer::NullBuffer;
-use arrow_buffer::ArrowNativeType;
-use arrow_buffer::Buffer;
-use arrow_data::ArrayData;
-use arrow_data::ArrayDataBuilder;
 use arrow_schema::ArrowError;
-use arrow_schema::DataType;
 use arrow_schema::Field;
-use arrow_schema::TimeUnit;
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::buffer::Buffer as Buffer2;
-use common_arrow::arrow::types::NativeType;
-use ordered_float::OrderedFloat;
 
-use crate::types::decimal::DecimalColumn;
-use crate::types::nullable::NullableColumn;
-use crate::types::number::NumberColumn;
-use crate::types::string::StringColumn;
-use crate::types::F32;
-use crate::types::F64;
 use crate::Column;
 use crate::DataField;
-use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
-use crate::ARROW_EXT_TYPE_EMPTY_MAP;
-use crate::ARROW_EXT_TYPE_VARIANT;
-use crate::EXTENSION_KEY;
 
 impl Column {
     pub fn into_arrow_rs(self) -> Result<Arc<dyn Array>, ArrowError> {
