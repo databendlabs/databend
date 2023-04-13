@@ -52,7 +52,7 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       run: |
         mkdir -p dist
-        zip -j dist/bendsql-${{ matrix.target }}.zip target/${{ matrix.target }}/release/bendsql.exe
+        7z a -tzip dist/bendsql-${{ matrix.target }}.zip target/${{ matrix.target }}/release/bendsql.exe
         gh release upload ${{ github.ref_name }} dist/bendsql-${{ matrix.target }}.zip --clobber
 
   distribution:
