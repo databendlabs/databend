@@ -36,14 +36,10 @@ use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
-use crate::plans::AndExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
-use crate::plans::ComparisonExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
-use crate::plans::NotExpr;
-use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::WindowFunc;
@@ -106,26 +102,6 @@ impl<'a> AggregateRewriter<'a> {
             ScalarExpr::BoundColumnRef(_) => Ok(scalar.clone()),
             ScalarExpr::BoundInternalColumnRef(_) => Ok(scalar.clone()),
             ScalarExpr::ConstantExpr(_) => Ok(scalar.clone()),
-            ScalarExpr::AndExpr(scalar) => Ok(AndExpr {
-                left: Box::new(self.visit(&scalar.left)?),
-                right: Box::new(self.visit(&scalar.right)?),
-            }
-            .into()),
-            ScalarExpr::OrExpr(scalar) => Ok(OrExpr {
-                left: Box::new(self.visit(&scalar.left)?),
-                right: Box::new(self.visit(&scalar.right)?),
-            }
-            .into()),
-            ScalarExpr::NotExpr(scalar) => Ok(NotExpr {
-                argument: Box::new(self.visit(&scalar.argument)?),
-            }
-            .into()),
-            ScalarExpr::ComparisonExpr(scalar) => Ok(ComparisonExpr {
-                op: scalar.op.clone(),
-                left: Box::new(self.visit(&scalar.left)?),
-                right: Box::new(self.visit(&scalar.right)?),
-            }
-            .into()),
             ScalarExpr::FunctionCall(func) => {
                 if func.func_name.eq_ignore_ascii_case("grouping") {
                     return self.replace_grouping(func);

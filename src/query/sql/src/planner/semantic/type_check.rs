@@ -72,16 +72,12 @@ use crate::binder::NameResolutionResult;
 use crate::optimizer::RelExpr;
 use crate::planner::metadata::optimize_remove_count_args;
 use crate::plans::AggregateFunction;
-use crate::plans::AndExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::BoundInternalColumnRef;
 use crate::plans::CastExpr;
-use crate::plans::ComparisonExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
-use crate::plans::NotExpr;
-use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
@@ -378,21 +374,11 @@ impl<'a> TypeChecker<'a> {
                         )
                         .await?;
 
-                    let (_, data_type) = *self
-                        .resolve_scalar_function_call(*span, "and", vec![], vec![
-                            ge_func.clone(),
-                            le_func.clone(),
-                        ])
-                        .await?;
-
-                    Box::new((
-                        AndExpr {
-                            left: Box::new(ge_func),
-                            right: Box::new(le_func),
-                        }
-                        .into(),
-                        data_type,
-                    ))
+                    self.resolve_scalar_function_call(*span, "and", vec![], vec![
+                        ge_func.clone(),
+                        le_func.clone(),
+                    ])
+                    .await?
                 } else {
                     // Rewrite `expr NOT BETWEEN low AND high`
                     // into `expr < low OR expr > high`
@@ -403,21 +389,8 @@ impl<'a> TypeChecker<'a> {
                         .resolve_binary_op(*span, &BinaryOperator::Gt, expr.as_ref(), high.as_ref())
                         .await?;
 
-                    let (_, data_type) = *self
-                        .resolve_scalar_function_call(*span, "or", vec![], vec![
-                            lt_func.clone(),
-                            gt_func.clone(),
-                        ])
-                        .await?;
-
-                    Box::new((
-                        OrExpr {
-                            left: Box::new(lt_func),
-                            right: Box::new(gt_func),
-                        }
-                        .into(),
-                        data_type,
-                    ))
+                    self.resolve_scalar_function_call(*span, "or", vec![], vec![lt_func, gt_func])
+                        .await?
                 }
             }
 
@@ -1411,13 +1384,11 @@ impl<'a> TypeChecker<'a> {
                     BinaryOperator::NotRLike => BinaryOperator::RLike,
                     _ => unreachable!(),
                 };
-                let (positive, data_type) = *self
+                let (positive, _) = *self
                     .resolve_binary_op(span, &positive_op, left, right)
                     .await?;
-                let scalar = ScalarExpr::NotExpr(NotExpr {
-                    argument: Box::new(positive),
-                });
-                Ok(Box::new((scalar, data_type)))
+                self.resolve_scalar_function_call(span, "not", vec![], vec![positive])
+                    .await
             }
             BinaryOperator::Gt
             | BinaryOperator::Lt
@@ -1437,50 +1408,11 @@ impl<'a> TypeChecker<'a> {
                     .await?;
 
                 Ok(Box::new((
-                    ComparisonExpr {
-                        op,
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    }
-                    .into(),
-                    data_type,
-                )))
-            }
-            BinaryOperator::And => {
-                let box (left, _) = self.resolve(left).await?;
-                let box (right, _) = self.resolve(right).await?;
-
-                let (_, data_type) = *self
-                    .resolve_scalar_function_call(span, "and", vec![], vec![
-                        left.clone(),
-                        right.clone(),
-                    ])
-                    .await?;
-
-                Ok(Box::new((
-                    AndExpr {
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    }
-                    .into(),
-                    data_type,
-                )))
-            }
-            BinaryOperator::Or => {
-                let box (left, _) = self.resolve(left).await?;
-                let box (right, _) = self.resolve(right).await?;
-
-                let (_, data_type) = *self
-                    .resolve_scalar_function_call(span, "or", vec![], vec![
-                        left.clone(),
-                        right.clone(),
-                    ])
-                    .await?;
-
-                Ok(Box::new((
-                    OrExpr {
-                        left: Box::new(left),
-                        right: Box::new(right),
+                    FunctionCall {
+                        span,
+                        func_name: op.to_func_name().to_string(),
+                        params: vec![],
+                        arguments: vec![left, right],
                     }
                     .into(),
                     data_type,
@@ -1508,23 +1440,6 @@ impl<'a> TypeChecker<'a> {
                 // Omit unary + operator
                 self.resolve(child).await
             }
-
-            UnaryOperator::Not => {
-                let (argument, _) = *self.resolve(child).await?;
-
-                let (_, data_type) = *self
-                    .resolve_scalar_function_call(span, "not", vec![], vec![argument.clone()])
-                    .await?;
-
-                Ok(Box::new((
-                    NotExpr {
-                        argument: Box::new(argument),
-                    }
-                    .into(),
-                    data_type,
-                )))
-            }
-
             other => {
                 let name = other.to_func_name();
                 self.resolve_function(span, name.as_str(), vec![], &[child])

@@ -20,6 +20,7 @@ mod scatter;
 mod sort;
 mod take;
 mod take_chunks;
+mod take_compact;
 mod topk;
 
 pub use group_by::*;

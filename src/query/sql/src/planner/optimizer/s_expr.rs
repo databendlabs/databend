@@ -278,16 +278,6 @@ fn find_subquery_in_expr(expr: &ScalarExpr) -> bool {
         ScalarExpr::BoundColumnRef(_)
         | ScalarExpr::BoundInternalColumnRef(_)
         | ScalarExpr::ConstantExpr(_) => false,
-        ScalarExpr::AndExpr(expr) => {
-            find_subquery_in_expr(&expr.left) || find_subquery_in_expr(&expr.right)
-        }
-        ScalarExpr::OrExpr(expr) => {
-            find_subquery_in_expr(&expr.left) || find_subquery_in_expr(&expr.right)
-        }
-        ScalarExpr::NotExpr(expr) => find_subquery_in_expr(&expr.argument),
-        ScalarExpr::ComparisonExpr(expr) => {
-            find_subquery_in_expr(&expr.left) || find_subquery_in_expr(&expr.right)
-        }
         ScalarExpr::WindowFunction(expr) => {
             let flag = match &expr.func {
                 WindowFuncType::Aggregate(agg) => agg.args.iter().any(find_subquery_in_expr),

@@ -51,8 +51,15 @@ INSERT INTO employees (employee_id, first_name, last_name, department, salary) V
 
 **Numbering employees within departments**
 ```sql
-SELECT employee_id, first_name, last_name, department, salary, ROW_NUMBER() OVER (PARTITION BY department ORDER BY salary DESC) AS row_num
-FROM employees;
+SELECT
+    employee_id,
+    first_name,
+    last_name,
+    department,
+    salary,
+    ROW_NUMBER() OVER (PARTITION BY department ORDER BY salary DESC) AS row_num
+FROM
+    employees;
 ```
 
 Result:

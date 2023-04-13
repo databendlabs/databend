@@ -10,45 +10,49 @@ NULL values are not counted.
 
 ## Syntax
 
-```
+```sql
 COUNT(expression)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| expression  | Any expression. <br /> This may be a column name, the result of another function, or a math operation.<br />`*` is also allowed, to indicate pure row counting.
+| Arguments  | Description                                                                                                                                                     |
+|------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| expression | Any expression. <br /> This may be a column name, the result of another function, or a math operation.<br />`*` is also allowed, to indicate pure row counting. |
 
 ## Return Type
 
 An integer.
 
-## Examples
+## Example
 
-:::tip
-numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
-:::
-
+**Create a Table and Insert Sample Data**
 ```sql
-SELECT count(*) FROM numbers(3);
-+----------+
-| count(*) |
-+----------+
-|        3 |
-+----------+
+CREATE TABLE students (
+  id INT,
+  name VARCHAR,
+  age INT,
+  grade FLOAT NULL
+);
 
-SELECT count(number) FROM numbers(3);
-+---------------+
-| count(number) |
-+---------------+
-|             3 |
-+---------------+
+INSERT INTO students (id, name, age, grade)
+VALUES (1, 'John', 21, 85),
+       (2, 'Emma', 22, NULL),
+       (3, 'Alice', 23, 90),
+       (4, 'Michael', 21, 88),
+       (5, 'Sophie', 22, 92);
 
-SELECT count(number) AS c FROM numbers(3);
-+------+
-| c    |
-+------+
-|    3 |
-+------+
+```
+
+**Query Demo: Count Students with Valid Grades**
+```sql
+SELECT COUNT(grade) AS count_valid_grades
+FROM students;
+```
+
+**Result**
+```sql
+| count_valid_grades |
+|--------------------|
+|          4         |
 ```

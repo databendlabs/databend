@@ -76,21 +76,6 @@ impl RulePushDownPrewhere {
                 }
                 return Err(ErrorCode::Unimplemented("Column is not in the table"));
             }
-            ScalarExpr::AndExpr(and) => {
-                Self::collect_columns_impl(table_index, schema, and.left.as_ref(), columns)?;
-                Self::collect_columns_impl(table_index, schema, and.right.as_ref(), columns)?;
-            }
-            ScalarExpr::OrExpr(or) => {
-                Self::collect_columns_impl(table_index, schema, or.left.as_ref(), columns)?;
-                Self::collect_columns_impl(table_index, schema, or.right.as_ref(), columns)?;
-            }
-            ScalarExpr::NotExpr(not) => {
-                Self::collect_columns_impl(table_index, schema, not.argument.as_ref(), columns)?
-            }
-            ScalarExpr::ComparisonExpr(cmp) => {
-                Self::collect_columns_impl(table_index, schema, cmp.left.as_ref(), columns)?;
-                Self::collect_columns_impl(table_index, schema, cmp.right.as_ref(), columns)?;
-            }
             ScalarExpr::FunctionCall(func) => {
                 for arg in func.arguments.iter() {
                     Self::collect_columns_impl(table_index, schema, arg, columns)?;

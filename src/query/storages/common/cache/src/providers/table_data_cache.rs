@@ -130,6 +130,14 @@ impl CacheAccessor<String, Vec<u8>, DefaultHashBuilder, Count> for TableDataCach
     fn contains_key(&self, k: &str) -> bool {
         self.external_cache.contains_key(k)
     }
+
+    fn size(&self) -> u64 {
+        self.external_cache.size()
+    }
+
+    fn len(&self) -> usize {
+        self.external_cache.len()
+    }
 }
 
 struct CachePopulationWorker<T> {

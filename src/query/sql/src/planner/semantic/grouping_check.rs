@@ -18,13 +18,9 @@ use common_exception::Span;
 
 use crate::binder::ColumnBinding;
 use crate::binder::Visibility;
-use crate::plans::AndExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
-use crate::plans::ComparisonExpr;
 use crate::plans::FunctionCall;
-use crate::plans::NotExpr;
-use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
 use crate::BindContext;
 
@@ -98,26 +94,6 @@ impl<'a> GroupingChecker<'a> {
                 )).set_span(span))
             }
             ScalarExpr::ConstantExpr(_) => Ok(scalar.clone()),
-            ScalarExpr::AndExpr(scalar) => Ok(AndExpr {
-                left: Box::new(self.resolve(&scalar.left, span)?),
-                right: Box::new(self.resolve(&scalar.right, span)?),
-            }
-            .into()),
-            ScalarExpr::OrExpr(scalar) => Ok(OrExpr {
-                left: Box::new(self.resolve(&scalar.left, span)?),
-                right: Box::new(self.resolve(&scalar.right, span)?),
-            }
-            .into()),
-            ScalarExpr::NotExpr(scalar) => Ok(NotExpr {
-                argument: Box::new(self.resolve(&scalar.argument, span)?),
-            }
-            .into()),
-            ScalarExpr::ComparisonExpr(scalar) => Ok(ComparisonExpr {
-                op: scalar.op.clone(),
-                left: Box::new(self.resolve(&scalar.left, span)?),
-                right: Box::new(self.resolve(&scalar.right, span)?),
-            }
-            .into()),
             ScalarExpr::FunctionCall(func) => {
                 let args = func
                     .arguments

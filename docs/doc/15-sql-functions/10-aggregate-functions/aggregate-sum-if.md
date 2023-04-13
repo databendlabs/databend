@@ -11,24 +11,34 @@ The suffix -If can be appended to the name of any aggregate function. In this ca
 SUM_IF(column, cond)
 ```
 
-## Examples
+## Example
 
-:::tip
-numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
-:::
-
+**Create a Table and Insert Sample Data**
 ```sql
-SELECT sum(number) FROM numbers(10);
-+-------------+
-| sum(number) |
-+-------------+
-|          45 |
-+-------------+
+CREATE TABLE order_data (
+  id INT,
+  customer_id INT,
+  amount FLOAT,
+  status VARCHAR
+);
 
-SELECT sum_if(number, number > 7) FROM numbers(10);
-+------------------------------+
-| sum_if(number, (number > 7)) |
-+------------------------------+
-|                           17 |
-+------------------------------+
+INSERT INTO order_data (id, customer_id, amount, status)
+VALUES (1, 1, 100, 'Completed'),
+       (2, 2, 50, 'Completed'),
+       (3, 3, 80, 'Cancelled'),
+       (4, 4, 120, 'Completed'),
+       (5, 5, 75, 'Cancelled');
+```
+
+**Query Demo: Calculate the Total Amount of Completed Orders**
+```sql
+SELECT SUM_IF(amount, status = 'Completed') AS total_amount_completed
+FROM order_data;
+```
+
+**Result**
+```sql
+| total_amount_completed |
+|------------------------|
+|         270.0          |
 ```

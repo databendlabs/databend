@@ -17,6 +17,7 @@ use std::fmt::Debug;
 
 use async_trait::async_trait;
 use common_auth::RefreshableToken;
+use common_exception::ErrorCode;
 use http::Request;
 use http::StatusCode;
 use opendal::layers::LoggingLayer;
@@ -58,7 +59,7 @@ pub fn create_share_table_operator(
     share_tenant_id: &str,
     share_name: &str,
     table_name: &str,
-) -> Result<Operator> {
+) -> common_exception::Result<Operator> {
     let op = match share_endpoint_address {
         Some(share_endpoint_address) => {
             let signer = SharedSigner::new(
@@ -84,7 +85,12 @@ pub fn create_share_table_operator(
             .layer(TracingLayer)
             .finish()
         }
-        None => Operator::new(())?.finish(),
+        None => {
+            return Err(ErrorCode::EmptyShareEndpointConfig(format!(
+                "Empty share config for creating operator of shared table {}.{}",
+                share_name, table_name,
+            )));
+        }
     };
 
     Ok(op)
