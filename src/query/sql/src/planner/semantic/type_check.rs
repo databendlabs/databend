@@ -1414,14 +1414,13 @@ impl<'a> TypeChecker<'a> {
                     .resolve_scalar_function_call(span, SOUNDEX_FUNC_NAME, vec![], vec![right])
                     .await?;
 
-                self
-                    .resolve_scalar_function_call(
-                        span,
-                        &BinaryOperator::Eq.to_func_name(),
-                        vec![],
-                        vec![left, right],
-                    )
-                    .await
+                self.resolve_scalar_function_call(
+                    span,
+                    &BinaryOperator::Eq.to_func_name(),
+                    vec![],
+                    vec![left, right],
+                )
+                .await
             }
             BinaryOperator::Gt
             | BinaryOperator::Lt
