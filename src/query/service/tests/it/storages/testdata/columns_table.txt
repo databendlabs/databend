@@ -92,6 +92,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | "memory_usage"             | "system" | "query_log"           | "UInt64"           | "BIGINT UNSIGNED"   | ""       | ""       | "NO"     | ""       |
 | "metric"                   | "system" | "metrics"             | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "mysql_connection_id"      | "system" | "processes"           | "Nullable(UInt32)" | "INT UNSIGNED"      | ""       | ""       | "YES"    | ""       |
+| "name"                     | "system" | "caches"              | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "name"                     | "system" | "catalogs"            | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "name"                     | "system" | "clusters"            | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "name"                     | "system" | "columns"             | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
@@ -108,6 +109,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | "name"                     | "system" | "tables"              | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "name"                     | "system" | "tables_with_history" | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "name"                     | "system" | "users"               | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
+| "num_items"                | "system" | "caches"              | "UInt64"           | "BIGINT UNSIGNED"   | ""       | ""       | "NO"     | ""       |
 | "num_rows"                 | "system" | "query_cache"         | "UInt64"           | "BIGINT UNSIGNED"   | ""       | ""       | "NO"     | ""       |
 | "num_rows"                 | "system" | "tables"              | "Nullable(UInt64)" | "BIGINT UNSIGNED"   | ""       | ""       | "YES"    | ""       |
 | "num_rows"                 | "system" | "tables_with_history" | "Nullable(UInt64)" | "BIGINT UNSIGNED"   | ""       | ""       | "YES"    | ""       |
@@ -135,6 +137,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | "scan_rows"                | "system" | "query_log"           | "UInt64"           | "BIGINT UNSIGNED"   | ""       | ""       | "NO"     | ""       |
 | "server_version"           | "system" | "query_log"           | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "session_settings"         | "system" | "query_log"           | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
+| "size"                     | "system" | "caches"              | "UInt64"           | "BIGINT UNSIGNED"   | ""       | ""       | "NO"     | ""       |
 | "sql"                      | "system" | "query_cache"         | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "sql_user"                 | "system" | "query_log"           | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |
 | "sql_user_privileges"      | "system" | "query_log"           | "String"           | "VARCHAR"           | ""       | ""       | "NO"     | ""       |

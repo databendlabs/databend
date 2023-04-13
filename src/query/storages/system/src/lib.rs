@@ -18,6 +18,7 @@
 extern crate core;
 
 mod build_options_table;
+mod caches_table;
 mod catalogs_table;
 mod clustering_history_table;
 mod clusters_table;
@@ -46,6 +47,7 @@ mod tracing_table;
 mod users_table;
 
 pub use build_options_table::BuildOptionsTable;
+pub use caches_table::CachesTable;
 pub use catalogs_table::CatalogsTable;
 pub use clustering_history_table::ClusteringHistoryLogElement;
 pub use clustering_history_table::ClusteringHistoryQueue;
