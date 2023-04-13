@@ -50,9 +50,9 @@ impl Connection for FlightSQLConnection {
         }
     }
 
-    async fn exec(&mut self, sql: &str) -> Result<()> {
-        let _info = self.client.execute_update(sql.to_string()).await?;
-        Ok(())
+    async fn exec(&mut self, sql: &str) -> Result<i64> {
+        let affected_rows = self.client.execute_update(sql.to_string()).await?;
+        Ok(affected_rows)
     }
 
     async fn query_iter(&mut self, sql: &str) -> Result<RowIterator> {

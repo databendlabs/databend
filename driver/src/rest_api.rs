@@ -45,12 +45,12 @@ impl Connection for RestAPIConnection {
         }
     }
 
-    async fn exec(&mut self, sql: &str) -> Result<()> {
+    async fn exec(&mut self, sql: &str) -> Result<i64> {
         let mut resp = self.client.query(sql).await?;
         while let Some(next_uri) = resp.next_uri {
             resp = self.client.query_page(&next_uri).await?;
         }
-        Ok(())
+        Ok(0)
     }
 
     async fn query_iter(&mut self, sql: &str) -> Result<RowIterator> {

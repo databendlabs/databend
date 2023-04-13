@@ -252,6 +252,8 @@ impl TryFrom<&Arc<ArrowField>> for Field {
             | ArrowDataType::FixedSizeBinary(_) => DataType::String,
             ArrowDataType::Timestamp(_, _) => DataType::Timestamp,
             ArrowDataType::Date32 => DataType::Date,
+            ArrowDataType::Decimal128(_, _) => DataType::Decimal,
+            ArrowDataType::Decimal256(_, _) => DataType::Decimal,
             _ => {
                 return Err(Error::Parsing(format!(
                     "Unsupported datatype for arrow field: {:?}",

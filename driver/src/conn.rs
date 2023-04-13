@@ -34,7 +34,7 @@ pub struct ConnectionInfo {
 #[async_trait]
 pub trait Connection: DynClone + Send + Sync {
     fn info(&self) -> ConnectionInfo;
-    async fn exec(&mut self, sql: &str) -> Result<()>;
+    async fn exec(&mut self, sql: &str) -> Result<i64>;
     async fn query_iter(&mut self, sql: &str) -> Result<RowIterator>;
     async fn query_iter_ext(&mut self, sql: &str) -> Result<(Schema, RowProgressIterator)>;
     async fn query_row(&mut self, sql: &str) -> Result<Option<Row>>;
