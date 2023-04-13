@@ -36,4 +36,4 @@ SELECT 'meat' SOUNDS LIKE 'meet'
 query B
 SELECT 'bough' SOUNDS LIKE 'bow';
 ----
-1
+0
