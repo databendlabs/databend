@@ -195,6 +195,7 @@ fn new_table_meta() -> mt::TableMeta {
         field_comments: vec!["c".to_string(); 21],
         drop_on: None,
         statistics: Default::default(),
+        shared_by: BTreeSet::new(),
     }
 }
 
