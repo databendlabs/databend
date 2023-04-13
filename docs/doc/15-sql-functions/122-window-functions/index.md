@@ -34,8 +34,8 @@ The list below shows all the window functions.
 | [STDDEV_POP](../10-aggregate-functions/aggregate-stddev-pop.md)       | General      | ✔      | ✔            |       |
 | [STDDEV_SAMP](../10-aggregate-functions/aggregate-stddev-samp.md)     | General      | ✔      | ✔            |       |
 | [MEDIAN](../10-aggregate-functions/aggregate-median.md)               | General      | ✔      | ✔            |       |
-| [QUANTILE](../10-aggregate-functions/aggregate-quantile.md)           | General      | ✔      | ✔            |       |
 | [QUANTILE_CONT](../10-aggregate-functions/aggregate-quantile-cont.md) | General      | ✔      | ✔            |       |
+| [QUANTILE_DISC](../10-aggregate-functions/aggregate-quantile-disc.md) | General      | ✔      | ✔            |       |
 | [KURTOSIS](../10-aggregate-functions/aggregate-kurtosis.md)           | General      | ✔      | ✔            |       |
 | [SKEWNESS](../10-aggregate-functions/aggregate-skewness.md)           | General      | ✔      | ✔            |       |
 | [SUM](../10-aggregate-functions/aggregate-sum.md)                     | General      | ✔      | ✔            |       |
