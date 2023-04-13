@@ -21,8 +21,6 @@ common-io = { path = "../../common/io" }
 
 # Crates.io dependencies
 arrow-array = "37.0.0"
-arrow-buffer = "37.0.0"
-arrow-data = "37.0.0"
 arrow-schema = "37.0.0"
 base64 = "0.21.0"
 chrono = { workspace = true }

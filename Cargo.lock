@@ -228,7 +228,7 @@ dependencies = [
 [[package]]
 name = "arrow-format"
 version = "0.8.1"
-source = "git+https://github.com/sundy-li/arrow-format?rev=4300370#4300370f127d3bf9c9ca2ee9ac8b28e45a09d31c"
+source = "git+https://github.com/sundy-li/arrow-format?rev=77da470#77da47090fc710c1d2020b725602d55eb75306c8"
 dependencies = [
  "planus",
  "prost",
@@ -1631,8 +1631,6 @@ name = "common-expression"
 version = "0.1.0"
 dependencies = [
  "arrow-array",
- "arrow-buffer",
- "arrow-data",
  "arrow-schema",
  "base64 0.21.0",
  "chrono",

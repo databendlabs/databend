@@ -32,9 +32,6 @@ impl Column {
         let field = DataField::try_from(field)?;
         let arrow2_array: Box<dyn common_arrow::arrow::array::Array> = array.into();
 
-        Ok(Column::from_arrow(
-            arrow2_array.as_ref(),
-            &field.data_type(),
-        ))
+        Ok(Column::from_arrow(arrow2_array.as_ref(), field.data_type()))
     }
 }
