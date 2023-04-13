@@ -21,6 +21,7 @@ use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_storages_system::BuildOptionsTable;
+use common_storages_system::CachesTable;
 use common_storages_system::CatalogsTable;
 use common_storages_system::ClusteringHistoryTable;
 use common_storages_system::ClustersTable;
@@ -99,6 +100,7 @@ impl SystemDatabase {
             CatalogsTable::create(sys_db_meta.next_table_id()),
             QueryCacheTable::create(sys_db_meta.next_table_id()),
             TableFunctionsTable::create(sys_db_meta.next_table_id()),
+            CachesTable::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_tables = Self::disable_system_tables();

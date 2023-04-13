@@ -100,9 +100,17 @@ pub struct SqlLogicTestArgs {
     pub debug: bool,
 
     #[arg(
-        long = "tpch",
+        long = "bench",
         default_missing_value = "true",
-        help = "The arg is used to enable tpch benchmark"
+        help = "The arg is used to run benchmark instead of test"
     )]
-    pub tpch: bool,
+    pub bench: bool,
+
+    // Set specific the database to connnect
+    #[arg(
+        long = "database",
+        default_value = "default",
+        help = "Specify the database to connnect, the default database is 'default'"
+    )]
+    pub database: String,
 }

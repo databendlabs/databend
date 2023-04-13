@@ -43,32 +43,44 @@ impl JoinHashTable {
         H::Key: 'a,
     {
         let valids = &probe_state.valids;
-        // The right join will return multiple data blocks of similar size
+        // The right join will return multiple data blocks of similar size.
+        let mut probed_num = 0;
         let mut probed_blocks = vec![];
-        let mut local_probe_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
+        let mut probe_indexes_len = 0;
+        let local_probe_indexes = &mut probe_state.probe_indexes;
         let mut local_build_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
         let mut validity = MutableBitmap::with_capacity(JOIN_MAX_BLOCK_SIZE);
         let mut build_indexes = self.hash_join_desc.join_state.build_indexes.write();
+
+        let data_blocks = self.row_space.datablocks();
+        let num_rows = data_blocks
+            .iter()
+            .fold(0, |acc, chunk| acc + chunk.num_rows());
+
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = self.probe_key(hash_table, key, valids, i);
 
             if let Some(v) = probe_result_ptr {
                 let probed_rows = v.get();
 
-                if local_probe_indexes.len() + probed_rows.len() < local_probe_indexes.capacity() {
-                    build_indexes.extend(probed_rows);
+                if probed_num + probed_rows.len() < JOIN_MAX_BLOCK_SIZE {
+                    build_indexes.extend_from_slice(probed_rows);
                     local_build_indexes.extend_from_slice(probed_rows);
-                    local_probe_indexes.extend(std::iter::repeat(i as u32).take(probed_rows.len()));
+                    local_probe_indexes[probe_indexes_len] = (i as u32, probed_rows.len() as u32);
+                    probe_indexes_len += 1;
+                    probed_num += probed_rows.len();
                     validity.extend_constant(probed_rows.len(), true);
                 } else {
                     let mut index = 0_usize;
                     let mut remain = probed_rows.len();
 
                     while index < probed_rows.len() {
-                        if local_probe_indexes.len() + remain < local_probe_indexes.capacity() {
+                        if probed_num + remain < JOIN_MAX_BLOCK_SIZE {
                             build_indexes.extend_from_slice(&probed_rows[index..]);
                             local_build_indexes.extend_from_slice(&probed_rows[index..]);
-                            local_probe_indexes.extend(std::iter::repeat(i as u32).take(remain));
+                            local_probe_indexes[probe_indexes_len] = (i as u32, remain as u32);
+                            probe_indexes_len += 1;
+                            probed_num += remain;
                             validity.extend_constant(remain, true);
 
                             index += remain;
@@ -79,17 +91,26 @@ impl JoinHashTable {
                                 ));
                             }
 
-                            let addition =
-                                local_probe_indexes.capacity() - local_probe_indexes.len();
+                            let addition = JOIN_MAX_BLOCK_SIZE - probed_num;
                             let new_index = index + addition;
 
                             build_indexes.extend_from_slice(&probed_rows[index..new_index]);
-                            local_probe_indexes.extend(std::iter::repeat(i as u32).take(addition));
                             local_build_indexes.extend_from_slice(&probed_rows[index..new_index]);
+                            local_probe_indexes[probe_indexes_len] = (i as u32, addition as u32);
+                            probe_indexes_len += 1;
+                            probed_num += addition;
                             validity.extend_constant(addition, true);
 
-                            let build_block = self.row_space.gather(&local_build_indexes)?;
-                            let mut probe_block = DataBlock::take(input, &local_probe_indexes)?;
+                            let build_block = self.row_space.gather(
+                                &local_build_indexes,
+                                &data_blocks,
+                                &num_rows,
+                            )?;
+                            let mut probe_block = DataBlock::take_compacted_indices(
+                                input,
+                                &local_probe_indexes[0..probe_indexes_len],
+                                probed_num,
+                            )?;
 
                             // If join type is right join, need to wrap nullable for probe side
                             // If join type is semi/anti right join, directly merge `build_block` and `probe_block`
@@ -113,8 +134,9 @@ impl JoinHashTable {
                             index = new_index;
                             remain -= addition;
 
-                            local_probe_indexes.clear();
                             local_build_indexes.clear();
+                            probe_indexes_len = 0;
+                            probed_num = 0;
                             validity = MutableBitmap::new();
                         }
                     }
@@ -122,7 +144,11 @@ impl JoinHashTable {
             }
         }
 
-        let mut probe_block = DataBlock::take(input, &local_probe_indexes)?;
+        let mut probe_block = DataBlock::take_compacted_indices(
+            input,
+            &local_probe_indexes[0..probe_indexes_len],
+            probed_num,
+        )?;
 
         // If join type is right join, need to wrap nullable for probe side
         // If join type is semi/anti right join, directly merge `build_block` and `probe_block`

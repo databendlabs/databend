@@ -26,17 +26,33 @@ MEDIAN(expression)
 
 the type of the value.
 
-## Examples
+## Example
 
-:::tip
-MEDIAN(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
-:::
-
+**Create a Table and Insert Sample Data**
 ```sql
-SELECT MEDIAN(number) FROM numbers(10000);
-+----------------+
-| median(number) |
-+----------------+
-|    4999        |
-+----------------+
+CREATE TABLE exam_scores (
+  id INT,
+  student_id INT,
+  score INT
+);
+
+INSERT INTO exam_scores (id, student_id, score)
+VALUES (1, 1, 80),
+       (2, 2, 90),
+       (3, 3, 75),
+       (4, 4, 95),
+       (5, 5, 85);
+```
+
+**Query Demo: Calculate Median Exam Score**
+```sql
+SELECT MEDIAN(score) AS median_score
+FROM exam_scores;
+```
+
+**Result**
+```sql
+|  median_score  |
+|----------------|
+|      85.0      |
 ```

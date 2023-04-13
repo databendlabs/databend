@@ -66,8 +66,8 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::AggregateMode;
-use crate::plans::AndExpr;
 use crate::plans::Exchange;
+use crate::plans::FunctionCall;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
@@ -1056,9 +1056,11 @@ impl PhysicalPlanBuilder {
                     .iter()
                     .cloned()
                     .reduce(|lhs, rhs| {
-                        ScalarExpr::AndExpr(AndExpr {
-                            left: Box::new(lhs),
-                            right: Box::new(rhs),
+                        ScalarExpr::FunctionCall(FunctionCall {
+                            span: None,
+                            func_name: "and".to_string(),
+                            params: vec![],
+                            arguments: vec![lhs, rhs],
                         })
                     })
                     .expect("there should be at least one predicate in prewhere");

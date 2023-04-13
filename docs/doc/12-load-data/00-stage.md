@@ -1,6 +1,6 @@
 ---
-title: Load from an Internal Stage
-sidebar_label: Load from an Internal Stage
+title: Loading from an Internal Stage
+sidebar_label: Loading from an Internal Stage
 description:
   Load data from Databend stages.
 ---

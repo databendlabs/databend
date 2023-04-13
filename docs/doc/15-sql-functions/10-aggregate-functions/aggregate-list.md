@@ -22,13 +22,37 @@ LIST(expression)
 
 the Array type that use the type of the value as inner type.
 
-## Examples
+## Example
+
+**Create a Table and Insert Sample Data**
+```sql
+CREATE TABLE movie_ratings (
+  id INT,
+  movie_title VARCHAR,
+  user_id INT,
+  rating INT
+);
+
+INSERT INTO movie_ratings (id, movie_title, user_id, rating)
+VALUES (1, 'Inception', 1, 5),
+       (2, 'Inception', 2, 4),
+       (3, 'Inception', 3, 5),
+       (4, 'Interstellar', 1, 4),
+       (5, 'Interstellar', 2, 3);
+```
+
+**Query Demo: List All Ratings for Inception Movie**
 
 ```sql
-SELECT LIST(number) FROM numbers(10);
-+-----------------------+
-| list(number)          |
-+-----------------------+
-| [0,1,2,3,4,5,6,7,8,9] |
-+-----------------------+
+SELECT movie_title, LIST(rating) AS ratings
+FROM movie_ratings
+WHERE movie_title = 'Inception'
+GROUP BY movie_title;
+```
+
+**Result**
+```sql
+| movie_title |  ratings   |
+|-------------|------------|
+| Inception   | [5, 4, 5]  |
 ```

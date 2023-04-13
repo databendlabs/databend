@@ -12,7 +12,7 @@ The conditions, except the first, apply in pairs: the result of the second will 
 
 ## Syntax
 
-```
+```sql
 RETENTION( <cond1> , <cond2> , ..., <cond32> );
 ```
 
@@ -26,34 +26,40 @@ RETENTION( <cond1> , <cond2> , ..., <cond32> );
 
 The array of 1 or 0.
 
-## Examples
+## Example
 
+**Create a Table and Insert Sample Data**
+```sql
+CREATE TABLE user_events (
+  id INT,
+  user_id INT,
+  event_date DATE,
+  event_type VARCHAR
+);
+
+INSERT INTO user_events (id, user_id, event_date, event_type)
+VALUES (1, 1, '2022-01-01', 'signup'),
+       (2, 1, '2022-01-02', 'login'),
+       (3, 2, '2022-01-01', 'signup'),
+       (4, 2, '2022-01-03', 'purchase'),
+       (5, 3, '2022-01-01', 'signup'),
+       (6, 3, '2022-01-02', 'login');
 ```
-CREATE TABLE retention_test(date DATE, uid INT);
-INSERT INTO retention_test SELECT '2018-08-06', number FROM numbers(80);
-INSERT INTO retention_test SELECT '2018-08-07', number FROM numbers(70);
-INSERT INTO retention_test SELECT '2018-08-08', number FROM numbers(60);
+
+**Query Demo: Calculate User Retention Based on Signup, Login, and Purchase Events**
+```sql
+SELECT
+  user_id,
+  RETENTION(event_type = 'signup', event_type = 'login', event_type = 'purchase') AS retention
+FROM user_events
+GROUP BY user_id;
 ```
 
-```
-SELECT sum(r[1]) as r1, sum(r[2]) as r2 FROM (SELECT uid, retention(date = '2018-08-06', date = '2018-08-07') AS r FROM retention_test WHERE date = '2018-08-06' or date = '2018-08-07' GROUP BY uid);
-+------+------+
-| r1   | r2   |
-+------+------+
-|   80 |   70 |
-+------+------+
-
-SELECT sum(r[1]) as r1, sum(r[2]) as r2 FROM (SELECT uid, retention(date = '2018-08-06', date = '2018-08-08') AS r FROM retention_test WHERE date = '2018-08-06' or date = '2018-08-08' GROUP BY uid);
-+------+------+
-| r1   | r2   |
-+------+------+
-|   80 |   60 |
-+------+------+
-
-SELECT sum(r[1]) as r1, sum(r[2]) as r2, sum(r[3]) as r3 FROM (SELECT uid, retention(date = '2018-08-06', date = '2018-08-07', date = '2018-08-08') AS r FROM retention_test GROUP BY uid);
-+------+------+------+
-| r1   | r2   | r3   |
-+------+------+------+
-|   80 |   70 |   60 |
-+------+------+------+
+**Result**
+```sql
+| user_id | retention |
+|---------|-----------|
+|   1     | [1, 1, 0] |
+|   2     | [1, 0, 1] |
+|   3     | [1, 1, 0] |
 ```

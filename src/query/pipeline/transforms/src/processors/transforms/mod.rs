@@ -18,7 +18,7 @@ pub mod transform_accumulating;
 pub mod transform_accumulating_async;
 mod transform_async;
 pub mod transform_block_compact;
-pub mod transform_block_compact_no_split;
+pub mod transform_block_compact_for_copy;
 pub mod transform_compact;
 mod transform_dummy;
 pub mod transform_multi_sort_merge;

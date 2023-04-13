@@ -18,23 +18,35 @@ APPROX_COUNT_DISTINCT(<expr>)
 
 Integer.
 
-## Examples
+## Example
 
-Both the APPROX_COUNT_DISTINCT and COUNT_DISTINCT functions answer the question “How Many Distinct”. APPROX_COUNT_DISTINCT computes the distinct counts using the HyperLogLog algorithm and returns an estimated result with less memory and time than COUNT_DISTINCT which returns the exact number.
-
-These examples return the number of distinct visitors to the Databend website based on their IP address:
-
+**Create a Table and Insert Sample Data**
 ```sql
-SELECT APPROX_COUNT_DISTINCT(ipaddress) FROM webvisitors;
+CREATE TABLE user_events (
+  id INT,
+  user_id INT,
+  event_name VARCHAR
+);
 
----
-3096
-
-
-SELECT COUNT(DISTINCT ipaddress) FROM webvisitors;
-
----
-3099
+INSERT INTO user_events (id, user_id, event_name)
+VALUES (1, 1, 'Login'),
+       (2, 2, 'Login'),
+       (3, 3, 'Login'),
+       (4, 1, 'Logout'),
+       (5, 2, 'Logout'),
+       (6, 4, 'Login'),
+       (7, 1, 'Login');
 ```
 
-The results above are not the same because `3096` is an estimated value.
+**Query Demo: Estimate the Number of Distinct User IDs**
+```sql
+SELECT APPROX_COUNT_DISTINCT(user_id) AS approx_distinct_user_count
+FROM user_events;
+```
+
+**Result**
+```sql
+| approx_distinct_user_count |
+|----------------------------|
+|             4              |
+```

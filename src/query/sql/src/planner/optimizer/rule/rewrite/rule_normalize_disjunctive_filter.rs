@@ -21,10 +21,9 @@ use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
-use crate::plans::AndExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::Filter;
-use crate::plans::OrExpr;
+use crate::plans::FunctionCall;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -38,18 +37,12 @@ enum PredicateScalar {
 
 fn predicate_scalar(scalar: &ScalarExpr) -> PredicateScalar {
     match scalar {
-        ScalarExpr::AndExpr(and_expr) => {
-            let args = vec![
-                predicate_scalar(&and_expr.left),
-                predicate_scalar(&and_expr.right),
-            ];
+        ScalarExpr::FunctionCall(func) if func.func_name == "and" => {
+            let args = func.arguments.iter().map(predicate_scalar).collect();
             PredicateScalar::And { args }
         }
-        ScalarExpr::OrExpr(or_expr) => {
-            let args = vec![
-                predicate_scalar(&or_expr.left),
-                predicate_scalar(&or_expr.right),
-            ];
+        ScalarExpr::FunctionCall(func) if func.func_name == "or" => {
+            let args = func.arguments.iter().map(predicate_scalar).collect();
             PredicateScalar::Or { args }
         }
         _ => PredicateScalar::Other {
@@ -68,9 +61,11 @@ fn normalize_predicate_scalar(
             args.into_iter()
                 .map(|arg| normalize_predicate_scalar(arg, return_type.clone()))
                 .reduce(|lhs, rhs| {
-                    ScalarExpr::AndExpr(AndExpr {
-                        left: Box::from(lhs),
-                        right: Box::from(rhs),
+                    ScalarExpr::FunctionCall(FunctionCall {
+                        span: None,
+                        func_name: "and".to_string(),
+                        params: vec![],
+                        arguments: vec![lhs, rhs],
                     })
                 })
                 .expect("has at least two args")
@@ -80,9 +75,11 @@ fn normalize_predicate_scalar(
             args.into_iter()
                 .map(|arg| normalize_predicate_scalar(arg, return_type.clone()))
                 .reduce(|lhs, rhs| {
-                    ScalarExpr::OrExpr(OrExpr {
-                        left: Box::from(lhs),
-                        right: Box::from(rhs),
+                    ScalarExpr::FunctionCall(FunctionCall {
+                        span: None,
+                        func_name: "or".to_string(),
+                        params: vec![],
+                        arguments: vec![lhs, rhs],
                     })
                 })
                 .expect("has at least two args")

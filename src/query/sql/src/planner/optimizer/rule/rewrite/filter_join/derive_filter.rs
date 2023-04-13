@@ -127,21 +127,6 @@ fn replace_column(scalar: &mut ScalarExpr, col_to_scalar: &HashMap<&IndexType, &
             // Safe to unwrap
             *scalar = (*col_to_scalar.get(&column_index).unwrap()).clone();
         }
-        ScalarExpr::AndExpr(expr) => {
-            replace_column(&mut expr.left, col_to_scalar);
-            replace_column(&mut expr.right, col_to_scalar);
-        }
-        ScalarExpr::OrExpr(expr) => {
-            replace_column(&mut expr.left, col_to_scalar);
-            replace_column(&mut expr.right, col_to_scalar);
-        }
-        ScalarExpr::NotExpr(expr) => {
-            replace_column(&mut expr.argument, col_to_scalar);
-        }
-        ScalarExpr::ComparisonExpr(expr) => {
-            replace_column(&mut expr.left, col_to_scalar);
-            replace_column(&mut expr.right, col_to_scalar);
-        }
         ScalarExpr::WindowFunction(expr) => {
             if let WindowFuncType::Aggregate(agg) = &mut expr.func {
                 for arg in agg.args.iter_mut() {
