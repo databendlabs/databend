@@ -668,7 +668,7 @@ fn test_array_sort(file: &mut impl Write) {
     );
     run_ast(
         file,
-        "array_sort_asc_null_last(['z', 'a', NULL, 'v', 'd', NULL])",
+        "array_sort_asc_null_last([1.2, NULL, 3.4, 5.6, '2.2', NULL])",
         &[],
     );
     run_ast(

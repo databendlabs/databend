@@ -96,8 +96,8 @@ Functions overloads:
 2 array_indexof(Array(T0) NULL, T0 NULL) :: UInt64 NULL
 0 array_kurtosis FACTORY
 0 array_max FACTORY
-0 array_min FACTORY
 0 array_median FACTORY
+0 array_min FACTORY
 0 array_prepend(T0, Array(T0)) :: Array(T0)
 0 array_remove_first(Array(Nothing)) :: Array(Nothing)
 1 array_remove_first(Array(Nothing) NULL) :: Array(Nothing) NULL

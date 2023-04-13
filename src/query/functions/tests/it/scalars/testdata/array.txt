@@ -1715,7 +1715,7 @@ output type    : Float64 NULL
 output domain  : {1..=1}
 output         : 1
 
- 
+
 ast            : array_stddev_samp([NULL, 3, 2, 1])
 raw expr       : array_stddev_samp(array(NULL, 3, 2, 1))
 checked expr   : array_stddev_samp<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL)))
@@ -2120,9 +2120,10 @@ output type    : Array(Nothing)
 output domain  : []
 output         : []
 
-ast            : array_sort_asc_null_last([])
-raw expr       : array_sort_asc_null_last(array())
-checked expr   : array_sort_asc_null_last<Array(Nothing)>(array<>())
+
+ast            : array_sort_desc_null_first([])
+raw expr       : array_sort_desc_null_first(array())
+checked expr   : array_sort_desc_null_first<Array(Nothing)>(array<>())
 optimized expr : [] :: Array(Nothing)
 output type    : Array(Nothing)
 output domain  : []
@@ -2138,7 +2139,7 @@ output domain  : {NULL}
 output         : NULL
 
 
-ast            : array_sort_asc_null_first([8, 20, 1, 2, 3, 4, 5, 6, 7], 'ASC')
+ast            : array_sort_asc_null_first([8, 20, 1, 2, 3, 4, 5, 6, 7])
 raw expr       : array_sort_asc_null_first(array(8, 20, 1, 2, 3, 4, 5, 6, 7))
 checked expr   : array_sort_asc_null_first<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0, T0, T0, T0, T0, T0, T0>(8_u8, 20_u8, 1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
 optimized expr : [1, 2, 3, 4, 5, 6, 7, 8, 20]
@@ -2147,7 +2148,7 @@ output domain  : [{1..=20}]
 output         : [1, 2, 3, 4, 5, 6, 7, 8, 20]
 
 
-ast            : array_sort_asc_null_last([8, 20, 1, 2, 3, 4, 5, 6, 7], 'ASC')
+ast            : array_sort_asc_null_last([8, 20, 1, 2, 3, 4, 5, 6, 7])
 raw expr       : array_sort_asc_null_last(array(8, 20, 1, 2, 3, 4, 5, 6, 7))
 checked expr   : array_sort_asc_null_last<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0, T0, T0, T0, T0, T0, T0>(8_u8, 20_u8, 1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
 optimized expr : [1, 2, 3, 4, 5, 6, 7, 8, 20]
@@ -2156,7 +2157,7 @@ output domain  : [{1..=20}]
 output         : [1, 2, 3, 4, 5, 6, 7, 8, 20]
 
 
-ast            : array_sort_desc_null_first([8, 20, 1, 2, 3, 4, 5, 6, 7], 'ASC')
+ast            : array_sort_desc_null_first([8, 20, 1, 2, 3, 4, 5, 6, 7])
 raw expr       : array_sort_desc_null_first(array(8, 20, 1, 2, 3, 4, 5, 6, 7))
 checked expr   : array_sort_desc_null_first<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0, T0, T0, T0, T0, T0, T0>(8_u8, 20_u8, 1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
 optimized expr : [20, 8, 7, 6, 5, 4, 3, 2, 1]
@@ -2165,7 +2166,7 @@ output domain  : [{1..=20}]
 optimized expr : [20, 8, 7, 6, 5, 4, 3, 2, 1]
 
 
-ast            : array_sort_desc_null_last([8, 20, 1, 2, 3, 4, 5, 6, 7], 'ASC')
+ast            : array_sort_desc_null_last([8, 20, 1, 2, 3, 4, 5, 6, 7])
 raw expr       : array_sort_desc_null_last(array(8, 20, 1, 2, 3, 4, 5, 6, 7))
 checked expr   : array_sort_desc_null_last<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0, T0, T0, T0, T0, T0, T0>(8_u8, 20_u8, 1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
 optimized expr : [20, 8, 7, 6, 5, 4, 3, 2, 1]
@@ -2174,7 +2175,7 @@ output domain  : [{1..=20}]
 optimized expr : [20, 8, 7, 6, 5, 4, 3, 2, 1]
 
 
-ast            : array_sort_asc_null_first([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'ASC', 'NULLS FIRST')
+ast            : array_sort_asc_null_first([1.2, NULL, 3.4, 5.6, '2.2', NULL])
 raw expr       : array_sort_asc_null_first(array(1.2, NULL, 3.4, 5.6, "2.2", NULL))
 checked expr   : array_sort_asc_null_first<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST("2.2" AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
 optimized expr : [NULL, NULL, 1.2, 2.2, 3.4, 5.6]
@@ -2183,7 +2184,7 @@ output domain  : [{0.0..=5.6} ∪ {NULL}]
 output         : [NULL, NULL, 1.2, 2.2, 3.4, 5.6]
 
 
-ast            : array_sort_asc_null_last([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'ASC', 'NULLS FIRST')
+ast            : array_sort_asc_null_last([1.2, NULL, 3.4, 5.6, '2.2', NULL])
 raw expr       : array_sort_asc_null_last(array(1.2, NULL, 3.4, 5.6, "2.2", NULL))
 checked expr   : array_sort_asc_null_last<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST("2.2" AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
 optimized expr : [1.2, 2.2, 3.4, 5.6, NULL, NULL]
@@ -2192,7 +2193,7 @@ output domain  : [{0.0..=5.6} ∪ {NULL}]
 output         : [1.2, 2.2, 3.4, 5.6, NULL, NULL]
 
 
-ast            : array_sort_desc_null_first([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'DESC', 'NULLS FIRST')
+ast            : array_sort_desc_null_first([1.2, NULL, 3.4, 5.6, '2.2', NULL])
 raw expr       : array_sort_desc_null_first(array(1.2, NULL, 3.4, 5.6, "2.2", NULL))
 checked expr   : array_sort_desc_null_first<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST("2.2" AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
 optimized expr : [NULL, NULL, 5.6, 3.4, 2.2, 1.2]
@@ -2201,7 +2202,7 @@ output domain  : [{0.0..=5.6} ∪ {NULL}]
 output         : [NULL, NULL, 5.6, 3.4, 2.2, 1.2]
 
 
-ast            : array_sort_desc_null_last([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'DESC', 'NULLS LAST')
+ast            : array_sort_desc_null_last([1.2, NULL, 3.4, 5.6, '2.2', NULL])
 raw expr       : array_sort_desc_null_last(array(1.2, NULL, 3.4, 5.6, "2.2", NULL))
 checked expr   : array_sort_desc_null_last<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST("2.2" AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
 optimized expr : [5.6, 3.4, 2.2, 1.2, NULL, NULL]
