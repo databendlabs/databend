@@ -1406,12 +1406,11 @@ impl<'a> TypeChecker<'a> {
                 let box (left, _) = self.resolve(left).await?;
                 let box (right, _) = self.resolve(right).await?;
 
-                const SOUNDEX_FUNC_NAME: &'static str = "soundex";
                 let (left, _) = *self
-                    .resolve_scalar_function_call(span, SOUNDEX_FUNC_NAME, vec![], vec![left])
+                    .resolve_scalar_function_call(span, "soundex", vec![], vec![left])
                     .await?;
                 let (right, _) = *self
-                    .resolve_scalar_function_call(span, SOUNDEX_FUNC_NAME, vec![], vec![right])
+                    .resolve_scalar_function_call(span, "soundex", vec![], vec![right])
                     .await?;
 
                 self.resolve_scalar_function_call(
