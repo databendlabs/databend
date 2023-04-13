@@ -42,8 +42,8 @@ echo "SELECT * FROM shared_db.t2" | $MYSQL_CLIENT_SHARE_2_CONNECT
 # alter table and query table data again
 echo "alter table add column and query table data again"
 echo "ALTER table test_database.t1 add column b UInt64 default 1" | $MYSQL_CLIENT_SHARE_1_CONNECT
-echo "SELECT * FROM shared_db.t1 order by number" | $MYSQL_CLIENT_SHARE_2_CONNECT
-echo "SELECT * FROM shared_db.t1 order by number" | $MYSQL_CLIENT_SHARE_3_CONNECT
+echo "SELECT * FROM shared_db.t1 order by number" | $MYSQL_CLIENT_SHARE_2_CONNECT | awk '{print $(NF-1)","$(NF)}'
+echo "SELECT * FROM shared_db.t1 order by number" | $MYSQL_CLIENT_SHARE_3_CONNECT | awk '{print $(NF-1)","$(NF)}'
 echo "alter table drop column and query table data again"
 echo "ALTER table test_database.t1 drop column number" | $MYSQL_CLIENT_SHARE_1_CONNECT
 echo "SELECT * FROM shared_db.t1" | $MYSQL_CLIENT_SHARE_2_CONNECT

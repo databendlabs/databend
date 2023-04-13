@@ -19,12 +19,12 @@ INBOUND test_share test_database shared_tenant to_tenant
 5
 6
 alter table add column and query table data again
-1  1
-2  1
-3  1
-1  1
-2  1
-3  1
+1,1
+2,1
+3,1
+1,1
+2,1
+3,1
 alter table drop column and query table data again
 1
 1
