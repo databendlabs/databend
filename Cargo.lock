@@ -6437,10 +6437,11 @@ dependencies = [
 
 [[package]]
 name = "micromarshal"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff74d5aaace38f0b9e2fd914979184b9ac4b6fda9c072cd1f5eb09d50a125e4f"
+checksum = "2777e7006e9b80afb5d2797e2b9e23865451708c9e280a61253586a0dd3a5db1"
 dependencies = [
+ "ethnum",
  "ordered-float 3.6.0",
 ]
 
