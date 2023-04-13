@@ -27,14 +27,9 @@ use z3::SatResult;
 use z3::Solver;
 
 use crate::binder::Recursion;
-use crate::plans::AndExpr;
 use crate::plans::BoundColumnRef;
-use crate::plans::ComparisonExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
-use crate::plans::FunctionCall;
-use crate::plans::NotExpr;
-use crate::plans::OrExpr;
 use crate::IndexType;
 use crate::ScalarExpr;
 use crate::ScalarVisitor;
@@ -153,22 +148,21 @@ impl<'ctx> ScalarVisitor for VariableCollector<'ctx> {
 /// Will return a Nullable Boolean ast.
 fn transform_logical_expr<'ctx>(ctx: &'ctx Context, scalar: &ScalarExpr) -> Option<Dynamic<'ctx>> {
     let result = match scalar {
-        ScalarExpr::AndExpr(AndExpr { left, right }) => {
-            let left = transform_logical_expr(ctx, left)?;
-            let right = transform_logical_expr(ctx, right)?;
+        ScalarExpr::FunctionCall(func) if func.func_name == "and" => {
+            let left = transform_logical_expr(ctx, &func.arguments[0])?;
+            let right = transform_logical_expr(ctx, &func.arguments[1])?;
 
             and_nullable_bool(ctx, &left, &right)
         }
-        ScalarExpr::OrExpr(OrExpr { left, right }) => {
-            let left = transform_logical_expr(ctx, left)?;
-            let right = transform_logical_expr(ctx, right)?;
+        ScalarExpr::FunctionCall(func) if func.func_name == "or" => {
+            let left = transform_logical_expr(ctx, &func.arguments[0])?;
+            let right = transform_logical_expr(ctx, &func.arguments[1])?;
 
             or_nullable_bool(ctx, &left, &right)
         }
-        ScalarExpr::NotExpr(NotExpr { argument }) => {
-            let argument = transform_logical_expr(ctx, argument)?;
-
-            not_nullable_bool(ctx, &argument)
+        ScalarExpr::FunctionCall(func) if func.func_name == "not" => {
+            let arg = transform_logical_expr(ctx, &func.arguments[0])?;
+            not_nullable_bool(ctx, &arg)
         }
         _ => transform_predicate_expr(ctx, scalar)?,
     };
@@ -182,61 +176,64 @@ fn transform_predicate_expr<'ctx>(
 ) -> Option<Dynamic<'ctx>> {
     tracing::info!("Transforming: {:?}", scalar);
     match scalar {
-        ScalarExpr::ComparisonExpr(ComparisonExpr { op, left, right }) => match (left, right) {
-            (
-                box ScalarExpr::BoundColumnRef(BoundColumnRef { column, .. }),
-                box ScalarExpr::ConstantExpr(ConstantExpr { value, .. }),
-            ) => match value {
-                Scalar::Number(value) if column.data_type.remove_nullable().is_numeric() => {
-                    let int_value = Int::from_i64(ctx, parse_int_literal(&Scalar::Number(*value))?);
-                    let left = Int::new_const(ctx, column.index.to_string().as_str());
+        ScalarExpr::FunctionCall(func) => {
+            if let Some(op) = ComparisonOp::try_from_func_name(&func.func_name) {
+                let left = &func.arguments[0];
+                let right = &func.arguments[1];
+                match (left, right) {
+                    (
+                        ScalarExpr::BoundColumnRef(BoundColumnRef { column, .. }),
+                        ScalarExpr::ConstantExpr(ConstantExpr { value, .. }),
+                    ) => match value {
+                        Scalar::Number(value)
+                            if column.data_type.remove_nullable().is_numeric() =>
+                        {
+                            let int_value =
+                                Int::from_i64(ctx, parse_int_literal(&Scalar::Number(*value))?);
+                            let left = Int::new_const(ctx, column.index.to_string().as_str());
 
-                    match op {
-                        ComparisonOp::Equal => Some(eq_int(ctx, &left, &int_value)),
-                        ComparisonOp::NotEqual => Some(ne_int(ctx, &left, &int_value)),
-                        ComparisonOp::GT => Some(gt_int(ctx, &left, &int_value)),
-                        ComparisonOp::GTE => Some(ge_int(ctx, &left, &int_value)),
-                        ComparisonOp::LT => Some(lt_int(ctx, &left, &int_value)),
-                        ComparisonOp::LTE => Some(le_int(ctx, &left, &int_value)),
-                    }
-                }
-                _ => None,
-            },
-            (
-                box ScalarExpr::ConstantExpr(ConstantExpr { value, .. }),
-                box ScalarExpr::BoundColumnRef(BoundColumnRef { column, .. }),
-            ) => match value {
-                Scalar::Number(value) if column.data_type.is_numeric() => {
-                    let int_value = Int::from_i64(ctx, parse_int_literal(&Scalar::Number(*value))?);
-                    let right = Int::new_const(ctx, column.index.to_string().as_str());
+                            match op {
+                                ComparisonOp::Equal => Some(eq_int(ctx, &left, &int_value)),
+                                ComparisonOp::NotEqual => Some(ne_int(ctx, &left, &int_value)),
+                                ComparisonOp::GT => Some(gt_int(ctx, &left, &int_value)),
+                                ComparisonOp::GTE => Some(ge_int(ctx, &left, &int_value)),
+                                ComparisonOp::LT => Some(lt_int(ctx, &left, &int_value)),
+                                ComparisonOp::LTE => Some(le_int(ctx, &left, &int_value)),
+                            }
+                        }
+                        _ => None,
+                    },
+                    (
+                        ScalarExpr::ConstantExpr(ConstantExpr { value, .. }),
+                        ScalarExpr::BoundColumnRef(BoundColumnRef { column, .. }),
+                    ) => match value {
+                        Scalar::Number(value) if column.data_type.is_numeric() => {
+                            let int_value =
+                                Int::from_i64(ctx, parse_int_literal(&Scalar::Number(*value))?);
+                            let right = Int::new_const(ctx, column.index.to_string().as_str());
 
-                    match op {
-                        ComparisonOp::Equal => Some(eq_int(ctx, &right, &int_value)),
-                        ComparisonOp::NotEqual => Some(ne_int(ctx, &right, &int_value)),
-                        ComparisonOp::GT => Some(lt_int(ctx, &right, &int_value)),
-                        ComparisonOp::GTE => Some(le_int(ctx, &right, &int_value)),
-                        ComparisonOp::LT => Some(gt_int(ctx, &right, &int_value)),
-                        ComparisonOp::LTE => Some(ge_int(ctx, &right, &int_value)),
-                    }
+                            match op {
+                                ComparisonOp::Equal => Some(eq_int(ctx, &right, &int_value)),
+                                ComparisonOp::NotEqual => Some(ne_int(ctx, &right, &int_value)),
+                                ComparisonOp::GT => Some(lt_int(ctx, &right, &int_value)),
+                                ComparisonOp::GTE => Some(le_int(ctx, &right, &int_value)),
+                                ComparisonOp::LT => Some(gt_int(ctx, &right, &int_value)),
+                                ComparisonOp::LTE => Some(ge_int(ctx, &right, &int_value)),
+                            }
+                        }
+                        _ => None,
+                    },
+                    _ => None,
                 }
-                _ => None,
-            },
-            _ => None,
-        },
-        ScalarExpr::FunctionCall(FunctionCall {
-            func_name,
-            arguments,
-            ..
-        }) => {
-            if arguments.len() == 1
-                && arguments[0]
+            } else if func.arguments.len() == 1
+                && func.arguments[0]
                     .data_type()
                     .ok()?
                     .remove_nullable()
                     .is_numeric()
             {
-                if let ScalarExpr::BoundColumnRef(column) = &arguments[0] {
-                    if func_name == "is_null" {
+                if let ScalarExpr::BoundColumnRef(column) = &func.arguments[0] {
+                    if func.func_name == "is_null" {
                         Some(from_bool(
                             ctx,
                             &is_null_int(
@@ -244,7 +241,7 @@ fn transform_predicate_expr<'ctx>(
                                 &Int::new_const(ctx, column.column.index.to_string().as_str()),
                             ),
                         ))
-                    } else if func_name == "is_not_null" {
+                    } else if func.func_name == "is_not_null" {
                         Some(from_bool(
                             ctx,
                             &is_not_null_int(

@@ -1,5 +1,5 @@
 {
-  "label": "Ingest",
+  "label": "Data Ingestion",
   "link": {
     "type": "generated-index",
     "slug": "/integrations/data"

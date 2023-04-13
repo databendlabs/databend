@@ -253,7 +253,14 @@ impl JoinHashTable {
         &self,
         unmatched_build_indexes: &Vec<RowPtr>,
     ) -> Result<DataBlock> {
-        let mut unmatched_build_block = self.row_space.gather(unmatched_build_indexes)?;
+        let data_blocks = self.row_space.datablocks();
+        let num_rows = data_blocks
+            .iter()
+            .fold(0, |acc, chunk| acc + chunk.num_rows());
+
+        let mut unmatched_build_block =
+            self.row_space
+                .gather(unmatched_build_indexes, &data_blocks, &num_rows)?;
         if self.hash_join_desc.join_type == JoinType::Full {
             let num_rows = unmatched_build_block.num_rows();
             let nullable_unmatched_build_columns = unmatched_build_block
@@ -309,13 +316,20 @@ impl JoinHashTable {
     }
 
     pub(crate) fn rest_block(&self) -> Result<DataBlock> {
+        let data_blocks = self.row_space.datablocks();
+        let num_rows = data_blocks
+            .iter()
+            .fold(0, |acc, chunk| acc + chunk.num_rows());
+
         let mut rest_pairs = self.hash_join_desc.join_state.rest_pairs.write();
         if rest_pairs.0.is_empty() {
             return Ok(DataBlock::empty());
         }
         let probe_block = DataBlock::concat(&rest_pairs.0)?;
         rest_pairs.0.clear();
-        let mut build_block = self.row_space.gather(&rest_pairs.1)?;
+        let mut build_block = self
+            .row_space
+            .gather(&rest_pairs.1, &data_blocks, &num_rows)?;
         rest_pairs.1.clear();
         // For left join, wrap nullable for build block
         if matches!(

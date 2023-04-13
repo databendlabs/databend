@@ -20,14 +20,10 @@ use common_exception::Result;
 use super::select::SelectList;
 use crate::optimizer::SExpr;
 use crate::plans::AggregateFunction;
-use crate::plans::AndExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
-use crate::plans::ComparisonExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
-use crate::plans::NotExpr;
-use crate::plans::OrExpr;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Window;
@@ -129,26 +125,6 @@ impl<'a> WindowRewriter<'a> {
             ScalarExpr::BoundColumnRef(_) => Ok(scalar.clone()),
             ScalarExpr::BoundInternalColumnRef(_) => Ok(scalar.clone()),
             ScalarExpr::ConstantExpr(_) => Ok(scalar.clone()),
-            ScalarExpr::AndExpr(scalar) => Ok(AndExpr {
-                left: Box::new(self.visit(&scalar.left)?),
-                right: Box::new(self.visit(&scalar.right)?),
-            }
-            .into()),
-            ScalarExpr::OrExpr(scalar) => Ok(OrExpr {
-                left: Box::new(self.visit(&scalar.left)?),
-                right: Box::new(self.visit(&scalar.right)?),
-            }
-            .into()),
-            ScalarExpr::NotExpr(scalar) => Ok(NotExpr {
-                argument: Box::new(self.visit(&scalar.argument)?),
-            }
-            .into()),
-            ScalarExpr::ComparisonExpr(scalar) => Ok(ComparisonExpr {
-                op: scalar.op.clone(),
-                left: Box::new(self.visit(&scalar.left)?),
-                right: Box::new(self.visit(&scalar.right)?),
-            }
-            .into()),
             ScalarExpr::FunctionCall(func) => {
                 let new_args = func
                     .arguments

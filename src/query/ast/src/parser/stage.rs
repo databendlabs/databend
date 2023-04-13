@@ -80,7 +80,7 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
 
     let option_compression = map(
         rule! {
-        (COMPRESSION ~ "=" ~ (AUTO | NONE |GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAWDEFLATE | XZ ) )
+        (COMPRESSION ~ "=" ~ (AUTO | NONE | GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAWDEFLATE | XZ ) )
         },
         |(_, _, v)| ("COMPRESSION".to_string(), v.text().to_string()),
     );

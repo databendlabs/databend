@@ -887,7 +887,7 @@ pub async fn convert_share_meta_to_spec(
 }
 
 // return share name and new share meta
-pub async fn revoke_db_from_share(
+pub async fn remove_db_from_share(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     share_id: u64,
     db_id: u64,
@@ -898,14 +898,14 @@ pub async fn revoke_db_from_share(
     let (_seq, share_name) = get_share_id_to_name_or_err(
         kv_api,
         share_id,
-        format!("revoke_db_from_share: {}", share_id),
+        format!("remove_db_from_share: {}", share_id),
     )
     .await?;
 
     let (share_meta_seq, mut share_meta) = get_share_meta_by_id_or_err(
         kv_api,
         share_id,
-        format!("revoke_db_from_share: {}", share_id),
+        format!("remove_db_from_share: {}", share_id),
     )
     .await?;
 
@@ -947,14 +947,14 @@ pub async fn remove_table_from_share(
     let (_seq, share_name) = get_share_id_to_name_or_err(
         kv_api,
         share_id,
-        format!("revoke_db_from_share: {}", share_id),
+        format!("remove_db_from_share: {}", share_id),
     )
     .await?;
 
     let (share_meta_seq, mut share_meta) = get_share_meta_by_id_or_err(
         kv_api,
         share_id,
-        format!("revoke_db_from_share: {}", share_id),
+        format!("remove_db_from_share: {}", share_id),
     )
     .await?;
 

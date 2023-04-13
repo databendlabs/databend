@@ -17,6 +17,7 @@ use std::fmt::Debug;
 
 use async_trait::async_trait;
 use common_auth::RefreshableToken;
+use common_exception::ErrorCode;
 use http::Request;
 use http::StatusCode;
 use opendal::layers::LoggingLayer;
@@ -58,7 +59,7 @@ pub fn create_share_table_operator(
     share_tenant_id: &str,
     share_name: &str,
     table_name: &str,
-) -> Result<Operator> {
+) -> common_exception::Result<Operator> {
     let op = match share_endpoint_address {
         Some(share_endpoint_address) => {
             let signer = SharedSigner::new(
@@ -84,7 +85,12 @@ pub fn create_share_table_operator(
             .layer(TracingLayer)
             .finish()
         }
-        None => Operator::new(())?.finish(),
+        None => {
+            return Err(ErrorCode::EmptyShareEndpointConfig(format!(
+                "Empty share config for creating operator of shared table {}.{}",
+                share_name, table_name,
+            )));
+        }
     };
 
     Ok(op)
@@ -154,7 +160,7 @@ impl Accessor for SharedAccessor {
             })?,
         );
 
-        let resp = self.client.send_async(req).await?;
+        let resp = self.client.send(req).await?;
 
         if resp.status().is_success() {
             let content_length = parse_content_length(resp.headers())
@@ -185,7 +191,7 @@ impl Accessor for SharedAccessor {
         let req = req
             .body(AsyncBody::Empty)
             .map_err(new_request_build_error)?;
-        let resp = self.client.send_async(req).await?;
+        let resp = self.client.send(req).await?;
         let status = resp.status();
         match status {
             StatusCode::OK => {

@@ -72,7 +72,7 @@ impl ShareEndpointManager {
                 match ShareTableConfig::share_endpoint_address() {
                     Some(url) => {
                         return Ok(vec![EndpointConfig {
-                            url,
+                            url: format!("http://{}/", url),
                             token: ShareTableConfig::share_endpoint_token(),
                             tenant: from_tenant.to_string(),
                         }]);
@@ -137,7 +137,7 @@ impl ShareEndpointManager {
             .header(CONTENT_LENGTH, bs.len())
             .header(TENANT_HEADER, requester)
             .body(AsyncBody::Bytes(bs))?;
-        let resp = self.client.send_async(req).await;
+        let resp = self.client.send(req).await;
         match resp {
             Ok(resp) => {
                 let bs = resp.into_body().bytes().await?;
@@ -156,50 +156,58 @@ impl ShareEndpointManager {
         to_tenant: Option<String>,
         share_name: Option<ShareNameIdent>,
     ) -> Result<Vec<(String, ShareSpec)>> {
-        match self.get_share_endpoint_config(from_tenant, to_tenant).await {
-            Err(_) => Ok(vec![]),
-            Ok(endpoint_meta_config_vec) => {
-                let mut share_spec_vec = vec![];
-                let share_names: Vec<String> = vec![];
-                for endpoint_config in endpoint_meta_config_vec {
-                    let url = format!("{}tenant/{}/share_spec", endpoint_config.url, from_tenant);
-                    let bs = Bytes::from(serde_json::to_vec(&share_names)?);
-                    let auth = endpoint_config.token.to_header().await?;
-                    let requester = GlobalConfig::instance().as_ref().query.tenant_id.clone();
-                    let req = Request::builder()
-                        .method(Method::POST)
-                        .uri(&url)
-                        .header(AUTHORIZATION, auth)
-                        .header(CONTENT_LENGTH, bs.len())
-                        .header(TENANT_HEADER, requester)
-                        .body(AsyncBody::Bytes(bs))?;
-                    let resp = self.client.send_async(req).await;
-                    match resp {
-                        Ok(resp) => {
-                            let bs = resp.into_body().bytes().await?;
-                            let ret: Vec<ShareSpec> = serde_json::from_slice(&bs)?;
-                            for share_spec in ret {
-                                if let Some(ref share_name) = share_name {
-                                    if share_spec.name == share_name.share_name
-                                        && endpoint_config.tenant == share_name.tenant
-                                    {
-                                        share_spec_vec
-                                            .push((endpoint_config.tenant.clone(), share_spec));
-                                        return Ok(share_spec_vec);
-                                    }
-                                }
-                                share_spec_vec.push((endpoint_config.tenant.clone(), share_spec));
-                            }
-                        }
-                        Err(err) => {
-                            error!("get_inbound_shares error: {:?}", err);
-                            continue;
-                        }
-                    }
-                }
-
-                Ok(share_spec_vec)
+        let mut endpoint_meta_config_vec = vec![];
+        // If `to_tenant` is None, query from same tenant for inbound shares
+        if to_tenant.is_none() {
+            if let Ok(config_vec) = self
+                .get_share_endpoint_config(from_tenant, Some(from_tenant.to_string()))
+                .await
+            {
+                endpoint_meta_config_vec.extend(config_vec);
             }
         }
+        if let Ok(config_vec) = self.get_share_endpoint_config(from_tenant, to_tenant).await {
+            endpoint_meta_config_vec.extend(config_vec);
+        }
+
+        let mut share_spec_vec = vec![];
+        let share_names: Vec<String> = vec![];
+        for endpoint_config in endpoint_meta_config_vec {
+            let url = format!("{}tenant/{}/share_spec", endpoint_config.url, from_tenant);
+            let bs = Bytes::from(serde_json::to_vec(&share_names)?);
+            let auth = endpoint_config.token.to_header().await?;
+            let requester = GlobalConfig::instance().as_ref().query.tenant_id.clone();
+            let req = Request::builder()
+                .method(Method::POST)
+                .uri(&url)
+                .header(AUTHORIZATION, auth)
+                .header(CONTENT_LENGTH, bs.len())
+                .header(TENANT_HEADER, requester)
+                .body(AsyncBody::Bytes(bs))?;
+            let resp = self.client.send(req).await;
+            match resp {
+                Ok(resp) => {
+                    let bs = resp.into_body().bytes().await?;
+                    let ret: Vec<ShareSpec> = serde_json::from_slice(&bs)?;
+                    for share_spec in ret {
+                        if let Some(ref share_name) = share_name {
+                            if share_spec.name == share_name.share_name
+                                && endpoint_config.tenant == share_name.tenant
+                            {
+                                share_spec_vec.push((endpoint_config.tenant.clone(), share_spec));
+                                return Ok(share_spec_vec);
+                            }
+                        }
+                        share_spec_vec.push((endpoint_config.tenant.clone(), share_spec));
+                    }
+                }
+                Err(err) => {
+                    error!("get_inbound_shares error: {:?}", err);
+                    continue;
+                }
+            }
+        }
+
+        Ok(share_spec_vec)
     }
 }
