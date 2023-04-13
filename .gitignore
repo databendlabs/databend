@@ -3,3 +3,5 @@ target/
 Cargo.lock
 
 /tests/data
+
+/dist

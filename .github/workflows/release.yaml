@@ -7,8 +7,85 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { tool: cross, os: ubuntu, target: aarch64-unknown-linux-gnu }
+          - { tool: cross, os: ubuntu, target: aarch64-unknown-linux-musl }
+          - { tool: cross, os: ubuntu, target: x86_64-unknown-linux-gnu }
+          - { tool: cross, os: ubuntu, target: x86_64-unknown-linux-musl }
+          - { tool: cargo, os: macos, target: aarch64-apple-darwin }
+          - { tool: cargo, os: macos, target: x86_64-apple-darwin }
+          - { tool: cargo, os: windows, target: x86_64-pc-windows-gnu }
+          - { tool: cargo, os: windows, target: x86_64-pc-windows-msvc }
+    runs-on: ${{ matrix.os }}-latest
     steps:
     - uses: actions/checkout@v3
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+        targets: ${{ matrix.target }}
+    - name: Setup Cross
+      if: matrix.tool == 'cross'
+      shell: bash
+      run: |
+        curl -sSfLo /tmp/cross.tar.gz https://github.com/cross-rs/cross/releases/download/v0.2.5/cross-x86_64-unknown-linux-gnu.tar.gz
+        tar -xzf /tmp/cross.tar.gz -C /tmp
+        sudo mv /tmp/cross /usr/local/bin/cross
+    - name: Build
+      shell: bash
+      run: |
+        ${{ matrix.tool }} build --release --target=${{ matrix.target }} --bin=bendsql
+    - name: Publish Linux and macOS
+      if: matrix.os != 'windows'
+      shell: bash
+      run: |
+        mkdir -p dist
+        tar -czf dist/bendsql-${{ matrix.target }}.tar.gz -C target/${{ matrix.target }}/release bendsql
+        gh release upload ${{ github.ref_name }} dist/bendsql-${{ matrix.target }}.tar.gz --clobber
+    - name: Publish Windows
+      if: matrix.os == 'windows'
+      shell: bash
+      run: |
+        mkdir -p dist
+        zip -j dist/bendsql-${{ matrix.target }}.zip target/${{ matrix.target }}/release/bendsql.exe
+        gh release upload ${{ github.ref_name }} dist/bendsql-${{ matrix.target }}.zip --clobber
 
-    # TODO: release binaries
+  distribution:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { packager: apk, arch: amd64, target: x86_64-unknown-linux-musl }
+          - { packager: apk, arch: arm64, target: aarch64-unknown-linux-musl }
+          - { packager: deb, arch: amd64, target: x86_64-unknown-linux-musl }
+          - { packager: deb, arch: arm64, target: aarch64-unknown-linux-musl }
+          - { packager: rpm, arch: amd64, target: x86_64-unknown-linux-musl }
+          - { packager: rpm, arch: arm64, target: aarch64-unknown-linux-musl }
+          - { packager: archlinux, arch: amd64, target: x86_64-unknown-linux-gnu }
+          - { packager: archlinux, arch: arm64, target: aarch64-unknown-linux-gnu }
+    steps:
+    - uses: actions/checkout@v3
+    - name: Setup nfpm
+      shell: bash
+      run: |
+        curl -sSfLo /tmp/nfpm.tar.gz https://github.com/goreleaser/nfpm/releases/download/v2.28.0/nfpm_2.28.0_Linux_x86_64.tar.gz
+        tar -xzf /tmp/nfpm.tar.gz -C /tmp
+        sudo mv /tmp/nfpm /usr/local/bin/nfpm
+    - name: Download
+      shell: bash
+      run: |
+        mkdir -p dist/pkg
+        gh release download ${{ github.ref_name }} --pattern "bendsql-${{ matrix.target }}.tar.gz" --dir dist/
+        tar -xzf dist/bendsql-${{ matrix.target }}.tar.gz -C dist/
+    - name: Package
+      shell: bash
+      run: |
+        export arch=${{ matrix.arch }}
+        export version=${{ github.ref_name }}
+        nfpm package --packager ${{ matrix.packager }} --target dist/pkg/ -f <(envsubst '${arch} ${version}' < nfpm.yaml)
+    - name: Publish
+      shell: bash
+      run: |
+        gh release upload ${{ github.ref_name }} dist/pkg/* --clobber

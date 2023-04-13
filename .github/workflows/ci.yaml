@@ -23,13 +23,13 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
   build:
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}-latest
     strategy:
       matrix:
         os:
-          - ubuntu-latest
-          - macos-11
-          - windows-latest
+          - ubuntu
+          - macos
+          - windows
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup
