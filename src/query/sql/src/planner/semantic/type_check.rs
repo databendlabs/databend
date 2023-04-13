@@ -1407,10 +1407,10 @@ impl<'a> TypeChecker<'a> {
                 let box (right, _) = self.resolve(right).await?;
 
                 let (left, _) = *self
-                    .resolve_function(span, "soundex", vec![], &[left.as_ref()])
+                    .resolve_function(span, "soundex", vec![], &[left])
                     .await?;
                 let (right, _) = *self
-                    .resolve_function(span, "soundex", vec![], &[right.as_ref()])
+                    .resolve_function(span, "soundex", vec![], &[right])
                     .await?;
 
                 *self
