@@ -15,17 +15,26 @@
 use std::sync::Arc;
 
 use chrono::DateTime;
+use chrono::Duration;
 use chrono::Utc;
+use common_catalog::table::NavigationPoint;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableStatistics;
 use futures::TryStreamExt;
+use opendal::EntryMode;
+use opendal::Metakey;
+use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use tracing::warn;
 
 use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
+use crate::io::TableMetaLocationGenerator;
 use crate::FuseTable;
+use crate::FUSE_TBL_SNAPSHOT_PREFIX;
 
 impl FuseTable {
     #[async_backtrace::framed]
@@ -33,7 +42,16 @@ impl FuseTable {
         &self,
         time_point: DateTime<Utc>,
     ) -> Result<Arc<FuseTable>> {
-        self.find(|snapshot| {
+        let snapshot_location = if let Some(loc) = self.snapshot_loc().await? {
+            loc
+        } else {
+            // not an error?
+            return Err(ErrorCode::TableHistoricalDataNotFound(
+                "Empty Table has no historical data",
+            ));
+        };
+
+        self.find(snapshot_location, |snapshot| {
             if let Some(ts) = snapshot.timestamp {
                 ts <= time_point
             } else {
@@ -45,7 +63,16 @@ impl FuseTable {
 
     #[async_backtrace::framed]
     pub async fn navigate_to_snapshot(&self, snapshot_id: &str) -> Result<Arc<FuseTable>> {
-        self.find(|snapshot| {
+        let snapshot_location = if let Some(loc) = self.snapshot_loc().await? {
+            loc
+        } else {
+            // not an error?
+            return Err(ErrorCode::TableHistoricalDataNotFound(
+                "Empty Table has no historical data",
+            ));
+        };
+
+        self.find(snapshot_location, |snapshot| {
             snapshot
                 .snapshot_id
                 .simple()
@@ -63,9 +90,17 @@ impl FuseTable {
         retention_point: Option<DateTime<Utc>>,
     ) -> Result<Arc<FuseTable>> {
         assert!(retention_point.is_some());
+        let snapshot_location = if let Some(loc) = self.snapshot_loc().await? {
+            loc
+        } else {
+            // not an error?
+            return Err(ErrorCode::TableHistoricalDataNotFound(
+                "Empty Table has no historical data",
+            ));
+        };
 
         let mut find_id = false;
-        self.find(|snapshot| {
+        self.find(snapshot_location, |snapshot| {
             if find_id {
                 snapshot.timestamp <= retention_point
             } else if snapshot
@@ -89,24 +124,14 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
-    pub async fn find<P>(&self, mut pred: P) -> Result<Arc<FuseTable>>
+    pub async fn find<P>(&self, location: String, mut pred: P) -> Result<Arc<FuseTable>>
     where P: FnMut(&TableSnapshot) -> bool {
-        let snapshot_location = if let Some(loc) = self.snapshot_loc().await? {
-            loc
-        } else {
-            // not an error?
-            return Err(ErrorCode::TableHistoricalDataNotFound(
-                "Empty Table has no historical data",
-            ));
-        };
-
-        let snapshot_version = self.snapshot_format_version().await?;
+        let snapshot_version = TableMetaLocationGenerator::snapshot_version(location.as_str());
         let reader = MetaReaders::table_snapshot_reader(self.get_operator());
-
         // grab the table history as stream
         // snapshots are order by timestamp DESC.
         let mut snapshot_stream = reader.snapshot_history(
-            snapshot_location,
+            location,
             snapshot_version,
             self.meta_location_generator().clone(),
         );
@@ -162,5 +187,147 @@ impl FuseTable {
                 "No historical data found at given point",
             ))
         }
+    }
+
+    #[async_backtrace::framed]
+    pub async fn navigate_for_purge(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        instant: Option<NavigationPoint>,
+    ) -> Result<(Arc<FuseTable>, Vec<String>)> {
+        let retention = Duration::hours(ctx.get_settings().get_retention_period()? as i64);
+        let root_snapshot = if let Some(snapshot) = self.read_table_snapshot().await? {
+            snapshot
+        } else {
+            return Err(ErrorCode::TableHistoricalDataNotFound(
+                "No historical data found at given point",
+            ));
+        };
+
+        assert!(root_snapshot.timestamp.is_some());
+        let mut time_point = root_snapshot.timestamp.unwrap() - retention;
+
+        let (location, files) = match instant {
+            Some(NavigationPoint::TimePoint(point)) => {
+                time_point = std::cmp::min(point, time_point);
+                self.list_by_time_point(time_point).await
+            }
+            Some(NavigationPoint::SnapshotID(snapshot_id)) => {
+                self.list_by_snapshot_id(snapshot_id.as_str(), time_point)
+                    .await
+            }
+            None => self.list_by_time_point(time_point).await,
+        }?;
+
+        let table = self
+            .find(location, |snapshot| {
+                if let Some(ts) = snapshot.timestamp {
+                    ts <= time_point
+                } else {
+                    false
+                }
+            })
+            .await?;
+        Ok((table, files))
+    }
+
+    #[async_backtrace::framed]
+    async fn list_by_time_point(&self, time_point: DateTime<Utc>) -> Result<(String, Vec<String>)> {
+        let files = self.list_files(time_point, |_| {}).await?;
+        let location = files[0].clone();
+        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+        let ver = TableMetaLocationGenerator::snapshot_version(location.as_str());
+        let load_params = LoadParams {
+            location,
+            len_hint: None,
+            ver,
+            put_cache: false,
+        };
+        let snapshot = reader.read(&load_params).await?;
+        // Take the prev snapshot as base snapshot to avoid get orphan snapshot.
+        let prev = snapshot.prev_snapshot_id;
+        match prev {
+            Some((id, v)) => {
+                let new_loc = self
+                    .meta_location_generator()
+                    .snapshot_location_from_uuid(&id, v)?;
+                Ok((new_loc, files))
+            }
+            None => Err(ErrorCode::TableHistoricalDataNotFound(
+                "No historical data found at given point",
+            )),
+        }
+    }
+
+    #[async_backtrace::framed]
+    async fn list_by_snapshot_id(
+        &self,
+        snapshot_id: &str,
+        retention_point: DateTime<Utc>,
+    ) -> Result<(String, Vec<String>)> {
+        let prefix_loc = format!(
+            "{}/{}/{}",
+            self.meta_location_generator().prefix(),
+            FUSE_TBL_SNAPSHOT_PREFIX,
+            snapshot_id
+        );
+
+        let mut location = None;
+        let files = self
+            .list_files(retention_point, |loc| {
+                if loc.as_str().starts_with(&prefix_loc) {
+                    location = Some(loc);
+                }
+            })
+            .await?;
+        let location = location.ok_or(ErrorCode::TableHistoricalDataNotFound(
+            "No historical data found at given point",
+        ))?;
+        Ok((location, files))
+    }
+
+    #[async_backtrace::framed]
+    async fn list_files<P>(&self, time_point: DateTime<Utc>, mut pred: P) -> Result<Vec<String>>
+    where P: FnMut(String) {
+        let prefix = format!(
+            "{}/{}/",
+            self.meta_location_generator().prefix(),
+            FUSE_TBL_SNAPSHOT_PREFIX,
+        );
+        let op = self.operator.clone();
+
+        let mut file_list = vec![];
+        let mut ds = op.list(&prefix).await?;
+        while let Some(de) = ds.try_next().await? {
+            let meta = op
+                .metadata(&de, Metakey::Mode | Metakey::LastModified)
+                .await?;
+            match meta.mode() {
+                EntryMode::FILE => {
+                    let modified = meta.last_modified();
+                    let location = de.path().to_string();
+                    pred(location.clone());
+                    if let Some(modified) = modified {
+                        if modified <= time_point {
+                            file_list.push((location, modified));
+                        }
+                    }
+                }
+                _ => {
+                    warn!("found not snapshot file in {:}, found: {:?}", prefix, de);
+                    continue;
+                }
+            }
+        }
+
+        if file_list.is_empty() {
+            return Err(ErrorCode::TableHistoricalDataNotFound(
+                "No historical data found at given point",
+            ));
+        }
+
+        file_list.sort_by(|(_, m1), (_, m2)| m2.cmp(m1));
+
+        Ok(file_list.into_iter().map(|v| v.0).collect())
     }
 }

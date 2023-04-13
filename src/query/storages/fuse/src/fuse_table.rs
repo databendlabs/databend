@@ -19,7 +19,6 @@ use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use chrono::Duration;
 use common_catalog::catalog::StorageDescription;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
@@ -554,34 +553,13 @@ impl Table for FuseTable {
         instant: Option<NavigationPoint>,
         keep_last_snapshot: bool,
     ) -> Result<()> {
-        let retention = Duration::hours(ctx.get_settings().get_retention_period()? as i64);
-        let root_snapshot = if let Some(snapshot) = self.read_table_snapshot().await? {
-            snapshot
-        } else {
-            warn!("Empty Table has no historical data");
-            return Ok(());
-        };
-
-        assert!(root_snapshot.timestamp.is_some());
-        let retention_point = root_snapshot.timestamp.unwrap() - retention;
-
-        let table = match instant {
-            Some(NavigationPoint::TimePoint(time_point)) => {
-                let min_time_point = std::cmp::min(time_point, retention_point);
-                self.navigate_to_time_point(min_time_point).await
-            }
-            Some(NavigationPoint::SnapshotID(snapshot_id)) => {
-                self.navigate_with_retention(snapshot_id.as_str(), Some(retention_point))
-                    .await
-            }
-            None => self.navigate_to_time_point(retention_point).await,
-        };
-        match table {
-            Err(e) => {
+        match self.navigate_for_purge(&ctx, instant).await {
+            Ok((table, _files)) => table.do_purge(&ctx, keep_last_snapshot).await,
+            Err(e) if e.code() == ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND => {
                 warn!("navigate failed: {:?}", e);
                 Ok(())
             }
-            Ok(t) => t.do_purge(&ctx, keep_last_snapshot).await,
+            Err(e) => Err(e),
         }
     }
 

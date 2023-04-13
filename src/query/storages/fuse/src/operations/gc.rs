@@ -75,7 +75,7 @@ impl FuseTable {
         };
 
         let locations_referenced_by_root = self
-            .get_block_locations(ctx.clone(), &root_snapshot.segments, true)
+            .get_block_locations(ctx.clone(), &root_snapshot.segments, keep_last_snapshot)
             .await?;
         let root_snapshot_lite = Arc::new(SnapshotLiteExtended {
             format_version: root_snapshot.format_version(),

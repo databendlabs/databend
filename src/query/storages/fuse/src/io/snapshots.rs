@@ -368,7 +368,7 @@ impl SnapshotsIO {
         // Result:
         // [(3, Some(3)), (1, Some(1)), (2, None),(4, None)]
         file_list.sort_by(|(_, m1), (_, m2)| m2.cmp(m1));
-
+        println!("file_list: {:?}", file_list);
         Ok(file_list.into_iter().map(|v| v.0).collect())
     }
 
