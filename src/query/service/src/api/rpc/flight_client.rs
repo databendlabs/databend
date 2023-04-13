@@ -43,8 +43,8 @@ pub struct FlightClient {
 // TODO: Integration testing required
 impl FlightClient {
     pub fn new(mut inner: FlightServiceClient<Channel>) -> FlightClient {
-        inner.max_decoding_message_size(usize::MAX);
-        inner.max_encoding_message_size(usize::MAX);
+        inner = inner.max_decoding_message_size(usize::MAX);
+        inner = inner.max_encoding_message_size(usize::MAX);
 
         FlightClient { inner }
     }

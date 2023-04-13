@@ -194,6 +194,6 @@ rpath = false
 [patch.crates-io]
 # If there are dependencies that need patching, they can be listed below.
 
-arrow-format = { git = "https://github.com/sundy-li/arrow-format", rev = "77da470" }
+arrow-format = { git = "https://github.com/sundy-li/arrow-format", rev = "c49adfe" }
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "ed0e1ff" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }
