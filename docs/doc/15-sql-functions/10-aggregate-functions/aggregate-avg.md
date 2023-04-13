@@ -16,9 +16,9 @@ AVG(expression)
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| expression  | Any numerical expression |
+| Arguments  | Description              |
+|------------|--------------------------|
+| expression | Any numerical expression |
 
 ## Return Type
 
@@ -26,36 +26,35 @@ double
 
 ## Examples
 
-:::tip
-    numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
-:::
+**Creating a Table and Inserting Sample Data**
 
+Let's create a table named "sales" and insert some sample data:
 ```sql
-SELECT AVG(*) FROM numbers(3);
-+--------+
-| avg(*) |
-+--------+
-|      1 |
-+--------+
+CREATE TABLE sales (
+  id INTEGER,
+  product VARCHAR(50),
+  price FLOAT
+);
 
-SELECT AVG(number) FROM numbers(3);
-+-------------+
-| avg(number) |
-+-------------+
-|           1 |
-+-------------+
+INSERT INTO sales (id, product, price)
+VALUES (1, 'Product A', 10.5),
+       (2, 'Product B', 20.75),
+       (3, 'Product C', 30.0),
+       (4, 'Product D', 15.25),
+       (5, 'Product E', 25.5);
+```
 
-SELECT AVG(number+1) FROM numbers(3);
-+----------------------+
-| avg(plus(number, 1)) |
-+----------------------+
-|                    2 |
-+----------------------+
+**Query: Using AVG() Function**
 
-SELECT AVG(number+1) AS a FROM numbers(3);
-+------+
-| a    |
-+------+
-|    2 |
-+------+
+Now, let's use the AVG() function to find the average price of all products in the "sales" table:
+```sql
+SELECT AVG(price) AS avg_price
+FROM sales;
+```
+
+The result should look like this:
+```sql
+| avg_price |
+| --------- |
+| 20.4      |
 ```

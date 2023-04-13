@@ -26,18 +26,33 @@ STDDEV_SAMP(expression)
 
 double
 
-## Examples
+## Example
 
-:::tip
-numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
-:::
-
+**Create a Table and Insert Sample Data**
 ```sql
-SELECT STDDEV_SAMP(number) FROM numbers(10000);
-+---------------------+
-| stddev_samp(number) |
-+---------------------+
-|  2886.8956799071675 |
-+---------------------+
+CREATE TABLE height_data (
+  id INT,
+  person_id INT,
+  height FLOAT
+);
 
+INSERT INTO height_data (id, person_id, height)
+VALUES (1, 1, 5.8),
+       (2, 2, 6.1),
+       (3, 3, 5.9),
+       (4, 4, 5.7),
+       (5, 5, 6.3);
+```
+
+**Query Demo: Calculate Sample Standard Deviation of Heights**
+```sql
+SELECT STDDEV_SAMP(height) AS height_stddev_samp
+FROM height_data;
+```
+
+**Result**
+```sql
+| height_stddev_samp |
+|--------------------|
+|      0.240         |
 ```
