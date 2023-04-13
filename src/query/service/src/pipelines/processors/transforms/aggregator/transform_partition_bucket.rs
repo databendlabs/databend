@@ -259,7 +259,11 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
             data_blocks.push(match cell.hashtable.len() == 0 {
                 true => None,
                 false => Some(DataBlock::empty_with_meta(
-                    AggregateMeta::<Method, V>::create_hashtable(bucket as isize, cell),
+                    AggregateMeta::<Method, V>::create_hashtable(
+                        bucket as isize,
+                        cell,
+                        payload.dictionary.clone(),
+                    ),
                 )),
             })
         }

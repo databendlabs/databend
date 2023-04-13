@@ -162,6 +162,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
                     }
                     AggregateMeta::HashTable(payload) => {
                         let bucket = payload.bucket;
+                        let dictionary = payload.dictionary.clone();
                         for hashtable_cell in self.scatter(payload)? {
                             blocks.push(match hashtable_cell.hashtable.len() == 0 {
                                 true => DataBlock::empty(),
@@ -169,6 +170,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
                                     AggregateMeta::<Method, V>::create_hashtable(
                                         bucket,
                                         hashtable_cell,
+                                        dictionary.clone(),
                                     ),
                                 ),
                             });

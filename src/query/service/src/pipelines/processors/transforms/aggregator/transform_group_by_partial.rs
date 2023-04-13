@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 use std::vec;
 
 use common_catalog::table_context::TableContext;
@@ -25,6 +26,7 @@ use common_expression::types::NumberType;
 use common_expression::types::ValueType;
 use common_expression::Column;
 use common_expression::DataBlock;
+use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 use common_hashtable::ShortStringHashMap;
 use common_pipeline_core::processors::port::InputPort;
@@ -33,10 +35,12 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_transforms::processors::transforms::AccumulatingTransform;
 use common_pipeline_transforms::processors::transforms::AccumulatingTransformer;
 use common_sql::IndexType;
+use tracing::info;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_cell::GroupByHashTableDropper;
 use crate::pipelines::processors::transforms::aggregator::aggregate_cell::HashTableCell;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
+use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
@@ -89,6 +93,7 @@ pub struct TransformPartialGroupBy<Method: HashMethodBounds> {
     hash_table: HashTable<Method>,
     group_columns: Vec<IndexType>,
     settings: GroupBySettings,
+    params: Arc<AggregatorParams>,
     two_stage_dict_index: u64,
     two_stage_dict_hash_table: ShortStringHashMap<[u8], u64>,
 }
@@ -113,6 +118,7 @@ impl<Method: HashMethodBounds> TransformPartialGroupBy<Method> {
                 hash_table,
                 group_columns: params.group_columns.clone(),
                 settings: GroupBySettings::try_from(ctx)?,
+                params,
                 two_stage_dict_index: 0,
                 two_stage_dict_hash_table: ShortStringHashMap::new(),
             },
@@ -189,7 +195,18 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                 ) {
                     if let HashTable::HashTable(cell) = std::mem::take(&mut self.hash_table) {
                         self.hash_table = HashTable::PartitionedHashTable(
-                            PartitionedHashMethod::convert_hashtable(&self.method, cell)?,
+                            match Method::SUPPORT_TWO_STAGE && self.settings.enable_two_stage {
+                                true => Self::rebuild_hashtable(
+                                    &self.method,
+                                    cell,
+                                    &mut self.two_stage_dict_index,
+                                    &mut self.two_stage_dict_hash_table,
+                                    &self.params,
+                                )?,
+                                false => {
+                                    PartitionedHashMethod::convert_hashtable(&self.method, cell)?
+                                }
+                            },
                         );
                     }
                 }
@@ -235,16 +252,22 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
             HashTable::HashTable(cell) => match cell.hashtable.len() == 0 {
                 true => vec![],
                 false => vec![DataBlock::empty_with_meta(
-                    AggregateMeta::<Method, ()>::create_hashtable(-1, cell),
+                    AggregateMeta::<Method, ()>::create_hashtable(-1, cell, None),
                 )],
             },
             HashTable::PartitionedHashTable(v) => {
                 let cells = PartitionedHashTableDropper::split_cell(v);
                 let mut blocks = Vec::with_capacity(cells.len());
+                let dictionary = std::mem::take(&mut self.two_stage_dict_hash_table);
+                let dictionary = Some(Arc::new(dictionary));
                 for (bucket, cell) in cells.into_iter().enumerate() {
                     if cell.hashtable.len() != 0 {
                         blocks.push(DataBlock::empty_with_meta(
-                            AggregateMeta::<Method, ()>::create_hashtable(bucket as isize, cell),
+                            AggregateMeta::<Method, ()>::create_hashtable(
+                                bucket as isize,
+                                cell,
+                                dictionary.clone(),
+                            ),
                         ));
                     }
                 }
@@ -280,5 +303,65 @@ impl<Method: HashMethodBounds> TransformPartialGroupBy<Method> {
             NumberType::<u64>::upcast_column(NumberType::<u64>::build_column(dict_column_data)),
             NumberType::<u64>::data_type(),
         )
+    }
+
+    fn rebuild_hashtable<T>(
+        method: &Method,
+        mut cell: HashTableCell<Method, T>,
+        dictionary_index: &mut u64,
+        dictionary_hashtable: &mut ShortStringHashMap<[u8], u64>,
+        params: &AggregatorParams,
+    ) -> Result<HashTableCell<PartitionedHashMethod<Method>, T>>
+    where
+        T: Copy + Send + Sync + 'static,
+        // Self: PolymorphicKeysHelper<PartitionedHashMethod<Method>>,
+    {
+        let instant = Instant::now();
+        let partitioned_method = PartitionedHashMethod::create(method.clone());
+        let mut partitioned_hashtable = partitioned_method.create_hash_table()?;
+
+        unsafe {
+            let rows_num = cell.hashtable.len();
+            let bytes_num = cell.hashtable.unsize_key_size().unwrap();
+            let mut columns_builder = method.group_columns_builder(rows_num, bytes_num, params);
+
+            for item in cell.hashtable.iter() {
+                columns_builder.append_value(item.key());
+            }
+
+            let mut group_columns = vec![];
+            for group_column in columns_builder.finish()? {
+                let data_type = group_column.data_type();
+                group_columns.push(match group_column {
+                    Column::String(column) => Self::dictionary_group_column(
+                        &column,
+                        dictionary_index,
+                        dictionary_hashtable,
+                    ),
+                    Column::Variant(column) => Self::dictionary_group_column(
+                        &column,
+                        dictionary_index,
+                        dictionary_hashtable,
+                    ),
+                    _ => (group_column, data_type),
+                });
+            }
+
+            let state = method.build_keys_state(&group_columns, rows_num)?;
+
+            for key in method.build_keys_iter(&state)? {
+                let _ = partitioned_hashtable.insert_and_entry(key);
+            }
+        }
+
+        info!(
+            "Convert to Partitioned HashTable elapsed: {:?}",
+            instant.elapsed()
+        );
+
+        let _old_dropper = cell._dropper.clone().unwrap();
+        let _new_dropper = PartitionedHashTableDropper::<Method, T>::create(_old_dropper);
+        let _old_dropper = cell._dropper.take();
+        Ok(HashTableCell::create(partitioned_hashtable, _new_dropper))
     }
 }

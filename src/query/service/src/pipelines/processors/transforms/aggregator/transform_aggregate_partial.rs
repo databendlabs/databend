@@ -287,7 +287,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
             HashTable::HashTable(v) => match v.hashtable.len() == 0 {
                 true => vec![],
                 false => vec![DataBlock::empty_with_meta(
-                    AggregateMeta::<Method, usize>::create_hashtable(-1, v),
+                    AggregateMeta::<Method, usize>::create_hashtable(-1, v, None),
                 )],
             },
             HashTable::PartitionedHashTable(v) => {
@@ -296,7 +296,11 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
                 for (bucket, cell) in cells.into_iter().enumerate() {
                     if cell.hashtable.len() != 0 {
                         blocks.push(DataBlock::empty_with_meta(
-                            AggregateMeta::<Method, usize>::create_hashtable(bucket as isize, cell),
+                            AggregateMeta::<Method, usize>::create_hashtable(
+                                bucket as isize,
+                                cell,
+                                None,
+                            ),
                         ));
                     }
                 }

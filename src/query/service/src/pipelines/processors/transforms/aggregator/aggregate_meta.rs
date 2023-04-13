@@ -15,11 +15,13 @@
 use std::any::Any;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::sync::Arc;
 
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::Column;
 use common_expression::DataBlock;
+use common_hashtable::ShortStringHashMap;
 
 use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
@@ -28,6 +30,7 @@ use crate::pipelines::processors::transforms::HashTableCell;
 pub struct HashTablePayload<T: HashMethodBounds, V: Send + Sync + 'static> {
     pub bucket: isize,
     pub cell: HashTableCell<T, V>,
+    pub dictionary: Option<Arc<ShortStringHashMap<[u8], u64>>>,
     pub arena_holder: ArenaHolder,
 }
 
@@ -59,11 +62,16 @@ pub enum AggregateMeta<Method: HashMethodBounds, V: Send + Sync + 'static> {
 }
 
 impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V> {
-    pub fn create_hashtable(bucket: isize, cell: HashTableCell<Method, V>) -> BlockMetaInfoPtr {
+    pub fn create_hashtable(
+        bucket: isize,
+        cell: HashTableCell<Method, V>,
+        dictionary: Option<Arc<ShortStringHashMap<[u8], u64>>>,
+    ) -> BlockMetaInfoPtr {
         Box::new(AggregateMeta::<Method, V>::HashTable(HashTablePayload {
             cell,
             bucket,
             arena_holder: ArenaHolder::create(None),
+            dictionary,
         }))
     }
 
@@ -79,6 +87,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> AggregateMeta<Method, V
             cell,
             bucket,
             arena_holder: ArenaHolder::create(None),
+            dictionary: None,
         }))
     }
 
