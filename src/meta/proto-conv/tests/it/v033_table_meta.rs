@@ -12,16 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use chrono::TimeZone;
 use chrono::Utc;
-use common_expression as ex;
+use common_expression as ce;
 use common_expression::types::NumberDataType;
 use common_meta_app::schema as mt;
-use common_meta_app::storage::StorageParams;
 use maplit::btreemap;
+use maplit::btreeset;
 
 use crate::common;
 
@@ -36,104 +35,107 @@ use crate::common;
 //
 // The message bytes are built from the output of `test_build_pb_buf()`
 #[test]
-fn test_decode_v24_table_meta() -> anyhow::Result<()> {
+fn test_decode_v33_table_meta() -> anyhow::Result<()> {
     let bytes = vec![
-        10, 169, 5, 10, 51, 10, 8, 110, 117, 108, 108, 97, 98, 108, 101, 18, 5, 97, 32, 43, 32, 51,
-        26, 26, 178, 2, 17, 154, 2, 8, 42, 0, 160, 6, 24, 168, 6, 24, 160, 6, 24, 168, 6, 24, 160,
-        6, 24, 168, 6, 24, 160, 6, 24, 168, 6, 24, 10, 23, 10, 4, 98, 111, 111, 108, 26, 9, 138, 2,
-        0, 160, 6, 24, 168, 6, 24, 160, 6, 24, 168, 6, 24, 10, 31, 10, 4, 105, 110, 116, 56, 26,
-        17, 154, 2, 8, 42, 0, 160, 6, 24, 168, 6, 24, 160, 6, 24, 168, 6, 24, 160, 6, 24, 168, 6,
-        24, 10, 32, 10, 5, 105, 110, 116, 49, 54, 26, 17, 154, 2, 8, 50, 0, 160, 6, 24, 168, 6, 24,
-        160, 6, 24, 168, 6, 24, 160, 6, 24, 168, 6, 24, 10, 32, 10, 5, 105, 110, 116, 51, 50, 26,
-        17, 154, 2, 8, 58, 0, 160, 6, 24, 168, 6, 24, 160, 6, 24, 168, 6, 24, 160, 6, 24, 168, 6,
-        24, 10, 32, 10, 5, 105, 110, 116, 54, 52, 26, 17, 154, 2, 8, 66, 0, 160, 6, 24, 168, 6, 24,
-        160, 6, 24, 168, 6, 24, 160, 6, 24, 168, 6, 24, 10, 32, 10, 5, 117, 105, 110, 116, 56, 26,
-        17, 154, 2, 8, 10, 0, 160, 6, 24, 168, 6, 24, 160, 6, 24, 168, 6, 24, 160, 6, 24, 168, 6,
-        24, 10, 33, 10, 6, 117, 105, 110, 116, 49, 54, 26, 17, 154, 2, 8, 18, 0, 160, 6, 24, 168,
-        6, 24, 160, 6, 24, 168, 6, 24, 160, 6, 24, 168, 6, 24, 10, 33, 10, 6, 117, 105, 110, 116,
-        51, 50, 26, 17, 154, 2, 8, 26, 0, 160, 6, 24, 168, 6, 24, 160, 6, 24, 168, 6, 24, 160, 6,
-        24, 168, 6, 24, 10, 33, 10, 6, 117, 105, 110, 116, 54, 52, 26, 17, 154, 2, 8, 34, 0, 160,
-        6, 24, 168, 6, 24, 160, 6, 24, 168, 6, 24, 160, 6, 24, 168, 6, 24, 10, 34, 10, 7, 102, 108,
-        111, 97, 116, 51, 50, 26, 17, 154, 2, 8, 74, 0, 160, 6, 24, 168, 6, 24, 160, 6, 24, 168, 6,
-        24, 160, 6, 24, 168, 6, 24, 10, 34, 10, 7, 102, 108, 111, 97, 116, 54, 52, 26, 17, 154, 2,
-        8, 82, 0, 160, 6, 24, 168, 6, 24, 160, 6, 24, 168, 6, 24, 160, 6, 24, 168, 6, 24, 10, 23,
-        10, 4, 100, 97, 116, 101, 26, 9, 170, 2, 0, 160, 6, 24, 168, 6, 24, 160, 6, 24, 168, 6, 24,
-        10, 28, 10, 9, 116, 105, 109, 101, 115, 116, 97, 109, 112, 26, 9, 162, 2, 0, 160, 6, 24,
-        168, 6, 24, 160, 6, 24, 168, 6, 24, 10, 25, 10, 6, 115, 116, 114, 105, 110, 103, 26, 9,
-        146, 2, 0, 160, 6, 24, 168, 6, 24, 160, 6, 24, 168, 6, 24, 10, 63, 10, 6, 115, 116, 114,
-        117, 99, 116, 26, 47, 202, 2, 38, 10, 3, 102, 111, 111, 10, 3, 98, 97, 114, 18, 9, 138, 2,
-        0, 160, 6, 24, 168, 6, 24, 18, 9, 146, 2, 0, 160, 6, 24, 168, 6, 24, 160, 6, 24, 168, 6,
-        24, 160, 6, 24, 168, 6, 24, 160, 6, 24, 168, 6, 24, 10, 33, 10, 5, 97, 114, 114, 97, 121,
-        26, 18, 186, 2, 9, 138, 2, 0, 160, 6, 24, 168, 6, 24, 160, 6, 24, 168, 6, 24, 160, 6, 24,
-        168, 6, 24, 10, 31, 10, 3, 109, 97, 112, 26, 18, 194, 2, 9, 138, 2, 0, 160, 6, 24, 168, 6,
-        24, 160, 6, 24, 168, 6, 24, 160, 6, 24, 168, 6, 24, 10, 26, 10, 7, 118, 97, 114, 105, 97,
-        110, 116, 26, 9, 210, 2, 0, 160, 6, 24, 168, 6, 24, 160, 6, 24, 168, 6, 24, 18, 6, 10, 1,
-        97, 18, 1, 98, 160, 6, 24, 168, 6, 24, 34, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41, 42,
-        10, 10, 3, 120, 121, 122, 18, 3, 102, 111, 111, 50, 2, 52, 52, 58, 10, 10, 3, 97, 98, 99,
-        18, 3, 100, 101, 102, 64, 0, 74, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41, 82, 23, 110,
-        101, 118, 101, 114, 45, 103, 111, 110, 110, 97, 45, 103, 105, 118, 101, 45, 121, 111, 117,
-        45, 117, 112, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48,
+        10, 148, 6, 10, 51, 10, 8, 110, 117, 108, 108, 97, 98, 108, 101, 18, 5, 97, 32, 43, 32, 51,
+        26, 26, 178, 2, 17, 154, 2, 8, 42, 0, 160, 6, 33, 168, 6, 24, 160, 6, 33, 168, 6, 24, 160,
+        6, 33, 168, 6, 24, 160, 6, 33, 168, 6, 24, 10, 25, 10, 4, 98, 111, 111, 108, 26, 9, 138, 2,
+        0, 160, 6, 33, 168, 6, 24, 32, 1, 160, 6, 33, 168, 6, 24, 10, 33, 10, 4, 105, 110, 116, 56,
+        26, 17, 154, 2, 8, 42, 0, 160, 6, 33, 168, 6, 24, 160, 6, 33, 168, 6, 24, 32, 2, 160, 6,
+        33, 168, 6, 24, 10, 34, 10, 5, 105, 110, 116, 49, 54, 26, 17, 154, 2, 8, 50, 0, 160, 6, 33,
+        168, 6, 24, 160, 6, 33, 168, 6, 24, 32, 3, 160, 6, 33, 168, 6, 24, 10, 34, 10, 5, 105, 110,
+        116, 51, 50, 26, 17, 154, 2, 8, 58, 0, 160, 6, 33, 168, 6, 24, 160, 6, 33, 168, 6, 24, 32,
+        4, 160, 6, 33, 168, 6, 24, 10, 34, 10, 5, 105, 110, 116, 54, 52, 26, 17, 154, 2, 8, 66, 0,
+        160, 6, 33, 168, 6, 24, 160, 6, 33, 168, 6, 24, 32, 5, 160, 6, 33, 168, 6, 24, 10, 34, 10,
+        5, 117, 105, 110, 116, 56, 26, 17, 154, 2, 8, 10, 0, 160, 6, 33, 168, 6, 24, 160, 6, 33,
+        168, 6, 24, 32, 6, 160, 6, 33, 168, 6, 24, 10, 35, 10, 6, 117, 105, 110, 116, 49, 54, 26,
+        17, 154, 2, 8, 18, 0, 160, 6, 33, 168, 6, 24, 160, 6, 33, 168, 6, 24, 32, 7, 160, 6, 33,
+        168, 6, 24, 10, 35, 10, 6, 117, 105, 110, 116, 51, 50, 26, 17, 154, 2, 8, 26, 0, 160, 6,
+        33, 168, 6, 24, 160, 6, 33, 168, 6, 24, 32, 8, 160, 6, 33, 168, 6, 24, 10, 35, 10, 6, 117,
+        105, 110, 116, 54, 52, 26, 17, 154, 2, 8, 34, 0, 160, 6, 33, 168, 6, 24, 160, 6, 33, 168,
+        6, 24, 32, 9, 160, 6, 33, 168, 6, 24, 10, 36, 10, 7, 102, 108, 111, 97, 116, 51, 50, 26,
+        17, 154, 2, 8, 74, 0, 160, 6, 33, 168, 6, 24, 160, 6, 33, 168, 6, 24, 32, 10, 160, 6, 33,
+        168, 6, 24, 10, 36, 10, 7, 102, 108, 111, 97, 116, 54, 52, 26, 17, 154, 2, 8, 82, 0, 160,
+        6, 33, 168, 6, 24, 160, 6, 33, 168, 6, 24, 32, 11, 160, 6, 33, 168, 6, 24, 10, 25, 10, 4,
+        100, 97, 116, 101, 26, 9, 170, 2, 0, 160, 6, 33, 168, 6, 24, 32, 12, 160, 6, 33, 168, 6,
+        24, 10, 30, 10, 9, 116, 105, 109, 101, 115, 116, 97, 109, 112, 26, 9, 162, 2, 0, 160, 6,
+        33, 168, 6, 24, 32, 13, 160, 6, 33, 168, 6, 24, 10, 27, 10, 6, 115, 116, 114, 105, 110,
+        103, 26, 9, 146, 2, 0, 160, 6, 33, 168, 6, 24, 32, 14, 160, 6, 33, 168, 6, 24, 10, 65, 10,
+        6, 115, 116, 114, 117, 99, 116, 26, 47, 202, 2, 38, 10, 3, 102, 111, 111, 10, 3, 98, 97,
+        114, 18, 9, 138, 2, 0, 160, 6, 33, 168, 6, 24, 18, 9, 146, 2, 0, 160, 6, 33, 168, 6, 24,
+        160, 6, 33, 168, 6, 24, 160, 6, 33, 168, 6, 24, 32, 15, 160, 6, 33, 168, 6, 24, 10, 35, 10,
+        5, 97, 114, 114, 97, 121, 26, 18, 186, 2, 9, 138, 2, 0, 160, 6, 33, 168, 6, 24, 160, 6, 33,
+        168, 6, 24, 32, 17, 160, 6, 33, 168, 6, 24, 10, 28, 10, 7, 118, 97, 114, 105, 97, 110, 116,
+        26, 9, 210, 2, 0, 160, 6, 33, 168, 6, 24, 32, 18, 160, 6, 33, 168, 6, 24, 10, 34, 10, 13,
+        118, 97, 114, 105, 97, 110, 116, 95, 97, 114, 114, 97, 121, 26, 9, 210, 2, 0, 160, 6, 33,
+        168, 6, 24, 32, 19, 160, 6, 33, 168, 6, 24, 10, 35, 10, 14, 118, 97, 114, 105, 97, 110,
+        116, 95, 111, 98, 106, 101, 99, 116, 26, 9, 210, 2, 0, 160, 6, 33, 168, 6, 24, 32, 20, 160,
+        6, 33, 168, 6, 24, 10, 29, 10, 8, 105, 110, 116, 101, 114, 118, 97, 108, 26, 9, 250, 1, 0,
+        160, 6, 33, 168, 6, 24, 32, 21, 160, 6, 33, 168, 6, 24, 18, 6, 10, 1, 97, 18, 1, 98, 24,
+        22, 160, 6, 33, 168, 6, 24, 34, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41, 42, 10, 10, 3,
+        120, 121, 122, 18, 3, 102, 111, 111, 50, 2, 52, 52, 58, 10, 10, 3, 97, 98, 99, 18, 3, 100,
+        101, 102, 64, 0, 74, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41, 82, 7, 100, 101, 102, 97,
+        117, 108, 116, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48,
         58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 57, 32, 49, 50,
         58, 48, 48, 58, 49, 48, 32, 85, 84, 67, 178, 1, 13, 116, 97, 98, 108, 101, 95, 99, 111,
-        109, 109, 101, 110, 116, 186, 1, 6, 160, 6, 24, 168, 6, 24, 202, 1, 1, 99, 202, 1, 1, 99,
+        109, 109, 101, 110, 116, 186, 1, 6, 160, 6, 33, 168, 6, 24, 202, 1, 1, 99, 202, 1, 1, 99,
         202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99,
         202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99,
         202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99,
-        202, 1, 1, 99, 210, 1, 15, 18, 13, 10, 5, 95, 100, 97, 116, 97, 160, 6, 24, 168, 6, 24,
-        218, 1, 5, 108, 117, 108, 117, 95, 160, 6, 24, 168, 6, 24,
+        202, 1, 1, 99, 226, 1, 1, 1, 160, 6, 33, 168, 6, 24,
     ];
 
     let want = || mt::TableMeta {
-        schema: Arc::new(ex::TableSchema::new_from(
+        schema: Arc::new(ce::TableSchema::new_from(
             vec![
-                ex::TableField::new(
+                ce::TableField::new(
                     "nullable",
-                    ex::TableDataType::Nullable(Box::new(ex::TableDataType::Number(
+                    ce::TableDataType::Nullable(Box::new(ce::TableDataType::Number(
                         NumberDataType::Int8,
                     ))),
                 )
                 .with_default_expr(Some("a + 3".to_string())),
-                ex::TableField::new("bool", ex::TableDataType::Boolean),
-                ex::TableField::new("int8", ex::TableDataType::Number(NumberDataType::Int8)),
-                ex::TableField::new("int16", ex::TableDataType::Number(NumberDataType::Int16)),
-                ex::TableField::new("int32", ex::TableDataType::Number(NumberDataType::Int32)),
-                ex::TableField::new("int64", ex::TableDataType::Number(NumberDataType::Int64)),
-                ex::TableField::new("uint8", ex::TableDataType::Number(NumberDataType::UInt8)),
-                ex::TableField::new("uint16", ex::TableDataType::Number(NumberDataType::UInt16)),
-                ex::TableField::new("uint32", ex::TableDataType::Number(NumberDataType::UInt32)),
-                ex::TableField::new("uint64", ex::TableDataType::Number(NumberDataType::UInt64)),
-                ex::TableField::new(
+                ce::TableField::new("bool", ce::TableDataType::Boolean),
+                ce::TableField::new("int8", ce::TableDataType::Number(NumberDataType::Int8)),
+                ce::TableField::new("int16", ce::TableDataType::Number(NumberDataType::Int16)),
+                ce::TableField::new("int32", ce::TableDataType::Number(NumberDataType::Int32)),
+                ce::TableField::new("int64", ce::TableDataType::Number(NumberDataType::Int64)),
+                ce::TableField::new("uint8", ce::TableDataType::Number(NumberDataType::UInt8)),
+                ce::TableField::new("uint16", ce::TableDataType::Number(NumberDataType::UInt16)),
+                ce::TableField::new("uint32", ce::TableDataType::Number(NumberDataType::UInt32)),
+                ce::TableField::new("uint64", ce::TableDataType::Number(NumberDataType::UInt64)),
+                ce::TableField::new(
                     "float32",
-                    ex::TableDataType::Number(NumberDataType::Float32),
+                    ce::TableDataType::Number(NumberDataType::Float32),
                 ),
-                ex::TableField::new(
+                ce::TableField::new(
                     "float64",
-                    ex::TableDataType::Number(NumberDataType::Float64),
+                    ce::TableDataType::Number(NumberDataType::Float64),
                 ),
-                ex::TableField::new("date", ex::TableDataType::Date),
-                ex::TableField::new("timestamp", ex::TableDataType::Timestamp),
-                ex::TableField::new("string", ex::TableDataType::String),
-                ex::TableField::new("struct", ex::TableDataType::Tuple {
+                ce::TableField::new("date", ce::TableDataType::Date),
+                ce::TableField::new("timestamp", ce::TableDataType::Timestamp),
+                ce::TableField::new("string", ce::TableDataType::String),
+                ce::TableField::new("struct", ce::TableDataType::Tuple {
                     fields_name: vec![s("foo"), s("bar")],
-                    fields_type: vec![ex::TableDataType::Boolean, ex::TableDataType::String],
+                    fields_type: vec![ce::TableDataType::Boolean, ce::TableDataType::String],
                 }),
-                ex::TableField::new(
+                ce::TableField::new(
                     "array",
-                    ex::TableDataType::Array(Box::new(ex::TableDataType::Boolean)),
+                    ce::TableDataType::Array(Box::new(ce::TableDataType::Boolean)),
                 ),
-                ex::TableField::new(
-                    "map",
-                    ex::TableDataType::Map(Box::new(ex::TableDataType::Boolean)),
-                ),
-                ex::TableField::new("variant", ex::TableDataType::Variant),
+                ce::TableField::new("variant", ce::TableDataType::Variant),
+                ce::TableField::new("variant_array", ce::TableDataType::Variant),
+                ce::TableField::new("variant_object", ce::TableDataType::Variant),
+                // NOTE: It is safe to convert Interval to NULL, because `Interval` is never really used.
+                ce::TableField::new("interval", ce::TableDataType::Null),
             ],
             btreemap! {s("a") => s("b")},
         )),
-        catalog: "never-gonna-give-you-up".to_string(),
+        catalog: "default".to_string(),
         engine: "44".to_string(),
+        storage_params: None,
+        part_prefix: "".to_string(),
         engine_options: btreemap! {s("abc") => s("def")},
-        storage_params: Some(StorageParams::default()),
-        part_prefix: "lulu_".to_string(),
         options: btreemap! {s("xyz") => s("foo")},
         default_cluster_key: Some("(a + 2, b)".to_string()),
         cluster_keys: vec!["(a + 2, b)".to_string()],
@@ -144,11 +146,11 @@ fn test_decode_v24_table_meta() -> anyhow::Result<()> {
         field_comments: vec!["c".to_string(); 21],
         drop_on: None,
         statistics: Default::default(),
-        shared_by: BTreeSet::new(),
+        shared_by: btreeset! {1},
     };
 
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), bytes.as_slice(), 24, want())
+    common::test_load_old(func_name!(), bytes.as_slice(), 33, want())
 }
 
 fn s(ss: impl ToString) -> String {

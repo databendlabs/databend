@@ -322,7 +322,13 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                         );
                     }
                     Err(e) => match e {
-                        KVAppError::AppError(AppError::UnknownShareId(_)) => {}
+                        // ignore UnknownShareId error
+                        KVAppError::AppError(AppError::UnknownShareId(_)) => {
+                            error!(
+                                "UnknownShareId {} when drop_database {} shared by",
+                                share_id, tenant_dbname
+                            );
+                        }
                         _ => return Err(e),
                     },
                 }
@@ -1801,7 +1807,13 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                             mut_share_table_info.push((share_name.to_string(), share_table_info));
                         }
                         Err(e) => match e {
-                            KVAppError::AppError(AppError::UnknownShareId(_)) => {}
+                            // ignore UnknownShareId error
+                            KVAppError::AppError(AppError::UnknownShareId(_)) => {
+                                error!(
+                                    "UnknownShareId {} when drop_table_by_id {} shared by",
+                                    share_id, tenant_dbname_tbname
+                                );
+                            }
                             _ => return Err(e),
                         },
                     }
@@ -2714,7 +2726,10 @@ async fn get_share_table_info_map(
             Ok((seq, share_name)) => (seq, share_name),
             Err(e) => match e {
                 // ignore UnknownShareId error
-                KVAppError::AppError(AppError::UnknownShareId(_)) => continue,
+                KVAppError::AppError(AppError::UnknownShareId(_)) => {
+                    error!("UnknownShareId {} when get_share_table_info_map", share_id);
+                    continue;
+                }
                 _ => return Err(e),
             },
         };
@@ -2729,7 +2744,10 @@ async fn get_share_table_info_map(
             Ok((seq, share_meta)) => (seq, share_meta),
             Err(e) => match e {
                 // ignore UnknownShareId error
-                KVAppError::AppError(AppError::UnknownShareId(_)) => continue,
+                KVAppError::AppError(AppError::UnknownShareId(_)) => {
+                    error!("UnknownShareId {} when get_share_table_info_map", share_id);
+                    continue;
+                }
                 _ => return Err(e),
             },
         };

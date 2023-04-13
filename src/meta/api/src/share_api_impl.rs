@@ -42,6 +42,7 @@ use common_meta_types::TxnOp;
 use common_meta_types::TxnRequest;
 use common_tracing::func_name;
 use tracing::debug;
+use tracing::error;
 
 use crate::convert_share_meta_to_spec;
 use crate::db_has_to_exist;
@@ -1731,10 +1732,12 @@ async fn get_tenant_share_spec_vec(
         let (_share_id_seq, share_id, _share_meta_seq, share_meta) = match res {
             Ok(x) => x,
             Err(e) => match e {
-                KVAppError::AppError(AppError::UnknownShare(_)) => {
+                KVAppError::AppError(AppError::UnknownShare(e)) => {
+                    error!("{:?} when get_tenant_share_spec_vec", e);
                     continue;
                 }
                 KVAppError::AppError(AppError::UnknownShareId(_)) => {
+                    error!("{:?} when get_tenant_share_spec_vec", e);
                     continue;
                 }
                 _ => {
