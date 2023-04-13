@@ -39,6 +39,8 @@ jobs:
     - name: Publish Linux and macOS
       if: matrix.os != 'windows'
       shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |
         mkdir -p dist
         tar -czf dist/bendsql-${{ matrix.target }}.tar.gz -C target/${{ matrix.target }}/release bendsql
@@ -46,6 +48,8 @@ jobs:
     - name: Publish Windows
       if: matrix.os == 'windows'
       shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |
         mkdir -p dist
         zip -j dist/bendsql-${{ matrix.target }}.zip target/${{ matrix.target }}/release/bendsql.exe
@@ -75,6 +79,8 @@ jobs:
         sudo mv /tmp/nfpm /usr/local/bin/nfpm
     - name: Download
       shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |
         mkdir -p dist/pkg
         gh release download ${{ github.ref_name }} --pattern "bendsql-${{ matrix.target }}.tar.gz" --dir dist/
@@ -87,5 +93,7 @@ jobs:
         nfpm package --packager ${{ matrix.packager }} --target dist/pkg/ -f <(envsubst '${arch} ${version}' < nfpm.yaml)
     - name: Publish
       shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |
         gh release upload ${{ github.ref_name }} dist/pkg/* --clobber
