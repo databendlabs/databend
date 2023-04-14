@@ -50,6 +50,7 @@ pub use util::get_share_database_id_and_privilege;
 pub use util::get_share_id_to_name_or_err;
 pub use util::get_share_meta_by_id_or_err;
 pub use util::get_share_or_err;
+pub use util::get_share_table_info;
 pub use util::get_u64_value;
 pub use util::is_all_db_data_removed;
 pub use util::is_db_need_to_be_remove;

@@ -13,10 +13,12 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use arrow_schema::ArrowError;
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field as ArrowField;
+use arrow_schema::Fields;
 use arrow_schema::Schema as ArrowSchema;
 use arrow_schema::TimeUnit;
 
@@ -52,7 +54,7 @@ impl From<&DataType> for ArrowDataType {
             DataType::Nullable(ty) => ty.as_ref().into(),
             DataType::Array(ty) => {
                 let arrow_ty = ty.as_ref().into();
-                ArrowDataType::LargeList(Box::new(ArrowField::new(
+                ArrowDataType::LargeList(Arc::new(ArrowField::new(
                     "_array",
                     arrow_ty,
                     ty.is_nullable(),
@@ -65,17 +67,17 @@ impl From<&DataType> for ArrowDataType {
                         let val_ty = ArrowDataType::from(&tys[1]);
                         let key_field = ArrowField::new("key", key_ty, tys[0].is_nullable());
                         let val_field = ArrowField::new("value", val_ty, tys[1].is_nullable());
-                        ArrowDataType::Struct(vec![key_field, val_field])
+                        ArrowDataType::Struct(Fields::from(vec![key_field, val_field]))
                     }
                     _ => unreachable!(),
                 };
                 ArrowDataType::Map(
-                    Box::new(ArrowField::new("entries", inner_ty, ty.is_nullable())),
+                    Arc::new(ArrowField::new("entries", inner_ty, ty.is_nullable())),
                     false,
                 )
             }
             DataType::Tuple(types) => {
-                let fields = types
+                let fields: Vec<ArrowField> = types
                     .iter()
                     .enumerate()
                     .map(|(index, ty)| {
@@ -84,7 +86,7 @@ impl From<&DataType> for ArrowDataType {
                         ArrowField::new(name.as_str(), ty.into(), ty.is_nullable())
                     })
                     .collect();
-                ArrowDataType::Struct(fields)
+                ArrowDataType::Struct(Fields::from(fields))
             }
 
             DataType::EmptyArray => ArrowDataType::Null,
@@ -152,8 +154,9 @@ impl From<&DataField> for ArrowField {
 
 impl From<&DataSchema> for ArrowSchema {
     fn from(value: &DataSchema) -> Self {
+        let fields: Vec<ArrowField> = value.fields.iter().map(|f| f.into()).collect::<Vec<_>>();
         ArrowSchema {
-            fields: value.fields.iter().map(|f| f.into()).collect::<Vec<_>>(),
+            fields: Fields::from(fields),
             metadata: Default::default(),
         }
     }
@@ -174,7 +177,7 @@ impl TryFrom<&ArrowSchema> for DataSchema {
     fn try_from(schema: &ArrowSchema) -> Result<Self, ArrowError> {
         let mut fields = vec![];
         for field in &schema.fields {
-            fields.push(DataField::try_from(field)?)
+            fields.push(DataField::try_from(field.as_ref())?)
         }
         Ok(DataSchema {
             fields,
@@ -187,11 +190,19 @@ impl TryFrom<&ArrowField> for DataType {
     type Error = ArrowError;
 
     fn try_from(f: &ArrowField) -> Result<Self, ArrowError> {
-        match f.metadata().get("Extension").map(|v| v.as_str()) {
-            Some(ARROW_EXT_TYPE_EMPTY_ARRAY) => return Ok(DataType::EmptyArray),
-            Some(ARROW_EXT_TYPE_EMPTY_MAP) => return Ok(DataType::EmptyMap),
-            Some(ARROW_EXT_TYPE_VARIANT) => return Ok(DataType::Variant),
-            _ => {}
+        let extend_type = match f.metadata().get("Extension").map(|v| v.as_str()) {
+            Some(ARROW_EXT_TYPE_EMPTY_ARRAY) => Some(DataType::EmptyArray),
+            Some(ARROW_EXT_TYPE_EMPTY_MAP) => Some(DataType::EmptyMap),
+            Some(ARROW_EXT_TYPE_VARIANT) => Some(DataType::Variant),
+            _ => None,
+        };
+
+        if let Some(ty) = extend_type {
+            return if f.is_nullable() {
+                Ok(DataType::Nullable(Box::new(ty)))
+            } else {
+                Ok(ty)
+            };
         }
 
         let ty = f.data_type();
@@ -236,6 +247,10 @@ impl TryFrom<&ArrowField> for DataType {
                 "cast {ty} to DataType not implemented yet"
             )))?,
         };
-        Ok(data_type)
+        if f.is_nullable() {
+            Ok(DataType::Nullable(Box::new(data_type)))
+        } else {
+            Ok(data_type)
+        }
     }
 }

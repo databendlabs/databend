@@ -3,6 +3,8 @@ title: Arithmetic Operators
 title_includes: plus, minus, multiply, div, divide, mod, caret, modulo, negate, +, -, /, %, *, ^, |/, ||/, @, &, |, #, ~, <<, >>
 ---
 
+SQL arithmetic operators.
+
 | Operator              | Description                                            | Example                    | Result |
 |-----------------------|--------------------------------------------------------|----------------------------|--------|
 | **+ (unary)**         | Returns `a`                                            | **+5**                     | 5      |

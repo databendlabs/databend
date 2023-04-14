@@ -35,6 +35,7 @@ use tempfile::NamedTempFile;
 use tokio::net::UnixListener;
 use tokio::net::UnixStream;
 use tokio_stream::wrappers::UnixListenerStream;
+use tonic::transport::Channel;
 use tonic::transport::Endpoint;
 use tonic::transport::Server;
 use tower::service_fn;
@@ -46,7 +47,7 @@ use crate::tests::TestGlobalServices;
 const TEST_USER: &str = "test_user";
 const TEST_PASSWORD: &str = "test_password";
 
-async fn client_with_uds(path: String) -> FlightSqlServiceClient {
+async fn client_with_uds(path: String) -> FlightSqlServiceClient<Channel> {
     let connector = service_fn(move |_| UnixStream::connect(path.clone()));
     let channel = Endpoint::try_from("http://example.com")
         .unwrap()
@@ -57,12 +58,11 @@ async fn client_with_uds(path: String) -> FlightSqlServiceClient {
 }
 
 async fn run_query(
-    client: &mut FlightSqlServiceClient,
+    client: &mut FlightSqlServiceClient<Channel>,
     sql: &str,
 ) -> std::result::Result<String, ArrowError> {
     let mut stmt = client.prepare(sql.to_string()).await?;
     let res = if stmt.dataset_schema()?.fields.is_empty() {
-        // there is a bug in FlightSqlServiceClient::execute_update(), which lead to panic
         let affected_rows = client.execute_update(sql.to_string()).await?;
         affected_rows.to_string()
     } else {
@@ -119,10 +119,10 @@ async fn test_query() -> Result<()> {
             "select (1, 1.1)",
             "select {1: 11, 2: 22}",
             "show tables",
-            // "drop table if exists test1",
-            // "create table test1(a int, b string)",
-            // "insert into table test1(a, b) values (1, 'x'), (2, 'y')",
-            // "select * from table test1",
+            "drop table if exists test1",
+            "create table test1(a int, b string)",
+            "insert into table test1(a, b) values (1, 'x'), (2, 'y')",
+            "select * from test1",
         ];
         for case in cases {
             writeln!(file, "---------- Input ----------").unwrap();

@@ -15,7 +15,7 @@ bstr = "1.0.1"
 chrono-tz = { workspace = true }
 lexical-core = "0.8.5"
 match-template = "0.0.1"
-micromarshal = "0.3.0"
+micromarshal = "0.4.0"
 num = "0.4.0"
 ordered-float = { workspace = true }
 serde_json = { workspace = true }
