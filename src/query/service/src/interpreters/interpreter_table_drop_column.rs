@@ -20,6 +20,7 @@ use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
 use common_sql::plans::DropTableColumnPlan;
+use common_storages_share::save_share_table_info;
 use common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::interpreters::Interpreter;
@@ -83,7 +84,15 @@ impl Interpreter for DropTableColumnInterpreter {
             copied_files: None,
         };
 
-        catalog.update_table_meta(table_info, req).await?;
+        let res = catalog.update_table_meta(table_info, req).await?;
+        if let Some(share_table_info) = res.share_table_info {
+            save_share_table_info(
+                &self.ctx.get_tenant(),
+                self.ctx.get_data_operator()?.operator(),
+                share_table_info,
+            )
+            .await?;
+        }
 
         Ok(PipelineBuildResult::create())
     }

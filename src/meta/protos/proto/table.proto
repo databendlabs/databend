@@ -110,6 +110,8 @@ message TableMeta {
   optional StorageConfig storage_params = 26;
 
   optional string part_prefix = 27;
+
+  repeated uint64 shared_by = 28; 
 }
 
 // Save table name id list history.

@@ -44,7 +44,7 @@ use crate::aggregates::AggregateFunction;
 use crate::with_simple_no_number_mapped_type;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ListState<T>
+pub struct ArrayAggState<T>
 where
     T: ValueType,
     T::Scalar: Serialize + DeserializeOwned,
@@ -53,7 +53,7 @@ where
     values: Vec<T::Scalar>,
 }
 
-impl<T> Default for ListState<T>
+impl<T> Default for ArrayAggState<T>
 where
     T: ValueType,
     T::Scalar: Serialize + DeserializeOwned,
@@ -63,7 +63,7 @@ where
     }
 }
 
-impl<T> ScalarStateFunc<T> for ListState<T>
+impl<T> ScalarStateFunc<T> for ArrayAggState<T>
 where
     T: ValueType,
     T::Scalar: Serialize + DeserializeOwned + Send + Sync,
@@ -118,7 +118,7 @@ where
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct NullableListState<T>
+pub struct NullableArrayAggState<T>
 where
     T: ValueType,
     T::Scalar: Serialize + DeserializeOwned,
@@ -127,7 +127,7 @@ where
     values: Vec<Option<T::Scalar>>,
 }
 
-impl<T> Default for NullableListState<T>
+impl<T> Default for NullableArrayAggState<T>
 where
     T: ValueType,
     T::Scalar: Serialize + DeserializeOwned,
@@ -137,7 +137,7 @@ where
     }
 }
 
-impl<T> ScalarStateFunc<T> for NullableListState<T>
+impl<T> ScalarStateFunc<T> for NullableArrayAggState<T>
 where
     T: ValueType,
     T::Scalar: Serialize + DeserializeOwned + Send + Sync,
@@ -210,20 +210,20 @@ where
 }
 
 #[derive(Clone)]
-pub struct AggregateListFunction<T, State> {
+pub struct AggregateArrayAggFunction<T, State> {
     display_name: String,
     return_type: DataType,
     _t: PhantomData<T>,
     _state: PhantomData<State>,
 }
 
-impl<T, State> AggregateFunction for AggregateListFunction<T, State>
+impl<T, State> AggregateFunction for AggregateArrayAggFunction<T, State>
 where
     T: ValueType + Send + Sync,
     State: ScalarStateFunc<T>,
 {
     fn name(&self) -> &str {
-        "AggregateListFunction"
+        "AggregateArrayAggFunction"
     }
 
     fn return_type(&self) -> Result<DataType> {
@@ -349,19 +349,19 @@ where
     }
 }
 
-impl<T, State> fmt::Display for AggregateListFunction<T, State> {
+impl<T, State> fmt::Display for AggregateArrayAggFunction<T, State> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
     }
 }
 
-impl<T, State> AggregateListFunction<T, State>
+impl<T, State> AggregateArrayAggFunction<T, State>
 where
     T: ValueType + Send + Sync,
     State: ScalarStateFunc<T>,
 {
     fn try_create(display_name: &str, return_type: DataType) -> Result<Arc<dyn AggregateFunction>> {
-        let func = AggregateListFunction::<T, State> {
+        let func = AggregateArrayAggFunction::<T, State> {
             display_name: display_name.to_string(),
             return_type,
             _t: PhantomData,
@@ -371,7 +371,7 @@ where
     }
 }
 
-pub fn try_create_aggregate_list_function(
+pub fn try_create_aggregate_array_agg_function(
     display_name: &str,
     _params: Vec<Scalar>,
     argument_types: Vec<DataType>,
@@ -384,25 +384,25 @@ pub fn try_create_aggregate_list_function(
     with_simple_no_number_mapped_type!(|T| match data_type.remove_nullable() {
         DataType::T => {
             if nullable {
-                type State = NullableListState<T>;
-                AggregateListFunction::<T, State>::try_create(display_name, return_type)
+                type State = NullableArrayAggState<T>;
+                AggregateArrayAggFunction::<T, State>::try_create(display_name, return_type)
             } else {
-                type State = ListState<T>;
-                AggregateListFunction::<T, State>::try_create(display_name, return_type)
+                type State = ArrayAggState<T>;
+                AggregateArrayAggFunction::<T, State>::try_create(display_name, return_type)
             }
         }
         DataType::Number(num_type) => {
             with_number_mapped_type!(|NUM| match num_type {
                 NumberDataType::NUM => {
                     if nullable {
-                        type State = NullableListState<NumberType<NUM>>;
-                        AggregateListFunction::<NumberType<NUM>, State>::try_create(
+                        type State = NullableArrayAggState<NumberType<NUM>>;
+                        AggregateArrayAggFunction::<NumberType<NUM>, State>::try_create(
                             display_name,
                             return_type,
                         )
                     } else {
-                        type State = ListState<NumberType<NUM>>;
-                        AggregateListFunction::<NumberType<NUM>, State>::try_create(
+                        type State = ArrayAggState<NumberType<NUM>>;
+                        AggregateArrayAggFunction::<NumberType<NUM>, State>::try_create(
                             display_name,
                             return_type,
                         )
@@ -412,14 +412,14 @@ pub fn try_create_aggregate_list_function(
         }
         DataType::Decimal(DecimalDataType::Decimal128(_)) => {
             if nullable {
-                type State = NullableListState<DecimalType<i128>>;
-                AggregateListFunction::<DecimalType<i128>, State>::try_create(
+                type State = NullableArrayAggState<DecimalType<i128>>;
+                AggregateArrayAggFunction::<DecimalType<i128>, State>::try_create(
                     display_name,
                     return_type,
                 )
             } else {
-                type State = ListState<DecimalType<i128>>;
-                AggregateListFunction::<DecimalType<i128>, State>::try_create(
+                type State = ArrayAggState<DecimalType<i128>>;
+                AggregateArrayAggFunction::<DecimalType<i128>, State>::try_create(
                     display_name,
                     return_type,
                 )
@@ -427,14 +427,14 @@ pub fn try_create_aggregate_list_function(
         }
         DataType::Decimal(DecimalDataType::Decimal256(_)) => {
             if nullable {
-                type State = NullableListState<DecimalType<i256>>;
-                AggregateListFunction::<DecimalType<i256>, State>::try_create(
+                type State = NullableArrayAggState<DecimalType<i256>>;
+                AggregateArrayAggFunction::<DecimalType<i256>, State>::try_create(
                     display_name,
                     return_type,
                 )
             } else {
-                type State = ListState<DecimalType<i256>>;
-                AggregateListFunction::<DecimalType<i256>, State>::try_create(
+                type State = ArrayAggState<DecimalType<i256>>;
+                AggregateArrayAggFunction::<DecimalType<i256>, State>::try_create(
                     display_name,
                     return_type,
                 )
@@ -442,16 +442,16 @@ pub fn try_create_aggregate_list_function(
         }
         _ => {
             if nullable {
-                type State = NullableListState<AnyType>;
-                AggregateListFunction::<AnyType, State>::try_create(display_name, return_type)
+                type State = NullableArrayAggState<AnyType>;
+                AggregateArrayAggFunction::<AnyType, State>::try_create(display_name, return_type)
             } else {
-                type State = ListState<AnyType>;
-                AggregateListFunction::<AnyType, State>::try_create(display_name, return_type)
+                type State = ArrayAggState<AnyType>;
+                AggregateArrayAggFunction::<AnyType, State>::try_create(display_name, return_type)
             }
         }
     })
 }
 
-pub fn aggregate_list_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_list_function))
+pub fn aggregate_array_agg_function_desc() -> AggregateFunctionDescription {
+    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_array_agg_function))
 }

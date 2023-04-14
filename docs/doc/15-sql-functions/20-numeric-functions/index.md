@@ -2,7 +2,7 @@
 title: Numeric Functions
 ---
 
-The table below shows the available numeric functions.
+SQL Numeric Functions Overview.
 
 
 | Function           | Description                                                                                                                                                                                                                                                                                                                                                    | Example                | Result              |

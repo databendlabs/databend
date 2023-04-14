@@ -59,6 +59,7 @@ use common_expression::DataSchema;
 use futures::Stream;
 use prost::Message;
 use tonic::metadata::MetadataValue;
+use tonic::transport::NamedService;
 use tonic::Request;
 use tonic::Response;
 use tonic::Status;
@@ -106,6 +107,10 @@ fn simple_flight_info<T: ProstMessageExt>(message: T) -> Response<FlightInfo> {
         total_bytes: -1,
     };
     Response::new(info)
+}
+
+impl NamedService for FlightSqlServiceImpl {
+    const NAME: &'static str = "FlightSqlService";
 }
 
 #[tonic::async_trait]
