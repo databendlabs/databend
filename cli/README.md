@@ -1,6 +1,11 @@
-# bendsql &emsp; 
+# BendSQL
 
-## Install 
+Databend Native Command Line Tool
+
+[![crates.io](https://img.shields.io/crates/v/bendsql.svg)](https://crates.io/crates/bendsql)
+![License](https://img.shields.io/crates/l/bendsql.svg)
+
+## Install
 
 ```sh
 cargo install bendsql
@@ -9,8 +14,29 @@ cargo install bendsql
 ## Usage
 
 ```
-> bendsql --help
-Usage: bendsql <--user <USER>|--password <PASSWORD>|--host <HOST>|--port <PORT>>
+❯ bendsql --help
+Databend Native Command Line Tool
+
+Usage: bendsql [OPTIONS]
+
+Options:
+      --help                 Print help information
+      --flight               Using flight sql protocol
+      --tls                  Enable TLS
+  -h, --host <HOST>          Databend Server host, Default: 127.0.0.1
+  -P, --port <PORT>          Databend Server port, Default: 8000
+  -u, --user <USER>          Default: root
+  -p, --password <PASSWORD>  [env: BENDSQL_PASSWORD=]
+  -D, --database <DATABASE>  Database name
+      --set <SET>            Settings
+      --dsn <DSN>            Data source name [env: BENDSQL_DSN=]
+  -n, --non-interactive      Force non-interactive mode
+  -q, --query <QUERY>        Query to execute
+  -d, --data <DATA>          Data to load, @file or @- for stdin
+  -f, --format <FORMAT>      Data format to load [default: csv]
+  -o, --output <OUTPUT>      Output format [default: table]
+      --progress             Show progress for data loading in stderr
+  -V, --version              Print version
 ```
 
 ## Examples
@@ -64,4 +90,3 @@ Bye
 - basic auto-completion
 - select query support
 - TBD
-

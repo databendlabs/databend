@@ -4,11 +4,11 @@ Databend Native Client in Rust
 
 ## Components
 
-- **core**: RestAPI rust client [![crates.io](https://img.shields.io/crates/v/databend-client.svg)](https://crates.io/crates/databend-client)
+- [**core**](core): RestAPI rust client
 
-- **driver**: Unified SQL client for RestAPI and FlightSQL [![crates.io](https://img.shields.io/crates/v/databend-driver.svg)](https://crates.io/crates/databend-driver)
+- [**driver**](driver): Unified SQL client for RestAPI and FlightSQL
 
-- **cli**: Native CLI for Databend [![crates.io](https://img.shields.io/crates/v/bendsql.svg)](https://crates.io/crates/bendsql)
+- [**cli**](cli): Native CLI for Databend
 
 
 ## Installation for BendSQL
@@ -28,14 +28,23 @@ With Binary: check for latest release [here](https://github.com/datafuselabs/dat
 
 ## Development
 
-### unit tests
+### Cargo fmt, clippy, audit
 
 ```bash
-cargo test --lib
+make check
+```
+
+### Unit tests
+
+```bash
+make test
 ```
 
 ### integration tests
 
+** Note: Docker and Docker Compose needed **
+
 ```bash
-make -C tests
+make integration-tests
+make integration-tests-flight-sql
 ```

@@ -1,12 +1,11 @@
 # Databend Driver
 
-Databend Driver for Rust
+Databend unified SQL client for RestAPI and FlightSQL
 
 [![crates.io](https://img.shields.io/crates/v/databend-driver.svg)](https://crates.io/crates/databend-driver)
 ![License](https://img.shields.io/crates/l/databend-driver.svg)
 
 ## usage
-
 
 ### exec
 
@@ -14,7 +13,7 @@ Databend Driver for Rust
 use databend_driver::new_connection;
 
 let dsn = "databend://root:@localhost:8000/default?sslmode=disable";
-let conn = new_connection(dsn).await.unwrap();
+let mut conn = new_connection(dsn).await.unwrap();
 
 let sql_create = "CREATE TABLE books (
     title VARCHAR,
