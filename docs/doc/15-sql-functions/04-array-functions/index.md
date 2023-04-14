@@ -32,7 +32,7 @@ SQL Array Functions and Usage.
 :::note
 **ARRAY_AGGREGATE(array, name)** supports the following aggregation functions, `avg`, `count`, `max`, `min`, `sum`, `any`, `stddev_samp`, `stddev_pop`, `stddev`, `std`, `median`, `approx_count_distinct`, `kurtosis`, `skewness`.
 
-**ARRAY_AGGREGATE(array, name)** function also support rewrite as **ARRAY_<name>(array)**. Following is a list of existing rewrites, `array_avg`, `array_count`, `array_max`, `array_min`, `array_sum`, `array_any`, `array_stddev_samp`, `array_stddev_pop`, `array_stddev`, `array_std`, `array_median`, `array_approx_count_distinct`, `array_kurtosis`, `array_skewness`.
+**ARRAY_AGGREGATE(array, name)** function also support rewrite as **ARRAY_<name\>(array)**. Following is a list of existing rewrites, `array_avg`, `array_count`, `array_max`, `array_min`, `array_sum`, `array_any`, `array_stddev_samp`, `array_stddev_pop`, `array_stddev`, `array_std`, `array_median`, `array_approx_count_distinct`, `array_kurtosis`, `array_skewness`.
 :::
 
 :::note
