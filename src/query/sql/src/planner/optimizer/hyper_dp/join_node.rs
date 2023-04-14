@@ -12,31 +12,96 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
+use std::sync::Arc;
 
+use common_exception::Result;
+use parking_lot::Mutex;
+
+use crate::optimizer::hyper_dp::join_relation::JoinRelation;
 use crate::optimizer::hyper_dp::DPhpy;
 use crate::optimizer::RelExpr;
+use crate::optimizer::SExpr;
+use crate::plans::Join;
 use crate::plans::JoinType;
+use crate::plans::Operator;
+use crate::plans::RelOperator;
 use crate::IndexType;
 use crate::ScalarExpr;
 
 #[derive(Clone, Debug)]
 pub struct JoinNode {
     pub join_type: JoinType,
-    pub leaves: Vec<IndexType>,
-    pub children: Vec<JoinNode>,
-    pub join_conditions: Vec<(ScalarExpr, ScalarExpr)>,
+    pub leaves: Arc<Vec<IndexType>>,
+    pub children: Arc<Vec<JoinNode>>,
+    pub join_conditions: Arc<Vec<(ScalarExpr, ScalarExpr)>>,
     pub cost: f64,
-    // Cache cardinality after computing.
+    // Cache cardinality/s_expr after computing.
     pub cardinality: Option<f64>,
+    pub s_expr: Option<SExpr>,
 }
 
 impl JoinNode {
-    pub fn cardinality(&mut self, dphpy: &DPhpy) -> Result<f64> {
-        let s_expr = dphpy.s_expr(self);
-        let rel_expr = RelExpr::with_s_expr(&s_expr);
-        let card = rel_expr.derive_relational_prop()?.cardinality;
+    pub fn cardinality(&mut self, relations: &[JoinRelation]) -> Result<f64> {
+        if let Some(card) = self.cardinality {
+            return Ok(card);
+        }
+        let s_expr = if let Some(s_expr) = &self.s_expr {
+            s_expr
+        } else {
+            self.s_expr = Some(self.s_expr(relations));
+            self.s_expr.as_ref().unwrap()
+        };
+        let rel_expr = RelExpr::with_s_expr(s_expr);
+        let card = rel_expr.derive_cardinality()?.0;
         self.cardinality = Some(card);
         Ok(card)
+    }
+
+    pub fn set_cost(&mut self, cost: f64) {
+        self.cost = cost;
+    }
+
+    pub fn s_expr(&self, join_relations: &[JoinRelation]) -> SExpr {
+        // Traverse JoinNode
+        if self.children.is_empty() {
+            // The node is leaf, get relation for `join_relations`
+            let idx = self.leaves[0];
+            let relation = join_relations[idx].s_expr();
+            return relation;
+        }
+
+        // The node is join
+        // Split `join_conditions` to `left_conditions` and `right_conditions`
+        let left_conditions = self
+            .join_conditions
+            .iter()
+            .map(|(l, _)| l.clone())
+            .collect();
+        let right_conditions = self
+            .join_conditions
+            .iter()
+            .map(|(_, r)| r.clone())
+            .collect();
+        let rel_op = RelOperator::Join(Join {
+            left_conditions,
+            right_conditions,
+            non_equi_conditions: vec![],
+            join_type: self.join_type.clone(),
+            marker_index: None,
+            from_correlated_subquery: false,
+            contain_runtime_filter: false,
+        });
+        let children = self
+            .children
+            .iter()
+            .map(|child| {
+                if let Some(s_expr) = &child.s_expr {
+                    s_expr.clone()
+                } else {
+                    child.s_expr(join_relations)
+                }
+            })
+            .collect::<Vec<_>>();
+        SExpr::create(rel_op, children, None, None, None)
     }
 }

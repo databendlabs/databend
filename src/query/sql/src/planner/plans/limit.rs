@@ -70,4 +70,16 @@ impl Operator for Limit {
             },
         })
     }
+
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<(f64, Statistics)> {
+        let (cardinality, _statistics) = rel_expr.derive_cardinality_child(0)?;
+        let cardinality = match self.limit {
+            Some(limit) if (limit as f64) < cardinality => limit as f64,
+            _ => cardinality,
+        };
+        Ok((cardinality, Statistics {
+            precise_cardinality: None,
+            column_stats: Default::default(),
+        }))
+    }
 }

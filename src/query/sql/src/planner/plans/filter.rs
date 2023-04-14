@@ -120,4 +120,32 @@ impl Operator for Filter {
             },
         })
     }
+
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<(f64, Statistics)> {
+        let (cardinality, mut statistics) = rel_expr.derive_cardinality_child(0)?;
+        // Derive cardinality
+        let sb = SelectivityEstimator::new(&statistics);
+        let mut selectivity = MAX_SELECTIVITY;
+        for pred in self.predicates.iter() {
+            // Compute selectivity for each conjunction
+            selectivity *= sb.compute_selectivity(pred);
+        }
+        let cardinality = cardinality * selectivity;
+
+        // Derive column statistics
+        let column_stats = if cardinality == 0.0 {
+            HashMap::new()
+        } else {
+            for (_, column_stat) in statistics.column_stats.iter_mut() {
+                if cardinality < cardinality {
+                    column_stat.ndv = (column_stat.ndv * cardinality / cardinality).ceil();
+                }
+            }
+            statistics.column_stats
+        };
+        Ok((cardinality, Statistics {
+            precise_cardinality: statistics.precise_cardinality,
+            column_stats,
+        }))
+    }
 }

@@ -223,6 +223,11 @@ impl Operator for Scan {
         })
     }
 
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<(f64, OpStatistics)> {
+        let rel_prop = self.derive_relational_prop(rel_expr)?;
+        Ok((rel_prop.cardinality, rel_prop.statistics))
+    }
+
     // Won't be invoked at all, since `PhysicalScan` is leaf node
     fn compute_required_prop_child(
         &self,

@@ -24,6 +24,7 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
+use crate::optimizer::SExpr;
 use crate::optimizer::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
@@ -228,5 +229,55 @@ impl Operator for Aggregate {
                 column_stats,
             },
         })
+    }
+
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<(f64, Statistics)> {
+        let (cardinality, mut statistics) = rel_expr.derive_cardinality_child(0)?;
+        let cardinality = if self.group_items.is_empty() {
+            // Scalar aggregation
+            1.0
+        } else if self
+            .group_items
+            .iter()
+            .any(|item| statistics.column_stats.get(&item.index).is_none())
+        {
+            cardinality
+        } else {
+            // A upper bound
+            let res = self.group_items.iter().fold(1.0, |acc, item| {
+                let item_stat = statistics.column_stats.get(&item.index).unwrap();
+                acc * item_stat.ndv
+            });
+            for item in self.group_items.iter() {
+                let item_stat = statistics.column_stats.get_mut(&item.index).unwrap();
+                if let Some(histogram) = &mut item_stat.histogram {
+                    let mut num_values = 0.0;
+                    let mut num_distinct = 0.0;
+                    for bucket in histogram.buckets.iter() {
+                        num_distinct += bucket.num_distinct();
+                        num_values += bucket.num_values();
+                    }
+                    // When there is a high probability that eager aggregation
+                    // is better, we will update the histogram.
+                    if num_values / num_distinct >= 10.0 {
+                        for bucket in histogram.buckets.iter_mut() {
+                            bucket.aggregate_values();
+                        }
+                    }
+                }
+            }
+            // To avoid res is very large
+            f64::min(res, cardinality)
+        };
+
+        let precise_cardinality = if self.group_items.is_empty() {
+            Some(1)
+        } else {
+            None
+        };
+        Ok((cardinality, Statistics {
+            precise_cardinality,
+            column_stats: statistics.column_stats,
+        }))
     }
 }

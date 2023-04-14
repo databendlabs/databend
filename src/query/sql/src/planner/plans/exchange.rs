@@ -22,6 +22,7 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
+use crate::optimizer::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -52,6 +53,10 @@ impl Operator for Exchange {
                 Exchange::Merge => Distribution::Serial,
             },
         })
+    }
+
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<(f64, Statistics)> {
+        rel_expr.derive_cardinality_child(0)
     }
 
     fn compute_required_prop_child(

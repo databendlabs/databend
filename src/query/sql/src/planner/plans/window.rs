@@ -161,6 +161,10 @@ impl Operator for Window {
             },
         })
     }
+
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<(f64, Statistics)> {
+        todo!()
+    }
 }
 
 #[derive(Default, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]

@@ -118,4 +118,8 @@ impl Operator for EvalScalar {
             },
         })
     }
+
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<(f64, Statistics)> {
+        rel_expr.derive_cardinality_child(0)
+    }
 }

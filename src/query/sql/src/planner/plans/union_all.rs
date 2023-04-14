@@ -105,6 +105,10 @@ impl Operator for UnionAll {
         })
     }
 
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<(f64, Statistics)> {
+        todo!()
+    }
+
     fn compute_required_prop_child(
         &self,
         _ctx: Arc<dyn TableContext>,

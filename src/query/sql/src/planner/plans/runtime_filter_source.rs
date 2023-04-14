@@ -92,6 +92,14 @@ impl Operator for RuntimeFilterSource {
         todo!()
     }
 
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<(f64, Statistics)> {
+        let (cardinality, mut statistics) = rel_expr.derive_cardinality_child(0)?;
+        Ok((cardinality, Statistics {
+            precise_cardinality: None,
+            column_stats: statistics.column_stats,
+        }))
+    }
+
     fn compute_required_prop_child(
         &self,
         _ctx: Arc<dyn TableContext>,

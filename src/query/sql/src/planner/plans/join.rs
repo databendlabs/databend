@@ -172,10 +172,12 @@ impl Join {
 
     fn inner_join_cardinality(
         &self,
-        left_prop: &mut RelationalProperty,
-        right_prop: &mut RelationalProperty,
+        left_cardinality: &mut f64,
+        right_cardinality: &mut f64,
+        left_statistics: &mut Statistics,
+        right_statistics: &mut Statistics,
     ) -> Result<f64> {
-        let mut join_card = left_prop.cardinality * right_prop.cardinality;
+        let mut join_card = *left_cardinality * *right_cardinality;
         for (left_condition, right_condition) in self
             .left_conditions
             .iter()
@@ -189,12 +191,10 @@ impl Join {
             {
                 continue;
             }
-            let left_col_stat = left_prop
-                .statistics
+            let left_col_stat = left_statistics
                 .column_stats
                 .get(left_condition.used_columns().iter().next().unwrap());
-            let right_col_stat = right_prop
-                .statistics
+            let right_col_stat = right_statistics
                 .column_stats
                 .get(right_condition.used_columns().iter().next().unwrap());
             match (left_col_stat, right_col_stat) {
@@ -221,16 +221,16 @@ impl Join {
                         let card = evaluate_by_ndv(
                             left_col_stat,
                             right_col_stat,
-                            left_prop,
-                            right_prop,
+                            *left_cardinality,
+                            *right_cardinality,
                             &mut new_ndv,
                         );
                         if card < join_card {
                             join_card = card;
                         }
                         update_statistic(
-                            left_prop,
-                            right_prop,
+                            left_statistics,
+                            right_statistics,
                             left_condition,
                             right_condition,
                             NewStatistic {
@@ -242,15 +242,18 @@ impl Join {
                         continue;
                     }
                     let card = match (&left_col_stat.histogram, &right_col_stat.histogram) {
+                        /*
                         (Some(left_hist), Some(right_hist)) => {
                             // Evaluate join cardinality by histogram.
                             evaluate_by_histogram(left_hist, right_hist, &mut new_ndv)?
                         }
+
+                         */
                         _ => evaluate_by_ndv(
                             left_col_stat,
                             right_col_stat,
-                            left_prop,
-                            right_prop,
+                            *left_cardinality,
+                            *right_cardinality,
                             &mut new_ndv,
                         ),
                     };
@@ -258,8 +261,8 @@ impl Join {
                         join_card = card;
                     }
                     update_statistic(
-                        left_prop,
-                        right_prop,
+                        left_statistics,
+                        right_statistics,
                         left_condition,
                         right_condition,
                         NewStatistic {
@@ -314,8 +317,12 @@ impl Operator for Join {
 
         // Evaluating join cardinality using histograms.
         // If histogram is None, will evaluate using NDV.
-        let inner_join_cardinality =
-            self.inner_join_cardinality(&mut left_prop, &mut right_prop)?;
+        let inner_join_cardinality = self.inner_join_cardinality(
+            &mut left_prop.cardinality,
+            &mut right_prop.cardinality,
+            &mut left_prop.statistics,
+            &mut right_prop.statistics,
+        )?;
         let cardinality = match self.join_type {
             JoinType::Inner | JoinType::Cross => inner_join_cardinality,
             JoinType::Left => f64::max(left_prop.cardinality, inner_join_cardinality),
@@ -374,6 +381,46 @@ impl Operator for Join {
                 distribution: probe_prop.distribution.clone(),
             }),
         }
+    }
+
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<(f64, Statistics)> {
+        let (mut left_cardinality, mut left_statistics) = rel_expr.derive_cardinality_child(0)?;
+        let (mut right_cardinality, mut right_statistics) = rel_expr.derive_cardinality_child(1)?;
+        // Evaluating join cardinality using histograms.
+        // If histogram is None, will evaluate using NDV.
+        let inner_join_cardinality = self.inner_join_cardinality(
+            &mut left_cardinality,
+            &mut right_cardinality,
+            &mut left_statistics,
+            &mut right_statistics,
+        )?;
+        let cardinality = match self.join_type {
+            JoinType::Inner | JoinType::Cross => inner_join_cardinality,
+            JoinType::Left => f64::max(left_cardinality, inner_join_cardinality),
+            JoinType::Right => f64::max(right_cardinality, inner_join_cardinality),
+            JoinType::Full => {
+                f64::max(left_cardinality, inner_join_cardinality)
+                    + f64::max(right_cardinality, inner_join_cardinality)
+                    - inner_join_cardinality
+            }
+            JoinType::LeftSemi | JoinType::LeftAnti | JoinType::LeftMark | JoinType::Single => {
+                left_cardinality
+            }
+            JoinType::RightSemi | JoinType::RightAnti | JoinType::RightMark => right_cardinality,
+        };
+        // Derive column statistics
+        let column_stats = if cardinality == 0.0 {
+            HashMap::new()
+        } else {
+            let mut column_stats = HashMap::new();
+            column_stats.extend(left_statistics.column_stats);
+            column_stats.extend(right_statistics.column_stats);
+            column_stats
+        };
+        Ok((cardinality, Statistics {
+            precise_cardinality: None,
+            column_stats,
+        }))
     }
 
     fn compute_required_prop_child(
@@ -533,8 +580,8 @@ fn evaluate_by_histogram(
 fn evaluate_by_ndv(
     left_stat: &ColumnStat,
     right_stat: &ColumnStat,
-    left_prop: &RelationalProperty,
-    right_prop: &RelationalProperty,
+    left_cardinality: f64,
+    right_cardinality: f64,
     new_ndv: &mut Option<f64>,
 ) -> f64 {
     // Update column ndv
@@ -544,24 +591,22 @@ fn evaluate_by_ndv(
     if max_ndv == 0.0 {
         0.0
     } else {
-        left_prop.cardinality * right_prop.cardinality / max_ndv
+        left_cardinality * right_cardinality / max_ndv
     }
 }
 
 fn update_statistic(
-    left_prop: &mut RelationalProperty,
-    right_prop: &mut RelationalProperty,
+    left_statistics: &mut Statistics,
+    right_statistics: &mut Statistics,
     left_condition: &ScalarExpr,
     right_condition: &ScalarExpr,
     new_stat: NewStatistic,
 ) {
-    let left_col_stat = left_prop
-        .statistics
+    let left_col_stat = left_statistics
         .column_stats
         .get_mut(left_condition.used_columns().iter().next().unwrap())
         .unwrap();
-    let right_col_stat = right_prop
-        .statistics
+    let right_col_stat = right_statistics
         .column_stats
         .get_mut(right_condition.used_columns().iter().next().unwrap())
         .unwrap();

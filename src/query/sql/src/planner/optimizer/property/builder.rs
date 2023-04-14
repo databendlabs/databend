@@ -24,7 +24,9 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::SExpr;
+use crate::optimizer::Statistics;
 use crate::plans::Operator;
+use crate::IndexType;
 
 /// A helper to access children of `SExpr` and `MExpr` in
 /// a unified view.
@@ -66,6 +68,32 @@ impl<'a> RelExpr<'a> {
             RelExpr::MExpr { expr, memo } => {
                 Ok(memo.group(expr.group_index)?.relational_prop.clone())
             }
+        }
+    }
+
+    // Derive cardinality and statistics
+    pub fn derive_cardinality(&self) -> Result<(f64, Statistics)> {
+        match self {
+            RelExpr::SExpr { expr } => {
+                if let Some(stat_info) = expr.stat_info.lock().unwrap().as_ref() {
+                    return Ok(stat_info.clone());
+                }
+                let stat_info = expr.plan.derive_cardinality(self)?;
+                *expr.stat_info.lock().unwrap() = Some(stat_info.clone());
+                Ok(stat_info)
+            }
+            RelExpr::MExpr { expr, .. } => expr.plan.derive_cardinality(self),
+        }
+    }
+
+    pub(crate) fn derive_cardinality_child(&self, index: IndexType) -> Result<(f64, Statistics)> {
+        match self {
+            RelExpr::SExpr { expr } => {
+                let child = expr.child(index)?;
+                let rel_expr = RelExpr::with_s_expr(child);
+                rel_expr.derive_cardinality()
+            }
+            _ => unreachable!(),
         }
     }
 

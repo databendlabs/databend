@@ -31,7 +31,7 @@ use crate::plans::ScalarExpr;
 /// that we cannot estimate the selectivity for it.
 /// This factor comes from the paper
 /// "Access Path Selection in a Relational Database Management System"
-pub const DEFAULT_SELECTIVITY: f64 = 1f64 / 3f64;
+pub const DEFAULT_SELECTIVITY: f64 = 0.4;
 pub const MAX_SELECTIVITY: f64 = 1f64;
 
 pub struct SelectivityEstimator<'a> {
