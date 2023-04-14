@@ -63,9 +63,11 @@ use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::PhysicalPlanBuilder;
+use common_sql::plans::FunctionCall;
 use common_sql::plans::Insert;
 use common_sql::plans::InsertInputSource;
 use common_sql::plans::Plan;
+use common_sql::plans::ScalarExpr;
 use common_sql::BindContext;
 use common_sql::Metadata;
 use common_sql::MetadataRef;
@@ -878,9 +880,39 @@ async fn exprs_to_scalar(
             }
         }
 
-        let (mut scalar, _) = scalar_binder.bind(expr).await?;
+        let (mut scalar, data_type) = scalar_binder.bind(expr).await?;
         let field_data_type = schema.field(i).data_type();
-        scalar = wrap_cast(&scalar, field_data_type);
+        scalar = if field_data_type.remove_nullable() == DataType::Variant {
+            match data_type.remove_nullable() {
+                DataType::Boolean
+                | DataType::Number(_)
+                | DataType::Decimal(_)
+                | DataType::Timestamp
+                | DataType::Date
+                | DataType::Variant => wrap_cast(&scalar, field_data_type),
+                DataType::String => {
+                    // parse string to JSON value
+                    ScalarExpr::FunctionCall(FunctionCall {
+                        span: None,
+                        func_name: "parse_json".to_string(),
+                        params: vec![],
+                        arguments: vec![scalar],
+                    })
+                }
+                _ => {
+                    if data_type == DataType::Null && field_data_type.is_nullable() {
+                        scalar
+                    } else {
+                        return Err(ErrorCode::BadBytes(format!(
+                            "unable to cast type `{}` to type `{}`",
+                            data_type, field_data_type
+                        )));
+                    }
+                }
+            }
+        } else {
+            wrap_cast(&scalar, field_data_type)
+        };
         let expr = scalar
             .as_expr_with_col_index()?
             .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());

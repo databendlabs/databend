@@ -49,6 +49,7 @@ use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
 use common_io::cursor_ext::ReadNumberExt;
 use common_io::prelude::FormatSettings;
+use jsonb::parse_value;
 use lexical_core::FromLexical;
 use num::cast::AsPrimitive;
 
@@ -403,8 +404,20 @@ impl FastFieldDecoderValues {
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
-        self.read_string_inner(reader, &mut column.data, positions)?;
-        column.commit_row();
+        let mut buf = Vec::new();
+        self.read_string_inner(reader, &mut buf, positions)?;
+        match parse_value(&buf) {
+            Ok(value) => {
+                value.write_to_vec(&mut column.data);
+                column.commit_row();
+            }
+            Err(_) => {
+                return Err(ErrorCode::BadBytes(format!(
+                    "Invalid JSON value: {:?}",
+                    String::from_utf8_lossy(&buf)
+                )));
+            }
+        }
         Ok(())
     }
 }
