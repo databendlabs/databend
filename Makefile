@@ -13,6 +13,9 @@ build:
 test:
 	cargo test --all --all-features --lib -- --nocapture
 
+integration-down:
+	make -C tests down
+
 integration-tests:
 	make -C tests
 
