@@ -2,6 +2,8 @@
 title: 'Geography Functions'
 ---
 
+Geography Functions in SQL.
+
 | Function                                                | Description                                                                                                                   | Example                                                          | Result                          |
 |---------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------|---------------------------------|
 | **GEO_TO_H3(lon, lat, res)**                            | Returns the [H3](https://eng.uber.com/h3/) index of the hexagon cell where the given location resides.                        | **GEO_TO_H3(37.79506683, 55.71290588, 15)**                      | 644325524701193974              |

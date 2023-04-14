@@ -2,6 +2,9 @@
 title: 'Array Functions'
 ---
 
+
+SQL Array Functions and Usage.
+
 | Function                             | Description                                                                                  | Example                               | Result                   |
 |--------------------------------------|----------------------------------------------------------------------------------------------|---------------------------------------|--------------------------|
 | **GET(array, index)**                | Returns an element from the array by index (1-based)                                         | **GET([1, 2], 2)**                    | 2                        |

@@ -3,7 +3,7 @@ title: Comparison Operators
 title_includes: =, >=, >, !=, <=, <, <>
 ---
 
-## Comparison Operators
+SQL Comparison Operators.
 
 | Operator  | Description                     | Example       | Result |
 |-----------|---------------------------------|---------------|--------|

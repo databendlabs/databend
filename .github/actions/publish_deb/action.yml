@@ -40,6 +40,17 @@ runs:
         reprepro includedeb stable databend_${deb_version}_amd64.deb
         reprepro includedeb stable databend_${deb_version}_arm64.deb
 
+    - name: Add BendSQL
+      shell: bash
+      working-directory: scripts/distribution/deb
+      run: |
+        version=$(gh release view --repo datafuselabs/databend-client --json name | jq -r '.name')
+        deb_version=${version/v/}
+        wget -q https://github.com/datafuselabs/databend-client/releases/download/${version}/bendsql_${deb_version}_amd64.deb
+        wget -q https://github.com/datafuselabs/databend-client/releases/download/${version}/bendsql_${deb_version}_arm64.deb
+        reprepro includedeb stable bendsql_${deb_version}_amd64.deb
+        reprepro includedeb stable bendsql_${deb_version}_arm64.deb
+
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v2
       with:
