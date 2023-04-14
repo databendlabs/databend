@@ -13,17 +13,17 @@ Databend Native Client in Rust
 
 ## Installation for BendSQL
 
-With Cargo:
+* With Cargo:
 ```bash
 cargo install bendsql
 ```
 
-With Homebrew:
+* With Homebrew:
 ```bash
 brew install databendcloud/homebrew-tap/bendsql
 ```
 
-With Binary: check for latest release [here](https://github.com/datafuselabs/databend-client/releases)
+* With Binary: check for latest release [here](https://github.com/datafuselabs/databend-client/releases)
 
 
 ## Development
@@ -42,7 +42,7 @@ make test
 
 ### integration tests
 
-**Note: Docker and Docker Compose needed**
+*Note: Docker and Docker Compose needed*
 
 ```bash
 make integration-tests

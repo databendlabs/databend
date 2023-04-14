@@ -43,42 +43,50 @@ Options:
 
 ### REPL
 ```sql
-❯ bendsql -h arch -u sundy -p abc --port 8900
-Welcome to Arrow CLI.
-Connecting to http://arch:8900/ as user sundy.
+❯ bendsql
+Welcome to BendSQL.
+Connecting to localhost:8000 as user root.
 
-arch :) select avg(number) from numbers(10);
+bendsql> select avg(number) from numbers(10);
 
-select avg(number) from numbers(10);
+SELECT
+  avg(number)
+FROM
+  numbers(10);
 
-+-------------+
-| avg(number) |
-+-------------+
-| 4.5         |
-+-------------+
+┌───────────────────┐
+│    avg(number)    │
+│ Nullable(Float64) │
+├───────────────────┤
+│ 4.5               │
+└───────────────────┘
 
-1 rows in set (0.036 sec)
+1 row in 0.259 sec. Processed 10 rows, 10B (38.59 rows/s, 308B/s)
 
-arch :) show tables like 'c%';
+bendsql> show tables like 'd%';
 
-show tables like 'c%';
+SHOW TABLES LIKE 'd%';
 
-+-------------------+
-| tables_in_default |
-+-------------------+
-| customer          |
-+-------------------+
+┌───────────────────┐
+│ tables_in_default │
+│       String      │
+├───────────────────┤
+│ data              │
+│ data2             │
+│ data3             │
+│ data4             │
+└───────────────────┘
 
-1 rows in set (0.030 sec)
+4 rows in 0.106 sec. Processed 0 rows, 0B (0 rows/s, 0B/s)
 
-arch :) exit
+bendsql> exit
 Bye
 ```
 
 ### StdIn Pipe
 
 ```bash
-❯ echo "select number from numbers(3)" | bendsql -h arch -u sundy -p abc --port 8900
+❯ echo "select number from numbers(3)" | bendsql -h localhost --port 8900 --flight
 0
 1
 2
