@@ -25,6 +25,9 @@ use crate::models::SharedTableResponse;
 
 // Methods for access share table spec.
 impl SharingAccessor {
+    // Note that too short expire duration may cause return `Request has expired` error
+    const PRESIGNED_URL_EXPIRE_SECONDS: u64 = 3600;
+
     // read share table spec from S3 and check whether requester has permission on the table
     #[async_backtrace::framed]
     async fn get_shared_table_spec(
@@ -53,15 +56,22 @@ impl SharingAccessor {
         let file_path = truncate_root(self.get_root(), input.file_name.clone());
         let obj_path = format!("{}/{}", loc_prefix, file_path);
         let op = self.op.clone();
+
         if input.method == "HEAD" {
             let s = op
-                .presign_stat(obj_path.as_str(), Duration::from_secs(1))
+                .presign_stat(
+                    obj_path.as_str(),
+                    Duration::from_secs(Self::PRESIGNED_URL_EXPIRE_SECONDS),
+                )
                 .await?;
             return Ok(PresignFileResponse::new(&s, input.file_name.clone()));
         }
 
         let s = op
-            .presign_read(obj_path.as_str(), Duration::from_secs(1))
+            .presign_read(
+                obj_path.as_str(),
+                Duration::from_secs(Self::PRESIGNED_URL_EXPIRE_SECONDS),
+            )
             .await?;
         Ok(PresignFileResponse::new(&s, input.file_name.clone()))
     }
