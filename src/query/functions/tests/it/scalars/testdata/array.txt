@@ -1698,7 +1698,421 @@ evaluation (internal):
 +--------+-------------------------------------------------------------------------+
 
 
-ast            : array_sort([])
+ast            : array_stddev_samp([])
+raw expr       : array_stddev_samp(array())
+checked expr   : array_stddev_samp<Array(Nothing)>(array<>())
+optimized expr : NULL
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : array_stddev_samp([1, 2, 3])
+raw expr       : array_stddev_samp(array(1, 2, 3))
+checked expr   : array_stddev_samp<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8))
+optimized expr : 1_f64
+output type    : Float64 NULL
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : array_stddev_samp([NULL, 3, 2, 1])
+raw expr       : array_stddev_samp(array(NULL, 3, 2, 1))
+checked expr   : array_stddev_samp<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL)))
+optimized expr : 1_f64
+output type    : Float64 NULL
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : array_stddev_samp([a, b, c, d])
+raw expr       : array_stddev_samp(array(a::Int16, b::Int16, c::Int16, d::Int16))
+checked expr   : array_stddev_samp<Array(Int16)>(array<T0=Int16><T0, T0, T0, T0>(a, b, c, d))
+evaluation:
++--------+---------+---------+---------+---------+--------------+
+|        | a       | b       | c       | d       | Output       |
++--------+---------+---------+---------+---------+--------------+
+| Type   | Int16   | Int16   | Int16   | Int16   | Float64 NULL |
+| Domain | {1..=8} | {1..=6} | {3..=7} | {1..=9} | Unknown      |
+| Row 0  | 1       | 2       | 3       | 4       | 1.2909944487 |
+| Row 1  | 5       | 6       | 7       | 8       | 1.2909944487 |
+| Row 2  | 8       | 1       | 7       | 1       | 3.7749172176 |
+| Row 3  | 3       | 2       | 6       | 9       | 3.1622776601 |
++--------+---------+---------+---------+---------+--------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                 |
++--------+----------------------------------------------------------------------------------------------------------------------+
+| a      | Int16([1, 5, 8, 3])                                                                                                  |
+| b      | Int16([2, 6, 1, 2])                                                                                                  |
+| c      | Int16([3, 7, 7, 6])                                                                                                  |
+| d      | Int16([4, 8, 1, 9])                                                                                                  |
+| Output | NullableColumn { column: Float64([1.2909944487, 1.2909944487, 3.7749172176, 3.1622776601]), validity: [0b____1111] } |
++--------+----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : array_stddev_pop([])
+raw expr       : array_stddev_pop(array())
+checked expr   : array_stddev_pop<Array(Nothing)>(array<>())
+optimized expr : NULL
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : array_stddev_pop([1, 2, 3])
+raw expr       : array_stddev_pop(array(1, 2, 3))
+checked expr   : array_stddev_pop<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8))
+optimized expr : 0.8164965809_f64
+output type    : Float64 NULL
+output domain  : {0.8164965809..=0.8164965809}
+output         : 0.8164965809
+
+
+ast            : array_stddev_pop([NULL, 3, 2, 1])
+raw expr       : array_stddev_pop(array(NULL, 3, 2, 1))
+checked expr   : array_stddev_pop<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL)))
+optimized expr : 0.8164965809_f64
+output type    : Float64 NULL
+output domain  : {0.8164965809..=0.8164965809}
+output         : 0.8164965809
+
+
+ast            : array_stddev_pop([a, b, c, d])
+raw expr       : array_stddev_pop(array(a::Int16, b::Int16, c::Int16, d::Int16))
+checked expr   : array_stddev_pop<Array(Int16)>(array<T0=Int16><T0, T0, T0, T0>(a, b, c, d))
+evaluation:
++--------+---------+---------+---------+---------+--------------+
+|        | a       | b       | c       | d       | Output       |
++--------+---------+---------+---------+---------+--------------+
+| Type   | Int16   | Int16   | Int16   | Int16   | Float64 NULL |
+| Domain | {1..=8} | {1..=6} | {3..=7} | {1..=9} | Unknown      |
+| Row 0  | 1       | 2       | 3       | 4       | 1.1180339887 |
+| Row 1  | 5       | 6       | 7       | 8       | 1.1180339887 |
+| Row 2  | 8       | 1       | 7       | 1       | 3.2691742076 |
+| Row 3  | 3       | 2       | 6       | 9       | 2.7386127875 |
++--------+---------+---------+---------+---------+--------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                 |
++--------+----------------------------------------------------------------------------------------------------------------------+
+| a      | Int16([1, 5, 8, 3])                                                                                                  |
+| b      | Int16([2, 6, 1, 2])                                                                                                  |
+| c      | Int16([3, 7, 7, 6])                                                                                                  |
+| d      | Int16([4, 8, 1, 9])                                                                                                  |
+| Output | NullableColumn { column: Float64([1.1180339887, 1.1180339887, 3.2691742076, 2.7386127875]), validity: [0b____1111] } |
++--------+----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : array_median([])
+raw expr       : array_median(array())
+checked expr   : array_median<Array(Nothing)>(array<>())
+optimized expr : NULL
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : array_median([1, 2, 3])
+raw expr       : array_median(array(1, 2, 3))
+checked expr   : array_median<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8))
+optimized expr : 2_f64
+output type    : Float64 NULL
+output domain  : {2..=2}
+output         : 2
+
+
+ast            : array_median([NULL, 3, 2, 1])
+raw expr       : array_median(array(NULL, 3, 2, 1))
+checked expr   : array_median<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL)))
+optimized expr : 2_f64
+output type    : Float64 NULL
+output domain  : {2..=2}
+output         : 2
+
+
+ast            : array_median([a, b, c, d])
+raw expr       : array_median(array(a::Int16, b::Int16, c::Int16, d::Int16))
+checked expr   : array_median<Array(Int16)>(array<T0=Int16><T0, T0, T0, T0>(a, b, c, d))
+evaluation:
++--------+---------+---------+---------+---------+--------------+
+|        | a       | b       | c       | d       | Output       |
++--------+---------+---------+---------+---------+--------------+
+| Type   | Int16   | Int16   | Int16   | Int16   | Float64 NULL |
+| Domain | {1..=8} | {1..=6} | {3..=7} | {1..=9} | Unknown      |
+| Row 0  | 1       | 2       | 3       | 4       | 2.5          |
+| Row 1  | 5       | 6       | 7       | 8       | 6.5          |
+| Row 2  | 8       | 1       | 7       | 1       | 4            |
+| Row 3  | 3       | 2       | 6       | 9       | 4.5          |
++--------+---------+---------+---------+---------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------+
+| Column | Data                                                                           |
++--------+--------------------------------------------------------------------------------+
+| a      | Int16([1, 5, 8, 3])                                                            |
+| b      | Int16([2, 6, 1, 2])                                                            |
+| c      | Int16([3, 7, 7, 6])                                                            |
+| d      | Int16([4, 8, 1, 9])                                                            |
+| Output | NullableColumn { column: Float64([2.5, 6.5, 4, 4.5]), validity: [0b____1111] } |
++--------+--------------------------------------------------------------------------------+
+
+
+ast            : array_approx_count_distinct([])
+raw expr       : array_approx_count_distinct(array())
+checked expr   : array_approx_count_distinct<Array(Nothing)>(array<>())
+optimized expr : NULL
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : array_approx_count_distinct([1, 2, 3])
+raw expr       : array_approx_count_distinct(array(1, 2, 3))
+checked expr   : array_approx_count_distinct<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8))
+optimized expr : 3_u64
+output type    : UInt64
+output domain  : {3..=3}
+output         : 3
+
+
+ast            : array_approx_count_distinct([NULL, 3, 2, 1])
+raw expr       : array_approx_count_distinct(array(NULL, 3, 2, 1))
+checked expr   : array_approx_count_distinct<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL)))
+optimized expr : 3_u64
+output type    : UInt64
+output domain  : {3..=3}
+output         : 3
+
+
+ast            : array_approx_count_distinct(['a', 'b', 'c'])
+raw expr       : array_approx_count_distinct(array("a", "b", "c"))
+checked expr   : array_approx_count_distinct<Array(String)>(array<T0=String><T0, T0, T0>("a", "b", "c"))
+optimized expr : 3_u64
+output type    : UInt64
+output domain  : {3..=3}
+output         : 3
+
+
+ast            : array_approx_count_distinct([NULL, 'x', 'y', 'z'])
+raw expr       : array_approx_count_distinct(array(NULL, "x", "y", "z"))
+checked expr   : array_approx_count_distinct<Array(String NULL)>(array<T0=String NULL><T0, T0, T0, T0>(CAST(NULL AS String NULL), CAST("x" AS String NULL), CAST("y" AS String NULL), CAST("z" AS String NULL)))
+optimized expr : 3_u64
+output type    : UInt64
+output domain  : {3..=3}
+output         : 3
+
+
+ast            : array_approx_count_distinct([a, b, c, d])
+raw expr       : array_approx_count_distinct(array(a::Int16, b::Int16, c::Int16, d::Int16))
+checked expr   : array_approx_count_distinct<Array(Int16)>(array<T0=Int16><T0, T0, T0, T0>(a, b, c, d))
+evaluation:
++--------+---------+---------+---------+---------+---------+
+|        | a       | b       | c       | d       | Output  |
++--------+---------+---------+---------+---------+---------+
+| Type   | Int16   | Int16   | Int16   | Int16   | UInt64  |
+| Domain | {1..=8} | {1..=6} | {3..=7} | {1..=9} | Unknown |
+| Row 0  | 1       | 2       | 3       | 4       | 4       |
+| Row 1  | 5       | 6       | 7       | 8       | 4       |
+| Row 2  | 8       | 1       | 7       | 1       | 3       |
+| Row 3  | 3       | 2       | 6       | 9       | 4       |
++--------+---------+---------+---------+---------+---------+
+evaluation (internal):
++--------+----------------------+
+| Column | Data                 |
++--------+----------------------+
+| a      | Int16([1, 5, 8, 3])  |
+| b      | Int16([2, 6, 1, 2])  |
+| c      | Int16([3, 7, 7, 6])  |
+| d      | Int16([4, 8, 1, 9])  |
+| Output | UInt64([4, 4, 3, 4]) |
++--------+----------------------+
+
+
+ast            : array_approx_count_distinct([a, b, c, d])
+raw expr       : array_approx_count_distinct(array(a::UInt64 NULL, b::UInt64 NULL, c::UInt64 NULL, d::UInt64 NULL))
+checked expr   : array_approx_count_distinct<Array(UInt64 NULL)>(array<T0=UInt64 NULL><T0, T0, T0, T0>(a, b, c, d))
+evaluation:
++--------+------------------+------------------+-------------+------------------+---------+
+|        | a                | b                | c           | d                | Output  |
++--------+------------------+------------------+-------------+------------------+---------+
+| Type   | UInt64 NULL      | UInt64 NULL      | UInt64 NULL | UInt64 NULL      | UInt64  |
+| Domain | {0..=4} ∪ {NULL} | {0..=6} ∪ {NULL} | {3..=9}     | {0..=6} ∪ {NULL} | Unknown |
+| Row 0  | 1                | 2                | 3           | 4                | 4       |
+| Row 1  | 2                | NULL             | 7           | 6                | 3       |
+| Row 2  | NULL             | 5                | 8           | 5                | 2       |
+| Row 3  | 4                | 6                | 9           | NULL             | 3       |
++--------+------------------+------------------+-------------+------------------+---------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------+
+| Column | Data                                                                    |
++--------+-------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt64([1, 2, 0, 4]), validity: [0b____1011] } |
+| b      | NullableColumn { column: UInt64([2, 0, 5, 6]), validity: [0b____1101] } |
+| c      | NullableColumn { column: UInt64([3, 7, 8, 9]), validity: [0b____1111] } |
+| d      | NullableColumn { column: UInt64([4, 6, 5, 0]), validity: [0b____0111] } |
+| Output | UInt64([4, 3, 2, 3])                                                    |
++--------+-------------------------------------------------------------------------+
+
+
+ast            : array_kurtosis([])
+raw expr       : array_kurtosis(array())
+checked expr   : array_kurtosis<Array(Nothing)>(array<>())
+optimized expr : NULL
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : array_kurtosis([1, 2, 3])
+raw expr       : array_kurtosis(array(1, 2, 3))
+checked expr   : array_kurtosis<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8))
+optimized expr : NULL
+output type    : Float64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : array_kurtosis([NULL, 3, 2, 1])
+raw expr       : array_kurtosis(array(NULL, 3, 2, 1))
+checked expr   : array_kurtosis<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL)))
+optimized expr : NULL
+output type    : Float64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : array_kurtosis([a, b, c, d])
+raw expr       : array_kurtosis(array(a::Int16, b::Int16, c::Int16, d::Int16))
+checked expr   : array_kurtosis<Array(Int16)>(array<T0=Int16><T0, T0, T0, T0>(a, b, c, d))
+evaluation:
++--------+---------+---------+---------+---------+---------------+
+|        | a       | b       | c       | d       | Output        |
++--------+---------+---------+---------+---------+---------------+
+| Type   | Int16   | Int16   | Int16   | Int16   | Float64 NULL  |
+| Domain | {1..=8} | {1..=6} | {3..=7} | {1..=9} | Unknown       |
+| Row 0  | 1       | 2       | 3       | 4       | -1.2          |
+| Row 1  | 5       | 6       | 7       | 8       | -1.2          |
+| Row 2  | 8       | 1       | 7       | 1       | -5.6522006771 |
+| Row 3  | 3       | 2       | 6       | 9       | -1.7          |
++--------+---------+---------+---------+---------+---------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------+
+| Column | Data                                                                                          |
++--------+-----------------------------------------------------------------------------------------------+
+| a      | Int16([1, 5, 8, 3])                                                                           |
+| b      | Int16([2, 6, 1, 2])                                                                           |
+| c      | Int16([3, 7, 7, 6])                                                                           |
+| d      | Int16([4, 8, 1, 9])                                                                           |
+| Output | NullableColumn { column: Float64([-1.2, -1.2, -5.6522006771, -1.7]), validity: [0b____1111] } |
++--------+-----------------------------------------------------------------------------------------------+
+
+
+ast            : array_kurtosis([a, b, c, d])
+raw expr       : array_kurtosis(array(a::UInt64 NULL, b::UInt64 NULL, c::UInt64 NULL, d::UInt64 NULL))
+checked expr   : array_kurtosis<Array(UInt64 NULL)>(array<T0=UInt64 NULL><T0, T0, T0, T0>(a, b, c, d))
+evaluation:
++--------+------------------+------------------+-------------+------------------+--------------+
+|        | a                | b                | c           | d                | Output       |
++--------+------------------+------------------+-------------+------------------+--------------+
+| Type   | UInt64 NULL      | UInt64 NULL      | UInt64 NULL | UInt64 NULL      | Float64 NULL |
+| Domain | {0..=4} ∪ {NULL} | {0..=6} ∪ {NULL} | {3..=9}     | {0..=6} ∪ {NULL} | Unknown      |
+| Row 0  | 1                | 2                | 3           | 4                | -1.2         |
+| Row 1  | 2                | NULL             | 7           | 6                | NULL         |
+| Row 2  | NULL             | 5                | 8           | 5                | NULL         |
+| Row 3  | 4                | 6                | 9           | NULL             | NULL         |
++--------+------------------+------------------+-------------+------------------+--------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------+
+| Column | Data                                                                        |
++--------+-----------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt64([1, 2, 0, 4]), validity: [0b____1011] }     |
+| b      | NullableColumn { column: UInt64([2, 0, 5, 6]), validity: [0b____1101] }     |
+| c      | NullableColumn { column: UInt64([3, 7, 8, 9]), validity: [0b____1111] }     |
+| d      | NullableColumn { column: UInt64([4, 6, 5, 0]), validity: [0b____0111] }     |
+| Output | NullableColumn { column: Float64([-1.2, 0, 0, 0]), validity: [0b____0001] } |
++--------+-----------------------------------------------------------------------------+
+
+
+ast            : array_skewness([])
+raw expr       : array_skewness(array())
+checked expr   : array_skewness<Array(Nothing)>(array<>())
+optimized expr : NULL
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : array_skewness([1, 2, 3])
+raw expr       : array_skewness(array(1, 2, 3))
+checked expr   : array_skewness<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8))
+optimized expr : 0_f64
+output type    : Float64 NULL
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : array_skewness([NULL, 3, 2, 1])
+raw expr       : array_skewness(array(NULL, 3, 2, 1))
+checked expr   : array_skewness<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(NULL AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(1_u8 AS UInt8 NULL)))
+optimized expr : 0_f64
+output type    : Float64 NULL
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : array_skewness([a, b, c, d])
+raw expr       : array_skewness(array(a::Int16, b::Int16, c::Int16, d::Int16))
+checked expr   : array_skewness<Array(Int16)>(array<T0=Int16><T0, T0, T0, T0>(a, b, c, d))
+evaluation:
++--------+---------+---------+---------+---------+--------------+
+|        | a       | b       | c       | d       | Output       |
++--------+---------+---------+---------+---------+--------------+
+| Type   | Int16   | Int16   | Int16   | Int16   | Float64 NULL |
+| Domain | {1..=8} | {1..=6} | {3..=7} | {1..=9} | Unknown      |
+| Row 0  | 1       | 2       | 3       | 4       | 0            |
+| Row 1  | 5       | 6       | 7       | 8       | 0            |
+| Row 2  | 8       | 1       | 7       | 1       | 0.0604172654 |
+| Row 3  | 3       | 2       | 6       | 9       | 0.632455532  |
++--------+---------+---------+---------+---------+--------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------+
+| Column | Data                                                                                          |
++--------+-----------------------------------------------------------------------------------------------+
+| a      | Int16([1, 5, 8, 3])                                                                           |
+| b      | Int16([2, 6, 1, 2])                                                                           |
+| c      | Int16([3, 7, 7, 6])                                                                           |
+| d      | Int16([4, 8, 1, 9])                                                                           |
+| Output | NullableColumn { column: Float64([0, 0, 0.0604172654, 0.632455532]), validity: [0b____1111] } |
++--------+-----------------------------------------------------------------------------------------------+
+
+
+ast            : array_skewness([a, b, c, d])
+raw expr       : array_skewness(array(a::UInt64 NULL, b::UInt64 NULL, c::UInt64 NULL, d::UInt64 NULL))
+checked expr   : array_skewness<Array(UInt64 NULL)>(array<T0=UInt64 NULL><T0, T0, T0, T0>(a, b, c, d))
+evaluation:
++--------+------------------+------------------+-------------+------------------+---------------+
+|        | a                | b                | c           | d                | Output        |
++--------+------------------+------------------+-------------+------------------+---------------+
+| Type   | UInt64 NULL      | UInt64 NULL      | UInt64 NULL | UInt64 NULL      | Float64 NULL  |
+| Domain | {0..=4} ∪ {NULL} | {0..=6} ∪ {NULL} | {3..=9}     | {0..=6} ∪ {NULL} | Unknown       |
+| Row 0  | 1                | 2                | 3           | 4                | 0             |
+| Row 1  | 2                | NULL             | 7           | 6                | -1.4578629673 |
+| Row 2  | NULL             | 5                | 8           | 5                | 1.7320508075  |
+| Row 3  | 4                | 6                | 9           | NULL             | 0.5855827262  |
++--------+------------------+------------------+-------------+------------------+---------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                       |
++--------+------------------------------------------------------------------------------------------------------------+
+| a      | NullableColumn { column: UInt64([1, 2, 0, 4]), validity: [0b____1011] }                                    |
+| b      | NullableColumn { column: UInt64([2, 0, 5, 6]), validity: [0b____1101] }                                    |
+| c      | NullableColumn { column: UInt64([3, 7, 8, 9]), validity: [0b____1111] }                                    |
+| d      | NullableColumn { column: UInt64([4, 6, 5, 0]), validity: [0b____0111] }                                    |
+| Output | NullableColumn { column: Float64([0, -1.4578629673, 1.7320508075, 0.5855827262]), validity: [0b____1111] } |
++--------+------------------------------------------------------------------------------------------------------------+
+
+
+ast            : array_sort_asc_null_first([])
 raw expr       : array_sort_asc_null_first(array())
 checked expr   : array_sort_asc_null_first<Array(Nothing)>(array<>())
 optimized expr : [] :: Array(Nothing)
@@ -1707,7 +2121,16 @@ output domain  : []
 output         : []
 
 
-ast            : array_sort(NULL)
+ast            : array_sort_desc_null_first([])
+raw expr       : array_sort_desc_null_first(array())
+checked expr   : array_sort_desc_null_first<Array(Nothing)>(array<>())
+optimized expr : [] :: Array(Nothing)
+output type    : Array(Nothing)
+output domain  : []
+output         : []
+
+
+ast            : array_sort_asc_null_first(NULL)
 raw expr       : array_sort_asc_null_first(NULL)
 checked expr   : array_sort_asc_null_first<Array(Nothing) NULL>(CAST(NULL AS Array(Nothing) NULL))
 optimized expr : NULL
@@ -1716,7 +2139,7 @@ output domain  : {NULL}
 output         : NULL
 
 
-ast            : array_sort([8, 20, 1, 2, 3, 4, 5, 6, 7], 'ASC')
+ast            : array_sort_asc_null_first([8, 20, 1, 2, 3, 4, 5, 6, 7])
 raw expr       : array_sort_asc_null_first(array(8, 20, 1, 2, 3, 4, 5, 6, 7))
 checked expr   : array_sort_asc_null_first<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0, T0, T0, T0, T0, T0, T0>(8_u8, 20_u8, 1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
 optimized expr : [1, 2, 3, 4, 5, 6, 7, 8, 20]
@@ -1725,25 +2148,16 @@ output domain  : [{1..=20}]
 output         : [1, 2, 3, 4, 5, 6, 7, 8, 20]
 
 
-ast            : array_sort([], 'ASC')
-raw expr       : array_sort_asc_null_first(array())
-checked expr   : array_sort_asc_null_first<Array(Nothing)>(array<>())
-optimized expr : [] :: Array(Nothing)
-output type    : Array(Nothing)
-output domain  : []
-output         : []
+ast            : array_sort_asc_null_last([8, 20, 1, 2, 3, 4, 5, 6, 7])
+raw expr       : array_sort_asc_null_last(array(8, 20, 1, 2, 3, 4, 5, 6, 7))
+checked expr   : array_sort_asc_null_last<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0, T0, T0, T0, T0, T0, T0>(8_u8, 20_u8, 1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
+optimized expr : [1, 2, 3, 4, 5, 6, 7, 8, 20]
+output type    : Array(UInt8)
+output domain  : [{1..=20}]
+output         : [1, 2, 3, 4, 5, 6, 7, 8, 20]
 
 
-ast            : array_sort([], 'DESC')
-raw expr       : array_sort_desc_null_first(array())
-checked expr   : array_sort_desc_null_first<Array(Nothing)>(array<>())
-optimized expr : [] :: Array(Nothing)
-output type    : Array(Nothing)
-output domain  : []
-output         : []
-
-
-ast            : array_sort([8, 20, 1, 2, 3, 4, 5, 6, 7], 'DESC')
+ast            : array_sort_desc_null_first([8, 20, 1, 2, 3, 4, 5, 6, 7])
 raw expr       : array_sort_desc_null_first(array(8, 20, 1, 2, 3, 4, 5, 6, 7))
 checked expr   : array_sort_desc_null_first<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0, T0, T0, T0, T0, T0, T0>(8_u8, 20_u8, 1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
 optimized expr : [20, 8, 7, 6, 5, 4, 3, 2, 1]
@@ -1752,60 +2166,16 @@ output domain  : [{1..=20}]
 output         : [20, 8, 7, 6, 5, 4, 3, 2, 1]
 
 
-ast            : array_sort([9.32, 0, 1.2, 3.4, 5.6, 7.8])
-raw expr       : array_sort_asc_null_first(array(9.32, 0, 1.2, 3.4, 5.6, 7.8))
-checked expr   : array_sort_asc_null_first<T0=Decimal(3, 2)><Array(T0)>(array<T0=Decimal(3, 2)><T0, T0, T0, T0, T0, T0>(9.32_d128(3,2), to_decimal<UInt8>(3, 2)(0_u8), to_decimal<Decimal(2, 1)>(3, 2)(1.2_d128(2,1)), to_decimal<Decimal(2, 1)>(3, 2)(3.4_d128(2,1)), to_decimal<Decimal(2, 1)>(3, 2)(5.6_d128(2,1)), to_decimal<Decimal(2, 1)>(3, 2)(7.8_d128(2,1))))
-optimized expr : [0.00, 1.20, 3.40, 5.60, 7.80, 9.32]
-output type    : Array(Decimal(3, 2))
-output domain  : [{0.00..=9.32}]
-output         : [0.00, 1.20, 3.40, 5.60, 7.80, 9.32]
+ast            : array_sort_desc_null_last([8, 20, 1, 2, 3, 4, 5, 6, 7])
+raw expr       : array_sort_desc_null_last(array(8, 20, 1, 2, 3, 4, 5, 6, 7))
+checked expr   : array_sort_desc_null_last<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0, T0, T0, T0, T0, T0, T0>(8_u8, 20_u8, 1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
+optimized expr : [20, 8, 7, 6, 5, 4, 3, 2, 1]
+output type    : Array(UInt8)
+output domain  : [{1..=20}]
+output         : [20, 8, 7, 6, 5, 4, 3, 2, 1]
 
 
-error: 
-  --> SQL:1:13
-  |
-1 | array_sort(['x', 0, 1.2, 3.4, 5.6, 7.8])
-  |             ^^^ bad decimal literal: unexpected char while evaluating function `to_decimal("x")`
-
-
-
-ast            : array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'DESC', 'NULLS FIRST')
-raw expr       : array_sort_desc_null_first(array(1.2, NULL, 3.4, 5.6, "2.2", NULL))
-checked expr   : array_sort_desc_null_first<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST("2.2" AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
-optimized expr : [NULL, NULL, 5.6, 3.4, 2.2, 1.2]
-output type    : Array(Decimal(2, 1) NULL)
-output domain  : [{0.0..=5.6} ∪ {NULL}]
-output         : [NULL, NULL, 5.6, 3.4, 2.2, 1.2]
-
-
-ast            : array_sort([], 'DESC', 'NULLS FIRST')
-raw expr       : array_sort_desc_null_first(array())
-checked expr   : array_sort_desc_null_first<Array(Nothing)>(array<>())
-optimized expr : [] :: Array(Nothing)
-output type    : Array(Nothing)
-output domain  : []
-output         : []
-
-
-ast            : array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'DESC', 'NULLS LAST')
-raw expr       : array_sort_desc_null_last(array(1.2, NULL, 3.4, 5.6, "2.2", NULL))
-checked expr   : array_sort_desc_null_last<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST("2.2" AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
-optimized expr : [5.6, 3.4, 2.2, 1.2, NULL, NULL]
-output type    : Array(Decimal(2, 1) NULL)
-output domain  : [{0.0..=5.6} ∪ {NULL}]
-output         : [5.6, 3.4, 2.2, 1.2, NULL, NULL]
-
-
-ast            : array_sort([], 'DESC', 'NULLS LAST')
-raw expr       : array_sort_desc_null_last(array())
-checked expr   : array_sort_desc_null_last<Array(Nothing)>(array<>())
-optimized expr : [] :: Array(Nothing)
-output type    : Array(Nothing)
-output domain  : []
-output         : []
-
-
-ast            : array_sort([1.2, NULL, 3.4, 5.6, '2.2', NULL], 'ASC', 'NULLS FIRST')
+ast            : array_sort_asc_null_first([1.2, NULL, 3.4, 5.6, '2.2', NULL])
 raw expr       : array_sort_asc_null_first(array(1.2, NULL, 3.4, 5.6, "2.2", NULL))
 checked expr   : array_sort_asc_null_first<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST("2.2" AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
 optimized expr : [NULL, NULL, 1.2, 2.2, 3.4, 5.6]
@@ -1814,30 +2184,30 @@ output domain  : [{0.0..=5.6} ∪ {NULL}]
 output         : [NULL, NULL, 1.2, 2.2, 3.4, 5.6]
 
 
-ast            : array_sort([], 'ASC', 'NULLS FIRST')
-raw expr       : array_sort_asc_null_first(array())
-checked expr   : array_sort_asc_null_first<Array(Nothing)>(array<>())
-optimized expr : [] :: Array(Nothing)
-output type    : Array(Nothing)
-output domain  : []
-output         : []
+ast            : array_sort_asc_null_last([1.2, NULL, 3.4, 5.6, '2.2', NULL])
+raw expr       : array_sort_asc_null_last(array(1.2, NULL, 3.4, 5.6, "2.2", NULL))
+checked expr   : array_sort_asc_null_last<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST("2.2" AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
+optimized expr : [1.2, 2.2, 3.4, 5.6, NULL, NULL]
+output type    : Array(Decimal(2, 1) NULL)
+output domain  : [{0.0..=5.6} ∪ {NULL}]
+output         : [1.2, 2.2, 3.4, 5.6, NULL, NULL]
 
 
-ast            : array_sort(['z', 'a', NULL, 'v', 'd', NULL], 'ASC', 'NULLS LAST')
-raw expr       : array_sort_asc_null_last(array("z", "a", NULL, "v", "d", NULL))
-checked expr   : array_sort_asc_null_last<T0=String NULL><Array(T0)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0>(CAST("z" AS String NULL), CAST("a" AS String NULL), CAST(NULL AS String NULL), CAST("v" AS String NULL), CAST("d" AS String NULL), CAST(NULL AS String NULL)))
-optimized expr : ["a", "d", "v", "z", NULL, NULL]
-output type    : Array(String NULL)
-output domain  : [{""..="z"} ∪ {NULL}]
-output         : ["a", "d", "v", "z", NULL, NULL]
+ast            : array_sort_desc_null_first([1.2, NULL, 3.4, 5.6, '2.2', NULL])
+raw expr       : array_sort_desc_null_first(array(1.2, NULL, 3.4, 5.6, "2.2", NULL))
+checked expr   : array_sort_desc_null_first<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST("2.2" AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
+optimized expr : [NULL, NULL, 5.6, 3.4, 2.2, 1.2]
+output type    : Array(Decimal(2, 1) NULL)
+output domain  : [{0.0..=5.6} ∪ {NULL}]
+output         : [NULL, NULL, 5.6, 3.4, 2.2, 1.2]
 
 
-ast            : array_sort([], 'ASC', 'NULLS LAST')
-raw expr       : array_sort_asc_null_last(array())
-checked expr   : array_sort_asc_null_last<Array(Nothing)>(array<>())
-optimized expr : [] :: Array(Nothing)
-output type    : Array(Nothing)
-output domain  : []
-output         : []
+ast            : array_sort_desc_null_last([1.2, NULL, 3.4, 5.6, '2.2', NULL])
+raw expr       : array_sort_desc_null_last(array(1.2, NULL, 3.4, 5.6, "2.2", NULL))
+checked expr   : array_sort_desc_null_last<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST("2.2" AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
+optimized expr : [5.6, 3.4, 2.2, 1.2, NULL, NULL]
+output type    : Array(Decimal(2, 1) NULL)
+output domain  : [{0.0..=5.6} ∪ {NULL}]
+output         : [5.6, 3.4, 2.2, 1.2, NULL, NULL]
 
 
