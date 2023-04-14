@@ -36,6 +36,7 @@ use crate::Schema;
 #[derive(Clone)]
 pub struct FlightSQLConnection {
     pub(crate) client: FlightSqlServiceClient<Channel>,
+    handshaked: bool,
     args: Args,
 }
 
@@ -51,8 +52,15 @@ impl Connection for FlightSQLConnection {
     }
 
     async fn exec(&mut self, sql: &str) -> Result<i64> {
+        self.handshake().await?;
         let affected_rows = self.client.execute_update(sql.to_string()).await?;
         Ok(affected_rows)
+    }
+
+    async fn query_row(&mut self, sql: &str) -> Result<Option<Row>> {
+        let mut rows = self.query_iter(sql).await?;
+        let row = rows.try_next().await?;
+        Ok(row)
     }
 
     async fn query_iter(&mut self, sql: &str) -> Result<RowIterator> {
@@ -66,6 +74,7 @@ impl Connection for FlightSQLConnection {
     }
 
     async fn query_iter_ext(&mut self, sql: &str) -> Result<(Schema, RowProgressIterator)> {
+        self.handshake().await?;
         let mut stmt = self.client.prepare(sql.to_string()).await?;
         let flight_info = stmt.execute().await?;
         let ticket = flight_info.endpoint[0]
@@ -76,12 +85,6 @@ impl Connection for FlightSQLConnection {
         let (schema, rows) = FlightSQLRows::try_from_flight_data(flight_data).await?;
         Ok((schema, Box::pin(rows)))
     }
-
-    async fn query_row(&mut self, sql: &str) -> Result<Option<Row>> {
-        let mut rows = self.query_iter(sql).await?;
-        let row = rows.try_next().await?;
-        Ok(row)
-    }
 }
 
 impl FlightSQLConnection {
@@ -91,8 +94,23 @@ impl FlightSQLConnection {
         let mut client = FlightSqlServiceClient::new(channel);
         // enable progress
         client.set_header("bendsql", "1");
-        let _token = client.handshake(&args.user, &args.password).await?;
-        Ok(Self { client, args })
+        Ok(Self {
+            client,
+            args,
+            handshaked: false,
+        })
+    }
+
+    async fn handshake(&mut self) -> Result<()> {
+        if self.handshaked {
+            return Ok(());
+        }
+        let _token = self
+            .client
+            .handshake(&self.args.user, &self.args.password)
+            .await?;
+        self.handshaked = true;
+        Ok(())
     }
 
     fn parse_dsn(dsn: &str) -> Result<(Args, Endpoint)> {

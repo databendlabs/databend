@@ -57,7 +57,21 @@ impl std::fmt::Display for Error {
             Error::BadArgument(msg) => write!(f, "BadArgument: {}", msg),
             Error::InvalidResponse(msg) => write!(f, "ResponseError: {}", msg),
             #[cfg(feature = "flight-sql")]
-            Error::Arrow(e) => write!(f, "ArrowError: {}", e),
+            Error::Arrow(e) => {
+                let msg = match e {
+                    arrow_schema::ArrowError::IoError(err) => {
+                        static START: &str = "Code:";
+                        static END: &str = ". at";
+
+                        let message_index = err.find(START).unwrap_or(0);
+                        let message_end_index = err.find(END).unwrap_or(err.len());
+                        let message = &err[message_index..message_end_index];
+                        message.replace("\\n", "\n")
+                    }
+                    other => format!("{}", other),
+                };
+                write!(f, "ArrowError: {}", msg)
+            }
             Error::Convert(e) => write!(
                 f,
                 "ConvertError: cannot convert {} to {}: {:?}",
