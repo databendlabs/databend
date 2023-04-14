@@ -314,14 +314,6 @@ pub enum ExprElement {
     Array {
         exprs: Vec<Expr>,
     },
-    /// ARRAY_SORT([1,2,3], ASC|DESC, NULLS FIRST|LAST)
-    ArraySort {
-        expr: Box<Expr>,
-        // Optional `ASC` or `DESC`
-        asc: Option<String>,
-        // Optional `NULLS FIRST` or `NULLS LAST`
-        nulls_first: Option<String>,
-    },
     /// `{'k1':'v1','k2':'v2'}`
     Map {
         kvs: Vec<(Expr, Expr)>,
@@ -525,41 +517,6 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 span: transform_span(elem.span.0),
                 exprs,
             },
-            ExprElement::ArraySort {
-                expr,
-                asc,
-                nulls_first,
-            } => {
-                let asc = if let Some(asc) = asc {
-                    if asc.to_lowercase() == "asc" {
-                        true
-                    } else if asc.to_lowercase() == "desc" {
-                        false
-                    } else {
-                        return Err("Sorting order must be either ASC or DESC");
-                    }
-                } else {
-                    true
-                };
-                let null_first = if let Some(nulls_first) = nulls_first {
-                    let null_first = nulls_first.trim().to_lowercase();
-                    if null_first == "nulls first" {
-                        true
-                    } else if null_first == "nulls last" {
-                        false
-                    } else {
-                        return Err("Null sorting order must be either NULLS FIRST or NULLS LAST");
-                    }
-                } else {
-                    true
-                };
-                Expr::ArraySort {
-                    span: transform_span(elem.span.0),
-                    expr,
-                    asc,
-                    null_first,
-                }
-            }
             ExprElement::Map { kvs } => Expr::Map {
                 span: transform_span(elem.span.0),
                 kvs,
@@ -955,22 +912,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             ExprElement::Array { exprs }
         },
     );
-    // ARRAY_SORT([...], ASC | DESC, NULLS FIRST | LAST)
-    let array_sort = map(
-        rule! {
-            ( ARRAY_SORT )
-            ~ "("
-            ~ #subexpr(0)
-            ~ ( "," ~ #literal_string )?
-            ~ ( "," ~ #literal_string )?
-            ~ ")"
-        },
-        |(_, _, expr, opt_asc, opt_null_first, _)| ExprElement::ArraySort {
-            expr: Box::new(expr),
-            asc: opt_asc.map(|(_, asc)| asc),
-            nulls_first: opt_null_first.map(|(_, first_last)| first_last),
-        },
-    );
 
     let map_expr = map(
         rule! { "{" ~ #comma_separated_list0(map_element) ~ "}" },
@@ -1069,7 +1010,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         rule!(
             #position : "`POSITION(... IN ...)`"
             | #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"
-            | #array_sort : "`ARRAY_SORT([...], 'ASC' | 'DESC', 'NULLS FIRST' | 'NULLS LAST')`"
             | #trim : "`TRIM(...)`"
             | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
             | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"

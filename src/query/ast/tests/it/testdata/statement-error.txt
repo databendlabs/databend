@@ -386,7 +386,7 @@ error:
   --> SQL:1:41
   |
 1 | SELECT * FROM t GROUP BY GROUPING SETS ()
-  | ------                                  ^ expected `(`, `IS`, `IN`, `EXISTS`, `BETWEEN`, `+`, or 65 more ...
+  | ------                                  ^ expected `(`, `IS`, `IN`, `EXISTS`, `BETWEEN`, `+`, or 64 more ...
   | |                                        
   | while parsing `SELECT ...`
 
