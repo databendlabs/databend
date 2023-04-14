@@ -2,6 +2,8 @@
 title: 'Conditional Functions'
 ---
 
+SQL Conditional Functions Overview.
+
 | Function                                                   | Description                                                                                                                                              | Example                                                                          | Result   |
 |------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------|----------|
 | **IF(cond1, expr1, [cond2, expr2, ...], expr_else)**       | If cond1 is TRUE, it returns expr1. Otherwise if cond2 is TRUE, it returns expr2, and so on.                                                             | **IF(1 > 2, 3, 4 < 5, 6, 7)**                                                    | 6        |
