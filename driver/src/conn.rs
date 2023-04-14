@@ -25,6 +25,7 @@ use crate::rows::{Row, RowIterator, RowProgressIterator};
 use crate::schema::Schema;
 
 pub struct ConnectionInfo {
+    pub handler: String,
     pub host: String,
     pub port: u16,
     pub user: String,

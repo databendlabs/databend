@@ -44,6 +44,7 @@ pub struct FlightSQLConnection {
 impl Connection for FlightSQLConnection {
     fn info(&self) -> ConnectionInfo {
         ConnectionInfo {
+            handler: "FlightSQL".to_string(),
             host: self.args.host.clone(),
             port: self.args.port,
             user: self.args.user.clone(),

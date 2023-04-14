@@ -38,6 +38,7 @@ pub struct RestAPIConnection {
 impl Connection for RestAPIConnection {
     fn info(&self) -> ConnectionInfo {
         ConnectionInfo {
+            handler: "RestAPI".to_string(),
             host: self.client.host.clone(),
             port: self.client.port,
             user: self.client.user.clone(),
