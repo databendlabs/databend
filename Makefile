@@ -21,3 +21,6 @@ integration-tests:
 
 integration-tests-flight-sql:
 	make -C tests test-flight-sql
+
+integration-bendsql:
+	make -C tests test-bendsql

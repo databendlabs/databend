@@ -1,26 +1,38 @@
 #!/bin/sh
 
-port=8000
-extra=""
-if [ $1 = "flight" ];then
-	port=8900
-	extra="--flight"
-fi
+set -e
+
+CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-./target}
+DATABEND_USER=${DATABEND_USER:-root}
+DATABEND_PASSWORD=${DATABEND_PASSWORD:-}
+DATABEND_HOST=${DATABEND_HOST:-localhost}
+
+case $1 in
+"flight")
+	echo
+	echo "==> Testing Flight SQL handler"
+	export BENDSQL_DSN="databend+flight://${DATABEND_USER}:${DATABEND_PASSWORD}@${DATABEND_HOST}:8900/?sslmode=disable"
+	;;
+"http")
+	echo
+	echo "==> Testing REST API handler"
+	export BENDSQL_DSN="databend+http://${DATABEND_USER}:${DATABEND_PASSWORD}@${DATABEND_HOST}:8000/?sslmode=disable"
+	;;
+*)
+	echo "Usage: $0 [flight|http]"
+	exit 1
+	;;
+esac
 
 cargo build --bin bendsql
 
-for f in `ls cli/tests/*.sql`;do
-	echo "Testing -- ${f}"
-	suite=`echo $f | sed -e 's#cli/tests/##'  | sed -e 's#.sql##'`
-	cat $f | ./target/debug/bendsql -u ${DATABEND_USER} -p ${DATABEND_PASSWORD} --port ${port} -h${DATABEND_HOST} ${extra} > /tmp/${suite}.output 2>&1
-	diff /tmp/${suite}.output cli/tests/${suite}.result
-	
-	ret_code=$?
-	if [ $ret_code -ne 0 ]; then
-		exit 1
-	fi
+for tf in cli/tests/*.sql; do
+	echo "    Running test -- ${tf}"
+	suite=$(basename "${tf}" | sed -e 's#.sql##')
+	"${CARGO_TARGET_DIR}/debug/bendsql" <"${tf}" >"cli/tests/${suite}.output" 2>&1
+	diff "cli/tests/${suite}.output" "cli/tests/${suite}.result"
 done
 
-rm /tmp/*.output
+rm cli/tests/*.output
 
-echo "Tests $1 passed"
+echo "--> Tests $1 passed"

@@ -24,9 +24,10 @@ services:
       timeout: 1s
   test:
     image: rust
-    command: cargo test --target-dir /target --test *
+    command: cargo test --test *
     working_dir: /workspace
     environment:
+      - CARGO_TARGET_DIR=/target
       - RUST_BACKTRACE=1
       - TEST_DATABEND_DSN=databend://databend:databend@databend:8000/default?sslmode=disable
     volumes:
@@ -39,9 +40,10 @@ services:
         condition: service_healthy
   test-flight-sql:
     image: rust
-    command: cargo test --target-dir /target --features flight-sql --test driver
+    command: cargo test --features flight-sql --test driver
     working_dir: /workspace
     environment:
+      - CARGO_TARGET_DIR=/target
       - RUST_BACKTRACE=1
       - TEST_DATABEND_DSN=databend+flight://databend:databend@databend:8900/default?sslmode=disable
     volumes:
@@ -54,9 +56,10 @@ services:
         condition: service_healthy
   test-bendsql:
     image: rust
-    command: bash cli/test.sh http && bash cli/test.sh flight
+    command: bash -c './cli/test.sh http && ./cli/test.sh flight'
     working_dir: /workspace
     environment:
+      - CARGO_TARGET_DIR=/target
       - RUST_BACKTRACE=1
       - DATABEND_USER=databend
       - DATABEND_PASSWORD=databend
