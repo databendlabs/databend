@@ -206,7 +206,7 @@ jobs:
           repo_role_arn: ${{ secrets.REPO_ROLE_ARN }}
 
   hive:
-    runs-on: [self-hosted, X64, Linux, 8c16g]
+    runs-on: [self-hosted, X64, Linux, 16c32g]
     needs: [create_release]
     env:
       RUNNER_PROVIDER: aws
