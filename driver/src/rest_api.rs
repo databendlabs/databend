@@ -42,11 +42,10 @@ impl Connection for RestAPIConnection {
             host: self.client.host.clone(),
             port: self.client.port,
             user: self.client.user.clone(),
-            database: self.client.database.clone(),
         }
     }
 
-    async fn exec(&mut self, sql: &str) -> Result<i64> {
+    async fn exec(&self, sql: &str) -> Result<i64> {
         let mut resp = self.client.query(sql).await?;
         while let Some(next_uri) = resp.next_uri {
             resp = self.client.query_page(&next_uri).await?;
@@ -54,7 +53,7 @@ impl Connection for RestAPIConnection {
         Ok(resp.stats.progresses.write_progress.rows as i64)
     }
 
-    async fn query_iter(&mut self, sql: &str) -> Result<RowIterator> {
+    async fn query_iter(&self, sql: &str) -> Result<RowIterator> {
         let (_, rows_with_progress) = self.query_iter_ext(sql).await?;
         let rows = rows_with_progress.filter_map(|r| match r {
             Ok(RowWithProgress::Row(r)) => Some(Ok(r)),
@@ -64,13 +63,13 @@ impl Connection for RestAPIConnection {
         Ok(Box::pin(rows))
     }
 
-    async fn query_iter_ext(&mut self, sql: &str) -> Result<(Schema, RowProgressIterator)> {
+    async fn query_iter_ext(&self, sql: &str) -> Result<(Schema, RowProgressIterator)> {
         let resp = self.client.query(sql).await?;
         let (schema, rows) = RestAPIRows::from_response(self.client.clone(), resp)?;
         Ok((schema, Box::pin(rows)))
     }
 
-    async fn query_row(&mut self, sql: &str) -> Result<Option<Row>> {
+    async fn query_row(&self, sql: &str) -> Result<Option<Row>> {
         let resp = self.client.query(sql).await?;
         let resp = self.wait_for_data(resp).await?;
         self.finish_query(resp.final_uri).await?;

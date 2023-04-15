@@ -26,7 +26,7 @@ async fn prepare(name: &str) -> (Box<dyn Connection>, String) {
 
 #[tokio::test]
 async fn select_iter() {
-    let (mut conn, table) = prepare("select_iter").await;
+    let (conn, table) = prepare("select_iter").await;
     let sql_create = format!(
         "CREATE TABLE `{}` (
 		i64 Int64,
@@ -104,7 +104,7 @@ async fn select_iter() {
 
 #[tokio::test]
 async fn select_numbers() {
-    let (mut conn, _) = prepare("select_numbers").await;
+    let (conn, _) = prepare("select_numbers").await;
     let rows = conn.query_iter("select * from NUMBERS(5)").await.unwrap();
     let ret: Vec<u64> = rows
         .map(|r| r.unwrap().try_into().unwrap())
@@ -118,7 +118,7 @@ async fn select_numbers() {
 
 #[tokio::test]
 async fn select_sleep() {
-    let (mut conn, _) = prepare("select_sleep").await;
+    let (conn, _) = prepare("select_sleep").await;
     let mut rows = conn.query_iter("select SLEEP(2);").await.unwrap();
     let mut result = vec![];
     while let Some(row) = rows.next().await {

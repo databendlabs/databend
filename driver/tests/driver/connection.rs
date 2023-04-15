@@ -19,14 +19,14 @@ use crate::common::DEFAULT_DSN;
 #[tokio::test]
 async fn trait_with_clone() {
     let dsn = option_env!("TEST_DATABEND_DSN").unwrap_or(DEFAULT_DSN);
-    let mut conn = new_connection(dsn).await.unwrap();
+    let conn = new_connection(dsn).await.unwrap();
     let row = conn.query_row("select 'hello'").await.unwrap();
     assert!(row.is_some());
     let row = row.unwrap();
     let (val,): (String,) = row.try_into().unwrap();
     assert_eq!(val, "hello");
 
-    let mut conn2 = conn.clone();
+    let conn2 = conn.clone();
     let row = conn2.query_row("select 'world'").await.unwrap();
     assert!(row.is_some());
     let row = row.unwrap();

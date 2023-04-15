@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::{collections::BTreeMap, fmt};
 
 use bytes::Bytes;
@@ -20,6 +20,7 @@ use http::StatusCode;
 use reqwest::header::HeaderMap;
 use reqwest::multipart::{Form, Part};
 use reqwest::Client as HttpClient;
+use tokio::sync::Mutex;
 use url::Url;
 
 use crate::{
@@ -75,7 +76,7 @@ pub struct APIClient {
 
     tenant: Option<String>,
     warehouse: Option<String>,
-    pub database: Option<String>,
+    pub database: Arc<Mutex<Option<String>>>,
     pub user: String,
     password: Option<String>,
     session_settings: Arc<Mutex<BTreeMap<String, String>>>,
@@ -96,10 +97,11 @@ impl APIClient {
         }
         client.user = u.username().to_string();
         client.password = u.password().map(|s| s.to_string());
-        client.database = match u.path().trim_start_matches('/') {
+        let database = match u.path().trim_start_matches('/') {
             "" => None,
             s => Some(s.to_string()),
         };
+        client.database = Arc::new(Mutex::new(database));
         let mut scheme = "https";
         let mut session_settings = BTreeMap::new();
         for (k, v) in u.query_pairs() {
@@ -155,10 +157,11 @@ impl APIClient {
         Ok(client)
     }
 
-    pub async fn query(&mut self, sql: &str) -> Result<QueryResponse> {
+    pub async fn query(&self, sql: &str) -> Result<QueryResponse> {
+        let session_settings = self.make_session().await;
         let req = QueryRequest::new(sql)
             .with_pagination(self.make_pagination())
-            .with_session(self.make_session());
+            .with_session(session_settings);
         let endpoint = self.endpoint.join("v1/query")?;
         let resp = self
             .cli
@@ -179,10 +182,11 @@ impl APIClient {
         if let Some(err) = resp.error {
             return Err(Error::InvalidResponse(err));
         }
-        let mut session_settings = self.session_settings.lock().unwrap();
+        let mut session_settings = self.session_settings.lock().await;
         if let Some(session) = &resp.session {
             if session.database.is_some() {
-                self.database = session.database.clone();
+                let mut database = self.database.lock().await;
+                *database = session.database.clone();
             }
             if let Some(settings) = &session.settings {
                 for (k, v) in settings {
@@ -216,17 +220,18 @@ impl APIClient {
         }
     }
 
-    fn make_session(&self) -> Option<SessionConfig> {
-        let session_settings = self.session_settings.lock().unwrap();
-        if self.database.is_none() && session_settings.is_empty() {
+    async fn make_session(&self) -> Option<SessionConfig> {
+        let session_settings = self.session_settings.lock().await;
+        let database = self.database.lock().await;
+        if database.is_none() && session_settings.is_empty() {
             return None;
         }
         let mut session = SessionConfig {
             database: None,
             settings: None,
         };
-        if self.database.is_some() {
-            session.database = self.database.clone();
+        if database.is_some() {
+            session.database = database.clone();
         }
         if !session_settings.is_empty() {
             session.settings = Some(session_settings.clone());
@@ -368,7 +373,7 @@ impl Default for APIClient {
             port: 8000,
             tenant: None,
             warehouse: None,
-            database: None,
+            database: Arc::new(Mutex::new(None)),
             user: "root".to_string(),
             password: None,
             session_settings: Arc::new(Mutex::new(BTreeMap::new())),
@@ -392,7 +397,10 @@ mod test {
         assert_eq!(client.endpoint, Url::parse("http://app.databend.com:80")?);
         assert_eq!(client.user, "username");
         assert_eq!(client.password, Some("password".to_string()));
-        assert_eq!(client.database, Some("test".to_string()));
+        assert_eq!(
+            *client.database.try_lock().unwrap(),
+            Some("test".to_string())
+        );
         assert_eq!(client.wait_time_secs, Some(10));
         assert_eq!(client.max_rows_in_buffer, Some(5000000));
         assert_eq!(client.max_rows_per_page, Some(10000));

@@ -1,6 +1,6 @@
 [package]
 name = "databend-client"
-version = "0.1.10"
+version = "0.1.11"
 edition = "2021"
 license = "Apache-2.0"
 description = "Databend Client for Rust"
@@ -25,7 +25,7 @@ serde_json = { version = "1.0.94", default-features = false, features = ["std"] 
 tower = { version = "0.4.13", default-features = false }
 tower-http = { version = "0.4.0", default-features = false }
 url = { version = "2.3.1", default-features = false }
+tokio = { version = "1.26.0", features = ["macros"] }
 
 [dev-dependencies]
 chrono = { version = "0.4.24", default-features = false, features = ["clock"] }
-tokio = { version = "1.26.0", features = ["macros"] }

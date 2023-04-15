@@ -29,14 +29,13 @@ pub struct ConnectionInfo {
     pub host: String,
     pub port: u16,
     pub user: String,
-    pub database: Option<String>,
 }
 
 #[async_trait]
 pub trait Connection: DynClone + Send + Sync {
     fn info(&self) -> ConnectionInfo;
 
-    async fn version(&mut self) -> Result<String> {
+    async fn version(&self) -> Result<String> {
         let row = self.query_row("SELECT version()").await?;
         let version = match row {
             Some(row) => {
@@ -48,10 +47,10 @@ pub trait Connection: DynClone + Send + Sync {
         Ok(version)
     }
 
-    async fn exec(&mut self, sql: &str) -> Result<i64>;
-    async fn query_row(&mut self, sql: &str) -> Result<Option<Row>>;
-    async fn query_iter(&mut self, sql: &str) -> Result<RowIterator>;
-    async fn query_iter_ext(&mut self, sql: &str) -> Result<(Schema, RowProgressIterator)>;
+    async fn exec(&self, sql: &str) -> Result<i64>;
+    async fn query_row(&self, sql: &str) -> Result<Option<Row>>;
+    async fn query_iter(&self, sql: &str) -> Result<RowIterator>;
+    async fn query_iter_ext(&self, sql: &str) -> Result<(Schema, RowProgressIterator)>;
 }
 dyn_clone::clone_trait_object!(Connection);
 

@@ -39,7 +39,7 @@ pub struct Session {
 
 impl Session {
     pub async fn try_new(dsn: String, settings: Settings, is_repl: bool) -> Result<Self> {
-        let mut conn = new_connection(&dsn).await?;
+        let conn = new_connection(&dsn).await?;
         let info = conn.info();
         if is_repl {
             println!("Welcome to BendSQL.");

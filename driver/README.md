@@ -13,7 +13,7 @@ Databend unified SQL client for RestAPI and FlightSQL
 use databend_driver::new_connection;
 
 let dsn = "databend://root:@localhost:8000/default?sslmode=disable";
-let mut conn = new_connection(dsn).await.unwrap();
+let conn = new_connection(dsn).await.unwrap();
 
 let sql_create = "CREATE TABLE books (
     title VARCHAR,

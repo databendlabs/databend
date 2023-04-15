@@ -23,6 +23,7 @@ use arrow_flight::utils::flight_data_to_arrow_batch;
 use arrow_flight::{sql::client::FlightSqlServiceClient, FlightData};
 use arrow_schema::SchemaRef as ArrowSchemaRef;
 use async_trait::async_trait;
+use tokio::sync::Mutex;
 use tokio_stream::{Stream, StreamExt};
 use tonic::transport::{Channel, ClientTlsConfig, Endpoint};
 use tonic::Streaming;
@@ -35,8 +36,8 @@ use crate::Schema;
 
 #[derive(Clone)]
 pub struct FlightSQLConnection {
-    pub(crate) client: FlightSqlServiceClient<Channel>,
-    handshaked: bool,
+    pub(crate) client: Arc<Mutex<FlightSqlServiceClient<Channel>>>,
+    handshaked: Arc<Mutex<bool>>,
     args: Args,
 }
 
@@ -48,23 +49,23 @@ impl Connection for FlightSQLConnection {
             host: self.args.host.clone(),
             port: self.args.port,
             user: self.args.user.clone(),
-            database: self.args.database.clone(),
         }
     }
 
-    async fn exec(&mut self, sql: &str) -> Result<i64> {
+    async fn exec(&self, sql: &str) -> Result<i64> {
         self.handshake().await?;
-        let affected_rows = self.client.execute_update(sql.to_string()).await?;
+        let mut client = self.client.lock().await;
+        let affected_rows = client.execute_update(sql.to_string()).await?;
         Ok(affected_rows)
     }
 
-    async fn query_row(&mut self, sql: &str) -> Result<Option<Row>> {
+    async fn query_row(&self, sql: &str) -> Result<Option<Row>> {
         let mut rows = self.query_iter(sql).await?;
         let row = rows.try_next().await?;
         Ok(row)
     }
 
-    async fn query_iter(&mut self, sql: &str) -> Result<RowIterator> {
+    async fn query_iter(&self, sql: &str) -> Result<RowIterator> {
         let (_, rows_with_progress) = self.query_iter_ext(sql).await?;
         let rows = rows_with_progress.filter_map(|r| match r {
             Ok(RowWithProgress::Row(r)) => Some(Ok(r)),
@@ -74,15 +75,16 @@ impl Connection for FlightSQLConnection {
         Ok(Box::pin(rows))
     }
 
-    async fn query_iter_ext(&mut self, sql: &str) -> Result<(Schema, RowProgressIterator)> {
+    async fn query_iter_ext(&self, sql: &str) -> Result<(Schema, RowProgressIterator)> {
         self.handshake().await?;
-        let mut stmt = self.client.prepare(sql.to_string()).await?;
+        let mut client = self.client.lock().await;
+        let mut stmt = client.prepare(sql.to_string()).await?;
         let flight_info = stmt.execute().await?;
         let ticket = flight_info.endpoint[0]
             .ticket
             .as_ref()
             .ok_or(Error::Protocol("Ticket is empty".to_string()))?;
-        let flight_data = self.client.do_get(ticket.clone()).await?;
+        let flight_data = client.do_get(ticket.clone()).await?;
         let (schema, rows) = FlightSQLRows::try_from_flight_data(flight_data).await?;
         Ok((schema, Box::pin(rows)))
     }
@@ -96,21 +98,22 @@ impl FlightSQLConnection {
         // enable progress
         client.set_header("bendsql", "1");
         Ok(Self {
-            client,
+            client: Arc::new(Mutex::new(client)),
             args,
-            handshaked: false,
+            handshaked: Arc::new(Mutex::new(false)),
         })
     }
 
-    async fn handshake(&mut self) -> Result<()> {
-        if self.handshaked {
+    async fn handshake(&self) -> Result<()> {
+        let mut handshaked = self.handshaked.lock().await;
+        if *handshaked {
             return Ok(());
         }
-        let _token = self
-            .client
+        let mut client = self.client.lock().await;
+        let _token = client
             .handshake(&self.args.user, &self.args.password)
             .await?;
-        self.handshaked = true;
+        *handshaked = true;
         Ok(())
     }
 

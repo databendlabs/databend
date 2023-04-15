@@ -24,7 +24,7 @@ async fn prepare() -> Box<dyn Connection> {
 
 #[tokio::test]
 async fn select_string() {
-    let mut conn = prepare().await;
+    let conn = prepare().await;
     let row = conn.query_row("select 'hello'").await.unwrap();
     assert!(row.is_some());
     let row = row.unwrap();
@@ -34,7 +34,7 @@ async fn select_string() {
 
 #[tokio::test]
 async fn select_boolean() {
-    let mut conn = prepare().await;
+    let conn = prepare().await;
     let row = conn.query_row("select true").await.unwrap();
     assert!(row.is_some());
     let row = row.unwrap();
@@ -44,7 +44,7 @@ async fn select_boolean() {
 
 #[tokio::test]
 async fn select_u16() {
-    let mut conn = prepare().await;
+    let conn = prepare().await;
     let row = conn.query_row("select to_uint16(15532)").await.unwrap();
     assert!(row.is_some());
     let row = row.unwrap();
@@ -54,7 +54,7 @@ async fn select_u16() {
 
 #[tokio::test]
 async fn select_f64() {
-    let mut conn = prepare().await;
+    let conn = prepare().await;
     let row = conn
         .query_row("select to_float64(3.1415925)")
         .await
@@ -67,7 +67,7 @@ async fn select_f64() {
 
 #[tokio::test]
 async fn select_date() {
-    let mut conn = prepare().await;
+    let conn = prepare().await;
     let row = conn
         .query_row("select to_date('2023-03-28')")
         .await
@@ -86,7 +86,7 @@ async fn select_date() {
 
 #[tokio::test]
 async fn select_datetime() {
-    let mut conn = prepare().await;
+    let conn = prepare().await;
     let row = conn
         .query_row("select to_datetime('2023-03-28 12:34:56.789')")
         .await
@@ -121,7 +121,7 @@ async fn select_datetime() {
 
 #[tokio::test]
 async fn select_multiple_columns() {
-    let mut conn = prepare().await;
+    let conn = prepare().await;
     let row = conn
         .query_row("select to_uint8(1), to_float64(2.2), '3'")
         .await
@@ -136,7 +136,7 @@ async fn select_multiple_columns() {
 
 #[tokio::test]
 async fn select_multiple_rows() {
-    let mut conn = prepare().await;
+    let conn = prepare().await;
     let row = conn.query_row("select * from numbers(3)").await.unwrap();
     assert!(row.is_some());
     let row = row.unwrap();
@@ -146,7 +146,7 @@ async fn select_multiple_rows() {
 
 #[tokio::test]
 async fn select_sleep() {
-    let mut conn = prepare().await;
+    let conn = prepare().await;
     let row = conn.query_row("select SLEEP(3);").await.unwrap();
     assert!(row.is_some());
     let row = row.unwrap();
