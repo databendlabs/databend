@@ -166,20 +166,15 @@ impl FuseTable {
             None => self.list_by_time_point(time_point).await,
         }?;
 
-        let table = self
-            .find(location, |snapshot| {
-                if let Some(ts) = snapshot.timestamp {
-                    ts <= time_point
-                } else {
-                    false
-                }
-            })
-            .await?;
+        let table = self.navigate_to_time_point(location, time_point).await?;
         Ok((table, files))
     }
 
     #[async_backtrace::framed]
-    async fn list_by_time_point(&self, time_point: DateTime<Utc>) -> Result<(String, Vec<String>)> {
+    pub async fn list_by_time_point(
+        &self,
+        time_point: DateTime<Utc>,
+    ) -> Result<(String, Vec<String>)> {
         let files = self.list_files(time_point, |_| {}).await?;
         let location = files[0].clone();
         let reader = MetaReaders::table_snapshot_reader(self.get_operator());
@@ -207,7 +202,7 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
-    async fn list_by_snapshot_id(
+    pub async fn list_by_snapshot_id(
         &self,
         snapshot_id: &str,
         retention_point: DateTime<Utc>,

@@ -554,7 +554,7 @@ impl Table for FuseTable {
         keep_last_snapshot: bool,
     ) -> Result<()> {
         match self.navigate_for_purge(&ctx, instant).await {
-            Ok((table, _files)) => table.do_purge(&ctx, keep_last_snapshot).await,
+            Ok((table, files)) => table.do_purge(&ctx, files, keep_last_snapshot).await,
             Err(e) if e.code() == ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND => {
                 warn!("navigate failed: {:?}", e);
                 Ok(())

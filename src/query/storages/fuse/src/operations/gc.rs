@@ -38,12 +38,14 @@ use crate::io::SnapshotLiteExtended;
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::FuseTable;
+use crate::FUSE_TBL_SNAPSHOT_PREFIX;
 
 impl FuseTable {
     #[async_backtrace::framed]
     pub async fn do_purge(
         &self,
         ctx: &Arc<dyn TableContext>,
+        snapshot_files: Vec<String>,
         keep_last_snapshot: bool,
     ) -> Result<()> {
         // 1. Read the root snapshot.
@@ -87,13 +89,6 @@ impl FuseTable {
         drop(root_snapshot);
 
         let snapshots_io = SnapshotsIO::create(ctx.clone(), self.operator.clone());
-
-        // 2. List all the snapshot file paths.
-        // note that snapshot file paths of ongoing txs might be included
-        let mut snapshot_files = vec![];
-        if let Some(prefix) = SnapshotsIO::get_s3_prefix_from_file(&root_snapshot_location) {
-            snapshot_files = snapshots_io.list_files(&prefix, None).await?;
-        }
 
         let chunk_size = ctx.get_settings().get_max_storage_io_requests()? as usize;
         let location_gen = self.meta_location_generator();
@@ -169,11 +164,34 @@ impl FuseTable {
             }
         }
 
-        assert_eq!(remain_snapshots.len(), 1);
-        assert_eq!(
-            remain_snapshots[0].snapshot_id,
-            root_snapshot_lite.snapshot_id
-        );
+        if !remain_snapshots.is_empty() {
+            let mut snapshots_to_be_purged = HashSet::new();
+            let mut segments_to_be_purged = HashSet::new();
+            let mut ts_to_be_purged = HashSet::new();
+            for s in remain_snapshots {
+                if let Ok(loc) =
+                    location_gen.snapshot_location_from_uuid(&s.snapshot_id, s.format_version)
+                {
+                    snapshots_to_be_purged.insert(loc);
+                }
+
+                segments_to_be_purged.extend(s.segments);
+
+                if s.table_statistics_location.is_some() {
+                    ts_to_be_purged.insert(s.table_statistics_location.unwrap());
+                }
+            }
+            self.partial_purge(
+                ctx,
+                &mut counter,
+                &locations_referenced_by_root,
+                segments_to_be_purged,
+                ts_to_be_purged,
+                snapshots_to_be_purged,
+            )
+            .await?;
+        }
+
         // 4. purge root snapshots.
         if !keep_last_snapshot {
             self.purge_root_snapshot(
@@ -444,6 +462,15 @@ impl FuseTable {
             block_location: blocks,
             bloom_location: blooms,
         })
+    }
+
+    pub async fn list_snapshot_files(&self) -> Result<Vec<String>> {
+        let prefix = format!(
+            "{}/{}/",
+            self.meta_location_generator().prefix(),
+            FUSE_TBL_SNAPSHOT_PREFIX,
+        );
+        SnapshotsIO::list_files(self.get_operator(), &prefix, None).await
     }
 }
 

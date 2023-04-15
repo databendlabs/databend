@@ -52,8 +52,10 @@ impl FuseTable {
             self.operator.write(&new_snapshot_loc, bytes).await?;
 
             if purge {
+                let snapshot_files = self.list_snapshot_files().await?;
                 let keep_last_snapshot = false;
-                self.do_purge(&ctx, keep_last_snapshot).await?
+                self.do_purge(&ctx, snapshot_files, keep_last_snapshot)
+                    .await?
             }
 
             let mut new_table_meta = self.table_info.meta.clone();

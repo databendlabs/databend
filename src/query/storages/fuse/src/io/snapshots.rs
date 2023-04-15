@@ -160,7 +160,7 @@ impl SnapshotsIO {
         // note that snapshot file paths of ongoing txs might be included
         let mut snapshot_files = vec![];
         if let Some(prefix) = Self::get_s3_prefix_from_file(&root_snapshot_file) {
-            snapshot_files = self.list_files(&prefix, None).await?;
+            snapshot_files = Self::list_files(self.operator.clone(), &prefix, None).await?;
         }
 
         // 1. Get all the snapshot by chunks.
@@ -235,9 +235,7 @@ impl SnapshotsIO {
         };
         let snapshot = reader.read(&load_params).await?;
 
-        if snapshot.timestamp >= root_snapshot.timestamp
-            && snapshot.snapshot_id != root_snapshot.snapshot_id
-        {
+        if snapshot.timestamp >= root_snapshot.timestamp {
             // filter out snapshots which have larger (artificial)timestamp , they are
             // not members of precedents of the current snapshot, whose timestamp is
             // min_snapshot_timestamp.
@@ -335,12 +333,10 @@ impl SnapshotsIO {
 
     #[async_backtrace::framed]
     pub async fn list_files(
-        &self,
+        op: Operator,
         prefix: &str,
         exclude_file: Option<&str>,
     ) -> Result<Vec<String>> {
-        let op = self.operator.clone();
-
         let mut file_list = vec![];
         let mut ds = op.list(prefix).await?;
         while let Some(de) = ds.try_next().await? {

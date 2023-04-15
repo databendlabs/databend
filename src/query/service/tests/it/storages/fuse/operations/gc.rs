@@ -52,9 +52,12 @@ async fn test_fuse_purge_normal_case() -> Result<()> {
     // do_gc
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let snapshot_files = fuse_table.list_snapshot_files().await?;
     let keep_last_snapshot = true;
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
-    fuse_table.do_purge(&table_ctx, keep_last_snapshot).await?;
+    fuse_table
+        .do_purge(&table_ctx, snapshot_files, keep_last_snapshot)
+        .await?;
 
     let expected_num_of_snapshot = 1;
     check_data_dir(
@@ -103,7 +106,10 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
     // do_gc
     let keep_last_snapshot = true;
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
-    fuse_table.do_purge(&table_ctx, keep_last_snapshot).await?;
+    let snapshot_files = fuse_table.list_snapshot_files().await?;
+    fuse_table
+        .do_purge(&table_ctx, snapshot_files, keep_last_snapshot)
+        .await?;
 
     // expects two snapshot there
     // - one snapshot of the latest version
@@ -225,7 +231,10 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
     // do_gc
     let keep_last_snapshot = true;
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
-    fuse_table.do_purge(&table_ctx, keep_last_snapshot).await?;
+    let snapshot_files = fuse_table.list_snapshot_files().await?;
+    fuse_table
+        .do_purge(&table_ctx, snapshot_files, keep_last_snapshot)
+        .await?;
 
     let expected_num_of_snapshot = 2;
     let expected_num_of_segment = 3;
@@ -256,7 +265,7 @@ async fn test_fuse_purge_retention() -> Result<()> {
 
     let schema = TestFixture::default_table_schema();
     let mut table = fixture.latest_default_table().await?;
-    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let mut fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let location_gen = fuse_table.meta_location_generator();
     let operator = fuse_table.get_operator();
 
@@ -328,13 +337,21 @@ async fn test_fuse_purge_retention() -> Result<()> {
         .await?;
     }
 
-    // Default retention period is 12, snapshot 0 is purged.
+    let table_ctx: Arc<dyn TableContext> = ctx.clone();
+    // Retention period is 12, snapshot 0 is purged.
     {
         table = fixture.latest_default_table().await?;
+        fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let snapshot_files = fuse_table.list_snapshot_files().await?;
+        // retention period is 12.
+        let time_point = now - Duration::hours(12);
+        let snapshot_loc = fuse_table.snapshot_loc().await?.unwrap();
+        let table = fuse_table
+            .navigate_to_time_point(snapshot_loc, time_point)
+            .await?;
         let keep_last_snapshot = true;
-        let table_ctx: Arc<dyn TableContext> = ctx.clone();
         table
-            .purge(table_ctx.clone(), None, keep_last_snapshot)
+            .do_purge(&table_ctx, snapshot_files, keep_last_snapshot)
             .await?;
 
         let expected_num_of_snapshot = 2;
@@ -343,7 +360,7 @@ async fn test_fuse_purge_retention() -> Result<()> {
         let expected_num_of_index = expected_num_of_blocks;
         check_data_dir(
             &fixture,
-            "do_gc: retention period is 12",
+            "do_gc: navigate to time point",
             expected_num_of_snapshot,
             0,
             expected_num_of_segment,
@@ -366,10 +383,13 @@ async fn test_fuse_purge_retention() -> Result<()> {
 
     // Set retention period to 0, snapshot 1 and 2 are purged.
     {
-        ctx.get_settings().set_retention_period(0)?;
         table = fixture.latest_default_table().await?;
-        let table_ctx: Arc<dyn TableContext> = ctx.clone();
-        table.purge(table_ctx.clone(), None, true).await?;
+        fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let snapshot_files = fuse_table.list_snapshot_files().await?;
+        // retention period is 0, the base snapshot is root snapshot.
+        fuse_table
+            .do_purge(&table_ctx, snapshot_files, true)
+            .await?;
 
         let expected_num_of_snapshot = 1;
         let expected_num_of_segment = 1;
@@ -391,7 +411,10 @@ async fn test_fuse_purge_retention() -> Result<()> {
 
     // keep_last_snapshot is false. All of snapshots will be purged.
     {
-        table.purge(ctx.clone(), None, false).await?;
+        let snapshot_files = fuse_table.list_snapshot_files().await?;
+        fuse_table
+            .do_purge(&table_ctx, snapshot_files, false)
+            .await?;
         let expected_num_of_snapshot = 0;
         let expected_num_of_segment = 0;
         let expected_num_of_blocks = 0;
