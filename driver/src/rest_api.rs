@@ -51,7 +51,7 @@ impl Connection for RestAPIConnection {
         while let Some(next_uri) = resp.next_uri {
             resp = self.client.query_page(&next_uri).await?;
         }
-        Ok(0)
+        Ok(resp.stats.progresses.write_progress.rows as i64)
     }
 
     async fn query_iter(&mut self, sql: &str) -> Result<RowIterator> {
