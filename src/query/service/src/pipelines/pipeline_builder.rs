@@ -297,11 +297,22 @@ impl PipelineBuilder {
 
         // Fill internal columns if needed.
         if let Some(internal_columns) = &scan.internal_column {
-            self.main_pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(Box::new(
-                    FillInternalColumnProcessor::create(internal_columns.clone(), input, output),
-                )))
-            })?;
+            if table.support_row_id_column() {
+                self.main_pipeline.add_transform(|input, output| {
+                    Ok(ProcessorPtr::create(Box::new(
+                        FillInternalColumnProcessor::create(
+                            internal_columns.clone(),
+                            input,
+                            output,
+                        ),
+                    )))
+                })?;
+            } else {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "Table engine `{}` does not support virtual column _row_id",
+                    table.engine()
+                )));
+            }
         }
 
         let schema = scan.source.schema();

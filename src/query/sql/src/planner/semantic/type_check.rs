@@ -2452,7 +2452,7 @@ impl<'a> TypeChecker<'a> {
             .read()
             .table(table_index)
             .table()
-            .support_virtual_columns()
+            .support_variant_virtual_columns()
         {
             return None;
         }
