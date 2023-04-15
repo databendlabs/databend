@@ -5,6 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 echo "drop test share and database"
 echo "drop share if exists test_share" | $MYSQL_CLIENT_SHARE_1_CONNECT
+echo "drop share if exists my_share" | $MYSQL_CLIENT_SHARE_2_CONNECT
 echo "drop database if exists test_database" | $MYSQL_CLIENT_SHARE_1_CONNECT
 echo "drop database if exists shared_db" | $MYSQL_CLIENT_SHARE_2_CONNECT
 echo "drop database if exists shared_db" | $MYSQL_CLIENT_SHARE_3_CONNECT
@@ -39,6 +40,11 @@ echo "CREATE DATABASE if not exists shared_db FROM SHARE shared_tenant.test_shar
 echo "SELECT * FROM shared_db.t1" | $MYSQL_CLIENT_SHARE_2_CONNECT
 echo "SELECT * FROM shared_db.t2" | $MYSQL_CLIENT_SHARE_2_CONNECT
 
+# cannot grant a database which create from share
+echo "cannot grant a database which create from share"
+echo "CREATE SHARE my_share" | $MYSQL_CLIENT_SHARE_2_CONNECT
+echo "GRANT USAGE ON DATABASE shared_db TO SHARE my_share" | $MYSQL_CLIENT_SHARE_2_CONNECT
+
 # alter table and query table data again
 echo "alter table add column and query table data again"
 echo "ALTER table test_database.t1 add column b UInt64 default 1" | $MYSQL_CLIENT_SHARE_1_CONNECT
@@ -66,6 +72,7 @@ echo "SELECT * FROM shared_db.t2" | $MYSQL_CLIENT_SHARE_3_CONNECT
 ## Drop database and share.
 echo "all is good"
 echo "drop share if exists test_share" | $MYSQL_CLIENT_SHARE_1_CONNECT
+echo "drop share if exists my_share" | $MYSQL_CLIENT_SHARE_2_CONNECT
 echo "drop database if exists test_database" | $MYSQL_CLIENT_SHARE_1_CONNECT
 echo "drop database if exists shared_db" | $MYSQL_CLIENT_SHARE_2_CONNECT
 echo "drop database if exists shared_db" | $MYSQL_CLIENT_SHARE_3_CONNECT

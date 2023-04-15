@@ -503,6 +503,24 @@ impl UnknownShareEndpointId {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error(
+    "CannotShareDatabaseCreatedFromShare: cannot share database {database_name} which created from share while {context}"
+)]
+pub struct CannotShareDatabaseCreatedFromShare {
+    database_name: String,
+    context: String,
+}
+
+impl CannotShareDatabaseCreatedFromShare {
+    pub fn new(database_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            database_name: database_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("TxnRetryMaxTimes: Txn {op} has retry {max_retry} times, abort.")]
 pub struct TxnRetryMaxTimes {
     op: String,
@@ -616,6 +634,9 @@ pub enum AppError {
 
     #[error(transparent)]
     UnknownShareEndpointId(#[from] UnknownShareEndpointId),
+
+    #[error(transparent)]
+    CannotShareDatabaseCreatedFromShare(#[from] CannotShareDatabaseCreatedFromShare),
 }
 
 impl AppErrorMessage for UnknownDatabase {
@@ -775,6 +796,15 @@ impl AppErrorMessage for UnknownShareEndpointId {
     }
 }
 
+impl AppErrorMessage for CannotShareDatabaseCreatedFromShare {
+    fn message(&self) -> String {
+        format!(
+            "Cannot share database '{}' which created from share",
+            self.database_name
+        )
+    }
+}
+
 impl AppErrorMessage for TxnRetryMaxTimes {
     fn message(&self) -> String {
         format!(
@@ -863,6 +893,9 @@ impl From<AppError> for ErrorCode {
             AppError::UnknownShareEndpoint(err) => ErrorCode::UnknownShareEndpoint(err.message()),
             AppError::UnknownShareEndpointId(err) => {
                 ErrorCode::UnknownShareEndpointId(err.message())
+            }
+            AppError::CannotShareDatabaseCreatedFromShare(err) => {
+                ErrorCode::CannotShareDatabaseCreatedFromShare(err.message())
             }
             AppError::TxnRetryMaxTimes(err) => ErrorCode::TxnRetryMaxTimes(err.message()),
             AppError::DuplicatedUpsertFiles(err) => ErrorCode::DuplicatedUpsertFiles(err.message()),
