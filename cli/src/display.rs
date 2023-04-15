@@ -115,6 +115,7 @@ impl<'a> ChunkDisplay for ReplDisplay<'a> {
                 }
                 Err(e) => {
                     eprintln!("error: {}", e);
+                    break;
                 }
             }
         }
@@ -176,6 +177,7 @@ impl ChunkDisplay for FormatDisplay {
                 Ok(_) => {}
                 Err(err) => {
                     eprintln!("error: {}", err);
+                    break;
                 }
             }
         }
