@@ -14,7 +14,6 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::vec;
 
 use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
@@ -50,7 +49,6 @@ impl Debug for FragmentData {
 
 pub enum DataPacket {
     ErrorCode(ErrorCode),
-    Dictionary(FlightData),
     FragmentData(FragmentData),
     FetchProgressAndPrecommit,
     ProgressAndPrecommit {
@@ -59,11 +57,9 @@ pub enum DataPacket {
     },
 }
 
-impl TryFrom<DataPacket> for FlightData {
-    type Error = ErrorCode;
-
-    fn try_from(packet: DataPacket) -> Result<Self> {
-        Ok(match packet {
+impl From<DataPacket> for FlightData {
+    fn from(packet: DataPacket) -> Self {
+        match packet {
             DataPacket::ErrorCode(error) => {
                 error!("Got error code data packet: {:?}", error);
                 FlightData::from(error)
@@ -80,17 +76,23 @@ impl TryFrom<DataPacket> for FlightData {
                 precommit,
             } => {
                 let mut data_body = vec![];
-                data_body.write_u64::<BigEndian>(progress.len() as u64)?;
-                data_body.write_u64::<BigEndian>(precommit.len() as u64)?;
+                data_body
+                    .write_u64::<BigEndian>(progress.len() as u64)
+                    .unwrap();
+                data_body
+                    .write_u64::<BigEndian>(precommit.len() as u64)
+                    .unwrap();
 
                 // Progress.
+                // TODO(winter): remove unwrap.
                 for progress_info in progress {
-                    progress_info.write(&mut data_body)?;
+                    progress_info.write(&mut data_body).unwrap();
                 }
 
                 // Pre-commit.
+                // TODO(winter): remove unwrap.
                 for precommit_block in precommit {
-                    precommit_block.write(&mut data_body)?;
+                    precommit_block.write(&mut data_body).unwrap();
                 }
 
                 FlightData {
@@ -100,11 +102,7 @@ impl TryFrom<DataPacket> for FlightData {
                     app_metadata: vec![0x04],
                 }
             }
-            DataPacket::Dictionary(mut flight_data) => {
-                flight_data.app_metadata.push(0x05);
-                flight_data
-            }
-        })
+        }
     }
 }
 
@@ -156,7 +154,6 @@ impl TryFrom<FlightData> for DataPacket {
                     progress: progress_info,
                 })
             }
-            0x05 => Ok(DataPacket::Dictionary(flight_data)),
             _ => Err(ErrorCode::BadBytes("Unknown flight data packet type.")),
         }
     }

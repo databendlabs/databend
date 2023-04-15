@@ -33,7 +33,7 @@ use crate::api::DataPacket;
 pub struct ExchangeSourceReader {
     finished: bool,
     output: Arc<OutputPort>,
-    output_data: Vec<DataPacket>,
+    output_data: Option<DataPacket>,
     flight_receiver: FlightReceiver,
 }
 
@@ -43,7 +43,7 @@ impl ExchangeSourceReader {
             output,
             flight_receiver,
             finished: false,
-            output_data: vec![],
+            output_data: None,
         }))
     }
 }
@@ -77,9 +77,8 @@ impl Processor for ExchangeSourceReader {
             return Ok(Event::NeedConsume);
         }
 
-        if !self.output_data.is_empty() {
-            let packets = std::mem::take(&mut self.output_data);
-            let exchange_source_meta = ExchangeDeserializeMeta::create(packets);
+        if let Some(data_packet) = self.output_data.take() {
+            let exchange_source_meta = ExchangeDeserializeMeta::create(data_packet);
             self.output
                 .push_data(Ok(DataBlock::empty_with_meta(exchange_source_meta)));
         }
@@ -89,20 +88,11 @@ impl Processor for ExchangeSourceReader {
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> common_exception::Result<()> {
-        if self.output_data.is_empty() {
-            let mut dictionaries = Vec::new();
-
-            while let Some(output_data) = self.flight_receiver.recv().await? {
-                if !matches!(&output_data, DataPacket::Dictionary(_)) {
-                    dictionaries.push(output_data);
-                    self.output_data = dictionaries;
-                    return Ok(());
-                }
-
-                dictionaries.push(output_data);
+        if self.output_data.is_none() {
+            if let Some(output_data) = self.flight_receiver.recv().await? {
+                self.output_data = Some(output_data);
+                return Ok(());
             }
-
-            assert!(dictionaries.is_empty());
         }
 
         if !self.finished {

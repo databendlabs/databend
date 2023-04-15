@@ -48,10 +48,10 @@ impl StatisticsSender {
 
         let (tx, rx) = match (exchanges.remove(0), exchanges.remove(0)) {
             (tx @ FlightExchange::Sender { .. }, rx @ FlightExchange::Receiver { .. }) => {
-                (tx.convert_to_sender(), rx.convert_to_receiver())
+                (tx.as_sender(), rx.as_receiver())
             }
             (rx @ FlightExchange::Receiver { .. }, tx @ FlightExchange::Sender { .. }) => {
-                (tx.convert_to_sender(), rx.convert_to_receiver())
+                (tx.as_sender(), rx.as_receiver())
             }
             _ => unreachable!(),
         };
@@ -146,7 +146,6 @@ impl StatisticsSender {
     ) -> Result<()> {
         match command {
             DataPacket::ErrorCode(_) => unreachable!(),
-            DataPacket::Dictionary(_) => unreachable!(),
             DataPacket::FragmentData(_) => unreachable!(),
             DataPacket::ProgressAndPrecommit { .. } => unreachable!(),
             DataPacket::FetchProgressAndPrecommit => {
