@@ -141,6 +141,9 @@ impl Session {
         // TODO support multi line
         while let Some(Ok(line)) = lines.next() {
             let line = line.trim_end();
+            if line.is_empty() {
+                continue;
+            }
             if let Err(e) = self.handle_query(false, line).await {
                 eprintln!("{}", e);
             }

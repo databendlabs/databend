@@ -52,6 +52,23 @@ services:
     depends_on:
       databend:
         condition: service_healthy
+  test-bendsql:
+    image: rust
+    command: bash cli/test.sh http && bash cli/test.sh flight
+    working_dir: /workspace
+    environment:
+      - RUST_BACKTRACE=1
+      - DATABEND_USER=databend
+      - DATABEND_PASSWORD=databend
+      - DATABEND_HOST=databend
+    volumes:
+      - ../:/workspace
+      - rustup:/usr/local/rustup
+      - ${HOME}/.cargo/registry:/usr/local/cargo/registry
+      - target:/target
+    depends_on:
+      databend:
+        condition: service_healthy
 
 volumes:
   rustup:
