@@ -1,0 +1,59 @@
+statement ok
+CREATE DATABASE IF NOT EXISTS test_explain_window
+
+statement ok
+USE test_explain_window
+
+statement ok
+DROP TABLE IF EXISTS empsalary
+
+statement ok
+CREATE TABLE empsalary (depname string, empno bigint, salary int, enroll_date date)
+
+query T
+explain SELECT depname, empno, salary, sum(salary) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary ORDER BY depname, empno
+----
+EvalScalar
+├── expressions: [empsalary.depname (#0), empsalary.empno (#1), empsalary.salary (#2), sum(salary) OVER (PARTITION BY depname ORDER BY empno) (#4)]
+├── estimated rows: 0.00
+└── Sort
+    ├── sort keys: [depname ASC NULLS LAST, empno ASC NULLS LAST]
+    ├── estimated rows: 0.00
+    └── Window
+        ├── aggregate function: [sum(salary)]
+        ├── partition by: [depname]
+        ├── order by: [empno]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── EvalScalar
+            ├── expressions: [empsalary.salary (#2), empsalary.depname (#0), empsalary.empno (#1)]
+            ├── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.test_explain_window.empsalary
+                ├── read rows: 0
+                ├── read bytes: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: NONE]
+                ├── output columns: [depname, empno, salary]
+                └── estimated rows: 0.00
+
+statement ok
+set max_threads=4;
+
+query T
+explain pipeline SELECT depname, empno, salary, sum(salary) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary ORDER BY depname, empno;
+----
+CompoundBlockOperator(Project) × 1 processor
+  CompoundBlockOperator(Map) × 1 processor
+    Merge (SortMergeTransform × 4 processors) to (CompoundBlockOperator(Map) × 1)
+      SortMergeTransform × 4 processors
+        SortPartialTransform × 4 processors
+          Merge (Transform Window × 1 processor) to (SortPartialTransform × 4)
+            Transform Window × 1 processor
+              Merge (SortMergeTransform × 4 processors) to (Transform Window × 1)
+                SortMergeTransform × 4 processors
+                  SortPartialTransform × 4 processors
+                    Merge (CompoundBlockOperator(Map) × 1 processor) to (SortPartialTransform × 4)
+                      CompoundBlockOperator(Map) × 1 processor
+                        DeserializeDataTransform × 1 processor
+                          SyncReadParquetDataSource × 1 processor
