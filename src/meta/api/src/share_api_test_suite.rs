@@ -1243,6 +1243,7 @@ impl ShareApiTestSuite {
         let tenant1 = "tenant1";
         let share1 = "share1";
         let share2 = "share2";
+        let share3 = "share3";
         let db_name = "db1";
         let tbl_name = "table1";
         let share_id;
@@ -1254,6 +1255,10 @@ impl ShareApiTestSuite {
         let share_name2 = ShareNameIdent {
             tenant: tenant1.to_string(),
             share_name: share2.to_string(),
+        };
+        let share_name3 = ShareNameIdent {
+            tenant: tenant1.to_string(),
+            share_name: share3.to_string(),
         };
 
         info!("--- get unknown object");
@@ -1434,6 +1439,34 @@ impl ShareApiTestSuite {
             let res = mt.create_database(req).await;
             info!("create database res: {:?}", res);
             assert!(res.is_ok());
+
+            // cannot share a database created from a share
+            {
+                let req = CreateShareReq {
+                    if_not_exists: false,
+                    share_name: share_name3.clone(),
+                    comment: None,
+                    create_on,
+                };
+
+                let res = mt.create_share(req).await;
+                assert!(res.is_ok());
+
+                let req = GrantShareObjectReq {
+                    share_name: share_name3.clone(),
+                    object: ShareGrantObjectName::Database(db2.to_string()),
+                    grant_on,
+                    privilege: ShareGrantObjectPrivilege::Usage,
+                };
+
+                let res = mt.grant_share_object(req).await;
+                assert!(res.is_err());
+                let err = res.unwrap_err();
+                assert_eq!(
+                    ErrorCode::CannotShareDatabaseCreatedFromShare("").code(),
+                    ErrorCode::from(err).code()
+                );
+            }
 
             let req = DropShareReq {
                 if_exists: true,
