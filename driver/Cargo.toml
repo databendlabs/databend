@@ -1,6 +1,6 @@
 [package]
 name = "databend-driver"
-version = "0.2.9"
+version = "0.2.10"
 edition = "2021"
 license = "Apache-2.0"
 description = "Databend Driver for Rust"
@@ -21,7 +21,7 @@ flight-sql = ["dep:arrow", "dep:arrow-array", "dep:arrow-cast", "dep:arrow-fligh
 [dependencies]
 async-trait = "0.1.68"
 chrono = { version = "0.4.24", default-features = false, features = ["clock"] }
-databend-client = { version = "0.1.9", path = "../core" }
+databend-client = { version = "0.1.10", path = "../core" }
 dyn-clone = "1.0.11"
 http = "0.2.9"
 serde = { version = "1.0.156", default-features = false, features = ["derive"] }
@@ -39,7 +39,7 @@ tonic = { version = "0.9.1", default-features = false, features = [
     "transport",
     "codegen",
     "tls",
-    "tls-roots",
+    "tls-webpki-roots",
     "prost",
 ], optional = true }
 

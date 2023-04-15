@@ -1,6 +1,6 @@
 [package]
 name = "databend-client"
-version = "0.1.9"
+version = "0.1.10"
 edition = "2021"
 license = "Apache-2.0"
 description = "Databend Client for Rust"
@@ -12,7 +12,7 @@ repository = "https://github.com/datafuselabs/databend-client"
 default = ["rustls"]
 
 # Enable rustls for TLS support
-rustls = ["reqwest/rustls-tls-native-roots"]
+rustls = ["reqwest/rustls-tls"]
 # Enable native-tls for TLS support
 native-tls = ["reqwest/native-tls"]
 
