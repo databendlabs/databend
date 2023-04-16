@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_storages_share::get_share_spec_location;
 
 use crate::accessor::SharingAccessor;
 use crate::models;
@@ -23,7 +24,7 @@ impl SharingAccessor {
     #[async_backtrace::framed]
     pub async fn get_share_spec(tenant: &String) -> Result<Vec<ShareSpec>> {
         let sharing_accessor = Self::instance();
-        let path = sharing_accessor.get_share_spec_location();
+        let path = get_share_spec_location(&sharing_accessor.config.tenant);
         let data = sharing_accessor.op.read(&path).await?;
         let share_specs: models::SharingConfig = serde_json::from_slice(data.as_slice())?;
         let mut share_spec_vec = vec![];

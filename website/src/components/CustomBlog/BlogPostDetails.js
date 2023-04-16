@@ -94,8 +94,7 @@ const BlogPostDetails = (props) => {
                     </div>
                   </h2>
                   <p>
-                    Thanks a lot to the contributors for their excellent work
-                    this week.
+                    Thanks a lot to the contributors for their excellent work.
                   </p>
                   <AvatarGroup
                     contributors={metadata.frontMatter.contributors}

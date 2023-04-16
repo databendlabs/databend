@@ -15,7 +15,7 @@
 use std::time::Duration;
 
 use common_exception::Result;
-use common_storages_share::SHARE_CONFIG_PREFIX;
+use common_storages_share::get_share_spec_location;
 
 use crate::accessor::truncate_root;
 use crate::accessor::SharingAccessor;
@@ -35,7 +35,7 @@ impl SharingAccessor {
         input: &models::LambdaInput,
     ) -> Result<Option<SharedTableResponse>> {
         let sharing_accessor = Self::instance();
-        let path = sharing_accessor.get_share_spec_location();
+        let path = get_share_spec_location(&sharing_accessor.config.tenant);
         let data = sharing_accessor.op.read(&path).await?;
         let share_specs: models::SharingConfig = serde_json::from_slice(data.as_slice())?;
         share_specs.get_tables(input)
@@ -74,13 +74,6 @@ impl SharingAccessor {
             )
             .await?;
         Ok(PresignFileResponse::new(&s, input.file_name.clone()))
-    }
-
-    pub fn get_share_spec_location(&self) -> String {
-        format!(
-            "{}/{}/share_specs.json",
-            self.config.tenant, SHARE_CONFIG_PREFIX
-        )
     }
 
     #[async_backtrace::framed]

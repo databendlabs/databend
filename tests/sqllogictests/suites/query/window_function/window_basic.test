@@ -242,5 +242,20 @@ SELECT salary, sum(salary) OVER (PARTITION BY depname) FROM empsalary ORDER BY c
 4200 25100
 3500 7400
 
+# diff windows
+query II
+SELECT depname, empno, salary, sum(salary) OVER (PARTITION BY depname ORDER BY empno), sum(salary) OVER (PARTITION BY empno ORDER BY depname) FROM empsalary ORDER BY depname, empno
+----
+develop 7 4200 4200 4200
+develop 8 6000 10200 6000
+develop 9 4500 14700 4500
+develop 10 5200 19900 5200
+develop 11 5200 25100 5200
+personnel 2 3900 3900 3900
+personnel 5 3500 7400 3500
+sales 1 5000 5000 5000
+sales 3 4800 9800 4800
+sales 4 4800 14600 4800
+
 statement ok
 DROP DATABASE test_window_basic

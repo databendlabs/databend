@@ -15,6 +15,7 @@
 use chrono::DateTime;
 use chrono::Utc;
 use common_meta_app::app_error::AppError;
+use common_meta_app::app_error::CannotShareDatabaseCreatedFromShare;
 use common_meta_app::app_error::ShareAccountsAlreadyExists;
 use common_meta_app::app_error::ShareAlreadyExists;
 use common_meta_app::app_error::ShareEndpointAlreadyExists;
@@ -555,7 +556,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             };
 
             let seq_and_id =
-                get_share_object_seq_and_id(self, &req.object, &share_name_key.tenant).await?;
+                get_share_object_seq_and_id(self, &req.object, &share_name_key.tenant, true)
+                    .await?;
 
             check_share_object(&share_meta.database, &seq_and_id, &req.object)?;
 
@@ -676,7 +678,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             };
 
             let seq_and_id =
-                get_share_object_seq_and_id(self, &req.object, &share_name_key.tenant).await?;
+                get_share_object_seq_and_id(self, &req.object, &share_name_key.tenant, false)
+                    .await?;
 
             check_share_object(&share_meta.database, &seq_and_id, &req.object)?;
 
@@ -1503,6 +1506,7 @@ async fn get_share_object_seq_and_id(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     obj_name: &ShareGrantObjectName,
     tenant: &str,
+    grant: bool,
 ) -> Result<ShareGrantObjectSeqAndId, KVAppError> {
     match obj_name {
         ShareGrantObjectName::Database(db_name) => {
@@ -1517,6 +1521,16 @@ async fn get_share_object_seq_and_id(
             )
             .await?;
 
+            if grant && db_meta.from_share.is_some() {
+                return Err(KVAppError::AppError(
+                    AppError::CannotShareDatabaseCreatedFromShare(
+                        CannotShareDatabaseCreatedFromShare::new(
+                            db_name,
+                            format!("get_share_object_seq_and_id: {}", name_key),
+                        ),
+                    ),
+                ));
+            }
             Ok(ShareGrantObjectSeqAndId::Database(
                 db_meta_seq,
                 db_id,
