@@ -187,12 +187,6 @@ pub enum Expr {
     },
     /// The `Array` expr
     Array { span: Span, exprs: Vec<Expr> },
-    ArraySort {
-        span: Span,
-        expr: Box<Expr>,
-        asc: bool,
-        null_first: bool,
-    },
     /// The `Map` expr
     Map { span: Span, kvs: Vec<(Expr, Expr)> },
     /// The `Interval 1 DAY` expr
@@ -632,7 +626,6 @@ impl Expr {
             | Expr::Subquery { span, .. }
             | Expr::MapAccess { span, .. }
             | Expr::Array { span, .. }
-            | Expr::ArraySort { span, .. }
             | Expr::Map { span, .. }
             | Expr::Interval { span, .. }
             | Expr::DateAdd { span, .. }
@@ -1236,26 +1229,6 @@ impl Display for Expr {
                 write!(f, "[")?;
                 write_comma_separated_list(f, exprs)?;
                 write!(f, "]")?;
-            }
-            Expr::ArraySort {
-                expr,
-                asc,
-                null_first,
-                ..
-            } => {
-                write!(f, "ARRAY_SORT(")?;
-                write!(f, "{expr})")?;
-                if *asc {
-                    write!(f, " , 'ASC'")?;
-                } else {
-                    write!(f, " , 'DESC'")?;
-                }
-                if *null_first {
-                    write!(f, " , 'NULLS FIRST'")?;
-                } else {
-                    write!(f, " , 'NULLS LAST'")?;
-                }
-                write!(f, ")")?;
             }
             Expr::Map { kvs, .. } => {
                 write!(f, "{{")?;

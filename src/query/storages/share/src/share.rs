@@ -23,17 +23,21 @@ use common_meta_app::share::ShareTableInfoMap;
 use common_meta_app::share::ShareTableSpec;
 use opendal::Operator;
 
-pub const SHARE_CONFIG_PREFIX: &str = "_share_config";
+const SHARE_CONFIG_PREFIX: &str = "_share_config";
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct ShareSpecVec {
     share_specs: BTreeMap<String, ext::ShareSpecExt>,
 }
 
+pub fn get_share_spec_location(tenant: &String) -> String {
+    format!("{}/{}/share_specs.json", SHARE_CONFIG_PREFIX, tenant,)
+}
+
 pub fn share_table_info_location(tenant: &str, share_name: &str) -> String {
     format!(
         "{}/{}/{}_table_info.json",
-        tenant, SHARE_CONFIG_PREFIX, share_name
+        SHARE_CONFIG_PREFIX, tenant, share_name
     )
 }
 
@@ -69,7 +73,7 @@ pub async fn save_share_spec(
     share_table_info: Option<Vec<ShareTableInfoMap>>,
 ) -> Result<()> {
     if let Some(share_spec) = spec_vec {
-        let location = format!("{}/{}/share_specs.json", tenant, SHARE_CONFIG_PREFIX);
+        let location = get_share_spec_location(tenant);
         let mut share_spec_vec = ShareSpecVec::default();
         for spec in share_spec {
             let share_name = spec.name.clone();

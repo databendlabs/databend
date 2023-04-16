@@ -206,7 +206,7 @@ jobs:
           repo_role_arn: ${{ secrets.REPO_ROLE_ARN }}
 
   hive:
-    runs-on: [self-hosted, X64, Linux, 8c16g]
+    runs-on: [self-hosted, X64, Linux, 16c32g]
     needs: [create_release]
     env:
       RUNNER_PROVIDER: aws
@@ -475,6 +475,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/publish_deb
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           version: ${{ needs.create_release.outputs.version }}
           repo_role_arn: ${{ secrets.REPO_ROLE_ARN }}
