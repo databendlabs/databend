@@ -47,8 +47,8 @@ echo "insert into t20_0011 values(4)" | $MYSQL_CLIENT_CONNECT
 echo "checking that there should are 3 snapshots before purge"
 echo "select count(*)=3  from fuse_snapshot('default', 't20_0011')" | $MYSQL_CLIENT_CONNECT
 
-## location the timestamp of 2nd snapshot
-TIMEPOINT=$(echo "select timestamp from fuse_snapshot('default', 't20_0011') where row_count=3" | $MYSQL_CLIENT_CONNECT)
+## location the timestamp of latest snapshot
+TIMEPOINT=$(echo "select timestamp from fuse_snapshot('default', 't20_0011') where row_count=4" | $MYSQL_CLIENT_CONNECT)
 
 ## verify
 echo "set retention_period=0; optimize table t20_0011 purge before (TIMESTAMP => '$TIMEPOINT'::TIMESTAMP)" | $MYSQL_CLIENT_CONNECT
