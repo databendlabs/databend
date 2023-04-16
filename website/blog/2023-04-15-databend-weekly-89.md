@@ -42,6 +42,8 @@ Stay connected with the latest news about Databend.
 
 Databend v1.1.0 was officially released on April 14, 2023! This release marks the first major update of Databend since version 1.0.
 
+The new version has many new features, including:
+
 - `COPY INTO` now has ETL capabilities
 - Full Support for TPC-DS Queries
 - `REPLACE INTO`
@@ -135,8 +137,8 @@ Databend v1.2 is scheduled for release on May 15th and includes the following fe
 | (Storage) Fuse engine orphan data cleanup                                                        | IN PROGRESS | high-priority |
 | (Storage) [Compress Fuse meta data#10265](https://github.com/datafuselabs/databend/issues/10265) | IN PROGRESS | high-priority |
 | [Embedding Model #10689](https://github.com/datafuselabs/databend/issues/10689)                  | IN PROGRESS | high-priority |
-| Search optimization SQL framwork                                                                 | IN PROGRESS |               |
-| Distributed group by with dictonary                                                              | IN PROGRESS |               |
+| Search optimization SQL framework                                                                 | IN PROGRESS |               |
+| Distributed group by with dictionary                                                              | IN PROGRESS |               |
 
 Please note that this is a release plan and may be subject to change. We encourage community members to participate in the discussion and provide feedback on the plan.
 
