@@ -16,6 +16,7 @@ pub mod fuse_source;
 mod native_data_source;
 mod native_data_source_deserializer;
 mod native_data_source_reader;
+mod native_rows_fetcher;
 mod parquet_data_source;
 mod parquet_data_source_deserializer;
 mod parquet_data_source_reader;

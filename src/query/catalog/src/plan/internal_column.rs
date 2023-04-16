@@ -25,8 +25,8 @@ use common_expression::Value;
 
 // Segment and Block id Bits when generate internal column `_row_id`
 // Since `DEFAULT_BLOCK_PER_SEGMENT` is 1000, so `block_id` 10 bits is enough.
-const NUM_BLOCK_ID_BITS: usize = 10;
-const NUM_SEGMENT_ID_BITS: usize = 22;
+pub const NUM_BLOCK_ID_BITS: usize = 10;
+pub const NUM_SEGMENT_ID_BITS: usize = 22;
 
 pub const ROW_ID: &str = "_row_id";
 pub const SNAPSHOT_NAME: &str = "_snapshot_name";
