@@ -659,55 +659,6 @@ impl ShareMeta {
         }
     }
 
-    pub fn revoke_object_privileges(
-        &mut self,
-        object: ShareGrantObject,
-        privileges: ShareGrantObjectPrivilege,
-        update_on: DateTime<Utc>,
-    ) -> Result<(), AppError> {
-        let key = object.to_string();
-
-        match object {
-            ShareGrantObject::Database(_db_id) => {
-                if let Some(entry) = &mut self.database {
-                    if object == entry.object {
-                        if entry.revoke_privileges(privileges, update_on) {
-                            // all database privileges have been revoked, clear database and entries.
-                            self.database = None;
-                            self.entries.clear();
-                            self.update_on = Some(update_on);
-                        }
-                    } else {
-                        return Err(AppError::WrongShareObject(WrongShareObject::new(&key)));
-                    }
-                } else {
-                    return Err(AppError::WrongShareObject(WrongShareObject::new(
-                        object.to_string(),
-                    )));
-                }
-            }
-            ShareGrantObject::Table(table_id) => match self.entries.get_mut(&key) {
-                Some(entry) => {
-                    if let ShareGrantObject::Table(self_table_id) = entry.object {
-                        if self_table_id == table_id {
-                            if entry.revoke_privileges(privileges, update_on) {
-                                self.entries.remove(&key);
-                            }
-                        } else {
-                            return Err(AppError::WrongShareObject(WrongShareObject::new(
-                                object.to_string(),
-                            )));
-                        }
-                    } else {
-                        unreachable!("ShareMeta.entries MUST be Table Object");
-                    }
-                }
-                None => return Ok(()),
-            },
-        }
-        Ok(())
-    }
-
     pub fn has_granted_privileges(
         &self,
         obj_name: &ShareGrantObjectName,

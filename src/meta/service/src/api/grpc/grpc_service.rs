@@ -43,6 +43,7 @@ use prost::Message;
 use tokio_stream;
 use tokio_stream::Stream;
 use tonic::metadata::MetadataMap;
+use tonic::transport::NamedService;
 use tonic::Request;
 use tonic::Response;
 use tonic::Status;
@@ -85,6 +86,10 @@ impl MetaServiceImpl {
         })?;
         Ok(claim)
     }
+}
+
+impl NamedService for MetaServiceImpl {
+    const NAME: &'static str = "meta_service";
 }
 
 #[async_trait::async_trait]

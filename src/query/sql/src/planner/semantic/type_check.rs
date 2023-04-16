@@ -840,17 +840,6 @@ impl<'a> TypeChecker<'a> {
 
             Expr::Array { span, exprs, .. } => self.resolve_array(*span, exprs).await?,
 
-            Expr::ArraySort {
-                span,
-                expr,
-                asc,
-                null_first,
-                ..
-            } => {
-                self.resolve_array_sort(*span, expr, asc, null_first)
-                    .await?
-            }
-
             Expr::Position {
                 substr_expr,
                 str_expr,
@@ -1709,6 +1698,8 @@ impl<'a> TypeChecker<'a> {
             "is_null",
             "coalesce",
             "last_query_id",
+            "array_sort",
+            "array_aggregate",
         ]
     }
 
@@ -1945,6 +1936,94 @@ impl<'a> TypeChecker<'a> {
                 }
                 None
             }
+            ("array_sort", args) => {
+                if args.is_empty() || args.len() > 3 {
+                    return None;
+                }
+                let mut asc = true;
+                let mut nulls_first = true;
+                if args.len() >= 2 {
+                    let box (arg, _) = self.resolve(args[1]).await.ok()?;
+                    if let Ok(arg) = ConstantExpr::try_from(arg) {
+                        if let Scalar::String(val) = arg.value {
+                            let sort_order = unsafe { std::str::from_utf8_unchecked(&val) };
+                            if sort_order.eq_ignore_ascii_case("asc") {
+                                asc = true;
+                            } else if sort_order.eq_ignore_ascii_case("desc") {
+                                asc = false;
+                            } else {
+                                return Some(Err(ErrorCode::SemanticError(
+                                    "Sorting order must be either ASC or DESC",
+                                )));
+                            }
+                        } else {
+                            return Some(Err(ErrorCode::SemanticError(
+                                "Sorting order must be either ASC or DESC",
+                            )));
+                        }
+                    } else {
+                        return Some(Err(ErrorCode::SemanticError(
+                            "Sorting order must be a constant string",
+                        )));
+                    }
+                }
+                if args.len() == 3 {
+                    let box (arg, _) = self.resolve(args[2]).await.ok()?;
+                    if let Ok(arg) = ConstantExpr::try_from(arg) {
+                        if let Scalar::String(val) = arg.value {
+                            let nulls_order = unsafe { std::str::from_utf8_unchecked(&val) };
+                            if nulls_order.eq_ignore_ascii_case("nulls first") {
+                                nulls_first = true;
+                            } else if nulls_order.eq_ignore_ascii_case("nulls last") {
+                                nulls_first = false;
+                            } else {
+                                return Some(Err(ErrorCode::SemanticError(
+                                    "Null sorting order must be either NULLS FIRST or NULLS LAST",
+                                )));
+                            }
+                        } else {
+                            return Some(Err(ErrorCode::SemanticError(
+                                "Null sorting order must be either NULLS FIRST or NULLS LAST",
+                            )));
+                        }
+                    } else {
+                        return Some(Err(ErrorCode::SemanticError(
+                            "Null sorting order must be a constant string",
+                        )));
+                    }
+                }
+                let func_name = match (asc, nulls_first) {
+                    (true, true) => "array_sort_asc_null_first",
+                    (false, true) => "array_sort_desc_null_first",
+                    (true, false) => "array_sort_asc_null_last",
+                    (false, false) => "array_sort_desc_null_last",
+                };
+                let args_ref: Vec<&Expr> = vec![args[0]];
+                Some(
+                    self.resolve_function(span, func_name, vec![], &args_ref)
+                        .await,
+                )
+            }
+            ("array_aggregate", args) => {
+                if args.len() != 2 {
+                    return None;
+                }
+                let box (arg, _) = self.resolve(args[1]).await.ok()?;
+                if let Ok(arg) = ConstantExpr::try_from(arg) {
+                    if let Scalar::String(arg) = arg.value {
+                        let aggr_func_name = unsafe { std::str::from_utf8_unchecked(&arg) };
+                        let func_name = format!("array_{}", aggr_func_name);
+                        let args_ref: Vec<&Expr> = vec![args[0]];
+                        return Some(
+                            self.resolve_function(span, &func_name, vec![], &args_ref)
+                                .await,
+                        );
+                    }
+                }
+                Some(Err(ErrorCode::SemanticError(
+                    "Aggregate function name be a constant string",
+                )))
+            }
             _ => None,
         }
     }
@@ -2056,26 +2135,6 @@ impl<'a> TypeChecker<'a> {
         }
 
         self.resolve_scalar_function_call(span, "array", vec![], elems)
-            .await
-    }
-
-    #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
-    async fn resolve_array_sort(
-        &mut self,
-        span: Span,
-        expr: &Expr,
-        asc: &bool,
-        null_first: &bool,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let box (arg, _type) = self.resolve(expr).await?;
-        let func_name = match (*asc, *null_first) {
-            (true, true) => "array_sort_asc_null_first",
-            (true, false) => "array_sort_asc_null_last",
-            (false, true) => "array_sort_desc_null_first",
-            (false, false) => "array_sort_desc_null_last",
-        };
-        self.resolve_scalar_function_call(span, func_name, vec![], vec![arg])
             .await
     }
 
@@ -2723,19 +2782,6 @@ impl<'a> TypeChecker<'a> {
                         .iter()
                         .map(|expr| self.clone_expr_with_replacement(expr, replacement_fn))
                         .collect::<Result<Vec<Expr>>>()?,
-                }),
-                Expr::ArraySort {
-                    span,
-                    expr,
-                    asc,
-                    null_first,
-                } => Ok(Expr::ArraySort {
-                    span: *span,
-                    expr: Box::new(
-                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
-                    ),
-                    asc: *asc,
-                    null_first: *null_first,
                 }),
                 Expr::Interval { span, expr, unit } => Ok(Expr::Interval {
                     span: *span,

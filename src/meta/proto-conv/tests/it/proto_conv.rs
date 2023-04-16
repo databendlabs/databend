@@ -31,6 +31,7 @@ use common_proto_conv::FromToProto;
 use common_proto_conv::Incompatible;
 use common_proto_conv::VER;
 use maplit::btreemap;
+use maplit::btreeset;
 use pretty_assertions::assert_eq;
 
 fn s(ss: impl ToString) -> String {
@@ -195,6 +196,7 @@ fn new_table_meta() -> mt::TableMeta {
         field_comments: vec!["c".to_string(); 21],
         drop_on: None,
         statistics: Default::default(),
+        shared_by: btreeset! {1},
     }
 }
 
