@@ -123,3 +123,100 @@ async fn test_fuse_navigate() -> Result<()> {
     };
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_navigate_for_purge() -> Result<()> {
+    // 1. Setup
+    let fixture = TestFixture::new().await;
+    let db = fixture.default_db_name();
+    let tbl = fixture.default_table_name();
+    let ctx = fixture.ctx();
+    fixture.create_default_table().await?;
+
+    // 1.1 first commit
+    let qry = format!(
+        "insert into {}.{} values (1, (2, 3)), (2, (4, 6)) ",
+        db, tbl
+    );
+    execute_query(ctx.clone(), qry.as_str())
+        .await?
+        .try_collect::<Vec<DataBlock>>()
+        .await?;
+
+    // keep the first snapshot of the insertion
+    let table = fixture.latest_default_table().await?;
+    let first_snapshot = FuseTable::try_from_table(table.as_ref())?
+        .snapshot_loc()
+        .await?
+        .unwrap();
+
+    // take a nap
+    tokio::time::sleep(Duration::from_millis(2)).await;
+
+    // 1.2 second commit
+    let qry = format!("insert into {}.{} values (3, (6, 9)) ", db, tbl);
+    execute_query(ctx.clone(), qry.as_str())
+        .await?
+        .try_collect::<Vec<DataBlock>>()
+        .await?;
+    // keep the snapshot of the second insertion
+    let table = fixture.latest_default_table().await?;
+    let second_snapshot = FuseTable::try_from_table(table.as_ref())?
+        .snapshot_loc()
+        .await?
+        .unwrap();
+
+    // take a nap
+    tokio::time::sleep(Duration::from_millis(2)).await;
+
+    // 1.3 third commit
+    let qry = format!("insert into {}.{} values (4, (8, 12)) ", db, tbl);
+    execute_query(ctx.clone(), qry.as_str())
+        .await?
+        .try_collect::<Vec<DataBlock>>()
+        .await?;
+    let table = fixture.latest_default_table().await?;
+    let third_snapshot = FuseTable::try_from_table(table.as_ref())?
+        .snapshot_loc()
+        .await?
+        .unwrap();
+
+    // 2. grab the history
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
+    let loc = fuse_table.snapshot_loc().await?.unwrap();
+    assert_eq!(third_snapshot, loc);
+    let version = TableMetaLocationGenerator::snapshot_version(loc.as_str());
+    let snapshots: Vec<_> = reader
+        .snapshot_history(
+            loc.clone(),
+            version,
+            fuse_table.meta_location_generator().clone(),
+        )
+        .try_collect()
+        .await?;
+
+    // 3. there should be three snapshots
+    assert_eq!(3, snapshots.len());
+
+    // 4. navigate by the time point
+    let meta = fuse_table.get_operator().stat(&loc).await?;
+    let modified = meta.last_modified();
+    assert!(modified.is_some());
+    let time_point = modified.unwrap().sub(chrono::Duration::milliseconds(1));
+    // navigate from the instant that is just one ms before the timestamp of the latest snapshot.
+    let (navigate, files) = fuse_table.list_by_time_point(time_point).await?;
+    assert_eq!(2, files.len());
+    assert_eq!(navigate, first_snapshot);
+
+    // 5. navigate by snapshot id.
+    let snapshot_id = snapshots[1].snapshot_id.simple().to_string();
+    let (navigate, files) = fuse_table
+        .list_by_snapshot_id(&snapshot_id, time_point)
+        .await?;
+    assert_eq!(2, files.len());
+    assert_eq!(navigate, second_snapshot);
+
+    Ok(())
+}

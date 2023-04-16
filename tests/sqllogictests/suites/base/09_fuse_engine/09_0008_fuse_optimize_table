@@ -59,7 +59,7 @@ optimize table `t` purge
 query B
 select count(*) from fuse_snapshot('db_09_0008', 't')
 ----
-1
+2
 
 query I
 select * from t order by a
@@ -101,7 +101,7 @@ statement ok
 optimize table `t` all
 
 query B
-select count(*)=1 from fuse_snapshot('db_09_0008', 't')
+select count(*)=2 from fuse_snapshot('db_09_0008', 't')
 ----
 1
 
