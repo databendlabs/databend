@@ -52,11 +52,11 @@ impl VersionedReader<TableSnapshot> for SnapshotVersion {
                 ts.into()
             }
             SnapshotVersion::V1(v) => {
-                let mut ts = load_by_version(reader, v).await?;
+                let ts = load_by_version(reader, v).await?;
                 TableSnapshotV2::from(ts).into()
             }
             SnapshotVersion::V0(v) => {
-                let mut ts = load_by_version(reader, v).await?;
+                let ts = load_by_version(reader, v).await?;
                 TableSnapshotV2::from(ts).into()
             }
         };

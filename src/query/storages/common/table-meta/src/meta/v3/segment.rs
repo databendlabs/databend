@@ -14,7 +14,6 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::TableField;
 use serde::Deserialize;
 use serde::Serialize;
 

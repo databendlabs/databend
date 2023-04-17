@@ -178,9 +178,6 @@ impl ColumnMeta {
     }
 }
 
-use super::super::v0;
-use super::super::v1;
-
 impl BlockMeta {
     pub fn from_v0(s: &v0::BlockMeta, fields: &[TableField]) -> Self {
         let col_stats = s
