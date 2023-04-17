@@ -26,9 +26,12 @@ use serde::Serialize;
 use crate::meta::statistics::ClusterStatistics;
 use crate::meta::statistics::ColumnStatistics;
 use crate::meta::statistics::FormatVersion;
+use crate::meta::v0;
+use crate::meta::v1;
 use crate::meta::Compression;
 use crate::meta::Location;
 use crate::meta::Statistics;
+use crate::meta::Versioned;
 
 /// A segment comprises one or more blocks
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -61,6 +64,33 @@ pub struct BlockMeta {
     pub compression: Compression,
 }
 
+impl SegmentInfo {
+    pub fn from_v0(s: v0::SegmentInfo, fields: &[TableField]) -> Self {
+        let summary = Statistics::from_v0(s.summary, fields);
+        Self {
+            format_version: SegmentInfo::VERSION,
+            blocks: s
+                .blocks
+                .into_iter()
+                .map(|b| Arc::new(BlockMeta::from_v0(&b, fields)))
+                .collect::<_>(),
+            summary,
+        }
+    }
+
+    pub fn from_v1(s: v1::SegmentInfo, fields: &[TableField]) -> Self {
+        let summary = Statistics::from_v0(s.summary, fields);
+        Self {
+            format_version: SegmentInfo::VERSION,
+            blocks: s
+                .blocks
+                .into_iter()
+                .map(|b| Arc::new(BlockMeta::from_v1(b.as_ref(), fields)))
+                .collect::<_>(),
+            summary,
+        }
+    }
+}
 impl BlockMeta {
     #[allow(clippy::too_many_arguments)]
     pub fn new(

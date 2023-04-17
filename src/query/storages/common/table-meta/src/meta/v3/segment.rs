@@ -51,37 +51,9 @@ impl SegmentInfo {
     }
 }
 
-use super::super::v0;
-use super::super::v1;
 use super::super::v2;
 
 impl SegmentInfo {
-    pub fn from_v0(s: v0::SegmentInfo, fields: &[TableField]) -> Self {
-        let summary = Statistics::from_v0(s.summary, fields);
-        Self {
-            format_version: SegmentInfo::VERSION,
-            blocks: s
-                .blocks
-                .into_iter()
-                .map(|b| Arc::new(BlockMeta::from_v0(&b, fields)))
-                .collect::<_>(),
-            summary,
-        }
-    }
-
-    pub fn from_v1(s: v1::SegmentInfo, fields: &[TableField]) -> Self {
-        let summary = Statistics::from_v0(s.summary, fields);
-        Self {
-            format_version: SegmentInfo::VERSION,
-            blocks: s
-                .blocks
-                .into_iter()
-                .map(|b| Arc::new(BlockMeta::from_v1(b.as_ref(), fields)))
-                .collect::<_>(),
-            summary,
-        }
-    }
-
     pub fn from_v2(s: v2::SegmentInfo) -> Self {
         Self {
             format_version: SegmentInfo::VERSION,

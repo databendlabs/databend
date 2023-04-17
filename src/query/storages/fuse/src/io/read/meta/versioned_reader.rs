@@ -22,11 +22,13 @@ use futures::AsyncRead;
 use serde::de::DeserializeOwned;
 use serde_json::from_slice;
 use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::SegmentInfoV2;
 use storages_common_table_meta::meta::SegmentInfoVersion;
 use storages_common_table_meta::meta::SnapshotVersion;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
 use storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
+use storages_common_table_meta::meta::TableSnapshotV2;
 
 use crate::io::read::meta::segment_reader::load_segment_v3;
 use crate::io::read::meta::snapshot_reader::load_snapshot_v3;
@@ -49,8 +51,14 @@ impl VersionedReader<TableSnapshot> for SnapshotVersion {
                 ts.schema = TableSchema::init_if_need(ts.schema);
                 ts.into()
             }
-            SnapshotVersion::V1(v) => load_by_version(reader, v).await?.into(),
-            SnapshotVersion::V0(v) => load_by_version(reader, v).await?.into(),
+            SnapshotVersion::V1(v) => {
+                let mut ts = load_by_version(reader, v).await?;
+                TableSnapshotV2::from(ts).into()
+            }
+            SnapshotVersion::V0(v) => {
+                let mut ts = load_by_version(reader, v).await?;
+                TableSnapshotV2::from(ts).into()
+            }
         };
         Ok(r)
     }
@@ -83,12 +91,12 @@ impl VersionedReader<SegmentInfo> for (SegmentInfoVersion, TableSchemaRef) {
             SegmentInfoVersion::V1(v) => {
                 let data = load_by_version(reader, v).await?;
                 let fields = schema.leaf_fields();
-                SegmentInfo::from_v1(data, &fields)
+                SegmentInfo::from_v2(SegmentInfoV2::from_v1(data, &fields))
             }
             SegmentInfoVersion::V0(v) => {
                 let data = load_by_version(reader, v).await?;
                 let fields = schema.leaf_fields();
-                SegmentInfo::from_v0(data, &fields)
+                SegmentInfo::from_v2(SegmentInfoV2::from_v0(data, &fields))
             }
         };
         Ok(r)

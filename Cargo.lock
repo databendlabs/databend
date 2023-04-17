@@ -2357,7 +2357,6 @@ dependencies = [
  "futures-util",
  "jsonb",
  "metrics",
- "micromarshal",
  "opendal",
  "parquet-format-safe",
  "serde",

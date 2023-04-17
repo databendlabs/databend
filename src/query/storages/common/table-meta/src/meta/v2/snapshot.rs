@@ -14,15 +14,18 @@
 
 use chrono::DateTime;
 use chrono::Utc;
+use common_expression::converts::from_schema;
 use common_expression::TableSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::meta::statistics::FormatVersion;
+use crate::meta::v1;
 use crate::meta::ClusterKey;
 use crate::meta::Location;
 use crate::meta::SnapshotId;
 use crate::meta::Statistics;
+use crate::meta::Versioned;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshot {
@@ -54,4 +57,46 @@ pub struct TableSnapshot {
     // The metadata of the cluster keys.
     pub cluster_key_meta: Option<ClusterKey>,
     pub table_statistics_location: Option<String>,
+}
+
+use super::super::v0;
+
+impl From<v0::TableSnapshot> for TableSnapshot {
+    fn from(s: v0::TableSnapshot) -> Self {
+        let schema = from_schema(&s.schema);
+        let schema = TableSchema::init_if_need(schema);
+        let leaf_fields = schema.leaf_fields();
+        let summary = Statistics::from_v0(s.summary, &leaf_fields);
+        Self {
+            format_version: TableSnapshot::VERSION,
+            snapshot_id: s.snapshot_id,
+            timestamp: None,
+            prev_snapshot_id: s.prev_snapshot_id.map(|id| (id, 0)),
+            schema,
+            summary,
+            segments: s.segments.into_iter().map(|l| (l, 0)).collect(),
+            cluster_key_meta: None,
+            table_statistics_location: None,
+        }
+    }
+}
+
+impl From<v1::TableSnapshot> for TableSnapshot {
+    fn from(s: v1::TableSnapshot) -> Self {
+        let schema = from_schema(&s.schema);
+        let schema = TableSchema::init_if_need(schema);
+        let leaf_fields = schema.leaf_fields();
+        let summary = Statistics::from_v0(s.summary, &leaf_fields);
+        Self {
+            format_version: TableSnapshot::VERSION,
+            snapshot_id: s.snapshot_id,
+            timestamp: None,
+            prev_snapshot_id: s.prev_snapshot_id,
+            schema,
+            summary,
+            segments: s.segments,
+            cluster_key_meta: s.cluster_key_meta,
+            table_statistics_location: s.table_statistics_location,
+        }
+    }
 }
