@@ -23,6 +23,7 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
+use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
@@ -68,19 +69,6 @@ impl Operator for UnionAll {
             .cloned()
             .collect();
 
-        let cardinality = left_prop.cardinality + right_prop.cardinality;
-
-        let precise_cardinality =
-            left_prop
-                .statistics
-                .precise_cardinality
-                .and_then(|left_cardinality| {
-                    right_prop
-                        .statistics
-                        .precise_cardinality
-                        .map(|right_cardinality| left_cardinality + right_cardinality)
-                });
-
         // Derive used columns
         let mut used_columns = self.used_columns()?;
         used_columns.extend(left_prop.used_columns);
@@ -90,11 +78,6 @@ impl Operator for UnionAll {
             output_columns,
             outer_columns,
             used_columns,
-            cardinality,
-            statistics: Statistics {
-                precise_cardinality,
-                column_stats: Default::default(),
-            },
         })
     }
 
@@ -105,8 +88,29 @@ impl Operator for UnionAll {
         })
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<(f64, Statistics)> {
-        todo!()
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
+        let left_stat_info = rel_expr.derive_cardinality_child(0)?;
+        let right_stat_info = rel_expr.derive_cardinality_child(1)?;
+        let cardinality = left_stat_info.cardinality + right_stat_info.cardinality;
+
+        let precise_cardinality =
+            left_stat_info
+                .statistics
+                .precise_cardinality
+                .and_then(|left_cardinality| {
+                    right_stat_info
+                        .statistics
+                        .precise_cardinality
+                        .map(|right_cardinality| left_cardinality + right_cardinality)
+                });
+
+        Ok(StatInfo {
+            cardinality,
+            statistics: Statistics {
+                precise_cardinality,
+                column_stats: Default::default(),
+            },
+        })
     }
 
     fn compute_required_prop_child(

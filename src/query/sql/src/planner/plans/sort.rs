@@ -22,7 +22,7 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
-use crate::optimizer::Statistics;
+use crate::optimizer::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::IndexType;
@@ -65,7 +65,7 @@ impl Operator for Sort {
         rel_expr.derive_relational_prop_child(0)
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<(f64, Statistics)> {
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
         rel_expr.derive_cardinality_child(0)
     }
 }

@@ -23,6 +23,7 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
+use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
@@ -73,18 +74,12 @@ impl Operator for RuntimeFilterSource {
         // Derive output columns
         let output_columns = left_prop.output_columns.clone();
         // Derive outer columns
-        let outer_columns = left_prop.outer_columns.clone();
+        let outer_columns = left_prop.outer_columns;
 
         Ok(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns: self.used_columns()?,
-
-            cardinality: left_prop.cardinality,
-            statistics: Statistics {
-                precise_cardinality: None,
-                column_stats: left_prop.statistics.column_stats,
-            },
         })
     }
 
@@ -92,12 +87,15 @@ impl Operator for RuntimeFilterSource {
         todo!()
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<(f64, Statistics)> {
-        let (cardinality, mut statistics) = rel_expr.derive_cardinality_child(0)?;
-        Ok((cardinality, Statistics {
-            precise_cardinality: None,
-            column_stats: statistics.column_stats,
-        }))
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
+        let stat_info = rel_expr.derive_cardinality_child(0)?;
+        Ok(StatInfo {
+            cardinality: stat_info.cardinality,
+            statistics: Statistics {
+                precise_cardinality: None,
+                column_stats: stat_info.statistics.column_stats,
+            },
+        })
     }
 
     fn compute_required_prop_child(

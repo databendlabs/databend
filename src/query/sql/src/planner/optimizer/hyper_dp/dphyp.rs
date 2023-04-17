@@ -29,7 +29,6 @@ use crate::optimizer::RuleFactory;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::Filter;
-use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::IndexType;

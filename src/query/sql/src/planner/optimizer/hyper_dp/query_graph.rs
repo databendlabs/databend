@@ -69,10 +69,11 @@ impl QueryGraph {
         for i in 0..nodes_size {
             let mut edge = &self.root_edge;
             for node in nodes.iter().take(nodes_size).skip(i) {
-                if !edge.children.contains_key(node) {
+                if let Some(child) = edge.children.get(node) {
+                    edge = child;
+                } else {
                     break;
                 }
-                edge = edge.children.get(node).unwrap();
                 for neighbor_info in edge.neighbors.iter() {
                     if is_subset(&neighbor_info.neighbors, neighbor) {
                         return Ok((true, neighbor_info.join_conditions.clone()));

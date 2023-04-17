@@ -15,15 +15,12 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use parking_lot::Mutex;
 
 use crate::optimizer::hyper_dp::join_relation::JoinRelation;
-use crate::optimizer::hyper_dp::DPhpy;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::Operator;
 use crate::plans::RelOperator;
 use crate::IndexType;
 use crate::ScalarExpr;
@@ -52,7 +49,7 @@ impl JoinNode {
             self.s_expr.as_ref().unwrap()
         };
         let rel_expr = RelExpr::with_s_expr(s_expr);
-        let card = rel_expr.derive_cardinality()?.0;
+        let card = rel_expr.derive_cardinality()?.cardinality;
         self.cardinality = Some(card);
         Ok(card)
     }

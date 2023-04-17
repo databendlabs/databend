@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_exception::Result;
 
 use crate::optimizer::group::Group;
@@ -41,7 +39,7 @@ impl PatternExtractor {
                 vec![],
                 Some(m_expr.group_index),
                 Some(memo.group(m_expr.group_index)?.relational_prop.clone()),
-                None,
+                Some(memo.group(m_expr.group_index)?.stat_info.clone()),
             )]);
         }
 
@@ -95,7 +93,7 @@ impl PatternExtractor {
                 vec![],
                 Some(m_expr.group_index),
                 Some(memo.group(m_expr.group_index)?.relational_prop.clone()),
-                None,
+                Some(memo.group(m_expr.group_index)?.stat_info.clone()),
             ));
             return Ok(results);
         }
@@ -110,7 +108,7 @@ impl PatternExtractor {
                 children,
                 Some(m_expr.group_index),
                 Some(memo.group(m_expr.group_index)?.relational_prop.clone()),
-                None,
+                Some(memo.group(m_expr.group_index)?.stat_info.clone()),
             ));
 
             let mut shifted = false;

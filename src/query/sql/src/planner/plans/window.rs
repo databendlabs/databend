@@ -34,6 +34,7 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
+use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
@@ -118,25 +119,42 @@ impl Operator for Window {
             .cloned()
             .collect();
 
+        // Derive used columns
+        let mut used_columns = self.used_columns()?;
+        used_columns.extend(input_prop.used_columns);
+
+        Ok(RelationalProperty {
+            output_columns,
+            outer_columns,
+            used_columns,
+        })
+    }
+
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
+        let input_stat_info = rel_expr.derive_cardinality_child(0)?;
         let cardinality = if self.partition_by.is_empty() {
             // Scalar aggregation
             1.0
         } else if self.partition_by.iter().any(|item| {
-            input_prop
+            input_stat_info
                 .statistics
                 .column_stats
                 .get(&item.index)
                 .is_none()
         }) {
-            input_prop.cardinality
+            input_stat_info.cardinality
         } else {
             // A upper bound
             let res = self.partition_by.iter().fold(1.0, |acc, item| {
-                let item_stat = input_prop.statistics.column_stats.get(&item.index).unwrap();
+                let item_stat = input_stat_info
+                    .statistics
+                    .column_stats
+                    .get(&item.index)
+                    .unwrap();
                 acc * item_stat.ndv
             });
             // To avoid res is very large
-            f64::min(res, input_prop.cardinality)
+            f64::min(res, input_stat_info.cardinality)
         };
 
         let precise_cardinality = if self.partition_by.is_empty() {
@@ -144,26 +162,13 @@ impl Operator for Window {
         } else {
             None
         };
-
-        // Derive used columns
-        let mut used_columns = self.used_columns()?;
-        used_columns.extend(input_prop.used_columns);
-        let column_stats = input_prop.statistics.column_stats;
-
-        Ok(RelationalProperty {
-            output_columns,
-            outer_columns,
-            used_columns,
+        Ok(StatInfo {
             cardinality,
             statistics: Statistics {
                 precise_cardinality,
-                column_stats,
+                column_stats: input_stat_info.statistics.column_stats,
             },
         })
-    }
-
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<(f64, Statistics)> {
-        todo!()
     }
 }
 
@@ -208,7 +213,6 @@ pub enum WindowFuncType {
     RowNumber,
     Rank,
     DenseRank,
-    PercentRank,
 }
 
 impl WindowFuncType {
@@ -217,7 +221,6 @@ impl WindowFuncType {
             "row_number" => Ok(WindowFuncType::RowNumber),
             "rank" => Ok(WindowFuncType::Rank),
             "dense_rank" => Ok(WindowFuncType::DenseRank),
-            "percent_rank" => Ok(WindowFuncType::PercentRank),
             _ => Err(ErrorCode::UnknownFunction(format!(
                 "Unknown window function: {}",
                 name
@@ -230,7 +233,6 @@ impl WindowFuncType {
             WindowFuncType::RowNumber => "row_number".to_string(),
             WindowFuncType::Rank => "rank".to_string(),
             WindowFuncType::DenseRank => "dense_rank".to_string(),
-            WindowFuncType::PercentRank => "percent_rank".to_string(),
         }
     }
 
@@ -249,7 +251,6 @@ impl WindowFuncType {
             WindowFuncType::RowNumber | WindowFuncType::Rank | WindowFuncType::DenseRank => {
                 DataType::Number(NumberDataType::UInt64)
             }
-            WindowFuncType::PercentRank => DataType::Number(NumberDataType::Float64),
         }
     }
 }

@@ -22,7 +22,7 @@ use educe::Educe;
 use super::RelationalProperty;
 use crate::optimizer::rule::AppliedRules;
 use crate::optimizer::rule::RuleID;
-use crate::optimizer::Statistics;
+use crate::optimizer::StatInfo;
 use crate::plans::Operator;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
@@ -50,7 +50,7 @@ pub struct SExpr {
     pub(crate) rel_prop: Arc<Mutex<Option<RelationalProperty>>>,
 
     #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
-    pub(crate) stat_info: Arc<Mutex<Option<(f64, Statistics)>>>,
+    pub(crate) stat_info: Arc<Mutex<Option<StatInfo>>>,
 
     /// A bitmap to record applied rules on current SExpr, to prevent
     /// redundant transformations.
@@ -63,7 +63,7 @@ impl SExpr {
         children: Vec<SExpr>,
         original_group: Option<IndexType>,
         rel_prop: Option<RelationalProperty>,
-        stat_info: Option<(f64, Statistics)>,
+        stat_info: Option<StatInfo>,
     ) -> Self {
         SExpr {
             plan,

@@ -21,7 +21,7 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
-use crate::optimizer::Statistics;
+use crate::optimizer::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 
@@ -57,10 +57,7 @@ impl Operator for PatternPlan {
         ))
     }
 
-    fn derive_cardinality(
-        &self,
-        _rel_expr: &RelExpr,
-    ) -> common_exception::Result<(f64, Statistics)> {
+    fn derive_cardinality(&self, _rel_expr: &RelExpr) -> common_exception::Result<StatInfo> {
         Err(ErrorCode::Internal(
             "Cannot derive cardinality for pattern plan",
         ))

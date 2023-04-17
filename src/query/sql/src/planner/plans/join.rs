@@ -31,6 +31,7 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
+use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics;
 use crate::optimizer::UniformSampleSet;
 use crate::plans::Operator;
@@ -286,8 +287,8 @@ impl Operator for Join {
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty> {
-        let mut left_prop = rel_expr.derive_relational_prop_child(0)?;
-        let mut right_prop = rel_expr.derive_relational_prop_child(1)?;
+        let left_prop = rel_expr.derive_relational_prop_child(0)?;
+        let right_prop = rel_expr.derive_relational_prop_child(1)?;
         // Derive output columns
         let mut output_columns = left_prop.output_columns.clone();
         if let Some(mark_index) = self.marker_index {
@@ -315,54 +316,15 @@ impl Operator for Join {
         }
         outer_columns = outer_columns.difference(&output_columns).cloned().collect();
 
-        // Evaluating join cardinality using histograms.
-        // If histogram is None, will evaluate using NDV.
-        let inner_join_cardinality = self.inner_join_cardinality(
-            &mut left_prop.cardinality,
-            &mut right_prop.cardinality,
-            &mut left_prop.statistics,
-            &mut right_prop.statistics,
-        )?;
-        let cardinality = match self.join_type {
-            JoinType::Inner | JoinType::Cross => inner_join_cardinality,
-            JoinType::Left => f64::max(left_prop.cardinality, inner_join_cardinality),
-            JoinType::Right => f64::max(right_prop.cardinality, inner_join_cardinality),
-            JoinType::Full => {
-                f64::max(left_prop.cardinality, inner_join_cardinality)
-                    + f64::max(right_prop.cardinality, inner_join_cardinality)
-                    - inner_join_cardinality
-            }
-            JoinType::LeftSemi | JoinType::LeftAnti | JoinType::LeftMark | JoinType::Single => {
-                left_prop.cardinality
-            }
-            JoinType::RightSemi | JoinType::RightAnti | JoinType::RightMark => {
-                right_prop.cardinality
-            }
-        };
-
         // Derive used columns
         let mut used_columns = self.used_columns()?;
         used_columns.extend(left_prop.used_columns);
         used_columns.extend(right_prop.used_columns);
-        // Derive column statistics
-        let column_stats = if cardinality == 0.0 {
-            HashMap::new()
-        } else {
-            let mut column_stats = HashMap::new();
-            column_stats.extend(left_prop.statistics.column_stats);
-            column_stats.extend(right_prop.statistics.column_stats);
-            column_stats
-        };
 
         Ok(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
-            cardinality,
-            statistics: Statistics {
-                precise_cardinality: None,
-                column_stats,
-            },
         })
     }
 
@@ -383,9 +345,13 @@ impl Operator for Join {
         }
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<(f64, Statistics)> {
-        let (mut left_cardinality, mut left_statistics) = rel_expr.derive_cardinality_child(0)?;
-        let (mut right_cardinality, mut right_statistics) = rel_expr.derive_cardinality_child(1)?;
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
+        let left_stat_info = rel_expr.derive_cardinality_child(0)?;
+        let right_stat_info = rel_expr.derive_cardinality_child(1)?;
+        let (mut left_cardinality, mut left_statistics) =
+            (left_stat_info.cardinality, left_stat_info.statistics);
+        let (mut right_cardinality, mut right_statistics) =
+            (right_stat_info.cardinality, right_stat_info.statistics);
         // Evaluating join cardinality using histograms.
         // If histogram is None, will evaluate using NDV.
         let inner_join_cardinality = self.inner_join_cardinality(
@@ -417,10 +383,13 @@ impl Operator for Join {
             column_stats.extend(right_statistics.column_stats);
             column_stats
         };
-        Ok((cardinality, Statistics {
-            precise_cardinality: None,
-            column_stats,
-        }))
+        Ok(StatInfo {
+            cardinality,
+            statistics: Statistics {
+                precise_cardinality: None,
+                column_stats,
+            },
+        })
     }
 
     fn compute_required_prop_child(

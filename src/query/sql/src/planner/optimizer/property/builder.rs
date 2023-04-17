@@ -24,7 +24,7 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::SExpr;
-use crate::optimizer::Statistics;
+use crate::optimizer::StatInfo;
 use crate::plans::Operator;
 use crate::IndexType;
 
@@ -72,7 +72,7 @@ impl<'a> RelExpr<'a> {
     }
 
     // Derive cardinality and statistics
-    pub fn derive_cardinality(&self) -> Result<(f64, Statistics)> {
+    pub fn derive_cardinality(&self) -> Result<StatInfo> {
         match self {
             RelExpr::SExpr { expr } => {
                 if let Some(stat_info) = expr.stat_info.lock().unwrap().as_ref() {
@@ -86,14 +86,14 @@ impl<'a> RelExpr<'a> {
         }
     }
 
-    pub(crate) fn derive_cardinality_child(&self, index: IndexType) -> Result<(f64, Statistics)> {
+    pub(crate) fn derive_cardinality_child(&self, index: IndexType) -> Result<StatInfo> {
         match self {
             RelExpr::SExpr { expr } => {
                 let child = expr.child(index)?;
                 let rel_expr = RelExpr::with_s_expr(child);
                 rel_expr.derive_cardinality()
             }
-            _ => unreachable!(),
+            RelExpr::MExpr { expr, memo } => Ok(memo.group(expr.group_index)?.stat_info.clone()),
         }
     }
 
