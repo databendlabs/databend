@@ -90,6 +90,7 @@ pub struct TransformWindow<T: Number> {
     partition_start: RowPtr,
     partition_end: RowPtr,
     partition_ended: bool,
+    partition_size: usize,
 
     // Frame: [`frame_start`, `frame_end`). `frame_end` is excluded.
     frame_unit: WindowFuncFrameUnits,
@@ -109,8 +110,6 @@ pub struct TransformWindow<T: Number> {
     frame_end: RowPtr,
     frame_started: bool,
     frame_ended: bool,
-    // for percent_rank/cume_dist
-    frame_size: usize,
 
     // Can be used to optimize window frame sliding.
     prev_frame_start: RowPtr,
@@ -229,6 +228,7 @@ impl<T: Number> TransformWindow<T> {
                 return;
             }
             self.partition_end.row += 1;
+            self.partition_size += 1;
         }
 
         assert_eq!(self.partition_end.row, block_rows);
@@ -474,10 +474,10 @@ impl<T: Number> TransformWindow<T> {
                 )));
             }
             WindowFunctionImpl::PercentRank => {
-                let percent = if self.frame_size <= 1 {
+                let percent = if self.partition_size <= 1 {
                     0_f64
                 } else {
-                    ((self.current_rank - 1) as f64) / ((self.frame_size - 1) as f64)
+                    ((self.current_rank - 1) as f64) / ((self.partition_size - 1) as f64)
                 };
                 builder.push(ScalarRef::Number(NumberScalar::Float64(percent.into())));
             }
@@ -538,6 +538,7 @@ impl TransformWindow<u64> {
             partition_start: RowPtr::default(),
             partition_end: RowPtr::default(),
             partition_ended: false,
+            partition_size: 0,
             frame_unit: WindowFuncFrameUnits::Rows,
             start_bound,
             end_bound,
@@ -549,7 +550,6 @@ impl TransformWindow<u64> {
             frame_end: RowPtr::default(),
             frame_started: false,
             frame_ended: false,
-            frame_size: 0,
             prev_frame_start: RowPtr::default(),
             prev_frame_end: RowPtr::default(),
             peer_group_start: RowPtr::default(),
@@ -603,6 +603,7 @@ where T: Number + ResultTypeOfUnary
             partition_start: RowPtr::default(),
             partition_end: RowPtr::default(),
             partition_ended: false,
+            partition_size: 0,
             frame_unit: WindowFuncFrameUnits::Range,
             start_bound,
             end_bound,
@@ -614,7 +615,6 @@ where T: Number + ResultTypeOfUnary
             frame_end: RowPtr::default(),
             frame_started: false,
             frame_ended: false,
-            frame_size: 0,
             prev_frame_start: RowPtr::default(),
             prev_frame_end: RowPtr::default(),
             peer_group_start: RowPtr::default(),
@@ -746,29 +746,9 @@ where T: Number + ResultTypeOfUnary
         }
     }
 
-    fn count_rows(&self, start: &RowPtr, end: &RowPtr) -> usize {
-        if start.block == end.block {
-            end.row - start.row
-        } else {
-            let mut count = self.block_at(start).num_rows() - start.row + end.row;
-            for block in (start.block + 1)..end.block {
-                count += self.blocks[block].block.num_rows();
-            }
-            count
-        }
-    }
-
-    fn count_rows_in_frame(&mut self) {
-        self.frame_size = self.count_rows(&self.frame_start, &self.frame_end)
-    }
-
     fn compute_on_frame(&mut self) -> Result<()> {
         match &self.func {
             WindowFunctionImpl::Aggregate(agg) => self.apply_aggregate(agg),
-            WindowFunctionImpl::PercentRank => {
-                self.count_rows_in_frame();
-                Ok(())
-            }
             _ => Ok(()),
         }
     }
@@ -864,7 +844,6 @@ where T: Number + ResultTypeOfUnary
                 self.prev_frame_end = self.frame_end;
                 self.frame_started = false;
                 self.frame_ended = false;
-                self.frame_size = 0;
             }
 
             if self.input_is_finished {
@@ -886,6 +865,7 @@ where T: Number + ResultTypeOfUnary
                 self.partition_start = self.partition_end;
                 self.partition_end = self.advance_row(self.partition_end);
                 self.partition_ended = false;
+                self.partition_size = 1;
 
                 // reset frames
                 self.need_check_null_frame = self.if_need_check_null_frame();
