@@ -1,13 +1,13 @@
 ---
 title: Databend Query Metrics
-sidebar_label: Databend Query Metrics
+sidebar_label: Query Metrics
 description:
   Databend Query Metrics
 ---
 
-A `databend-query` server records metrics in table [system.metrics](../../13-sql-reference/20-system-tables/system-metrics.md).
+A `databend-query` server records metrics in table [system.metrics](../13-sql-reference/20-system-tables/system-metrics.md).
 
-The [metric_api_address](../07-query/10-query-config.md) to listen on that can be scraped by Prometheus and will return a [prometheus](http://prometheus.io/docs/instrumenting/exposition_formats/) format of metrics.
+The [metric_api_address](../10-deploy/07-query/10-query-config.md) to listen on that can be scraped by Prometheus and will return a [prometheus](http://prometheus.io/docs/instrumenting/exposition_formats/) format of metrics.
 
 > Note: Default metric_api_address value is : 127.0.0.1:7070 , Prometheus can access this uri: http://127.0.0.1:7070/metrics
 
