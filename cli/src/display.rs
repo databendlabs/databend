@@ -198,7 +198,9 @@ impl ChunkDisplay for FormatDisplay {
 }
 
 fn print_rows(schema: SchemaRef, results: &[Row], _settings: &Settings) -> Result<()> {
-    println!("{}", create_table(schema, results)?);
+    if !results.is_empty() {
+        println!("{}", create_table(schema, results)?);
+    }
     Ok(())
 }
 

@@ -91,9 +91,9 @@ impl Connection for FlightSQLConnection {
 }
 
 impl FlightSQLConnection {
-    pub async fn try_create(dsn: &str) -> Result<Self> {
+    pub fn try_create(dsn: &str) -> Result<Self> {
         let (args, endpoint) = Self::parse_dsn(dsn)?;
-        let channel = endpoint.connect().await?;
+        let channel = endpoint.connect_lazy();
         let mut client = FlightSqlServiceClient::new(channel);
         // enable progress
         client.set_header("bendsql", "1");

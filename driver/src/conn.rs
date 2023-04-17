@@ -54,7 +54,7 @@ pub trait Connection: DynClone + Send + Sync {
 }
 dyn_clone::clone_trait_object!(Connection);
 
-pub async fn new_connection(dsn: &str) -> Result<Box<dyn Connection>> {
+pub fn new_connection(dsn: &str) -> Result<Box<dyn Connection>> {
     let u = Url::parse(dsn)?;
     match u.scheme() {
         "databend" | "databend+http" | "databend+https" => {
@@ -63,7 +63,7 @@ pub async fn new_connection(dsn: &str) -> Result<Box<dyn Connection>> {
         }
         #[cfg(feature = "flight-sql")]
         "databend+flight" | "databend+grpc" => {
-            let conn = FlightSQLConnection::try_create(dsn).await?;
+            let conn = FlightSQLConnection::try_create(dsn)?;
             Ok(Box::new(conn))
         }
         _ => Err(Error::Parsing(format!(

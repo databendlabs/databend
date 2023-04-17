@@ -19,7 +19,7 @@ use crate::common::DEFAULT_DSN;
 
 async fn prepare() -> Box<dyn Connection> {
     let dsn = option_env!("TEST_DATABEND_DSN").unwrap_or(DEFAULT_DSN);
-    new_connection(dsn).await.unwrap()
+    new_connection(dsn).unwrap()
 }
 
 #[tokio::test]

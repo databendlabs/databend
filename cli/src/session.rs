@@ -39,7 +39,7 @@ pub struct Session {
 
 impl Session {
     pub async fn try_new(dsn: String, settings: Settings, is_repl: bool) -> Result<Self> {
-        let conn = new_connection(&dsn).await?;
+        let conn = new_connection(&dsn)?;
         let info = conn.info();
         if is_repl {
             println!("Welcome to BendSQL.");
@@ -190,22 +190,24 @@ impl Session {
     }
 
     async fn reconnect(&mut self) -> Result<()> {
+        self.conn = new_connection(&self.dsn)?;
         if self.is_repl {
             let info = self.conn.info();
             println!(
-                "Connecting to {}:{} as user {}.",
+                "Trying reconnect to {}:{} as user {}.",
                 info.host, info.port, info.user
             );
+            let version = self.conn.version().await?;
+            println!("Connected to {}", version);
             println!();
         }
-        self.conn = new_connection(&self.dsn).await?;
         Ok(())
     }
 }
 
 fn get_history_path() -> String {
     format!(
-        "{}/.databend_history",
+        "{}/.bendsql_history",
         std::env::var("HOME").unwrap_or_else(|_| ".".to_string())
     )
 }

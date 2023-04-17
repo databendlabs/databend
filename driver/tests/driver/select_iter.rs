@@ -20,7 +20,7 @@ use crate::common::DEFAULT_DSN;
 async fn prepare(name: &str) -> (Box<dyn Connection>, String) {
     let dsn = option_env!("TEST_DATABEND_DSN").unwrap_or(DEFAULT_DSN);
     let table = format!("{}_{}", name, chrono::Utc::now().timestamp());
-    let conn = new_connection(dsn).await.unwrap();
+    let conn = new_connection(dsn).unwrap();
     (conn, table)
 }
 
