@@ -13,18 +13,24 @@
 //  limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_catalog::plan::compute_row_id_prefix;
+use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
+use common_pipeline_core::Pipeline;
 use common_storage::ColumnNodes;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
 
+use super::native_rows_fetcher::build_native_row_fetcher_pipeline;
 use crate::io::MetaReaders;
+use crate::FuseStorageFormat;
 use crate::FuseTable;
 
 // #[async_backtrace::framed]
@@ -63,4 +69,31 @@ pub(super) async fn build_partitions_map(
     }
 
     Ok(map)
+}
+
+pub fn build_row_fetcher_pipeline(
+    ctx: Arc<dyn TableContext>,
+    pipeline: &mut Pipeline,
+    row_id_col_offset: usize,
+    source: &DataSourcePlan,
+    projection: Projection,
+) -> Result<()> {
+    let table = ctx.build_table_from_source_plan(source)?;
+    let fuse_table = table
+        .as_any()
+        .downcast_ref::<FuseTable>()
+        .ok_or_else(|| ErrorCode::Internal("Row fetcher is only supported by Fuse engine"))?;
+
+    match &fuse_table.storage_format {
+        FuseStorageFormat::Native => build_native_row_fetcher_pipeline(
+            ctx,
+            pipeline,
+            row_id_col_offset,
+            fuse_table,
+            projection,
+        ),
+        FuseStorageFormat::Parquet => {
+            todo!("row fetcher")
+        }
+    }
 }

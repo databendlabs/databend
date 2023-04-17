@@ -20,6 +20,7 @@ use std::sync::Arc;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_catalog::plan::split_row_id;
 use common_catalog::plan::Projection;
+use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -27,13 +28,18 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::AsyncTransform;
-use opendal::Operator;
+use common_pipeline_transforms::processors::transforms::AsyncTransformer;
 
 use super::fuse_row_fetcher::build_partitions_map;
 use super::native_data_source::DataChunks;
 use super::native_data_source_deserializer::NativeDeserializeDataTransform;
 use crate::io::BlockReader;
+use crate::FuseTable;
 
 pub struct TransformNativeRowsFetcher<const BLOCKING_IO: bool> {
     ctx: Arc<dyn TableContext>,
@@ -42,9 +48,8 @@ pub struct TransformNativeRowsFetcher<const BLOCKING_IO: bool> {
     projection: Projection,
     column_leaves: Vec<Vec<ColumnDescriptor>>,
 
-    row_id_column_idx: usize,
+    row_id_col_offset: usize,
 
-    operator: Operator,
     reader: Arc<BlockReader>,
 }
 
@@ -59,7 +64,7 @@ impl<const BLOCKING_IO: bool> AsyncTransform for TransformNativeRowsFetcher<BLOC
             return Ok(data);
         }
 
-        let row_id_column = data.columns()[self.row_id_column_idx]
+        let row_id_column = data.columns()[self.row_id_col_offset]
             .value
             .convert_to_full_column(&DataType::Number(NumberDataType::UInt64), num_rows)
             .into_number()
@@ -82,7 +87,7 @@ impl<const BLOCKING_IO: bool> AsyncTransform for TransformNativeRowsFetcher<BLOC
         let part_map = build_partitions_map(
             snapshot_loc,
             ver,
-            self.operator.clone(),
+            self.reader.operator.clone(),
             self.table_schema.clone(),
             &self.projection,
         )
@@ -132,6 +137,34 @@ impl<const BLOCKING_IO: bool> AsyncTransform for TransformNativeRowsFetcher<BLOC
 }
 
 impl<const BLOCKING_IO: bool> TransformNativeRowsFetcher<BLOCKING_IO> {
+    fn create(
+        ctx: Arc<dyn TableContext>,
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        row_id_col_offset: usize,
+        table_schema: TableSchemaRef,
+        projection: Projection,
+        reader: Arc<BlockReader>,
+    ) -> ProcessorPtr {
+        let mut column_leaves = Vec::with_capacity(reader.project_column_nodes.len());
+        for column_node in &reader.project_column_nodes {
+            let leaves: Vec<ColumnDescriptor> = column_node
+                .leaf_indices
+                .iter()
+                .map(|i| reader.parquet_schema_descriptor.columns()[*i].clone())
+                .collect::<Vec<_>>();
+            column_leaves.push(leaves);
+        }
+        ProcessorPtr::create(AsyncTransformer::create(input, output, Self {
+            ctx,
+            reader,
+            column_leaves,
+            table_schema,
+            projection,
+            row_id_col_offset,
+        }))
+    }
+
     fn build_block(&self, mut chunks: DataChunks) -> Result<DataBlock> {
         let mut array_iters = BTreeMap::new();
 
@@ -153,4 +186,39 @@ impl<const BLOCKING_IO: bool> TransformNativeRowsFetcher<BLOCKING_IO> {
 
         self.reader.build_block(arrays, None)
     }
+}
+
+pub(super) fn build_native_row_fetcher_pipeline(
+    ctx: Arc<dyn TableContext>,
+    pipeline: &mut Pipeline,
+    row_id_col_offset: usize,
+    table: &FuseTable,
+    projection: Projection,
+) -> Result<()> {
+    let block_reader = table.create_block_reader(projection.clone(), false, ctx.clone())?;
+    let table_schema = table.schema();
+
+    pipeline.add_transform(|input, output| {
+        Ok(if block_reader.support_blocking_api() {
+            TransformNativeRowsFetcher::<true>::create(
+                ctx.clone(),
+                input,
+                output,
+                row_id_col_offset,
+                table_schema.clone(),
+                projection.clone(),
+                block_reader.clone(),
+            )
+        } else {
+            TransformNativeRowsFetcher::<false>::create(
+                ctx.clone(),
+                input,
+                output,
+                row_id_col_offset,
+                table_schema.clone(),
+                projection.clone(),
+                block_reader.clone(),
+            )
+        })
+    })
 }
