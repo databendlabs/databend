@@ -382,8 +382,17 @@ impl std::fmt::Display for Value {
             Value::Boolean(b) => write!(f, "{}", b),
             Value::Number(n) => write!(f, "{}", n),
             Value::String(s) => write!(f, "{}", s),
-            Value::Timestamp(t) => write!(f, "{}", t),
-            Value::Date(d) => write!(f, "{}", d),
+            Value::Timestamp(i) => {
+                let secs = i / 1_000_000;
+                let nanos = ((i % 1_000_000) * 1000) as u32;
+                let t = NaiveDateTime::from_timestamp_opt(secs, nanos).unwrap_or_default();
+                write!(f, "{}", t)
+            }
+            Value::Date(i) => {
+                let days = i + 719_163;
+                let d = NaiveDate::from_num_days_from_ce_opt(days).unwrap_or_default();
+                write!(f, "{}", d)
+            }
         }
     }
 }
