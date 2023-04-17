@@ -17,22 +17,22 @@ use common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::principal::FileFormatOptions;
+use crate::principal::FileFormatParams;
 use crate::principal::UserIdentity;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 #[serde(default)]
 pub struct UserDefinedFileFormat {
     pub name: String,
-    pub file_format_options: FileFormatOptions,
+    pub file_format_params: FileFormatParams,
     pub creator: UserIdentity,
 }
 
 impl UserDefinedFileFormat {
-    pub fn new(name: &str, file_format_options: FileFormatOptions, creator: UserIdentity) -> Self {
+    pub fn new(name: &str, file_format_params: FileFormatParams, creator: UserIdentity) -> Self {
         Self {
             name: name.to_string(),
-            file_format_options,
+            file_format_params,
             creator,
         }
     }

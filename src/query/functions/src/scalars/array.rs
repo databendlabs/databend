@@ -70,13 +70,21 @@ use siphasher::sip128::SipHasher24;
 use crate::aggregates::eval_aggr;
 use crate::AggregateFunctionFactory;
 
-const ARRAY_AGGREGATE_FUNCTIONS: &[(&str, &str); 6] = &[
+const ARRAY_AGGREGATE_FUNCTIONS: &[(&str, &str); 14] = &[
     ("array_avg", "avg"),
     ("array_count", "count"),
     ("array_max", "max"),
     ("array_min", "min"),
     ("array_sum", "sum"),
     ("array_any", "any"),
+    ("array_stddev_samp", "stddev_samp"),
+    ("array_stddev_pop", "stddev_pop"),
+    ("array_stddev", "stddev"),
+    ("array_std", "std"),
+    ("array_median", "median"),
+    ("array_approx_count_distinct", "approx_count_distinct"),
+    ("array_kurtosis", "kurtosis"),
+    ("array_skewness", "skewness"),
 ];
 
 const ARRAY_SORT_FUNCTIONS: &[(&str, (bool, bool)); 4] = &[
@@ -647,8 +655,11 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
         let factory = AggregateFunctionFactory::instance();
         let func = factory.get(name, vec![], vec![*array_type.clone()]).ok()?;
         let return_type = func.return_type().ok()?;
-
-        Some(return_type)
+        if args_type[0].is_nullable() {
+            Some(return_type.wrap_nullable())
+        } else {
+            Some(return_type)
+        }
     }
 
     fn eval_array_aggr(
@@ -684,6 +695,10 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
                 let return_type = eval_aggr_return_type(name, &[column.data_type()]).unwrap();
                 let mut builder = ColumnBuilder::with_capacity(&return_type, column.len());
                 for arr in column.iter() {
+                    if arr == ScalarRef::Null {
+                        builder.push_default();
+                        continue;
+                    }
                     let array_column = arr.as_array().unwrap();
                     let len = array_column.len();
                     match eval_aggr(name, vec![], &[array_column.clone()], len) {
@@ -735,6 +750,7 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
                         offset: 0,
                         asc: sort_desc.0,
                         nulls_first: sort_desc.1,
+                        is_nullable: false,  // This information is not needed here.
                     }];
                     let columns = vec![BlockEntry{
                         data_type: arr.data_type(),

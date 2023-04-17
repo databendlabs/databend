@@ -25,6 +25,7 @@ use common_exception::Result;
 use common_io::constants::NAN_BYTES_SNAKE;
 use common_io::escape_string;
 
+use crate::principal::FileFormatParams;
 use crate::principal::UserIdentity;
 use crate::storage::StorageParams;
 
@@ -260,6 +261,29 @@ impl FileFormatOptions {
             ));
         }
         Ok(file_format_options)
+    }
+
+    pub fn to_map(&self) -> BTreeMap<String, String> {
+        let mut opts = BTreeMap::new();
+        opts.insert("format".to_string(), self.format.to_string());
+        opts.insert("skip_header".to_string(), self.skip_header.to_string());
+        opts.insert(
+            "field_delimiter".to_string(),
+            self.field_delimiter.to_string(),
+        );
+        opts.insert(
+            "record_delimiter".to_string(),
+            self.record_delimiter.to_string(),
+        );
+        opts.insert("nan_display".to_string(), self.nan_display.to_string());
+        opts.insert("escape".to_string(), self.escape.to_string());
+        opts.insert("compression".to_string(), self.compression.to_string());
+        opts.insert("row_tag".to_string(), self.row_tag.to_string());
+        opts.insert("quote".to_string(), self.quote.to_string());
+        if let Some(name) = &self.name {
+            opts.insert("name".to_string(), name.to_string());
+        }
+        opts
     }
 
     pub fn default_by_type(format_type: StageFileFormatType) -> Self {
@@ -511,7 +535,7 @@ pub struct StageInfo {
     pub stage_name: String,
     pub stage_type: StageType,
     pub stage_params: StageParams,
-    pub file_format_options: FileFormatOptions,
+    pub file_format_params: FileFormatParams,
     pub copy_options: CopyOptions,
     pub comment: String,
     /// TODO(xuanwo): stage doesn't have this info anymore, remove it.

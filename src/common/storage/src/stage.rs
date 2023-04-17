@@ -15,7 +15,6 @@
 use std::path::Path;
 
 use chrono::DateTime;
-use chrono::TimeZone;
 use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -56,10 +55,7 @@ impl StageFileInfo {
             path,
             size: meta.content_length(),
             md5: meta.content_md5().map(str::to_string),
-            last_modified: meta
-                .last_modified()
-                .map(|v| Utc.timestamp_nanos(v.unix_timestamp_nanos() as i64))
-                .unwrap_or_default(),
+            last_modified: meta.last_modified().unwrap_or_default(),
             etag: meta.etag().map(str::to_string),
             status: StageFileStatus::NeedCopy,
             creator: None,
@@ -159,7 +155,7 @@ impl StageFilesInfo {
     }
 
     pub fn blocking_first_file(&self, operator: &Operator) -> Result<StageFileInfo> {
-        let mut files = self.blocking_list(operator, true)?;
+        let mut files = self.blocking_list(operator, true, None)?;
         match files.pop() {
             None => Err(ErrorCode::BadArguments("no file found")),
             Some(f) => Ok(f),
@@ -170,7 +166,10 @@ impl StageFilesInfo {
         &self,
         operator: &Operator,
         first_only: bool,
+        max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
+        let max_files = max_files.unwrap_or(usize::MAX);
+        let mut limit = 0;
         if let Some(files) = &self.files {
             let mut res = Vec::new();
             for file in files {
@@ -189,11 +188,15 @@ impl StageFilesInfo {
                 if first_only {
                     break;
                 }
+                limit += 1;
+                if limit == max_files {
+                    return Ok(res);
+                }
             }
             Ok(res)
         } else {
             let pattern = self.get_pattern()?;
-            blocking_list_files_with_pattern(operator, &self.path, pattern, first_only)
+            blocking_list_files_with_pattern(operator, &self.path, pattern, first_only, max_files)
         }
     }
 
@@ -260,6 +263,7 @@ fn blocking_list_files_with_pattern(
     path: &str,
     pattern: Option<Regex>,
     first_only: bool,
+    max_files: usize,
 ) -> Result<Vec<StageFileInfo>> {
     let operator = operator.blocking();
 
@@ -282,12 +286,17 @@ fn blocking_list_files_with_pattern(
     // path is a dir
     let mut files = Vec::new();
     let list = operator.list(path)?;
+    let mut limit = 0;
     for obj in list {
         let obj = obj?;
         let meta = operator.metadata(&obj, StageFileInfo::meta_query())?;
         if check_file(obj.path(), meta.mode(), &pattern) {
             files.push(StageFileInfo::new(obj.path().to_string(), &meta));
             if first_only {
+                return Ok(files);
+            }
+            limit += 1;
+            if limit == max_files {
                 return Ok(files);
             }
         }

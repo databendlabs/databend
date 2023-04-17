@@ -2,6 +2,8 @@
 title: 'Conversion Functions'
 ---
 
+SQL Conversion Functions Overview.
+
 | Function                          | Description                                                                            | Example                            | Result                     |
 |-----------------------------------|----------------------------------------------------------------------------------------|------------------------------------|----------------------------|
 | **CAST( expr AS data_type )**     | Convert a value from one data type to another data type                                | **CAST(1 AS VARCHAR)**             | 1                          |

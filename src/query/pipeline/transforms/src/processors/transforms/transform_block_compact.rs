@@ -81,18 +81,11 @@ impl Compactor for BlockCompactor {
             if accumulated_rows >= self.thresholds.max_rows_per_block {
                 // Used for recluster operation, will be removed later.
                 if self.is_recluster {
-                    let mut offset = 0;
-                    let mut remain_rows = accumulated_rows;
-                    while remain_rows >= self.thresholds.max_rows_per_block {
-                        let cut =
-                            merged.slice(offset..(offset + self.thresholds.max_rows_per_block));
-                        res.push(cut);
-                        offset += self.thresholds.max_rows_per_block;
-                        remain_rows -= self.thresholds.max_rows_per_block;
-                    }
-
-                    if remain_rows > 0 {
-                        blocks.push(merged.slice(offset..(offset + remain_rows)));
+                    let (perfect, remain) =
+                        merged.split_by_rows(self.thresholds.max_rows_per_block);
+                    res.extend(perfect);
+                    if let Some(b) = remain {
+                        blocks.push(b);
                     }
                 } else {
                     // we can't use slice here, it did not deallocate memory

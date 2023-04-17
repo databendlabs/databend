@@ -192,7 +192,7 @@ impl ReplaceInterpreter {
                         transform_output_port,
                         select_schema.clone(),
                         target_schema.clone(),
-                        func_ctx,
+                        func_ctx.clone(),
                     )
                 },
             )?;

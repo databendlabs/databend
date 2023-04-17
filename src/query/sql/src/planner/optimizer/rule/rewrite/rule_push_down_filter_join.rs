@@ -18,8 +18,7 @@ use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::JoinPredicate;
 use crate::optimizer::rule::rewrite::filter_join::convert_mark_to_semi_join;
-use crate::optimizer::rule::rewrite::filter_join::convert_outer_to_inner_join;
-use crate::optimizer::rule::rewrite::filter_join::remove_nullable;
+use crate::optimizer::rule::rewrite::filter_join::outer_to_inner;
 use crate::optimizer::rule::rewrite::filter_join::rewrite_predicates;
 use crate::optimizer::rule::rewrite::filter_join::try_derive_predicates;
 use crate::optimizer::rule::Rule;
@@ -28,6 +27,7 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::planner::binder::wrap_cast;
+use crate::plans::ComparisonOp;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
@@ -39,7 +39,7 @@ use crate::MetadataRef;
 pub struct RulePushDownFilterJoin {
     id: RuleID,
     patterns: Vec<SExpr>,
-    metadata: MetadataRef,
+    _metadata: MetadataRef,
 }
 
 impl RulePushDownFilterJoin {
@@ -76,7 +76,7 @@ impl RulePushDownFilterJoin {
                     ),
                 ),
             )],
-            metadata,
+            _metadata: metadata,
         }
     }
 }
@@ -88,21 +88,7 @@ impl Rule for RulePushDownFilterJoin {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         // First, try to convert outer join to inner join
-        let join: Join = s_expr.child(0)?.plan().clone().try_into()?;
-        let origin_join_type = join.join_type;
-        let (mut s_expr, converted) = convert_outer_to_inner_join(s_expr)?;
-        if converted {
-            // If outer join is converted to inner join, we need to change datatype of filter predicate
-            let mut filter: Filter = s_expr.plan().clone().try_into()?;
-            let mut new_predicates = Vec::with_capacity(filter.predicates.len());
-            for predicate in filter.predicates.iter() {
-                let new_predicate =
-                    remove_nullable(&s_expr, predicate, &origin_join_type, self.metadata.clone())?;
-                new_predicates.push(new_predicate);
-            }
-            filter.predicates = new_predicates;
-            s_expr = SExpr::create_unary(filter.into(), s_expr.child(0)?.clone())
-        }
+        let mut s_expr = outer_to_inner(s_expr)?;
         // Second, check if can convert mark join to semi join
         s_expr = convert_mark_to_semi_join(&s_expr)?;
         let filter: Filter = s_expr.plan().clone().try_into()?;
@@ -168,8 +154,8 @@ pub fn try_push_down_filter_join(
             }
             JoinPredicate::Other(_) => original_predicates.push(predicate),
 
-            JoinPredicate::Both { left, right, equal } => {
-                if equal {
+            JoinPredicate::Both { left, right, op } => {
+                if op == ComparisonOp::Equal {
                     let left_type = left.data_type()?;
                     let right_type = right.data_type()?;
                     let join_key_type = common_super_type(

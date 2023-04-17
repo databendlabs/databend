@@ -22,14 +22,10 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::AggregateFunction;
-use crate::plans::AndExpr;
 use crate::plans::CastExpr;
-use crate::plans::ComparisonExpr;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
-use crate::plans::NotExpr;
-use crate::plans::OrExpr;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -37,14 +33,16 @@ use crate::plans::ScalarItem;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
+use crate::MetadataRef;
 
 pub struct RulePushDownFilterEvalScalar {
     id: RuleID,
     patterns: Vec<SExpr>,
+    metadata: MetadataRef,
 }
 
 impl RulePushDownFilterEvalScalar {
-    pub fn new() -> Self {
+    pub fn new(metadata: MetadataRef) -> Self {
         Self {
             id: RuleID::PushDownFilterEvalScalar,
             // Filter
@@ -70,227 +68,111 @@ impl RulePushDownFilterEvalScalar {
                     ),
                 ),
             )],
+            metadata,
         }
     }
 
     // Replace predicate with children scalar items
-    fn replace_predicate(
-        predicate: &ScalarExpr,
-        items: &[ScalarItem],
-        eval_scalar_columns: &ColumnSet,
-        eval_scalar_child_columns: &ColumnSet,
-    ) -> Result<ScalarExpr> {
-        if !predicate
-            .used_columns()
-            .is_subset(eval_scalar_child_columns)
-            && predicate.used_columns().is_subset(eval_scalar_columns)
-        {
-            match predicate {
-                ScalarExpr::BoundColumnRef(column) => {
-                    for item in items {
-                        if item.index == column.column.index {
-                            return Ok(item.scalar.clone());
-                        }
+    fn replace_predicate(predicate: &ScalarExpr, items: &[ScalarItem]) -> Result<ScalarExpr> {
+        match predicate {
+            ScalarExpr::BoundColumnRef(column) => {
+                for item in items {
+                    if item.index == column.column.index {
+                        return Ok(item.scalar.clone());
                     }
-                    Err(ErrorCode::UnknownColumn(format!(
-                        "Cannot find column to replace `{}`(#{})",
-                        column.column.column_name, column.column.index
-                    )))
                 }
-                ScalarExpr::AndExpr(scalar) => {
-                    let left = Self::replace_predicate(
-                        &scalar.left,
-                        items,
-                        eval_scalar_columns,
-                        eval_scalar_child_columns,
-                    )?;
-                    let right = Self::replace_predicate(
-                        &scalar.right,
-                        items,
-                        eval_scalar_columns,
-                        eval_scalar_child_columns,
-                    )?;
-                    Ok(ScalarExpr::AndExpr(AndExpr {
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    }))
-                }
-                ScalarExpr::OrExpr(scalar) => {
-                    let left = Self::replace_predicate(
-                        &scalar.left,
-                        items,
-                        eval_scalar_columns,
-                        eval_scalar_child_columns,
-                    )?;
-                    let right = Self::replace_predicate(
-                        &scalar.right,
-                        items,
-                        eval_scalar_columns,
-                        eval_scalar_child_columns,
-                    )?;
-                    Ok(ScalarExpr::OrExpr(OrExpr {
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    }))
-                }
-                ScalarExpr::NotExpr(scalar) => {
-                    let argument = Self::replace_predicate(
-                        &scalar.argument,
-                        items,
-                        eval_scalar_columns,
-                        eval_scalar_child_columns,
-                    )?;
-                    Ok(ScalarExpr::NotExpr(NotExpr {
-                        argument: Box::new(argument),
-                    }))
-                }
-                ScalarExpr::ComparisonExpr(scalar) => {
-                    let left = Self::replace_predicate(
-                        &scalar.left,
-                        items,
-                        eval_scalar_columns,
-                        eval_scalar_child_columns,
-                    )?;
-                    let right = Self::replace_predicate(
-                        &scalar.right,
-                        items,
-                        eval_scalar_columns,
-                        eval_scalar_child_columns,
-                    )?;
-                    Ok(ScalarExpr::ComparisonExpr(ComparisonExpr {
-                        op: scalar.op.clone(),
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    }))
-                }
-                ScalarExpr::WindowFunction(window) => {
-                    let func = match &window.func {
-                        WindowFuncType::Aggregate(agg) => {
-                            let args = agg
-                                .args
-                                .iter()
-                                .map(|arg| {
-                                    Self::replace_predicate(
-                                        arg,
-                                        items,
-                                        eval_scalar_columns,
-                                        eval_scalar_child_columns,
-                                    )
-                                })
-                                .collect::<Result<Vec<ScalarExpr>>>()?;
-
-                            WindowFuncType::Aggregate(AggregateFunction {
-                                func_name: agg.func_name.clone(),
-                                distinct: agg.distinct,
-                                params: agg.params.clone(),
-                                args,
-                                return_type: agg.return_type.clone(),
-                                display_name: agg.display_name.clone(),
-                            })
-                        }
-                        func => func.clone(),
-                    };
-
-                    let partition_by = window
-                        .partition_by
-                        .iter()
-                        .map(|arg| {
-                            Self::replace_predicate(
-                                arg,
-                                items,
-                                eval_scalar_columns,
-                                eval_scalar_child_columns,
-                            )
-                        })
-                        .collect::<Result<Vec<ScalarExpr>>>()?;
-
-                    let order_by = window
-                        .order_by
-                        .iter()
-                        .map(|arg| {
-                            Ok(WindowOrderBy {
-                                asc: arg.asc,
-                                nulls_first: arg.nulls_first,
-                                expr: Self::replace_predicate(
-                                    &arg.expr,
-                                    items,
-                                    eval_scalar_columns,
-                                    eval_scalar_child_columns,
-                                )?,
-                            })
-                        })
-                        .collect::<Result<Vec<_>>>()?;
-
-                    Ok(ScalarExpr::WindowFunction(WindowFunc {
-                        display_name: window.display_name.clone(),
-                        func,
-                        partition_by,
-                        order_by,
-                        frame: window.frame.clone(),
-                    }))
-                }
-                ScalarExpr::AggregateFunction(agg_func) => {
-                    let args = agg_func
-                        .args
-                        .iter()
-                        .map(|arg| {
-                            Self::replace_predicate(
-                                arg,
-                                items,
-                                eval_scalar_columns,
-                                eval_scalar_child_columns,
-                            )
-                        })
-                        .collect::<Result<Vec<ScalarExpr>>>()?;
-
-                    Ok(ScalarExpr::AggregateFunction(AggregateFunction {
-                        func_name: agg_func.func_name.clone(),
-                        distinct: agg_func.distinct,
-                        params: agg_func.params.clone(),
-                        args,
-                        return_type: agg_func.return_type.clone(),
-                        display_name: agg_func.display_name.clone(),
-                    }))
-                }
-                ScalarExpr::FunctionCall(func) => {
-                    let arguments = func
-                        .arguments
-                        .iter()
-                        .map(|arg| {
-                            Self::replace_predicate(
-                                arg,
-                                items,
-                                eval_scalar_columns,
-                                eval_scalar_child_columns,
-                            )
-                        })
-                        .collect::<Result<Vec<ScalarExpr>>>()?;
-
-                    Ok(ScalarExpr::FunctionCall(FunctionCall {
-                        span: func.span,
-                        params: func.params.clone(),
-                        arguments,
-                        func_name: func.func_name.clone(),
-                    }))
-                }
-                ScalarExpr::CastExpr(cast) => {
-                    let arg = Self::replace_predicate(
-                        &cast.argument,
-                        items,
-                        eval_scalar_columns,
-                        eval_scalar_child_columns,
-                    )?;
-                    Ok(ScalarExpr::CastExpr(CastExpr {
-                        span: cast.span,
-                        is_try: cast.is_try,
-                        argument: Box::new(arg),
-                        target_type: cast.target_type.clone(),
-                    }))
-                }
-                _ => Ok(predicate.clone()),
+                Err(ErrorCode::UnknownColumn(format!(
+                    "Cannot find column to replace `{}`(#{})",
+                    column.column.column_name, column.column.index
+                )))
             }
-        } else {
-            Ok(predicate.clone())
+            ScalarExpr::WindowFunction(window) => {
+                let func = match &window.func {
+                    WindowFuncType::Aggregate(agg) => {
+                        let args = agg
+                            .args
+                            .iter()
+                            .map(|arg| Self::replace_predicate(arg, items))
+                            .collect::<Result<Vec<ScalarExpr>>>()?;
+
+                        WindowFuncType::Aggregate(AggregateFunction {
+                            func_name: agg.func_name.clone(),
+                            distinct: agg.distinct,
+                            params: agg.params.clone(),
+                            args,
+                            return_type: agg.return_type.clone(),
+                            display_name: agg.display_name.clone(),
+                        })
+                    }
+                    func => func.clone(),
+                };
+
+                let partition_by = window
+                    .partition_by
+                    .iter()
+                    .map(|arg| Self::replace_predicate(arg, items))
+                    .collect::<Result<Vec<ScalarExpr>>>()?;
+
+                let order_by = window
+                    .order_by
+                    .iter()
+                    .map(|arg| {
+                        Ok(WindowOrderBy {
+                            asc: arg.asc,
+                            nulls_first: arg.nulls_first,
+                            expr: Self::replace_predicate(&arg.expr, items)?,
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+
+                Ok(ScalarExpr::WindowFunction(WindowFunc {
+                    display_name: window.display_name.clone(),
+                    func,
+                    partition_by,
+                    order_by,
+                    frame: window.frame.clone(),
+                }))
+            }
+            ScalarExpr::AggregateFunction(agg_func) => {
+                let args = agg_func
+                    .args
+                    .iter()
+                    .map(|arg| Self::replace_predicate(arg, items))
+                    .collect::<Result<Vec<ScalarExpr>>>()?;
+
+                Ok(ScalarExpr::AggregateFunction(AggregateFunction {
+                    func_name: agg_func.func_name.clone(),
+                    distinct: agg_func.distinct,
+                    params: agg_func.params.clone(),
+                    args,
+                    return_type: agg_func.return_type.clone(),
+                    display_name: agg_func.display_name.clone(),
+                }))
+            }
+            ScalarExpr::FunctionCall(func) => {
+                let arguments = func
+                    .arguments
+                    .iter()
+                    .map(|arg| Self::replace_predicate(arg, items))
+                    .collect::<Result<Vec<ScalarExpr>>>()?;
+
+                Ok(ScalarExpr::FunctionCall(FunctionCall {
+                    span: func.span,
+                    params: func.params.clone(),
+                    arguments,
+                    func_name: func.func_name.clone(),
+                }))
+            }
+            ScalarExpr::CastExpr(cast) => {
+                let arg = Self::replace_predicate(&cast.argument, items)?;
+                Ok(ScalarExpr::CastExpr(CastExpr {
+                    span: cast.span,
+                    is_try: cast.is_try,
+                    argument: Box::new(arg),
+                    target_type: cast.target_type.clone(),
+                }))
+            }
+            _ => Ok(predicate.clone()),
         }
     }
 }
@@ -317,22 +199,20 @@ impl Rule for RulePushDownFilterEvalScalar {
         let scalar_rel_expr = RelExpr::with_s_expr(s_expr);
         let eval_scalar_prop = scalar_rel_expr.derive_relational_prop_child(0)?;
 
+        let metadata = self.metadata.read();
+        let table_entries = metadata.tables();
+        let is_source_of_view = table_entries.iter().any(|t| t.is_source_of_view());
+
         // Replacing `DerivedColumn` in `Filter` with the column expression defined in the view.
         // This allows us to eliminate the `EvalScalar` and push the filter down to the `Scan`.
-        if used_columns.is_subset(&eval_scalar_prop.output_columns)
-            && !used_columns.is_subset(&eval_scalar_child_prop.output_columns)
+        if (used_columns.is_subset(&eval_scalar_prop.output_columns)
+            && !used_columns.is_subset(&eval_scalar_child_prop.output_columns))
+            || is_source_of_view
         {
             let new_predicates = &filter
                 .predicates
                 .iter()
-                .map(|predicate| {
-                    Self::replace_predicate(
-                        predicate,
-                        &eval_scalar.items,
-                        &eval_scalar_prop.output_columns,
-                        &eval_scalar_child_prop.output_columns,
-                    )
-                })
+                .map(|predicate| Self::replace_predicate(predicate, &eval_scalar.items))
                 .collect::<Result<Vec<ScalarExpr>>>()?;
 
             filter.predicates = new_predicates.to_vec();

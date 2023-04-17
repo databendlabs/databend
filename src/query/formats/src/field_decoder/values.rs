@@ -43,7 +43,10 @@ pub struct FieldDecoderValues {
 }
 
 impl FieldDecoderValues {
-    pub fn create(options: &FileFormatOptionsExt) -> Self {
+    /// currently we assume Values format not Configurable,
+    /// so we can embed it in "strings" of other formats
+    /// and used the same code to encode/decode in clients.
+    pub fn create(options_ext: &FileFormatOptionsExt) -> Self {
         FieldDecoderValues {
             common_settings: CommonSettings {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
@@ -51,7 +54,7 @@ impl FieldDecoderValues {
                 null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
-                timezone: options.timezone,
+                timezone: options_ext.timezone,
             },
         }
     }

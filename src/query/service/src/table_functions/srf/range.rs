@@ -221,7 +221,7 @@ struct RangeSource<const INCLUSIVE: bool> {
 fn get_i64_number(scalar: &Scalar) -> Result<i64> {
     check_number(
         None,
-        FunctionContext::default(),
+        &FunctionContext::default(),
         &Expr::<usize>::Cast {
             span: None,
             is_try: false,

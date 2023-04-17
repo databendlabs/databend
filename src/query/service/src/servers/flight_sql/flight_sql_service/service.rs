@@ -14,6 +14,7 @@
 
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Duration;
 
 use arrow_flight::flight_descriptor::DescriptorType;
 use arrow_flight::flight_service_server::FlightService;
@@ -58,6 +59,7 @@ use common_expression::DataSchema;
 use futures::Stream;
 use prost::Message;
 use tonic::metadata::MetadataValue;
+use tonic::transport::NamedService;
 use tonic::Request;
 use tonic::Response;
 use tonic::Status;
@@ -107,6 +109,10 @@ fn simple_flight_info<T: ProstMessageExt>(message: T) -> Response<FlightInfo> {
     Response::new(info)
 }
 
+impl NamedService for FlightSqlServiceImpl {
+    const NAME: &'static str = "FlightSqlService";
+}
+
 #[tonic::async_trait]
 impl FlightSqlService for FlightSqlServiceImpl {
     type FlightService = FlightSqlServiceImpl;
@@ -141,7 +147,17 @@ impl FlightSqlService for FlightSqlServiceImpl {
         session.get_status().write().is_native_client =
             FlightSqlServiceImpl::get_header_value(request.metadata(), "bendsql").is_some();
 
-        self.sessions.insert(token, session);
+        let session_keep_alive =
+            FlightSqlServiceImpl::get_header_value(request.metadata(), "session_keep_alive")
+                .map(|v| v.parse::<u64>().unwrap_or(360))
+                .unwrap_or(360);
+
+        self.sessions.lock().insert(
+            token,
+            session,
+            Some(Duration::from_secs(session_keep_alive)),
+        );
+
         Ok(resp)
     }
 

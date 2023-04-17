@@ -2,7 +2,7 @@
 title: UNSET
 ---
 
-Sets one or more settings back to their default values. The settings will also be reset to the initial SESSION level if they were set to GLOBAL level. See [Examples](#examples) for how to reset a GLOBAL setting with UNSET.
+Sets one or more system settings back to their default values. The settings will also be reset to the initial SESSION level if they were set to GLOBAL level. See [Examples](#examples) for how to reset a GLOBAL setting with UNSET. For more information about the setting levels, see [Managing Settings](../../10-deploy/06-manage-settings.md). To show all the current settings, use [SHOW SETTINGS](../40-show/show-settings.md).
 
 See also: [SET](01-set-global.md)
 
@@ -14,7 +14,7 @@ UNSET <setting_name> | ( <setting_name> [, <setting_name> ...])
 
 ## Examples
 
-This example assigns new values to some settings, changes their levels to GLOBAL, then resets them to their defaults:
+This example assigns new values to some system settings, changes their levels to GLOBAL, then resets them to their defaults:
 
 ```sql
 ---Show default values
@@ -38,7 +38,6 @@ SELECT name, value, default, level from system.settings where name in ('sql_dial
 
 ---Reset to default values
 UNSET (timezone, sql_dialect);
-UNSET sql_dialect;
 
 SELECT name, value, default, level from system.settings where name in ('sql_dialect', 'timezone');
 

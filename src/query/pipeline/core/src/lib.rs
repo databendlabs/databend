@@ -14,11 +14,13 @@
 
 pub mod processors;
 
+pub mod input_error;
 pub mod pipe;
 pub mod pipeline;
 pub mod pipeline_display;
 pub mod unsafe_cell_wrap;
 
+pub use input_error::InputError;
 pub use pipe::SinkPipeBuilder;
 pub use pipe::SourcePipeBuilder;
 pub use pipe::TransformPipeBuilder;

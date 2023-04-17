@@ -16,6 +16,7 @@ use common_exception::Result;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
+use common_meta_app::principal::TsvFileFormatParams;
 
 use crate::field_encoder::helpers::write_escaped_string;
 use crate::field_encoder::FieldEncoderRowBased;
@@ -36,14 +37,18 @@ pub struct TSVOutputFormatBase<const WITH_NAMES: bool, const WITH_TYPES: bool> {
 }
 
 impl<const WITH_NAMES: bool, const WITH_TYPES: bool> TSVOutputFormatBase<WITH_NAMES, WITH_TYPES> {
-    pub fn create(schema: TableSchemaRef, options: &FileFormatOptionsExt) -> Self {
-        let field_encoder = FieldEncoderTSV::create(options);
+    pub fn create(
+        schema: TableSchemaRef,
+        params: &TsvFileFormatParams,
+        options_ext: &FileFormatOptionsExt,
+    ) -> Self {
+        let field_encoder = FieldEncoderTSV::create(params, options_ext);
         Self {
             schema,
             field_encoder,
-            field_delimiter: options.stage.field_delimiter.as_bytes()[0],
-            record_delimiter: options.stage.record_delimiter.as_bytes().to_vec(),
-            quote: b'\'',
+            field_delimiter: params.field_delimiter.as_bytes()[0],
+            record_delimiter: params.record_delimiter.as_bytes().to_vec(),
+            quote: params.quote.as_bytes()[0],
         }
     }
 

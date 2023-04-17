@@ -22,31 +22,36 @@ MAX(expression)
 
 The maximum value, in the type of the value.
 
-## Examples
+## Example
 
-:::tip
-    numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
-:::
+**Create a Table and Insert Sample Data**
+```sql
+CREATE TABLE temperatures (
+  id INT,
+  city VARCHAR,
+  temperature FLOAT
+);
+
+INSERT INTO temperatures (id, city, temperature)
+VALUES (1, 'New York', 30),
+       (2, 'New York', 28),
+       (3, 'New York', 32),
+       (4, 'Los Angeles', 25),
+       (5, 'Los Angeles', 27);
+```
+
+**Query Demo: Find Maximum Temperature for New York City**
 
 ```sql
-SELECT MAX(*) FROM numbers(3);
-+--------+
-| max(*) |
-+--------+
-|      2 |
-+--------+
+SELECT city, MAX(temperature) AS max_temperature
+FROM temperatures
+WHERE city = 'New York'
+GROUP BY city;
+```
 
-SELECT MAX(number) FROM numbers(3);
-+-------------+
-| max(number) |
-+-------------+
-|           2 |
-+-------------+
-
-SELECT MAX(number) AS max FROM numbers(3);
-+------+
-| max  |
-+------+
-|    2 |
-+------+
+**Result**
+```sql
+|    city    | max_temperature |
+|------------|-----------------|
+| New York   |       32        |
 ```

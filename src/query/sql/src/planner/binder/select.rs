@@ -107,8 +107,9 @@ impl Binder {
             from_context.all_column_bindings(),
             self.name_resolution_ctx.unquoted_ident_case_sensitive,
         );
-        let new_stmt = rewriter.rewrite(stmt)?;
+        let (new_stmt, new_order_by) = rewriter.rewrite(stmt, order_by)?;
         let stmt = new_stmt.as_ref().unwrap_or(stmt);
+        let order_by = new_order_by.as_deref().unwrap_or(order_by);
 
         if let Some(expr) = &stmt.selection {
             s_expr = self.bind_where(&mut from_context, expr, s_expr).await?;
@@ -148,7 +149,8 @@ impl Binder {
         self.analyze_window(&mut from_context, &mut select_list)?;
 
         // `analyze_projection` should behind `analyze_aggregate_select` because `analyze_aggregate_select` will rewrite `grouping`.
-        let (mut scalar_items, projections) = self.analyze_projection(&select_list)?;
+        let (mut scalar_items, projections) =
+            self.analyze_projection(&from_context, &select_list)?;
 
         let having = if let Some(having) = &stmt.having {
             Some(
@@ -161,7 +163,7 @@ impl Binder {
 
         let order_items = self
             .analyze_order_items(
-                &from_context,
+                &mut from_context,
                 &mut scalar_items,
                 &projections,
                 order_by,
@@ -675,6 +677,7 @@ impl Binder {
 struct SelectRewriter<'a> {
     column_binding: &'a [ColumnBinding],
     new_stmt: Option<SelectStmt>,
+    new_order_by: Option<Vec<OrderByExpr>>,
     is_unquoted_ident_case_sensitive: bool,
 }
 
@@ -779,16 +782,22 @@ impl<'a> SelectRewriter<'a> {
         SelectRewriter {
             column_binding,
             new_stmt: None,
+            new_order_by: None,
             is_unquoted_ident_case_sensitive,
         }
     }
 
-    fn rewrite(&mut self, stmt: &SelectStmt) -> Result<Option<SelectStmt>> {
-        self.rewrite_window_references(stmt)?;
+    fn rewrite(
+        &mut self,
+        stmt: &SelectStmt,
+        order_by: &[OrderByExpr],
+    ) -> Result<(Option<SelectStmt>, Option<Vec<OrderByExpr>>)> {
+        self.rewrite_window_references(stmt, order_by)?;
         self.rewrite_pivot(stmt)?;
         self.rewrite_unpivot(stmt)?;
-        Ok(self.new_stmt.take())
+        Ok((self.new_stmt.take(), self.new_order_by.take()))
     }
+
     fn rewrite_pivot(&mut self, stmt: &SelectStmt) -> Result<()> {
         if stmt.from.len() != 1 || stmt.from[0].pivot().is_none() {
             return Ok(());
@@ -899,7 +908,11 @@ impl<'a> SelectRewriter<'a> {
         Ok(())
     }
 
-    fn rewrite_window_references(&mut self, stmt: &SelectStmt) -> Result<()> {
+    fn rewrite_window_references(
+        &mut self,
+        stmt: &SelectStmt,
+        order_by: &[OrderByExpr],
+    ) -> Result<()> {
         if stmt.window_list.is_none() {
             return Ok(());
         }
@@ -944,6 +957,36 @@ impl<'a> SelectRewriter<'a> {
                 },
                 SelectTarget::QualifiedName { .. } => {}
             }
+        }
+
+        if !order_by.is_empty() {
+            let mut new_order_by = order_by.to_vec();
+            for order in &mut new_order_by {
+                match &mut order.expr {
+                    Expr::FunctionCall { window, .. } => {
+                        if let Some(window) = window {
+                            match window {
+                                Window::WindowReference(reference) => {
+                                    let window_spec = window_definitions
+                                        .get(&reference.window_name.name)
+                                        .ok_or_else(|| {
+                                            ErrorCode::SyntaxException("Window not found")
+                                        })?;
+                                    *window = Window::WindowSpec(WindowSpec {
+                                        existing_window_name: None,
+                                        partition_by: window_spec.partition_by.clone(),
+                                        order_by: window_spec.order_by.clone(),
+                                        window_frame: window_spec.window_frame.clone(),
+                                    });
+                                }
+                                Window::WindowSpec(_) => continue,
+                            }
+                        }
+                    }
+                    _ => continue,
+                }
+            }
+            self.new_order_by = Some(new_order_by);
         }
 
         if let Some(ref mut new_stmt) = self.new_stmt {
@@ -1003,14 +1046,11 @@ impl<'a> SelectRewriter<'a> {
             .clone();
 
             let resolved_spec = match referenced_window_spec.existing_window_name.clone() {
-                Some(_) => {
-                    println!("call recursion:{:?}", referenced_name);
-                    Self::rewrite_inherited_window_spec(
-                        &referenced_window_spec,
-                        window_list,
-                        resolved_window,
-                    )?
-                }
+                Some(_) => Self::rewrite_inherited_window_spec(
+                    &referenced_window_spec,
+                    window_list,
+                    resolved_window,
+                )?,
                 None => referenced_window_spec.clone(),
             };
 

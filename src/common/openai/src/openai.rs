@@ -12,36 +12,44 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-pub enum AIModel {
-    // For SQL completion.
-    TextDavinci003,
-    // For embedding.
-    TextEmbeddingAda003,
-    // For Text completion.
-    GPT35Turbo,
-}
-
-// https://platform.openai.com/examples
-impl ToString for AIModel {
-    fn to_string(&self) -> String {
-        match self {
-            AIModel::TextDavinci003 => "text-davinci-003".to_string(),
-            AIModel::TextEmbeddingAda003 => "text-embedding-ada-002".to_string(),
-            AIModel::GPT35Turbo => "gpt-3.5-turbo".to_string(),
-        }
-    }
-}
-
 pub struct OpenAI {
     pub(crate) api_key: String,
     pub(crate) api_base: String,
+    pub(crate) embedding_model: String,
+    pub(crate) completion_model: String,
 }
 
 impl OpenAI {
-    pub fn create(api_key: String) -> Self {
+    pub fn create(
+        api_base: String,
+        api_key: String,
+        embedding_model: String,
+        completion_model: String,
+    ) -> Self {
+        // Check and default.
+        let api_base = if api_base.is_empty() {
+            "https://api.openai.com/v1/".to_string()
+        } else {
+            api_base
+        };
+
+        let embedding_model = if embedding_model.is_empty() {
+            "text-embedding-ada-002".to_string()
+        } else {
+            embedding_model
+        };
+
+        let completion_model = if completion_model.is_empty() {
+            "gpt-3.5-turbo".to_string()
+        } else {
+            completion_model
+        };
+
         OpenAI {
+            api_base,
             api_key,
-            api_base: "https://api.openai.com/v1/".to_string(),
+            embedding_model,
+            completion_model,
         }
     }
 }

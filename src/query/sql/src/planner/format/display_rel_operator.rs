@@ -20,12 +20,10 @@ use itertools::Itertools;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::AggregateMode;
-use crate::plans::AndExpr;
-use crate::plans::ComparisonExpr;
-use crate::plans::ComparisonOp;
 use crate::plans::EvalScalar;
 use crate::plans::Exchange;
 use crate::plans::Filter;
+use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Limit;
@@ -34,11 +32,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::Scan;
 use crate::plans::Sort;
 use crate::plans::Window;
-use crate::BaseTableColumn;
-use crate::ColumnEntry;
-use crate::DerivedColumn;
 use crate::MetadataRef;
-use crate::TableInternalColumn;
 
 #[derive(Clone)]
 pub enum FormatContext {
@@ -120,23 +114,6 @@ pub fn format_scalar(_metadata: &MetadataRef, scalar: &ScalarExpr) -> String {
             }
         }
         ScalarExpr::ConstantExpr(constant) => constant.value.to_string(),
-        ScalarExpr::AndExpr(and) => format!(
-            "({}) AND ({})",
-            format_scalar(_metadata, &and.left),
-            format_scalar(_metadata, &and.right)
-        ),
-        ScalarExpr::OrExpr(or) => format!(
-            "({}) OR ({})",
-            format_scalar(_metadata, &or.left),
-            format_scalar(_metadata, &or.right)
-        ),
-        ScalarExpr::NotExpr(not) => format!("NOT ({})", format_scalar(_metadata, &not.argument),),
-        ScalarExpr::ComparisonExpr(comp) => format!(
-            "{} {} {}",
-            format_scalar(_metadata, &comp.left),
-            comp.op.to_func_name(),
-            format_scalar(_metadata, &comp.right)
-        ),
         ScalarExpr::WindowFunction(win) => win.display_name.clone(),
         ScalarExpr::AggregateFunction(agg) => agg.display_name.clone(),
         ScalarExpr::FunctionCall(func) => {
@@ -277,18 +254,7 @@ fn scan_to_format_tree(
                             .iter()
                             .map(|item| format!(
                                 "{} (#{}) {}",
-                                match metadata.read().column(item.index) {
-                                    ColumnEntry::BaseTableColumn(BaseTableColumn {
-                                        column_name,
-                                        ..
-                                    }) => column_name,
-                                    ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) =>
-                                        alias,
-                                    ColumnEntry::InternalColumn(TableInternalColumn {
-                                        internal_column,
-                                        ..
-                                    }) => internal_column.column_name(),
-                                },
+                                metadata.read().column(item.index).name(),
                                 item.index,
                                 if item.asc { "ASC" } else { "DESC" }
                             ))
@@ -346,18 +312,7 @@ fn logical_get_to_format_tree(
                             .iter()
                             .map(|item| format!(
                                 "{} (#{}) {}",
-                                match metadata.read().column(item.index) {
-                                    ColumnEntry::BaseTableColumn(BaseTableColumn {
-                                        column_name,
-                                        ..
-                                    }) => column_name,
-                                    ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) =>
-                                        alias,
-                                    ColumnEntry::InternalColumn(TableInternalColumn {
-                                        internal_column,
-                                        ..
-                                    }) => internal_column.column_name(),
-                                },
+                                metadata.read().column(item.index).name(),
                                 item.index,
                                 if item.asc { "ASC" } else { "DESC" }
                             ))
@@ -386,10 +341,11 @@ pub fn logical_join_to_format_tree(
         .iter()
         .zip(op.right_conditions.iter())
         .map(|(left, right)| {
-            ComparisonExpr {
-                op: ComparisonOp::Equal,
-                left: Box::new(left.clone()),
-                right: Box::new(right.clone()),
+            FunctionCall {
+                span: None,
+                func_name: "eq".to_string(),
+                params: vec![],
+                arguments: vec![left.clone(), right.clone()],
             }
             .into()
         })
@@ -402,9 +358,11 @@ pub fn logical_join_to_format_tree(
 
     let equi_conditions = if !preds.is_empty() {
         let pred = preds.iter().skip(1).fold(preds[0].clone(), |prev, next| {
-            ScalarExpr::AndExpr(AndExpr {
-                left: Box::new(prev),
-                right: Box::new(next.clone()),
+            ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "and".to_string(),
+                params: vec![],
+                arguments: vec![prev, next.clone()],
             })
         });
         format_scalar(&metadata, &pred)
@@ -630,17 +588,9 @@ fn sort_to_format_tree(
         .items
         .iter()
         .map(|item| {
-            let metadata = metadata.read();
-            let name = match metadata.column(item.index) {
-                ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => column_name,
-                ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
-                ColumnEntry::InternalColumn(TableInternalColumn {
-                    internal_column, ..
-                }) => internal_column.column_name(),
-            };
             format!(
                 "{} (#{}) {}",
-                name,
+                metadata.read().column(item.index).name(),
                 item.index,
                 if item.asc { "ASC" } else { "DESC" }
             )

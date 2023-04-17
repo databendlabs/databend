@@ -26,7 +26,7 @@ use common_expression::SortColumnDescription;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::transforms::transform_block_compact_no_split::BlockCompactorNoSplit;
+use common_pipeline_transforms::processors::transforms::transform_block_compact_for_copy::BlockCompactorForCopy;
 use common_pipeline_transforms::processors::transforms::BlockCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
@@ -65,7 +65,7 @@ impl FuseTable {
                     Ok(ProcessorPtr::create(TransformCompact::try_create(
                         transform_input_port,
                         transform_output_port,
-                        BlockCompactorNoSplit::new(block_compact_thresholds),
+                        BlockCompactorForCopy::new(block_compact_thresholds),
                     )?))
                 })?;
                 pipeline.resize(size)?;
@@ -89,6 +89,7 @@ impl FuseTable {
                     offset: *index,
                     asc: true,
                     nulls_first: false,
+                    is_nullable: false, // This information is not needed here.
                 })
                 .collect();
 
@@ -179,12 +180,13 @@ impl FuseTable {
         let func_ctx = ctx.get_function_context()?;
         if !exprs.is_empty() {
             let num_input_columns = input_schema.fields().len();
+            let func_ctx2 = func_ctx.clone();
             pipeline.add_transform(move |input, output| {
                 Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                     input,
                     output,
                     num_input_columns,
-                    func_ctx,
+                    func_ctx2.clone(),
                     vec![BlockOperator::Map {
                         exprs: exprs.clone(),
                     }],

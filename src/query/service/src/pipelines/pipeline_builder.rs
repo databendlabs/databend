@@ -19,8 +19,11 @@ use common_catalog::table::AppendMode;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_function;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::with_hash_method;
 use common_expression::with_mappedhash_method;
+use common_expression::with_number_mapped_type;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::FunctionContext;
@@ -34,6 +37,7 @@ use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Processor;
 use common_pipeline_sinks::EmptySink;
 use common_pipeline_sinks::Sinker;
 use common_pipeline_sinks::UnionReceiveSink;
@@ -66,7 +70,9 @@ use common_sql::ColumnBinding;
 use common_sql::IndexType;
 use common_storage::DataOperator;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
+use petgraph::matrix_graph::Zero;
 
+use super::processors::transforms::FrameBound;
 use super::processors::transforms::WindowFunctionInfo;
 use super::processors::ProfileWrapper;
 use super::processors::TransformExpandGroupingSets;
@@ -274,7 +280,7 @@ impl PipelineBuilder {
                 input,
                 output,
                 num_input_columns,
-                *func_ctx,
+                func_ctx.clone(),
                 vec![BlockOperator::Project {
                     projection: projections.clone(),
                 }],
@@ -316,7 +322,7 @@ impl PipelineBuilder {
                     input,
                     output,
                     num_input_columns,
-                    func_ctx,
+                    func_ctx.clone(),
                     ops.clone(),
                 )))
             })?;
@@ -379,7 +385,7 @@ impl PipelineBuilder {
                 input,
                 output,
                 num_input_columns,
-                func_ctx,
+                func_ctx.clone(),
                 vec![BlockOperator::Project {
                     projection: project.projections.clone(),
                 }],
@@ -409,10 +415,13 @@ impl PipelineBuilder {
         let num_input_columns = eval_scalar.input.output_schema()?.num_fields();
 
         self.main_pipeline.add_transform(|input, output| {
-            let transform =
-                CompoundBlockOperator::create(input, output, num_input_columns, func_ctx, vec![
-                    op.clone(),
-                ]);
+            let transform = CompoundBlockOperator::create(
+                input,
+                output,
+                num_input_columns,
+                func_ctx.clone(),
+                vec![op.clone()],
+            );
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProfileWrapper::create(
@@ -444,10 +453,13 @@ impl PipelineBuilder {
         let num_input_columns = project_set.input.output_schema()?.num_fields();
 
         self.main_pipeline.add_transform(|input, output| {
-            let transform =
-                CompoundBlockOperator::create(input, output, num_input_columns, func_ctx, vec![
-                    op.clone(),
-                ]);
+            let transform = CompoundBlockOperator::create(
+                input,
+                output,
+                num_input_columns,
+                func_ctx.clone(),
+                vec![op.clone()],
+            );
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProfileWrapper::create(
@@ -577,7 +589,14 @@ impl PipelineBuilder {
             }
         })?;
 
-        if self.ctx.get_cluster().is_empty() {
+        // If cluster mode, spill write will be completed in exchange serialize, because we need scatter the block data first
+        if self.ctx.get_cluster().is_empty()
+            && !self
+                .ctx
+                .get_settings()
+                .get_spilling_bytes_threshold_per_proc()?
+                .is_zero()
+        {
             let operator = DataOperator::instance().operator();
             let location_prefix = format!("_aggregate_spill/{}", self.ctx.get_tenant());
             self.main_pipeline.add_transform(|input, output| {
@@ -618,12 +637,20 @@ impl PipelineBuilder {
         let tenant = self.ctx.get_tenant();
         self.exchange_injector = match params.aggregate_functions.is_empty() {
             true => with_mappedhash_method!(|T| match method.clone() {
-                HashMethodKind::T(method) =>
-                    AggregateInjector::<_, ()>::create(tenant.clone(), method, params.clone()),
+                HashMethodKind::T(method) => AggregateInjector::<_, ()>::create(
+                    &self.ctx,
+                    tenant.clone(),
+                    method,
+                    params.clone()
+                ),
             }),
             false => with_mappedhash_method!(|T| match method.clone() {
-                HashMethodKind::T(method) =>
-                    AggregateInjector::<_, usize>::create(tenant.clone(), method, params.clone()),
+                HashMethodKind::T(method) => AggregateInjector::<_, usize>::create(
+                    &self.ctx,
+                    tenant.clone(),
+                    method,
+                    params.clone()
+                ),
             }),
         };
 
@@ -669,13 +696,22 @@ impl PipelineBuilder {
                 HashMethodKind::T(v) => {
                     let input: &PhysicalPlan = &aggregate.input;
                     if matches!(input, PhysicalPlan::ExchangeSource(_)) {
-                        self.exchange_injector =
-                            AggregateInjector::<_, ()>::create(tenant, v.clone(), params.clone());
+                        self.exchange_injector = AggregateInjector::<_, ()>::create(
+                            &self.ctx,
+                            tenant,
+                            v.clone(),
+                            params.clone(),
+                        );
                     }
 
                     self.build_pipeline(&aggregate.input)?;
                     self.exchange_injector = old_inject;
-                    build_partition_bucket::<_, ()>(v, &mut self.main_pipeline, params.clone())
+                    build_partition_bucket::<_, ()>(
+                        &self.ctx,
+                        v,
+                        &mut self.main_pipeline,
+                        params.clone(),
+                    )
                 }
             }),
             false => with_hash_method!(|T| match method {
@@ -683,6 +719,7 @@ impl PipelineBuilder {
                     let input: &PhysicalPlan = &aggregate.input;
                     if matches!(input, PhysicalPlan::ExchangeSource(_)) {
                         self.exchange_injector = AggregateInjector::<_, usize>::create(
+                            &self.ctx,
                             tenant,
                             v.clone(),
                             params.clone(),
@@ -690,7 +727,12 @@ impl PipelineBuilder {
                     }
                     self.build_pipeline(&aggregate.input)?;
                     self.exchange_injector = old_inject;
-                    build_partition_bucket::<_, usize>(v, &mut self.main_pipeline, params.clone())
+                    build_partition_bucket::<_, usize>(
+                        &self.ctx,
+                        v,
+                        &mut self.main_pipeline,
+                        params.clone(),
+                    )
                 }
             }),
         }
@@ -760,6 +802,7 @@ impl PipelineBuilder {
                     offset,
                     asc: o.asc,
                     nulls_first: o.nulls_first,
+                    is_nullable: input_schema.field(offset).is_nullable(), // Used for check null frame.
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -773,6 +816,7 @@ impl PipelineBuilder {
                     offset: *offset,
                     asc: true,
                     nulls_first: true,
+                    is_nullable: input_schema.field(*offset).is_nullable(),  // This information is not needed here.
                 })
             }
 
@@ -785,14 +829,60 @@ impl PipelineBuilder {
         let func = WindowFunctionInfo::try_create(&window.func, &input_schema)?;
         // Window
         self.main_pipeline.add_transform(|input, output| {
-            let transform = TransformWindow::try_create(
-                input,
-                output,
-                func.clone(),
-                partition_by.clone(),
-                order_by.clone(),
-                window.window_frame.clone(),
-            )?;
+            // The transform can only be created here, because it cannot be cloned.
+
+            let transform = if window.window_frame.units.is_rows() {
+                let start_bound = FrameBound::try_from(&window.window_frame.start_bound)?;
+                let end_bound = FrameBound::try_from(&window.window_frame.end_bound)?;
+                Box::new(TransformWindow::<u64>::try_create_rows(
+                    input,
+                    output,
+                    func.clone(),
+                    partition_by.clone(),
+                    order_by.clone(),
+                    (start_bound, end_bound),
+                )?) as Box<dyn Processor>
+            } else {
+                if order_by.len() == 1 {
+                    // If the length of order_by is 1, there may be a RANGE frame.
+                    let data_type = input_schema
+                        .field(order_by[0].offset)
+                        .data_type()
+                        .remove_nullable();
+                    with_number_mapped_type!(|NUM_TYPE| match data_type {
+                        DataType::Number(NumberDataType::NUM_TYPE) => {
+                            let start_bound =
+                                FrameBound::try_from(&window.window_frame.start_bound)?;
+                            let end_bound = FrameBound::try_from(&window.window_frame.end_bound)?;
+                            return Ok(ProcessorPtr::create(Box::new(
+                                TransformWindow::<NUM_TYPE>::try_create_range(
+                                    input,
+                                    output,
+                                    func.clone(),
+                                    partition_by.clone(),
+                                    order_by.clone(),
+                                    (start_bound, end_bound),
+                                )?,
+                            )
+                                as Box<dyn Processor>));
+                        }
+                        _ => {}
+                    })
+                }
+
+                // There is no offset in the RANGE frame. (just CURRENT ROW or UNBOUNDED)
+                // So we can use any number type to create the transform.
+                let start_bound = FrameBound::try_from(&window.window_frame.start_bound)?;
+                let end_bound = FrameBound::try_from(&window.window_frame.end_bound)?;
+                Box::new(TransformWindow::<u8>::try_create_range(
+                    input,
+                    output,
+                    func.clone(),
+                    partition_by.clone(),
+                    order_by.clone(),
+                    (start_bound, end_bound),
+                )?) as Box<dyn Processor>
+            };
             Ok(ProcessorPtr::create(transform))
         })?;
 
@@ -813,6 +903,7 @@ impl PipelineBuilder {
                     offset,
                     asc: desc.asc,
                     nulls_first: desc.nulls_first,
+                    is_nullable: input_schema.field(offset).is_nullable(),  // This information is not needed here.
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -1124,7 +1215,7 @@ impl PipelineBuilder {
                         transform_output_port,
                         select_schema.clone(),
                         insert_schema.clone(),
-                        func_ctx,
+                        func_ctx.clone(),
                     )
                 })?;
         }

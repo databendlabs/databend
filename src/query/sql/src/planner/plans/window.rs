@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -22,6 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use common_expression::Scalar;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
@@ -193,31 +193,9 @@ pub enum WindowFuncFrameBound {
     #[default]
     CurrentRow,
     /// `<N> PRECEDING` or `UNBOUNDED PRECEDING`
-    Preceding(Option<usize>),
+    Preceding(Option<Scalar>),
     /// `<N> FOLLOWING` or `UNBOUNDED FOLLOWING`.
-    Following(Option<usize>),
-}
-
-impl WindowFuncFrameBound {
-    fn to_number(&self) -> i64 {
-        match self {
-            WindowFuncFrameBound::CurrentRow => 0,
-            WindowFuncFrameBound::Preceding(n) => match n {
-                None => i64::MIN,
-                Some(n) => -(*n as i64),
-            },
-            WindowFuncFrameBound::Following(n) => match n {
-                None => i64::MAX,
-                Some(n) => *n as i64,
-            },
-        }
-    }
-}
-
-impl PartialOrd for WindowFuncFrameBound {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.to_number().partial_cmp(&other.to_number())
-    }
+    Following(Option<Scalar>),
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -226,6 +204,7 @@ pub enum WindowFuncType {
     RowNumber,
     Rank,
     DenseRank,
+    PercentRank,
 }
 
 impl WindowFuncType {
@@ -234,6 +213,7 @@ impl WindowFuncType {
             "row_number" => Ok(WindowFuncType::RowNumber),
             "rank" => Ok(WindowFuncType::Rank),
             "dense_rank" => Ok(WindowFuncType::DenseRank),
+            "percent_rank" => Ok(WindowFuncType::PercentRank),
             _ => Err(ErrorCode::UnknownFunction(format!(
                 "Unknown window function: {}",
                 name
@@ -246,6 +226,7 @@ impl WindowFuncType {
             WindowFuncType::RowNumber => "row_number".to_string(),
             WindowFuncType::Rank => "rank".to_string(),
             WindowFuncType::DenseRank => "dense_rank".to_string(),
+            WindowFuncType::PercentRank => "percent_rank".to_string(),
         }
     }
 
@@ -264,6 +245,7 @@ impl WindowFuncType {
             WindowFuncType::RowNumber | WindowFuncType::Rank | WindowFuncType::DenseRank => {
                 DataType::Number(NumberDataType::UInt64)
             }
+            WindowFuncType::PercentRank => DataType::Number(NumberDataType::Float64),
         }
     }
 }

@@ -6,6 +6,9 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 options="$1"
 
+# Create Database
+echo "CREATE DATABASE IF NOT EXISTS ${MYSQL_DATABASE}" | $MYSQL_CLIENT_CONNECT_DEFAULT
+
 for t in customer lineitem nation orders partsupp part region supplier; do
     echo "DROP TABLE IF EXISTS $t" | $MYSQL_CLIENT_CONNECT
 done

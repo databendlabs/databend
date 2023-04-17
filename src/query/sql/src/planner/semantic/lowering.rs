@@ -47,6 +47,7 @@ impl LoweringContext for Metadata {
             ColumnEntry::BaseTableColumn(column) => Ok(DataType::from(&column.data_type)),
             ColumnEntry::DerivedColumn(column) => Ok(column.data_type.clone()),
             ColumnEntry::InternalColumn(column) => Ok(column.internal_column.data_type()),
+            ColumnEntry::VirtualColumn(column) => Ok(DataType::from(&column.data_type)),
         }
     }
 }
@@ -220,39 +221,6 @@ impl ScalarExpr {
                 span: constant.span,
                 scalar: constant.value.clone(),
             },
-            ScalarExpr::AndExpr(expr) => RawExpr::FunctionCall {
-                span: None,
-                name: "and".to_string(),
-                params: vec![],
-                args: vec![
-                    expr.left.as_raw_expr_with_col_name(),
-                    expr.right.as_raw_expr_with_col_name(),
-                ],
-            },
-            ScalarExpr::OrExpr(expr) => RawExpr::FunctionCall {
-                span: None,
-                name: "or".to_string(),
-                params: vec![],
-                args: vec![
-                    expr.left.as_raw_expr_with_col_name(),
-                    expr.right.as_raw_expr_with_col_name(),
-                ],
-            },
-            ScalarExpr::NotExpr(expr) => RawExpr::FunctionCall {
-                span: None,
-                name: "not".to_string(),
-                params: vec![],
-                args: vec![expr.argument.as_raw_expr_with_col_name()],
-            },
-            ScalarExpr::ComparisonExpr(expr) => RawExpr::FunctionCall {
-                span: None,
-                name: expr.op.to_func_name().to_string(),
-                params: vec![],
-                args: vec![
-                    expr.left.as_raw_expr_with_col_name(),
-                    expr.right.as_raw_expr_with_col_name(),
-                ],
-            },
             ScalarExpr::WindowFunction(win) => RawExpr::ColumnRef {
                 span: None,
                 id: win.display_name.clone(),
@@ -329,39 +297,6 @@ impl ScalarExpr {
             ScalarExpr::ConstantExpr(constant) => RawExpr::Constant {
                 span: constant.span,
                 scalar: constant.value.clone(),
-            },
-            ScalarExpr::AndExpr(expr) => RawExpr::FunctionCall {
-                span: None,
-                name: "and".to_string(),
-                params: vec![],
-                args: vec![
-                    expr.left.as_raw_expr_with_col_index(),
-                    expr.right.as_raw_expr_with_col_index(),
-                ],
-            },
-            ScalarExpr::OrExpr(expr) => RawExpr::FunctionCall {
-                span: None,
-                name: "or".to_string(),
-                params: vec![],
-                args: vec![
-                    expr.left.as_raw_expr_with_col_index(),
-                    expr.right.as_raw_expr_with_col_index(),
-                ],
-            },
-            ScalarExpr::NotExpr(expr) => RawExpr::FunctionCall {
-                span: None,
-                name: "not".to_string(),
-                params: vec![],
-                args: vec![expr.argument.as_raw_expr_with_col_index()],
-            },
-            ScalarExpr::ComparisonExpr(expr) => RawExpr::FunctionCall {
-                span: None,
-                name: expr.op.to_func_name().to_string(),
-                params: vec![],
-                args: vec![
-                    expr.left.as_raw_expr_with_col_index(),
-                    expr.right.as_raw_expr_with_col_index(),
-                ],
             },
             ScalarExpr::WindowFunction(win) => RawExpr::ColumnRef {
                 span: None,

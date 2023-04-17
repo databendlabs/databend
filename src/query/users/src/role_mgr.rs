@@ -57,6 +57,20 @@ impl UserApiProvider {
         }
     }
 
+    #[async_backtrace::framed]
+    pub async fn exists_role(&self, tenant: &str, role: String) -> Result<bool> {
+        match self.get_role(tenant, role).await {
+            Ok(_) => Ok(true),
+            Err(e) => {
+                if e.code() == ErrorCode::UNKNOWN_ROLE {
+                    Ok(false)
+                } else {
+                    Err(e)
+                }
+            }
+        }
+    }
+
     // Add a new role info.
     #[async_backtrace::framed]
     pub async fn add_role(
@@ -65,6 +79,10 @@ impl UserApiProvider {
         role_info: RoleInfo,
         if_not_exists: bool,
     ) -> Result<u64> {
+        if if_not_exists && self.exists_role(tenant, role_info.name.clone()).await? {
+            return Ok(0);
+        }
+
         let client = self.get_role_api_client(tenant)?;
         let add_role = client.add_role(role_info);
         match add_role.await {
@@ -85,7 +103,7 @@ impl UserApiProvider {
     // 2. PUBLIC, on the other side only includes the public accessible privileges, but every role
     //    contains the PUBLIC role. The data objects which owned by PUBLIC can be accessed by any role.
     #[async_backtrace::framed]
-    pub async fn ensure_builtin_roles(&self, tenant: &str) -> Result<u64> {
+    pub async fn ensure_builtin_roles(&self, tenant: &str) -> Result<()> {
         let mut account_admin = RoleInfo::new(BUILTIN_ROLE_ACCOUNT_ADMIN);
         account_admin.grants.grant_privileges(
             &GrantObject::Global,
@@ -102,7 +120,9 @@ impl UserApiProvider {
             ),
             UserPrivilegeType::Select.into(),
         );
-        self.add_role(tenant, public, true).await
+        self.add_role(tenant, public, true).await?;
+
+        Ok(())
     }
 
     #[async_backtrace::framed]

@@ -6,28 +6,39 @@ title: MAX_IF
 
 The suffix `_IF` can be appended to the name of any aggregate function. In this case, the aggregate function accepts an extra argument – a condition.
 
-```
+```sql
 MAX_IF(column, cond)
 ```
 
-## Examples
+## Example
 
-:::tip
-numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
-:::
+**Create a Table and Insert Sample Data**
+```sql
+CREATE TABLE sales (
+  id INT,
+  salesperson_id INT,
+  product_id INT,
+  revenue FLOAT
+);
+
+INSERT INTO sales (id, salesperson_id, product_id, revenue)
+VALUES (1, 1, 1, 1000),
+       (2, 1, 2, 2000),
+       (3, 1, 3, 3000),
+       (4, 2, 1, 1500),
+       (5, 2, 2, 2500);
+```
+
+**Query Demo: Find Maximum Revenue for Salesperson with ID 1**
 
 ```sql
-SELECT max(number) FROM numbers(10);
-+-------------+
-| max(number) |
-+-------------+
-|           9 |
-+-------------+
+SELECT MAX_IF(revenue, salesperson_id = 1) AS max_revenue_salesperson_1
+FROM sales;
+```
 
-SELECT max_if(number, number < 7) FROM numbers(10);
-+------------------------------+
-| max_if(number, (number < 7)) |
-+------------------------------+
-|                            6 |
-+------------------------------+
+**Result**
+```sql
+| max_revenue_salesperson_1 |
+|---------------------------|
+|           3000            |
 ```

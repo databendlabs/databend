@@ -252,6 +252,8 @@ build_exceptions! {
     ShareEndpointAlreadyExists(2714),
     UnknownShareEndpoint(2715),
     UnknownShareEndpointId(2716),
+    UnknownShareTable(2717),
+    CannotShareDatabaseCreatedFromShare(2718),
 
     // Variable error codes.
     UnknownVariable(2801),

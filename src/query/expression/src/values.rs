@@ -348,6 +348,16 @@ impl Scalar {
             _ => unimplemented!(),
         }
     }
+
+    pub fn is_positive(&self) -> bool {
+        match self {
+            Scalar::Number(n) => n.is_positive(),
+            Scalar::Decimal(d) => d.is_positive(),
+            Scalar::Timestamp(t) => *t > 0,
+            Scalar::Date(d) => *d > 0,
+            _ => unreachable!("is_positive() called on non-numeric scalar"),
+        }
+    }
 }
 
 impl<'a> ScalarRef<'a> {

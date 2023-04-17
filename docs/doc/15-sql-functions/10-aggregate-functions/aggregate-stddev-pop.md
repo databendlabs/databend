@@ -33,32 +33,33 @@ STD(expression)
 
 double
 
-## Examples
+## Example
 
-:::tip
-numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
-:::
-
+**Create a Table and Insert Sample Data**
 ```sql
-SELECT STDDEV_POP(number) FROM numbers(10000);
-+--------------------+
-| STDDEV_POP(number) |
-+--------------------+
-|  2886.751331514372 |
-+--------------------+
+CREATE TABLE test_scores (
+  id INT,
+  student_id INT,
+  score FLOAT
+);
 
-SELECT STDDEV(number) FROM numbers(1000);
-+--------------------+
-| STDDEV(number)     |
-+--------------------+
-| 288.67499025720946 |
-+--------------------+
+INSERT INTO test_scores (id, student_id, score)
+VALUES (1, 1, 80),
+       (2, 2, 85),
+       (3, 3, 90),
+       (4, 4, 95),
+       (5, 5, 100);
+```
 
-SELECT STD(number) FROM numbers(100);
-+-------------------+
-| STD(number)       |
-+-------------------+
-| 28.86607004772212 |
-+-------------------+
+**Query Demo: Calculate Population Standard Deviation of Test Scores**
+```sql
+SELECT STDDEV_POP(score) AS test_score_stddev_pop
+FROM test_scores;
+```
 
+**Result**
+```sql
+| test_score_stddev_pop |
+|-----------------------|
+|        7.07107        |
 ```

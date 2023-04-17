@@ -17,7 +17,12 @@ use common_openai::OpenAI;
 fn create_openai() -> Option<OpenAI> {
     let key = std::env::var("OPENAI_API_KEY").unwrap_or("".to_string());
     if !key.is_empty() {
-        Some(OpenAI::create(key))
+        Some(OpenAI::create(
+            "".to_string(),
+            key,
+            "".to_string(),
+            "".to_string(),
+        ))
     } else {
         None
     }

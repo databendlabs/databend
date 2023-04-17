@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use chrono::TimeZone;
@@ -143,6 +144,7 @@ fn test_decode_v24_table_meta() -> anyhow::Result<()> {
         field_comments: vec!["c".to_string(); 21],
         drop_on: None,
         statistics: Default::default(),
+        shared_by: BTreeSet::new(),
     };
 
     common::test_pb_from_to(func_name!(), want())?;

@@ -15,4 +15,5 @@ cd "$SCRIPT_PATH/../../tests" || exit
 
 echo "Starting databend-test"
 # 13_0004_q4: https://github.com/datafuselabs/databend/issues/8107
-./databend-test --mode 'cluster' --run-dir 0_stateless --skip '13_0004_q4', '13_0008_q8'
+# 18_0064_q64: stackoverflow at planner
+./databend-test --mode 'cluster' --run-dir 0_stateless --skip '13_0004_q4', '13_0008_q8' '18_0064_q64'

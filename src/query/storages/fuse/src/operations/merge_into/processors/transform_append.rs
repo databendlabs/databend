@@ -16,6 +16,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
+use common_base::base::ProgressValues;
+use common_base::runtime::GlobalIORuntime;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::BlockThresholds;
@@ -170,8 +172,18 @@ impl AsyncAccumulatingTransform for AppendTransform {
         }
         // 1. serialize block and index
         let block_builder = self.block_builder.clone();
-        let serialized_block_state =
-            tokio_rayon::spawn(move || block_builder.build(data_block)).await?;
+        let serialized_block_state = GlobalIORuntime::instance()
+            .spawn_blocking(move || block_builder.build(data_block))
+            .await?;
+
+        let progress_values = ProgressValues {
+            rows: serialized_block_state.block_meta.row_count as usize,
+            bytes: serialized_block_state.block_meta.block_size as usize,
+        };
+        self.block_builder
+            .ctx
+            .get_write_progress()
+            .incr(&progress_values);
 
         let start = Instant::now();
 

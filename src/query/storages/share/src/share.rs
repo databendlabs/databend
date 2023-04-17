@@ -23,18 +23,46 @@ use common_meta_app::share::ShareTableInfoMap;
 use common_meta_app::share::ShareTableSpec;
 use opendal::Operator;
 
-pub const SHARE_CONFIG_PREFIX: &str = "_share_config";
+const SHARE_CONFIG_PREFIX: &str = "_share_config";
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct ShareSpecVec {
     share_specs: BTreeMap<String, ext::ShareSpecExt>,
 }
 
+pub fn get_share_spec_location(tenant: &String) -> String {
+    format!("{}/{}/share_specs.json", SHARE_CONFIG_PREFIX, tenant,)
+}
+
 pub fn share_table_info_location(tenant: &str, share_name: &str) -> String {
     format!(
         "{}/{}/{}_table_info.json",
-        tenant, SHARE_CONFIG_PREFIX, share_name
+        SHARE_CONFIG_PREFIX, tenant, share_name
     )
+}
+
+#[async_backtrace::framed]
+pub async fn save_share_table_info(
+    tenant: &str,
+    operator: Operator,
+    share_table_info: Vec<ShareTableInfoMap>,
+) -> Result<()> {
+    for (share_name, share_table_info) in share_table_info {
+        let share_name = share_name.clone();
+        let location = share_table_info_location(tenant, &share_name);
+        match share_table_info {
+            Some(table_info_map) => {
+                operator
+                    .write(&location, serde_json::to_vec(&table_info_map)?)
+                    .await?;
+            }
+            None => {
+                operator.delete(&location).await?;
+            }
+        }
+    }
+
+    Ok(())
 }
 
 #[async_backtrace::framed]
@@ -42,10 +70,10 @@ pub async fn save_share_spec(
     tenant: &String,
     operator: Operator,
     spec_vec: Option<Vec<ShareSpec>>,
-    share_table_info: Option<&ShareTableInfoMap>,
+    share_table_info: Option<Vec<ShareTableInfoMap>>,
 ) -> Result<()> {
     if let Some(share_spec) = spec_vec {
-        let location = format!("{}/{}/share_specs.json", tenant, SHARE_CONFIG_PREFIX);
+        let location = get_share_spec_location(tenant);
         let mut share_spec_vec = ShareSpecVec::default();
         for spec in share_spec {
             let share_name = spec.name.clone();
@@ -60,19 +88,8 @@ pub async fn save_share_spec(
     }
 
     // save share table info
-    if let Some((share_name, share_table_info)) = share_table_info {
-        let share_name = share_name.clone();
-        let location = share_table_info_location(tenant, &share_name);
-        match share_table_info {
-            Some(table_info_map) => {
-                operator
-                    .write(&location, serde_json::to_vec(table_info_map)?)
-                    .await?;
-            }
-            None => {
-                operator.delete(&location).await?;
-            }
-        }
+    if let Some(share_table_info) = share_table_info {
+        save_share_table_info(tenant, operator, share_table_info).await?
     }
 
     Ok(())

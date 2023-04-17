@@ -751,6 +751,8 @@ pub enum TokenKind {
     SUBSTR,
     #[token("SEMI", ignore(ascii_case))]
     SEMI,
+    #[token("SOUNDS", ignore(ascii_case))]
+    SOUNDS,
     #[token("TABLE", ignore(ascii_case))]
     TABLE,
     #[token("TABLES", ignore(ascii_case))]
@@ -785,8 +787,6 @@ pub enum TokenKind {
     TRANSIENT,
     #[token("TRIM", ignore(ascii_case))]
     TRIM,
-    #[token("ARRAY_SORT", ignore(ascii_case))]
-    ARRAY_SORT,
     #[token("TRUE", ignore(ascii_case))]
     TRUE,
     #[token("TRUNCATE", ignore(ascii_case))]
@@ -1032,7 +1032,6 @@ impl TokenKind {
             | TokenKind::TRAILING
             // | TokenKind::TREAT
             | TokenKind::TRIM
-            | TokenKind::ARRAY_SORT
             | TokenKind::TRUE
             | TokenKind::TRY_CAST
             // | TokenKind::UNIQUE

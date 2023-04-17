@@ -641,18 +641,20 @@ impl<'a> JoinConditionResolver<'a> {
             right = wrap_cast(&right, &least_super_type);
         }
 
-        if left_used_columns.is_subset(&left_columns)
-            && right_used_columns.is_subset(&right_columns)
-        {
-            left_join_conditions.push(left);
-            right_join_conditions.push(right);
-            return Ok(true);
-        } else if left_used_columns.is_subset(&right_columns)
-            && right_used_columns.is_subset(&left_columns)
-        {
-            left_join_conditions.push(right);
-            right_join_conditions.push(left);
-            return Ok(true);
+        if !left_used_columns.is_empty() && !right_used_columns.is_empty() {
+            if left_used_columns.is_subset(&left_columns)
+                && right_used_columns.is_subset(&right_columns)
+            {
+                left_join_conditions.push(left);
+                right_join_conditions.push(right);
+                return Ok(true);
+            } else if left_used_columns.is_subset(&right_columns)
+                && right_used_columns.is_subset(&left_columns)
+            {
+                left_join_conditions.push(right);
+                right_join_conditions.push(left);
+                return Ok(true);
+            }
         }
         Ok(false)
     }

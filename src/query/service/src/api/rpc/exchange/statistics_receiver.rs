@@ -56,10 +56,10 @@ impl StatisticsReceiver {
 
             let (tx, rx) = match (exchanges.remove(0), exchanges.remove(0)) {
                 (tx @ FlightExchange::Sender { .. }, rx @ FlightExchange::Receiver { .. }) => {
-                    (tx.as_sender(), rx.as_receiver())
+                    (tx.convert_to_sender(), rx.convert_to_receiver())
                 }
                 (rx @ FlightExchange::Receiver { .. }, tx @ FlightExchange::Sender { .. }) => {
-                    (tx.as_sender(), rx.as_receiver())
+                    (tx.convert_to_sender(), rx.convert_to_receiver())
                 }
                 _ => unreachable!(),
             };
@@ -159,8 +159,7 @@ impl StatisticsReceiver {
             Ok(None) => Ok(true),
             Err(transport_error) => Err(transport_error),
             Ok(Some(DataPacket::ErrorCode(error))) => Err(error),
-            Ok(Some(DataPacket::ClosingInput)) => unreachable!(),
-            Ok(Some(DataPacket::ClosingOutput)) => unreachable!(),
+            Ok(Some(DataPacket::Dictionary(_))) => unreachable!(),
             Ok(Some(DataPacket::FragmentData(_))) => unreachable!(),
             Ok(Some(DataPacket::FetchProgressAndPrecommit)) => unreachable!(),
             Ok(Some(DataPacket::ProgressAndPrecommit {

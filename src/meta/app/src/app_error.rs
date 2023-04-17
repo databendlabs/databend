@@ -403,6 +403,28 @@ impl ShareHasNoGrantedPrivilege {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("UnknownShareTable: {tenant}.{share_name} has no share table {table_name}")]
+pub struct UnknownShareTable {
+    pub tenant: String,
+    pub share_name: String,
+    pub table_name: String,
+}
+
+impl UnknownShareTable {
+    pub fn new(
+        tenant: impl Into<String>,
+        share_name: impl Into<String>,
+        table_name: impl Into<String>,
+    ) -> Self {
+        Self {
+            tenant: tenant.into(),
+            share_name: share_name.into(),
+            table_name: table_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("WrongShare: {share_name} has the wrong format")]
 pub struct WrongShare {
     share_name: String,
@@ -475,6 +497,24 @@ impl UnknownShareEndpointId {
     pub fn new(share_endpoint_id: u64, context: impl Into<String>) -> Self {
         Self {
             share_endpoint_id,
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error(
+    "CannotShareDatabaseCreatedFromShare: cannot share database {database_name} which created from share while {context}"
+)]
+pub struct CannotShareDatabaseCreatedFromShare {
+    database_name: String,
+    context: String,
+}
+
+impl CannotShareDatabaseCreatedFromShare {
+    pub fn new(database_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            database_name: database_name.into(),
             context: context.into(),
         }
     }
@@ -581,6 +621,9 @@ pub enum AppError {
     ShareHasNoGrantedPrivilege(#[from] ShareHasNoGrantedPrivilege),
 
     #[error(transparent)]
+    UnknownShareTable(#[from] UnknownShareTable),
+
+    #[error(transparent)]
     WrongShare(#[from] WrongShare),
 
     #[error(transparent)]
@@ -591,6 +634,9 @@ pub enum AppError {
 
     #[error(transparent)]
     UnknownShareEndpointId(#[from] UnknownShareEndpointId),
+
+    #[error(transparent)]
+    CannotShareDatabaseCreatedFromShare(#[from] CannotShareDatabaseCreatedFromShare),
 }
 
 impl AppErrorMessage for UnknownDatabase {
@@ -717,6 +763,15 @@ impl AppErrorMessage for ShareHasNoGrantedPrivilege {
     }
 }
 
+impl AppErrorMessage for UnknownShareTable {
+    fn message(&self) -> String {
+        format!(
+            "unknown share table {} of share {}.{}",
+            self.table_name, self.tenant, self.share_name
+        )
+    }
+}
+
 impl AppErrorMessage for WrongShare {
     fn message(&self) -> String {
         format!("share {} has the wrong format", self.share_name)
@@ -738,6 +793,15 @@ impl AppErrorMessage for UnknownShareEndpoint {
 impl AppErrorMessage for UnknownShareEndpointId {
     fn message(&self) -> String {
         format!("Unknown share endpoint id '{}'", self.share_endpoint_id)
+    }
+}
+
+impl AppErrorMessage for CannotShareDatabaseCreatedFromShare {
+    fn message(&self) -> String {
+        format!(
+            "Cannot share database '{}' which created from share",
+            self.database_name
+        )
     }
 }
 
@@ -821,6 +885,7 @@ impl From<AppError> for ErrorCode {
             AppError::ShareHasNoGrantedPrivilege(err) => {
                 ErrorCode::ShareHasNoGrantedPrivilege(err.message())
             }
+            AppError::UnknownShareTable(err) => ErrorCode::UnknownShareTable(err.message()),
             AppError::WrongShare(err) => ErrorCode::WrongShare(err.message()),
             AppError::ShareEndpointAlreadyExists(err) => {
                 ErrorCode::ShareEndpointAlreadyExists(err.message())
@@ -828,6 +893,9 @@ impl From<AppError> for ErrorCode {
             AppError::UnknownShareEndpoint(err) => ErrorCode::UnknownShareEndpoint(err.message()),
             AppError::UnknownShareEndpointId(err) => {
                 ErrorCode::UnknownShareEndpointId(err.message())
+            }
+            AppError::CannotShareDatabaseCreatedFromShare(err) => {
+                ErrorCode::CannotShareDatabaseCreatedFromShare(err.message())
             }
             AppError::TxnRetryMaxTimes(err) => ErrorCode::TxnRetryMaxTimes(err.message()),
             AppError::DuplicatedUpsertFiles(err) => ErrorCode::DuplicatedUpsertFiles(err.message()),

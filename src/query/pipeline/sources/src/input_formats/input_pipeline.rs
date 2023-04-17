@@ -53,8 +53,6 @@ pub struct StreamingReadBatch {
 #[async_trait::async_trait]
 pub trait AligningStateTrait: Sync + Sized {
     type Pipe: InputFormatPipe<AligningState = Self>;
-    fn try_create(ctx: &Arc<InputContext>, split_info: &Arc<SplitInfo>) -> Result<Self>;
-
     fn align(
         &mut self,
         read_batch: Option<<Self::Pipe as InputFormatPipe>::ReadBatch>,
@@ -67,8 +65,6 @@ pub trait AligningStateTrait: Sync + Sized {
 
 pub trait BlockBuilderTrait {
     type Pipe: InputFormatPipe<BlockBuilder = Self>;
-    fn create(ctx: Arc<InputContext>) -> Self;
-
     fn deserialize(
         &mut self,
         batch: Option<<Self::Pipe as InputFormatPipe>::RowBatch>,
@@ -97,6 +93,13 @@ pub trait InputFormatPipe: Sized + Send + 'static {
     type RowBatch: RowBatchTrait;
     type AligningState: AligningStateTrait<Pipe = Self> + Send;
     type BlockBuilder: BlockBuilderTrait<Pipe = Self> + Send;
+
+    fn try_create_align_state(
+        ctx: &Arc<InputContext>,
+        split_info: &Arc<SplitInfo>,
+    ) -> Result<Self::AligningState>;
+
+    fn try_create_block_builder(ctx: &Arc<InputContext>) -> Result<Self::BlockBuilder>;
 
     fn get_split_meta(split_info: &Arc<SplitInfo>) -> Option<&Self::SplitMeta> {
         split_info

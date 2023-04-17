@@ -11,6 +11,7 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
+
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::Arc;
@@ -24,15 +25,17 @@ use common_formats::FieldDecoderRowBased;
 use common_formats::FieldDecoderXML;
 use common_formats::FileFormatOptionsExt;
 use common_io::cursor_ext::*;
+use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageFileFormatType;
+use common_meta_app::principal::XmlFileFormatParams;
+use common_pipeline_core::InputError;
 use xml::reader::XmlEvent;
 use xml::ParserConfig;
 
 use crate::input_formats::AligningStateTextBased;
 use crate::input_formats::BlockBuilder;
 use crate::input_formats::InputContext;
-use crate::input_formats::InputError;
 use crate::input_formats::InputFormatTextBase;
 use crate::input_formats::RowBatch;
 use crate::input_formats::SplitInfo;
@@ -97,14 +100,16 @@ pub struct AligningStateWholeFile {
     bufs: Vec<Vec<u8>>,
 }
 
-impl AligningStateTextBased for AligningStateWholeFile {
+impl AligningStateWholeFile {
     fn try_create(_ctx: &Arc<InputContext>, split_info: &Arc<SplitInfo>) -> Result<Self> {
         Ok(Self {
             split_info: split_info.clone(),
             bufs: vec![],
         })
     }
+}
 
+impl AligningStateTextBased for AligningStateWholeFile {
     fn align(&mut self, buf: &[u8]) -> Result<Vec<RowBatch>> {
         self.bufs.push(buf.to_vec());
         Ok(vec![])
@@ -133,8 +138,21 @@ impl InputFormatTextBase for InputFormatXML {
         StageFileFormatType::Xml
     }
 
-    fn create_field_decoder(options: &FileFormatOptionsExt) -> Arc<dyn FieldDecoder> {
-        Arc::new(FieldDecoderXML::create(options))
+    fn create_field_decoder(
+        params: &FileFormatParams,
+        options: &FileFormatOptionsExt,
+    ) -> Arc<dyn FieldDecoder> {
+        Arc::new(FieldDecoderXML::create(
+            XmlFileFormatParams::downcast_unchecked(params).clone(),
+            options,
+        ))
+    }
+
+    fn try_create_align_state(
+        ctx: &Arc<InputContext>,
+        split_info: &Arc<SplitInfo>,
+    ) -> Result<Self::AligningState> {
+        AligningStateWholeFile::try_create(ctx, split_info)
     }
 
     fn deserialize(
@@ -149,14 +167,15 @@ impl InputFormatTextBase for InputFormatXML {
         let columns = &mut builder.mutable_columns;
 
         let path = &batch.split_info.file.path;
-        let row_tag = builder.ctx.format_options.stage.row_tag.as_bytes().to_vec();
+        let xml_params = XmlFileFormatParams::downcast_unchecked(&builder.ctx.file_format_params);
+        let row_tag = xml_params.row_tag.as_bytes().to_vec();
         let field_tag = vec![b'f', b'i', b'e', b'l', b'd'];
 
         let mut buf = Cursor::new(&batch.data);
         let num_fields = builder.ctx.schema.fields().len();
         let reader = ParserConfig::new().create_reader(&mut buf);
 
-        let mut rows_to_skip = builder.ctx.format_options.stage.skip_header as usize;
+        let mut rows_to_skip = 0;
 
         let mut cols = HashMap::with_capacity(num_fields);
 

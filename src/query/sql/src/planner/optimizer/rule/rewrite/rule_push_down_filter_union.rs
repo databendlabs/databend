@@ -21,14 +21,10 @@ use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::AggregateFunction;
-use crate::plans::AndExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
-use crate::plans::ComparisonExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
-use crate::plans::NotExpr;
-use crate::plans::OrExpr;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -157,22 +153,6 @@ fn replace_column_binding(
             unreachable!()
         }
         constant_expr @ ScalarExpr::ConstantExpr(_) => Ok(constant_expr),
-        ScalarExpr::AndExpr(expr) => Ok(ScalarExpr::AndExpr(AndExpr {
-            left: Box::new(replace_column_binding(index_pairs, *expr.left)?),
-            right: Box::new(replace_column_binding(index_pairs, *expr.right)?),
-        })),
-        ScalarExpr::OrExpr(expr) => Ok(ScalarExpr::OrExpr(OrExpr {
-            left: Box::new(replace_column_binding(index_pairs, *expr.left)?),
-            right: Box::new(replace_column_binding(index_pairs, *expr.right)?),
-        })),
-        ScalarExpr::NotExpr(expr) => Ok(ScalarExpr::NotExpr(NotExpr {
-            argument: Box::new(replace_column_binding(index_pairs, *expr.argument)?),
-        })),
-        ScalarExpr::ComparisonExpr(expr) => Ok(ScalarExpr::ComparisonExpr(ComparisonExpr {
-            op: expr.op,
-            left: Box::new(replace_column_binding(index_pairs, *expr.left)?),
-            right: Box::new(replace_column_binding(index_pairs, *expr.right)?),
-        })),
         ScalarExpr::WindowFunction(expr) => Ok(ScalarExpr::WindowFunction(WindowFunc {
             display_name: expr.display_name,
             func: match expr.func {

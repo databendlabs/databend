@@ -15,13 +15,9 @@
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::plans::AndExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
-use crate::plans::ComparisonExpr;
 use crate::plans::FunctionCall;
-use crate::plans::NotExpr;
-use crate::plans::OrExpr;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ScalarExpr;
@@ -41,26 +37,6 @@ impl<'a> WindowChecker<'a> {
             ScalarExpr::BoundColumnRef(_)
             | ScalarExpr::BoundInternalColumnRef(_)
             | ScalarExpr::ConstantExpr(_) => Ok(scalar.clone()),
-            ScalarExpr::AndExpr(scalar) => Ok(AndExpr {
-                left: Box::new(self.resolve(&scalar.left)?),
-                right: Box::new(self.resolve(&scalar.right)?),
-            }
-            .into()),
-            ScalarExpr::OrExpr(scalar) => Ok(OrExpr {
-                left: Box::new(self.resolve(&scalar.left)?),
-                right: Box::new(self.resolve(&scalar.right)?),
-            }
-            .into()),
-            ScalarExpr::NotExpr(scalar) => Ok(NotExpr {
-                argument: Box::new(self.resolve(&scalar.argument)?),
-            }
-            .into()),
-            ScalarExpr::ComparisonExpr(scalar) => Ok(ComparisonExpr {
-                op: scalar.op.clone(),
-                left: Box::new(self.resolve(&scalar.left)?),
-                right: Box::new(self.resolve(&scalar.right)?),
-            }
-            .into()),
             ScalarExpr::FunctionCall(func) => {
                 let args = func
                     .arguments
@@ -110,7 +86,7 @@ impl<'a> WindowChecker<'a> {
                     }
                     .into());
                 }
-                Err(ErrorCode::Internal("Invalid window function"))
+                Err(ErrorCode::Internal("Window Check: Invalid window function"))
             }
 
             ScalarExpr::AggregateFunction(_) => unreachable!(),

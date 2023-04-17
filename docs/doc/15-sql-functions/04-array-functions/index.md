@@ -2,6 +2,9 @@
 title: 'Array Functions'
 ---
 
+
+SQL Array Functions and Usage.
+
 | Function                             | Description                                                                                  | Example                               | Result                   |
 |--------------------------------------|----------------------------------------------------------------------------------------------|---------------------------------------|--------------------------|
 | **GET(array, index)**                | Returns an element from the array by index (1-based)                                         | **GET([1, 2], 2)**                    | 2                        |
@@ -11,7 +14,7 @@ title: 'Array Functions'
 | **ARRAY_INDEXOF(array, item)**       | Returns the index(1-based) of an element if the array contains the element                   | **ARRAY_INDEXOF([1, 2, 9], 9)**       | 3                        |
 | **ARRAY_SLICE(array, start[, end])** | Extracts a slice from the array by index (1-based)                                           | **ARRAY_SLICE([1, 21, 32, 4], 2, 3)** | [21,32]                  |
 | **ARRAY_SORT(array)**                | Sorts elements in the array in ascending order                                               | **ARRAY_SORT([1, 4, 3, 2])**          | [1,2,3,4]                |
-| **ARRAY_<aggr\>(array)**             | Aggregates elements in the array with an aggregate function (sum, count, avg, min, max, any) | **ARRAY_SUM([1, 2, 3, 4]**            | 10                       |
+| **ARRAY_AGGREGATE(array, name)**     | Aggregates elements in the array with an aggregate function (sum, count, avg, min, max, any, ...) | **ARRAY_AGGREGATE([1, 2, 3, 4], 'SUM')**  | 10                       |
 | **ARRAY_UNIQUE(array)**              | Counts unique elements in the array (except NULL)                                            | **ARRAY_UNIQUE([1, 2, 3, 3, 4])**     | 4                        |
 | **ARRAY_DISTINCT(array)**            | Removes all duplicates and NULLs from the array without preserving the original order        | **ARRAY_DISTINCT([1, 2, 2, 4])**      | [1,2,4]                  |
 | **ARRAY_PREPEND(item, array)**       | Prepends an element to the array                                                             | **ARRAY_PREPEND(1, [3, 4])**          | [1,3,4]                  |
@@ -24,6 +27,12 @@ title: 'Array Functions'
 **ARRAY_SORT(array)** can accept two optional parameters, `order` and `nullposition`, which can be specified through the syntax **ARRAY_SORT(array, order, nullposition)**.
    - `order` specifies the sorting order as either ascending (ASC) or descending (DESC). Defaults to ASC.
    - `nullposition` determines the position of NULL values in the sorting result, at the beginning (NULLS FIRST) or at the end (NULLS LAST) of the sorting output. Defaults to NULLS FIRST.
+:::
+
+:::note
+**ARRAY_AGGREGATE(array, name)** supports the following aggregation functions, `avg`, `count`, `max`, `min`, `sum`, `any`, `stddev_samp`, `stddev_pop`, `stddev`, `std`, `median`, `approx_count_distinct`, `kurtosis`, `skewness`.
+
+**ARRAY_AGGREGATE(array, name)** function also support rewrite as **ARRAY_<name\>(array)**. Following is a list of existing rewrites, `array_avg`, `array_count`, `array_max`, `array_min`, `array_sum`, `array_any`, `array_stddev_samp`, `array_stddev_pop`, `array_stddev`, `array_std`, `array_median`, `array_approx_count_distinct`, `array_kurtosis`, `array_skewness`.
 :::
 
 :::note

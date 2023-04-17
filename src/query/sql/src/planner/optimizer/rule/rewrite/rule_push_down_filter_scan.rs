@@ -19,14 +19,10 @@ use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::AggregateFunction;
-use crate::plans::AndExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
-use crate::plans::ComparisonExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
-use crate::plans::NotExpr;
-use crate::plans::OrExpr;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::Scan;
@@ -110,41 +106,6 @@ impl RulePushDownFilterScan {
                     }
                 }
                 Ok(predicate.clone())
-            }
-            ScalarExpr::AndExpr(scalar) => {
-                let left = Self::replace_view_column(&scalar.left, table_entries, column_entries)?;
-                let right =
-                    Self::replace_view_column(&scalar.right, table_entries, column_entries)?;
-                Ok(ScalarExpr::AndExpr(AndExpr {
-                    left: Box::new(left),
-                    right: Box::new(right),
-                }))
-            }
-            ScalarExpr::OrExpr(scalar) => {
-                let left = Self::replace_view_column(&scalar.left, table_entries, column_entries)?;
-                let right =
-                    Self::replace_view_column(&scalar.right, table_entries, column_entries)?;
-                Ok(ScalarExpr::OrExpr(OrExpr {
-                    left: Box::new(left),
-                    right: Box::new(right),
-                }))
-            }
-            ScalarExpr::NotExpr(scalar) => {
-                let argument =
-                    Self::replace_view_column(&scalar.argument, table_entries, column_entries)?;
-                Ok(ScalarExpr::NotExpr(NotExpr {
-                    argument: Box::new(argument),
-                }))
-            }
-            ScalarExpr::ComparisonExpr(scalar) => {
-                let left = Self::replace_view_column(&scalar.left, table_entries, column_entries)?;
-                let right =
-                    Self::replace_view_column(&scalar.right, table_entries, column_entries)?;
-                Ok(ScalarExpr::ComparisonExpr(ComparisonExpr {
-                    op: scalar.op.clone(),
-                    left: Box::new(left),
-                    right: Box::new(right),
-                }))
             }
             ScalarExpr::WindowFunction(window) => {
                 let func = match &window.func {
@@ -262,6 +223,7 @@ impl RulePushDownFilterScan {
                             break;
                         }
                     }
+                    ColumnEntry::VirtualColumn(_) => {}
                 }
             }
             if !contain_derived_column {

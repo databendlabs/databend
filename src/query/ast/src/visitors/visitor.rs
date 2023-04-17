@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_exception::Span;
-use common_meta_app::principal::FileFormatOptions;
+use common_meta_app::principal::FileFormatOptionsAst;
 use common_meta_app::principal::PrincipalIdentity;
 use common_meta_app::principal::UserIdentity;
 
@@ -293,10 +293,6 @@ pub trait Visitor<'ast>: Sized {
         }
     }
 
-    fn visit_array_sort(&mut self, _span: Span, expr: &'ast Expr, _asc: bool, _null_first: bool) {
-        walk_expr(self, expr);
-    }
-
     fn visit_map(&mut self, _span: Span, kvs: &'ast [(Expr, Expr)]) {
         for (key_expr, val_expr) in kvs {
             walk_expr(self, key_expr);
@@ -509,7 +505,7 @@ pub trait Visitor<'ast>: Sized {
         &mut self,
         _if_not_exists: bool,
         _name: &'ast str,
-        _file_format_options: &'ast FileFormatOptions,
+        _file_format_options: &'ast FileFormatOptionsAst,
     ) {
     }
 

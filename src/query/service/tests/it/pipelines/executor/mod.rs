@@ -13,3 +13,4 @@
 // limitations under the License.
 
 mod executor_graph;
+mod pipeline_executor;
