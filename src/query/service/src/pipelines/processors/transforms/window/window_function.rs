@@ -35,6 +35,7 @@ pub enum WindowFunctionInfo {
     RowNumber,
     Rank,
     DenseRank,
+    PercentRank,
 }
 
 pub struct WindowFuncAggImpl {
@@ -91,6 +92,7 @@ pub enum WindowFunctionImpl {
     RowNumber,
     Rank,
     DenseRank,
+    PercentRank,
 }
 
 impl WindowFunctionInfo {
@@ -115,6 +117,7 @@ impl WindowFunctionInfo {
             WindowFunction::RowNumber => Self::RowNumber,
             WindowFunction::Rank => Self::Rank,
             WindowFunction::DenseRank => Self::DenseRank,
+            WindowFunction::PercentRank => Self::PercentRank,
         })
     }
 }
@@ -140,6 +143,7 @@ impl WindowFunctionImpl {
             WindowFunctionInfo::RowNumber => Self::RowNumber,
             WindowFunctionInfo::Rank => Self::Rank,
             WindowFunctionInfo::DenseRank => Self::DenseRank,
+            WindowFunctionInfo::PercentRank => Self::PercentRank,
         })
     }
 
@@ -149,6 +153,7 @@ impl WindowFunctionImpl {
             Self::RowNumber | Self::Rank | Self::DenseRank => {
                 DataType::Number(NumberDataType::UInt64)
             }
+            Self::PercentRank => DataType::Number(NumberDataType::Float64),
         })
     }
 

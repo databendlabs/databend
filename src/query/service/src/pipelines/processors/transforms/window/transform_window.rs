@@ -109,6 +109,8 @@ pub struct TransformWindow<T: Number> {
     frame_end: RowPtr,
     frame_started: bool,
     frame_ended: bool,
+    // for percent_rank/cume_dist
+    frame_size: usize,
 
     // Can be used to optimize window frame sliding.
     prev_frame_start: RowPtr,
@@ -471,6 +473,14 @@ impl<T: Number> TransformWindow<T> {
                     self.current_dense_rank as u64,
                 )));
             }
+            WindowFunctionImpl::PercentRank => {
+                let percent = if self.frame_size <= 1 {
+                    0_f64
+                } else {
+                    ((self.current_rank - 1) as f64) / ((self.frame_size - 1) as f64)
+                };
+                builder.push(ScalarRef::Number(NumberScalar::Float64(percent.into())));
+            }
         };
 
         Ok(())
@@ -539,6 +549,7 @@ impl TransformWindow<u64> {
             frame_end: RowPtr::default(),
             frame_started: false,
             frame_ended: false,
+            frame_size: 0,
             prev_frame_start: RowPtr::default(),
             prev_frame_end: RowPtr::default(),
             peer_group_start: RowPtr::default(),
@@ -603,6 +614,7 @@ where T: Number + ResultTypeOfUnary
             frame_end: RowPtr::default(),
             frame_started: false,
             frame_ended: false,
+            frame_size: 0,
             prev_frame_start: RowPtr::default(),
             prev_frame_end: RowPtr::default(),
             peer_group_start: RowPtr::default(),
@@ -734,6 +746,33 @@ where T: Number + ResultTypeOfUnary
         }
     }
 
+    fn count_rows(&self, start: &RowPtr, end: &RowPtr) -> usize {
+        if start.block == end.block {
+            end.row - start.row
+        } else {
+            let mut count = self.block_at(start).num_rows() - start.row + end.row;
+            for block in (start.block + 1)..end.block {
+                count += self.blocks[block].block.num_rows();
+            }
+            count
+        }
+    }
+
+    fn count_rows_in_frame(&mut self) {
+        self.frame_size = self.count_rows(&self.frame_start, &self.frame_end)
+    }
+
+    fn compute_on_frame(&mut self) -> Result<()> {
+        match &self.func {
+            WindowFunctionImpl::Aggregate(agg) => self.apply_aggregate(agg),
+            WindowFunctionImpl::PercentRank => {
+                self.count_rows_in_frame();
+                Ok(())
+            }
+            _ => Ok(()),
+        }
+    }
+
     /// When adding a [`DataBlock`], we compute the aggregations to the end.
     ///
     /// For each row in the input block,
@@ -813,9 +852,7 @@ where T: Number + ResultTypeOfUnary
                     }
 
                     // 3.1
-                    if let WindowFunctionImpl::Aggregate(agg) = &self.func {
-                        self.apply_aggregate(agg)?;
-                    }
+                    self.compute_on_frame()?;
                 }
 
                 self.merge_result_of_current_row()?;
@@ -827,6 +864,7 @@ where T: Number + ResultTypeOfUnary
                 self.prev_frame_end = self.frame_end;
                 self.frame_started = false;
                 self.frame_ended = false;
+                self.frame_size = 0;
             }
 
             if self.input_is_finished {
