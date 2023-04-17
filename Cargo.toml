@@ -10,6 +10,7 @@ members = [
     # Binaries
     "src/binaries",
     "src/binaries/meta-upgrade-09",
+    "src/binaries/query-enterprise",
     # Common
     "src/common/arrow",
     "src/common/auth",
