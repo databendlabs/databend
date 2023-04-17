@@ -607,7 +607,7 @@ impl<'a> TypeChecker<'a> {
                                 "no function matches the given name: '{func_name}', do you mean {}?",
                                 possible_funcs.join(", ")
                             ))
-                            .set_span(*span));
+                                .set_span(*span));
                         }
                     }
                 }
@@ -1389,6 +1389,26 @@ impl<'a> TypeChecker<'a> {
                     .await?;
                 self.resolve_scalar_function_call(span, "not", vec![], vec![positive])
                     .await
+            }
+            BinaryOperator::SoundsLike => {
+                // rewrite "expr1 SOUNDS LIKE expr2" to "SOUNDEX(expr1) = SOUNDEX(expr2)"
+                let box (left, _) = self.resolve(left).await?;
+                let box (right, _) = self.resolve(right).await?;
+
+                let (left, _) = *self
+                    .resolve_scalar_function_call(span, "soundex", vec![], vec![left])
+                    .await?;
+                let (right, _) = *self
+                    .resolve_scalar_function_call(span, "soundex", vec![], vec![right])
+                    .await?;
+
+                self.resolve_scalar_function_call(
+                    span,
+                    &BinaryOperator::Eq.to_func_name(),
+                    vec![],
+                    vec![left, right],
+                )
+                .await
             }
             BinaryOperator::Gt
             | BinaryOperator::Lt
