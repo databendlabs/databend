@@ -18,38 +18,41 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_arrow::parquet::metadata::ColumnDescriptor;
-use common_base::base::tokio;
-use common_catalog::plan::PartInfoPtr;
-use common_catalog::plan::NUM_BLOCK_ID_BITS;
-use common_catalog::plan::NUM_SEGMENT_ID_BITS;
+use common_catalog::plan::split_row_id;
+use common_catalog::plan::Projection;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::DataBlock;
+use common_expression::TableSchemaRef;
 use common_pipeline_transforms::processors::transforms::AsyncTransform;
+use opendal::Operator;
 
+use super::fuse_row_fetcher::build_partitions_map;
 use super::native_data_source::DataChunks;
 use super::native_data_source_deserializer::NativeDeserializeDataTransform;
 use crate::io::BlockReader;
 
-pub struct TransformNativeRowsFetcher {
-    row_id_column_idx: usize,
-    reader: Arc<BlockReader>,
+pub struct TransformNativeRowsFetcher<const BLOCKING_IO: bool> {
+    ctx: Arc<dyn TableContext>,
 
-    /// The partition map.
-    ///
-    /// - Key: seg_id + block_id, which is the high 32 bits of the row id.
-    /// - Value: the partition info.
-    part_map: Arc<HashMap<u64, PartInfoPtr>>,
-
+    table_schema: TableSchemaRef,
+    projection: Projection,
     column_leaves: Vec<Vec<ColumnDescriptor>>,
+
+    row_id_column_idx: usize,
+
+    operator: Operator,
+    reader: Arc<BlockReader>,
 }
 
 #[async_trait::async_trait]
-impl AsyncTransform for TransformNativeRowsFetcher {
+impl<const BLOCKING_IO: bool> AsyncTransform for TransformNativeRowsFetcher<BLOCKING_IO> {
     const NAME: &'static str = "TransformNativeRowsFetcher";
 
+    #[async_backtrace::framed]
     async fn transform(&mut self, mut data: DataBlock) -> Result<DataBlock> {
         let num_rows = data.num_rows();
         if num_rows == 0 {
@@ -67,27 +70,40 @@ impl AsyncTransform for TransformNativeRowsFetcher {
         let mut part_set = HashSet::new();
         let mut row_set = Vec::with_capacity(num_rows);
         for row_id in row_id_column.iter() {
-            let part_id = row_id >> (NUM_SEGMENT_ID_BITS + NUM_BLOCK_ID_BITS);
-            let idx_within_block = row_id & ((1 << (NUM_SEGMENT_ID_BITS + NUM_BLOCK_ID_BITS)) - 1);
+            let (part_id, idx) = split_row_id(*row_id);
             part_set.insert(part_id);
-            row_set.push((part_id, idx_within_block));
+            row_set.push((part_id, idx));
         }
 
+        let (snapshot_loc, ver) = self
+            .ctx
+            .get_snapshot()
+            .ok_or_else(|| ErrorCode::Internal("Snapshot location is not found"))?;
+        let part_map = build_partitions_map(
+            snapshot_loc,
+            ver,
+            self.operator.clone(),
+            self.table_schema.clone(),
+            &self.projection,
+        )
+        .await?;
+
         let mut chunks = Vec::with_capacity(part_set.len());
-        for part_id in part_set.into_iter() {
-            let part = self.part_map[&part_id].clone();
-            let reader = self.reader.clone();
-            chunks.push(async move {
-                let handler = tokio::spawn(async_backtrace::location!().frame(async move {
-                    Ok::<_, ErrorCode>((
-                        part_id,
-                        reader.async_read_native_columns_data(part).await?,
-                    ))
-                }));
-                handler.await.unwrap()
-            });
+        if BLOCKING_IO {
+            for part_id in part_set.into_iter() {
+                let part = part_map[&part_id].clone();
+                let reader = self.reader.clone();
+                let chunk = reader.sync_read_native_columns_data(part)?;
+                chunks.push((part_id, chunk));
+            }
+        } else {
+            for part_id in part_set.into_iter() {
+                let part = part_map[&part_id].clone();
+                let reader = self.reader.clone();
+                let chunk = reader.async_read_native_columns_data(part).await?;
+                chunks.push((part_id, chunk));
+            }
         }
-        let chunks = futures::future::try_join_all(chunks).await?;
         let mut part_idx_map = HashMap::with_capacity(chunks.len());
         let fetched_blocks = chunks
             .into_iter()
@@ -115,7 +131,7 @@ impl AsyncTransform for TransformNativeRowsFetcher {
     }
 }
 
-impl TransformNativeRowsFetcher {
+impl<const BLOCKING_IO: bool> TransformNativeRowsFetcher<BLOCKING_IO> {
     fn build_block(&self, mut chunks: DataChunks) -> Result<DataBlock> {
         let mut array_iters = BTreeMap::new();
 

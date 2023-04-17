@@ -110,8 +110,8 @@ pub trait Table: Sync + Send {
         false
     }
 
-    /// Whether the table engine supports virtual columns optimization for Variant types.
-    fn support_variant_virtual_columns(&self) -> bool {
+    /// Whether the table engine supports virtual columns optimization.
+    fn support_virtual_columns(&self) -> bool {
         false
     }
 

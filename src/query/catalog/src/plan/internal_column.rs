@@ -27,11 +27,31 @@ use common_expression::Value;
 // Since `DEFAULT_BLOCK_PER_SEGMENT` is 1000, so `block_id` 10 bits is enough.
 pub const NUM_BLOCK_ID_BITS: usize = 10;
 pub const NUM_SEGMENT_ID_BITS: usize = 22;
+pub const NUM_ROW_ID_PREFIX_BITS: usize = NUM_BLOCK_ID_BITS + NUM_SEGMENT_ID_BITS;
 
 pub const ROW_ID: &str = "_row_id";
 pub const SNAPSHOT_NAME: &str = "_snapshot_name";
 pub const SEGMENT_NAME: &str = "_segment_name";
 pub const BLOCK_NAME: &str = "_block_name";
+
+#[inline(always)]
+pub fn compute_row_id_prefix(seg_id: u64, block_id: u64) -> u64 {
+    let seg_id = seg_id & ((1 << NUM_SEGMENT_ID_BITS) - 1);
+    let block_id = block_id & ((1 << NUM_BLOCK_ID_BITS) - 1);
+    (seg_id << NUM_BLOCK_ID_BITS) | block_id
+}
+
+#[inline(always)]
+pub fn compute_row_id(prefix: u64, idx: u64) -> u64 {
+    (prefix << NUM_ROW_ID_PREFIX_BITS) | (idx & ((1 << NUM_ROW_ID_PREFIX_BITS) - 1))
+}
+
+#[inline(always)]
+pub fn split_row_id(id: u64) -> (u64, u64) {
+    let prefix = id >> NUM_ROW_ID_PREFIX_BITS;
+    let idx = id & ((1 << NUM_ROW_ID_PREFIX_BITS) - 1);
+    (prefix, idx)
+}
 
 // meta data for generate internal columns
 #[derive(Debug)]
@@ -101,10 +121,10 @@ impl InternalColumn {
             InternalColumnType::RowId => {
                 let block_id = meta.block_id as u64;
                 let seg_id = meta.segment_id as u64;
-                let high_32bit = (seg_id << NUM_SEGMENT_ID_BITS) + (block_id << NUM_BLOCK_ID_BITS);
+                let high_32bit = compute_row_id_prefix(seg_id, block_id) << NUM_ROW_ID_PREFIX_BITS;
                 let mut row_ids = Vec::with_capacity(num_rows);
                 for i in 0..num_rows {
-                    let row_id = high_32bit + i as u64;
+                    let row_id = compute_row_id(high_32bit, i as u64);
                     row_ids.push(row_id);
                 }
                 BlockEntry {

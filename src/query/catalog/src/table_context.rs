@@ -101,6 +101,9 @@ pub trait TableContext: Send + Sync {
     fn get_cacheable(&self) -> bool;
     fn set_cacheable(&self, cacheable: bool);
 
+    fn set_snapshot(&self, location: String, ver: u64);
+    fn get_snapshot(&self) -> Option<(String, u64)>;
+
     fn attach_query_str(&self, kind: String, query: String);
     fn get_query_str(&self) -> String;
 

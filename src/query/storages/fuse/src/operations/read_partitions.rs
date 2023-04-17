@@ -408,7 +408,7 @@ impl FuseTable {
         )
     }
 
-    fn projection_part(
+    pub(crate) fn projection_part(
         meta: &BlockMeta,
         block_meta_index: &Option<BlockMetaIndex>,
         column_nodes: &ColumnNodes,

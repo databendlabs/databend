@@ -441,6 +441,14 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn set_snapshot(&self, location: String, ver: u64) {
+        todo!()
+    }
+
+    fn get_snapshot(&self) -> Option<(String, u64)> {
+        todo!()
+    }
+
     fn attach_query_str(&self, _kind: String, _query: String) {
         todo!()
     }
