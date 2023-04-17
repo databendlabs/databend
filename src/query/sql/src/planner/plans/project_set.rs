@@ -68,7 +68,10 @@ impl Operator for ProjectSet {
     }
 
     fn derive_cardinality(&self, rel_expr: &RelExpr) -> common_exception::Result<StatInfo> {
-        rel_expr.derive_cardinality_child(0)
+        let mut input_stat = rel_expr.derive_cardinality_child(0)?;
+        // ProjectSet is set-returning functions, precise_cardinality set None
+        input_stat.statistics.precise_cardinality = None;
+        Ok(input_stat)
     }
 
     fn compute_required_prop_child(
