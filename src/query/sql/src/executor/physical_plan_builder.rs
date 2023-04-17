@@ -773,6 +773,7 @@ impl PhysicalPlanBuilder {
                     WindowFuncType::RowNumber => WindowFunction::RowNumber,
                     WindowFuncType::Rank => WindowFunction::Rank,
                     WindowFuncType::DenseRank => WindowFunction::DenseRank,
+                    WindowFuncType::PercentRank => WindowFunction::PercentRank,
                 };
 
                 Ok(PhysicalPlan::Window(Window {

@@ -204,6 +204,7 @@ pub enum WindowFuncType {
     RowNumber,
     Rank,
     DenseRank,
+    PercentRank,
 }
 
 impl WindowFuncType {
@@ -212,6 +213,7 @@ impl WindowFuncType {
             "row_number" => Ok(WindowFuncType::RowNumber),
             "rank" => Ok(WindowFuncType::Rank),
             "dense_rank" => Ok(WindowFuncType::DenseRank),
+            "percent_rank" => Ok(WindowFuncType::PercentRank),
             _ => Err(ErrorCode::UnknownFunction(format!(
                 "Unknown window function: {}",
                 name
@@ -224,6 +226,7 @@ impl WindowFuncType {
             WindowFuncType::RowNumber => "row_number".to_string(),
             WindowFuncType::Rank => "rank".to_string(),
             WindowFuncType::DenseRank => "dense_rank".to_string(),
+            WindowFuncType::PercentRank => "percent_rank".to_string(),
         }
     }
 
@@ -242,6 +245,7 @@ impl WindowFuncType {
             WindowFuncType::RowNumber | WindowFuncType::Rank | WindowFuncType::DenseRank => {
                 DataType::Number(NumberDataType::UInt64)
             }
+            WindowFuncType::PercentRank => DataType::Number(NumberDataType::Float64),
         }
     }
 }
