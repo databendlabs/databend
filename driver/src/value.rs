@@ -16,6 +16,9 @@ use chrono::{Datelike, NaiveDate, NaiveDateTime};
 
 use crate::error::{ConvertError, Error, Result};
 
+// Thu 1970-01-01 is R.D. 719163
+const DAYS_FROM_CE: i32 = 719_163;
+
 #[cfg(feature = "flight-sql")]
 use {
     arrow_array::{
@@ -135,8 +138,7 @@ impl TryFrom<(&DataType, &str)> for Value {
                     .timestamp_micros(),
             )),
             DataType::Date => Ok(Self::Date(
-                // 719_163 is the number of days from 0000-01-01 to 1970-01-01
-                chrono::NaiveDate::parse_from_str(v, "%Y-%m-%d")?.num_days_from_ce() - 719_163,
+                chrono::NaiveDate::parse_from_str(v, "%Y-%m-%d")?.num_days_from_ce() - DAYS_FROM_CE,
             )),
             // TODO:(everpcpc) handle complex types
             _ => Ok(Self::String(v.to_string())),
@@ -346,7 +348,7 @@ impl TryFrom<Value> for NaiveDate {
     fn try_from(val: Value) -> Result<Self> {
         match val {
             Value::Date(i) => {
-                let days = i + 719_163;
+                let days = i + DAYS_FROM_CE;
                 let d = NaiveDate::from_num_days_from_ce_opt(days);
                 match d {
                     Some(d) => Ok(d),
@@ -389,7 +391,7 @@ impl std::fmt::Display for Value {
                 write!(f, "{}", t)
             }
             Value::Date(i) => {
-                let days = i + 719_163;
+                let days = i + DAYS_FROM_CE;
                 let d = NaiveDate::from_num_days_from_ce_opt(days).unwrap_or_default();
                 write!(f, "{}", d)
             }
