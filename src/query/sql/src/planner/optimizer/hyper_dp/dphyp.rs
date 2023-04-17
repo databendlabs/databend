@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_base::runtime::Thread;
 use common_exception::Result;
 
 use crate::optimizer::hyper_dp::join_node::JoinNode;
@@ -140,21 +141,56 @@ impl DPhpy {
                     };
                     self.filters.insert(filter);
                 }
-                let left_res = self.get_base_relations(
-                    &s_expr.children()[0],
-                    join_conditions,
-                    true,
-                    left_is_subquery,
-                    None,
-                )?;
-                let right_res = self.get_base_relations(
-                    &s_expr.children()[1],
-                    join_conditions,
-                    true,
-                    right_is_subquery,
-                    None,
-                )?;
-                Ok(left_res && right_res)
+                if left_is_subquery && right_is_subquery {
+                    // Parallel process subquery
+                    let metadata = self.metadata.clone();
+                    let left_expr = s_expr.children()[0].clone();
+                    let left_res = Thread::spawn(move || {
+                        let mut dphyp = DPhpy::new(metadata.clone());
+                        (dphyp.optimize(left_expr), dphyp.table_index_map)
+                    });
+                    let metadata = self.metadata.clone();
+                    let right_expr = s_expr.children()[1].clone();
+                    let right_res = Thread::spawn(move || {
+                        let mut dphyp = DPhpy::new(metadata.clone());
+                        (dphyp.optimize(right_expr), dphyp.table_index_map)
+                    });
+                    let left_res = left_res.join()?;
+                    let (left_expr, left_optimized) = left_res.0?;
+                    let right_res = right_res.join()?;
+                    let (right_expr, right_optimized) = right_res.0?;
+                    if left_optimized && right_optimized {
+                        let key = self.subquery_table_index_map.len() + MOCK_NUMBER;
+                        self.subquery_table_index_map.insert(key, left_res.1);
+                        self.table_index_map
+                            .insert(key, self.join_relations.len() as IndexType);
+                        self.join_relations.push(JoinRelation::new(&left_expr));
+                        let key = self.subquery_table_index_map.len() + MOCK_NUMBER;
+                        self.subquery_table_index_map.insert(key, right_res.1);
+                        self.table_index_map
+                            .insert(key, self.join_relations.len() as IndexType);
+                        self.join_relations.push(JoinRelation::new(&right_expr));
+                        Ok(true)
+                    } else {
+                        Ok(false)
+                    }
+                } else {
+                    let left_res = self.get_base_relations(
+                        &s_expr.children()[0],
+                        join_conditions,
+                        true,
+                        left_is_subquery,
+                        None,
+                    )?;
+                    let right_res = self.get_base_relations(
+                        &s_expr.children()[1],
+                        join_conditions,
+                        true,
+                        right_is_subquery,
+                        None,
+                    )?;
+                    Ok(left_res && right_res)
+                }
             }
 
             RelOperator::ProjectSet(_)

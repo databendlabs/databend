@@ -112,7 +112,7 @@ impl Operator for Filter {
         } else {
             for (_, column_stat) in statistics.column_stats.iter_mut() {
                 if cardinality < input_cardinality {
-                    column_stat.ndv = (column_stat.ndv * cardinality / cardinality).ceil();
+                    column_stat.ndv = (column_stat.ndv * cardinality / input_cardinality).ceil();
                 }
             }
             statistics.column_stats
