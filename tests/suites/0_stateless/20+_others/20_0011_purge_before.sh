@@ -11,8 +11,10 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 echo "create table t20_0011(c int)" | $MYSQL_CLIENT_CONNECT
 ## - 1st snapshot contains 2 rows, 1 block, 1 segment
 echo "insert into t20_0011 values(1),(2)" | $MYSQL_CLIENT_CONNECT
+sleep 0.002
 ## - 2nd snapshot contains 3 rows, 2 blocks, 2 segments
 echo "insert into t20_0011 values(3)" | $MYSQL_CLIENT_CONNECT
+sleep 0.002
 ## - 3rd snapshot contains 4 rows, 3 blocks, 3 segments
 echo "insert into t20_0011 values(4)" | $MYSQL_CLIENT_CONNECT
 
@@ -39,8 +41,10 @@ echo "drop table t20_0011 all" | $MYSQL_CLIENT_CONNECT
 echo "create table t20_0011(c int)" | $MYSQL_CLIENT_CONNECT
 ## - 1st snapshot contains 2 rows, 1 block, 1 segment
 echo "insert into t20_0011 values(1),(2)" | $MYSQL_CLIENT_CONNECT
+sleep 0.002
 ## - 2nd snapshot contains 3 rows, 2 blocks, 2 segments
 echo "insert into t20_0011 values(3)" | $MYSQL_CLIENT_CONNECT
+sleep 0.002
 ## - 3rd snapshot contains 4 rows, 3 blocks, 3 segments
 echo "insert into t20_0011 values(4)" | $MYSQL_CLIENT_CONNECT
 
