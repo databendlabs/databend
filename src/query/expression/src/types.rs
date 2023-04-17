@@ -14,6 +14,7 @@
 
 pub mod any;
 pub mod array;
+pub mod bitmap;
 pub mod boolean;
 pub mod date;
 pub mod decimal;
@@ -75,6 +76,7 @@ pub enum DataType {
     Nullable(Box<DataType>),
     Array(Box<DataType>),
     Map(Box<DataType>),
+    Bitmap,
     Tuple(Vec<DataType>),
     Variant,
     Generic(usize),
@@ -174,6 +176,7 @@ impl DataType {
         }
     }
 
+    #[inline]
     pub fn is_decimal(&self) -> bool {
         matches!(self, DataType::Decimal(_ty))
     }

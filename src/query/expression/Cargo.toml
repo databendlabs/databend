@@ -41,6 +41,7 @@ num-traits = "0.2.15"
 once_cell = "1.15.0"
 ordered-float = { workspace = true, features = ["serde", "rand"] }
 rand = { version = "0.8.5", features = ["small_rng"] }
+roaring = "0.10.1"
 rust_decimal = "1.26"
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -35,6 +35,8 @@ use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
+use rand::distributions::Uniform;
+use roaring::RoaringBitmap;
 use serde::de::Visitor;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -125,6 +127,7 @@ pub enum ScalarRef<'a> {
     Date(i32),
     Array(Column),
     Map(Column),
+    Bitmap(&'a RoaringBitmap),
     Tuple(Vec<ScalarRef<'a>>),
     Variant(&'a [u8]),
 }
@@ -142,6 +145,7 @@ pub enum Column {
     Date(Buffer<i32>),
     Array(Box<ArrayColumn<AnyType>>),
     Map(Box<ArrayColumn<AnyType>>),
+    Bitmap(Bitmap),
     Nullable(Box<NullableColumn<AnyType>>),
     Tuple(Vec<Column>),
     Variant(StringColumn),
@@ -1516,6 +1520,7 @@ impl Column {
         use jsonb::Value as JsonbValue;
         use rand::distributions::Alphanumeric;
         use rand::distributions::DistString;
+        use rand::distributions::Uniform;
         use rand::rngs::SmallRng;
         use rand::Rng;
         use rand::SeedableRng;
@@ -1597,6 +1602,14 @@ impl Column {
                     offsets: offsets.into(),
                 }))
             }
+            DataType::Bitmap => (0..len).map(|_| {
+                let die_range = Uniform::new_inclusive(1, 6);
+                let rolls = SmallRng::from_entropy()
+                    .sample_iter(&die_range)
+                    .map(|v| v as u32)
+                    .collect::<Vec<_>>();
+                RoaringBitmap::from_iter(rolls)
+            }),
             DataType::Tuple(fields) => {
                 let fields = fields
                     .iter()

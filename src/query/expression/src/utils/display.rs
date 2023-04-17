@@ -444,6 +444,7 @@ impl Display for DataType {
                 }
                 _ => unreachable!(),
             },
+            DataType::Bitmap => write!(f, "Bitmap"),
             DataType::Tuple(tys) => {
                 write!(f, "Tuple(")?;
                 for (i, ty) in tys.iter().enumerate() {
@@ -486,6 +487,7 @@ impl Display for TableDataType {
                 }
                 _ => unreachable!(),
             },
+            TableDataType::Bitmap => write!(f, "Bitmap"),
             TableDataType::Tuple {
                 fields_name,
                 fields_type,

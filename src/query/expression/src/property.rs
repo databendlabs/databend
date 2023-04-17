@@ -201,6 +201,7 @@ impl Domain {
                 };
                 Domain::Map(Some(inner_domain))
             }
+            DataType::Bitmap => Domain::Undefined,
             DataType::Variant => Domain::Undefined,
             DataType::Generic(_) => unreachable!(),
         }
