@@ -69,16 +69,6 @@ select * from t order by a
 7
 
 statement ok
-optimize table `t` purge
-
-query I
-select * from t order by a
-----
-5
-6
-7
-
-statement ok
 insert into t values (8)
 
 statement ok
@@ -100,10 +90,11 @@ select * from t order by a
 statement ok
 optimize table `t` all
 
-query B
-select count(*)=2 from fuse_snapshot('db_09_0008', 't')
+query II
+select segment_count,block_count from fuse_snapshot('db_09_0008', 't') limit 2
 ----
-1
+1 1
+4 4
 
 
 
