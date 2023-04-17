@@ -232,7 +232,6 @@ async fn main_entrypoint() -> Result<()> {
     #[cfg(not(feature = "databend-enterprise"))]
     println!("Databend Query");
     println!();
-    println!();
     println!("Version: {}", *DATABEND_COMMIT_VERSION);
     println!();
     println!("Logging:");
