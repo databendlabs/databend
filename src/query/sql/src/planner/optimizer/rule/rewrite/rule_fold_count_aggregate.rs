@@ -73,7 +73,7 @@ impl Rule for RuleFoldCountAggregate {
         }
 
         let rel_expr = RelExpr::with_s_expr(s_expr);
-        let input_prop = rel_expr.derive_relational_prop_child(0)?;
+        let input_stat_info = rel_expr.derive_cardinality_child(0)?;
 
         let is_simple_count = agg.group_items.is_empty()
             && agg.aggregate_functions.iter().all(|agg| match &agg.scalar {
@@ -100,7 +100,10 @@ impl Rule for RuleFoldCountAggregate {
                 _ => false,
             });
 
-        if let (true, Some(card)) = (is_simple_count, input_prop.statistics.precise_cardinality) {
+        if let (true, Some(card)) = (
+            is_simple_count,
+            input_stat_info.statistics.precise_cardinality,
+        ) {
             let mut scalars = agg.aggregate_functions;
             for item in scalars.iter_mut() {
                 item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
@@ -116,8 +119,8 @@ impl Rule for RuleFoldCountAggregate {
             ));
         } else if let (true, column_stats, Some(table_card)) = (
             simple_nullable_count,
-            input_prop.statistics.column_stats,
-            input_prop.statistics.precise_cardinality,
+            input_stat_info.statistics.column_stats,
+            input_stat_info.statistics.precise_cardinality,
         ) {
             let mut scalars = agg.aggregate_functions;
             for item in scalars.iter_mut() {

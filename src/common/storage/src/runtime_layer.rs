@@ -107,10 +107,10 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
     }
 
     #[async_backtrace::framed]
-    async fn create(&self, path: &str, args: OpCreate) -> Result<RpCreate> {
+    async fn create_dir(&self, path: &str, args: OpCreate) -> Result<RpCreate> {
         let op = self.inner.clone();
         let path = path.to_string();
-        let future = async move { op.create(&path, args).await };
+        let future = async move { op.create_dir(&path, args).await };
         let future = TrackedFuture::create(future);
         self.runtime.spawn(future).await.expect("join must success")
     }
