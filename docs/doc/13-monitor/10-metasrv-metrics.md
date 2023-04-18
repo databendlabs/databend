@@ -1,6 +1,6 @@
 ---
 title: Databend Meta Metrics
-sidebar_label: Meta Service Metrics
+sidebar_label: Meta Metrics
 description: 
   Databend Meta Service Metrics
 ---
