@@ -28,6 +28,7 @@ use super::Limit;
 use super::PhysicalPlan;
 use super::Project;
 use super::ProjectSet;
+use super::RowFetch;
 use super::Sort;
 use super::TableScan;
 use crate::executor::RuntimeFilterSource;
@@ -47,6 +48,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::Window(plan) => self.replace_window(plan),
             PhysicalPlan::Sort(plan) => self.replace_sort(plan),
             PhysicalPlan::Limit(plan) => self.replace_limit(plan),
+            PhysicalPlan::RowFetch(plan) => self.replace_row_fetch(plan),
             PhysicalPlan::HashJoin(plan) => self.replace_hash_join(plan),
             PhysicalPlan::Exchange(plan) => self.replace_exchange(plan),
             PhysicalPlan::ExchangeSource(plan) => self.replace_exchange_source(plan),
@@ -192,6 +194,19 @@ pub trait PhysicalPlanReplacer {
         }))
     }
 
+    fn replace_row_fetch(&mut self, plan: &RowFetch) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+
+        Ok(PhysicalPlan::RowFetch(RowFetch {
+            plan_id: plan.plan_id,
+            input: Box::new(input),
+            source: plan.source.clone(),
+            row_id_col_offset: plan.row_id_col_offset,
+            cols_to_fetch: plan.cols_to_fetch.clone(),
+            stat_info: plan.stat_info.clone(),
+        }))
+    }
+
     fn replace_exchange(&mut self, plan: &Exchange) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
 
@@ -311,6 +326,9 @@ impl PhysicalPlan {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::Limit(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::RowFetch(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::HashJoin(plan) => {

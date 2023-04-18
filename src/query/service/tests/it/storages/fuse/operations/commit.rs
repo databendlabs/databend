@@ -441,7 +441,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_snapshot(&self, location: String, ver: u64) {
+    fn set_snapshot(&self, _location: String, _ver: u64) {
         todo!()
     }
 

@@ -17,6 +17,7 @@ use std::fmt::Display;
 
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::InternalColumn;
+use common_catalog::plan::Projection;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
@@ -385,6 +386,36 @@ impl Limit {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct RowFetch {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    /// Only used for display.
+    pub plan_id: u32,
+
+    pub input: Box<PhysicalPlan>,
+
+    // cloned from `input`.
+    pub source: Box<DataSourcePlan>,
+
+    pub row_id_col_offset: usize,
+    pub cols_to_fetch: Projection,
+
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
+}
+
+impl RowFetch {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        let mut fields = self.input.output_schema()?.fields().clone();
+        let schema_to_fetch = self
+            .cols_to_fetch
+            .project_schema(&self.source.source_info.schema());
+        let cols_to_fetch = schema_to_fetch.fields().iter().map(|f| f.into());
+        fields.extend(cols_to_fetch);
+        Ok(DataSchemaRefExt::create(fields))
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct HashJoin {
     /// A unique id of operator in a `PhysicalPlan` tree.
     /// Only used for display.
@@ -623,6 +654,7 @@ pub enum PhysicalPlan {
     Window(Window),
     Sort(Sort),
     Limit(Limit),
+    RowFetch(RowFetch),
     HashJoin(HashJoin),
     Exchange(Exchange),
     UnionAll(UnionAll),
@@ -657,6 +689,7 @@ impl PhysicalPlan {
             PhysicalPlan::Window(plan) => plan.output_schema(),
             PhysicalPlan::Sort(plan) => plan.output_schema(),
             PhysicalPlan::Limit(plan) => plan.output_schema(),
+            PhysicalPlan::RowFetch(plan) => plan.output_schema(),
             PhysicalPlan::HashJoin(plan) => plan.output_schema(),
             PhysicalPlan::Exchange(plan) => plan.output_schema(),
             PhysicalPlan::ExchangeSource(plan) => plan.output_schema(),
@@ -680,6 +713,7 @@ impl PhysicalPlan {
             PhysicalPlan::Window(_) => "Window".to_string(),
             PhysicalPlan::Sort(_) => "Sort".to_string(),
             PhysicalPlan::Limit(_) => "Limit".to_string(),
+            PhysicalPlan::RowFetch(_) => "RowFetch".to_string(),
             PhysicalPlan::HashJoin(_) => "HashJoin".to_string(),
             PhysicalPlan::Exchange(_) => "Exchange".to_string(),
             PhysicalPlan::UnionAll(_) => "UnionAll".to_string(),
@@ -703,6 +737,7 @@ impl PhysicalPlan {
             PhysicalPlan::Window(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Sort(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Limit(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::RowFetch(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::HashJoin(plan) => Box::new(
                 std::iter::once(plan.probe.as_ref()).chain(std::iter::once(plan.build.as_ref())),
             ),
@@ -720,6 +755,31 @@ impl PhysicalPlan {
                 std::iter::once(plan.left_side.as_ref())
                     .chain(std::iter::once(plan.right_side.as_ref())),
             ),
+        }
+    }
+
+    /// Used to find data source info in a non-aggregation and single-table query plan.
+    pub fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
+        match self {
+            PhysicalPlan::TableScan(scan) => Some(&scan.source),
+            PhysicalPlan::Filter(plan) => plan.input.try_find_single_data_source(),
+            PhysicalPlan::Project(plan) => plan.input.try_find_single_data_source(),
+            PhysicalPlan::EvalScalar(plan) => plan.input.try_find_single_data_source(),
+            PhysicalPlan::Window(plan) => plan.input.try_find_single_data_source(),
+            PhysicalPlan::Sort(plan) => plan.input.try_find_single_data_source(),
+            PhysicalPlan::Limit(plan) => plan.input.try_find_single_data_source(),
+            PhysicalPlan::Exchange(plan) => plan.input.try_find_single_data_source(),
+            PhysicalPlan::ExchangeSink(plan) => plan.input.try_find_single_data_source(),
+            PhysicalPlan::DistributedInsertSelect(plan) => plan.input.try_find_single_data_source(),
+            PhysicalPlan::ProjectSet(plan) => plan.input.try_find_single_data_source(),
+            PhysicalPlan::RowFetch(plan) => plan.input.try_find_single_data_source(),
+            PhysicalPlan::RuntimeFilterSource(_)
+            | PhysicalPlan::UnionAll(_)
+            | PhysicalPlan::ExchangeSource(_)
+            | PhysicalPlan::HashJoin(_)
+            | PhysicalPlan::AggregateExpand(_)
+            | PhysicalPlan::AggregateFinal(_)
+            | PhysicalPlan::AggregatePartial(_) => None,
         }
     }
 }

@@ -33,7 +33,7 @@ use crate::io::MetaReaders;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
 
-// #[async_backtrace::framed]
+#[async_backtrace::framed]
 pub(super) async fn build_partitions_map(
     snapshot_loc: String,
     ver: u64,

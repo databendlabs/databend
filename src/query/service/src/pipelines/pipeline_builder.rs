@@ -60,6 +60,7 @@ use common_sql::executor::Limit;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
 use common_sql::executor::ProjectSet;
+use common_sql::executor::RowFetch;
 use common_sql::executor::RuntimeFilterSource;
 use common_sql::executor::Sort;
 use common_sql::executor::TableScan;
@@ -69,6 +70,7 @@ use common_sql::plans::JoinType;
 use common_sql::ColumnBinding;
 use common_sql::IndexType;
 use common_storage::DataOperator;
+use common_storages_fuse::operations::build_row_fetcher_pipeline;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
 use petgraph::matrix_graph::Zero;
 
@@ -178,6 +180,7 @@ impl PipelineBuilder {
             PhysicalPlan::Window(window) => self.build_window(window),
             PhysicalPlan::Sort(sort) => self.build_sort(sort),
             PhysicalPlan::Limit(limit) => self.build_limit(limit),
+            PhysicalPlan::RowFetch(row_fetch) => self.build_row_fetch(row_fetch),
             PhysicalPlan::HashJoin(join) => self.build_join(join),
             PhysicalPlan::ExchangeSink(sink) => self.build_exchange_sink(sink),
             PhysicalPlan::ExchangeSource(source) => self.build_exchange_source(source),
@@ -1001,6 +1004,24 @@ impl PipelineBuilder {
                 Ok(ProcessorPtr::create(transform))
             }
         })
+    }
+
+    fn build_row_fetch(&mut self, row_fetch: &RowFetch) -> Result<()> {
+        debug_assert!({
+            if let PhysicalPlan::Limit(limit) = &*row_fetch.input {
+                matches!(*limit.input, PhysicalPlan::Sort(_))
+            } else {
+                false
+            }
+        });
+        self.build_pipeline(&row_fetch.input)?;
+        build_row_fetcher_pipeline(
+            self.ctx.clone(),
+            &mut self.main_pipeline,
+            row_fetch.row_id_col_offset,
+            &row_fetch.source,
+            row_fetch.cols_to_fetch.clone(),
+        )
     }
 
     fn build_join_probe(&mut self, join: &HashJoin, state: Arc<JoinHashTable>) -> Result<()> {
