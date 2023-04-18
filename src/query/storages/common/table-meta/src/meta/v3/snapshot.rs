@@ -118,13 +118,17 @@ impl TableSnapshot {
     }
 
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
-        let mut buf = Vec::new();
-
         let encoding = Encoding::default();
         let compression = Compression::default();
 
         let data = encode(&encoding, &self)?;
         let data_compress = compress(&compression, data)?;
+
+        let data_size = self.format_version.to_le_bytes().len()
+            + 2
+            + data_compress.len().to_le_bytes().len()
+            + data_compress.len();
+        let mut buf = Vec::with_capacity(data_size);
 
         buf.extend_from_slice(&self.format_version.to_le_bytes());
         buf.push(encoding as u8);

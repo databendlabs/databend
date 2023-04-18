@@ -11,6 +11,8 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
+#[cfg(feature = "dev")]
+use std::io::Cursor;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Read;
@@ -69,6 +71,7 @@ pub fn compress(compression: &Compression, data: Vec<u8>) -> Result<Vec<u8>> {
         Compression::Snappy => Ok(SnapEncoder::new()
             .compress_vec(&data)
             .map_err(|e| Error::new(ErrorKind::InvalidData, e))?),
+        #[cfg(not(feature = "dev"))]
         _ => Err(ErrorCode::UnknownFormat(format!(
             "unsupported compression: {:?}",
             compression
@@ -91,6 +94,7 @@ pub fn decompress(compression: &Compression, data: Vec<u8>) -> Result<Vec<u8>> {
         Compression::Snappy => Ok(SnapDecoder::new()
             .decompress_vec(&data)
             .map_err(|e| Error::new(ErrorKind::InvalidData, e))?),
+        #[cfg(not(feature = "dev"))]
         _ => Err(ErrorCode::UnknownFormat(format!(
             "unsupported compression: {:?}",
             compression
@@ -146,6 +150,7 @@ pub fn encode<T: Serialize>(encoding: &Encoding, data: &T) -> Result<Vec<u8>> {
             Ok(bs)
         }
         Encoding::Json => Ok(serde_json::to_vec(&data)?),
+        #[cfg(not(feature = "dev"))]
         _ => Err(ErrorCode::UnknownFormat(format!(
             "unsupported encoding: {:?}",
             encoding
@@ -165,6 +170,7 @@ pub fn decode<'a, T: Deserialize<'a>>(encoding: &Encoding, data: &'a Vec<u8>) ->
                 .map_err(|e| Error::new(ErrorKind::InvalidData, e))?)
         }
         Encoding::Json => Ok(from_slice::<T>(data)?),
+        #[cfg(not(feature = "dev"))]
         _ => Err(ErrorCode::UnknownFormat(format!(
             "unsupported encoding: {:?}",
             encoding

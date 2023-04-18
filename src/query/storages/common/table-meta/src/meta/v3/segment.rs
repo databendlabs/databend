@@ -72,8 +72,6 @@ impl SegmentInfo {
     /// A Result containing the serialized Segment data as a byte vector. If any errors occur during
     /// encoding, compression, or writing to the byte vector, an error will be returned.
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
-        let mut buf = Vec::new();
-
         let encoding = Encoding::default();
         let compression = Compression::default();
 
@@ -82,6 +80,14 @@ impl SegmentInfo {
 
         let summary = encode(&encoding, &self.summary)?;
         let summary_compress = compress(&compression, summary)?;
+
+        let data_size = self.format_version.to_le_bytes().len()
+            + 2
+            + blocks_compress.len().to_le_bytes().len()
+            + blocks_compress.len()
+            + summary_compress.len().to_le_bytes().len()
+            + summary_compress.len();
+        let mut buf = Vec::with_capacity(data_size);
 
         buf.extend_from_slice(&self.format_version.to_le_bytes());
         buf.push(encoding as u8);

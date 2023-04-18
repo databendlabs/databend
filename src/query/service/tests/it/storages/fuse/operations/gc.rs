@@ -93,7 +93,11 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
         // that the timestamp of snapshot returned is larger than `current_snapshot`'s.
         let orphan_snapshot = TableSnapshot::from_previous(current_snapshot.as_ref());
         orphan_snapshot
-            .write_meta(&operator, &orphan_snapshot_location)
+            .write_meta_data(
+                &operator,
+                &orphan_snapshot_location,
+                orphan_snapshot.to_bytes()?,
+            )
             .await?;
     }
 
@@ -271,7 +275,7 @@ mod utils {
         }
 
         new_snapshot
-            .write_meta(&operator, &new_snapshot_location)
+            .write_meta_data(&operator, &new_snapshot_location, new_snapshot.to_bytes()?)
             .await?;
 
         Ok(new_snapshot_location)
