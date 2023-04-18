@@ -2,9 +2,13 @@
 title: Quick Start Resources
 ---
 
-Welcome to our Quick Start Resources page! Whether you're a newbie to Databend or looking to refresh your knowledge, this page is designed to help you get up and running quickly 🚀. We've compiled a list of key documents to help you navigate our documentation and learn the essentials of Databend. From deployment guides to usecases, this page will provide you with everything you need to begin using Databend effectively.
+Welcome to our Quick Start Resources page! 
 
-## Set up Databend 🛠️
+Whether you're a newbie to Databend or looking to refresh your knowledge, this page is designed to help you get up and running quickly 🚀. We've compiled a list of key documents to help you navigate our documentation and learn the essentials of Databend. From deployment guides to usecases, this page will provide you with everything you need to begin using Databend effectively.
+
+## Databend Setup
+
+Learn various deployment modes and connection options with Databend to customize your setup.
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -16,55 +20,52 @@ import TabItem from '@theme/TabItem';
 * [Deploying a Standalone Databend](../10-deploy/02-deploying-databend.md)
 * [Expanding a Standalone Databend](../10-deploy/03-expanding-to-a-databend-cluster.md)
 * [Deploying a Query Cluster on Kubernetes](../10-deploy/04-deploying-databend-on-kubernetes.md)
-* [Deploying a Local Databend (for Non-Production Use)](../10-deploy/05-deploying-local.md)
+* [Local and Docker Deployments (Non-Production Use)](../10-deploy/05-deploying-local.md)
 * [Databend Cloud (Beta)](../02-cloud/index.md)
 
 </TabItem>
 
 <TabItem value="Connect" label="Connect">
 
-* [How to Connect Databend with MySQL Client](../11-integrations/00-api/01-mysql-handler.md)
-* [How to Connect Databend with ClickHouse HTTP Handler](../11-integrations/00-api/02-clickhouse-handler.md)
-* [How to Connect Databend with REST API](../11-integrations/00-api/00-rest.md)
-* [How to Connect Databend with MySQL-Compatible Clients](../11-integrations/30-access-tool/00-mysql.md)
-* [How to Connect Databend with bendsql](../11-integrations/30-access-tool/01-bendsql.md)
-* [How to Execute Queries in Python](../03-develop/01-python.md)
-* [How to Query Databend in Jupyter Notebooks](../11-integrations/20-gui-tool/00-jupyter.md)
-* [How to Execute Queries in Golang](../03-develop/00-golang.md)
-* [How to Execute Queries in Node.js](../03-develop/02-nodejs.md)
+* [Connecting to Databend with bendsql](../11-integrations/30-access-tool/01-bendsql.md)
+* [Connecting to Databend with JDBC](../11-integrations/30-access-tool/02-jdbc.md)
+* [Connecting to Databend with MySQL-Compatible Clients](../11-integrations/30-access-tool/00-mysql.md)
 
 </TabItem>
 
 <TabItem value="Manage" label="Manage">
 
-* [Manage Databend Settings](../10-deploy/06-manage-settings.md)
-* [How to Back Up Meta Data](../10-deploy/06-metasrv/30-metasrv-backup-restore.md)
-* [How to Back Up Databases](../10-deploy/09-upgrade/10-backup-and-restore-schema.md)
-* [Upgrade Databend](../10-deploy/09-upgrade/50-upgrade.md)
+* [Managing Databend Settings](../10-deploy/06-manage-settings.md)
+* [Backing Up and Restoring a Meta Service Cluster](../10-deploy/06-metasrv/30-metasrv-backup-restore.md)
+* [Backing Up and Restoring Schema Data](../10-deploy/09-upgrade/10-backup-and-restore-schema.md)
+* [Upgrading Databend](../10-deploy/09-upgrade/50-upgrade.md)
 
 </TabItem>
 </Tabs>
 
-## Load and Unload Data 📥
+## Data Load & Unload
 
-* [How to Load Data from Databend Stages](../12-load-data/00-stage.md)
-* [How to Load Data from Amazon S3](../12-load-data/01-s3.md)
-* [How to Load Data from Local File System](../12-load-data/02-local.md)
-* [How to Load Data from Remote Files](../12-load-data/04-http.md)
+Databend makes it easy to load data from various sources, stage, Amazon S3, local and remote files, and so on.
+
+* [Loading Data from Databend Stages](../12-load-data/00-stage.md)
+* [Loading Data from Amazon S3](../12-load-data/01-s3.md)
+* [Loading Data from Local File System](../12-load-data/02-local.md)
+* [Loading Data from Remote Files](../12-load-data/04-http.md)
 * [Querying Data in Staged Files](../12-load-data/05-querying-stage.md)
 * [Transforming Data During a Load](../12-load-data/06-data-load-transform.md)
-* [How to Unload Data from Databend](../12-unload-data/index.md)
+* [Unloading Data from Databend](../12-unload-data/index.md)
 
-## Manage Data and User Access 🗄️
+## Data & User Management
+
+To make the most of Databend, learn how to manage your database by inserting, updating, and deleting data, creating and dropping databases and tables, and managing user-defined functions and views. Explore advanced features like generating SQL with AI and managing users, roles, and privileges for fine-grained control.
 
 <Tabs>
 <TabItem value="Data" label="Data" default>
 
-* [COPY](../14-sql-commands/10-dml/dml-copy-into-table.md)
-* [INSERT](../14-sql-commands/10-dml/dml-insert.md)
-* [DELETE](../14-sql-commands/10-dml/dml-delete-from.md)
-* [UPDATE](../14-sql-commands/10-dml/dml-update.md)
-* [REPLACE](../14-sql-commands/10-dml/dml-replace.md)
+* [How to Insert Data into a Table](../14-sql-commands/10-dml/dml-insert.md)
+* [How to Update Data in a Table](../14-sql-commands/10-dml/dml-update.md)
+* [How to Replace a Row in a Table](../14-sql-commands/10-dml/dml-replace.md)
+* [How to Delete One or More Rows from a Table](../14-sql-commands/10-dml/dml-delete-from.md)
 
 </TabItem>
 
@@ -105,7 +106,7 @@ import TabItem from '@theme/TabItem';
 
 </TabItem>
 
-<TabItem value="User Access" label="User Access" >
+<TabItem value="User" label="User" >
 
 * [How to Create a User](../14-sql-commands/00-ddl/30-user/01-user-create-user.md)
 * [How to Grant Privileges to a User](../14-sql-commands/00-ddl/30-user/10-grant-privileges.md)
@@ -118,9 +119,20 @@ import TabItem from '@theme/TabItem';
 </TabItem>
 </Tabs>
 
-## Ecosystem with Databend 📊
+## Integrations
+
+Databend's rich ecosystem offers a range of powerful tools and integrations, allowing you to work more efficiently and effectively.
 
 <Tabs>
+<TabItem value="Visualizations" label="Visualizations" default>
+
+* [Jupyter Notebook](../11-integrations/20-gui-tool/00-jupyter.md)
+* [Grafana](../11-integrations/20-gui-tool/02-grafana.md)
+* [Metabase](../11-integrations/20-gui-tool/03-metabase.md)
+* [Redash](../11-integrations/20-gui-tool/04-redash.md)
+
+</TabItem>
+
 <TabItem value="APIs" label="APIs" default>
 
 * [HTTP Handler](../11-integrations/00-api/00-rest.md)
@@ -139,13 +151,10 @@ import TabItem from '@theme/TabItem';
 * [Java](../03-develop/03-java.md)
 
 </TabItem>
-
-<TabItem value="Visualizations" label="Visualizations">
-
-* [Jupyter Notebook](../11-integrations/20-gui-tool/00-jupyter.md)
-* [Grafana](../11-integrations/20-gui-tool/02-grafana.md)
-* [Metabase](../11-integrations/20-gui-tool/03-metabase.md)
-* [Redash](../11-integrations/20-gui-tool/04-redash.md)
-
-</TabItem>
 </Tabs>
+
+## Next Steps
+
+Congratulations on completing the Quick Start materials 👏👏👏! 
+
+We hope you found them helpful in getting up and running with Databend. To continue your journey with Databend, we encourage you to check out our documentation, which provides in-depth information on Databend's features and capabilities. You can also join our [community](../00-overview/index.md#community) to connect with other Databend users and get help with any questions or issues you may have.
