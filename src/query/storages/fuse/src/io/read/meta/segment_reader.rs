@@ -31,11 +31,11 @@ use storages_common_table_meta::meta::Versioned;
 
 use crate::io::read::meta::meta_readers::read_and_deserialize;
 
-/// Reads a segment header from a binary stream and returns a `SegmentInfo` object.
+/// Reads a segment from Vec<u8> and returns a `SegmentInfo` object.
 ///
-/// This function reads the following fields from the stream and constructs a `SegmentInfo` object:
+/// This function reads the buffer from the stream and constructs a `SegmentInfo` object:
 ///
-/// * `version` (u16): The version number of the segment.
+/// * `version` (u64): The version number of the segment.
 /// * `encoding` (u8): The encoding format used to serialize the segment's data.
 /// * `compression` (u8): The compression format used to compress the segment's data.
 /// * `blocks_size` (u64): The size (in bytes) of the compressed block metadata.

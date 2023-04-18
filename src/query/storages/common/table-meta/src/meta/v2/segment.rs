@@ -44,6 +44,13 @@ pub struct SegmentInfo {
     pub summary: Statistics,
 }
 
+impl SegmentInfo {
+    #[inline]
+    pub fn version(&self) -> FormatVersion {
+        self.format_version
+    }
+}
+
 /// Meta information of a block
 /// Part of and kept inside the [SegmentInfo]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -64,33 +71,6 @@ pub struct BlockMeta {
     pub compression: Compression,
 }
 
-impl SegmentInfo {
-    pub fn from_v0(s: v0::SegmentInfo, fields: &[TableField]) -> Self {
-        let summary = Statistics::from_v0(s.summary, fields);
-        Self {
-            format_version: SegmentInfo::VERSION,
-            blocks: s
-                .blocks
-                .into_iter()
-                .map(|b| Arc::new(BlockMeta::from_v0(&b, fields)))
-                .collect::<_>(),
-            summary,
-        }
-    }
-
-    pub fn from_v1(s: v1::SegmentInfo, fields: &[TableField]) -> Self {
-        let summary = Statistics::from_v0(s.summary, fields);
-        Self {
-            format_version: SegmentInfo::VERSION,
-            blocks: s
-                .blocks
-                .into_iter()
-                .map(|b| Arc::new(BlockMeta::from_v1(b.as_ref(), fields)))
-                .collect::<_>(),
-            summary,
-        }
-    }
-}
 impl BlockMeta {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -121,6 +101,34 @@ impl BlockMeta {
 
     pub fn compression(&self) -> Compression {
         self.compression
+    }
+}
+
+impl SegmentInfo {
+    pub fn from_v0(s: v0::SegmentInfo, fields: &[TableField]) -> Self {
+        let summary = Statistics::from_v0(s.summary, fields);
+        Self {
+            format_version: SegmentInfo::VERSION,
+            blocks: s
+                .blocks
+                .into_iter()
+                .map(|b| Arc::new(BlockMeta::from_v0(&b, fields)))
+                .collect::<_>(),
+            summary,
+        }
+    }
+
+    pub fn from_v1(s: v1::SegmentInfo, fields: &[TableField]) -> Self {
+        let summary = Statistics::from_v0(s.summary, fields);
+        Self {
+            format_version: SegmentInfo::VERSION,
+            blocks: s
+                .blocks
+                .into_iter()
+                .map(|b| Arc::new(BlockMeta::from_v1(b.as_ref(), fields)))
+                .collect::<_>(),
+            summary,
+        }
     }
 }
 

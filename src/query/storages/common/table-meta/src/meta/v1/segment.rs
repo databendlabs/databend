@@ -107,6 +107,10 @@ impl SegmentInfo {
             summary,
         }
     }
+
+    pub fn format_version(&self) -> u64 {
+        self.format_version
+    }
 }
 
 use super::super::v0;

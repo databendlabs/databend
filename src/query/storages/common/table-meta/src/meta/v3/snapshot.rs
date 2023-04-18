@@ -34,6 +34,7 @@ use crate::meta::SnapshotId;
 use crate::meta::Statistics;
 use crate::meta::Versioned;
 
+/// The structure of the segment is the same as that of v2, but the serialization and deserialization methods are different
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshot {
     /// format version of snapshot
@@ -117,6 +118,15 @@ impl TableSnapshot {
         self.format_version
     }
 
+    /// Serializes the struct to a byte vector.
+    ///
+    /// The byte vector contains the format version, encoding, compression, and compressed data. The encoding
+    /// and compression are set to default values. The data is encoded and compressed.
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the serialized data as a byte vector. If any errors occur during
+    /// encoding, compression, or writing to the byte vector, an error will be returned.
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
         let encoding = Encoding::default();
         let compression = Compression::default();
