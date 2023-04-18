@@ -376,7 +376,7 @@ error:
   --> SQL:1:35
   |
 1 | SELECT * FROM t GROUP BY GROUPING SETS a, b
-  |                                   ^^^^ expected `,`, `HAVING`, `WINDOW`, `(`, `UNION`, `EXCEPT`, or 8 more ...
+  |                                   ^^^^ expected `,`, `HAVING`, `WINDOW`, `(`, `WITH`, `UNION`, or 9 more ...
 
 
 ---------- Input ----------

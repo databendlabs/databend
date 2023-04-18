@@ -116,6 +116,7 @@ fn test_statement() {
         r#"CREATE TABLE t(c1 int not null, c2 bigint not null, c3 varchar not null);"#,
         r#"CREATE TABLE t(c1 varbinary);"#,
         r#"CREATE TABLE t(c1 int default 1);"#,
+        r#"create table abc as (select * from xyz limit 10)"#,
         r#"ALTER USER u1 IDENTIFIED BY '123456';"#,
         r#"ALTER USER u1 WITH DEFAULT_ROLE = 'role1';"#,
         r#"ALTER USER u1 WITH DEFAULT_ROLE = 'role1', TENANTSETTING;"#,
@@ -500,6 +501,7 @@ fn test_query() {
         r#"select * from range(1, 2)"#,
         r#"select sum(a) over w from customer window w as (partition by a order by b)"#,
         r#"select a, sum(a) over w, sum(a) over w1, sum(a) over w2 from t1 window w as (partition by a), w2 as (w1 rows current row), w1 as (w order by a) order by a"#,
+        r#"SELECT * FROM ((SELECT * FROM xyu ORDER BY x, y)) AS xyu"#,
     ];
 
     for case in cases {
@@ -519,7 +521,6 @@ fn test_query_error() {
         r#"select * order"#,
         r#"select number + 5 as a, cast(number as float(255))"#,
         r#"select 1 1"#,
-        r#"SELECT * FROM ((SELECT * FROM xyu ORDER BY x, y)) AS xyu"#,
     ];
 
     for case in cases {
