@@ -24,6 +24,7 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::SelectivityEstimator;
+use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics;
 use crate::optimizer::MAX_SELECTIVITY;
 use crate::plans::Operator;
@@ -67,7 +68,7 @@ impl Operator for Filter {
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty> {
-        let mut input_prop = rel_expr.derive_relational_prop_child(0)?;
+        let input_prop = rel_expr.derive_relational_prop_child(0)?;
         let output_columns = input_prop.output_columns;
 
         // Derive outer columns
@@ -82,38 +83,42 @@ impl Operator for Filter {
         }
         outer_columns = outer_columns.difference(&output_columns).cloned().collect();
 
-        // Derive cardinality
-        let sb = SelectivityEstimator::new(&input_prop.statistics);
-        let mut selectivity = MAX_SELECTIVITY;
-        for pred in self.predicates.iter() {
-            // Compute selectivity for each conjunction
-            selectivity *= sb.compute_selectivity(pred);
-        }
-        let cardinality = input_prop.cardinality * selectivity;
         // Derive used columns
         let mut used_columns = self.used_columns()?;
         used_columns.extend(input_prop.used_columns);
-
-        // Derive column statistics
-        let column_stats = if cardinality == 0.0 {
-            HashMap::new()
-        } else {
-            for (_, column_stat) in input_prop.statistics.column_stats.iter_mut() {
-                if cardinality < input_prop.cardinality {
-                    column_stat.ndv =
-                        (column_stat.ndv * cardinality / input_prop.cardinality).ceil();
-                }
-            }
-            input_prop.statistics.column_stats
-        };
 
         Ok(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
+        })
+    }
+
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
+        let stat_info = rel_expr.derive_cardinality_child(0)?;
+        let (input_cardinality, mut statistics) = (stat_info.cardinality, stat_info.statistics);
+        // Derive cardinality
+        let sb = SelectivityEstimator::new(&statistics);
+        let mut selectivity = MAX_SELECTIVITY;
+        for pred in self.predicates.iter() {
+            // Compute selectivity for each conjunction
+            selectivity *= sb.compute_selectivity(pred);
+        }
+        let cardinality = input_cardinality * selectivity;
+
+        // Derive column statistics
+        let column_stats = if cardinality == 0.0 {
+            HashMap::new()
+        } else {
+            for (_, column_stat) in statistics.column_stats.iter_mut() {
+                if cardinality < input_cardinality {
+                    column_stat.ndv = (column_stat.ndv * cardinality / input_cardinality).ceil();
+                }
+            }
+            statistics.column_stats
+        };
+        Ok(StatInfo {
             cardinality,
-            // TODO(leiysky): if the predicate is always true, then we can pass through
-            // precise cardinality
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,

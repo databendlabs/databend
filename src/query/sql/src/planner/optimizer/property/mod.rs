@@ -40,6 +40,7 @@ pub use property::Distribution;
 pub use property::PhysicalProperty;
 pub use property::RelationalProperty;
 pub use property::RequiredProperty;
+pub use property::StatInfo;
 pub use property::Statistics;
 pub use property::TableSet;
 pub use selectivity::SelectivityEstimator;

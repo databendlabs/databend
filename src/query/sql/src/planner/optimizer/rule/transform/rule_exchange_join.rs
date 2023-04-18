@@ -254,6 +254,7 @@ impl Rule for RuleExchangeJoin {
             ],
             None,
             None,
+            None,
         );
 
         // Disable the following rules for join 4
