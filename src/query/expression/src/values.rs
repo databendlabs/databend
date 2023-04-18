@@ -46,7 +46,6 @@ use serde::Serializer;
 use crate::property::Domain;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
-use crate::types::bitmap::BitmapColumnBuilder;
 use crate::types::boolean::BooleanDomain;
 use crate::types::date::DATE_MAX;
 use crate::types::date::DATE_MIN;
@@ -129,7 +128,7 @@ pub enum ScalarRef<'a> {
     Date(i32),
     Array(Column),
     Map(Column),
-    Bitmap(Bitmap),
+    Bitmap(RoaringBitmap),
     Tuple(Vec<ScalarRef<'a>>),
     Variant(&'a [u8]),
 }

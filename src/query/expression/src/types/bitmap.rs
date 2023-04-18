@@ -38,8 +38,8 @@ impl ValueType for BitmapType {
     type Scalar = RoaringBitmap;
     type ScalarRef<'a> = &'a RoaringBitmap;
     type Column = Buffer<RoaringBitmap>;
-    type Domain = ();
-    type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, RoaringBitmap>>;
+    type Domain = BitmapDomain;
+    type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, &'a RoaringBitmap>>;
     type ColumnBuilder = Vec<RoaringBitmap>;
 
     #[inline]
@@ -57,7 +57,7 @@ impl ValueType for BitmapType {
 
     fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
         match scalar {
-            ScalarRef::Bitmap(scalar) => Some(*scalar.clone()),
+            ScalarRef::Bitmap(scalar) => Some(scalar),
             _ => None,
         }
     }
@@ -172,3 +172,5 @@ impl ArgType for BitmapType {
         Self::column_from_iter(iter, generics)
     }
 }
+
+pub struct BitmapDomain;
