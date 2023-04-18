@@ -70,7 +70,11 @@ pub enum DataType {
 
 impl DataType {
     pub fn is_numeric(&self) -> bool {
-        matches!(self, DataType::Number(_))
+        match self {
+            DataType::Number(_) => true,
+            DataType::Nullable(inner) => inner.is_numeric(),
+            _ => false,
+        }
     }
 }
 
