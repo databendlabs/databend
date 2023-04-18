@@ -22,12 +22,14 @@ use common_expression::types::DataType;
 use common_expression::types::ValueType;
 use common_expression::Column;
 use common_expression::HashMethod;
+use common_expression::HashMethodDictionarySerializer;
 use common_expression::HashMethodFixedKeys;
 use common_expression::HashMethodKeysU128;
 use common_expression::HashMethodKeysU256;
 use common_expression::HashMethodSerializer;
 use common_expression::HashMethodSingleString;
 use common_expression::KeysState;
+use common_hashtable::DictionaryStringHashMap;
 use common_hashtable::FastHash;
 use common_hashtable::HashMap;
 use common_hashtable::HashtableEntryMutRefLike;
@@ -452,6 +454,37 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
         v.fast_hash()
     }
 }
+// impl PolymorphicKeysHelper<HashMethodDictionarySerializer> for HashMethodDictionarySerializer {
+//     const SUPPORT_PARTITIONED: bool = true;
+//
+//     type HashTable<T: Send + Sync + 'static> = DictionaryStringHashMap<DictionaryKeys, T>;
+//
+//     fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>> {
+//         todo!()
+//     }
+//
+//     type ColumnBuilder<'a> where Self: 'a, HashMethodDictionarySerializer: 'a = ();
+//
+//     fn keys_column_builder(&self, capacity: usize, value_capacity: usize) -> Self::ColumnBuilder<'_> {
+//         todo!()
+//     }
+//
+//     type KeysColumnIter = ();
+//
+//     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
+//         todo!()
+//     }
+//
+//     type GroupColumnsBuilder<'a> where Self: 'a, HashMethodDictionarySerializer: 'a = ();
+//
+//     fn group_columns_builder(&self, capacity: usize, _data_capacity: usize, params: &AggregatorParams) -> Self::GroupColumnsBuilder<'_> {
+//         todo!()
+//     }
+//
+//     fn get_hash(&self, v: &HashKey) -> u64 {
+//         todo!()
+//     }
+// }
 
 #[derive(Clone)]
 pub struct PartitionedHashMethod<Method: HashMethodBounds> {

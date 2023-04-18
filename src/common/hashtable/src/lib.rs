@@ -27,6 +27,7 @@ mod lookup_hashtable;
 mod stack_hashtable;
 mod table0;
 
+mod dictionary_string_hashtable;
 mod partitioned_hashtable;
 mod short_string_hashtable;
 mod string_hashtable;
@@ -89,6 +90,9 @@ pub type StringHashSet<K> = string_hashtable::StringHashtable<K, ()>;
 pub type StringHashtableEntryRef<'a, K, V> = string_hashtable::StringHashtableEntryRef<'a, K, V>;
 pub type StringHashtableEntryMutRef<'a, K, V> =
     string_hashtable::StringHashtableEntryMutRef<'a, K, V>;
+
+pub type DictionaryStringHashMap<V> = dictionary_string_hashtable::DictionaryStringHashTable<V>;
+pub type DictionaryKeys = dictionary_string_hashtable::DictionaryKeys;
 
 pub type LookupHashMap<K, const CAPACITY: usize, V> = LookupHashtable<K, CAPACITY, V>;
 pub type LookupHashMapIter<'a, K, const CAPACITY: usize, V> = LookupTableIter<'a, CAPACITY, K, V>;

@@ -16,30 +16,37 @@ use std::fmt::Debug;
 use std::iter::TrustedLen;
 use std::marker::PhantomData;
 use std::ops::Not;
+use std::ptr::NonNull;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_hashtable::FastHash;
+use common_hashtable::{DictionaryKeys, FastHash};
 use common_io::prelude::BinaryWrite;
 use ethnum::i256;
 use ethnum::u256;
 use ethnum::U256;
+use futures::AsyncWriteExt;
 use micromarshal::Marshal;
 
+use crate::types::array::ArrayColumn;
+use crate::types::array::ArrayColumnBuilder;
+use crate::types::array::ArrayIterator;
 use crate::types::boolean::BooleanType;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::Number;
 use crate::types::number::NumberColumn;
+use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::types::string::StringIterator;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
+use crate::types::StringType;
 use crate::types::ValueType;
 use crate::with_decimal_mapped_type;
 use crate::with_integer_mapped_type;
@@ -52,13 +59,22 @@ pub enum KeysState {
     Column(Column),
     U128(Buffer<u128>),
     U256(Buffer<u256>),
+    Dictionary {
+        columns: Vec<StringColumn>,
+        keys_point: Vec<NonNull<[u8]>>,
+        dictionaries: Vec<DictionaryKeys>,
+    },
 }
+
+unsafe impl Send for KeysState {}
+
+unsafe impl Sync for KeysState {}
 
 pub trait HashMethod: Clone + Sync + Send + 'static {
     type HashKey: ?Sized + Eq + FastHash + Debug;
 
-    type HashKeyIter<'a>: Iterator<Item = &'a Self::HashKey> + TrustedLen
-    where Self: 'a;
+    type HashKeyIter<'a>: Iterator<Item=&'a Self::HashKey> + TrustedLen
+        where Self: 'a;
 
     fn name(&self) -> String;
 
@@ -215,13 +231,89 @@ impl HashMethod for HashMethodSerializer {
     }
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HashMethodDictionarySerializer {}
+
+impl HashMethod for HashMethodDictionarySerializer {
+    type HashKey = DictionaryKeys;
+    type HashKeyIter<'a> = std::slice::Iter<'a, DictionaryKeys>;
+
+    fn name(&self) -> String {
+        "DictionarySerializer".to_string()
+    }
+
+    fn build_keys_state(
+        &self,
+        group_columns: &[(Column, DataType)],
+        rows: usize,
+    ) -> Result<KeysState> {
+        // fixed type serialize one column to dictionary
+        let mut dictionary_columns = Vec::with_capacity(group_columns.len());
+
+        for (group_column, _) in group_columns {
+            if let Column::String(v) = group_column {
+                debug_assert_eq!(v.len(), rows);
+                dictionary_columns.push(v.clone());
+            } else if let Column::Variant(v) = group_column {
+                debug_assert_eq!(v.len(), rows);
+                dictionary_columns.push(v.clone());
+            }
+        }
+
+        if dictionary_columns.len() != group_columns.len() {
+            let approx_size = group_columns.len() * rows * 8;
+            let mut builder = StringColumnBuilder::with_capacity(rows, approx_size);
+
+            for row in 0..rows {
+                for (group_column, _) in group_columns {
+                    if !matches!(group_column, Column::String(_) | Column::Variant(_)) {
+                        serialize_column_binary(group_column, row, &mut builder.data);
+                    }
+                }
+
+                builder.commit_row();
+            }
+
+            dictionary_columns.push(builder.build());
+        }
+
+        let mut keys = Vec::with_capacity(rows * dictionary_columns.len());
+        let mut points = Vec::with_capacity(rows * dictionary_columns.len());
+
+        for row in 0..rows {
+            let start = points.len();
+
+            for dictionary_column in &dictionary_columns {
+                points.push(NonNull::from(unsafe {
+                    dictionary_column.index_unchecked(row)
+                }));
+            }
+
+            keys.push(DictionaryKeys::create(&points[start..]))
+        }
+
+        Ok(KeysState::Dictionary {
+            dictionaries: keys,
+            keys_point: points,
+            columns: dictionary_columns,
+        })
+    }
+
+    fn build_keys_iter<'a>(&self, keys_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {
+        match keys_state {
+            KeysState::Dictionary { dictionaries, .. } => Ok(dictionaries.iter()),
+            _ => unreachable!(),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct HashMethodFixedKeys<T> {
     t: PhantomData<T>,
 }
 
 impl<T> HashMethodFixedKeys<T>
-where T: Number
+    where T: Number
 {
     #[inline]
     pub fn get_key(&self, column: &Buffer<T>, row: usize) -> T {
@@ -230,7 +322,7 @@ where T: Number
 }
 
 impl<T> HashMethodFixedKeys<T>
-where T: Clone + Default
+    where T: Clone + Default
 {
     fn build_keys_vec(&self, group_columns: &[(Column, DataType)], rows: usize) -> Result<Vec<T>> {
         let step = std::mem::size_of::<T>();
@@ -261,7 +353,7 @@ where T: Clone + Default
 }
 
 impl<T> Default for HashMethodFixedKeys<T>
-where T: Clone
+    where T: Clone
 {
     fn default() -> Self {
         HashMethodFixedKeys { t: PhantomData }
@@ -269,7 +361,7 @@ where T: Clone
 }
 
 impl<T> HashMethodFixedKeys<T>
-where T: Clone
+    where T: Clone
 {
     pub fn deserialize_group_columns(
         &self,
