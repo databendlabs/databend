@@ -18,6 +18,8 @@ use common_ast::ast::Expr;
 use common_ast::ast::Literal;
 use common_ast::ast::Statement;
 use common_ast::parser::parse_sql;
+use common_ast::parser::token::HintPrefix;
+use common_ast::parser::token::HintSuffix;
 use common_ast::parser::token::Token;
 use common_ast::parser::token::TokenKind;
 use common_ast::parser::token::Tokenizer;
@@ -74,7 +76,7 @@ impl Planner {
             .peek()
             .and_then(|token| Some(token.as_ref().ok()?.kind))
             == Some(TokenKind::INSERT);
-        let mut tokens: Vec<Token> = if is_insert_stmt {
+        let tokens: Vec<Token> = if is_insert_stmt {
             (&mut tokenizer)
                 .take(PROBE_INSERT_INITIAL_TOKENS)
                 .take_while(|token| token.is_ok())
@@ -85,6 +87,8 @@ impl Planner {
         } else {
             (&mut tokenizer).collect::<Result<_>>()?
         };
+
+        let mut tokens = Self::preparse_opt_hints(&tokens);
 
         loop {
             let res = async {
@@ -141,6 +145,57 @@ impl Planner {
             } else {
                 return res;
             }
+        }
+    }
+
+    fn preparse_opt_hints<'a>(tokens: &'a [Token<'a>]) -> Vec<Token<'a>> {
+        let mut prefix_idx = 0;
+        let mut matched_prefix = 0;
+        let mut matched_suffix = 0;
+        let mut pre_suf_vec: Vec<(usize, usize)> = Vec::new();
+        for (i, token) in tokens.iter().enumerate() {
+            // The hint syntax must follow immediately after an INSERT, UPDATE, DELETE, SELECT, or REPLACE keyword
+            // that begins the statement block.
+            if i != 0
+                && (tokens[i - 1].kind == TokenKind::INSERT
+                    || tokens[i - 1].kind == TokenKind::SELECT
+                    || tokens[i - 1].kind == TokenKind::UPDATE
+                    || tokens[i - 1].kind == TokenKind::DELETE
+                    || tokens[i - 1].kind == TokenKind::REPLACE)
+                && token.kind == HintPrefix
+            {
+                continue;
+            }
+            if token.kind == HintPrefix {
+                prefix_idx = i;
+                matched_prefix += 1;
+            } else if token.kind == HintSuffix && matched_prefix == (matched_suffix + 1) {
+                matched_suffix += 1;
+                pre_suf_vec.push((prefix_idx, i));
+            }
+        }
+        if !pre_suf_vec.is_empty() {
+            let mut new_tokens: Vec<Token> = Vec::new();
+            // tokens:     [1,2,3,4,5,6,7]
+            // pre_suf_vec:  [1,2] [4,5]
+            // new_tokens: [1,4,7]
+            for (i, (prefix, suffix)) in pre_suf_vec.iter().enumerate() {
+                let (prefix, suffix) = (*prefix, *suffix);
+                if i < matched_suffix {
+                    let mut start = 0;
+                    if i != 0 {
+                        let (_, last_suffix) = pre_suf_vec[i - 1];
+                        start = last_suffix + 1;
+                    }
+                    new_tokens.extend_from_slice(&tokens[start..prefix]);
+                    if i == matched_suffix - 1 {
+                        new_tokens.extend_from_slice(&tokens[suffix + 1..]);
+                    }
+                }
+            }
+            new_tokens
+        } else {
+            tokens.to_vec()
         }
     }
 

@@ -102,7 +102,13 @@ pub enum TokenKind {
     #[regex(r"--[^\t\n\f]*", logos::skip)]
     Comment,
 
-    #[regex(r"/\*([^\*]|(\*[^/]))*\*/", logos::skip)]
+    #[token("/*+")]
+    HintPrefix,
+
+    #[token("*/")]
+    HintSuffix,
+
+    #[regex(r"/\*!\+([^\*]|(\*[^/]))*\*/", logos::skip)]
     CommentBlock,
 
     #[regex(r#"[_a-zA-Z][_$a-zA-Z0-9]*"#)]
@@ -467,6 +473,8 @@ pub enum TokenKind {
     FUNCTIONS,
     #[token("TABLE_FUNCTIONS", ignore(ascii_case))]
     TABLE_FUNCTIONS,
+    #[token("SET_VAR", ignore(ascii_case))]
+    SET_VAR,
     #[token("FUSE", ignore(ascii_case))]
     FUSE,
     #[token("GLOBAL", ignore(ascii_case))]

@@ -77,6 +77,7 @@ pub enum Statement {
     Replace(ReplaceStmt),
 
     Delete {
+        hints: Option<Hint>,
         table_reference: TableReference,
         selection: Option<Expr>,
     },
@@ -272,9 +273,12 @@ impl Display for Statement {
             Statement::Delete {
                 table_reference,
                 selection,
-                ..
+                hints,
             } => {
                 write!(f, "DELETE FROM {table_reference}")?;
+                if let Some(hints) = hints {
+                    write!(f, "{}", hints)?;
+                }
                 if let Some(conditions) = selection {
                     write!(f, "WHERE {conditions} ")?;
                 }
