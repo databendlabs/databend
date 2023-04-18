@@ -21,13 +21,13 @@ explain select * from t, t1, t2 where t.a = t2.a and t1.a = t2.a
 ----
 EvalScalar
 ├── expressions: [t.a (#0), t1.a (#1), t2.a (#2)]
-├── estimated rows: 0.01
+├── estimated rows: 0.00
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [t.a (#0)]
     ├── probe keys: [t2.a (#2)]
     ├── filters: []
-    ├── estimated rows: 0.01
+    ├── estimated rows: 0.00
     ├── TableScan(Build)
     │   ├── table: default.join_reorder.t
     │   ├── read rows: 1
@@ -42,7 +42,7 @@ EvalScalar
         ├── build keys: [t1.a (#1)]
         ├── probe keys: [t2.a (#2)]
         ├── filters: []
-        ├── estimated rows: 0.01
+        ├── estimated rows: 0.00
         ├── TableScan(Build)
         │   ├── table: default.join_reorder.t1
         │   ├── read rows: 10
@@ -67,13 +67,13 @@ explain select * from t, t2, t1 where t.a = t2.a and t1.a = t2.a
 ----
 EvalScalar
 ├── expressions: [t.a (#0), t2.a (#1), t1.a (#2)]
-├── estimated rows: 0.01
+├── estimated rows: 0.00
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [t.a (#0)]
     ├── probe keys: [t2.a (#1)]
     ├── filters: []
-    ├── estimated rows: 0.01
+    ├── estimated rows: 0.00
     ├── TableScan(Build)
     │   ├── table: default.join_reorder.t
     │   ├── read rows: 1
@@ -88,7 +88,7 @@ EvalScalar
         ├── build keys: [t1.a (#2)]
         ├── probe keys: [t2.a (#1)]
         ├── filters: []
-        ├── estimated rows: 0.01
+        ├── estimated rows: 0.00
         ├── TableScan(Build)
         │   ├── table: default.join_reorder.t1
         │   ├── read rows: 10
@@ -113,13 +113,13 @@ explain select * from t1, t, t2 where t.a = t2.a and t1.a = t2.a
 ----
 EvalScalar
 ├── expressions: [t1.a (#0), t.a (#1), t2.a (#2)]
-├── estimated rows: 0.01
+├── estimated rows: 0.00
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [t.a (#1)]
     ├── probe keys: [t2.a (#2)]
     ├── filters: []
-    ├── estimated rows: 0.01
+    ├── estimated rows: 0.00
     ├── TableScan(Build)
     │   ├── table: default.join_reorder.t
     │   ├── read rows: 1
@@ -134,7 +134,7 @@ EvalScalar
         ├── build keys: [t1.a (#0)]
         ├── probe keys: [t2.a (#2)]
         ├── filters: []
-        ├── estimated rows: 0.01
+        ├── estimated rows: 0.00
         ├── TableScan(Build)
         │   ├── table: default.join_reorder.t1
         │   ├── read rows: 10
@@ -159,13 +159,13 @@ explain select * from t1, t2, t where t.a = t2.a and t1.a = t2.a
 ----
 EvalScalar
 ├── expressions: [t1.a (#0), t2.a (#1), t.a (#2)]
-├── estimated rows: 0.01
+├── estimated rows: 0.00
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [t.a (#2)]
     ├── probe keys: [t2.a (#1)]
     ├── filters: []
-    ├── estimated rows: 0.01
+    ├── estimated rows: 0.00
     ├── TableScan(Build)
     │   ├── table: default.join_reorder.t
     │   ├── read rows: 1
@@ -180,7 +180,7 @@ EvalScalar
         ├── build keys: [t1.a (#0)]
         ├── probe keys: [t2.a (#1)]
         ├── filters: []
-        ├── estimated rows: 0.01
+        ├── estimated rows: 0.00
         ├── TableScan(Build)
         │   ├── table: default.join_reorder.t1
         │   ├── read rows: 10
@@ -205,13 +205,13 @@ explain select * from t2, t1, t where t.a = t2.a and t1.a = t2.a
 ----
 EvalScalar
 ├── expressions: [t2.a (#0), t1.a (#1), t.a (#2)]
-├── estimated rows: 0.01
+├── estimated rows: 0.00
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [t.a (#2)]
     ├── probe keys: [t2.a (#0)]
     ├── filters: []
-    ├── estimated rows: 0.01
+    ├── estimated rows: 0.00
     ├── TableScan(Build)
     │   ├── table: default.join_reorder.t
     │   ├── read rows: 1
@@ -226,7 +226,7 @@ EvalScalar
         ├── build keys: [t1.a (#1)]
         ├── probe keys: [t2.a (#0)]
         ├── filters: []
-        ├── estimated rows: 0.01
+        ├── estimated rows: 0.00
         ├── TableScan(Build)
         │   ├── table: default.join_reorder.t1
         │   ├── read rows: 10
@@ -251,13 +251,13 @@ explain select * from t2, t, t1 where t.a = t2.a and t1.a = t2.a
 ----
 EvalScalar
 ├── expressions: [t2.a (#0), t.a (#1), t1.a (#2)]
-├── estimated rows: 0.01
+├── estimated rows: 0.00
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [t.a (#1)]
     ├── probe keys: [t2.a (#0)]
     ├── filters: []
-    ├── estimated rows: 0.01
+    ├── estimated rows: 0.00
     ├── TableScan(Build)
     │   ├── table: default.join_reorder.t
     │   ├── read rows: 1
@@ -272,7 +272,7 @@ EvalScalar
         ├── build keys: [t1.a (#2)]
         ├── probe keys: [t2.a (#0)]
         ├── filters: []
-        ├── estimated rows: 0.01
+        ├── estimated rows: 0.00
         ├── TableScan(Build)
         │   ├── table: default.join_reorder.t1
         │   ├── read rows: 10
