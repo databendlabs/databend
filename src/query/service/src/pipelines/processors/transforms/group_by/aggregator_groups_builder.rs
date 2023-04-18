@@ -181,9 +181,11 @@ impl<'a> GroupColumnsBuilder for DictionarySerializedKeysGroupColumnsBuilder<'a>
                 let mut builder = StringColumnBuilder::with_capacity(0, 0);
 
                 for string_type_keys in &self.string_type_data {
-                    builder.put_slice(unsafe { string_type_keys.keys.as_ref()[index].as_ref() });
+                    builder.put(unsafe { string_type_keys.keys.as_ref()[index].as_ref() });
+                    builder.commit_row();
                 }
 
+                index += 1;
                 res.push(match data_type.is_string() {
                     true => Column::String(builder.build()),
                     false => Column::Variant(builder.build()),

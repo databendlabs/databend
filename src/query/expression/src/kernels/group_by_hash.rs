@@ -28,7 +28,6 @@ use common_io::prelude::BinaryWrite;
 use ethnum::i256;
 use ethnum::u256;
 use ethnum::U256;
-use futures::AsyncWriteExt;
 use micromarshal::Marshal;
 
 use crate::types::array::ArrayColumn;
@@ -100,6 +99,7 @@ pub type HashMethodKeysU256 = HashMethodFixedKeys<u256>;
 #[derive(Clone, Debug)]
 pub enum HashMethodKind {
     Serializer(HashMethodSerializer),
+    DictionarySerializer(HashMethodDictionarySerializer),
     SingleString(HashMethodSingleString),
     KeysU8(HashMethodKeysU8),
     KeysU16(HashMethodKeysU16),
@@ -114,7 +114,7 @@ macro_rules! with_hash_method {
     ( | $t:tt | $($tail:tt)* ) => {
         match_template::match_template! {
             $t = [Serializer, SingleString, KeysU8, KeysU16,
-            KeysU32, KeysU64, KeysU128, KeysU256],
+            KeysU32, KeysU64, KeysU128, KeysU256, DictionarySerializer],
             $($tail)*
         }
     }
@@ -133,6 +133,7 @@ macro_rules! with_mappedhash_method {
                 KeysU64 => HashMethodKeysU64,
                 KeysU128 => HashMethodKeysU128,
                 KeysU256 => HashMethodKeysU256,
+                DictionarySerializer => HashMethodDictionarySerializer
             ],
             $($tail)*
         }
@@ -160,6 +161,7 @@ impl HashMethodKind {
             HashMethodKind::KeysU256(_) => {
                 DataType::Decimal(DecimalDataType::Decimal256(i256::default_decimal_size()))
             }
+            HashMethodKind::DictionarySerializer(_) => DataType::String,
         }
     }
 }

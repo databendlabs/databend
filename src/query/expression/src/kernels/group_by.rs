@@ -23,6 +23,7 @@ use super::group_by_hash::HashMethodSerializer;
 use super::group_by_hash::HashMethodSingleString;
 use crate::types::DataType;
 use crate::DataBlock;
+use crate::HashMethodDictionarySerializer;
 use crate::HashMethodKeysU128;
 use crate::HashMethodKeysU256;
 
@@ -65,7 +66,9 @@ impl DataBlock {
                     group_key_len += 1;
                 }
             } else {
-                return Ok(HashMethodKind::Serializer(HashMethodSerializer::default()));
+                return Ok(HashMethodKind::DictionarySerializer(
+                    HashMethodDictionarySerializer::default(),
+                ));
             }
         }
 

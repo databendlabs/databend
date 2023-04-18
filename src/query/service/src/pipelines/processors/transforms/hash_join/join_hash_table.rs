@@ -21,7 +21,6 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_base::base::tokio::sync::Notify;
 use common_exception::Result;
 use common_expression::arrow::and_validities;
-use common_expression::with_hash_method;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Evaluator;
@@ -104,16 +103,18 @@ impl JoinHashTable {
             .collect::<Vec<_>>();
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
         Ok(match method {
-            HashMethodKind::Serializer(_) => Arc::new(JoinHashTable::try_create(
-                ctx,
-                HashTable::Serializer(SerializerHashTable {
-                    hash_table: StringHashMap::<[u8], Vec<RowPtr>>::new(),
-                    hash_method: HashMethodSerializer::default(),
-                }),
-                build_schema,
-                probe_schema,
-                hash_join_desc,
-            )?),
+            HashMethodKind::Serializer(_) | HashMethodKind::DictionarySerializer(_) => {
+                Arc::new(JoinHashTable::try_create(
+                    ctx,
+                    HashTable::Serializer(SerializerHashTable {
+                        hash_table: StringHashMap::<[u8], Vec<RowPtr>>::new(),
+                        hash_method: HashMethodSerializer::default(),
+                    }),
+                    build_schema,
+                    probe_schema,
+                    hash_join_desc,
+                )?)
+            }
             HashMethodKind::SingleString(_) => Arc::new(JoinHashTable::try_create(
                 ctx,
                 HashTable::SingleString(SingleStringHashTable {
@@ -283,14 +284,63 @@ impl JoinHashTable {
             probe_state.valids = valids;
         }
 
-        with_hash_method!(|T| match &*self.hash_table.read() {
-            HashTable::T(table) => {
+        match &*self.hash_table.read() {
+            HashTable::Serializer(table) => {
                 let keys_state = table
                     .hash_method
                     .build_keys_state(&probe_keys, input.num_rows())?;
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
                 self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
             }
-        })
+            HashTable::SingleString(table) => {
+                let keys_state = table
+                    .hash_method
+                    .build_keys_state(&probe_keys, input.num_rows())?;
+                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
+            }
+            HashTable::KeysU8(table) => {
+                let keys_state = table
+                    .hash_method
+                    .build_keys_state(&probe_keys, input.num_rows())?;
+                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
+            }
+            HashTable::KeysU16(table) => {
+                let keys_state = table
+                    .hash_method
+                    .build_keys_state(&probe_keys, input.num_rows())?;
+                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
+            }
+            HashTable::KeysU32(table) => {
+                let keys_state = table
+                    .hash_method
+                    .build_keys_state(&probe_keys, input.num_rows())?;
+                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
+            }
+            HashTable::KeysU64(table) => {
+                let keys_state = table
+                    .hash_method
+                    .build_keys_state(&probe_keys, input.num_rows())?;
+                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
+            }
+            HashTable::KeysU128(table) => {
+                let keys_state = table
+                    .hash_method
+                    .build_keys_state(&probe_keys, input.num_rows())?;
+                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
+            }
+            HashTable::KeysU256(table) => {
+                let keys_state = table
+                    .hash_method
+                    .build_keys_state(&probe_keys, input.num_rows())?;
+                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+                self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
+            }
+        }
     }
 }

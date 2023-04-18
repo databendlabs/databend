@@ -475,13 +475,15 @@ impl PolymorphicKeysHelper<HashMethodDictionarySerializer> for HashMethodDiction
         capacity: usize,
         value_capacity: usize,
     ) -> Self::ColumnBuilder<'_> {
-        todo!()
+        DictionaryStringKeysColumnBuilder::create(capacity, value_capacity)
     }
 
     type KeysColumnIter = DictionarySerializedKeysColumnIter;
 
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        todo!()
+        DictionarySerializedKeysColumnIter::create(column.as_string().ok_or_else(|| {
+            ErrorCode::IllegalDataType("Illegal data type for SerializedKeysColumnIter".to_string())
+        })?)
     }
 
     type GroupColumnsBuilder<'a> = DictionarySerializedKeysGroupColumnsBuilder<'a>;

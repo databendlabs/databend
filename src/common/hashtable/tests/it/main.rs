@@ -20,7 +20,6 @@ use common_hashtable::DictionaryKeys;
 use common_hashtable::DictionaryStringHashMap;
 use common_hashtable::HashMap;
 use common_hashtable::HashtableLike;
-use common_hashtable::HashtableUnsizedKeyable;
 use common_hashtable::ShortStringHashMap;
 use common_hashtable::StackHashMap;
 use rand::Rng;
@@ -150,7 +149,7 @@ fn test_dictionary_hash_map() {
                     NonNull::from(index1_str.as_bytes()),
                     NonNull::from(index2_str.as_bytes()),
                 ];
-                if let Ok(mut e) = hashtable.insert_and_entry(&DictionaryKeys::create(&keys)) {
+                if let Ok(e) = hashtable.insert_and_entry(&DictionaryKeys::create(&keys)) {
                     e.write(index1);
                 }
 
