@@ -416,8 +416,6 @@ impl Operator for Join {
                     | JoinType::RightSemi
                     | JoinType::RightMark
             )
-            && probe_physical_prop.distribution != Distribution::Broadcast
-            && build_physical_prop.distribution != Distribution::Broadcast
         {
             required.distribution = Distribution::Broadcast;
         } else if child_index == 0 {
