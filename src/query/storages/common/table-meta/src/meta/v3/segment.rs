@@ -55,7 +55,7 @@ use super::super::v2;
 impl SegmentInfo {
     pub fn from_v2(s: v2::SegmentInfo) -> Self {
         Self {
-            format_version: s.format_version(),
+            format_version: SegmentInfo::VERSION,
             blocks: s.blocks,
             summary: s.summary,
         }

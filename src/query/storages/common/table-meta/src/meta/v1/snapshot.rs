@@ -107,10 +107,6 @@ impl TableSnapshot {
             clone.table_statistics_location,
         )
     }
-
-    pub fn format_version(&self) -> u64 {
-        self.format_version
-    }
 }
 
 use super::super::v0;
@@ -150,7 +146,7 @@ pub struct TableSnapshotLite {
 impl From<&TableSnapshot> for TableSnapshotLite {
     fn from(value: &TableSnapshot) -> Self {
         TableSnapshotLite {
-            format_version: value.format_version(),
+            format_version: TableSnapshot::VERSION,
             snapshot_id: value.snapshot_id,
             timestamp: value.timestamp,
             prev_snapshot_id: value.prev_snapshot_id,

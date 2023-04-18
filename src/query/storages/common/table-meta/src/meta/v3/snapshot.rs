@@ -145,7 +145,7 @@ impl TableSnapshot {
 impl From<v2::TableSnapshot> for TableSnapshot {
     fn from(s: v2::TableSnapshot) -> Self {
         Self {
-            format_version: s.format_version(),
+            format_version: TableSnapshot::VERSION,
             snapshot_id: s.snapshot_id,
             timestamp: s.timestamp,
             prev_snapshot_id: s.prev_snapshot_id,
