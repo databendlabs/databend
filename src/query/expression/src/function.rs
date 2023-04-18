@@ -77,8 +77,11 @@ pub enum FunctionEval {
     SRF {
         /// Given multiple rows, return multiple sets of results
         /// for each input row, along with the number of rows in each set.
-        eval:
-            Box<dyn Fn(&[ValueRef<AnyType>], usize) -> Vec<(Value<AnyType>, usize)> + Send + Sync>,
+        eval: Box<
+            dyn Fn(&[ValueRef<AnyType>], usize, &mut EvalContext) -> Vec<(Value<AnyType>, usize)>
+                + Send
+                + Sync,
+        >,
     },
 }
 

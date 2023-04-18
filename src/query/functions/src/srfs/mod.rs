@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_expression::types::nullable::NullableColumn;
+use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::DataType;
 use common_expression::Column;
 use common_expression::Function;
@@ -26,6 +27,8 @@ use common_expression::FunctionSignature;
 use common_expression::Scalar;
 use common_expression::ScalarRef;
 use common_expression::Value;
+use jsonb::get_by_path;
+use jsonb::jsonpath::parse_json_path;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.properties.insert(
@@ -50,6 +53,69 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         }
     });
+
+    registry.properties.insert(
+        "json_path_query".to_string(),
+        FunctionProperty::default().kind(FunctionKind::SRF),
+    );
+
+    registry.register_function_factory("json_path_query", |_, args_type| {
+        if args_type.len() != 2 {
+            return None;
+        }
+        if args_type[0].remove_nullable() != DataType::Variant
+            || args_type[1].remove_nullable() != DataType::String
+        {
+            return None;
+        }
+
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "json_path_query".to_string(),
+                args_type: args_type.to_vec(),
+                return_type: DataType::Tuple(vec![DataType::Variant]),
+            },
+
+            eval: FunctionEval::SRF {
+                eval: Box::new(|args, num_rows, ctx| {
+                    let val_arg = args[0].clone().to_owned();
+                    let path_arg = args[1].clone().to_owned();
+                    (0..num_rows)
+                        .map(|row| {
+                            let val = val_arg.index(row).unwrap();
+                            let path = path_arg.index(row).unwrap();
+                            let mut builder = StringColumnBuilder::with_capacity(0, 0);
+                            if let ScalarRef::String(path) = path {
+                                match parse_json_path(path) {
+                                    Ok(json_path) => {
+                                        if let ScalarRef::Variant(val) = val {
+                                            let vals = get_by_path(val, json_path);
+                                            for val in vals {
+                                                builder.put(&val);
+                                                builder.commit_row();
+                                            }
+                                        }
+                                    }
+                                    Err(_) => {
+                                        ctx.set_error(
+                                            0,
+                                            format!(
+                                                "Invalid JSON Path '{}'",
+                                                &String::from_utf8_lossy(path),
+                                            ),
+                                        );
+                                    }
+                                }
+                            }
+                            let array = Column::Variant(builder.build());
+                            let array_len = array.len();
+                            (Value::Column(Column::Tuple(vec![array])), array_len)
+                        })
+                        .collect()
+                }),
+            },
+        }))
+    });
 }
 
 fn build_unnest(
@@ -65,7 +131,7 @@ fn build_unnest(
                     return_type: DataType::Tuple(vec![DataType::Null]),
                 },
                 eval: FunctionEval::SRF {
-                    eval: Box::new(|_, num_rows| {
+                    eval: Box::new(|_, num_rows, _| {
                         vec![(Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0); num_rows]
                     }),
                 },
@@ -92,7 +158,7 @@ fn build_unnest(
                 ))]),
             },
             eval: FunctionEval::SRF {
-                eval: Box::new(|args, num_rows| {
+                eval: Box::new(|args, num_rows, _| {
                     let arg = args[0].clone().to_owned();
                     (0..num_rows)
                         .map(|row| {

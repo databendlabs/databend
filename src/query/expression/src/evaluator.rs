@@ -881,9 +881,11 @@ impl<'a> Evaluator<'a> {
     /// for each input row, along with the number of rows in each set.
     pub fn run_srf(&self, expr: &Expr) -> Result<Vec<(Value<AnyType>, usize)>> {
         if let Expr::FunctionCall {
+            span,
             function,
             args,
             return_type,
+            generics,
             ..
         } = expr
         {
@@ -894,7 +896,16 @@ impl<'a> Evaluator<'a> {
                     .map(|expr| self.run(expr))
                     .collect::<Result<Vec<_>>>()?;
                 let cols_ref = args.iter().map(Value::as_ref).collect::<Vec<_>>();
-                let result = (eval)(&cols_ref, self.input_columns.num_rows());
+                let mut ctx = EvalContext {
+                    generics,
+                    num_rows: self.input_columns.num_rows(),
+                    validity: None,
+                    errors: None,
+                    tz: self.func_ctx.tz,
+                    func_ctx: self.func_ctx,
+                };
+                let result = (eval)(&cols_ref, self.input_columns.num_rows(), &mut ctx);
+                ctx.render_error(*span, &args, &function.signature.name)?;
                 assert_eq!(result.len(), self.input_columns.num_rows());
                 return Ok(result);
             }
