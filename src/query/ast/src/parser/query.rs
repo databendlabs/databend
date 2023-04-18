@@ -75,7 +75,7 @@ pub enum SetOperationElement {
 }
 
 pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>> {
-    let with = map(with, |with| SetOperationElement::With(with));
+    let with = map(with, SetOperationElement::With);
     let set_operator = map(
         rule! {
             ( UNION | EXCEPT | INTERSECT ) ~ ALL?
@@ -192,7 +192,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
             SetOperationElement::OrderBy { .. } => Affix::Postfix(Precedence(5)),
             SetOperationElement::Limit { .. } => Affix::Postfix(Precedence(5)),
             SetOperationElement::Offset { .. } => Affix::Postfix(Precedence(5)),
-            SetOperationElement::IgnoreResult => Affix::Prefix(Precedence(5)),
+            SetOperationElement::IgnoreResult => Affix::Postfix(Precedence(5)),
             _ => Affix::Nilfix,
         };
         Ok(affix)

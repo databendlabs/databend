@@ -77,6 +77,7 @@ fn test_statement() {
         r#"show create table a.b;"#,
         r#"show create table a.b format TabSeparatedWithNamesAndTypes;"#,
         r#"explain pipeline select a from b;"#,
+        r#"explain pipeline select a from t1 ignore_result;"#,
         r#"describe a;"#,
         r#"describe a format TabSeparatedWithNamesAndTypes;"#,
         r#"create table a (c decimal(38, 0))"#,

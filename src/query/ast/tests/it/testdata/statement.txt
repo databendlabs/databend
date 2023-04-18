@@ -382,6 +382,79 @@ Explain {
 
 
 ---------- Input ----------
+explain pipeline select a from t1 ignore_result;
+---------- Output ---------
+EXPLAIN PIPELINE SELECT a FROM t1
+---------- AST ------------
+Explain {
+    kind: Pipeline,
+    query: Query(
+        Query {
+            span: Some(
+                17..33,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        17..33,
+                    ),
+                    distinct: false,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    24..25,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Some(
+                                        24..25,
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                31..33,
+                            ),
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                name: "t1",
+                                quote: None,
+                                span: Some(
+                                    31..33,
+                                ),
+                            },
+                            alias: None,
+                            travel_point: None,
+                            pivot: None,
+                            unpivot: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: true,
+        },
+    ),
+}
+
+
+---------- Input ----------
 describe a;
 ---------- Output ---------
 DESCRIBE a
