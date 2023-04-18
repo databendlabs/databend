@@ -2116,6 +2116,51 @@ CreateTable(
 
 
 ---------- Input ----------
+CREATE TABLE t(c1 varbinary);
+---------- Output ---------
+CREATE TABLE t (c1 STRING NOT NULL)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                13..14,
+            ),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c1",
+                            quote: None,
+                            span: Some(
+                                15..17,
+                            ),
+                        },
+                        data_type: String,
+                        default_expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
 CREATE TABLE t(c1 int default 1);
 ---------- Output ---------
 CREATE TABLE t (c1 Int32 NOT NULL DEFAULT 1)
