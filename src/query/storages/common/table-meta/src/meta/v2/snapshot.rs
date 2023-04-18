@@ -59,6 +59,12 @@ pub struct TableSnapshot {
     pub table_statistics_location: Option<String>,
 }
 
+impl TableSnapshot {
+    pub fn format_version(&self) -> u64 {
+        self.format_version
+    }
+}
+
 use super::super::v0;
 
 impl From<v0::TableSnapshot> for TableSnapshot {
@@ -68,7 +74,7 @@ impl From<v0::TableSnapshot> for TableSnapshot {
         let leaf_fields = schema.leaf_fields();
         let summary = Statistics::from_v0(s.summary, &leaf_fields);
         Self {
-            format_version: TableSnapshot::VERSION,
+            format_version: 0,
             snapshot_id: s.snapshot_id,
             timestamp: None,
             prev_snapshot_id: s.prev_snapshot_id.map(|id| (id, 0)),
@@ -88,7 +94,7 @@ impl From<v1::TableSnapshot> for TableSnapshot {
         let leaf_fields = schema.leaf_fields();
         let summary = Statistics::from_v0(s.summary, &leaf_fields);
         Self {
-            format_version: TableSnapshot::VERSION,
+            format_version: s.format_version(),
             snapshot_id: s.snapshot_id,
             timestamp: None,
             prev_snapshot_id: s.prev_snapshot_id,

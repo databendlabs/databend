@@ -65,10 +65,14 @@ pub struct BlockMeta {
 }
 
 impl SegmentInfo {
+    pub fn format_version(&self) -> u64 {
+        self.format_version
+    }
+
     pub fn from_v0(s: v0::SegmentInfo, fields: &[TableField]) -> Self {
         let summary = Statistics::from_v0(s.summary, fields);
         Self {
-            format_version: SegmentInfo::VERSION,
+            format_version: 0,
             blocks: s
                 .blocks
                 .into_iter()
@@ -81,7 +85,7 @@ impl SegmentInfo {
     pub fn from_v1(s: v1::SegmentInfo, fields: &[TableField]) -> Self {
         let summary = Statistics::from_v0(s.summary, fields);
         Self {
-            format_version: SegmentInfo::VERSION,
+            format_version: s.format_version(),
             blocks: s
                 .blocks
                 .into_iter()
