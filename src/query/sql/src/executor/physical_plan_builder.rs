@@ -571,10 +571,10 @@ impl PhysicalPlanBuilder {
                                     }
                                 };
 
-                                let is_cluster = self.ctx.get_cluster().is_empty();
+                                let is_standalone = self.ctx.get_cluster().is_empty();
                                 let settings = self.ctx.get_settings();
                                 let efficiently_memory =
-                                    !is_cluster && settings.get_efficiently_memory_group_by()?;
+                                    is_standalone && settings.get_efficiently_memory_group_by()?;
 
                                 let group_by_key_index =
                                     aggregate_partial.output_schema()?.num_fields() - 1;

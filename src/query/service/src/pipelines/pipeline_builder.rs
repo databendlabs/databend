@@ -551,9 +551,9 @@ impl PipelineBuilder {
             });
         }
 
-        let is_cluster = self.ctx.get_cluster().is_empty();
+        let is_standalone = self.ctx.get_cluster().is_empty();
         let settings = self.ctx.get_settings();
-        let efficiently_memory = !is_cluster && settings.get_efficiently_memory_group_by()?;
+        let efficiently_memory = is_standalone && settings.get_efficiently_memory_group_by()?;
 
         let group_cols = &params.group_columns;
         let schema_before_group_by = params.input_schema.clone();
@@ -687,9 +687,9 @@ impl PipelineBuilder {
             });
         }
 
-        let is_cluster = self.ctx.get_cluster().is_empty();
+        let is_standalone = self.ctx.get_cluster().is_empty();
         let settings = self.ctx.get_settings();
-        let efficiently_memory = !is_cluster && settings.get_efficiently_memory_group_by()?;
+        let efficiently_memory = is_standalone && settings.get_efficiently_memory_group_by()?;
 
         let group_cols = &params.group_columns;
         let schema_before_group_by = params.input_schema.clone();
