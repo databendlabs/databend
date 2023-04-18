@@ -21,6 +21,7 @@ use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::NumberType;
 use common_expression::types::ValueType;
 use common_expression::Column;
+use common_hashtable::DictionaryKeys;
 use ethnum::i256;
 
 use super::large_number::LargeNumber;
@@ -114,5 +115,38 @@ impl<'a, T: LargeNumber> KeysColumnBuilder for LargeFixedKeysColumnBuilder<'a, T
             }
             _ => unreachable!(),
         }
+    }
+}
+
+pub struct DictionaryStringKeysColumnBuilder<'a> {
+    pub inner_builder: StringColumnBuilder,
+
+    _initial: usize,
+
+    _phantom: PhantomData<&'a ()>,
+}
+
+impl<'a> DictionaryStringKeysColumnBuilder<'a> {
+    pub fn create(capacity: usize, value_capacity: usize) -> Self {
+        DictionaryStringKeysColumnBuilder {
+            inner_builder: StringColumnBuilder::with_capacity(capacity, value_capacity),
+            _phantom: PhantomData,
+            _initial: value_capacity,
+        }
+    }
+}
+
+impl<'a> KeysColumnBuilder for DictionaryStringKeysColumnBuilder<'a> {
+    type T = &'a DictionaryKeys;
+
+    fn append_value(&mut self, v: &'a DictionaryKeys) {
+        // self.inner_builder.put_slice(v);
+        // self.inner_builder.commit_row();
+    }
+
+    fn finish(self) -> Column {
+        // debug_assert_eq!(self._initial, self.inner_builder.data.len());
+        // Column::String(self.inner_builder.build())
+        unreachable!()
     }
 }

@@ -1,6 +1,8 @@
+use std::fmt::Write;
 use std::mem::MaybeUninit;
 use std::ptr::NonNull;
 
+use ahash::AHasher;
 use bumpalo::Bump;
 
 use crate::hashtable::Hashtable;
@@ -13,24 +15,52 @@ use crate::string_hashtable::StringHashtableEntryMutRef;
 use crate::table0::Entry;
 use crate::traits::Keyable;
 use crate::traits::UnsizedKeyable;
-use crate::{DictionaryStringHashMap, FastHash};
+use crate::DictionaryStringHashMap;
+use crate::FastHash;
 use crate::HashtableEntryMutRefLike;
 use crate::HashtableEntryRefLike;
 use crate::HashtableLike;
 use crate::ShortStringHashSet;
+use crate::StringHashSet;
 use crate::StringHashtableEntryRef;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq)]
 pub struct DictionaryKeys {
-    pub(crate) keys: NonNull<[NonNull<[u8]>]>,
-    pub(crate) hash: u64,
+    pub keys: NonNull<[NonNull<[u8]>]>,
+    pub hash: u64,
+}
+
+impl PartialEq for DictionaryKeys {
+    fn eq(&self, other: &Self) -> bool {
+        if self.hash == other.hash {
+            unsafe {
+                return self.keys.as_ref() == other.keys.as_ref();
+            }
+        }
+
+        false
+    }
 }
 
 impl DictionaryKeys {
     pub fn create(keys: &[NonNull<[u8]>]) -> DictionaryKeys {
-        DictionaryKeys {
-            keys: NonNull::from(keys),
-            hash: 0,
+        unsafe {
+            let hash = keys
+                .iter()
+                .map(|x| x.as_ref().fast_hash())
+                .reduce(|left, right| {
+                    let mut a = (left ^ right).wrapping_mul(0x9ddfea08eb382d69_u64);
+                    a ^= a >> 47;
+                    let mut b = (right ^ a).wrapping_mul(0x9ddfea08eb382d69_u64);
+                    b ^= b >> 47;
+                    b.wrapping_mul(0x9ddfea08eb382d69_u64)
+                })
+                .unwrap_or_default();
+
+            DictionaryKeys {
+                hash,
+                keys: NonNull::from(keys),
+            }
         }
     }
 
@@ -45,8 +75,7 @@ impl DictionaryKeys {
 unsafe impl Keyable for DictionaryKeys {
     #[inline(always)]
     fn is_zero(this: &MaybeUninit<Self>) -> bool {
-        // unsafe { this.assume_init_ref().keys.as_ref().is_empty() }
-        false
+        unsafe { this.assume_init_ref().keys.as_ref().is_empty() }
     }
 
     #[inline(always)]
@@ -73,15 +102,19 @@ unsafe impl Sync for DictionaryKeys {}
 pub struct DictionaryStringHashTable<V> {
     arena: Bump,
     hashtable: Hashtable<DictionaryKeys, V>,
-    dictionary_hashset: ShortStringHashSet<[u8]>,
+    dictionary_hashset: StringHashSet<[u8]>,
 }
+
+unsafe impl<V> Send for DictionaryStringHashTable<V> {}
+
+unsafe impl<V> Sync for DictionaryStringHashTable<V> {}
 
 impl<V> DictionaryStringHashTable<V> {
     pub fn new() -> DictionaryStringHashMap<V> {
         DictionaryStringHashTable::<V> {
             arena: Bump::new(),
             hashtable: Hashtable::new(),
-            dictionary_hashset: ShortStringHashSet::new(),
+            dictionary_hashset: StringHashSet::new(),
         }
     }
 }
@@ -99,7 +132,9 @@ impl<V> HashtableLike for DictionaryStringHashTable<V> {
     }
 
     fn bytes_len(&self) -> usize {
-        self.dictionary_hashset.bytes_len() + self.hashtable.bytes_len() + self.arena.allocated_bytes()
+        self.dictionary_hashset.bytes_len()
+            + self.hashtable.bytes_len()
+            + self.arena.allocated_bytes()
     }
 
     fn entry(&self, key: &Self::Key) -> Option<Self::EntryRef<'_>> {
@@ -108,7 +143,8 @@ impl<V> HashtableLike for DictionaryStringHashTable<V> {
         unsafe {
             for key in key.keys.as_ref().iter() {
                 let entry = self.dictionary_hashset.entry(key.as_ref())?;
-                dictionary_keys.push(NonNull::from(entry.key()));
+                let s = NonNull::from(entry.key());
+                dictionary_keys.push(s);
             }
 
             self.hashtable
@@ -165,9 +201,8 @@ impl<V> HashtableLike for DictionaryStringHashTable<V> {
 
         let dictionary_key = DictionaryKeys::create(&dictionary_keys);
         let e = HashtableLike::insert_and_entry(&mut self.hashtable, &dictionary_key)?;
-        e.set_key(DictionaryKeys::create_with_hash(
+        e.set_key(DictionaryKeys::create(
             self.arena.alloc_slice_copy(&dictionary_keys),
-            dictionary_key.hash,
         ));
         Ok(e)
     }

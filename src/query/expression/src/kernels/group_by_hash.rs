@@ -22,7 +22,8 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_hashtable::{DictionaryKeys, FastHash};
+use common_hashtable::DictionaryKeys;
+use common_hashtable::FastHash;
 use common_io::prelude::BinaryWrite;
 use ethnum::i256;
 use ethnum::u256;
@@ -73,8 +74,8 @@ unsafe impl Sync for KeysState {}
 pub trait HashMethod: Clone + Sync + Send + 'static {
     type HashKey: ?Sized + Eq + FastHash + Debug;
 
-    type HashKeyIter<'a>: Iterator<Item=&'a Self::HashKey> + TrustedLen
-        where Self: 'a;
+    type HashKeyIter<'a>: Iterator<Item = &'a Self::HashKey> + TrustedLen
+    where Self: 'a;
 
     fn name(&self) -> String;
 
@@ -313,7 +314,7 @@ pub struct HashMethodFixedKeys<T> {
 }
 
 impl<T> HashMethodFixedKeys<T>
-    where T: Number
+where T: Number
 {
     #[inline]
     pub fn get_key(&self, column: &Buffer<T>, row: usize) -> T {
@@ -322,7 +323,7 @@ impl<T> HashMethodFixedKeys<T>
 }
 
 impl<T> HashMethodFixedKeys<T>
-    where T: Clone + Default
+where T: Clone + Default
 {
     fn build_keys_vec(&self, group_columns: &[(Column, DataType)], rows: usize) -> Result<Vec<T>> {
         let step = std::mem::size_of::<T>();
@@ -353,7 +354,7 @@ impl<T> HashMethodFixedKeys<T>
 }
 
 impl<T> Default for HashMethodFixedKeys<T>
-    where T: Clone
+where T: Clone
 {
     fn default() -> Self {
         HashMethodFixedKeys { t: PhantomData }
@@ -361,7 +362,7 @@ impl<T> Default for HashMethodFixedKeys<T>
 }
 
 impl<T> HashMethodFixedKeys<T>
-    where T: Clone
+where T: Clone
 {
     pub fn deserialize_group_columns(
         &self,

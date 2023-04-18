@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_expression::types::number::Number;
 use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringIterator;
+use common_hashtable::DictionaryKeys;
 
 use super::large_number::LargeNumber;
 
@@ -86,5 +87,28 @@ impl KeysColumnIter<[u8]> for SerializedKeysColumnIter {
 
     fn iter(&self) -> Self::Iterator<'_> {
         self.column.iter()
+    }
+}
+
+pub struct DictionarySerializedKeysColumnIter {
+    column: StringColumn,
+}
+
+impl DictionarySerializedKeysColumnIter {
+    pub fn create(column: &StringColumn) -> Result<DictionarySerializedKeysColumnIter> {
+        // Ok(DictionarySerializedKeysColumnIter {
+        //     column: column.clone(),
+        // })
+
+        unimplemented!()
+    }
+}
+
+impl KeysColumnIter<DictionaryKeys> for DictionarySerializedKeysColumnIter {
+    type Iterator<'a> = std::slice::Iter<'a, DictionaryKeys>;
+
+    fn iter(&self) -> Self::Iterator<'_> {
+        // self.column.iter()
+        unimplemented!()
     }
 }

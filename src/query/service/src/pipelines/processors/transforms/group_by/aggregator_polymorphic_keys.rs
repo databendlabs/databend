@@ -29,6 +29,7 @@ use common_expression::HashMethodKeysU256;
 use common_expression::HashMethodSerializer;
 use common_expression::HashMethodSingleString;
 use common_expression::KeysState;
+use common_hashtable::DictionaryKeys;
 use common_hashtable::DictionaryStringHashMap;
 use common_hashtable::FastHash;
 use common_hashtable::HashMap;
@@ -45,12 +46,15 @@ use tracing::info;
 use super::aggregator_keys_builder::LargeFixedKeysColumnBuilder;
 use super::aggregator_keys_iter::LargeFixedKeysColumnIter;
 use super::BUCKETS_LG2;
+use crate::pipelines::processors::transforms::group_by::aggregator_groups_builder::DictionarySerializedKeysGroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::aggregator_groups_builder::FixedKeysGroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::aggregator_groups_builder::GroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::aggregator_groups_builder::SerializedKeysGroupColumnsBuilder;
+use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder::DictionaryStringKeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder::FixedKeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder::KeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder::StringKeysColumnBuilder;
+use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::DictionarySerializedKeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::FixedKeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::SerializedKeysColumnIter;
@@ -454,37 +458,47 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
         v.fast_hash()
     }
 }
-// impl PolymorphicKeysHelper<HashMethodDictionarySerializer> for HashMethodDictionarySerializer {
-//     const SUPPORT_PARTITIONED: bool = true;
-//
-//     type HashTable<T: Send + Sync + 'static> = DictionaryStringHashMap<DictionaryKeys, T>;
-//
-//     fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>> {
-//         todo!()
-//     }
-//
-//     type ColumnBuilder<'a> where Self: 'a, HashMethodDictionarySerializer: 'a = ();
-//
-//     fn keys_column_builder(&self, capacity: usize, value_capacity: usize) -> Self::ColumnBuilder<'_> {
-//         todo!()
-//     }
-//
-//     type KeysColumnIter = ();
-//
-//     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-//         todo!()
-//     }
-//
-//     type GroupColumnsBuilder<'a> where Self: 'a, HashMethodDictionarySerializer: 'a = ();
-//
-//     fn group_columns_builder(&self, capacity: usize, _data_capacity: usize, params: &AggregatorParams) -> Self::GroupColumnsBuilder<'_> {
-//         todo!()
-//     }
-//
-//     fn get_hash(&self, v: &HashKey) -> u64 {
-//         todo!()
-//     }
-// }
+
+impl PolymorphicKeysHelper<HashMethodDictionarySerializer> for HashMethodDictionarySerializer {
+    const SUPPORT_PARTITIONED: bool = true;
+
+    type HashTable<T: Send + Sync + 'static> = DictionaryStringHashMap<T>;
+
+    fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>> {
+        Ok(DictionaryStringHashMap::new())
+    }
+
+    type ColumnBuilder<'a> = DictionaryStringKeysColumnBuilder<'a>;
+
+    fn keys_column_builder(
+        &self,
+        capacity: usize,
+        value_capacity: usize,
+    ) -> Self::ColumnBuilder<'_> {
+        todo!()
+    }
+
+    type KeysColumnIter = DictionarySerializedKeysColumnIter;
+
+    fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
+        todo!()
+    }
+
+    type GroupColumnsBuilder<'a> = DictionarySerializedKeysGroupColumnsBuilder<'a>;
+
+    fn group_columns_builder(
+        &self,
+        capacity: usize,
+        _data_capacity: usize,
+        params: &AggregatorParams,
+    ) -> Self::GroupColumnsBuilder<'_> {
+        DictionarySerializedKeysGroupColumnsBuilder::create(capacity, _data_capacity, params)
+    }
+
+    fn get_hash(&self, v: &DictionaryKeys) -> u64 {
+        DictionaryKeys::fast_hash(v)
+    }
+}
 
 #[derive(Clone)]
 pub struct PartitionedHashMethod<Method: HashMethodBounds> {
