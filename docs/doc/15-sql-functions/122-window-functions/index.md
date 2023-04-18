@@ -20,13 +20,13 @@ The list below shows all the window functions.
 
 | Function Name                                                         | Category     | Window | Window Frame | Notes |
 |-----------------------------------------------------------------------|--------------|--------|--------------|-------|
+| [ARRAY_AGG](../10-aggregate-functions/aggregate-array-agg.md)         | General      | ✔      |              |       |
 | [AVG](../10-aggregate-functions/aggregate-avg.md)                     | General      | ✔      | ✔            |       |
 | [AVG_IF](../10-aggregate-functions/aggregate-avg-if.md)               | General      | ✔      | ✔            |       |
 | [COUNT](../10-aggregate-functions/aggregate-count.md)                 | General      | ✔      | ✔            |       |
 | [COUNT_IF](../10-aggregate-functions/aggregate-count-if.md)           | General      | ✔      | ✔            |       |
 | [COVAR_POP](../10-aggregate-functions/aggregate-covar-pop.md)         | General      | ✔      |              |       |
 | [COVAR_SAMP](../10-aggregate-functions/aggregate-covar-samp.md)       | General      | ✔      |              |       |
-| [LIST](../10-aggregate-functions/aggregate-list.md)                   | General      | ✔      |              |       |
 | [MAX](../10-aggregate-functions/aggregate-max.md)                     | General      | ✔      | ✔            |       |
 | [MAX_IF](../10-aggregate-functions/aggregate-max-if.md)               | General      | ✔      | ✔            |       |
 | [MIN](../10-aggregate-functions/aggregate-min.md)                     | General      | ✔      | ✔            |       |
@@ -34,8 +34,8 @@ The list below shows all the window functions.
 | [STDDEV_POP](../10-aggregate-functions/aggregate-stddev-pop.md)       | General      | ✔      | ✔            |       |
 | [STDDEV_SAMP](../10-aggregate-functions/aggregate-stddev-samp.md)     | General      | ✔      | ✔            |       |
 | [MEDIAN](../10-aggregate-functions/aggregate-median.md)               | General      | ✔      | ✔            |       |
-| [QUANTILE](../10-aggregate-functions/aggregate-quantile.md)           | General      | ✔      | ✔            |       |
 | [QUANTILE_CONT](../10-aggregate-functions/aggregate-quantile-cont.md) | General      | ✔      | ✔            |       |
+| [QUANTILE_DISC](../10-aggregate-functions/aggregate-quantile-disc.md) | General      | ✔      | ✔            |       |
 | [KURTOSIS](../10-aggregate-functions/aggregate-kurtosis.md)           | General      | ✔      | ✔            |       |
 | [SKEWNESS](../10-aggregate-functions/aggregate-skewness.md)           | General      | ✔      | ✔            |       |
 | [SUM](../10-aggregate-functions/aggregate-sum.md)                     | General      | ✔      | ✔            |       |

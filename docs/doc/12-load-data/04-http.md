@@ -1,6 +1,6 @@
 ---
-title: Load from Remote File
-sidebar_label: Load from a Remote File
+title: Loading from Remote File
+sidebar_label: Loading from a Remote File
 description:
   Load data from remote files.
 ---

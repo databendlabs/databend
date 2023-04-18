@@ -55,11 +55,6 @@ impl Interpreter for ShowSharesInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let tenant = self.ctx.get_tenant();
-        let req = ShowSharesReq {
-            tenant: tenant.clone(),
-        };
-        let resp = meta_api.show_shares(req).await?;
-
         let mut names: Vec<Vec<u8>> = vec![];
         let mut kinds: Vec<Vec<u8>> = vec![];
         let mut created_owns: Vec<Vec<u8>> = vec![];
@@ -67,15 +62,6 @@ impl Interpreter for ShowSharesInterpreter {
         let mut from: Vec<Vec<u8>> = vec![];
         let mut to: Vec<Vec<u8>> = vec![];
         let mut comments: Vec<Vec<u8>> = vec![];
-        for entry in resp.inbound_accounts {
-            names.push(entry.share_name.share_name.clone().as_bytes().to_vec());
-            kinds.push("INBOUND".to_string().as_bytes().to_vec());
-            created_owns.push(entry.create_on.to_string().as_bytes().to_vec());
-            database_names.push(entry.database_name.unwrap_or_default().as_bytes().to_vec());
-            from.push(entry.share_name.tenant.clone().as_bytes().to_vec());
-            to.push(tenant.clone().as_bytes().to_vec());
-            comments.push(entry.comment.unwrap_or_default().as_bytes().to_vec());
-        }
 
         // query all share endpoint for other tenant inbound shares
         let share_specs = ShareEndpointManager::instance()
@@ -104,6 +90,11 @@ impl Interpreter for ShowSharesInterpreter {
             to.push(tenant.clone().as_bytes().to_vec());
             comments.push(share_spec.comment.unwrap_or_default().as_bytes().to_vec());
         }
+
+        let req = ShowSharesReq {
+            tenant: tenant.clone(),
+        };
+        let resp = meta_api.show_shares(req).await?;
 
         for entry in resp.outbound_accounts {
             names.push(entry.share_name.share_name.clone().as_bytes().to_vec());

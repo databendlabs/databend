@@ -27,30 +27,30 @@ use crate::error::Result;
 pub struct MySQLClient {
     pub conn: Conn,
     pub debug: bool,
-    pub tpch: bool,
+    pub bench: bool,
 }
 
 impl MySQLClient {
-    pub async fn create() -> Result<Self> {
-        let url = "mysql://root:@127.0.0.1:3307/default";
-        let pool = Pool::new(url);
+    pub async fn create(database: &str) -> Result<Self> {
+        let url = format!("mysql://root:@127.0.0.1:3307/{database}");
+        let pool = Pool::new(url.as_str());
         let conn = pool.get_conn().await?;
         Ok(Self {
             conn,
             debug: false,
-            tpch: false,
+            bench: false,
         })
     }
 
-    pub fn enable_tpch(&mut self) {
-        self.tpch = true;
+    pub fn enable_bench(&mut self) {
+        self.bench = true;
     }
 
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput<DefaultColumnType>> {
         let start = Instant::now();
         let rows: Vec<Row> = self.conn.query(sql).await?;
         let elapsed = start.elapsed();
-        if self.tpch
+        if self.bench
             && !(sql.trim_start().starts_with("set") || sql.trim_start().starts_with("analyze"))
         {
             println!("{elapsed:?}");

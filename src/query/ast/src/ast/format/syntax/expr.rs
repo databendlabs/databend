@@ -325,45 +325,6 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc<'static> {
                     .append(pretty_expr(v))
             })))
             .append(RcDoc::text("}")),
-        Expr::ArraySort {
-            expr,
-            asc,
-            null_first,
-            ..
-        } => {
-            let res = pretty_expr(*expr);
-            if asc {
-                res.clone()
-                    .append(RcDoc::text(","))
-                    .append(RcDoc::space())
-                    .append(RcDoc::text("'"))
-                    .append(RcDoc::text("ASC"))
-                    .append(RcDoc::text("'"));
-            } else {
-                res.clone()
-                    .append(RcDoc::text(","))
-                    .append(RcDoc::space())
-                    .append(RcDoc::text("'"))
-                    .append(RcDoc::text("DESC"))
-                    .append(RcDoc::text("'"));
-            }
-            if null_first {
-                res.clone()
-                    .append(RcDoc::text(","))
-                    .append(RcDoc::space())
-                    .append(RcDoc::text("'"))
-                    .append(RcDoc::text("NULL FIRST"))
-                    .append(RcDoc::text("'"));
-            } else {
-                res.clone()
-                    .append(RcDoc::text(","))
-                    .append(RcDoc::space())
-                    .append(RcDoc::text("'"))
-                    .append(RcDoc::text("NULL LAST"))
-                    .append(RcDoc::text("'"));
-            }
-            res.clone().append(RcDoc::text(")"))
-        }
         Expr::Interval { expr, unit, .. } => RcDoc::text("INTERVAL")
             .append(RcDoc::space())
             .append(pretty_expr(*expr))

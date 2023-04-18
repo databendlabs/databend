@@ -20,6 +20,7 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
+use crate::optimizer::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::IndexType;
@@ -56,9 +57,6 @@ impl Operator for ProjectSet {
         for srf in &self.srfs {
             child_prop.output_columns.insert(srf.index);
         }
-
-        // ProjectSet is set-returning functions, precise_cardinality set None
-        child_prop.statistics.precise_cardinality = None;
         Ok(child_prop)
     }
 
@@ -67,6 +65,13 @@ impl Operator for ProjectSet {
         rel_expr: &RelExpr,
     ) -> common_exception::Result<PhysicalProperty> {
         rel_expr.derive_physical_prop_child(0)
+    }
+
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> common_exception::Result<StatInfo> {
+        let mut input_stat = rel_expr.derive_cardinality_child(0)?;
+        // ProjectSet is set-returning functions, precise_cardinality set None
+        input_stat.statistics.precise_cardinality = None;
+        Ok(input_stat)
     }
 
     fn compute_required_prop_child(

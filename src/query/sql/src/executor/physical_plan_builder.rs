@@ -66,8 +66,8 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::AggregateMode;
-use crate::plans::AndExpr;
 use crate::plans::Exchange;
+use crate::plans::FunctionCall;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
@@ -773,6 +773,7 @@ impl PhysicalPlanBuilder {
                     WindowFuncType::RowNumber => WindowFunction::RowNumber,
                     WindowFuncType::Rank => WindowFunction::Rank,
                     WindowFuncType::DenseRank => WindowFunction::DenseRank,
+                    WindowFuncType::PercentRank => WindowFunction::PercentRank,
                 };
 
                 Ok(PhysicalPlan::Window(Window {
@@ -1056,9 +1057,11 @@ impl PhysicalPlanBuilder {
                     .iter()
                     .cloned()
                     .reduce(|lhs, rhs| {
-                        ScalarExpr::AndExpr(AndExpr {
-                            left: Box::new(lhs),
-                            right: Box::new(rhs),
+                        ScalarExpr::FunctionCall(FunctionCall {
+                            span: None,
+                            func_name: "and".to_string(),
+                            params: vec![],
+                            arguments: vec![lhs, rhs],
                         })
                     })
                     .expect("there should be at least one predicate in prewhere");
@@ -1138,10 +1141,10 @@ impl PhysicalPlanBuilder {
 
     fn build_plan_stat_info(&self, s_expr: &SExpr) -> Result<PlanStatsInfo> {
         let rel_expr = RelExpr::with_s_expr(s_expr);
-        let prop = rel_expr.derive_relational_prop()?;
+        let stat_info = rel_expr.derive_cardinality()?;
 
         Ok(PlanStatsInfo {
-            estimated_rows: prop.cardinality,
+            estimated_rows: stat_info.cardinality,
         })
     }
 }

@@ -38,7 +38,7 @@ impl JoinRelation {
 
     pub fn cardinality(&self) -> Result<f64> {
         let rel_expr = RelExpr::with_s_expr(&self.s_expr);
-        Ok(rel_expr.derive_relational_prop()?.cardinality)
+        Ok(rel_expr.derive_cardinality()?.cardinality)
     }
 }
 

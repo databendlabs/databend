@@ -17,9 +17,8 @@ use itertools::Itertools;
 
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
-use crate::plans::AndExpr;
 use crate::plans::Filter;
-use crate::plans::OrExpr;
+use crate::plans::FunctionCall;
 use crate::ColumnSet;
 use crate::ScalarExpr;
 
@@ -29,14 +28,17 @@ pub fn rewrite_predicates(s_expr: &SExpr) -> Result<Vec<ScalarExpr>> {
     let mut new_predicates = Vec::new();
     let mut origin_predicates = filter.predicates.clone();
     for predicate in filter.predicates.iter() {
-        if let ScalarExpr::OrExpr(or_expr) = predicate {
-            for join_child in join.children().iter() {
-                let rel_expr = RelExpr::with_s_expr(join_child);
-                let used_columns = rel_expr.derive_relational_prop()?.used_columns;
-                if let Some(predicate) = extract_or_predicate(or_expr, &used_columns)? {
-                    new_predicates.push(predicate)
+        match predicate {
+            ScalarExpr::FunctionCall(func) if func.func_name == "or" => {
+                for join_child in join.children().iter() {
+                    let rel_expr = RelExpr::with_s_expr(join_child);
+                    let used_columns = rel_expr.derive_relational_prop()?.used_columns;
+                    if let Some(predicate) = extract_or_predicate(&func.arguments, &used_columns)? {
+                        new_predicates.push(predicate)
+                    }
                 }
             }
+            _ => (),
         }
     }
     origin_predicates.extend(new_predicates);
@@ -48,31 +50,39 @@ pub fn rewrite_predicates(s_expr: &SExpr) -> Result<Vec<ScalarExpr>> {
 
 // Only need to be executed once
 fn extract_or_predicate(
-    or_expr: &OrExpr,
+    or_args: &[ScalarExpr],
     required_columns: &ColumnSet,
 ) -> Result<Option<ScalarExpr>> {
-    let or_args = flatten_ors(or_expr.clone());
+    let flatten_or_args = flatten_ors(or_args);
     let mut extracted_scalars = Vec::new();
-    for or_arg in or_args.iter() {
+    for or_arg in flatten_or_args.iter() {
         let mut sub_scalars = Vec::new();
-        if let ScalarExpr::AndExpr(and_expr) = or_arg {
-            let and_args = flatten_ands(and_expr.clone());
-            for and_arg in and_args.iter() {
-                if let ScalarExpr::OrExpr(or_expr) = and_arg {
-                    if let Some(scalar) = extract_or_predicate(or_expr, required_columns)? {
-                        sub_scalars.push(scalar);
-                    }
-                } else {
-                    let used_columns = and_arg.used_columns();
-                    if used_columns.is_subset(required_columns) {
-                        sub_scalars.push(and_arg.clone());
+        match or_arg {
+            ScalarExpr::FunctionCall(func) if func.func_name == "and" => {
+                let and_args = flatten_ands(&func.arguments);
+                for and_arg in and_args.iter() {
+                    match and_arg {
+                        ScalarExpr::FunctionCall(func) if func.func_name == "or" => {
+                            if let Some(scalar) =
+                                extract_or_predicate(&func.arguments, required_columns)?
+                            {
+                                sub_scalars.push(scalar);
+                            }
+                        }
+                        _ => {
+                            let used_columns = and_arg.used_columns();
+                            if used_columns.is_subset(required_columns) {
+                                sub_scalars.push(and_arg.clone());
+                            }
+                        }
                     }
                 }
             }
-        } else {
-            let used_columns = or_arg.used_columns();
-            if used_columns.is_subset(required_columns) {
-                sub_scalars.push(or_arg.clone());
+            _ => {
+                let used_columns = or_arg.used_columns();
+                if used_columns.is_subset(required_columns) {
+                    sub_scalars.push(or_arg.clone());
+                }
             }
         }
         if sub_scalars.is_empty() {
@@ -91,12 +101,13 @@ fn extract_or_predicate(
 
 // Flatten nested ORs, such as `a=1 or b=1 or c=1`
 // It'll be flatten to [a=1, b=1, c=1]
-fn flatten_ors(or_expr: OrExpr) -> Vec<ScalarExpr> {
+fn flatten_ors(or_args: &[ScalarExpr]) -> Vec<ScalarExpr> {
     let mut flattened_ors = Vec::new();
-    let or_args = vec![*or_expr.left, *or_expr.right];
     for or_arg in or_args.iter() {
         match or_arg {
-            ScalarExpr::OrExpr(or_expr) => flattened_ors.extend(flatten_ors(or_expr.clone())),
+            ScalarExpr::FunctionCall(func) if func.func_name == "or" => {
+                flattened_ors.extend(flatten_ors(&func.arguments))
+            }
             _ => flattened_ors.push(or_arg.clone()),
         }
     }
@@ -105,12 +116,13 @@ fn flatten_ors(or_expr: OrExpr) -> Vec<ScalarExpr> {
 
 // Flatten nested ORs, such as `a=1 and b=1 and c=1`
 // It'll be flatten to [a=1, b=1, c=1]
-fn flatten_ands(and_expr: AndExpr) -> Vec<ScalarExpr> {
+fn flatten_ands(and_args: &[ScalarExpr]) -> Vec<ScalarExpr> {
     let mut flattened_ands = Vec::new();
-    let and_args = vec![*and_expr.left, *and_expr.right];
     for and_arg in and_args.iter() {
         match and_arg {
-            ScalarExpr::AndExpr(and_expr) => flattened_ands.extend(flatten_ands(and_expr.clone())),
+            ScalarExpr::FunctionCall(func) if func.func_name == "and" => {
+                flattened_ands.extend(flatten_ands(&func.arguments));
+            }
             _ => flattened_ands.push(and_arg.clone()),
         }
     }
@@ -119,22 +131,32 @@ fn flatten_ands(and_expr: AndExpr) -> Vec<ScalarExpr> {
 
 // Merge predicates to AND scalar
 fn make_and_expr(scalars: &[ScalarExpr]) -> ScalarExpr {
-    if scalars.len() == 1 {
-        return scalars[0].clone();
-    }
-    ScalarExpr::AndExpr(AndExpr {
-        left: Box::new(scalars[0].clone()),
-        right: Box::new(make_and_expr(&scalars[1..])),
-    })
+    scalars
+        .iter()
+        .cloned()
+        .reduce(|lhs, rhs| {
+            ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "and".to_string(),
+                params: vec![],
+                arguments: vec![lhs, rhs],
+            })
+        })
+        .unwrap()
 }
 
 // Merge predicates to OR scalar
 fn make_or_expr(scalars: &[ScalarExpr]) -> ScalarExpr {
-    if scalars.len() == 1 {
-        return scalars[0].clone();
-    }
-    ScalarExpr::OrExpr(OrExpr {
-        left: Box::new(scalars[0].clone()),
-        right: Box::new(make_or_expr(&scalars[1..])),
-    })
+    scalars
+        .iter()
+        .cloned()
+        .reduce(|lhs, rhs| {
+            ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "or".to_string(),
+                params: vec![],
+                arguments: vec![lhs, rhs],
+            })
+        })
+        .unwrap()
 }

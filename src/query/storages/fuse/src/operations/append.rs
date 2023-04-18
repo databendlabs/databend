@@ -26,7 +26,7 @@ use common_expression::SortColumnDescription;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::transforms::transform_block_compact_no_split::BlockCompactorNoSplit;
+use common_pipeline_transforms::processors::transforms::transform_block_compact_for_copy::BlockCompactorForCopy;
 use common_pipeline_transforms::processors::transforms::BlockCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
@@ -65,7 +65,7 @@ impl FuseTable {
                     Ok(ProcessorPtr::create(TransformCompact::try_create(
                         transform_input_port,
                         transform_output_port,
-                        BlockCompactorNoSplit::new(block_compact_thresholds),
+                        BlockCompactorForCopy::new(block_compact_thresholds),
                     )?))
                 })?;
                 pipeline.resize(size)?;

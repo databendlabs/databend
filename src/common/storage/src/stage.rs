@@ -15,7 +15,6 @@
 use std::path::Path;
 
 use chrono::DateTime;
-use chrono::TimeZone;
 use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -56,10 +55,7 @@ impl StageFileInfo {
             path,
             size: meta.content_length(),
             md5: meta.content_md5().map(str::to_string),
-            last_modified: meta
-                .last_modified()
-                .map(|v| Utc.timestamp_nanos(v.unix_timestamp_nanos() as i64))
-                .unwrap_or_default(),
+            last_modified: meta.last_modified().unwrap_or_default(),
             etag: meta.etag().map(str::to_string),
             status: StageFileStatus::NeedCopy,
             creator: None,

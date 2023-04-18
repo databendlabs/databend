@@ -280,25 +280,6 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 .map(|expr| transform_expr(expr, columns))
                 .collect(),
         },
-        AExpr::ArraySort {
-            span,
-            expr,
-            asc,
-            null_first,
-        } => {
-            let name = match (asc, null_first) {
-                (true, true) => "array_sort_asc_null_first".to_string(),
-                (true, false) => "array_sort_asc_null_last".to_string(),
-                (false, true) => "array_sort_desc_null_first".to_string(),
-                (false, false) => "array_sort_desc_null_last".to_string(),
-            };
-            RawExpr::FunctionCall {
-                span,
-                name,
-                params: vec![],
-                args: vec![transform_expr(*expr, columns)],
-            }
-        }
         AExpr::Map { span, kvs } => {
             let mut keys = Vec::with_capacity(kvs.len());
             let mut vals = Vec::with_capacity(kvs.len());

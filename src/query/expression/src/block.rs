@@ -254,6 +254,24 @@ impl DataBlock {
         }
     }
 
+    pub fn split_by_rows(&self, max_rows_per_block: usize) -> (Vec<Self>, Option<Self>) {
+        let mut res = vec![];
+        let mut offset = 0;
+        let mut remain_rows = self.num_rows;
+        while remain_rows >= max_rows_per_block {
+            let cut = self.slice(offset..(offset + max_rows_per_block));
+            res.push(cut);
+            offset += max_rows_per_block;
+            remain_rows -= max_rows_per_block;
+        }
+        let remain = if remain_rows > 0 {
+            Some(self.slice(offset..(offset + remain_rows)))
+        } else {
+            None
+        };
+        (res, remain)
+    }
+
     #[inline]
     pub fn add_column(&mut self, entry: BlockEntry) {
         #[cfg(debug_assertions)]

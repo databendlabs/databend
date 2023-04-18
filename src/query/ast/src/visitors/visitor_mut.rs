@@ -292,10 +292,6 @@ pub trait VisitorMut: Sized {
         }
     }
 
-    fn visit_array_sort(&mut self, _span: Span, expr: &mut Expr, _asc: bool, _null_first: bool) {
-        walk_expr_mut(self, expr);
-    }
-
     fn visit_map(&mut self, _span: Span, kvs: &mut [(Expr, Expr)]) {
         for (key_expr, val_expr) in kvs {
             walk_expr_mut(self, key_expr);
