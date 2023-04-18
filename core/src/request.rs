@@ -32,7 +32,7 @@ pub struct QueryRequest<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pagination: Option<PaginationConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    stage_attachment: Option<StageAttachmentConfig>,
+    stage_attachment: Option<StageAttachmentConfig<'a>>,
 }
 
 #[derive(Serialize, Debug)]
@@ -46,16 +46,16 @@ pub struct PaginationConfig {
 }
 
 #[derive(Serialize, Debug)]
-pub struct StageAttachmentConfig {
-    pub location: String,
+pub struct StageAttachmentConfig<'a> {
+    pub location: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub file_format_options: Option<BTreeMap<String, String>>,
+    pub file_format_options: Option<BTreeMap<&'a str, &'a str>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub copy_options: Option<BTreeMap<String, String>>,
+    pub copy_options: Option<BTreeMap<&'a str, &'a str>>,
 }
 
-impl QueryRequest<'_> {
-    pub fn new(sql: &'_ str) -> QueryRequest {
+impl<'r, 't: 'r> QueryRequest<'r> {
+    pub fn new(sql: &'r str) -> QueryRequest {
         QueryRequest {
             session: None,
             sql,
@@ -76,7 +76,7 @@ impl QueryRequest<'_> {
 
     pub fn with_stage_attachment(
         mut self,
-        stage_attachment: Option<StageAttachmentConfig>,
+        stage_attachment: Option<StageAttachmentConfig<'t>>,
     ) -> Self {
         self.stage_attachment = stage_attachment;
         self
@@ -101,7 +101,7 @@ mod test {
                 max_rows_per_page: Some(1),
             }))
             .with_stage_attachment(Some(StageAttachmentConfig {
-                location: "@~/my_location".into(),
+                location: "@~/my_location",
                 file_format_options: None,
                 copy_options: None,
             }));

@@ -26,7 +26,7 @@ use url::Url;
 
 use crate::{
     error::{Error, Result},
-    request::{PaginationConfig, QueryRequest, SessionConfig},
+    request::{PaginationConfig, QueryRequest, SessionConfig, StageAttachmentConfig},
     response::{QueryError, QueryResponse},
 };
 
@@ -221,6 +221,28 @@ impl APIClient {
         }
     }
 
+    pub async fn wait_for_query(&self, resp: QueryResponse) -> Result<QueryResponse> {
+        if let Some(next_uri) = &resp.next_uri {
+            let schema = resp.schema;
+            let mut data = resp.data;
+            let mut resp = self.query_page(next_uri).await?;
+            while let Some(next_uri) = &resp.next_uri {
+                resp = self.query_page(next_uri).await?;
+                data.append(&mut resp.data);
+            }
+            resp.schema = schema;
+            resp.data = data;
+            Ok(resp)
+        } else {
+            Ok(resp)
+        }
+    }
+
+    pub async fn query_wait(&self, sql: &str) -> Result<QueryResponse> {
+        let resp = self.query(sql).await?;
+        self.wait_for_query(resp).await
+    }
+
     async fn make_session(&self) -> Option<SessionConfig> {
         let session_settings = self.session_settings.lock().await;
         let database = self.database.lock().await;
@@ -275,8 +297,46 @@ impl APIClient {
         Ok(headers)
     }
 
+    pub async fn insert_with_stage(
+        &self,
+        sql: &str,
+        stage_location: &str,
+        file_format_options: Option<BTreeMap<&str, &str>>,
+        copy_options: Option<BTreeMap<&str, &str>>,
+    ) -> Result<QueryResponse> {
+        let session_settings = self.make_session().await;
+        let stage_attachment = Some(StageAttachmentConfig {
+            location: stage_location,
+            file_format_options,
+            copy_options,
+        });
+        let req = QueryRequest::new(sql)
+            .with_pagination(self.make_pagination())
+            .with_session(session_settings)
+            .with_stage_attachment(stage_attachment);
+        let endpoint = self.endpoint.join("v1/query")?;
+        let resp = self
+            .cli
+            .post(endpoint)
+            .json(&req)
+            .basic_auth(self.user.clone(), self.password.clone())
+            .headers(self.make_headers()?)
+            .send()
+            .await?;
+        if resp.status() != StatusCode::OK {
+            let resp_err = QueryError {
+                code: resp.status().as_u16(),
+                message: resp.text().await?,
+            };
+            return Err(Error::InvalidResponse(resp_err));
+        }
+        let resp: QueryResponse = resp.json().await?;
+        let resp = self.wait_for_query(resp).await?;
+        Ok(resp)
+    }
+
     pub async fn upload_to_stage(
-        &mut self,
+        &self,
         stage_location: &str,
         data: impl AsyncRead + Send + Sync + 'static,
         size: u64,
@@ -324,7 +384,7 @@ impl APIClient {
     }
 
     async fn upload_to_stage_with_presigned(
-        &mut self,
+        &self,
         stage_location: &str,
         data: impl AsyncRead + Send + Sync + 'static,
         size: u64,
@@ -348,10 +408,9 @@ impl APIClient {
         }
     }
 
-    async fn get_presigned_url(&mut self, stage_location: &str) -> Result<PresignedResponse> {
-        let resp = self
-            .query(format!("PRESIGN UPLOAD {}", stage_location).as_str())
-            .await?;
+    async fn get_presigned_url(&self, stage_location: &str) -> Result<PresignedResponse> {
+        let sql = format!("PRESIGN UPLOAD {}", stage_location);
+        let resp = self.query_wait(&sql).await?;
         if resp.data.len() != 1 {
             return Err(Error::Request(
                 "Empty response from server for presigned request".to_string(),
