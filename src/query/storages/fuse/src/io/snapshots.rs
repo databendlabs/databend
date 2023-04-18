@@ -68,12 +68,11 @@ impl SnapshotsIO {
         data_accessor: Operator,
     ) -> Result<Arc<TableSnapshot>> {
         let reader = MetaReaders::table_snapshot_reader(data_accessor);
-        let format_version =
-            TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
+        let ver = TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
         let load_params = LoadParams {
             location: snapshot_location,
             len_hint: None,
-            ver: format_version,
+            ver,
             put_cache: true,
         };
         reader.read(&load_params).await
