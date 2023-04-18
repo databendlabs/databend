@@ -59,7 +59,7 @@ If you are interested in learning more, please check out the resources listed be
 
 ### New AI-related Configurations
 
-Databend has added new AI-related configurations that allow for the use of different endpoints and models.
+Databend now offers additional configurations for AI-related tasks, allowing you the flexibility to choose from various endpoints and models.
 
 This means that it can be easily integrated with other services including Azure OpenAI API. Additionally, the corresponding model can be flexibly configured as needed to balance performance and cost.
 
@@ -112,8 +112,8 @@ We are excited about the progress of the Rust version and look forward to sharin
 Here are some noteworthy items recorded here, perhaps you can find something that interests you.
 
 - Databend leverages a RBAC model to secure your data. Read [Docs | Access Control Privileges](https://databend.rs/doc/sql-reference/access-control-privileges) to learn about Global privileges and Object-specific privileges in Databend.
-- Add the `array_aggregate` function and support more array aggregate functions, including `stddev_samp`, `stddev_pop`, `stddev`, `std`, `median`, `approx_count_distinct`, `kurtosis`, and `skewness`.
-- Add the system table `system.caches` to describe the cache status in Databend.
+- Added the `array_aggregate` function and support more array aggregate functions, including `stddev_samp`, `stddev_pop`, `stddev`, `std`, `median`, `approx_count_distinct`, `kurtosis`, and `skewness`.
+- Added the system table `system.caches` to describe the cache status in Databend.
 - Databend recently introduced [z3.rs](https://github.com/prove-rs/z3.rs) to solve constraints. [Z3](https://github.com/Z3Prover/z3) is a theorem prover from Microsoft Research that is usually used to solve SMT problems.
 
 ## What's Up Next

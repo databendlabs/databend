@@ -119,11 +119,7 @@ impl FuseTable {
         }
 
         if let Some(root_snapshot_location) = self.snapshot_loc().await? {
-            let snapshots_io = SnapshotsIO::create(
-                ctx.clone(),
-                self.operator.clone(),
-                self.snapshot_format_version().await?,
-            );
+            let snapshots_io = SnapshotsIO::create(ctx.clone(), self.operator.clone());
 
             let start = Instant::now();
             let min_snapshot_timestamp = root_snapshot_ts;
@@ -210,11 +206,7 @@ impl FuseTable {
         {
             if let Some(root_ts_location) = root_ts_location_opt {
                 let start = Instant::now();
-                let snapshots_io = SnapshotsIO::create(
-                    ctx.clone(),
-                    self.operator.clone(),
-                    self.snapshot_format_version().await?,
-                );
+                let snapshots_io = SnapshotsIO::create(ctx.clone(), self.operator.clone());
                 // Todo(zhyass): exists bug, we need to filter out some table statistic files
                 // based on the snapshots just like the segments.
                 let ts_to_be_purged = snapshots_io
