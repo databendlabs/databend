@@ -140,13 +140,10 @@ impl<'a> KeysColumnBuilder for DictionaryStringKeysColumnBuilder<'a> {
     type T = &'a DictionaryKeys;
 
     fn append_value(&mut self, v: &'a DictionaryKeys) {
-        // self.inner_builder.put_slice(v);
-        // self.inner_builder.commit_row();
+        unimplemented!()
     }
 
     fn finish(self) -> Column {
-        // debug_assert_eq!(self._initial, self.inner_builder.data.len());
-        // Column::String(self.inner_builder.build())
-        unreachable!()
+        unimplemented!()
     }
 }

@@ -101,7 +101,7 @@ impl JoinHashTable {
             .iter()
             .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).data_type().clone())
             .collect::<Vec<_>>();
-        let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
+        let method = DataBlock::choose_hash_method_with_types(&hash_key_types, false)?;
         Ok(match method {
             HashMethodKind::Serializer(_) | HashMethodKind::DictionarySerializer(_) => {
                 Arc::new(JoinHashTable::try_create(

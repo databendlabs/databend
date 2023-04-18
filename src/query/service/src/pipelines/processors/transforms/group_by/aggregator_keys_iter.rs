@@ -15,6 +15,7 @@
 use std::slice::Iter;
 
 use common_arrow::arrow::buffer::Buffer;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::number::Number;
 use common_expression::types::string::StringColumn;
@@ -96,11 +97,9 @@ pub struct DictionarySerializedKeysColumnIter {
 
 impl DictionarySerializedKeysColumnIter {
     pub fn create(column: &StringColumn) -> Result<DictionarySerializedKeysColumnIter> {
-        // Ok(DictionarySerializedKeysColumnIter {
-        //     column: column.clone(),
-        // })
-
-        unimplemented!()
+        Err(ErrorCode::Unimplemented(
+            "DictionarySerializedKeys is unimplemented in cluster.",
+        ))
     }
 }
 
@@ -108,7 +107,7 @@ impl KeysColumnIter<DictionaryKeys> for DictionarySerializedKeysColumnIter {
     type Iterator<'a> = std::slice::Iter<'a, DictionaryKeys>;
 
     fn iter(&self) -> Self::Iterator<'_> {
-        // self.column.iter()
+        // self.column.iter
         unimplemented!()
     }
 }

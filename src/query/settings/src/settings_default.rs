@@ -238,6 +238,11 @@ impl DefaultSettings {
                     desc: "Group by shuffle mode, 'before_partial' is more balanced, but more data needs to exchange.",
                     possible_values: Some(vec!["before_partial", "before_merge"]),
                 }),
+                ("efficiently_memory_group_by", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Memory is used efficiently, but this may cause performance degradation.",
+                    possible_values: None,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

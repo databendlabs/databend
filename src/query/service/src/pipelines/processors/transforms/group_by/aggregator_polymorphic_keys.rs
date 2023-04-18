@@ -491,10 +491,10 @@ impl PolymorphicKeysHelper<HashMethodDictionarySerializer> for HashMethodDiction
     fn group_columns_builder(
         &self,
         capacity: usize,
-        _data_capacity: usize,
+        data_capacity: usize,
         params: &AggregatorParams,
     ) -> Self::GroupColumnsBuilder<'_> {
-        DictionarySerializedKeysGroupColumnsBuilder::create(capacity, _data_capacity, params)
+        DictionarySerializedKeysGroupColumnsBuilder::create(capacity, data_capacity, params)
     }
 
     fn get_hash(&self, v: &DictionaryKeys) -> u64 {

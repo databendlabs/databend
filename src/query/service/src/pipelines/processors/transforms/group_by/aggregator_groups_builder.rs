@@ -148,7 +148,7 @@ pub struct DictionarySerializedKeysGroupColumnsBuilder<'a> {
 }
 
 impl<'a> DictionarySerializedKeysGroupColumnsBuilder<'a> {
-    pub fn create(capacity: usize, data_capacity: usize, params: &AggregatorParams) -> Self {
+    pub fn create(capacity: usize, _data_capacity: usize, params: &AggregatorParams) -> Self {
         Self {
             other_type_data: Vec::with_capacity(capacity),
             string_type_data: Vec::with_capacity(capacity),

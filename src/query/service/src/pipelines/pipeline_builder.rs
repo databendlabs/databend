@@ -551,10 +551,14 @@ impl PipelineBuilder {
             });
         }
 
+        let is_cluster = self.ctx.get_cluster().is_empty();
+        let settings = self.ctx.get_settings();
+        let efficiently_memory = !is_cluster && settings.get_efficiently_memory_group_by()?;
+
         let group_cols = &params.group_columns;
         let schema_before_group_by = params.input_schema.clone();
         let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
-        let method = DataBlock::choose_hash_method(&sample_block, group_cols)?;
+        let method = DataBlock::choose_hash_method(&sample_block, group_cols, efficiently_memory)?;
 
         self.main_pipeline.add_transform(|input, output| {
             let transform = match params.aggregate_functions.is_empty() {
@@ -683,10 +687,14 @@ impl PipelineBuilder {
             });
         }
 
+        let is_cluster = self.ctx.get_cluster().is_empty();
+        let settings = self.ctx.get_settings();
+        let efficiently_memory = !is_cluster && settings.get_efficiently_memory_group_by()?;
+
         let group_cols = &params.group_columns;
         let schema_before_group_by = params.input_schema.clone();
         let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
-        let method = DataBlock::choose_hash_method(&sample_block, group_cols)?;
+        let method = DataBlock::choose_hash_method(&sample_block, group_cols, efficiently_memory)?;
 
         let tenant = self.ctx.get_tenant();
         let old_inject = self.exchange_injector.clone();

@@ -28,7 +28,11 @@ use crate::HashMethodKeysU128;
 use crate::HashMethodKeysU256;
 
 impl DataBlock {
-    pub fn choose_hash_method(chunk: &DataBlock, indices: &[usize]) -> Result<HashMethodKind> {
+    pub fn choose_hash_method(
+        chunk: &DataBlock,
+        indices: &[usize],
+        efficiently_memory: bool,
+    ) -> Result<HashMethodKind> {
         let hash_key_types = indices
             .iter()
             .map(|&offset| {
@@ -38,10 +42,13 @@ impl DataBlock {
             .collect::<Result<Vec<_>>>();
 
         let hash_key_types = hash_key_types?;
-        Self::choose_hash_method_with_types(&hash_key_types)
+        Self::choose_hash_method_with_types(&hash_key_types, efficiently_memory)
     }
 
-    pub fn choose_hash_method_with_types(hash_key_types: &[DataType]) -> Result<HashMethodKind> {
+    pub fn choose_hash_method_with_types(
+        hash_key_types: &[DataType],
+        efficiently_memory: bool,
+    ) -> Result<HashMethodKind> {
         if hash_key_types.len() == 1 {
             let typ = hash_key_types[0].clone();
             if matches!(typ, DataType::String | DataType::Variant) {
@@ -66,9 +73,12 @@ impl DataBlock {
                     group_key_len += 1;
                 }
             } else {
-                return Ok(HashMethodKind::DictionarySerializer(
-                    HashMethodDictionarySerializer::default(),
-                ));
+                return Ok(match efficiently_memory && hash_key_types.len() != 1 {
+                    true => HashMethodKind::Serializer(HashMethodSerializer::default()),
+                    false => HashMethodKind::DictionarySerializer(
+                        HashMethodDictionarySerializer::default(),
+                    ),
+                });
             }
         }
 
