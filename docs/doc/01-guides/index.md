@@ -1,10 +1,16 @@
 ---
-title: Get Started 
+title: Quick Start Resources
 ---
 
-These tutorials are intended to help you get started with Databend:
+Welcome to our Quick Start Resources page! Whether you're a newbie to Databend or looking to refresh your knowledge, this page is designed to help you get up and running quickly 🚀. We've compiled a list of key documents to help you navigate our documentation and learn the essentials of Databend. From deployment guides to usecases, this page will provide you with everything you need to begin using Databend effectively.
 
-## Deploying Databend
+## Set up Databend 🛠️
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+<Tabs>
+<TabItem value="Deploy" label="Deploy" default>
 
 * [Understanding Deployment Modes](../10-deploy/00-understanding-deployment-modes.md)
 * [Deploying a Standalone Databend](../10-deploy/02-deploying-databend.md)
@@ -13,7 +19,9 @@ These tutorials are intended to help you get started with Databend:
 * [Deploying a Local Databend (for Non-Production Use)](../10-deploy/05-deploying-local.md)
 * [Databend Cloud (Beta)](../02-cloud/index.md)
 
-## Connecting to Databend
+</TabItem>
+
+<TabItem value="Connect" label="Connect">
 
 * [How to Connect Databend with MySQL Client](../11-integrations/00-api/01-mysql-handler.md)
 * [How to Connect Databend with ClickHouse HTTP Handler](../11-integrations/00-api/02-clickhouse-handler.md)
@@ -25,7 +33,19 @@ These tutorials are intended to help you get started with Databend:
 * [How to Execute Queries in Golang](../03-develop/00-golang.md)
 * [How to Execute Queries in Node.js](../03-develop/02-nodejs.md)
 
-## Loading Data into Databend
+</TabItem>
+
+<TabItem value="Manage" label="Manage">
+
+* [Manage Databend Settings](../10-deploy/06-manage-settings.md)
+* [How to Back Up Meta Data](../10-deploy/06-metasrv/30-metasrv-backup-restore.md)
+* [How to Back Up Databases](../10-deploy/09-upgrade/10-backup-and-restore-schema.md)
+* [Upgrade Databend](../10-deploy/09-upgrade/50-upgrade.md)
+
+</TabItem>
+</Tabs>
+
+## Load and Unload Data 📥
 
 * [How to Load Data from Databend Stages](../12-load-data/00-stage.md)
 * [How to Load Data from Amazon S3](../12-load-data/01-s3.md)
@@ -33,12 +53,12 @@ These tutorials are intended to help you get started with Databend:
 * [How to Load Data from Remote Files](../12-load-data/04-http.md)
 * [Querying Data in Staged Files](../12-load-data/05-querying-stage.md)
 * [Transforming Data During a Load](../12-load-data/06-data-load-transform.md)
-
-## Unloading Data from Databend
-
 * [How to Unload Data from Databend](../12-unload-data/index.md)
 
-### Managing Data
+## Manage Data and User Access 🗄️
+
+<Tabs>
+<TabItem value="Data" label="Data" default>
 
 * [COPY](../14-sql-commands/10-dml/dml-copy-into-table.md)
 * [INSERT](../14-sql-commands/10-dml/dml-insert.md)
@@ -46,7 +66,46 @@ These tutorials are intended to help you get started with Databend:
 * [UPDATE](../14-sql-commands/10-dml/dml-update.md)
 * [REPLACE](../14-sql-commands/10-dml/dml-replace.md)
 
-## Managing Users
+</TabItem>
+
+<TabItem value="Database" label="Database" >
+
+* [How to Create a Database](../14-sql-commands/00-ddl/10-database/ddl-create-database.md)
+* [How to Drop a Database](../14-sql-commands/00-ddl/10-database/ddl-drop-database.md)
+
+</TabItem>
+
+<TabItem value="Table" label="Table" >
+
+* [How to Create a Table](../14-sql-commands/00-ddl/20-table/10-ddl-create-table.md)
+* [How to Drop a Table](../14-sql-commands/00-ddl/20-table/20-ddl-drop-table.md)
+* [How to Rename a Table](../14-sql-commands/00-ddl/20-table/30-ddl-rename-table.md)
+* [How to Truncate a Table](../14-sql-commands/00-ddl/20-table/40-ddl-truncate-table.md)
+* [How to Add/Drop Table Column](../14-sql-commands/00-ddl/20-table/90-alter-table-column.md)
+
+</TabItem>
+
+<TabItem value="View" label="View" >
+
+* [How to Create a View](../14-sql-commands/00-ddl/60-view/ddl-create-view.md)
+* [How to Drop a View](../14-sql-commands/00-ddl/60-view/ddl-drop-view.md)
+* [How to Alter a View](../14-sql-commands/00-ddl/60-view/ddl-alter-view.md)
+
+</TabItem>
+
+<TabItem value="Function" label="Function" >
+
+* [How to Create a User-Defined Function](../14-sql-commands/00-ddl/50-udf/ddl-create-function.md)
+* [How to Drop a User-Defined Function](../14-sql-commands/00-ddl/50-udf/ddl-drop-function.md)
+* [How to Alter a User-Defined Function](../14-sql-commands/00-ddl/50-udf/ddl-alter-function.md)
+* [Generating SQL with AI](../15-sql-functions/61-ai-functions/01-ai-to-sql.md)
+* [Creating Embedding Vectors](../15-sql-functions/61-ai-functions/02-ai-embedding-vector.md)
+* [Text Completion with AI](../15-sql-functions/61-ai-functions/03-ai-text-completion.md)
+* [Computing Text Similarities](../15-sql-functions/61-ai-functions/04-ai-cosine-distance.md)
+
+</TabItem>
+
+<TabItem value="User Access" label="User Access" >
 
 * [How to Create a User](../14-sql-commands/00-ddl/30-user/01-user-create-user.md)
 * [How to Grant Privileges to a User](../14-sql-commands/00-ddl/30-user/10-grant-privileges.md)
@@ -56,50 +115,37 @@ These tutorials are intended to help you get started with Databend:
 * [How to Grant Role to a User](../14-sql-commands/00-ddl/30-user/20-grant-role.md)
 * [How to Revoke Role from a User](../14-sql-commands/00-ddl/30-user/21-revoke-role.md)
 
-## Managing Databases
+</TabItem>
+</Tabs>
 
-* [How to Create a Database](../14-sql-commands/00-ddl/10-database/ddl-create-database.md)
-* [How to Drop a Database](../14-sql-commands/00-ddl/10-database/ddl-drop-database.md)
+## Ecosystem with Databend 📊
 
-## Managing Tables
+<Tabs>
+<TabItem value="APIs" label="APIs" default>
 
-* [How to Create a Table](../14-sql-commands/00-ddl/20-table/10-ddl-create-table.md)
-* [How to Drop a Table](../14-sql-commands/00-ddl/20-table/20-ddl-drop-table.md)
-* [How to Rename a Table](../14-sql-commands/00-ddl/20-table/30-ddl-rename-table.md)
-* [How to Truncate a Table](../14-sql-commands/00-ddl/20-table/40-ddl-truncate-table.md)
-* [How to Add/Drop Table Column](../14-sql-commands/00-ddl/20-table/90-alter-table-column.md)
+* [HTTP Handler](../11-integrations/00-api/00-rest.md)
+* [MySQL Handler](../11-integrations/00-api/01-mysql-handler.md)
+* [ClickHouse Handler](../11-integrations/00-api/02-clickhouse-handler.md)
+* [Streaming Load API](../11-integrations/00-api/03-streaming-load.md)
+* [File Upload API](../11-integrations/00-api/10-put-to-stage.md)
 
-## Managing Views
+</TabItem>
 
-* [How to Create a View](../14-sql-commands/00-ddl/60-view/ddl-create-view.md)
-* [How to Drop a View](../14-sql-commands/00-ddl/60-view/ddl-drop-view.md)
-* [How to Alter a View](../14-sql-commands/00-ddl/60-view/ddl-alter-view.md)
+<TabItem value="Languages" label="Languages">
 
-## Managing User-Defined Functions
+* [Golang](../03-develop/00-golang.md)
+* [Python](../03-develop/01-python.md)
+* [Node.js](../03-develop/02-nodejs.md)
+* [Java](../03-develop/03-java.md)
 
-* [How to Create a User-Defined Function](../14-sql-commands/00-ddl/50-udf/ddl-create-function.md)
-* [How to Drop a User-Defined Function](../14-sql-commands/00-ddl/50-udf/ddl-drop-function.md)
-* [How to Alter a User-Defined Function](../14-sql-commands/00-ddl/50-udf/ddl-alter-function.md)
+</TabItem>
 
+<TabItem value="Visualizations" label="Visualizations">
 
-## AI Functions
+* [Jupyter Notebook](../11-integrations/20-gui-tool/00-jupyter.md)
+* [Grafana](../11-integrations/20-gui-tool/02-grafana.md)
+* [Metabase](../11-integrations/20-gui-tool/03-metabase.md)
+* [Redash](../11-integrations/20-gui-tool/04-redash.md)
 
-* [Generating SQL with AI](../15-sql-functions/61-ai-functions/01-ai-to-sql.md)
-* [Creating Embedding Vectors](../15-sql-functions/61-ai-functions/02-ai-embedding-vector.md)
-* [Text Completion with AI](../15-sql-functions/61-ai-functions/03-ai-text-completion.md)
-* [Computing Text Similarities](../15-sql-functions/61-ai-functions/04-ai-cosine-distance.md)
-
-## Backup & Restore
-
-* [How to Back Up Meta Data](../10-deploy/06-metasrv/30-metasrv-backup-restore.md)
-* [How to Back Up Databases](../10-deploy/09-upgrade/10-backup-and-restore-schema.md)
-
-## Use Cases
-
-* [How to Analyze Nginx Access Logs with Databend](../21-use-cases/02-analyze-nginx-logs-with-databend-and-vector.md)
-* [How to Do User Retention Analysis with Databend](../21-use-cases/03-analyze-user-retention-with-databend.md)
-* [How to Do Conversion Funnel Analysis with Databend](../21-use-cases/04-analyze-funnel-with-databend.md)
-
-## Performance
-
-* [How to Benchmark Databend](../21-use-cases/01-analyze-ontime-with-databend-on-ec2-and-s3.md)
+</TabItem>
+</Tabs>
