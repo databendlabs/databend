@@ -249,6 +249,9 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
         let mut query = rhs.into_query();
         match op.elem {
             SetOperationElement::With(with) => {
+                if query.with.is_some() {
+                    return Err("duplicated WITH clause");
+                }
                 query.with = Some(with);
             }
             _ => unreachable!(),
@@ -260,12 +263,30 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
         let mut query = lhs.into_query();
         match op.elem {
             SetOperationElement::OrderBy { order_by } => {
+                if !query.order_by.is_empty() {
+                    return Err("duplicated ORDER BY clause");
+                }
+                if !query.limit.is_empty() {
+                    return Err("ORDER BY must appear before LIMIT");
+                }
+                if query.offset.is_some() {
+                    return Err("ORDER BY must appear before OFFSET");
+                }
                 query.order_by = order_by;
             }
             SetOperationElement::Limit { limit } => {
+                if !query.limit.is_empty() {
+                    return Err("duplicated LIMIT clause");
+                }
+                if query.offset.is_some() {
+                    return Err("LIMIT must appear before OFFSET");
+                }
                 query.limit = limit;
             }
             SetOperationElement::Offset { offset } => {
+                if query.offset.is_some() {
+                    return Err("duplicated OFFSET clause");
+                }
                 query.offset = Some(offset);
             }
             SetOperationElement::IgnoreResult => {
