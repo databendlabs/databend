@@ -18,7 +18,7 @@ This tutorial uses the Sentry service on the cloud. To sign up an account for Cl
 
 Once you're logged into Sentry, create a Sentry project for the `Rust` platform to start. For how to create a project on Sentry, see https://docs.sentry.io/product/sentry-basics/integrate-frontend/create-new-project/
 
-![Alt text](../../public/img/tracing/sentry-rust.png)
+![Alt text](../../../public/img/tracing/sentry-rust.png)
 
 ### Step 3. Set Environment Variables
 
@@ -48,4 +48,4 @@ Follow the [Deployment Guide](https://databend.rs/doc/deploy) to deploy Databend
 
 You're all set now. Check the pages on Sentry for alerts and performance information.
 
-![Alt text](../../public/img/tracing/sentry-done.png)
+![Alt text](../../../public/img/tracing/sentry-done.png)
