@@ -114,6 +114,7 @@ fn test_statement() {
         r#"DROP table IF EXISTS table1;"#,
         r#"CREATE TABLE t(c1 int null, c2 bigint null, c3 varchar null);"#,
         r#"CREATE TABLE t(c1 int not null, c2 bigint not null, c3 varchar not null);"#,
+        r#"CREATE TABLE t(c1 varbinary);"#,
         r#"CREATE TABLE t(c1 int default 1);"#,
         r#"ALTER USER u1 IDENTIFIED BY '123456';"#,
         r#"ALTER USER u1 WITH DEFAULT_ROLE = 'role1';"#,
