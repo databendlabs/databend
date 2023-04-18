@@ -16,6 +16,7 @@ use std::ops::Range;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::arrow::buffer::Buffer;
 use roaring::RoaringBitmap;
 
 use crate::property::Domain;
@@ -33,9 +34,9 @@ use crate::ScalarRef;
 pub struct BitmapType;
 
 impl ValueType for BitmapType {
-    type Scalar = RoaringBitmap;
-    type ScalarRef<'a> = RoaringBitmap;
-    type Column = Bitmap;
+    type Scalar = Bitmap;
+    type ScalarRef<'a> = Bitmap;
+    type Column = Buffer<Bitmap>;
     type Domain = BitmapDomain;
     type ColumnIterator<'a> = common_arrow::arrow::bitmap::utils::BitmapIter<'a>;
     type ColumnBuilder = MutableBitmap;
@@ -55,14 +56,14 @@ impl ValueType for BitmapType {
 
     fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
         match scalar {
-            ScalarRef::Bitmap(scalar) => Some((*scalar).clone()),
+            ScalarRef::Bitmap(scalar) => Some(*scalar.clone()),
             _ => None,
         }
     }
 
     fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column> {
         match col {
-            Column::Boolean(column) => Some(column.clone()),
+            Column::Bitmap(column) => Some(column.clone()),
             _ => None,
         }
     }
@@ -77,19 +78,19 @@ impl ValueType for BitmapType {
     }
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        domain.as_boolean().map(BooleanDomain::clone)
+        domain.as_boolean().map(BitmapDomain::clone)
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Scalar::Boolean(scalar)
+        Scalar::Bitmap(scalar)
     }
 
     fn upcast_column(col: Self::Column) -> Column {
-        Column::Boolean(col)
+        Column::Bitmap(col)
     }
 
     fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::Boolean(domain)
+        Domain::Bitmap(domain)
     }
 
     fn column_len<'a>(col: &'a Self::Column) -> usize {
@@ -97,7 +98,7 @@ impl ValueType for BitmapType {
     }
 
     fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>> {
-        col.get(index)
+        col.get(index).cloned()
     }
 
     unsafe fn index_column_unchecked<'a>(
