@@ -25,7 +25,6 @@ use common_meta_app::app_error::UnknownShareAccounts;
 use common_meta_app::app_error::UnknownShareEndpoint;
 use common_meta_app::app_error::UnknownShareEndpointId;
 use common_meta_app::app_error::UnknownShareId;
-use common_meta_app::app_error::UnknownShareTable;
 use common_meta_app::app_error::UnknownTable;
 use common_meta_app::app_error::UnknownTableId;
 use common_meta_app::app_error::WrongShare;
@@ -947,14 +946,14 @@ pub async fn remove_table_from_share(
     let (_seq, share_name) = get_share_id_to_name_or_err(
         kv_api,
         share_id,
-        format!("remove_db_from_share: {}", share_id),
+        format!("remove_table_from_share: {}", share_id),
     )
     .await?;
 
     let (share_meta_seq, mut share_meta) = get_share_meta_by_id_or_err(
         kv_api,
         share_id,
-        format!("remove_db_from_share: {}", share_id),
+        format!("remove_table_from_share: {}", share_id),
     )
     .await?;
 
@@ -973,13 +972,12 @@ pub async fn remove_table_from_share(
             share_meta.entries.remove(&table_name);
         }
         None => {
-            return Err(KVAppError::AppError(AppError::UnknownShareTable(
-                UnknownShareTable::new(
-                    &table_name.tenant,
-                    &share_name.share_name,
-                    &table_name.table_name,
-                ),
-            )));
+            tracing::warn!(
+                "remove_table_from_share: table {} not found of share {} in tenant {}",
+                &table_name.table_name,
+                &share_name.share_name,
+                &table_name.tenant
+            );
         }
     }
 
