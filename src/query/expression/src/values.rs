@@ -46,6 +46,7 @@ use serde::Serializer;
 use crate::property::Domain;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
+use crate::types::bitmap::BitmapColumnBuilder;
 use crate::types::boolean::BooleanDomain;
 use crate::types::date::DATE_MAX;
 use crate::types::date::DATE_MIN;
@@ -109,7 +110,7 @@ pub enum Scalar {
     String(Vec<u8>),
     Array(Column),
     Map(Column),
-    Bitmap(Bitmap),
+    Bitmap(RoaringBitmap),
     Tuple(Vec<Scalar>),
     Variant(Vec<u8>),
 }
@@ -146,7 +147,7 @@ pub enum Column {
     Date(Buffer<i32>),
     Array(Box<ArrayColumn<AnyType>>),
     Map(Box<ArrayColumn<AnyType>>),
-    Bitmap(Buffer<Bitmap>),
+    Bitmap(Buffer<RoaringBitmap>),
     Nullable(Box<NullableColumn<AnyType>>),
     Tuple(Vec<Column>),
     Variant(StringColumn),
@@ -165,6 +166,7 @@ pub enum ColumnBuilder {
     Date(Vec<i32>),
     Array(Box<ArrayColumnBuilder<AnyType>>),
     Map(Box<ArrayColumnBuilder<AnyType>>),
+    Bitmap(Vec<RoaringBitmap>),
     Nullable(Box<NullableColumnBuilder<AnyType>>),
     Tuple(Vec<ColumnBuilder>),
     Variant(StringColumnBuilder),

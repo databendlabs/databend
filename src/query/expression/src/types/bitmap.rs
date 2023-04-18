@@ -19,6 +19,7 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
 use roaring::RoaringBitmap;
 
+use crate::arrow::buffer_into_mut;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -34,12 +35,12 @@ use crate::ScalarRef;
 pub struct BitmapType;
 
 impl ValueType for BitmapType {
-    type Scalar = Bitmap;
-    type ScalarRef<'a> = Bitmap;
-    type Column = Buffer<Bitmap>;
-    type Domain = BitmapDomain;
-    type ColumnIterator<'a> = common_arrow::arrow::bitmap::utils::BitmapIter<'a>;
-    type ColumnBuilder = MutableBitmap;
+    type Scalar = RoaringBitmap;
+    type ScalarRef<'a> = &'a RoaringBitmap;
+    type Column = Buffer<RoaringBitmap>;
+    type Domain = ();
+    type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, RoaringBitmap>>;
+    type ColumnBuilder = Vec<RoaringBitmap>;
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {
@@ -47,11 +48,11 @@ impl ValueType for BitmapType {
     }
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
-        scalar
+        scalar.clone()
     }
 
     fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a> {
-        scalar.clone()
+        scalar
     }
 
     fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
@@ -72,13 +73,13 @@ impl ValueType for BitmapType {
         builder: &'a mut ColumnBuilder,
     ) -> Option<&'a mut Self::ColumnBuilder> {
         match builder {
-            crate::ColumnBuilder::Boolean(builder) => Some(builder),
+            crate::ColumnBuilder::Bitmap(builder) => Some(builder),
             _ => None,
         }
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        domain.as_boolean().map(BitmapDomain::clone)
+    fn try_downcast_domain(_domain: &Domain) -> Option<Self::Domain> {
+        None
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
@@ -98,7 +99,7 @@ impl ValueType for BitmapType {
     }
 
     fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>> {
-        col.get(index).cloned()
+        col.get(index)
     }
 
     unsafe fn index_column_unchecked<'a>(
@@ -113,11 +114,11 @@ impl ValueType for BitmapType {
     }
 
     fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a> {
-        col.iter()
+        col.iter().cloned()
     }
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
-        bitmap_into_mut(col)
+        buffer_into_mut(col)
     }
 
     fn builder_len(builder: &Self::ColumnBuilder) -> usize {
@@ -125,11 +126,11 @@ impl ValueType for BitmapType {
     }
 
     fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
-        builder.push(item);
+        builder.push(*item.clone());
     }
 
     fn push_default(builder: &mut Self::ColumnBuilder) {
-        builder.push(false);
+        builder.push(RoaringBitmap::new());
     }
 
     fn append_column(builder: &mut Self::ColumnBuilder, bitmap: &Self::Column) {
@@ -142,24 +143,19 @@ impl ValueType for BitmapType {
 
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         assert_eq!(builder.len(), 1);
-        builder.get(0)
+        builder.get(0).unwrap_or(*(RoaringBitmap::new()))
     }
 }
 
 impl ArgType for BitmapType {
     fn data_type() -> DataType {
-        DataType::Boolean
+        DataType::Bitmap
     }
 
-    fn full_domain() -> Self::Domain {
-        BitmapDomain {
-            has_false: true,
-            has_true: true,
-        }
-    }
+    fn full_domain() -> Self::Domain {}
 
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
-        MutableBitmap::with_capacity(capacity)
+        Vec::with_capacity(capacity)
     }
 
     fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
@@ -175,10 +171,4 @@ impl ArgType for BitmapType {
     ) -> Self::Column {
         Self::column_from_iter(iter, generics)
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct BitmapDomain {
-    pub has_false: bool,
-    pub has_true: bool,
 }
