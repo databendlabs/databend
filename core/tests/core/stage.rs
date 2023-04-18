@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Read;
+use tokio::fs::File;
 
 use databend_client::APIClient;
 
@@ -28,13 +28,13 @@ fn get_dsn(presigned: bool) -> String {
 }
 
 async fn upload_to_stage(client: &mut APIClient) {
-    let mut file = std::fs::File::open("tests/core/data/sample.csv").unwrap();
-    let mut buf = Vec::new();
-    file.read_to_end(&mut buf).unwrap();
+    let file = File::open("tests/core/data/sample.csv").await.unwrap();
+    let metadata = file.metadata().await.unwrap();
+
     let path = chrono::Utc::now().format("%Y%m%d%H%M%S").to_string();
     let stage_location = format!("@~/{}/sample.csv", path);
     client
-        .upload_to_stage(stage_location.as_str(), bytes::Bytes::from(buf))
+        .upload_to_stage(stage_location.as_str(), file, metadata.len())
         .await
         .unwrap();
 }

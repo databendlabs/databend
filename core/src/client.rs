@@ -15,12 +15,13 @@
 use std::sync::Arc;
 use std::{collections::BTreeMap, fmt};
 
-use bytes::Bytes;
 use http::StatusCode;
 use reqwest::header::HeaderMap;
 use reqwest::multipart::{Form, Part};
-use reqwest::Client as HttpClient;
+use reqwest::{Body, Client as HttpClient};
+use tokio::io::AsyncRead;
 use tokio::sync::Mutex;
+use tokio_util::io::ReaderStream;
 use url::Url;
 
 use crate::{
@@ -274,21 +275,33 @@ impl APIClient {
         Ok(headers)
     }
 
-    pub async fn upload_to_stage(&mut self, stage_location: &str, data: Bytes) -> Result<()> {
+    pub async fn upload_to_stage(
+        &mut self,
+        stage_location: &str,
+        data: impl AsyncRead + Send + Sync + 'static,
+        size: u64,
+    ) -> Result<()> {
         if self.presigned_url_disabled {
-            self.upload_to_stage_with_stream(stage_location, data).await
+            self.upload_to_stage_with_stream(stage_location, data, size)
+                .await
         } else {
-            self.upload_to_stage_with_presigned(stage_location, data)
+            self.upload_to_stage_with_presigned(stage_location, data, size)
                 .await
         }
     }
 
-    async fn upload_to_stage_with_stream(&self, stage_location: &str, data: Bytes) -> Result<()> {
+    async fn upload_to_stage_with_stream(
+        &self,
+        stage_location: &str,
+        data: impl AsyncRead + Send + Sync + 'static,
+        size: u64,
+    ) -> Result<()> {
         let endpoint = self.endpoint.join("v1/upload_to_stage")?;
         let location = StageLocation::try_from(stage_location)?;
         let mut headers = self.make_headers()?;
         headers.insert("stage_name", location.name.parse()?);
-        let part = Part::stream(data).file_name(location.path);
+        let stream = Body::wrap_stream(ReaderStream::new(data));
+        let part = Part::stream_with_length(stream, size).file_name(location.path);
         let form = Form::new().part("upload", part);
         let resp = self
             .cli
@@ -298,6 +311,7 @@ impl APIClient {
             .multipart(form)
             .send()
             .await?;
+
         let status = resp.status();
         let body = resp.bytes().await?;
         match status {
@@ -312,14 +326,17 @@ impl APIClient {
     async fn upload_to_stage_with_presigned(
         &mut self,
         stage_location: &str,
-        data: Bytes,
+        data: impl AsyncRead + Send + Sync + 'static,
+        size: u64,
     ) -> Result<()> {
         let presigned = self.get_presigned_url(stage_location).await?;
         let mut builder = self.cli.put(presigned.url);
         for (k, v) in presigned.headers {
             builder = builder.header(k, v);
         }
-        let resp = builder.body(data).send().await?;
+        builder = builder.header("Content-Length", size.to_string());
+        let stream = Body::wrap_stream(ReaderStream::new(data));
+        let resp = builder.body(stream).send().await?;
         let status = resp.status();
         let body = resp.bytes().await?;
         match status {
