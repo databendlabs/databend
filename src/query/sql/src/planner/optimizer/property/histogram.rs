@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
+use std::fmt;
 use std::fmt::Debug;
 
 use common_exception::Result;
@@ -291,4 +292,20 @@ pub struct InterleavedBucket {
     pub right_ndv: f64,
     pub left_num_rows: f64,
     pub right_num_rows: f64,
+    pub max_val: f64,
+}
+
+impl fmt::Display for Histogram {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for bucket in &self.buckets {
+            writeln!(
+                f,
+                "{}: {} values, {} distinct values",
+                bucket.upper_bound(),
+                bucket.num_values,
+                bucket.num_distinct
+            )?;
+        }
+        Ok(())
+    }
 }

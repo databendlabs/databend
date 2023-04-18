@@ -424,94 +424,102 @@ fn evaluate_by_histogram(
 ) -> Result<f64> {
     let mut interleaved_buckets = vec![];
     let mut all_ndv = 0.0;
-    for (left_idx, left_bucket) in left_hist.buckets.iter().enumerate() {
-        if left_idx == 0 {
+    for (idx, (left_bucket, right_bucket)) in left_hist
+        .buckets
+        .iter()
+        .zip(right_hist.buckets.iter())
+        .enumerate()
+    {
+        if idx == 0 {
             continue;
         }
-        for (right_idx, right_bucket) in right_hist.buckets.iter().enumerate() {
-            if right_idx == 0 {
-                continue;
-            }
-            let left_bucket_min = left_hist.buckets[left_idx - 1].upper_bound().to_double()?;
-            let left_bucket_max = left_bucket.upper_bound().to_double()?;
-            let right_bucket_min = right_hist.buckets[right_idx - 1]
-                .upper_bound()
-                .to_double()?;
-            let right_bucket_max = right_bucket.upper_bound().to_double()?;
-            if left_bucket_min <= right_bucket_max && left_bucket_max >= right_bucket_min {
-                // There are four cases for interleaving
-                // 1. left bucket contains right bucket
-                if right_bucket_min >= left_bucket_min && right_bucket_max <= left_bucket_min {
-                    let percentage =
-                        (right_bucket_max - right_bucket_min) / (left_bucket_max - left_bucket_min);
+
+        let left_bucket_min = left_hist.buckets[idx - 1].upper_bound().to_double()?;
+        let left_bucket_max = left_bucket.upper_bound().to_double()?;
+        let right_bucket_min = right_hist.buckets[idx - 1].upper_bound().to_double()?;
+        let right_bucket_max = right_bucket.upper_bound().to_double()?;
+        if left_bucket_min <= right_bucket_max && left_bucket_max >= right_bucket_min {
+            // There are four cases for interleaving
+            // 1. left bucket contains right bucket
+            // ---left_min---right_min---right_max---left_max---
+            if right_bucket_min >= left_bucket_min && right_bucket_max <= left_bucket_max {
+                let percentage =
+                    (right_bucket_max - right_bucket_min) / (left_bucket_max - left_bucket_min);
+                interleaved_buckets.push(InterleavedBucket {
+                    left_ndv: left_bucket.num_distinct() * percentage,
+                    right_ndv: right_bucket.num_distinct(),
+                    left_num_rows: left_bucket.num_values() * percentage,
+                    right_num_rows: right_bucket.num_values(),
+                    max_val: right_bucket_max,
+                })
+            } else if left_bucket_min >= right_bucket_min && left_bucket_max <= right_bucket_max {
+                // 2. right bucket contains left bucket
+                // ---right_min---left_min---left_max---right_max---
+                let percentage =
+                    (left_bucket_max - left_bucket_min) / (right_bucket_max - right_bucket_min);
+                interleaved_buckets.push(InterleavedBucket {
+                    left_ndv: left_bucket.num_distinct(),
+                    right_ndv: right_bucket.num_distinct() * percentage,
+                    left_num_rows: left_bucket.num_values(),
+                    right_num_rows: right_bucket.num_values() * percentage,
+                    max_val: left_bucket_max,
+                })
+            } else if left_bucket_min <= right_bucket_min && left_bucket_max <= right_bucket_max {
+                // 3. left bucket intersects with right bucket on the left
+                // ---left_min---right_min---left_max---right_max---
+                if left_bucket_max == right_bucket_min {
                     interleaved_buckets.push(InterleavedBucket {
-                        left_ndv: left_bucket.num_distinct() * percentage,
-                        right_ndv: right_bucket.num_distinct(),
-                        left_num_rows: left_bucket.num_values() * percentage,
-                        right_num_rows: right_bucket.num_values(),
-                    })
-                } else if left_bucket_min >= right_bucket_min && left_bucket_max <= right_bucket_max
-                {
-                    // 2. right bucket contains left bucket
-                    let percentage =
-                        (left_bucket_max - left_bucket_min) / (right_bucket_max - right_bucket_min);
-                    interleaved_buckets.push(InterleavedBucket {
-                        left_ndv: left_bucket.num_distinct(),
-                        right_ndv: right_bucket.num_distinct() * percentage,
-                        left_num_rows: left_bucket.num_values(),
-                        right_num_rows: right_bucket.num_values() * percentage,
-                    })
-                } else if left_bucket_min <= right_bucket_min && left_bucket_max <= right_bucket_max
-                {
-                    // 3. left bucket intersects with right bucket on the left
-                    if left_bucket_max == right_bucket_min {
-                        interleaved_buckets.push(InterleavedBucket {
-                            left_ndv: 1.0,
-                            right_ndv: 1.0,
-                            left_num_rows: left_bucket.num_values() / left_bucket.num_distinct(),
-                            right_num_rows: right_bucket.num_values() / right_bucket.num_distinct(),
-                        });
-                        continue;
-                    }
-                    let left_percentage =
-                        (left_bucket_max - right_bucket_min) / (left_bucket_max - left_bucket_min);
-                    let right_percentage = (left_bucket_max - right_bucket_min)
-                        / (right_bucket_max - right_bucket_min);
-                    interleaved_buckets.push(InterleavedBucket {
-                        left_ndv: left_bucket.num_distinct() * left_percentage,
-                        right_ndv: right_bucket.num_distinct() * right_percentage,
-                        left_num_rows: left_bucket.num_values() * left_percentage,
-                        right_num_rows: right_bucket.num_values() * right_percentage,
-                    })
-                } else if left_bucket_min >= right_bucket_min && left_bucket_max >= right_bucket_max
-                {
-                    // 4. left bucket intersects with right bucket on the right
-                    if right_bucket_max == left_bucket_min {
-                        interleaved_buckets.push(InterleavedBucket {
-                            left_ndv: 1.0,
-                            right_ndv: 1.0,
-                            left_num_rows: left_bucket.num_values() / left_bucket.num_distinct(),
-                            right_num_rows: right_bucket.num_values() / right_bucket.num_distinct(),
-                        });
-                        continue;
-                    }
-                    let left_percentage =
-                        (right_bucket_max - left_bucket_min) / (left_bucket_max - left_bucket_min);
-                    let right_percentage = (right_bucket_max - left_bucket_min)
-                        / (right_bucket_max - right_bucket_min);
-                    interleaved_buckets.push(InterleavedBucket {
-                        left_ndv: left_bucket.num_distinct() * left_percentage,
-                        right_ndv: right_bucket.num_distinct() * right_percentage,
-                        left_num_rows: left_bucket.num_values() * left_percentage,
-                        right_num_rows: right_bucket.num_values() * right_percentage,
-                    })
+                        left_ndv: 1.0,
+                        right_ndv: 1.0,
+                        left_num_rows: left_bucket.num_values() / left_bucket.num_distinct(),
+                        right_num_rows: right_bucket.num_values() / right_bucket.num_distinct(),
+                        max_val: left_bucket_max,
+                    });
+                    continue;
                 }
+                let left_percentage =
+                    (left_bucket_max - right_bucket_min) / (left_bucket_max - left_bucket_min);
+                let right_percentage =
+                    (left_bucket_max - right_bucket_min) / (right_bucket_max - right_bucket_min);
+                interleaved_buckets.push(InterleavedBucket {
+                    left_ndv: left_bucket.num_distinct() * left_percentage,
+                    right_ndv: right_bucket.num_distinct() * right_percentage,
+                    left_num_rows: left_bucket.num_values() * left_percentage,
+                    right_num_rows: right_bucket.num_values() * right_percentage,
+                    max_val: left_bucket_max,
+                })
+            } else if left_bucket_min >= right_bucket_min && left_bucket_max >= right_bucket_max {
+                // 4. left bucket intersects with right bucket on the right
+                // ---right_min---left_min---right_max---left_max---
+                if right_bucket_max == left_bucket_min {
+                    interleaved_buckets.push(InterleavedBucket {
+                        left_ndv: 1.0,
+                        right_ndv: 1.0,
+                        left_num_rows: left_bucket.num_values() / left_bucket.num_distinct(),
+                        right_num_rows: right_bucket.num_values() / right_bucket.num_distinct(),
+                        max_val: right_bucket_max,
+                    });
+                    continue;
+                }
+                let left_percentage =
+                    (right_bucket_max - left_bucket_min) / (left_bucket_max - left_bucket_min);
+                let right_percentage =
+                    (right_bucket_max - left_bucket_min) / (right_bucket_max - right_bucket_min);
+                interleaved_buckets.push(InterleavedBucket {
+                    left_ndv: left_bucket.num_distinct() * left_percentage,
+                    right_ndv: right_bucket.num_distinct() * right_percentage,
+                    left_num_rows: left_bucket.num_values() * left_percentage,
+                    right_num_rows: right_bucket.num_values() * right_percentage,
+                    max_val: right_bucket_max,
+                })
             }
         }
     }
     let mut card = 0.0;
-    for bucket in interleaved_buckets {
-        all_ndv += bucket.left_ndv.min(bucket.right_ndv);
+    for (idx, bucket) in interleaved_buckets.iter().enumerate() {
+        if idx == 0 || bucket.max_val != interleaved_buckets[idx - 1].max_val {
+            all_ndv += bucket.left_ndv.min(bucket.right_ndv);
+        }
         let max_ndv = f64::max(bucket.left_ndv, bucket.right_ndv);
         if max_ndv == 0.0 {
             continue;
