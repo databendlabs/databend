@@ -18,6 +18,7 @@ mod compression;
 /// Re-exports meta data structures of current version, i.e. v1
 mod current;
 mod format;
+mod utils;
 mod v0;
 mod v1;
 mod v2;
@@ -37,6 +38,7 @@ pub use statistics::Location;
 pub use statistics::SnapshotId;
 pub use statistics::Statistics;
 pub use statistics::StatisticsOfColumns;
+pub use utils::*;
 pub use versions::testify_version;
 pub use versions::SegmentInfoVersion;
 pub use versions::SnapshotVersion;

@@ -19,7 +19,10 @@ use common_expression::TableSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::meta::monotonically_increased_timestamp;
 use crate::meta::statistics::FormatVersion;
+use crate::meta::trim_timestamp_to_micro_second;
+use crate::meta::v0;
 use crate::meta::v1;
 use crate::meta::ClusterKey;
 use crate::meta::Location;
@@ -59,7 +62,39 @@ pub struct TableSnapshot {
     pub table_statistics_location: Option<String>,
 }
 
-use super::super::v0;
+impl TableSnapshot {
+    // for test.
+    pub fn new(
+        snapshot_id: SnapshotId,
+        prev_timestamp: &Option<DateTime<Utc>>,
+        prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
+        schema: TableSchema,
+        summary: Statistics,
+        segments: Vec<Location>,
+        cluster_key_meta: Option<ClusterKey>,
+        table_statistics_location: Option<String>,
+    ) -> Self {
+        let now = Utc::now();
+        // make snapshot timestamp monotonically increased
+        let adjusted_timestamp = monotonically_increased_timestamp(now, prev_timestamp);
+
+        // trim timestamp to micro seconds
+        let trimmed_timestamp = trim_timestamp_to_micro_second(adjusted_timestamp);
+        let timestamp = Some(trimmed_timestamp);
+
+        Self {
+            format_version: TableSnapshot::VERSION,
+            snapshot_id,
+            timestamp,
+            prev_snapshot_id,
+            schema,
+            summary,
+            segments,
+            cluster_key_meta,
+            table_statistics_location,
+        }
+    }
+}
 
 impl From<v0::TableSnapshot> for TableSnapshot {
     fn from(s: v0::TableSnapshot) -> Self {

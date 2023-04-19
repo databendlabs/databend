@@ -12,8 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::ops::Add;
-
 use chrono::DateTime;
 use chrono::Utc;
 use common_base::base::uuid::Uuid;
@@ -22,7 +20,9 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::super::v0::statistics::Statistics;
+use crate::meta::monotonically_increased_timestamp;
 use crate::meta::statistics::FormatVersion;
+use crate::meta::trim_timestamp_to_micro_second;
 use crate::meta::ClusterKey;
 use crate::meta::Location;
 use crate::meta::SnapshotId;
@@ -74,10 +74,10 @@ impl TableSnapshot {
     ) -> Self {
         let now = Utc::now();
         // make snapshot timestamp monotonically increased
-        let adjusted_timestamp = util::monotonically_increased_timestamp(now, prev_timestamp);
+        let adjusted_timestamp = monotonically_increased_timestamp(now, prev_timestamp);
 
         // trim timestamp to micro seconds
-        let trimmed_timestamp = util::trim_timestamp_to_micro_second(adjusted_timestamp);
+        let trimmed_timestamp = trim_timestamp_to_micro_second(adjusted_timestamp);
         let timestamp = Some(trimmed_timestamp);
 
         Self {
@@ -161,42 +161,5 @@ impl From<&TableSnapshot> for TableSnapshotLite {
             segment_count: value.segments.len() as u64,
             compressed_byte_size: value.summary.compressed_byte_size,
         }
-    }
-}
-
-mod util {
-    use chrono::DateTime;
-    use chrono::Datelike;
-    use chrono::TimeZone;
-    use chrono::Timelike;
-    use chrono::Utc;
-
-    use super::*;
-    pub fn trim_timestamp_to_micro_second(ts: DateTime<Utc>) -> DateTime<Utc> {
-        Utc.with_ymd_and_hms(
-            ts.year(),
-            ts.month(),
-            ts.day(),
-            ts.hour(),
-            ts.minute(),
-            ts.second(),
-        )
-        .unwrap()
-        .with_nanosecond(ts.timestamp_subsec_micros() * 1_000)
-        .unwrap()
-    }
-
-    pub fn monotonically_increased_timestamp(
-        timestamp: DateTime<Utc>,
-        previous_timestamp: &Option<DateTime<Utc>>,
-    ) -> DateTime<Utc> {
-        if let Some(prev_instant) = previous_timestamp {
-            // timestamp of the snapshot should always larger than the previous one's
-            if prev_instant > &timestamp {
-                // if local time is smaller, use the timestamp of previous snapshot, plus 1 ms
-                return prev_instant.add(chrono::Duration::milliseconds(1));
-            }
-        }
-        timestamp
     }
 }
