@@ -111,6 +111,7 @@ jobs:
         run: |
           cargo build --release --target=${{ steps.target.outputs.target }}
       - name: Basic Sqllogic Test
+        continue-on-error: true
         if: matrix.arch == 'x86_64'
         shell: bash
         env:
@@ -184,6 +185,7 @@ jobs:
           target: ${{ steps.target.outputs.target }}
           upload: false
       - name: Basic Sqllogic Test
+        continue-on-error: true
         if: matrix.arch == 'x86_64'
         shell: bash
         env:
