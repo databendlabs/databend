@@ -158,7 +158,7 @@ pub fn encode<T: Serialize>(encoding: &Encoding, data: &T) -> Result<Vec<u8>> {
     }
 }
 
-pub fn decode<'a, T: Deserialize<'a>>(encoding: &Encoding, data: &'a Vec<u8>) -> Result<T> {
+pub fn decode<'a, T: Deserialize<'a>>(encoding: &Encoding, data: &'a [u8]) -> Result<T> {
     match encoding {
         Encoding::Bincode => {
             Ok(bincode::deserialize(data).map_err(|e| Error::new(ErrorKind::InvalidData, e))?)

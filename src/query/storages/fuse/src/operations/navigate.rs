@@ -61,7 +61,6 @@ impl FuseTable {
         let snapshot_location = if let Some(loc) = self.snapshot_loc().await? {
             loc
         } else {
-            // not an error?
             return Err(ErrorCode::TableHistoricalDataNotFound(
                 "Empty Table has no historical data",
             ));

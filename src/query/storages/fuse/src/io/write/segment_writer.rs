@@ -42,9 +42,8 @@ impl<'a> SegmentWriter<'a> {
     #[async_backtrace::framed]
     pub async fn write_segment(&self, segment: SegmentInfo) -> Result<Location> {
         let location = self.generate_location();
-        let bs = segment.to_bytes()?;
         segment
-            .write_meta_data_through_cache(self.data_accessor, &location.0, bs)
+            .write_meta_through_cache(self.data_accessor, &location.0)
             .await?;
         Ok(location)
     }
@@ -53,7 +52,7 @@ impl<'a> SegmentWriter<'a> {
     pub async fn write_segment_no_cache(&self, segment: &SegmentInfo) -> Result<Location> {
         let location = self.generate_location();
         segment
-            .write_meta_data(self.data_accessor, location.0.as_str(), segment.to_bytes()?)
+            .write_meta(self.data_accessor, location.0.as_str())
             .await?;
         Ok(location)
     }

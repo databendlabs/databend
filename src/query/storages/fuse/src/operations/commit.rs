@@ -364,10 +364,7 @@ impl FuseTable {
             snapshot.table_statistics_location.is_some() && table_statistics.is_some();
 
         // 1. write down snapshot
-        let data = snapshot.to_bytes()?;
-        snapshot
-            .write_meta_data(operator, &snapshot_location, data)
-            .await?;
+        snapshot.write_meta(operator, &snapshot_location).await?;
         if need_to_save_statistics {
             table_statistics
                 .clone()
