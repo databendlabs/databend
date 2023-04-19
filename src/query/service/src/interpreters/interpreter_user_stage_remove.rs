@@ -68,8 +68,17 @@ impl Interpreter for RemoveUserStageInterpreter {
 
         let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
         let file_op = Files::create(table_ctx, op);
-        if let Err(e) = file_op.remove_file_in_batch(&files).await {
-            error!("Failed to delete file: {:?}, error: {}", files, e);
+
+        const REMOVE_BATCH: usize = 4000;
+        for chunk in files.chunks(REMOVE_BATCH) {
+            if let Err(e) = file_op.remove_file_in_batch(chunk).await {
+                error!("Failed to delete file: {:?}, error: {}", chunk, e);
+            }
+
+            let aborting = self.ctx.get_aborting();
+            if aborting.load(std::sync::atomic::Ordering::SeqCst) {
+                return Ok(PipelineBuildResult::create());
+            }
         }
 
         Ok(PipelineBuildResult::create())
