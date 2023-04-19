@@ -33,11 +33,11 @@ impl FuseTable {
     pub async fn do_truncate(&self, ctx: Arc<dyn TableContext>, purge: bool) -> Result<()> {
         if let Some(prev_snapshot) = self.read_table_snapshot().await? {
             let prev_id = prev_snapshot.snapshot_id;
-
+            let prev_format_version = self.snapshot_format_version().await?;
             let new_snapshot = TableSnapshot::new(
                 Uuid::new_v4(),
                 &prev_snapshot.timestamp,
-                Some((prev_id, prev_snapshot.format_version())),
+                Some((prev_id, prev_format_version)),
                 prev_snapshot.schema.clone(),
                 Default::default(),
                 vec![],

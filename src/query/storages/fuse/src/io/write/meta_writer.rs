@@ -16,42 +16,26 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use opendal::Operator;
-use serde::Serialize;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CachedObject;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::TableSnapshotStatistics;
 
 #[async_trait::async_trait]
 pub trait MetaWriter<T> {
     /// If meta has a `to_bytes` function, such as `SegmentInfo` and `TableSnapshot`
     /// We should not use `write_meta`. Instead, use `write_meta_data`
     async fn write_meta(&self, data_accessor: &Operator, location: &str) -> Result<()>;
-
-    async fn write_meta_data(
-        &self,
-        data_accessor: &Operator,
-        location: &str,
-        bs: Vec<u8>,
-    ) -> Result<()>;
 }
 
 #[async_trait::async_trait]
 impl<T> MetaWriter<T> for T
-where T: Serialize + Sync + Send
+where T: Marshal + Sync + Send
 {
     #[async_backtrace::framed]
     async fn write_meta(&self, data_accessor: &Operator, location: &str) -> Result<()> {
-        write_to_storage(data_accessor, location, &self).await?;
-        Ok(())
-    }
-
-    #[async_backtrace::framed]
-    async fn write_meta_data(
-        &self,
-        data_accessor: &Operator,
-        location: &str,
-        bs: Vec<u8>,
-    ) -> Result<()> {
-        data_accessor.write(location, bs).await?;
+        data_accessor.write(location, self.marshal()?).await?;
         Ok(())
     }
 }
@@ -62,20 +46,13 @@ pub trait CachedMetaWriter<T> {
     /// We should not use `write_meta_through_cache`. Instead, use `write_meta_data_through_cache`
     async fn write_meta_through_cache(self, data_accessor: &Operator, location: &str)
     -> Result<()>;
-
-    async fn write_meta_data_through_cache(
-        self,
-        data_accessor: &Operator,
-        location: &str,
-        bs: Vec<u8>,
-    ) -> Result<()>;
 }
 
 #[async_trait::async_trait]
 impl<T, C> CachedMetaWriter<T> for T
 where
     T: CachedObject<T, Cache = C> + Send + Sync,
-    T: Serialize,
+    T: Marshal,
     C: CacheAccessor<String, T>,
 {
     #[async_backtrace::framed]
@@ -84,21 +61,7 @@ where
         data_accessor: &Operator,
         location: &str,
     ) -> Result<()> {
-        write_to_storage(data_accessor, location, &self).await?;
-        if let Some(cache) = T::cache() {
-            cache.put(location.to_owned(), Arc::new(self))
-        }
-        Ok(())
-    }
-
-    #[async_backtrace::framed]
-    async fn write_meta_data_through_cache(
-        self,
-        data_accessor: &Operator,
-        location: &str,
-        bs: Vec<u8>,
-    ) -> Result<()> {
-        data_accessor.write(location, bs).await?;
+        data_accessor.write(location, self.marshal()?).await?;
         if let Some(cache) = T::cache() {
             cache.put(location.to_owned(), Arc::new(self))
         }
@@ -106,22 +69,25 @@ where
     }
 }
 
-async fn write_to_storage<T>(data_accessor: &Operator, location: &str, meta: &T) -> Result<()>
-where T: Serialize {
-    let bs = serde_json::to_vec(&meta)?;
-    data_accessor.write(location, bs).await?;
-
-    Ok(())
+trait Marshal {
+    fn marshal(&self) -> Result<Vec<u8>>;
 }
 
-// TODO batch write
-// async fn batch_write_to_storage<T>(
-//    data_accessor: &Operator,
-//    location: &str,
-//    meta: &[&T],
-//) -> Result<()>
-// where
-//    T: Serialize,
-//{
-//    todo!()
-//}
+impl Marshal for SegmentInfo {
+    fn marshal(&self) -> Result<Vec<u8>> {
+        self.to_bytes()
+    }
+}
+
+impl Marshal for TableSnapshot {
+    fn marshal(&self) -> Result<Vec<u8>> {
+        self.to_bytes()
+    }
+}
+
+impl Marshal for TableSnapshotStatistics {
+    fn marshal(&self) -> Result<Vec<u8>> {
+        let bytes = serde_json::to_vec(self)?;
+        Ok(bytes)
+    }
+}

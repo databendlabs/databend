@@ -359,15 +359,12 @@ impl FuseTable {
         operator: &Operator,
     ) -> Result<()> {
         let snapshot_location = location_generator
-            .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version())?;
+            .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
         let need_to_save_statistics =
             snapshot.table_statistics_location.is_some() && table_statistics.is_some();
 
         // 1. write down snapshot
-        let data = snapshot.to_bytes()?;
-        snapshot
-            .write_meta_data(operator, &snapshot_location, data)
-            .await?;
+        snapshot.write_meta(operator, &snapshot_location).await?;
         if need_to_save_statistics {
             table_statistics
                 .clone()
