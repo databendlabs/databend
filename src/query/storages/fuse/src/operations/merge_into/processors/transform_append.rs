@@ -34,9 +34,11 @@ use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CachedObject;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
+use storages_common_table_meta::meta::Versioned;
 
 use crate::io;
 use crate::io::BlockBuilder;
+use crate::io::MetaWriter;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
 use crate::metrics::metrics_inc_block_index_write_bytes;
@@ -127,19 +129,20 @@ impl AppendTransform {
             col_stats,
         });
 
-        let data = segment_info.to_bytes()?;
         let location = self.meta_locations.gen_segment_info_location();
         let segment = Arc::new(segment_info);
-
-        // write down segments (TODO use meta writer, cache & retry)
-        self.data_accessor.write(&location, data).await?;
+        segment
+            .as_ref()
+            .write_meta(&self.data_accessor, &location)
+            .await?;
 
         if let Some(segment_cache) = SegmentInfo::cache() {
             segment_cache.put(location.clone(), segment.clone());
         }
 
-        // emit log entry
-        let log_entry = AppendOperationLogEntry::new(location, segment);
+        // emit log entry.
+        // for newly created segment, always use the latest version
+        let log_entry = AppendOperationLogEntry::new(location, segment, SegmentInfo::VERSION);
         Ok(Some(log_entry))
     }
 

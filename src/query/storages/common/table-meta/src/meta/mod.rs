@@ -34,6 +34,7 @@ pub use format::Encoding;
 pub use statistics::ClusterKey;
 pub use statistics::ClusterStatistics;
 pub use statistics::ColumnStatistics;
+pub use statistics::FormatVersion;
 pub use statistics::Location;
 pub use statistics::SnapshotId;
 pub use statistics::Statistics;

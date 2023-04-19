@@ -18,13 +18,18 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use futures_util::stream;
 use storages_common_cache::LoadParams;
+use storages_common_table_meta::meta::FormatVersion;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::io::TableSnapshotReader;
 
-pub type TableSnapshotStream =
-    Pin<Box<dyn stream::Stream<Item = common_exception::Result<(Arc<TableSnapshot>, u64)>> + Send>>;
+pub type TableSnapshotStream = Pin<
+    Box<
+        dyn stream::Stream<Item = common_exception::Result<(Arc<TableSnapshot>, FormatVersion)>>
+            + Send,
+    >,
+>;
 
 pub trait SnapshotHistoryReader {
     fn snapshot_history(

@@ -39,11 +39,18 @@ pub struct SegmentInfo {
 }
 
 impl SegmentInfo {
-    #[inline]
-    pub fn version(&self) -> FormatVersion {
-        self.format_version
+    pub fn new(blocks: Vec<Arc<BlockMeta>>, summary: Statistics) -> Self {
+        Self {
+            format_version: SegmentInfo::VERSION,
+            blocks,
+            summary,
+        }
     }
 
+    // Total block bytes of this segment.
+    pub fn total_bytes(&self) -> u64 {
+        self.blocks.iter().map(|v| v.block_size).sum()
+    }
     #[inline]
     pub fn encoding() -> Encoding {
         Encoding::default()
@@ -99,24 +106,5 @@ impl SegmentInfo {
         buf.extend(summary_compress);
 
         Ok(buf)
-    }
-}
-
-impl SegmentInfo {
-    pub fn new(blocks: Vec<Arc<BlockMeta>>, summary: Statistics) -> Self {
-        Self {
-            format_version: SegmentInfo::VERSION,
-            blocks,
-            summary,
-        }
-    }
-
-    pub fn format_version(&self) -> u64 {
-        self.format_version
-    }
-
-    // Total block bytes of this segment.
-    pub fn total_bytes(&self) -> u64 {
-        self.blocks.iter().map(|v| v.block_size).sum()
     }
 }

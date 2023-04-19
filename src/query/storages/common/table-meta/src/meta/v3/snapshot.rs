@@ -102,6 +102,7 @@ impl TableSnapshot {
     pub fn from_previous(previous: &TableSnapshot) -> Self {
         let id = Uuid::new_v4();
         let clone = previous.clone();
+        // the timestamp of the new snapshot will be adjusted by the `new` method
         Self::new(
             id,
             &clone.timestamp,
@@ -172,7 +173,7 @@ impl From<v2::TableSnapshot> for TableSnapshot {
 // This *ONLY* used for some optimize operation, like PURGE/FUSE_SNAPSHOT function to avoid OOM.
 #[derive(Clone, Debug)]
 pub struct TableSnapshotLite {
-    pub snapshot_version: FormatVersion,
+    pub format_version: FormatVersion,
     pub snapshot_id: SnapshotId,
     pub timestamp: Option<DateTime<Utc>>,
     pub prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
@@ -184,10 +185,10 @@ pub struct TableSnapshotLite {
     pub segment_count: u64,
 }
 
-impl From<&TableSnapshot> for TableSnapshotLite {
-    fn from(value: &TableSnapshot) -> Self {
+impl From<(&TableSnapshot, FormatVersion)> for TableSnapshotLite {
+    fn from((value, ver): (&TableSnapshot, FormatVersion)) -> Self {
         TableSnapshotLite {
-            snapshot_version: value.format_version,
+            format_version: ver,
             snapshot_id: value.snapshot_id,
             timestamp: value.timestamp,
             prev_snapshot_id: value.prev_snapshot_id,
