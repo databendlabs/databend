@@ -210,7 +210,14 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
     builder.endpoint(&cfg.endpoint_url);
 
     // Region
-    builder.region(&cfg.region);
+    if cfg.region.is_empty() {
+        // Try to load region from env if not set.
+        if let Ok(region) = env::var("AWS_REGION") {
+            builder.region(&region);
+        }
+    } else {
+        builder.region(&cfg.region);
+    }
 
     // Credential.
     builder.access_key_id(&cfg.access_key_id);
