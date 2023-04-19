@@ -68,6 +68,7 @@ bendsql cloud warehouse use "${CLOUD_WAREHOUSE}"
 echo "Running queries..."
 
 # analyze table
+echo "Analyze table..."
 bendsql query <"${BENCHMARK_DATASET}/analyze.sql"
 
 function run_query() {
