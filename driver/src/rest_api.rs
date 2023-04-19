@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -21,17 +21,18 @@ use std::task::{Context, Poll};
 use async_trait::async_trait;
 use databend_client::response::QueryResponse;
 use databend_client::APIClient;
+use tokio::io::AsyncRead;
 use tokio_stream::{Stream, StreamExt};
 
 use crate::conn::{Connection, ConnectionInfo};
 use crate::error::{Error, Result};
 use crate::rows::{Row, RowIterator, RowProgressIterator, RowWithProgress};
 use crate::schema::{Schema, SchemaRef};
-use crate::ScanProgress;
+use crate::QueryProgress;
 
 #[derive(Clone)]
 pub struct RestAPIConnection {
-    pub(crate) client: APIClient,
+    client: APIClient,
 }
 
 #[async_trait]
@@ -81,9 +82,31 @@ impl Connection for RestAPIConnection {
             Ok(Some(row))
         }
     }
+
+    async fn stream_load(
+        &self,
+        sql: &str,
+        data: Box<dyn AsyncRead + Send + Sync + Unpin + 'static>,
+        size: u64,
+        file_format_options: Option<BTreeMap<&str, &str>>,
+        copy_options: Option<BTreeMap<&str, &str>>,
+    ) -> Result<QueryProgress> {
+        let stage_location = format!("@~/client/load/{}", chrono::Utc::now().timestamp_nanos());
+        self.client
+            .upload_to_stage(&stage_location, data, size)
+            .await?;
+        let file_format_options =
+            file_format_options.unwrap_or_else(Self::default_file_format_options);
+        let copy_options = copy_options.unwrap_or_else(Self::default_copy_options);
+        let resp = self
+            .client
+            .insert_with_stage(sql, &stage_location, file_format_options, copy_options)
+            .await?;
+        Ok(QueryProgress::from(resp.stats.progresses))
+    }
 }
 
-impl RestAPIConnection {
+impl<'o> RestAPIConnection {
     pub fn try_create(dsn: &str) -> Result<Self> {
         let client = APIClient::from_dsn(dsn)?;
         Ok(Self { client })
@@ -111,6 +134,21 @@ impl RestAPIConnection {
             Some(uri) => self.client.query_page(&uri).await.map_err(|e| e.into()),
             None => Err(Error::InvalidResponse("final_uri is empty".to_string())),
         }
+    }
+
+    fn default_file_format_options() -> BTreeMap<&'o str, &'o str> {
+        vec![
+            ("type", "CSV"),
+            ("field_delimiter", ","),
+            ("record_delimiter", "\n"),
+            ("skip_header", "0"),
+        ]
+        .into_iter()
+        .collect()
+    }
+
+    fn default_copy_options() -> BTreeMap<&'o str, &'o str> {
+        vec![("purge", "true")].into_iter().collect()
     }
 }
 
@@ -152,16 +190,7 @@ impl Stream for RestAPIRows {
                     self.data = resp.data.into();
                     self.next_uri = resp.next_uri;
                     self.next_page = None;
-                    let mut progress = ScanProgress {
-                        total_rows: 0,
-                        total_bytes: 0,
-                        read_rows: resp.stats.progresses.scan_progress.rows,
-                        read_bytes: resp.stats.progresses.scan_progress.bytes,
-                    };
-                    if let Some(total_scan) = resp.stats.progresses.total_scan {
-                        progress.total_bytes = total_scan.bytes;
-                        progress.total_rows = total_scan.rows;
-                    }
+                    let progress = QueryProgress::from(resp.stats.progresses);
                     Poll::Ready(Some(Ok(RowWithProgress::Progress(progress))))
                 }
                 Poll::Ready(Err(e)) => Poll::Ready(Some(Err(e))),

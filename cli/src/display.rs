@@ -18,7 +18,7 @@ use anyhow::Result;
 
 use comfy_table::{Cell, CellAlignment, Table};
 
-use databend_driver::{Row, RowProgressIterator, RowWithProgress, ScanProgress, SchemaRef};
+use databend_driver::{QueryProgress, Row, RowProgressIterator, RowWithProgress, SchemaRef};
 use futures::StreamExt;
 use rustyline::highlight::Highlighter;
 use tokio::time::Instant;
@@ -68,7 +68,7 @@ impl<'a> ReplDisplay<'a> {
 impl<'a> ChunkDisplay for ReplDisplay<'a> {
     async fn display(&mut self) -> Result<()> {
         let mut rows: Vec<Row> = Vec::new();
-        let mut progress = ScanProgress::default();
+        let mut progress = QueryProgress::default();
 
         if self.settings.display_pretty_sql {
             let format_sql = format_query(self.query);

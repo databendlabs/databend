@@ -140,6 +140,7 @@ impl TryFrom<(&DataType, &str)> for Value {
             DataType::Date => Ok(Self::Date(
                 chrono::NaiveDate::parse_from_str(v, "%Y-%m-%d")?.num_days_from_ce() - DAYS_FROM_CE,
             )),
+            DataType::Nullable(inner) => Self::try_from((inner.as_ref(), v)),
             // TODO:(everpcpc) handle complex types
             _ => Ok(Self::String(v.to_string())),
         }

@@ -44,18 +44,16 @@ async fn insert_with_stage(presigned: bool) {
     client.query_wait(&sql).await.unwrap();
 
     let sql = format!("INSERT INTO `{}` VALUES", table);
-    let file_format_options = Some(
-        vec![
-            ("type", "CSV"),
-            ("field_delimiter", ","),
-            ("record_delimiter", "\n"),
-            ("skip_header", "0"),
-            ("quote", "'"),
-        ]
-        .into_iter()
-        .collect(),
-    );
-    let copy_options = Some(vec![("purge", "true")].into_iter().collect());
+    let file_format_options = vec![
+        ("type", "CSV"),
+        ("field_delimiter", ","),
+        ("record_delimiter", "\n"),
+        ("skip_header", "0"),
+        ("quote", "'"),
+    ]
+    .into_iter()
+    .collect();
+    let copy_options = vec![("purge", "true")].into_iter().collect();
 
     client
         .insert_with_stage(&sql, &stage_location, file_format_options, copy_options)

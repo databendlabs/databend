@@ -301,14 +301,14 @@ impl APIClient {
         &self,
         sql: &str,
         stage_location: &str,
-        file_format_options: Option<BTreeMap<&str, &str>>,
-        copy_options: Option<BTreeMap<&str, &str>>,
+        file_format_options: BTreeMap<&str, &str>,
+        copy_options: BTreeMap<&str, &str>,
     ) -> Result<QueryResponse> {
         let session_settings = self.make_session().await;
         let stage_attachment = Some(StageAttachmentConfig {
             location: stage_location,
-            file_format_options,
-            copy_options,
+            file_format_options: Some(file_format_options),
+            copy_options: Some(copy_options),
         });
         let req = QueryRequest::new(sql)
             .with_pagination(self.make_pagination())

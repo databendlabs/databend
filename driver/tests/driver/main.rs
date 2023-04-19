@@ -17,3 +17,4 @@ mod common;
 mod connection;
 mod select_iter;
 mod select_simple;
+mod stream_load;

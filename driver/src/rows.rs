@@ -30,16 +30,43 @@ pub type RowProgressIterator = Pin<Box<dyn Stream<Item = Result<RowWithProgress>
 #[derive(Clone, Debug)]
 pub enum RowWithProgress {
     Row(Row),
-    Progress(ScanProgress),
+    Progress(QueryProgress),
 }
 
 #[derive(Deserialize, Clone, Debug, Default)]
-pub struct ScanProgress {
+pub struct QueryProgress {
+    #[serde(default)]
     pub total_rows: usize,
+    #[serde(default)]
     pub total_bytes: usize,
 
+    #[serde(default)]
     pub read_rows: usize,
+    #[serde(default)]
     pub read_bytes: usize,
+
+    #[serde(default)]
+    pub write_rows: usize,
+    #[serde(default)]
+    pub write_bytes: usize,
+}
+
+impl From<databend_client::response::Progresses> for QueryProgress {
+    fn from(progresses: databend_client::response::Progresses) -> Self {
+        let mut p = Self {
+            total_rows: 0,
+            total_bytes: 0,
+            read_rows: progresses.scan_progress.rows,
+            read_bytes: progresses.scan_progress.bytes,
+            write_rows: progresses.write_progress.rows,
+            write_bytes: progresses.write_progress.bytes,
+        };
+        if let Some(total) = progresses.total_scan {
+            p.total_rows = total.rows;
+            p.total_bytes = total.bytes;
+        }
+        p
+    }
 }
 
 #[derive(Clone, Debug, Default)]

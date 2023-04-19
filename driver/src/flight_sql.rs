@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -23,6 +23,7 @@ use arrow_flight::utils::flight_data_to_arrow_batch;
 use arrow_flight::{sql::client::FlightSqlServiceClient, FlightData};
 use arrow_schema::SchemaRef as ArrowSchemaRef;
 use async_trait::async_trait;
+use tokio::io::AsyncRead;
 use tokio::sync::Mutex;
 use tokio_stream::{Stream, StreamExt};
 use tonic::transport::{Channel, ClientTlsConfig, Endpoint};
@@ -31,12 +32,12 @@ use url::Url;
 
 use crate::conn::{Connection, ConnectionInfo};
 use crate::error::{Error, Result};
-use crate::rows::{Row, RowIterator, RowProgressIterator, RowWithProgress, Rows, ScanProgress};
+use crate::rows::{QueryProgress, Row, RowIterator, RowProgressIterator, RowWithProgress, Rows};
 use crate::Schema;
 
 #[derive(Clone)]
 pub struct FlightSQLConnection {
-    pub(crate) client: Arc<Mutex<FlightSqlServiceClient<Channel>>>,
+    client: Arc<Mutex<FlightSqlServiceClient<Channel>>>,
     handshaked: Arc<Mutex<bool>>,
     args: Args,
 }
@@ -87,6 +88,17 @@ impl Connection for FlightSQLConnection {
         let flight_data = client.do_get(ticket.clone()).await?;
         let (schema, rows) = FlightSQLRows::try_from_flight_data(flight_data).await?;
         Ok((schema, Box::pin(rows)))
+    }
+
+    async fn stream_load(
+        &self,
+        _sql: &str,
+        _data: Box<dyn AsyncRead + Send + Sync + Unpin + 'static>,
+        _size: u64,
+        _file_format_options: Option<BTreeMap<&str, &str>>,
+        _copy_options: Option<BTreeMap<&str, &str>>,
+    ) -> Result<QueryProgress> {
+        unimplemented!()
     }
 }
 
@@ -269,7 +281,7 @@ impl Stream for FlightSQLRows {
             Poll::Ready(Some(Ok(datum))) => {
                 // magic number 1 is used to indicate progress
                 if datum.app_metadata[..] == [0x01] {
-                    let progress: ScanProgress = serde_json::from_slice(&datum.data_body)?;
+                    let progress: QueryProgress = serde_json::from_slice(&datum.data_body)?;
                     Poll::Ready(Some(Ok(RowWithProgress::Progress(progress))))
                 } else {
                     let dicitionaries_by_id = HashMap::new();

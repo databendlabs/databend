@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use async_trait::async_trait;
 use dyn_clone::DynClone;
+use tokio::io::AsyncRead;
 use url::Url;
 
 #[cfg(feature = "flight-sql")]
@@ -23,6 +26,7 @@ use crate::error::{Error, Result};
 use crate::rest_api::RestAPIConnection;
 use crate::rows::{Row, RowIterator, RowProgressIterator};
 use crate::schema::Schema;
+use crate::QueryProgress;
 
 pub struct ConnectionInfo {
     pub handler: String,
@@ -51,6 +55,15 @@ pub trait Connection: DynClone + Send + Sync {
     async fn query_row(&self, sql: &str) -> Result<Option<Row>>;
     async fn query_iter(&self, sql: &str) -> Result<RowIterator>;
     async fn query_iter_ext(&self, sql: &str) -> Result<(Schema, RowProgressIterator)>;
+
+    async fn stream_load(
+        &self,
+        sql: &str,
+        data: Box<dyn AsyncRead + Send + Sync + Unpin + 'static>,
+        size: u64,
+        file_format_options: Option<BTreeMap<&str, &str>>,
+        copy_options: Option<BTreeMap<&str, &str>>,
+    ) -> Result<QueryProgress>;
 }
 dyn_clone::clone_trait_object!(Connection);
 
