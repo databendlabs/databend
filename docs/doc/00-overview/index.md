@@ -5,6 +5,8 @@ slug: /
 
 Welcome to the Databend documentation! Databend is an **open-source**, **elastic**, and **workload-aware** modern cloud data warehouse designed to meet businesses' massive-scale analytics needs at low cost and with low complexity.
 
+<iframe width="853" height="505" className="iframe-video" src="https://www.youtube.com/embed/Ysp0do8Ci-8" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+
 This welcome page guides you through the features, architecture, and other important details about Databend.
 
 ## Why Databend?
@@ -140,10 +142,11 @@ With these indexes, Databend can speed up queries by reducing the I/O and CPU co
 
 The Databend community is open to data professionals, students, and anyone who has a passion for cloud data warehouses. Feel free to click on the links below to be a part of the excitement:
 
-- [Slack](https://link.databend.rs/join-slack): Chat with the community
-- [GitHub](https://github.com/datafuselabs/databend): Feature requests, bug reports, and contributions
-- [Twitter](https://twitter.com/DatabendLabs): Stay in the know
-- [Weekly](https://weekly.databend.rs/): Weekly updates
+- Slack: https://link.databend.rs/join-slack
+- GitHub: https://github.com/datafuselabs/databend
+- Twitter: https://twitter.com/DatabendLabs
+- LinkedIn: https://www.linkedin.com/company/datafuselabs
+- YouTube: https://www.youtube.com/@DatabendLabs
 
 ## Roadmap
 

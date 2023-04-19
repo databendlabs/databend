@@ -47,12 +47,15 @@ impl QueryEdge {
 #[derive(Clone, Debug)]
 pub struct QueryGraph {
     root_edge: QueryEdge,
+    // cache neighbors
+    cached_neighbors: HashMap<Vec<IndexType>, Vec<IndexType>>,
 }
 
 impl QueryGraph {
     pub fn new() -> Self {
         Self {
             root_edge: QueryEdge::new(),
+            cached_neighbors: Default::default(),
         }
     }
 
@@ -61,50 +64,65 @@ impl QueryGraph {
         &self,
         nodes: &[IndexType],
         neighbor: &[IndexType],
-    ) -> Result<(bool, Vec<(ScalarExpr, ScalarExpr)>)> {
+    ) -> Result<Vec<(ScalarExpr, ScalarExpr)>> {
         let nodes_size = nodes.len();
+        let mut join_conditions = vec![];
         for i in 0..nodes_size {
             let mut edge = &self.root_edge;
             for node in nodes.iter().take(nodes_size).skip(i) {
-                if !edge.children.contains_key(node) {
+                if let Some(child) = edge.children.get(node) {
+                    edge = child;
+                } else {
                     break;
                 }
-                edge = edge.children.get(node).unwrap();
-            }
-            for neighbor_info in edge.neighbors.iter() {
-                if is_subset(&neighbor_info.neighbors, neighbor) {
-                    return Ok((true, neighbor_info.join_conditions.clone()));
+                for neighbor_info in edge.neighbors.iter() {
+                    if is_subset(&neighbor_info.neighbors, neighbor) {
+                        join_conditions.extend(neighbor_info.join_conditions.clone());
+                    }
                 }
             }
         }
-        Ok((false, vec![]))
+        Ok(join_conditions)
     }
 
     // Get all neighbors of `nodes` which are not in `forbidden_nodes`
     pub fn neighbors(
-        &self,
+        &mut self,
         nodes: &[IndexType],
         forbidden_nodes: &HashSet<IndexType>,
     ) -> Result<Vec<IndexType>> {
+        if let Some(neighbor) = self.cached_neighbors.get(nodes) {
+            let mut neighbors = neighbor.clone();
+            neighbors.retain(|node| !forbidden_nodes.contains(node));
+            neighbors.sort();
+            return Ok(neighbors);
+        }
+        let mut cached_neighbors = vec![];
         let mut neighbors = vec![];
         // Find neighbors for nodes that aren't in `forbidden_nodes`
         let nodes_size = nodes.len();
         for i in 0..nodes_size {
             let mut edge = &self.root_edge;
             for node in nodes.iter().take(nodes_size).skip(i) {
-                if !edge.children.contains_key(node) {
+                if let Some(child) = edge.children.get(node) {
+                    edge = child;
+                } else {
                     break;
                 }
-                edge = edge.children.get(node).unwrap();
-            }
-            for neighbor_info in edge.neighbors.iter() {
-                if !forbidden_nodes.contains(&neighbor_info.neighbors[0]) {
-                    neighbors.push(neighbor_info.neighbors[0]);
-                    return Ok(neighbors);
+                for neighbor_info in edge.neighbors.iter() {
+                    cached_neighbors.push(neighbor_info.neighbors[0]);
+                    if !forbidden_nodes.contains(&neighbor_info.neighbors[0])
+                        && !nodes.contains(&neighbor_info.neighbors[0])
+                    {
+                        neighbors.push(neighbor_info.neighbors[0]);
+                    }
                 }
             }
         }
+        self.cached_neighbors
+            .insert(nodes.to_vec(), cached_neighbors);
         neighbors.dedup();
+        neighbors.sort();
         Ok(neighbors)
     }
 
@@ -143,6 +161,14 @@ impl QueryGraph {
             join_conditions: vec![join_condition],
         };
         left_edge.neighbors.push(neighbor_info);
+        self.cached_neighbors
+            .entry(left_set.to_vec())
+            .and_modify(|val| val.push(right_set[0]))
+            .or_insert(vec![right_set[0]]);
+        self.cached_neighbors
+            .entry(right_set.to_vec())
+            .and_modify(|val| val.push(left_set[0]))
+            .or_insert(vec![left_set[0]]);
         Ok(())
     }
 }

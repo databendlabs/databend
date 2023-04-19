@@ -1141,10 +1141,10 @@ impl PhysicalPlanBuilder {
 
     fn build_plan_stat_info(&self, s_expr: &SExpr) -> Result<PlanStatsInfo> {
         let rel_expr = RelExpr::with_s_expr(s_expr);
-        let prop = rel_expr.derive_relational_prop()?;
+        let stat_info = rel_expr.derive_cardinality()?;
 
         Ok(PlanStatsInfo {
-            estimated_rows: prop.cardinality,
+            estimated_rows: stat_info.cardinality,
         })
     }
 }
