@@ -194,8 +194,8 @@ impl InputFormatPipe for ParquetFormatPipe {
         })
     }
 
-    fn try_create_block_builder(ctx: &Arc<InputContext>) -> Result<ParquetBlockBuilder> {
-        Ok(ParquetBlockBuilder { ctx: ctx.clone() })
+    fn try_create_block_builder(_ctx: &Arc<InputContext>) -> Result<ParquetBlockBuilder> {
+        Ok(ParquetBlockBuilder {})
     }
 }
 
@@ -386,9 +386,7 @@ impl ReadBatchTrait for ReadBatch {
     }
 }
 
-pub struct ParquetBlockBuilder {
-    ctx: Arc<InputContext>,
-}
+pub struct ParquetBlockBuilder {}
 
 impl BlockBuilderTrait for ParquetBlockBuilder {
     type Pipe = ParquetFormatPipe;
@@ -405,21 +403,7 @@ impl BlockBuilderTrait for ParquetBlockBuilder {
 
             let input_schema = DataSchema::new(fields);
             let block = DataBlock::from_arrow_chunk(&chunk, &input_schema)?;
-
-            let block_total_rows = block.num_rows();
-            let num_rows_per_block = self.ctx.block_compact_thresholds.max_rows_per_block;
-            let blocks: Vec<DataBlock> = (0..block_total_rows)
-                .step_by(num_rows_per_block)
-                .map(|idx| {
-                    if idx + num_rows_per_block < block_total_rows {
-                        block.slice(idx..idx + num_rows_per_block)
-                    } else {
-                        block.slice(idx..block_total_rows)
-                    }
-                })
-                .collect();
-
-            Ok(blocks)
+            Ok(vec![block])
         } else {
             Ok(vec![])
         }
