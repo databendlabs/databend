@@ -104,14 +104,17 @@ docker run --net=host  datafuselabs/databend
 
 ## Getting Started
 
-### Deploying Databend
+<details>
+<summary>Deploying Databend</summary>
 
 - [Understanding Deployment Modes](https://databend.rs/doc/deploy/understanding-deployment-modes)
 - [Deploying a Standalone Databend](https://databend.rs/doc/deploy/deploying-databend)
 - [Expanding a Standalone Databend](https://databend.rs/doc/deploy/expanding-to-a-databend-cluster)
 - [Databend Cloud (Beta)](https://databend.rs/doc/cloud)
+</details>
 
-### Connecting to Databend
+<details>
+<summary>Connecting to Databend</summary>
 
 - [How to Connect Databend with MySQL Client](https://databend.rs/doc/integrations/api/mysql-handler)
 - [How to Connect Databend with ClickHouse HTTP Handler](https://databend.rs/doc/integrations/api/clickhouse-handler)
@@ -120,8 +123,10 @@ docker run --net=host  datafuselabs/databend
 - [How to Query Databend in Jupyter Notebooks](https://databend.rs/doc/integrations/gui-tool/jupyter)
 - [How to Execute Queries in Golang](https://databend.rs/doc/develop/golang)
 - [How to Work with Databend in Node.js](https://databend.rs/doc/develop/nodejs)
+</details>
 
-### Loading Data into Databend
+<details>
+<summary>Loading Data into Databend</summary>
 
 - [How to Load Data from Local File System](https://databend.rs/doc/load-data/local)
 - [How to Load Data from Remote Files](https://databend.rs/doc/load-data/http)
@@ -129,20 +134,11 @@ docker run --net=host  datafuselabs/databend
 - [How to Load Data from Databend Stages](https://databend.rs/doc/load-data/stage)
 - [Querying Data in Staged Files](https://databend.rs/doc/load-data/querying-stage)
 - [Transforming Data During a Load](http://databend.rs/doc/load-data/data-load-transform)
-
-### Unloading Data from Databend
-
 - [How to Unload Data from Databend](https://databend.rs/doc/unload-data/)
+</details>
 
-### Managing Data
-
-- [COPY](https://databend.rs/doc/sql-commands/dml/dml-copy-into-table)
-- [INSERT](https://databend.rs/doc/sql-commands/dml/dml-insert)
-- [DELETE](https://databend.rs/doc/sql-commands/dml/dml-delete-from)
-- [UPDATE](https://databend.rs/doc/sql-commands/dml/dml-update)
-- [REPLACE](https://databend.rs/doc/sql-commands/dml/dml-replace)
-
-### Managing Users
+<details>
+<summary>Managing Users</summary>
 
 - [How to Create a User](https://databend.rs/doc/sql-commands/ddl/user/user-create-user)
 - [How to Grant Privileges to a User](https://databend.rs/doc/sql-commands/ddl/user/grant-privileges)
@@ -151,55 +147,58 @@ docker run --net=host  datafuselabs/databend
 - [How to Grant Privileges to a Role](https://databend.rs/doc/sql-commands/ddl/user/grant-privileges)
 - [How to Grant Role to a User](https://databend.rs/doc/sql-commands/ddl/user/grant-role)
 - [How to Revoke Role from a User](https://databend.rs/doc/sql-commands/ddl/user/revoke-role)
+</details>
 
-### Managing Databases
+<details>
+<summary>Managing Databases</summary>
 
 - [How to Create a Database](https://databend.rs/doc/sql-commands/ddl/database/ddl-create-database)
 - [How to Drop a Database](https://databend.rs/doc/sql-commands/ddl/database/ddl-drop-database)
+</details>
 
-### Managing Tables
+<details>
+<summary>Managing Tables</summary>
 
 - [How to Create a Table](https://databend.rs/doc/sql-commands/ddl/table/ddl-create-table)
 - [How to Drop a Table](https://databend.rs/doc/sql-commands/ddl/table/ddl-drop-table)
 - [How to Rename a Table](https://databend.rs/doc/sql-commands/ddl/table/ddl-rename-table)
 - [How to Truncate a Table](https://databend.rs/doc/sql-commands/ddl/table/ddl-truncate-table)
+- [How to Flash Back a Table](https://databend.rs/doc/sql-commands/ddl/table/flashback-table)
 - [How to Add/Drop Table Column](https://databend.rs/doc/sql-commands/ddl/table/alter-table-column)
+</details>
 
-### Managing Views
+<details>
+<summary>Managing Data</summary>
+
+- [COPY](https://databend.rs/doc/sql-commands/dml/dml-copy-into-table)
+- [INSERT](https://databend.rs/doc/sql-commands/dml/dml-insert)
+- [DELETE](https://databend.rs/doc/sql-commands/dml/dml-delete-from)
+- [UPDATE](https://databend.rs/doc/sql-commands/dml/dml-update)
+- [REPLACE](https://databend.rs/doc/sql-commands/dml/dml-replace)
+</details>
+
+<details>
+<summary>Managing Views</summary>
 
 - [How to Create a View](https://databend.rs/doc/sql-commands/ddl/view/ddl-create-view)
 - [How to Drop a View](https://databend.rs/doc/sql-commands/ddl/view/ddl-drop-view)
 - [How to Alter a View](https://databend.rs/doc/sql-commands/ddl/view/ddl-alter-view)
+</details>
 
-
-## AI Functions
+<details>
+<summary>AI Functions</summary>
 
 - [Generating SQL with AI](https://databend.rs/doc/sql-functions/ai-functions/ai-to-sql)
 - [Creating Embedding Vectors](https://databend.rs/doc/sql-functions/ai-functions/ai-embedding-vector)
 - [Computing Text Similarities](https://databend.rs/doc/sql-functions/ai-functions/cosine-distance)
 - [Text Completion with AI](https://databend.rs/doc/sql-functions/ai-functions/ai-text-completion)
+</details>
 
-
-### Managing User-Defined Functions
-
-- [How to Create a User-Defined Function](https://databend.rs/doc/sql-commands/ddl/udf/ddl-create-function)
-- [How to Drop a User-Defined Function](https://databend.rs/doc/sql-commands/ddl/udf/ddl-drop-function)
-- [How to Alter a User-Defined Function](https://databend.rs/doc/sql-commands/ddl/udf/ddl-alter-function)
-
-### Backup & Restore
-
-- [How to Back Up Meta Data](https://databend.rs/doc/deploy/metasrv/metasrv-backup-restore)
-- [How to Back Up Databases](https://databend.rs/doc/deploy/backup-restore/backup-and-restore-schema)
-
-### Use Cases
-
-- [Analyzing Nginx Access Logs With Databend](https://databend.rs/doc/use-cases/analyze-nginx-logs-with-databend-and-vector)
-- [User Retention Analysis With Databend](https://databend.rs/doc/use-cases/analyze-user-retention-with-databend)
-- [Conversion Funnel Analysis With Databend](https://databend.rs/doc/use-cases/analyze-funnel-with-databend)
-
-### Performance
+<details>
+<summary>Performance</summary>
 
 - [How to Benchmark Databend using TPC-H](https://databend.rs/blog/2022/08/08/benchmark-tpc-h)
+</details>
 
 
 ## Contributing
@@ -224,6 +223,7 @@ For general help in using Databend, please refer to the official documentation. 
 
 ## Roadmap
 
+- [Roadmap v1.2](https://github.com/datafuselabs/databend/issues/11073)
 - [Roadmap v1.1](https://github.com/datafuselabs/databend/issues/10334)
 - [Roadmap v1.0](https://github.com/datafuselabs/databend/issues/9604)
 - [Roadmap v0.9](https://github.com/datafuselabs/databend/issues/7052)
