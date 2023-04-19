@@ -210,7 +210,7 @@ impl Operator for Scan {
                 let mut selectivity = MAX_SELECTIVITY;
                 for pred in prewhere.predicates.iter() {
                     // Compute selectivity for each conjunction
-                    selectivity *= sb.compute_selectivity(pred);
+                    selectivity *= sb.compute_selectivity(pred)?;
                 }
                 (precise_cardinality as f64) * selectivity
             }

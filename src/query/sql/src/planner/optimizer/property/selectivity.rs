@@ -14,10 +14,15 @@
 
 use std::cmp::Ordering;
 
+use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
+use common_expression::ConstantFolder;
+use common_expression::Expr;
+use common_expression::FunctionContext;
 use common_expression::Scalar;
+use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::optimizer::ColumnStat;
 use crate::optimizer::Datum;
@@ -44,8 +49,8 @@ impl<'a> SelectivityEstimator<'a> {
     }
 
     /// Compute the selectivity of a predicate.
-    pub fn compute_selectivity(&self, predicate: &ScalarExpr) -> f64 {
-        match predicate {
+    pub fn compute_selectivity(&self, predicate: &ScalarExpr) -> Result<f64> {
+        Ok(match predicate {
             ScalarExpr::BoundColumnRef(_) => {
                 // If a column ref is on top of a predicate, e.g.
                 // `SELECT * FROM t WHERE c1`, the selectivity is 1.
@@ -61,19 +66,19 @@ impl<'a> SelectivityEstimator<'a> {
             }
 
             ScalarExpr::FunctionCall(func) if func.func_name == "and" => {
-                let left_selectivity = self.compute_selectivity(&func.arguments[0]);
-                let right_selectivity = self.compute_selectivity(&func.arguments[1]);
+                let left_selectivity = self.compute_selectivity(&func.arguments[0])?;
+                let right_selectivity = self.compute_selectivity(&func.arguments[1])?;
                 left_selectivity * right_selectivity
             }
 
             ScalarExpr::FunctionCall(func) if func.func_name == "or" => {
-                let left_selectivity = self.compute_selectivity(&func.arguments[0]);
-                let right_selectivity = self.compute_selectivity(&func.arguments[1]);
+                let left_selectivity = self.compute_selectivity(&func.arguments[0])?;
+                let right_selectivity = self.compute_selectivity(&func.arguments[1])?;
                 left_selectivity + right_selectivity - left_selectivity * right_selectivity
             }
 
             ScalarExpr::FunctionCall(func) if func.func_name == "not" => {
-                let argument_selectivity = self.compute_selectivity(&func.arguments[0]);
+                let argument_selectivity = self.compute_selectivity(&func.arguments[0])?;
                 1.0 - argument_selectivity
             }
 
@@ -90,7 +95,7 @@ impl<'a> SelectivityEstimator<'a> {
             }
 
             _ => DEFAULT_SELECTIVITY,
-        }
+        })
     }
 
     fn compute_selectivity_comparison_expr(
@@ -98,38 +103,40 @@ impl<'a> SelectivityEstimator<'a> {
         op: ComparisonOp,
         left: &ScalarExpr,
         right: &ScalarExpr,
-    ) -> f64 {
+    ) -> Result<f64> {
+        // Try to constant fold right right expr
+        let right = try_constant_fold(right)?;
         if let (ScalarExpr::BoundColumnRef(column_ref), ScalarExpr::ConstantExpr(constant)) =
-            (left, right)
+            (left, &right)
         {
             // Check if there is available histogram for the column.
             let column_stat =
                 if let Some(stat) = self.input_stat.column_stats.get(&column_ref.column.index) {
                     stat
                 } else {
-                    return DEFAULT_SELECTIVITY;
+                    return Ok(DEFAULT_SELECTIVITY);
                 };
             let col_hist = if let Some(hist) = column_stat.histogram.as_ref() {
                 hist
             } else {
-                return DEFAULT_SELECTIVITY;
+                return Ok(DEFAULT_SELECTIVITY);
             };
             let const_datum = if let Some(datum) = Datum::from_scalar(&constant.value) {
                 datum
             } else {
-                return DEFAULT_SELECTIVITY;
+                return Ok(DEFAULT_SELECTIVITY);
             };
 
-            match op {
+            return match op {
                 ComparisonOp::Equal => {
                     // For equal predicate, we just use cardinality of a single
                     // value to estimate the selectivity. This assumes that
                     // the column is in a uniform distribution.
-                    return evaluate_equal(col_hist, column_stat, constant);
+                    Ok(evaluate_equal(col_hist, column_stat, constant))
                 }
                 ComparisonOp::NotEqual => {
                     // For not equal predicate, we treat it as opposite of equal predicate.
-                    return 1.0 - evaluate_equal(col_hist, column_stat, constant);
+                    Ok(1.0 - evaluate_equal(col_hist, column_stat, constant))
                 }
                 ComparisonOp::GT => {
                     // For greater than predicate, we use the number of values
@@ -144,10 +151,10 @@ impl<'a> SelectivityEstimator<'a> {
                                 break;
                             }
                         } else {
-                            return DEFAULT_SELECTIVITY;
+                            return Ok(DEFAULT_SELECTIVITY);
                         }
                     }
-                    return 1.0 - num_greater / col_hist.num_values();
+                    Ok(1.0 - num_greater / col_hist.num_values())
                 }
                 ComparisonOp::LT => {
                     // For less than predicate, we treat it as opposite of
@@ -161,10 +168,10 @@ impl<'a> SelectivityEstimator<'a> {
                                 break;
                             }
                         } else {
-                            return DEFAULT_SELECTIVITY;
+                            return Ok(DEFAULT_SELECTIVITY);
                         }
                     }
-                    return num_greater / col_hist.num_values();
+                    Ok(num_greater / col_hist.num_values())
                 }
                 ComparisonOp::GTE => {
                     // Greater than or equal to predicate is similar to greater than predicate.
@@ -177,10 +184,10 @@ impl<'a> SelectivityEstimator<'a> {
                                 break;
                             }
                         } else {
-                            return DEFAULT_SELECTIVITY;
+                            return Ok(DEFAULT_SELECTIVITY);
                         }
                     }
-                    return 1.0 - num_greater / col_hist.num_values();
+                    Ok(1.0 - num_greater / col_hist.num_values())
                 }
                 ComparisonOp::LTE => {
                     // Less than or equal to predicate is similar to less than predicate.
@@ -193,15 +200,15 @@ impl<'a> SelectivityEstimator<'a> {
                                 break;
                             }
                         } else {
-                            return DEFAULT_SELECTIVITY;
+                            return Ok(DEFAULT_SELECTIVITY);
                         }
                     }
-                    return num_greater / col_hist.num_values();
+                    Ok(num_greater / col_hist.num_values())
                 }
-            }
+            };
         }
 
-        DEFAULT_SELECTIVITY
+        Ok(DEFAULT_SELECTIVITY)
     }
 }
 
@@ -255,4 +262,16 @@ fn compare_equal(datum: &Option<Datum>, col_hist: &Histogram, column_stat: &Colu
     }
 
     1.0 / col_hist.num_distinct_values()
+}
+
+fn try_constant_fold(scalar_expr: &ScalarExpr) -> Result<ScalarExpr> {
+    let expr = scalar_expr.as_expr_with_col_index()?;
+    let (expr, _) = ConstantFolder::fold(&expr, &FunctionContext::default(), &BUILTIN_FUNCTIONS);
+    if let Expr::Constant { scalar, span, .. } = expr {
+        return Ok(ScalarExpr::ConstantExpr(ConstantExpr {
+            span,
+            value: scalar,
+        }));
+    }
+    Ok(scalar_expr.clone())
 }
