@@ -265,7 +265,7 @@ impl Table for StageTable {
         ))
     }
 
-    fn get_block_compact_thresholds(&self) -> BlockThresholds {
+    fn get_block_thresholds(&self) -> BlockThresholds {
         let guard = self.block_compact_threshold.lock();
         (*guard).expect("must success")
     }
