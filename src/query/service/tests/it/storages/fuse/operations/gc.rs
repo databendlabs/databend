@@ -270,7 +270,7 @@ async fn test_fuse_purge_older_version() -> Result<()> {
         let segments =
             utils::generate_segments(fuse_table, num_of_segments, blocks_per_segment).await?;
 
-        // create snapshot 0.
+        // create snapshot 0, the format version is 2.
         let locations = vec![segments[0].0.clone()];
         let id = Uuid::new_v4();
         let mut snapshot_0 = TableSnapshotV2::new(
@@ -289,7 +289,7 @@ async fn test_fuse_purge_older_version() -> Result<()> {
             .snapshot_location_from_uuid(&snapshot_0.snapshot_id, TableSnapshotV2::VERSION)?;
         utils::write_snapshot_v2(&operator, &new_snapshot_location, &snapshot_0).await?;
 
-        // create snapshot 1.
+        // create snapshot 1, the format version is 3.
         let mut locations = Vec::with_capacity(2);
         for i in [1, 0] {
             locations.push(segments[i].0.clone());
@@ -312,7 +312,7 @@ async fn test_fuse_purge_older_version() -> Result<()> {
             .write_meta(&operator, &new_snapshot_location)
             .await?;
 
-        // create snapshot 2.
+        // create snapshot 2, the format version is 3.
         let mut locations = Vec::with_capacity(3);
         for i in [2, 1, 0] {
             locations.push(segments[i].0.clone());
@@ -341,7 +341,6 @@ async fn test_fuse_purge_older_version() -> Result<()> {
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
     table = fixture.latest_default_table().await?;
     fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    // retention period is 0, the base snapshot is root snapshot.
     fuse_table.do_purge(&table_ctx, true).await?;
 
     let expected_num_of_snapshot = 1;
@@ -444,7 +443,11 @@ mod utils {
         Ok((segment_location, segment_info))
     }
 
-    pub async fn write_snapshot_v2(data_accessor: &Operator, location: &str, meta: &TableSnapshotV2) -> Result<()> {
+    pub async fn write_snapshot_v2(
+        data_accessor: &Operator,
+        location: &str,
+        meta: &TableSnapshotV2,
+    ) -> Result<()> {
         let bs = serde_json::to_vec(&meta).map_err(Error::other)?;
         data_accessor.write(location, bs).await?;
         Ok(())
