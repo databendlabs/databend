@@ -222,6 +222,10 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
                 .expect("failed to build jsonb object");
             return;
         }
+        ScalarRef::Bitmap(bits) => {
+            let data = serde_json::to_string(bits).unwrap();
+            data.into()
+        }
         ScalarRef::Tuple(fields) => {
             let values = cast_scalars_to_variants(fields, tz);
             jsonb::build_object(

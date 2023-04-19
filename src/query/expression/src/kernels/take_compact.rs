@@ -19,6 +19,7 @@ use common_exception::Result;
 
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
+use crate::types::bitmap::BitmapType;
 use crate::types::decimal::DecimalColumn;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
@@ -149,6 +150,10 @@ impl Column {
                 Self::take_scalar_types::<MapType<AnyType, AnyType>>(
                     &column, builder, indices, row_num,
                 )
+            }
+            Column::Bitmap(column) => {
+                let builder = Self::take_primitive_types(column, indices, row_num);
+                BitmapType::upcast_column(Buffer::from(builder))
             }
             Column::Nullable(c) => {
                 let column = c.column.take_compacted_indices(indices, row_num);

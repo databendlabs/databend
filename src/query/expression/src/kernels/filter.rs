@@ -21,6 +21,7 @@ use common_exception::Result;
 
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
+use crate::types::bitmap::BitmapType;
 use crate::types::decimal::DecimalColumn;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
@@ -159,6 +160,10 @@ impl Column {
                 let column = ArrayColumn::try_downcast(column).unwrap();
                 Self::filter_scalar_types::<MapType<AnyType, AnyType>>(&column, builder, filter)
             }
+            Column::Bitmap(column) => {
+                Self::filter_scalar_types::<BitmapType>(column, Vec::with_capacity(length), filter)
+            }
+
             Column::Nullable(c) => {
                 let column = Self::filter(&c.column, filter);
                 let validity = Self::filter_scalar_types::<BooleanType>(

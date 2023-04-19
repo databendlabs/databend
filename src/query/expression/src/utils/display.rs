@@ -138,6 +138,7 @@ impl<'a> Debug for ScalarRef<'a> {
                 }
                 write!(f, "}}")
             }
+            ScalarRef::Bitmap(bits) => write!(f, "{bits:?}"),
             ScalarRef::Tuple(fields) => {
                 write!(f, "(")?;
                 for (i, field) in fields.iter().enumerate() {
@@ -170,6 +171,7 @@ impl Debug for Column {
             Column::Date(col) => write!(f, "{col:?}"),
             Column::Array(col) => write!(f, "{col:?}"),
             Column::Map(col) => write!(f, "{col:?}"),
+            Column::Bitmap(col) => write!(f, "{col:?}"),
             Column::Nullable(col) => write!(f, "{col:?}"),
             Column::Tuple(fields) => f.debug_tuple("Tuple").field(fields).finish(),
             Column::Variant(col) => write!(f, "{col:?}"),
@@ -212,6 +214,7 @@ impl<'a> Display for ScalarRef<'a> {
                 }
                 write!(f, "}}")
             }
+            ScalarRef::Bitmap(bits) => write!(f, "{bits:?}"),
             ScalarRef::Tuple(fields) => {
                 write!(f, "(")?;
                 for (i, field) in fields.iter().enumerate() {
@@ -906,6 +909,7 @@ impl Display for Domain {
                 write!(f, ")")
             }
             Domain::Map(None) => write!(f, "{{}}"),
+            Domain::Bitmap(domain) => write!(f, "{domain:?}"),
             Domain::Map(Some((key_domain, val_domain))) => {
                 write!(f, "{{[{key_domain}], [{val_domain}]}}")
             }

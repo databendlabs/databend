@@ -162,6 +162,10 @@ impl Column {
                 let builder = ArrayColumnBuilder { builder, offsets };
                 Self::concat_value_types::<MapType<AnyType, AnyType>>(builder, columns)
             }
+            Column::Bitmap(_) => {
+                let builder = Vec::with_capacity(capacity);
+                Self::concat_value_types::<DateType>(builder, columns)
+            }
             Column::Nullable(_) => {
                 let mut bitmaps = Vec::with_capacity(columns.len());
                 let mut inners = Vec::with_capacity(columns.len());

@@ -16,6 +16,7 @@ use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::hash::Hash;
 use std::io::Read;
+use std::ops::Index;
 use std::ops::Range;
 
 use base64::engine::general_purpose;
@@ -310,6 +311,7 @@ impl Scalar {
             Scalar::Date(d) => ScalarRef::Date(*d),
             Scalar::Array(col) => ScalarRef::Array(col.clone()),
             Scalar::Map(col) => ScalarRef::Map(col.clone()),
+            Scalar::Bitmap(b) => ScalarRef::Bitmap(b.as_slice()),
             Scalar::Tuple(fields) => ScalarRef::Tuple(fields.iter().map(Scalar::as_ref).collect()),
             Scalar::Variant(s) => ScalarRef::Variant(s.as_slice()),
         }
@@ -348,6 +350,7 @@ impl Scalar {
                 let col = builder.build();
                 Scalar::Map(col)
             }
+            DataType::Bitmap => Scalar::Bitmap(vec![]),
             DataType::Tuple(tys) => Scalar::Tuple(tys.iter().map(Scalar::default_value).collect()),
             DataType::Variant => Scalar::Variant(vec![]),
 
@@ -477,6 +480,7 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Date(_) => 4,
             ScalarRef::Array(col) => col.memory_size(),
             ScalarRef::Map(col) => col.memory_size(),
+            ScalarRef::Bitmap(s) => s.len(),
             ScalarRef::Tuple(scalars) => scalars.iter().map(|s| s.memory_size()).sum(),
             ScalarRef::Variant(buf) => buf.len(),
         }
@@ -503,6 +507,7 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Date(_) => DataType::Date,
             ScalarRef::Array(array) => DataType::Array(Box::new(array.data_type())),
             ScalarRef::Map(col) => DataType::Map(Box::new(col.data_type())),
+            ScalarRef::Bitmap(_) => DataType::Bitmap,
             ScalarRef::Tuple(fields) => {
                 let inner = fields
                     .iter()
@@ -529,6 +534,7 @@ impl PartialOrd for Scalar {
             (Scalar::Date(d1), Scalar::Date(d2)) => d1.partial_cmp(d2),
             (Scalar::Array(a1), Scalar::Array(a2)) => a1.partial_cmp(a2),
             (Scalar::Map(m1), Scalar::Map(m2)) => m1.partial_cmp(m2),
+            (Scalar::Bitmap(b1), Scalar::Bitmap(b2)) => b1.partial_cmp(b2),
             (Scalar::Tuple(t1), Scalar::Tuple(t2)) => t1.partial_cmp(t2),
             (Scalar::Variant(v1), Scalar::Variant(v2)) => {
                 jsonb::compare(v1.as_slice(), v2.as_slice()).ok()
@@ -564,6 +570,7 @@ impl PartialOrd for ScalarRef<'_> {
             (ScalarRef::Date(d1), ScalarRef::Date(d2)) => d1.partial_cmp(d2),
             (ScalarRef::Array(a1), ScalarRef::Array(a2)) => a1.partial_cmp(a2),
             (ScalarRef::Map(m1), ScalarRef::Map(m2)) => m1.partial_cmp(m2),
+            (ScalarRef::Bitmap(b1), ScalarRef::Bitmap(b2)) => b1.partial_cmp(b2),
             (ScalarRef::Tuple(t1), ScalarRef::Tuple(t2)) => t1.partial_cmp(t2),
             (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => jsonb::compare(v1, v2).ok(),
             _ => None,
@@ -609,6 +616,7 @@ impl Hash for ScalarRef<'_> {
                 let str = serialize_column(v);
                 str.hash(state);
             }
+            ScalarRef::Bitmap(v) => v.hash(state),
             ScalarRef::Tuple(v) => {
                 v.hash(state);
             }
@@ -680,6 +688,7 @@ impl Column {
             Column::Date(col) => col.len(),
             Column::Array(col) => col.len(),
             Column::Map(col) => col.len(),
+            Column::Bitmap(col) => col.len(),
             Column::Nullable(col) => col.len(),
             Column::Tuple(fields) => fields[0].len(),
             Column::Variant(col) => col.len(),
@@ -699,6 +708,12 @@ impl Column {
             Column::Date(col) => Some(ScalarRef::Date(col.get(index).cloned()?)),
             Column::Array(col) => Some(ScalarRef::Array(col.index(index)?)),
             Column::Map(col) => Some(ScalarRef::Map(col.index(index)?)),
+            Column::Bitmap(col) => {
+                let data = col.index(index);
+                Some(ScalarRef::Bitmap(
+                    data.into_iter().collect::<Vec<u32>>().as_slice(),
+                ))
+            }
             Column::Nullable(col) => Some(col.index(index)?.unwrap_or(ScalarRef::Null)),
             Column::Tuple(fields) => Some(ScalarRef::Tuple(
                 fields
