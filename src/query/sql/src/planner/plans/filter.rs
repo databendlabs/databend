@@ -102,7 +102,7 @@ impl Operator for Filter {
         let mut selectivity = MAX_SELECTIVITY;
         for pred in self.predicates.iter() {
             // Compute selectivity for each conjunction
-            selectivity *= sb.compute_selectivity(pred);
+            selectivity *= sb.compute_selectivity(pred)?;
         }
         let cardinality = input_cardinality * selectivity;
 
