@@ -193,7 +193,10 @@ impl Stream for RestAPIRows {
                     let progress = QueryProgress::from(resp.stats.progresses);
                     Poll::Ready(Some(Ok(RowWithProgress::Progress(progress))))
                 }
-                Poll::Ready(Err(e)) => Poll::Ready(Some(Err(e))),
+                Poll::Ready(Err(e)) => {
+                    self.next_page = None;
+                    Poll::Ready(Some(Err(e)))
+                }
                 Poll::Pending => {
                     cx.waker().wake_by_ref();
                     Poll::Pending
