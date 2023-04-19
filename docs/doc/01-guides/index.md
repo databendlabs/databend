@@ -83,6 +83,7 @@ To make the most of Databend, learn how to manage your database by inserting, up
 * [How to Rename a Table](../14-sql-commands/00-ddl/20-table/30-ddl-rename-table.md)
 * [How to Truncate a Table](../14-sql-commands/00-ddl/20-table/40-ddl-truncate-table.md)
 * [How to Add/Drop Table Column](../14-sql-commands/00-ddl/20-table/90-alter-table-column.md)
+* [How to Flash Back a Table](../14-sql-commands/00-ddl/20-table/70-flashback-table.md)
 
 </TabItem>
 
