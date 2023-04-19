@@ -79,14 +79,14 @@ impl FuseTable {
 
         // Find the instant which matches the given `time_point`.
         let mut instant = None;
-        while let Some(snapshot) = snapshot_stream.try_next().await? {
-            if pred(snapshot.as_ref()) {
-                instant = Some(snapshot);
+        while let Some(snapshot_with_version) = snapshot_stream.try_next().await? {
+            if pred(snapshot_with_version.0.as_ref()) {
+                instant = Some(snapshot_with_version);
                 break;
             }
         }
 
-        if let Some(snapshot) = instant {
+        if let Some((snapshot, format_version)) = instant {
             // Load the table instance by the snapshot
 
             // The `seq` of ident that we cloned here is JUST a place holder
@@ -102,10 +102,9 @@ impl FuseTable {
             table_info.meta.schema = Arc::new(snapshot.schema.clone());
 
             // 2. the table option `snapshot_location`
-            let ver = snapshot.format_version();
             let loc = self
                 .meta_location_generator
-                .snapshot_location_from_uuid(&snapshot.snapshot_id, ver)?;
+                .snapshot_location_from_uuid(&snapshot.snapshot_id, format_version)?;
             table_info
                 .meta
                 .options

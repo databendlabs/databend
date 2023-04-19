@@ -114,10 +114,6 @@ impl TableSnapshot {
         )
     }
 
-    pub fn format_version(&self) -> u64 {
-        self.format_version
-    }
-
     /// Serializes the struct to a byte vector.
     ///
     /// The byte vector contains the format version, encoding, compression, and compressed data. The encoding
@@ -191,7 +187,7 @@ pub struct TableSnapshotLite {
 impl From<&TableSnapshot> for TableSnapshotLite {
     fn from(value: &TableSnapshot) -> Self {
         TableSnapshotLite {
-            format_version: value.format_version(),
+            format_version: value.format_version,
             snapshot_id: value.snapshot_id,
             timestamp: value.timestamp,
             prev_snapshot_id: value.prev_snapshot_id,
