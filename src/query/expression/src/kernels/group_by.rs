@@ -73,7 +73,7 @@ impl DataBlock {
                     group_key_len += 1;
                 }
             } else {
-                return Ok(match efficiently_memory && hash_key_types.len() != 1 {
+                return Ok(match !efficiently_memory || hash_key_types.len() == 1 {
                     true => HashMethodKind::Serializer(HashMethodSerializer::default()),
                     false => HashMethodKind::DictionarySerializer(
                         HashMethodDictionarySerializer::default(),
