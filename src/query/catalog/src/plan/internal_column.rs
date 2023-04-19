@@ -125,7 +125,7 @@ impl InternalColumn {
             InternalColumnType::RowId => {
                 let block_id = meta.block_id as u64;
                 let seg_id = meta.segment_id as u64;
-                let high_32bit = compute_row_id_prefix(seg_id, block_id) << NUM_ROW_ID_PREFIX_BITS;
+                let high_32bit = compute_row_id_prefix(seg_id, block_id);
                 let mut row_ids = Vec::with_capacity(num_rows);
                 for i in 0..num_rows {
                     let row_id = compute_row_id(high_32bit, i as u64);

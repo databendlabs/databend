@@ -61,6 +61,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::UnionAll;
 use crate::ColumnBinding;
+use crate::ColumnEntry;
 use crate::IndexType;
 
 // A normalized IR for `SELECT` clause.
@@ -178,6 +179,7 @@ impl Binder {
             )
             .await?;
 
+        // After all analysis is done.
         self.analyze_lazy_materialization(
             &from_context,
             stmt,
@@ -723,6 +725,19 @@ impl Binder {
             return;
         }
 
+        let cols = metadata.columns();
+
+        let virtual_cols = cols
+            .iter()
+            .filter(|col| matches!(col, ColumnEntry::VirtualColumn(_)))
+            .map(|col| col.index())
+            .collect::<Vec<_>>();
+
+        if !virtual_cols.is_empty() {
+            // Virtual columns are not supported now.
+            return;
+        }
+
         let mut select_cols = HashSet::with_capacity(select_list.items.len());
         for s in select_list.items.iter() {
             select_cols.extend(s.scalar.used_columns())
@@ -744,7 +759,16 @@ impl Binder {
             .map(|w| w.used_columns())
             .unwrap_or_default();
 
-        let non_lazy_cols = order_by_cols.union(&where_cols).copied().collect();
+        let internal_cols = cols
+            .iter()
+            .filter(|col| matches!(col, ColumnEntry::InternalColumn(_)))
+            .map(|col| col.index())
+            .collect::<HashSet<_>>();
+
+        let mut non_lazy_cols = order_by_cols;
+        non_lazy_cols.extend(where_cols);
+        non_lazy_cols.extend(internal_cols);
+
         let lazy_cols = select_cols.difference(&non_lazy_cols).copied().collect();
         metadata.add_lazy_columns(lazy_cols)
     }
