@@ -26,7 +26,6 @@ use common_base::base::tokio::sync::mpsc::Sender;
 use common_base::base::tokio::sync::oneshot;
 use common_base::base::tokio::sync::oneshot::Receiver as OneRecv;
 use common_base::base::tokio::sync::oneshot::Sender as OneSend;
-use common_base::base::tokio::sync::RwLock;
 use common_base::base::tokio::time::sleep;
 use common_base::containers::ItemManager;
 use common_base::containers::Pool;
@@ -254,7 +253,7 @@ impl ClientHandle {
 /// Thus a meta client creates a runtime then spawn a MetaGrpcClientWorker.
 pub struct MetaGrpcClient {
     conn_pool: Pool<MetaChannelManager>,
-    endpoints: RwLock<Vec<String>>,
+    endpoints: Mutex<Vec<String>>,
     username: String,
     password: String,
     current_endpoint: Arc<Mutex<Option<String>>>,
@@ -339,7 +338,7 @@ impl MetaGrpcClient {
 
         let worker = Arc::new(Self {
             conn_pool: Pool::new(mgr, Duration::from_millis(50)),
-            endpoints: RwLock::new(endpoints),
+            endpoints: Mutex::new(endpoints),
             current_endpoint: Arc::new(Mutex::new(None)),
             unhealthy_endpoints: Mutex::new(TtlHashMap::new(unhealth_endpoint_evict_time)),
             auto_sync_interval,
@@ -425,7 +424,7 @@ impl MetaGrpcClient {
                     message::Response::MakeClient(resp)
                 }
                 message::Request::GetEndpoints(_) => {
-                    let resp = self.get_cached_endpoints().await;
+                    let resp = self.get_cached_endpoints();
                     message::Response::GetEndpoints(Ok(resp))
                 }
                 message::Request::GetClientInfo(_) => {
@@ -499,18 +498,35 @@ impl MetaGrpcClient {
         &self,
     ) -> Result<MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>, MetaClientError>
     {
-        let mut eps = self.get_cached_endpoints().await;
-        debug!("service endpoints: {:?}", eps);
+        let all_endpoints = self.get_cached_endpoints();
+        debug!("meta-service all endpoints: {:?}", all_endpoints);
+        debug_assert!(!all_endpoints.is_empty());
 
-        debug_assert!(!eps.is_empty());
+        // Filter out unhealthy endpoints
+        let endpoints = {
+            let mut endpoints = all_endpoints.clone();
 
-        if eps.len() > 1 {
-            // remove unhealthy endpoints
-            let ues = self.unhealthy_endpoints.lock();
-            eps.retain(|e| !ues.contains_key(e));
-        }
+            let unhealthy = self.unhealthy_endpoints.lock();
+            endpoints.retain(|e| !unhealthy.contains_key(e));
+            endpoints
+        };
 
-        for (addr, is_last) in eps.iter().enumerate().map(|(i, a)| (a, i == eps.len() - 1)) {
+        let endpoints = if endpoints.is_empty() {
+            warn!(
+                "meta-service has no healthy endpoints, force using all(healthy or not) endpoints: {:?}",
+                all_endpoints
+            );
+            all_endpoints.clone()
+        } else {
+            debug!("meta-service healthy endpoints: {:?}", endpoints);
+            endpoints
+        };
+
+        for (addr, is_last) in endpoints
+            .iter()
+            .enumerate()
+            .map(|(i, a)| (a, i == endpoints.len() - 1))
+        {
             let channel = self.make_channel(Some(addr)).await;
             match channel {
                 Ok(c) => {
@@ -559,9 +575,18 @@ impl MetaGrpcClient {
                 }
             }
         }
-        Err(MetaClientError::ConfigError(AnyError::error(
-            "endpoints is empty",
-        )))
+
+        let conn_err = ConnectionError::new(
+            AnyError::error(format!(
+                "healthy endpoints: {:?}; all endpoints: {:?}",
+                endpoints, all_endpoints
+            )),
+            "no endpoints to connect",
+        );
+
+        Err(MetaClientError::NetworkError(
+            MetaNetworkError::ConnectionError(conn_err),
+        ))
     }
 
     #[tracing::instrument(level = "debug", skip(self), err(Debug))]
@@ -569,7 +594,7 @@ impl MetaGrpcClient {
         let addr = if let Some(addr) = addr {
             addr.clone()
         } else {
-            let eps = self.endpoints.read().await;
+            let eps = self.endpoints.lock();
             eps.first().unwrap().clone()
         };
         let ch = self.conn_pool.get(&addr).await;
@@ -603,8 +628,8 @@ impl MetaGrpcClient {
         Ok(())
     }
 
-    async fn get_cached_endpoints(&self) -> Vec<String> {
-        let eps = self.endpoints.read().await;
+    fn get_cached_endpoints(&self) -> Vec<String> {
+        let eps = self.endpoints.lock();
         (*eps).clone()
     }
 
@@ -626,7 +651,7 @@ impl MetaGrpcClient {
             return Ok(());
         }
 
-        let mut eps = self.endpoints.write().await;
+        let mut eps = self.endpoints.lock();
         *eps = endpoints;
         Ok(())
     }
