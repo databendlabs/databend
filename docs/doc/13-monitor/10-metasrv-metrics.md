@@ -1,17 +1,23 @@
 ---
-title: Databend Meta Metrics
-sidebar_label: Meta Metrics
+title: Databend Metrics
+sidebar_label: Databend Metrics
 description: 
-  Databend Meta Service Metrics
+  Meta and Query Service Metrics
 ---
 
-## Metrics
+Metrics are crucial to monitor the performance and health of the system. Databend collects and stores two types of metrics, Meta Metrics and Query Metrics, in the format of [Prometheus](http://prometheus.io/docs/instrumenting/exposition_formats/). Meta Metrics are used for real-time monitoring and debugging of the Metasrv component, while Query Metrics are used for monitoring the performance of the Databend-query component.
 
-Metrics for real-time of monitoring and debugging of `metasrv`.
+You can access the metrics through a web browser using the following URLs:
 
-The simplest way to see the available metrics is to cURL the metrics HTTP API `HTTP_ADDRESS:HTTP_PORT/v1/metrics`, the API will returns a [Prometheus](http://prometheus.io/docs/instrumenting/exposition_formats/) format of metrics.
+- Meta Metrics: `http://<admin_api_address>/v1/metrics`. Defaults to `0.0.0.0:28101/v1/metrics`.
+- Query Metrics: `http://<metric_api_address>/metrics`. Defaults to `0.0.0.0:7070/metrics`.
 
-All the metrics is under `metasrv` prefix.
+:::tip
+Alternatively, you can visualize the metrics with a third-party tool. For supported tools and integration tutorials, see **Monitor** > **Using 3rd-party Tools**.
+:::
+## Meta Metrics
+
+Here's a list of Meta metrics captured by Databend.
 
 ### Server
 
@@ -102,3 +108,36 @@ These metrics describe the network status of meta service in the `metasrv`. All 
 | req_success       | Total number of success request from meta grpc client. | Counter   |
 | req_failed        | Total number of fail request from meta grpc client.    | Counter   |
 | rpc_delay_seconds | Latency distribution of meta-service API in second.    | Histogram |
+
+## Query Metrics
+
+Here's a list of Query metrics captured by Databend.
+
+| Name                               |  Type   | Description                                                                 | Labels                                                                          |
+|--------------------------------------|---------|-----------------------------------------------------------------------------|---------------------------------------------------------------------------------|
+| cluster_discovered_node_gauge        | gauge   | The number of nodes discovered in the current cluster.                      | tenant_id, cluster_id, flight_address and local_id(a inner cluster unique id)   |
+| interpreter_usedtime                 | summary | Sql interpreter used time.                                                  |                                                                                 |
+| meta_grpc_client_request_duration_ms | summary | The time used for requesting the remote meta service.                       | endpoint, request                                                               |
+| meta_grpc_client_request_inflight    | gauge   | The currently on going request to remote meta service.                      |                                                                                 |
+| meta_grpc_client_request_success     | counter | The total amount for successful request to remote meta service.             |                                                                                 |
+| mysql_process_request_duration       | summary | MySQL interactive process request used.                                     |                                                                                 |
+| opendal_bytes_total                  | counter | The total data size opendal handled in byte.                                | operation, service                                                              |
+| opendal_errors_total                 | counter | The total error count of opendal operations.                                | operation, service                                                              |
+| opendal_failures_total               | counter | The total failure count of opendal operations.                              | operation, service                                                              |
+| opendal_requests_duration_seconds    | summary | The time used by opendal to request remote storage backend.                 | operation, service                                                              |
+| opendal_requests_total               | counter | The total count of opendal operations.                                      | operation, service                                                              |
+| query_duration_ms                    | summary | The time used by each single query.                                         | tenant, cluster, handler, kind                                                  |
+| query_result_bytes                   | counter | The total returned data size of query result in byte.                       | tenant, cluster, handler, kind                                                  |
+| query_result_rows                    | counter | The total returned data rows of query result.                               | tenant, cluster, handler, kind                                                  |
+| query_scan_bytes                     | counter | The total scanned data size by query in byte.                               | tenant, cluster, handler, kind                                                  |
+| query_scan_io_bytes                  | counter | The total scanned transferred data size by query in byte.                   | tenant, cluster, handler, kind                                                  |
+| query_scan_partitions                | counter | The total scanned partitions by query.                                      | tenant, cluster, handler, kind                                                  |
+| query_scan_rows                      | counter | The total scanned data rows by query.                                       | tenant, cluster, handler, kind                                                  |
+| query_start                          | counter | The total count of query started.                                           | tenant, cluster, handler, kind                                                  |
+| query_success                        | counter | The total count of query succeeded.                                         | tenant, cluster, handler, kind                                                  |
+| query_total_partitions               | counter | The total partitions for query.                                             | tenant, cluster, handler, kind                                                  |
+| query_write_bytes                    | counter | The total data size written by query in byte.                               | tenant, cluster, handler, kind                                                  |
+| query_write_io_bytes                 | counter | The total data size written and transferred by query in byte.               | tenant, cluster, handler, kind                                                  |
+| query_write_rows                     | counter | The total data rows written by query.                                       | tenant, cluster, handler, kind                                                  |
+| session_close_numbers                | counter | The number of sessions have been disconnected since the server was started. | tenant, cluster_name                                                            |
+| session_connect_numbers              | counter | The number of sessions have been connected since the server was started.    | tenant, cluster_name                                                            |
