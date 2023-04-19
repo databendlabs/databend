@@ -22,6 +22,10 @@ use common_expression::FromData;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::Value;
+use common_expression::BLOCK_NAME_COLUMN_ID;
+use common_expression::ROW_ID_COLUMN_ID;
+use common_expression::SEGMENT_NAME_COLUMN_ID;
+use common_expression::SNAPSHOT_NAME_COLUMN_ID;
 
 // Segment and Block id Bits when generate internal column `_row_id`
 // Since `DEFAULT_BLOCK_PER_SEGMENT` is 1000, so `block_id` 10 bits is enough.
@@ -109,10 +113,10 @@ impl InternalColumn {
 
     pub fn column_id(&self) -> ColumnId {
         match &self.column_type {
-            InternalColumnType::RowId => u32::MAX,
-            InternalColumnType::BlockName => u32::MAX - 1,
-            InternalColumnType::SegmentName => u32::MAX - 2,
-            InternalColumnType::SnapshotName => u32::MAX - 3,
+            InternalColumnType::RowId => ROW_ID_COLUMN_ID,
+            InternalColumnType::BlockName => BLOCK_NAME_COLUMN_ID,
+            InternalColumnType::SegmentName => SEGMENT_NAME_COLUMN_ID,
+            InternalColumnType::SnapshotName => SNAPSHOT_NAME_COLUMN_ID,
         }
     }
 
