@@ -109,7 +109,7 @@ pub enum Scalar {
     String(Vec<u8>),
     Array(Column),
     Map(Column),
-    Bitmap(RoaringBitmap),
+    Bitmap(Vec<u32>),
     Tuple(Vec<Scalar>),
     Variant(Vec<u8>),
 }
@@ -128,7 +128,7 @@ pub enum ScalarRef<'a> {
     Date(i32),
     Array(Column),
     Map(Column),
-    Bitmap(RoaringBitmap),
+    Bitmap(&'a [u32]),
     Tuple(Vec<ScalarRef<'a>>),
     Variant(&'a [u8]),
 }

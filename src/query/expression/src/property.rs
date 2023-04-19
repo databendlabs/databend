@@ -15,6 +15,7 @@
 use enum_as_inner::EnumAsInner;
 use roaring::RoaringBitmap;
 
+use crate::types::bitmap::BitmapDomain;
 use crate::types::boolean::BooleanDomain;
 use crate::types::decimal::Decimal128Type;
 use crate::types::decimal::Decimal256Type;

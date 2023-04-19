@@ -35,11 +35,11 @@ use crate::ScalarRef;
 pub struct BitmapType;
 
 impl ValueType for BitmapType {
-    type Scalar = RoaringBitmap;
-    type ScalarRef<'a> = &'a RoaringBitmap;
+    type Scalar = Vec<u32>;
+    type ScalarRef<'a> = &'a [u32];
     type Column = Buffer<RoaringBitmap>;
     type Domain = BitmapDomain;
-    type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, &'a RoaringBitmap>>;
+    type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, &'a [u32]>>;
     type ColumnBuilder = Vec<RoaringBitmap>;
 
     #[inline]
@@ -48,7 +48,7 @@ impl ValueType for BitmapType {
     }
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
-        scalar.clone()
+        scalar.to_vec()
     }
 
     fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a> {
@@ -57,7 +57,7 @@ impl ValueType for BitmapType {
 
     fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
         match scalar {
-            ScalarRef::Bitmap(scalar) => Some(scalar),
+            ScalarRef::Bitmap(scalar) => Some(scalar.clone()),
             _ => None,
         }
     }
@@ -100,13 +100,17 @@ impl ValueType for BitmapType {
 
     fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>> {
         col.get(index)
+            .map(|c| c.into_iter().collect::<Vec<_>>().as_slice())
     }
 
     unsafe fn index_column_unchecked<'a>(
         col: &'a Self::Column,
         index: usize,
     ) -> Self::ScalarRef<'a> {
-        col.get_bit_unchecked(index)
+        col.get_unchecked(index)
+            .into_iter()
+            .collect::<Vec<_>>()
+            .as_slice()
     }
 
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
@@ -114,7 +118,8 @@ impl ValueType for BitmapType {
     }
 
     fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a> {
-        col.iter().cloned()
+        col.iter()
+            .map(|c| c.into_iter().collect::<Vec<_>>().as_slice())
     }
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
@@ -126,7 +131,7 @@ impl ValueType for BitmapType {
     }
 
     fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
-        builder.push(*item.clone());
+        builder.push(RoaringBitmap::from_iter(item));
     }
 
     fn push_default(builder: &mut Self::ColumnBuilder) {
@@ -134,7 +139,7 @@ impl ValueType for BitmapType {
     }
 
     fn append_column(builder: &mut Self::ColumnBuilder, bitmap: &Self::Column) {
-        builder.extend_from_bitmap(bitmap)
+        builder.extend_from_slice(bitmap)
     }
 
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
@@ -143,7 +148,10 @@ impl ValueType for BitmapType {
 
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         assert_eq!(builder.len(), 1);
-        builder.get(0).unwrap_or(*(RoaringBitmap::new()))
+        builder
+            .get(0)
+            .map(|c| c.into_iter().collect())
+            .unwrap_or(vec![])
     }
 }
 
@@ -152,17 +160,20 @@ impl ArgType for BitmapType {
         DataType::Bitmap
     }
 
-    fn full_domain() -> Self::Domain {}
+    fn full_domain() -> Self::Domain {
+        BitmapDomain {}
+    }
 
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
         Vec::with_capacity(capacity)
     }
 
+    fn column_from_vec(vec: Vec<Self::Scalar>, _generics: &GenericMap) -> Self::Column {
+        vec.into()
+    }
+
     fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
-        match iter.size_hint() {
-            (_, Some(_)) => unsafe { MutableBitmap::from_trusted_len_iter_unchecked(iter).into() },
-            (_, None) => MutableBitmap::from_iter(iter).into(),
-        }
+        iter.collect()
     }
 
     fn column_from_ref_iter<'a>(
@@ -173,4 +184,5 @@ impl ArgType for BitmapType {
     }
 }
 
-pub struct BitmapDomain;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BitmapDomain {}
