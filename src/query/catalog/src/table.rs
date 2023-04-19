@@ -303,7 +303,7 @@ pub trait Table: Sync + Send {
         }
     }
 
-    fn set_block_compact_thresholds(&self, _thresholds: BlockThresholds) {
+    fn set_block_thresholds(&self, _thresholds: BlockThresholds) {
         unimplemented!()
     }
 

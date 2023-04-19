@@ -270,7 +270,7 @@ impl Table for StageTable {
         (*guard).expect("must success")
     }
 
-    fn set_block_compact_thresholds(&self, thresholds: BlockThresholds) {
+    fn set_block_thresholds(&self, thresholds: BlockThresholds) {
         let mut guard = self.block_compact_threshold.lock();
         (*guard) = Some(thresholds)
     }
