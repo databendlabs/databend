@@ -22,6 +22,8 @@ use storages_common_cache_manager::CachedObject;
 
 #[async_trait::async_trait]
 pub trait MetaWriter<T> {
+    /// If meta has a `to_bytes` function, such as `SegmentInfo` and `TableSnapshot`
+    /// We should not use `write_meta`. Instead, use `write_meta_data`
     async fn write_meta(&self, data_accessor: &Operator, location: &str) -> Result<()>;
 
     async fn write_meta_data(
@@ -56,6 +58,8 @@ where T: Serialize + Sync + Send
 
 #[async_trait::async_trait]
 pub trait CachedMetaWriter<T> {
+    /// If meta has a `to_bytes` function, such as `SegmentInfo` and `TableSnapshot`
+    /// We should not use `write_meta_through_cache`. Instead, use `write_meta_data_through_cache`
     async fn write_meta_through_cache(self, data_accessor: &Operator, location: &str)
     -> Result<()>;
 
