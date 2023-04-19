@@ -64,8 +64,9 @@ impl QueryGraph {
         &self,
         nodes: &[IndexType],
         neighbor: &[IndexType],
-    ) -> Result<(bool, Vec<(ScalarExpr, ScalarExpr)>)> {
+    ) -> Result<Vec<(ScalarExpr, ScalarExpr)>> {
         let nodes_size = nodes.len();
+        let mut join_conditions = vec![];
         for i in 0..nodes_size {
             let mut edge = &self.root_edge;
             for node in nodes.iter().take(nodes_size).skip(i) {
@@ -76,12 +77,12 @@ impl QueryGraph {
                 }
                 for neighbor_info in edge.neighbors.iter() {
                     if is_subset(&neighbor_info.neighbors, neighbor) {
-                        return Ok((true, neighbor_info.join_conditions.clone()));
+                        join_conditions.extend(neighbor_info.join_conditions.clone());
                     }
                 }
             }
         }
-        Ok((false, vec![]))
+        Ok(join_conditions)
     }
 
     // Get all neighbors of `nodes` which are not in `forbidden_nodes`
