@@ -131,8 +131,11 @@ impl SnapshotsIO {
             }
         }
 
+        let mut snapshot_lite = TableSnapshotLite::from(snapshot.as_ref());
+        snapshot_lite.snapshot_version = ver;
+
         Ok(SnapshotLiteExtended {
-            snapshot_lite: TableSnapshotLite::from(snapshot.as_ref()),
+            snapshot_lite,
             segment_locations,
         })
     }
@@ -198,7 +201,11 @@ impl SnapshotsIO {
         let format_version = TableMetaLocationGenerator::snapshot_version(root_snapshot.as_str());
         let lite_snapshot_stream = table_snapshot_reader
             .snapshot_history(root_snapshot, format_version, location_generator)
-            .map_ok(|(snapshot, _)| TableSnapshotLite::from(snapshot.as_ref()));
+            .map_ok(|(snapshot, ver)| {
+                let mut lite = TableSnapshotLite::from(snapshot.as_ref());
+                lite.snapshot_version = ver;
+                lite
+            });
         if let Some(l) = limit {
             lite_snapshot_stream.take(l).try_collect::<Vec<_>>().await
         } else {
