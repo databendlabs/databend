@@ -190,7 +190,7 @@ docker run --net=host  datafuselabs/databend
 
 - [Generating SQL with AI](https://databend.rs/doc/sql-functions/ai-functions/ai-to-sql)
 - [Creating Embedding Vectors](https://databend.rs/doc/sql-functions/ai-functions/ai-embedding-vector)
-- [Computing Text Similarities](https://databend.rs/doc/sql-functions/ai-functions/cosine-distance)
+- [Computing Text Similarities](https://databend.rs/doc/sql-functions/ai-functions/ai-cosine-distance)
 - [Text Completion with AI](https://databend.rs/doc/sql-functions/ai-functions/ai-text-completion)
 </details>
 
