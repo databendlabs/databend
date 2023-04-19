@@ -50,9 +50,11 @@ LIST @my_internal_stage/2023/;
 | 2023/query.log  | 1348 | "1c6654b207472c277fc8c6207c035e18" | 2023-04-19 20:23:24.000 +0000 | NULL    |
 | 2023/readme.txt | 1193 | "8c0fbbebfedf26f93324541f97f5ac14" | 2023-04-19 20:23:24.000 +0000 | NULL    |
 +-----------------+------+------------------------------------+-------------------------------+---------+
+```
 
 To list all the files with the extension *.log in the stage, run the following command:
 
+```sql
 LIST @my_internal_stage PATTERN = '.log';
 +----------------+------+------------------------------------+-------------------------------+---------+
 |      name      | size |                md5                 |         last_modified         | creator |
