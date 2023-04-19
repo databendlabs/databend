@@ -109,9 +109,9 @@ impl Metadata {
         self.lazy_columns.contains(&index)
     }
 
-    pub fn set_lazy(&mut self, index: usize) {
-        debug_assert!(index < self.columns.len());
-        self.lazy_columns.insert(index);
+    pub fn add_lazy_columns(&mut self, indices: HashSet<usize>) {
+        debug_assert!(indices.iter().all(|i| *i < self.columns.len()));
+        self.lazy_columns.extend(indices);
     }
 
     pub fn lazy_columns(&self) -> &HashSet<usize> {

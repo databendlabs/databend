@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -55,6 +56,7 @@ use super::Sort;
 use super::TableScan;
 use super::WindowFunction;
 use crate::binder::wrap_cast;
+use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::EvalScalar;
@@ -248,6 +250,20 @@ impl PhysicalPlanBuilder {
                         }
                     } else {
                         name_mapping.insert(column.name().to_string(), *index);
+                    }
+                }
+
+                if !metadata.lazy_columns().is_empty() {
+                    // Lazy materilaztion is enabled.
+                    if let Entry::Vacant(entry) = name_mapping.entry(ROW_ID.to_string()) {
+                        let internal_column =
+                            INTERNAL_COLUMN_FACTORY.get_internal_column(ROW_ID).unwrap();
+                        let index = self
+                            .metadata
+                            .write()
+                            .add_internal_column(scan.table_index, internal_column.clone());
+                        entry.insert(index);
+                        project_internal_columns.insert(index, internal_column);
                     }
                 }
 
@@ -823,7 +839,15 @@ impl PhysicalPlanBuilder {
                     if !metadata.lazy_columns().is_empty() {
                         // Lazy materialization is enabled.
                         let input_schema = input_plan.output_schema()?;
-                        let row_id_col_offset = input_schema.index_of(ROW_ID)?;
+                        let row_id_col_index = metadata
+                            .columns()
+                            .iter()
+                            .position(|col| col.name() == ROW_ID)
+                            .ok_or_else(|| {
+                                ErrorCode::Internal("Internal column _row_id is not found")
+                            })?;
+                        let row_id_col_offset =
+                            input_schema.index_of(&row_id_col_index.to_string())?;
 
                         let source = input_plan.try_find_single_data_source();
                         debug_assert!(source.is_some());

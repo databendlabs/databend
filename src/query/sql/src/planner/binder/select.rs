@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use async_recursion::async_recursion;
 use common_ast::ast::BinaryOperator;
@@ -40,6 +41,7 @@ use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
 use common_functions::BUILTIN_FUNCTIONS;
 
+use super::sort::OrderItem;
 use crate::binder::join::JoinConditions;
 use crate::binder::project_set::SrfCollector;
 use crate::binder::scalar_common::split_conjunctions;
@@ -81,6 +83,7 @@ impl Binder {
         bind_context: &mut BindContext,
         stmt: &SelectStmt,
         order_by: &[OrderByExpr],
+        limit: usize,
     ) -> Result<(SExpr, BindContext)> {
         let (mut s_expr, mut from_context) = if stmt.from.is_empty() {
             self.bind_one_table(bind_context, stmt).await?
@@ -111,9 +114,13 @@ impl Binder {
         let stmt = new_stmt.as_ref().unwrap_or(stmt);
         let order_by = new_order_by.as_deref().unwrap_or(order_by);
 
-        if let Some(expr) = &stmt.selection {
-            s_expr = self.bind_where(&mut from_context, expr, s_expr).await?;
-        }
+        let where_scalar = if let Some(expr) = &stmt.selection {
+            let (new_expr, scalar) = self.bind_where(&mut from_context, expr, s_expr).await?;
+            s_expr = new_expr;
+            Some(scalar)
+        } else {
+            None
+        };
 
         // Collect set returning functions
         let set_returning_functions = {
@@ -170,6 +177,16 @@ impl Binder {
                 stmt.distinct,
             )
             .await?;
+
+        self.analyze_lazy_materialization(
+            &from_context,
+            stmt,
+            &scalar_items,
+            &select_list,
+            &where_scalar,
+            &order_items.items,
+            limit,
+        );
 
         if !from_context.aggregate_info.aggregate_functions.is_empty()
             || !from_context.aggregate_info.group_items.is_empty()
@@ -231,9 +248,13 @@ impl Binder {
         bind_context: &mut BindContext,
         set_expr: &SetExpr,
         order_by: &[OrderByExpr],
+        limit: usize,
     ) -> Result<(SExpr, BindContext)> {
         match set_expr {
-            SetExpr::Select(stmt) => self.bind_select_stmt(bind_context, stmt, order_by).await,
+            SetExpr::Select(stmt) => {
+                self.bind_select_stmt(bind_context, stmt, order_by, limit)
+                    .await
+            }
             SetExpr::Query(stmt) => self.bind_query(bind_context, stmt).await,
             SetExpr::SetOperation(set_operation) => {
                 self.bind_set_operator(
@@ -270,14 +291,33 @@ impl Binder {
                 bind_context.ctes_map.insert(table_name, cte_info);
             }
         }
+
+        let (limit, offset) = if !query.limit.is_empty() {
+            if query.limit.len() == 1 {
+                Self::analyze_limit(Some(&query.limit[0]), &query.offset)?
+            } else {
+                Self::analyze_limit(Some(&query.limit[1]), &Some(query.limit[0].clone()))?
+            }
+        } else if query.offset.is_some() {
+            Self::analyze_limit(None, &query.offset)?
+        } else {
+            (None, 0)
+        };
+
         let (mut s_expr, bind_context) = match query.body {
             SetExpr::Select(_) | SetExpr::Query(_) => {
-                self.bind_set_expr(bind_context, &query.body, &query.order_by)
-                    .await?
+                self.bind_set_expr(
+                    bind_context,
+                    &query.body,
+                    &query.order_by,
+                    limit.unwrap_or_default(),
+                )
+                .await?
             }
             SetExpr::SetOperation(_) => {
-                let (mut s_expr, mut bind_context) =
-                    self.bind_set_expr(bind_context, &query.body, &[]).await?;
+                let (mut s_expr, mut bind_context) = self
+                    .bind_set_expr(bind_context, &query.body, &[], limit.unwrap_or_default())
+                    .await?;
                 if !query.order_by.is_empty() {
                     s_expr = self
                         .bind_order_by_for_set_operation(&mut bind_context, s_expr, &query.order_by)
@@ -287,25 +327,8 @@ impl Binder {
             }
         };
 
-        if !query.limit.is_empty() {
-            if query.limit.len() == 1 {
-                s_expr = self
-                    .bind_limit(&bind_context, s_expr, Some(&query.limit[0]), &query.offset)
-                    .await?;
-            } else {
-                s_expr = self
-                    .bind_limit(
-                        &bind_context,
-                        s_expr,
-                        Some(&query.limit[1]),
-                        &Some(query.limit[0].clone()),
-                    )
-                    .await?;
-            }
-        } else if query.offset.is_some() {
-            s_expr = self
-                .bind_limit(&bind_context, s_expr, None, &query.offset)
-                .await?;
+        if !query.limit.is_empty() || query.offset.is_some() {
+            s_expr = Self::bind_limit(s_expr, limit, offset);
         }
 
         Ok((s_expr, bind_context))
@@ -317,7 +340,7 @@ impl Binder {
         bind_context: &mut BindContext,
         expr: &Expr,
         child: SExpr,
-    ) -> Result<SExpr> {
+    ) -> Result<(SExpr, ScalarExpr)> {
         bind_context.set_expr_context(ExprContext::WhereClause);
 
         let mut scalar_binder = ScalarBinder::new(
@@ -339,7 +362,7 @@ impl Binder {
             is_having: false,
         };
         let new_expr = SExpr::create_unary(filter_plan.into(), child);
-        Ok(new_expr)
+        Ok((new_expr, scalar))
     }
 
     #[async_backtrace::framed]
@@ -351,8 +374,9 @@ impl Binder {
         op: &SetOperator,
         all: &bool,
     ) -> Result<(SExpr, BindContext)> {
-        let (left_expr, left_bind_context) = self.bind_set_expr(bind_context, left, &[]).await?;
-        let (right_expr, right_bind_context) = self.bind_set_expr(bind_context, right, &[]).await?;
+        let (left_expr, left_bind_context) = self.bind_set_expr(bind_context, left, &[], 0).await?;
+        let (right_expr, right_bind_context) =
+            self.bind_set_expr(bind_context, right, &[], 0).await?;
         let mut coercion_types = Vec::with_capacity(left_bind_context.columns.len());
         if left_bind_context.columns.len() != right_bind_context.columns.len() {
             return Err(ErrorCode::SemanticError(
@@ -666,6 +690,63 @@ impl Binder {
             );
         }
         Ok((new_bind_context, pairs, left_expr, right_expr))
+    }
+
+    fn analyze_lazy_materialization(
+        &self,
+        bind_context: &BindContext,
+        stmt: &SelectStmt,
+        scalar_items: &HashMap<IndexType, ScalarItem>,
+        select_list: &SelectList,
+        where_scalar: &Option<ScalarExpr>,
+        order_by: &[OrderItem],
+        limit: usize,
+    ) {
+        // Only simple single table Top-N query is supported.
+        // e.g.
+        // SELECT ... FROM t WHERE ... ORDER BY ... LIMIT ...
+        if stmt.group_by.is_some() || stmt.having.is_some() || !bind_context.ctes_map.is_empty() {
+            return;
+        }
+
+        if !(!order_by.is_empty() && limit > 0 && limit <= 100) {
+            return;
+        }
+
+        let mut metadata = self.metadata.write();
+        if metadata.tables().len() != 1 {
+            // Only support single table query.
+            return;
+        }
+
+        if !metadata.table(0).table().support_row_id_column() {
+            return;
+        }
+
+        let mut select_cols = HashSet::with_capacity(select_list.items.len());
+        for s in select_list.items.iter() {
+            select_cols.extend(s.scalar.used_columns())
+        }
+
+        let mut order_by_cols = HashSet::with_capacity(order_by.len());
+        for o in order_by {
+            if let Some(scalar) = scalar_items.get(&o.index) {
+                let cols = scalar.scalar.used_columns();
+                order_by_cols.extend(cols);
+            } else {
+                // Is a col ref not appears in select list.
+                order_by_cols.insert(o.index);
+            }
+        }
+
+        let where_cols = where_scalar
+            .as_ref()
+            .map(|w| w.used_columns())
+            .unwrap_or_default();
+
+        let non_lazy_cols = order_by_cols.union(&where_cols).copied().collect();
+        let lazy_cols = select_cols.difference(&non_lazy_cols).copied().collect();
+        metadata.add_lazy_columns(lazy_cols)
     }
 }
 

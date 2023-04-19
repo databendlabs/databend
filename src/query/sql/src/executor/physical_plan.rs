@@ -409,7 +409,10 @@ impl RowFetch {
         let schema_to_fetch = self
             .cols_to_fetch
             .project_schema(&self.source.source_info.schema());
-        let cols_to_fetch = schema_to_fetch.fields().iter().map(|f| f.into());
+        let cols_to_fetch = schema_to_fetch
+            .fields()
+            .iter()
+            .map(|f| DataField::new(&f.column_id().to_string(), f.data_type().into()));
         fields.extend(cols_to_fetch);
         Ok(DataSchemaRefExt::create(fields))
     }
