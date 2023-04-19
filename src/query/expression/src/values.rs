@@ -1522,7 +1522,6 @@ impl Column {
         use jsonb::Value as JsonbValue;
         use rand::distributions::Alphanumeric;
         use rand::distributions::DistString;
-        use rand::distributions::Uniform;
         use rand::rngs::SmallRng;
         use rand::Rng;
         use rand::SeedableRng;
@@ -1604,14 +1603,19 @@ impl Column {
                     offsets: offsets.into(),
                 }))
             }
-            DataType::Bitmap => (0..len).map(|_| {
-                let die_range = Uniform::new_inclusive(1, 6);
-                let rolls = SmallRng::from_entropy()
-                    .sample_iter(&die_range)
-                    .map(|v| v as u32)
-                    .collect::<Vec<_>>();
-                RoaringBitmap::from_iter(rolls)
-            }),
+            DataType::Bitmap => {
+                let data = (0..len)
+                    .map(|_| {
+                        let die_range = Uniform::new_inclusive(1, 6);
+                        let rolls = SmallRng::from_entropy()
+                            .sample_iter(&die_range)
+                            .map(|v| v as u32)
+                            .collect::<Vec<_>>();
+                        RoaringBitmap::from_iter(rolls)
+                    })
+                    .collect::<Buffer<_>>();
+                Column::Bitmap(data)
+            }
             DataType::Tuple(fields) => {
                 let fields = fields
                     .iter()

@@ -14,8 +14,6 @@
 
 use std::ops::Range;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
 use roaring::RoaringBitmap;
 
@@ -25,7 +23,6 @@ use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
 use crate::types::ValueType;
-use crate::utils::arrow::bitmap_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
@@ -120,6 +117,9 @@ impl ValueType for BitmapType {
     fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a> {
         col.iter()
             .map(|c| c.into_iter().collect::<Vec<_>>().as_slice())
+            .collect::<Vec<_>>()
+            .iter()
+            .cloned()
     }
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
@@ -169,18 +169,20 @@ impl ArgType for BitmapType {
     }
 
     fn column_from_vec(vec: Vec<Self::Scalar>, _generics: &GenericMap) -> Self::Column {
-        vec.into()
+        vec.iter()
+            .map(|s| RoaringBitmap::from_iter(s.iter()))
+            .collect()
     }
 
     fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
-        iter.collect()
+        iter.map(|s| RoaringBitmap::from_iter(s.iter())).collect()
     }
 
     fn column_from_ref_iter<'a>(
         iter: impl Iterator<Item = Self::ScalarRef<'a>>,
-        generics: &GenericMap,
+        _generics: &GenericMap,
     ) -> Self::Column {
-        Self::column_from_iter(iter, generics)
+        iter.map(|s| RoaringBitmap::from_iter(s.iter())).collect()
     }
 }
 
