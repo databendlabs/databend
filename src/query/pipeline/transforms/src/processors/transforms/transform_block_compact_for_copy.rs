@@ -69,12 +69,12 @@ impl Compactor for BlockCompactorForCopy {
         let num_rows = block.num_rows();
         let num_bytes = block.memory_size();
 
-        /// holding slices of blocks to merge later may lead to oom, so
-        /// 1. we expect blocks from file formats are not slice.
-        /// 2. if block is splitted here, cut evenly and emit them at once.
         if num_rows > self.thresholds.max_rows_per_block
             || num_bytes > self.thresholds.max_bytes_per_block * 2
         {
+            // holding slices of blocks to merge later may lead to oom, so
+            // 1. we expect blocks from file formats are not slice.
+            // 2. if block is split here, cut evenly and emit them at once.
             let by_size = num_bytes / self.thresholds.max_bytes_per_block;
             let by_rows = num_rows / self.thresholds.min_rows_per_block;
             let rows_per_block = if by_size > by_rows {
