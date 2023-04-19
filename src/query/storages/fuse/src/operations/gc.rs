@@ -186,7 +186,7 @@ impl FuseTable {
                 if keep_last_snapshot && snapshot.snapshot_id == root_snapshot_id {
                     continue;
                 }
-                snapshots_to_be_purged.insert((snapshot.snapshot_id, snapshot.snapshot_version));
+                snapshots_to_be_purged.insert((snapshot.snapshot_id, snapshot.format_version));
             }
         }
 
@@ -313,7 +313,7 @@ impl FuseTable {
                 snapshots_to_be_purged.into_iter().chain(
                     orphan_snapshots
                         .into_iter()
-                        .map(|lite| (lite.snapshot_id, lite.snapshot_version)),
+                        .map(|lite| (lite.snapshot_id, lite.format_version)),
                 ),
             );
 

@@ -125,7 +125,7 @@ impl<'a> FuseSnapshot<'a> {
                 None => (None, 0),
             };
             prev_snapshot_ids.push(id);
-            format_versions.push(s.snapshot_version);
+            format_versions.push(s.format_version);
             segment_count.push(s.segment_count);
             block_count.push(s.block_count);
             row_count.push(s.row_count);
