@@ -114,7 +114,7 @@ impl FuseTable {
     ) -> Result<ClusterStatsGenerator> {
         let cluster_stats_gen = self.get_cluster_stats_gen(ctx.clone(), 0, block_thresholds)?;
 
-        let operators =  cluster_stats_gen.operators.clone();
+        let operators = cluster_stats_gen.operators.clone();
         if !operators.is_empty() {
             let num_input_columns = self.table_info.schema().fields().len();
             let func_ctx2 = cluster_stats_gen.func_ctx.clone();
