@@ -694,6 +694,7 @@ impl Binder {
         Ok((new_bind_context, pairs, left_expr, right_expr))
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn analyze_lazy_materialization(
         &self,
         bind_context: &BindContext,

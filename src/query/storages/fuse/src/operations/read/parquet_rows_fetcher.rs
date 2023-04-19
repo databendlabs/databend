@@ -12,28 +12,29 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::Result;
 use common_expression::DataBlock;
 
 use super::fuse_row_fetcher::RowFetcher;
-use super::native_data_source::DataChunks;
-use super::native_data_source_deserializer::NativeDeserializeDataTransform;
 use crate::io::BlockReader;
+use crate::io::ReadSettings;
+use crate::io::UncompressedBuffer;
+use crate::FusePartInfo;
+use crate::MergeIOReadResult;
 
-pub(super) struct NativeRowFetcher<const BLOCKING_IO: bool> {
+pub(super) struct ParquetRowFetcher<const BLOCKING_IO: bool> {
+    settings: ReadSettings,
     reader: Arc<BlockReader>,
-    column_leaves: Vec<Vec<ColumnDescriptor>>,
+    uncompressed_buffer: Arc<UncompressedBuffer>,
 }
 
 #[async_trait::async_trait]
-impl<const BLOCKING_IO: bool> RowFetcher for NativeRowFetcher<BLOCKING_IO> {
+impl<const BLOCKING_IO: bool> RowFetcher for ParquetRowFetcher<BLOCKING_IO> {
     async fn fetch(
         &self,
         part_map: &HashMap<u64, PartInfoPtr>,
@@ -43,13 +44,23 @@ impl<const BLOCKING_IO: bool> RowFetcher for NativeRowFetcher<BLOCKING_IO> {
         if BLOCKING_IO {
             for part_id in part_set.into_iter() {
                 let part = part_map[&part_id].clone();
-                let chunk = self.reader.sync_read_native_columns_data(part)?;
+                let chunk = self
+                    .reader
+                    .sync_read_columns_data_by_merge_io(&self.settings, part)?;
                 chunks.push((part_id, chunk));
             }
         } else {
             for part_id in part_set.into_iter() {
                 let part = part_map[&part_id].clone();
-                let chunk = self.reader.async_read_native_columns_data(part).await?;
+                let part = FusePartInfo::from_part(&part)?;
+                let chunk = self
+                    .reader
+                    .read_columns_data_by_merge_io(
+                        &self.settings,
+                        &part.location,
+                        &part.columns_meta,
+                    )
+                    .await?;
                 chunks.push((part_id, chunk));
             }
         }
@@ -59,7 +70,7 @@ impl<const BLOCKING_IO: bool> RowFetcher for NativeRowFetcher<BLOCKING_IO> {
             .enumerate()
             .map(|(idx, (part, chunk))| {
                 part_idx_map.insert(part, idx);
-                self.build_block(chunk)
+                self.build_block(&part_map[&part], chunk)
             })
             .collect::<Result<Vec<_>>>()?;
 
@@ -71,33 +82,26 @@ impl<const BLOCKING_IO: bool> RowFetcher for NativeRowFetcher<BLOCKING_IO> {
     }
 }
 
-impl<const BLOCKING_IO: bool> NativeRowFetcher<BLOCKING_IO> {
-    pub fn create(reader: Arc<BlockReader>, column_leaves: Vec<Vec<ColumnDescriptor>>) -> Self {
+impl<const BLOCKING_IO: bool> ParquetRowFetcher<BLOCKING_IO> {
+    pub fn create(reader: Arc<BlockReader>, settings: ReadSettings, buffer_size: usize) -> Self {
+        let uncompressed_buffer = UncompressedBuffer::new(buffer_size);
         Self {
             reader,
-            column_leaves,
+            settings,
+            uncompressed_buffer,
         }
     }
 
-    fn build_block(&self, mut chunks: DataChunks) -> Result<DataBlock> {
-        let mut array_iters = BTreeMap::new();
-
-        for (index, column_node) in self.reader.project_column_nodes.iter().enumerate() {
-            let readers = chunks.remove(&index).unwrap();
-            if !readers.is_empty() {
-                let leaves = self.column_leaves.get(index).unwrap().clone();
-                let array_iter =
-                    NativeDeserializeDataTransform::build_array_iter(column_node, leaves, readers)?;
-                array_iters.insert(index, array_iter);
-            }
-        }
-
-        let mut arrays = Vec::with_capacity(array_iters.len());
-        for (index, array_iter) in array_iters.iter_mut() {
-            let array = array_iter.next().unwrap()?;
-            arrays.push((*index, array));
-        }
-
-        self.reader.build_block(arrays, None)
+    fn build_block(&self, part: &PartInfoPtr, chunk: MergeIOReadResult) -> Result<DataBlock> {
+        let columns_chunks = chunk.columns_chunks()?;
+        let part = FusePartInfo::from_part(part)?;
+        self.reader.deserialize_parquet_chunks_with_buffer(
+            &part.location,
+            part.nums_rows,
+            &part.compression,
+            &part.columns_meta,
+            columns_chunks,
+            Some(self.uncompressed_buffer.clone()),
+        )
     }
 }

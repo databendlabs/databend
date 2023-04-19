@@ -13,23 +13,37 @@
 //  limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_catalog::plan::compute_row_id_prefix;
+use common_catalog::plan::split_row_id;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
+use common_pipeline_transforms::processors::transforms::AsyncTransform;
+use common_pipeline_transforms::processors::transforms::AsyncTransformer;
 use common_storage::ColumnNodes;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
 
-use super::native_rows_fetcher::build_native_row_fetcher_pipeline;
+use super::native_rows_fetcher::NativeRowFetcher;
+use super::parquet_rows_fetcher::ParquetRowFetcher;
+use crate::io::BlockReader;
 use crate::io::MetaReaders;
+use crate::io::ReadSettings;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
 
@@ -83,17 +97,187 @@ pub fn build_row_fetcher_pipeline(
         .as_any()
         .downcast_ref::<FuseTable>()
         .ok_or_else(|| ErrorCode::Internal("Row fetcher is only supported by Fuse engine"))?;
+    let block_reader = fuse_table.create_block_reader(projection.clone(), false, ctx.clone())?;
+    let table_schema = table.schema();
 
-    match &fuse_table.storage_format {
-        FuseStorageFormat::Native => build_native_row_fetcher_pipeline(
-            ctx,
-            pipeline,
-            row_id_col_offset,
-            fuse_table,
-            projection,
-        ),
-        FuseStorageFormat::Parquet => {
-            todo!("row fetcher")
+    pipeline.add_transform(|input, output| {
+        Ok(match &fuse_table.storage_format {
+            FuseStorageFormat::Native => {
+                let mut column_leaves = Vec::with_capacity(block_reader.project_column_nodes.len());
+                for column_node in &block_reader.project_column_nodes {
+                    let leaves: Vec<ColumnDescriptor> = column_node
+                        .leaf_indices
+                        .iter()
+                        .map(|i| block_reader.parquet_schema_descriptor.columns()[*i].clone())
+                        .collect::<Vec<_>>();
+                    column_leaves.push(leaves);
+                }
+                if block_reader.support_blocking_api() {
+                    TransformRowsFetcher::create(
+                        ctx.clone(),
+                        input,
+                        output,
+                        row_id_col_offset,
+                        table_schema.clone(),
+                        projection.clone(),
+                        NativeRowFetcher::<true>::create(block_reader.clone(), column_leaves),
+                    )
+                } else {
+                    TransformRowsFetcher::create(
+                        ctx.clone(),
+                        input,
+                        output,
+                        row_id_col_offset,
+                        table_schema.clone(),
+                        projection.clone(),
+                        NativeRowFetcher::<false>::create(block_reader.clone(), column_leaves),
+                    )
+                }
+            }
+            FuseStorageFormat::Parquet => {
+                let buffer_size =
+                    ctx.get_settings().get_parquet_uncompressed_buffer_size()? as usize;
+                let read_settings = ReadSettings::from_ctx(&ctx)?;
+                if block_reader.support_blocking_api() {
+                    TransformRowsFetcher::create(
+                        ctx.clone(),
+                        input,
+                        output,
+                        row_id_col_offset,
+                        table_schema.clone(),
+                        projection.clone(),
+                        ParquetRowFetcher::<true>::create(
+                            block_reader.clone(),
+                            read_settings,
+                            buffer_size,
+                        ),
+                    )
+                } else {
+                    TransformRowsFetcher::create(
+                        ctx.clone(),
+                        input,
+                        output,
+                        row_id_col_offset,
+                        table_schema.clone(),
+                        projection.clone(),
+                        ParquetRowFetcher::<false>::create(
+                            block_reader.clone(),
+                            read_settings,
+                            buffer_size,
+                        ),
+                    )
+                }
+            }
+        })
+    })
+}
+
+#[async_trait::async_trait]
+pub trait RowFetcher {
+    async fn fetch(
+        &self,
+        part_map: &HashMap<u64, PartInfoPtr>,
+        part_set: HashSet<u64>,
+    ) -> Result<(Vec<DataBlock>, HashMap<u64, usize>)>;
+
+    fn reader(&self) -> &BlockReader;
+}
+
+pub struct TransformRowsFetcher<F: RowFetcher> {
+    ctx: Arc<dyn TableContext>,
+
+    table_schema: TableSchemaRef,
+    projection: Projection,
+
+    row_id_col_offset: usize,
+
+    part_map: HashMap<u64, PartInfoPtr>,
+
+    fetcher: F,
+}
+
+#[async_trait::async_trait]
+impl<F: RowFetcher + Send + Sync> AsyncTransform for TransformRowsFetcher<F> {
+    const NAME: &'static str = "TransformNativeRowsFetcher";
+
+    #[async_backtrace::framed]
+    async fn on_start(&mut self) -> Result<()> {
+        let (snapshot_loc, ver) = self
+            .ctx
+            .get_snapshot()
+            .ok_or_else(|| ErrorCode::Internal("Snapshot location is not found"))?;
+        self.part_map = build_partitions_map(
+            snapshot_loc,
+            ver,
+            self.fetcher.reader().operator.clone(),
+            self.table_schema.clone(),
+            &self.projection,
+        )
+        .await?;
+        Ok(())
+    }
+
+    // #[async_backtrace::framed]
+    async fn transform(&mut self, mut data: DataBlock) -> Result<DataBlock> {
+        let num_rows = data.num_rows();
+        if num_rows == 0 {
+            return Ok(data);
         }
+
+        let row_id_column = data.columns()[self.row_id_col_offset]
+            .value
+            .convert_to_full_column(&DataType::Number(NumberDataType::UInt64), num_rows)
+            .into_number()
+            .unwrap()
+            .into_u_int64()
+            .unwrap();
+
+        let mut part_set = HashSet::new();
+        let mut row_set = Vec::with_capacity(num_rows);
+        for row_id in row_id_column.iter() {
+            let (part_id, idx) = split_row_id(*row_id);
+            part_set.insert(part_id);
+            row_set.push((part_id, idx));
+        }
+
+        let (fetched_blocks, part_idx_map) = self.fetcher.fetch(&self.part_map, part_set).await?;
+
+        let indices = row_set
+            .iter()
+            .map(|(part_id, row_idx)| {
+                let block_idx = part_idx_map[part_id];
+                (block_idx, *row_idx as usize, 1_usize)
+            })
+            .collect::<Vec<_>>();
+
+        let needed_block = DataBlock::take_blocks(&fetched_blocks, &indices, num_rows);
+        for col in needed_block.columns().iter() {
+            data.add_column(col.clone());
+        }
+
+        Ok(data)
+    }
+}
+
+impl<F> TransformRowsFetcher<F>
+where F: RowFetcher + Send + Sync + 'static
+{
+    fn create(
+        ctx: Arc<dyn TableContext>,
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        row_id_col_offset: usize,
+        table_schema: TableSchemaRef,
+        projection: Projection,
+        fetcher: F,
+    ) -> ProcessorPtr {
+        ProcessorPtr::create(AsyncTransformer::create(input, output, Self {
+            ctx,
+            table_schema,
+            projection,
+            row_id_col_offset,
+            part_map: HashMap::new(),
+            fetcher,
+        }))
     }
 }
