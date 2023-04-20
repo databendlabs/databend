@@ -395,9 +395,12 @@ pub struct RowFetch {
 
     // cloned from `input`.
     pub source: Box<DataSourcePlan>,
+    // projection on the source table schema.
+    pub cols_to_fetch: Projection,
 
     pub row_id_col_offset: usize,
-    pub cols_to_fetch: Projection,
+
+    pub fetched_fields: Vec<DataField>,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -406,14 +409,7 @@ pub struct RowFetch {
 impl RowFetch {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let mut fields = self.input.output_schema()?.fields().clone();
-        let schema_to_fetch = self
-            .cols_to_fetch
-            .project_schema(&self.source.source_info.schema());
-        let cols_to_fetch = schema_to_fetch
-            .fields()
-            .iter()
-            .map(|f| DataField::new(&f.column_id().to_string(), f.data_type().into()));
-        fields.extend(cols_to_fetch);
+        fields.extend_from_slice(&self.fetched_fields);
         Ok(DataSchemaRefExt::create(fields))
     }
 }

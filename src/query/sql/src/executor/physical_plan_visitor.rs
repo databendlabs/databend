@@ -203,6 +203,7 @@ pub trait PhysicalPlanReplacer {
             source: plan.source.clone(),
             row_id_col_offset: plan.row_id_col_offset,
             cols_to_fetch: plan.cols_to_fetch.clone(),
+            fetched_fields: plan.fetched_fields.clone(),
             stat_info: plan.stat_info.clone(),
         }))
     }

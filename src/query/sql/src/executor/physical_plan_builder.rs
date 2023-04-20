@@ -39,6 +39,7 @@ use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_functions::BUILTIN_FUNCTIONS;
+use itertools::Itertools;
 
 use super::cast_expr_to_non_null_boolean;
 use super::AggregateExpand;
@@ -849,21 +850,26 @@ impl PhysicalPlanBuilder {
                         let row_id_col_offset =
                             input_schema.index_of(&row_id_col_index.to_string())?;
 
+                        let mut has_inner_column = false;
+                        let fetched_fields = metadata
+                            .lazy_columns()
+                            .iter()
+                            .sorted() // Needs sort because we need to make the order deterministic.
+                            .map(|index| {
+                                let col = metadata.column(*index);
+                                if let ColumnEntry::BaseTableColumn(c) = col {
+                                    if c.path_indices.is_some() {
+                                        has_inner_column = true;
+                                    }
+                                }
+                                DataField::new(&index.to_string(), col.data_type())
+                            })
+                            .collect();
+
                         let source = input_plan.try_find_single_data_source();
                         debug_assert!(source.is_some());
                         let source_info = source.cloned().unwrap();
                         let table_schema = source_info.source_info.schema();
-                        let has_inner_column = matches!(
-                            source_info
-                                .push_downs
-                                .as_ref()
-                                .unwrap()
-                                .projection
-                                .as_ref()
-                                .unwrap(),
-                            Projection::InnerColumns(_)
-                        );
-
                         let cols_to_fetch = Self::build_projection(
                             &metadata,
                             &table_schema,
@@ -886,6 +892,7 @@ impl PhysicalPlanBuilder {
                             source: Box::new(source_info),
                             row_id_col_offset,
                             cols_to_fetch,
+                            fetched_fields,
                             stat_info: Some(stat_info),
                         }));
                     }

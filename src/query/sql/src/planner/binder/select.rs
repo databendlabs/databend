@@ -708,7 +708,13 @@ impl Binder {
         // Only simple single table Top-N query is supported.
         // e.g.
         // SELECT ... FROM t WHERE ... ORDER BY ... LIMIT ...
-        if stmt.group_by.is_some() || stmt.having.is_some() || !bind_context.ctes_map.is_empty() {
+        if stmt.group_by.is_some()
+            || stmt.having.is_some()
+            || stmt.distinct
+            || !bind_context.ctes_map.is_empty()
+            || !bind_context.aggregate_info.group_items.is_empty()
+            || !bind_context.aggregate_info.aggregate_functions.is_empty()
+        {
             return;
         }
 

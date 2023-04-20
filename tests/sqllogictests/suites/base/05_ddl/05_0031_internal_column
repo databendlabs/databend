@@ -24,7 +24,7 @@ SELECT b,_row_id,a FROM `05_0031_t` order by _row_id
 ----
 2 0 1
 2 1 2
-2 4194304 3
+2 4398046511104 3
 
 query II
 SELECT a,_row_id FROM `05_0031_t` where _row_id = 0 
