@@ -220,7 +220,7 @@ async fn check_count(result_stream: SendableDataBlockStream) -> Result<u64> {
     }
 }
 
-async fn compact_segment(ctx: Arc<QueryContext>, table: &Arc<dyn Table>) -> Result<()> {
+pub async fn compact_segment(ctx: Arc<QueryContext>, table: &Arc<dyn Table>) -> Result<()> {
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let mutator = build_mutator(fuse_table, ctx.clone(), None).await?.unwrap();
     mutator.try_commit(table.clone()).await

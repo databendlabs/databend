@@ -45,6 +45,15 @@ pub struct SegmentInfo {
 }
 
 impl SegmentInfo {
+    // for test.
+    pub fn new(blocks: Vec<Arc<BlockMeta>>, summary: Statistics) -> Self {
+        Self {
+            format_version: SegmentInfo::VERSION,
+            blocks,
+            summary,
+        }
+    }
+
     #[inline]
     pub fn version(&self) -> FormatVersion {
         self.format_version
