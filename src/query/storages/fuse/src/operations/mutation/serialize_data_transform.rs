@@ -20,61 +20,42 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_expression::TableSchemaRef;
-use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use opendal::Operator;
 use storages_common_pruner::BlockMetaIndex;
-use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ClusterStatistics;
-use storages_common_table_meta::table::TableCompression;
 
-use crate::io::serialize_block;
 use crate::io::write_data;
-use crate::io::TableMetaLocationGenerator;
-use crate::io::WriteSettings;
+use crate::io::BlockBuilder;
+use crate::io::BlockSerialization;
 use crate::operations::mutation::Mutation;
 use crate::operations::mutation::MutationTransformMeta;
 use crate::operations::mutation::SerializeDataMeta;
-use crate::operations::BloomIndexState;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::Processor;
-use crate::statistics::gen_columns_statistics;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 
-pub struct SerializeState {
-    pub block_data: Vec<u8>,
-    pub block_location: String,
-    pub index_data: Option<Vec<u8>>,
-    pub index_location: Option<String>,
-}
-
 enum State {
     Consume,
-    NeedSerialize(DataBlock),
-    Serialized(SerializeState, Arc<BlockMeta>),
+    NeedSerialize(DataBlock, Option<ClusterStatistics>),
+    Serialized(BlockSerialization),
     Output(Mutation),
 }
 
 pub struct SerializeDataTransform {
     state: State,
-    ctx: Arc<dyn TableContext>,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
-    write_settings: WriteSettings,
 
-    location_gen: TableMetaLocationGenerator,
+    block_builder: BlockBuilder,
+
     dal: Operator,
-    cluster_stats_gen: ClusterStatsGenerator,
 
-    schema: TableSchemaRef,
     index: BlockMetaIndex,
-    origin_stats: Option<ClusterStatistics>,
-    table_compression: TableCompression,
 }
 
 impl SerializeDataTransform {
@@ -85,20 +66,21 @@ impl SerializeDataTransform {
         table: &FuseTable,
         cluster_stats_gen: ClusterStatsGenerator,
     ) -> Result<ProcessorPtr> {
+        let block_builder = BlockBuilder {
+            ctx,
+            meta_locations: table.meta_location_generator().clone(),
+            source_schema: table.schema(),
+            write_settings: table.get_write_settings(),
+            cluster_stats_gen,
+        };
         Ok(ProcessorPtr::create(Box::new(SerializeDataTransform {
             state: State::Consume,
-            ctx: ctx.clone(),
             input,
             output,
             output_data: None,
-            location_gen: table.meta_location_generator().clone(),
+            block_builder,
             dal: table.get_operator(),
-            write_settings: table.get_write_settings(),
-            cluster_stats_gen,
-            schema: table.schema(),
             index: BlockMetaIndex::default(),
-            origin_stats: None,
-            table_compression: table.table_compression,
         })))
     }
 }
@@ -114,11 +96,11 @@ impl Processor for SerializeDataTransform {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if matches!(self.state, State::NeedSerialize(_) | State::Output(_)) {
+        if matches!(self.state, State::NeedSerialize(_, _) | State::Output(_)) {
             return Ok(Event::Sync);
         }
 
-        if matches!(self.state, State::Serialized(_, _)) {
+        if matches!(self.state, State::Serialized(_)) {
             return Ok(Event::Async);
         }
 
@@ -150,11 +132,10 @@ impl Processor for SerializeDataTransform {
         if let Some(meta) = meta {
             let meta = SerializeDataMeta::from_meta(&meta)?;
             self.index = meta.index.clone();
-            self.origin_stats = meta.cluster_stats.clone();
             if input_data.is_empty() {
                 self.state = State::Output(Mutation::Deleted);
             } else {
-                self.state = State::NeedSerialize(input_data);
+                self.state = State::NeedSerialize(input_data, meta.cluster_stats.clone());
             }
         } else {
             self.state = State::Output(Mutation::DoNothing);
@@ -164,70 +145,14 @@ impl Processor for SerializeDataTransform {
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
-            State::NeedSerialize(block) => {
-                let cluster_stats = self
-                    .cluster_stats_gen
-                    .gen_with_origin_stats(&block, std::mem::take(&mut self.origin_stats))?;
+            State::NeedSerialize(block, origin_stats) => {
+                let serialized = self.block_builder.build(block, |block, generator| {
+                    let cluster_stats =
+                        generator.gen_with_origin_stats(&block, origin_stats.clone())?;
+                    Ok((cluster_stats, block))
+                })?;
 
-                let row_count = block.num_rows() as u64;
-                let block_size = block.memory_size() as u64;
-                let (block_location, block_id) = self.location_gen.gen_block_location();
-
-                // build block index.
-                let location = self.location_gen.block_bloom_index_location(&block_id);
-                let bloom_index_state = BloomIndexState::try_create(
-                    self.ctx.clone(),
-                    self.schema.clone(),
-                    &block,
-                    location,
-                )?;
-                let column_distinct_count = bloom_index_state
-                    .as_ref()
-                    .map(|i| i.column_distinct_count.clone());
-                let col_stats =
-                    gen_columns_statistics(&block, column_distinct_count, &self.schema)?;
-
-                // serialize data block.
-                let mut block_data = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
-                let schema = self.schema.clone();
-
-                let (file_size, col_metas) =
-                    serialize_block(&self.write_settings, &schema, block, &mut block_data)?;
-
-                let (index_data, index_location, index_size) =
-                    if let Some(bloom_index_state) = bloom_index_state {
-                        (
-                            Some(bloom_index_state.data.clone()),
-                            Some(bloom_index_state.location.clone()),
-                            bloom_index_state.size,
-                        )
-                    } else {
-                        (None, None, 0u64)
-                    };
-
-                // new block meta.
-                let new_meta = Arc::new(BlockMeta::new(
-                    row_count,
-                    block_size,
-                    file_size,
-                    col_stats,
-                    col_metas,
-                    cluster_stats,
-                    block_location.clone(),
-                    index_location.clone(),
-                    index_size,
-                    self.table_compression.into(),
-                ));
-
-                self.state = State::Serialized(
-                    SerializeState {
-                        block_data,
-                        block_location: block_location.0,
-                        index_data,
-                        index_location: index_location.map(|l| l.0),
-                    },
-                    new_meta,
-                );
+                self.state = State::Serialized(serialized);
             }
             State::Output(op) => {
                 let meta = MutationTransformMeta::create(self.index.clone(), op);
@@ -241,21 +166,23 @@ impl Processor for SerializeDataTransform {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
-            State::Serialized(serialize_state, block_meta) => {
+            State::Serialized(serialized) => {
                 // write block data.
-                write_data(
-                    serialize_state.block_data,
-                    &self.dal,
-                    &serialize_state.block_location,
-                )
-                .await?;
-                // write index data.
-                if let (Some(index_data), Some(index_location)) =
-                    (serialize_state.index_data, serialize_state.index_location)
-                {
-                    write_data(index_data, &self.dal, &index_location).await?;
-                }
+                let raw_block_data = serialized.block_raw_data;
+                let path = serialized.block_meta.location.0.as_str();
+                write_data(raw_block_data, &self.dal, path).await?;
 
+                // write index data.
+                let bloom_index_state = serialized.bloom_index_state;
+                if let Some(bloom_index_state) = bloom_index_state {
+                    write_data(
+                        bloom_index_state.data,
+                        &self.dal,
+                        &bloom_index_state.location.0,
+                    )
+                    .await?;
+                }
+                let block_meta = Arc::new(serialized.block_meta);
                 self.state = State::Output(Mutation::Replaced(block_meta));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
