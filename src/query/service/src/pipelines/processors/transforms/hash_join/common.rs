@@ -30,11 +30,11 @@ use common_expression::Expr;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_hashtable::HashtableLike;
+use common_hashtable::HashJoinHashtableLike;
+use common_hashtable::MarkerKind;
+use common_hashtable::RowPtr;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
-use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
-use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::JoinHashTable;
 use crate::sql::plans::JoinType;
 
@@ -54,17 +54,34 @@ impl JoinHashTable {
     }
 
     #[inline]
-    pub(crate) fn probe_key<'a, H: HashtableLike<Value = Vec<RowPtr>>>(
+    pub(crate) fn contains<'a, H: HashJoinHashtableLike>(
         &self,
         hash_table: &'a H,
         key: &'a H::Key,
         valids: &Option<Bitmap>,
         i: usize,
-    ) -> Option<H::EntryRef<'a>> {
+    ) -> bool {
         if valids.as_ref().map_or(true, |v| v.get_bit(i)) {
-            return hash_table.entry(key);
+            return hash_table.contains(key);
         }
-        None
+        false
+    }
+
+    #[inline]
+    pub(crate) fn probe_key2<'a, H: HashJoinHashtableLike>(
+        &self,
+        hash_table: &'a H,
+        key: &'a H::Key,
+        valids: &Option<Bitmap>,
+        i: usize,
+        vec_ptr: *mut RowPtr,
+        occupied: usize,
+        capacity: usize,
+    ) -> (usize, u64) {
+        if valids.as_ref().map_or(true, |v| v.get_bit(i)) {
+            return hash_table.probe_hash_table(key, vec_ptr, occupied, capacity);
+        }
+        (0, 0)
     }
 
     pub(crate) fn create_marker_block(

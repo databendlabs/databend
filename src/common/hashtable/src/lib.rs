@@ -21,6 +21,7 @@
 #![feature(trusted_len)]
 
 mod container;
+mod hashjoin_hashtable;
 mod hashtable;
 mod keys_ref;
 mod lookup_hashtable;
@@ -97,3 +98,9 @@ pub type LookupHashMapIterMut<'a, K, const CAPACITY: usize, V> =
 
 pub use keys_ref::KeysRef;
 pub use partitioned_hashtable::hash2bucket;
+
+pub type HashJoinHashMap<K> = hashjoin_hashtable::HashJoinHashTable<K>;
+pub use hashjoin_hashtable::MarkerKind;
+pub use hashjoin_hashtable::RawEntry;
+pub use hashjoin_hashtable::RowPtr;
+pub use traits::HashJoinHashtableLike;

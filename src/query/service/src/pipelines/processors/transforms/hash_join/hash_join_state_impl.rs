@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::BorrowMut;
 use std::sync::atomic::Ordering;
 
 use common_arrow::arrow::bitmap::Bitmap;
@@ -21,14 +20,18 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::HashMethod;
-use common_hashtable::HashtableLike;
+use common_expression::HashMethodKind;
+use common_hashtable::HashJoinHashMap;
+use common_hashtable::MarkerKind;
+use common_hashtable::RawEntry;
+use common_hashtable::RowPtr;
+use ethnum::U256;
 
 use super::ProbeState;
 use crate::pipelines::processors::transforms::hash_join::desc::JoinState;
-use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
-use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
+use crate::pipelines::processors::transforms::hash_join::join_hash_table::HashJoinHashTable;
+use crate::pipelines::processors::transforms::FixedKeyHashJoinHashTable;
 use crate::pipelines::processors::HashJoinState;
-use crate::pipelines::processors::HashTable;
 use crate::pipelines::processors::JoinHashTable;
 use crate::sessions::TableContext;
 use crate::sql::planner::plans::JoinType;
@@ -76,171 +79,10 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn attach(&self) -> Result<()> {
-        let mut count = self.ref_count.lock().unwrap();
+        let mut count = self.building_count.lock().unwrap();
         *count += 1;
-        Ok(())
-    }
-
-    fn detach(&self) -> Result<()> {
-        let mut count = self.ref_count.lock().unwrap();
-        *count -= 1;
-        if *count == 0 {
-            self.finish()?;
-            let mut is_finished = self.is_finished.lock().unwrap();
-            *is_finished = true;
-            self.finished_notify.notify_waiters();
-            Ok(())
-        } else {
-            Ok(())
-        }
-    }
-
-    fn is_finished(&self) -> Result<bool> {
-        Ok(*self.is_finished.lock().unwrap())
-    }
-
-    fn finish(&self) -> Result<()> {
-        macro_rules! insert_key {
-            ($table: expr, $markers: expr, $method: expr, $chunk: expr, $columns: expr,  $chunk_index: expr, ) => {{
-                let keys_state = $method.build_keys_state(&$columns, $chunk.num_rows())?;
-                let build_keys_iter = $method.build_keys_iter(&keys_state)?;
-
-                for (row_index, key) in build_keys_iter.enumerate().take($chunk.num_rows()) {
-                    let ptr = RowPtr {
-                        chunk_index: $chunk_index,
-                        row_index,
-                        marker: $markers[row_index],
-                    };
-                    if self.hash_join_desc.join_type == JoinType::LeftMark {
-                        let mut self_row_ptrs = self.row_ptrs.write();
-                        self_row_ptrs.push(ptr);
-                    }
-                    match unsafe { $table.insert(*key) } {
-                        Ok(entity) => {
-                            entity.write(vec![ptr]);
-                        }
-                        Err(entity) => {
-                            entity.push(ptr);
-                        }
-                    }
-                }
-            }};
-        }
-
-        macro_rules! insert_string_key {
-            ($table: expr, $markers: expr, $method: expr, $chunk: expr, $columns: expr,  $chunk_index: expr, ) => {{
-                let keys_state = $method.build_keys_state(&$columns, $chunk.num_rows())?;
-                let build_keys_iter = $method.build_keys_iter(&keys_state)?;
-
-                for (row_index, key) in build_keys_iter.enumerate().take($chunk.num_rows()) {
-                    let ptr = RowPtr {
-                        chunk_index: $chunk_index,
-                        row_index,
-                        marker: $markers[row_index],
-                    };
-                    if self.hash_join_desc.join_type == JoinType::LeftMark {
-                        let mut self_row_ptrs = self.row_ptrs.write();
-                        self_row_ptrs.push(ptr);
-                    }
-                    match unsafe { $table.insert(key) } {
-                        Ok(entity) => {
-                            entity.write(vec![ptr]);
-                        }
-                        Err(entity) => {
-                            entity.push(ptr);
-                        }
-                    }
-                }
-            }};
-        }
-
-        {
-            let buffer = self.row_space.buffer.write().unwrap();
-            if !buffer.is_empty() {
-                let data_block = DataBlock::concat(&buffer)?;
-                self.add_build_block(data_block)?;
-            }
-        }
-        let interrupt = self.interrupt.clone();
-        let mut chunks = self.row_space.chunks.write().unwrap();
-        let mut has_null = false;
-        for chunk_index in 0..chunks.len() {
-            if interrupt.load(Ordering::Relaxed) {
-                return Err(ErrorCode::AbortedQuery(
-                    "Aborted query, because the server is shutting down or the query was killed.",
-                ));
-            }
-
-            let chunk = &mut chunks[chunk_index];
-            let columns = &chunk.cols;
-            let markers = match self.hash_join_desc.join_type {
-                JoinType::LeftMark => Self::init_markers(&chunk.cols, chunk.num_rows())
-                    .iter()
-                    .map(|x| Some(*x))
-                    .collect(),
-                JoinType::RightMark => {
-                    if !has_null && !chunk.cols.is_empty() {
-                        if let Some(validity) = chunk.cols[0].0.validity().1 {
-                            if validity.unset_bits() > 0 {
-                                has_null = true;
-                                let mut has_null_ref =
-                                    self.hash_join_desc.marker_join_desc.has_null.write();
-                                *has_null_ref = true;
-                            }
-                        }
-                    }
-                    vec![None; chunk.num_rows()]
-                }
-                _ => {
-                    vec![None; chunk.num_rows()]
-                }
-            };
-
-            match (*self.hash_table.write()).borrow_mut() {
-                HashTable::Serializer(table) => insert_string_key! {
-                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,
-                },
-                HashTable::SingleString(table) => insert_string_key! {
-                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,
-                },
-                HashTable::KeysU8(table) => insert_key! {
-                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,
-                },
-                HashTable::KeysU16(table) => insert_key! {
-                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,
-                },
-                HashTable::KeysU32(table) => insert_key! {
-                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,
-                },
-                HashTable::KeysU64(table) => insert_key! {
-                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,
-                },
-                HashTable::KeysU128(table) => insert_key! {
-                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,
-                },
-                HashTable::KeysU256(table) => insert_key! {
-                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,
-                },
-            }
-        }
-        Ok(())
-    }
-
-    #[async_backtrace::framed]
-    async fn wait_finish(&self) -> Result<()> {
-        let notified = {
-            let finished_guard = self.is_finished.lock().unwrap();
-
-            match *finished_guard {
-                true => None,
-                false => Some(self.finished_notify.notified()),
-            }
-        };
-
-        if let Some(notified) = notified {
-            notified.await;
-        }
-
+        let mut count = self.finalizing_count.lock().unwrap();
+        *count += 1;
         Ok(())
     }
 
@@ -441,6 +283,317 @@ impl HashJoinState for JoinHashTable {
         }
         input_blocks.push(rest_block);
         Ok(input_blocks)
+    }
+
+    /// Detach to state
+    fn build_end(&self) -> Result<()> {
+        let mut count = self.building_count.lock().unwrap();
+        *count -= 1;
+        if *count == 0 {
+            self.divide_finalize_task()?;
+
+            let chunks = self.row_space.chunks.read().unwrap();
+            let mut row_num = 0;
+            for chunk in chunks.iter() {
+                row_num += chunk.num_rows();
+            }
+            let capacity = (row_num * 2).next_power_of_two();
+            let mut entry_size = 0;
+            let hashtable = match (*self.method).clone() {
+                // HashMethodKind::Serializer(_) => Arc::new(JoinHashTable::try_create(
+                //     ctx,
+                //     HashTable::Serializer(SerializerHashTable {
+                //         hash_table: StringHashMap::<[u8], Vec<RowPtr>>::new(),
+                //         hash_method: HashMethodSerializer::default(),
+                //     }),
+                //     build_schema,
+                //     probe_schema,
+                //     hash_join_desc,
+                //     hash_key_types,
+                //     nullable_size,
+                //     row_size,
+                // )?),
+                // HashMethodKind::SingleString(_) => Arc::new(JoinHashTable::try_create(
+                //     ctx,
+                //     HashTable::SingleString(SingleStringHashTable {
+                //         hash_table: ShortStringHashMap::<[u8], Vec<RowPtr>>::new(),
+                //         hash_method: HashMethodSingleString::default(),
+                //     }),
+                //     build_schema,
+                //     probe_schema,
+                //     hash_join_desc,
+                //     hash_key_types,
+                //     nullable_size,
+                //     row_size,
+                // )?),
+                HashMethodKind::KeysU8(hash_method) => {
+                    entry_size = std::mem::size_of::<RawEntry<u8>>();
+                    HashJoinHashTable::KeysU8(FixedKeyHashJoinHashTable {
+                        hash_table: HashJoinHashMap::<u8>::with_fixed_capacity(capacity),
+                        hash_method,
+                    })
+                }
+                HashMethodKind::KeysU16(hash_method) => {
+                    entry_size = std::mem::size_of::<RawEntry<u16>>();
+                    HashJoinHashTable::KeysU16(FixedKeyHashJoinHashTable {
+                        hash_table: HashJoinHashMap::<u16>::with_fixed_capacity(capacity),
+                        hash_method,
+                    })
+                }
+                HashMethodKind::KeysU32(hash_method) => {
+                    entry_size = std::mem::size_of::<RawEntry<u32>>();
+                    HashJoinHashTable::KeysU32(FixedKeyHashJoinHashTable {
+                        hash_table: HashJoinHashMap::<u32>::with_fixed_capacity(capacity),
+                        hash_method,
+                    })
+                }
+                HashMethodKind::KeysU64(hash_method) => {
+                    entry_size = std::mem::size_of::<RawEntry<u64>>();
+                    HashJoinHashTable::KeysU64(FixedKeyHashJoinHashTable {
+                        hash_table: HashJoinHashMap::<u64>::with_fixed_capacity(capacity),
+                        hash_method,
+                    })
+                }
+                HashMethodKind::KeysU128(hash_method) => {
+                    entry_size = std::mem::size_of::<RawEntry<u128>>();
+                    HashJoinHashTable::KeysU128(FixedKeyHashJoinHashTable {
+                        hash_table: HashJoinHashMap::<u128>::with_fixed_capacity(capacity),
+                        hash_method,
+                    })
+                }
+                HashMethodKind::KeysU256(hash_method) => {
+                    entry_size = std::mem::size_of::<RawEntry<U256>>();
+                    HashJoinHashTable::KeysU256(FixedKeyHashJoinHashTable {
+                        hash_table: HashJoinHashMap::<U256>::with_fixed_capacity(capacity),
+                        hash_method,
+                    })
+                }
+                _ => unreachable!(),
+            };
+            let ht = unsafe { &mut *self.hash_table.get() };
+            *ht = hashtable;
+            self.entry_size.store(entry_size, Ordering::SeqCst);
+
+            let mut is_built = self.is_built.lock().unwrap();
+            *is_built = true;
+            self.built_notify.notify_waiters();
+            Ok(())
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Detach to state
+    fn finalize_end(&self) -> Result<()> {
+        let mut count = self.finalizing_count.lock().unwrap();
+        *count -= 1;
+        if *count == 0 {
+            let mut is_finalized = self.is_finalized.lock().unwrap();
+            *is_finalized = true;
+            self.finalized_notify.notify_waiters();
+            Ok(())
+        } else {
+            Ok(())
+        }
+    }
+
+    fn finalize(&self) -> Result<bool> {
+        let task_idx = self.unfinished_task_num.fetch_sub(1, Ordering::SeqCst) - 1;
+        if task_idx < 0 {
+            return Ok(false);
+        }
+        let chunks = self.row_space.chunks.read().unwrap();
+        let mut row_num = 0;
+        let task = {
+            let finalize_tasks = self.finalize_tasks.read();
+            finalize_tasks[task_idx as usize]
+        };
+        for chunk_index in task.0..task.1 {
+            row_num += chunks[chunk_index].num_rows();
+        }
+        let hashtable = unsafe { &mut *self.hash_table.get() };
+        let entry_size = self.entry_size.load(Ordering::Relaxed);
+        let mut local_space: Vec<u8> = Vec::with_capacity(row_num * entry_size);
+        let local_space_ptr = local_space.as_mut_ptr();
+        let mut offset = 0;
+        for chunk_index in task.0..task.1 {
+            row_num += chunks[chunk_index].num_rows();
+        }
+        macro_rules! insert_key {
+            ($table: expr, $markers: expr, $method: expr, $chunk: expr, $columns: expr,  $chunk_index: expr, $local_space_ptr: expr, $offset: expr, $entry_size: expr, $t: ty, ) => {{
+                let keys_state = $method.build_keys_state(&$columns, $chunk.num_rows())?;
+                let build_keys_iter = $method.build_keys_iter(&keys_state)?;
+                for (row_index, key) in build_keys_iter.enumerate().take($chunk.num_rows()) {
+                    let raw_entry_ptr = unsafe {
+                        std::mem::transmute::<*mut u8, *mut RawEntry<$t>>(
+                            local_space_ptr.add(offset),
+                        )
+                    };
+                    offset += entry_size;
+                    let row_ptr = RowPtr {
+                        chunk_index: $chunk_index,
+                        row_index,
+                        marker: $markers[row_index],
+                    };
+                    if self.hash_join_desc.join_type == JoinType::LeftMark {
+                        let mut self_row_ptrs = self.row_ptrs.write();
+                        self_row_ptrs.push(row_ptr.clone());
+                    }
+                    unsafe {
+                        (*raw_entry_ptr).row_ptr = row_ptr;
+                        (*raw_entry_ptr).key = key.clone();
+                        (*raw_entry_ptr).next = 0;
+                    }
+                    $table.insert(*key, raw_entry_ptr)
+                }
+            }};
+        }
+
+        let interrupt = self.interrupt.clone();
+        let chunks = self.row_space.chunks.read().unwrap();
+        let mut has_null = false;
+        for chunk_index in task.0..task.1 {
+            if interrupt.load(Ordering::Relaxed) {
+                return Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed.",
+                ));
+            }
+
+            let chunk = &chunks[chunk_index];
+            let columns = &chunk.cols;
+            let markers = match self.hash_join_desc.join_type {
+                JoinType::LeftMark => Self::init_markers(&chunk.cols, chunk.num_rows())
+                    .iter()
+                    .map(|x| Some(*x))
+                    .collect(),
+                JoinType::RightMark => {
+                    if !has_null && !chunk.cols.is_empty() {
+                        if let Some(validity) = chunk.cols[0].0.validity().1 {
+                            if validity.unset_bits() > 0 {
+                                has_null = true;
+                                let mut has_null_ref =
+                                    self.hash_join_desc.marker_join_desc.has_null.write();
+                                *has_null_ref = true;
+                            }
+                        }
+                    }
+                    vec![None; chunk.num_rows()]
+                }
+                _ => {
+                    vec![None; chunk.num_rows()]
+                }
+            };
+
+            match hashtable {
+                // HashTable::Serializer(table) => insert_string_key! {
+                //   &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,
+                // },
+                // HashTable::SingleString(table) => insert_string_key! {
+                //   &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,
+                // },
+                HashJoinHashTable::KeysU8(table) => insert_key! {
+                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,local_space_ptr, &mut offset, entry_size, u8,
+                },
+                HashJoinHashTable::KeysU16(table) => insert_key! {
+                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,local_space_ptr, &mut offset, entry_size, u16,
+                },
+                HashJoinHashTable::KeysU32(table) => insert_key! {
+                    &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,local_space_ptr, &mut offset, entry_size, u32,
+                },
+                HashJoinHashTable::KeysU64(table) => insert_key! {
+                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,local_space_ptr, &mut offset, entry_size, u64,
+                },
+                HashJoinHashTable::KeysU128(table) => insert_key! {
+                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,local_space_ptr, &mut offset, entry_size, u128,
+                },
+                HashJoinHashTable::KeysU256(table) => insert_key! {
+                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,local_space_ptr, &mut offset, entry_size, U256,
+                },
+                _ => unreachable!(),
+            }
+        }
+
+        {
+            let mut local_spaces = self.local_spaces.lock().unwrap();
+            local_spaces.push(local_space);
+        }
+        Ok(true)
+    }
+
+    fn divide_finalize_task(&self) -> Result<()> {
+        {
+            let buffer = self.row_space.buffer.write().unwrap();
+            if !buffer.is_empty() {
+                let data_block = DataBlock::concat(&buffer)?;
+                self.add_build_block(data_block)?;
+            }
+        }
+
+        // let interrupt = self.interrupt.clone();
+        let chunks = self.row_space.chunks.read().unwrap();
+        let chunks_len = chunks.len();
+        let mut finalize_tasks = self.finalize_tasks.write();
+        // TODO(dousir9)
+        let mut max_threads = *self.max_threads.lock().unwrap();
+        max_threads = 10;
+        debug_assert!(chunks_len > 0);
+        debug_assert!(max_threads > 0);
+        let (task_size, task_num) = if chunks_len >= max_threads {
+            (chunks_len / max_threads, max_threads)
+        } else {
+            (1, chunks_len)
+        };
+
+        for idx in 0..task_num - 1 {
+            let task = (idx * task_size, (idx + 1) * task_size);
+            finalize_tasks.push(task);
+        }
+        let last_task = ((task_num - 1) * task_size, chunks_len);
+        finalize_tasks.push(last_task);
+        self.unfinished_task_num
+            .store(task_num as i32, Ordering::Relaxed);
+        Ok(())
+    }
+
+    fn set_max_threads(&self, max_threads: usize) -> Result<()> {
+        *self.max_threads.lock().unwrap() = max_threads;
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    async fn wait_build_finish(&self) -> Result<()> {
+        let notified = {
+            let built_guard = self.is_built.lock().unwrap();
+
+            match *built_guard {
+                true => None,
+                false => Some(self.built_notify.notified()),
+            }
+        };
+
+        if let Some(notified) = notified {
+            notified.await;
+        }
+
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    async fn wait_finalize_finish(&self) -> Result<()> {
+        let notified = {
+            let finalized_guard = self.is_finalized.lock().unwrap();
+
+            match *finalized_guard {
+                true => None,
+                false => Some(self.finalized_notify.notified()),
+            }
+        };
+
+        if let Some(notified) = notified {
+            notified.await;
+        }
+
+        Ok(())
     }
 }
 

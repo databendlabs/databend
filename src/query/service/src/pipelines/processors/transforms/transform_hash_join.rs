@@ -19,7 +19,6 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
-use common_pipeline_sinks::Sink;
 
 use super::hash_join::ProbeState;
 use crate::pipelines::processors::port::InputPort;
@@ -30,35 +29,9 @@ use crate::pipelines::processors::Processor;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
-pub struct SinkBuildHashTable {
-    join_state: Arc<dyn HashJoinState>,
-}
-
-impl SinkBuildHashTable {
-    pub fn try_create(join_state: Arc<dyn HashJoinState>) -> Result<Self> {
-        join_state.attach()?;
-        Ok(Self { join_state })
-    }
-}
-
-impl Sink for SinkBuildHashTable {
-    const NAME: &'static str = "BuildHashTable";
-
-    fn on_finish(&mut self) -> Result<()> {
-        self.join_state.detach()
-    }
-
-    fn interrupt(&self) {
-        self.join_state.interrupt()
-    }
-
-    fn consume(&mut self, data_block: DataBlock) -> Result<()> {
-        self.join_state.build(data_block)
-    }
-}
-
 enum HashJoinStep {
     Build,
+    Finalize,
     Probe,
 }
 
@@ -104,7 +77,7 @@ impl TransformHashJoinProbe {
 #[async_trait::async_trait]
 impl Processor for TransformHashJoinProbe {
     fn name(&self) -> String {
-        "HashJoin".to_string()
+        "HashJoinProbe".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -114,6 +87,7 @@ impl Processor for TransformHashJoinProbe {
     fn event(&mut self) -> Result<Event> {
         match self.step {
             HashJoinStep::Build => Ok(Event::Async),
+            HashJoinStep::Finalize => unreachable!(),
             HashJoinStep::Probe => {
                 if self.output_port.is_finished() {
                     self.input_port.finish();
@@ -159,6 +133,7 @@ impl Processor for TransformHashJoinProbe {
     fn process(&mut self) -> Result<()> {
         match self.step {
             HashJoinStep::Build => Ok(()),
+            HashJoinStep::Finalize => unreachable!(),
             HashJoinStep::Probe => {
                 if let Some(data) = self.input_data.take() {
                     let data = data.convert_to_full();
@@ -172,10 +147,133 @@ impl Processor for TransformHashJoinProbe {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if let HashJoinStep::Build = &self.step {
-            self.join_state.wait_finish().await?;
+            self.join_state.wait_finalize_finish().await?;
             self.step = HashJoinStep::Probe;
         }
 
+        Ok(())
+    }
+}
+
+pub struct TransformHashJoinBuild {
+    input_port: Arc<InputPort>,
+    input_data: Option<DataBlock>,
+
+    step: HashJoinStep,
+    join_state: Arc<dyn HashJoinState>,
+    called_on_build_end: bool,
+    called_on_finalize_end: bool,
+}
+
+impl Drop for TransformHashJoinBuild {
+    fn drop(&mut self) {
+        if !self.called_on_finalize_end {
+            self.called_on_finalize_end = true;
+            let _ = self.join_state.finalize_end();
+        }
+    }
+}
+
+impl TransformHashJoinBuild {
+    pub fn create(
+        input_port: Arc<InputPort>,
+        join_state: Arc<dyn HashJoinState>,
+    ) -> Box<dyn Processor> {
+        Box::new(TransformHashJoinBuild {
+            input_port,
+            input_data: None,
+            step: HashJoinStep::Build,
+            join_state,
+            called_on_build_end: false,
+            called_on_finalize_end: false,
+        })
+    }
+
+    pub fn attach(
+        join_state: Arc<dyn HashJoinState>,
+        max_threads: usize,
+    ) -> Result<Arc<dyn HashJoinState>> {
+        join_state.attach()?;
+        join_state.set_max_threads(max_threads)?;
+        Ok(join_state)
+    }
+}
+
+#[async_trait::async_trait]
+impl Processor for TransformHashJoinBuild {
+    fn name(&self) -> String {
+        "HashJoinBuild".to_string()
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn event(&mut self) -> Result<Event> {
+        match self.step {
+            HashJoinStep::Build => {
+                if self.input_data.is_some() {
+                    return Ok(Event::Sync);
+                }
+
+                if self.input_port.is_finished() {
+                    return match !self.called_on_build_end {
+                        true => Ok(Event::Sync),
+                        false => Ok(Event::Async),
+                    };
+                }
+
+                match self.input_port.has_data() {
+                    true => {
+                        self.input_data = Some(self.input_port.pull_data().unwrap()?);
+                        Ok(Event::Sync)
+                    }
+                    false => {
+                        self.input_port.set_need_data();
+                        Ok(Event::NeedData)
+                    }
+                }
+            }
+            HashJoinStep::Finalize => match !self.called_on_finalize_end {
+                true => Ok(Event::Sync),
+                false => Ok(Event::Finished),
+            },
+            HashJoinStep::Probe => unreachable!(),
+        }
+    }
+
+    fn interrupt(&self) {
+        self.join_state.interrupt()
+    }
+
+    fn process(&mut self) -> Result<()> {
+        match self.step {
+            HashJoinStep::Build => {
+                if let Some(data_block) = self.input_data.take() {
+                    self.join_state.build(data_block)?;
+                } else if !self.called_on_build_end {
+                    self.called_on_build_end = true;
+                    self.join_state.build_end()?;
+                }
+                Ok(())
+            }
+            HashJoinStep::Finalize => {
+                if !self.called_on_finalize_end && !self.join_state.finalize()? {
+                    self.called_on_finalize_end = true;
+                    self.join_state.finalize_end()?;
+                }
+                Ok(())
+            }
+            HashJoinStep::Probe => unreachable!(),
+        }
+    }
+
+    #[async_backtrace::framed]
+    async fn async_process(&mut self) -> Result<()> {
+        if let HashJoinStep::Build = &self.step {
+            self.join_state.wait_build_finish().await?;
+            self.step = HashJoinStep::Finalize;
+        }
         Ok(())
     }
 }

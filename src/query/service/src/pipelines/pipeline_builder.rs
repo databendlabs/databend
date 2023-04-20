@@ -100,9 +100,9 @@ use crate::pipelines::processors::JoinHashTable;
 use crate::pipelines::processors::LeftJoinCompactor;
 use crate::pipelines::processors::MarkJoinCompactor;
 use crate::pipelines::processors::RightJoinCompactor;
-use crate::pipelines::processors::SinkBuildHashTable;
 use crate::pipelines::processors::SinkRuntimeFilterSource;
 use crate::pipelines::processors::TransformCastSchema;
+use crate::pipelines::processors::TransformHashJoinBuild;
 use crate::pipelines::processors::TransformHashJoinProbe;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::processors::TransformResortAddOn;
@@ -226,11 +226,13 @@ impl PipelineBuilder {
         let mut build_res = build_side_builder.finalize(build)?;
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
-
         let create_sink_processor = |input| {
-            let transform = Sinker::<SinkBuildHashTable>::create(
+            let transform = TransformHashJoinBuild::create(
                 input,
-                SinkBuildHashTable::try_create(join_state.clone())?,
+                TransformHashJoinBuild::attach(
+                    join_state.clone(),
+                    self.main_pipeline.get_max_threads(),
+                )?,
             );
 
             if self.enable_profiling {
@@ -1281,9 +1283,12 @@ impl PipelineBuilder {
         for _ in 0..output_size / 2 {
             let input = InputPort::create();
             items.push(PipeItem::create(
-                ProcessorPtr::create(Sinker::<SinkBuildHashTable>::create(
+                ProcessorPtr::create(TransformHashJoinBuild::create(
                     input.clone(),
-                    SinkBuildHashTable::try_create(self.join_state.as_ref().unwrap().clone())?,
+                    TransformHashJoinBuild::attach(
+                        self.join_state.as_ref().unwrap().clone(),
+                        self.main_pipeline.get_max_threads(),
+                    )?,
                 )),
                 vec![input],
                 vec![],

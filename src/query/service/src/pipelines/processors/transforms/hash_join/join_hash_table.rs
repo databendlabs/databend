@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::SyncUnsafeCell;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicI32;
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -32,8 +35,10 @@ use common_expression::HashMethodSerializer;
 use common_expression::HashMethodSingleString;
 use common_expression::RemoteExpr;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_hashtable::HashJoinHashMap;
 use common_hashtable::HashMap;
 use common_hashtable::HashtableKeyable;
+use common_hashtable::RowPtr;
 use common_hashtable::ShortStringHashMap;
 use common_hashtable::StringHashMap;
 use common_sql::plans::JoinType;
@@ -42,7 +47,6 @@ use parking_lot::RwLock;
 
 use super::ProbeState;
 use crate::pipelines::processors::transforms::hash_join::desc::HashJoinDesc;
-use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
 use crate::pipelines::processors::transforms::hash_join::util::probe_schema_wrap_nullable;
@@ -64,6 +68,21 @@ pub struct FixedKeyHashTable<T: HashtableKeyable> {
     pub(crate) hash_method: HashMethodFixedKeys<T>,
 }
 
+pub struct SerializerHashJoinHashTable {
+    pub(crate) hash_table: StringHashMap<[u8], u64>,
+    pub(crate) hash_method: HashMethodSerializer,
+}
+
+pub struct SingleStringHashJoinHashTable {
+    pub(crate) hash_table: ShortStringHashMap<[u8], u64>,
+    pub(crate) hash_method: HashMethodSingleString,
+}
+
+pub struct FixedKeyHashJoinHashTable<T: HashtableKeyable> {
+    pub(crate) hash_table: HashJoinHashMap<T>,
+    pub(crate) hash_method: HashMethodFixedKeys<T>,
+}
+
 pub enum HashTable {
     Serializer(SerializerHashTable),
     SingleString(SingleStringHashTable),
@@ -75,19 +94,43 @@ pub enum HashTable {
     KeysU256(FixedKeyHashTable<U256>),
 }
 
+pub enum HashJoinHashTable {
+    Null,
+    // TODO(dousir9)
+    Serializer(FixedKeyHashJoinHashTable<u8>),
+    // TODO(dousir9)
+    SingleString(FixedKeyHashJoinHashTable<u8>),
+    KeysU8(FixedKeyHashJoinHashTable<u8>),
+    KeysU16(FixedKeyHashJoinHashTable<u16>),
+    KeysU32(FixedKeyHashJoinHashTable<u32>),
+    KeysU64(FixedKeyHashJoinHashTable<u64>),
+    KeysU128(FixedKeyHashJoinHashTable<u128>),
+    KeysU256(FixedKeyHashJoinHashTable<U256>),
+}
+
 pub struct JoinHashTable {
     pub(crate) ctx: Arc<QueryContext>,
     /// Reference count
-    pub(crate) ref_count: Mutex<usize>,
-    pub(crate) is_finished: Mutex<bool>,
+    pub(crate) building_count: Mutex<usize>,
+    pub(crate) finalizing_count: Mutex<usize>,
+    pub(crate) is_built: Mutex<bool>,
+    pub(crate) is_finalized: Mutex<bool>,
     /// A shared big hash table stores all the rows from build side
-    pub(crate) hash_table: RwLock<HashTable>,
+    pub(crate) hash_table: Arc<SyncUnsafeCell<HashJoinHashTable>>,
     pub(crate) row_space: RowSpace,
     pub(crate) hash_join_desc: HashJoinDesc,
     pub(crate) row_ptrs: RwLock<Vec<RowPtr>>,
     pub(crate) probe_schema: DataSchemaRef,
     pub(crate) interrupt: Arc<AtomicBool>,
-    pub(crate) finished_notify: Arc<Notify>,
+    pub(crate) built_notify: Arc<Notify>,
+    pub(crate) finalized_notify: Arc<Notify>,
+
+    pub(crate) max_threads: Mutex<usize>,
+    pub(crate) finalize_tasks: Arc<RwLock<Vec<(usize, usize)>>>,
+    pub(crate) unfinished_task_num: Arc<AtomicI32>,
+    pub(crate) method: Arc<HashMethodKind>,
+    pub(crate) entry_size: Arc<AtomicUsize>,
+    pub(crate) local_spaces: Mutex<Vec<Vec<u8>>>,
 }
 
 impl JoinHashTable {
@@ -103,96 +146,22 @@ impl JoinHashTable {
             .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).data_type().clone())
             .collect::<Vec<_>>();
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
-        Ok(match method {
-            HashMethodKind::Serializer(_) => Arc::new(JoinHashTable::try_create(
-                ctx,
-                HashTable::Serializer(SerializerHashTable {
-                    hash_table: StringHashMap::<[u8], Vec<RowPtr>>::new(),
-                    hash_method: HashMethodSerializer::default(),
-                }),
-                build_schema,
-                probe_schema,
-                hash_join_desc,
-            )?),
-            HashMethodKind::SingleString(_) => Arc::new(JoinHashTable::try_create(
-                ctx,
-                HashTable::SingleString(SingleStringHashTable {
-                    hash_table: ShortStringHashMap::<[u8], Vec<RowPtr>>::new(),
-                    hash_method: HashMethodSingleString::default(),
-                }),
-                build_schema,
-                probe_schema,
-                hash_join_desc,
-            )?),
-            HashMethodKind::KeysU8(hash_method) => Arc::new(JoinHashTable::try_create(
-                ctx,
-                HashTable::KeysU8(FixedKeyHashTable {
-                    hash_table: HashMap::<u8, Vec<RowPtr>>::new(),
-                    hash_method,
-                }),
-                build_schema,
-                probe_schema,
-                hash_join_desc,
-            )?),
-            HashMethodKind::KeysU16(hash_method) => Arc::new(JoinHashTable::try_create(
-                ctx,
-                HashTable::KeysU16(FixedKeyHashTable {
-                    hash_table: HashMap::<u16, Vec<RowPtr>>::new(),
-                    hash_method,
-                }),
-                build_schema,
-                probe_schema,
-                hash_join_desc,
-            )?),
-            HashMethodKind::KeysU32(hash_method) => Arc::new(JoinHashTable::try_create(
-                ctx,
-                HashTable::KeysU32(FixedKeyHashTable {
-                    hash_table: HashMap::<u32, Vec<RowPtr>>::new(),
-                    hash_method,
-                }),
-                build_schema,
-                probe_schema,
-                hash_join_desc,
-            )?),
-            HashMethodKind::KeysU64(hash_method) => Arc::new(JoinHashTable::try_create(
-                ctx,
-                HashTable::KeysU64(FixedKeyHashTable {
-                    hash_table: HashMap::<u64, Vec<RowPtr>>::new(),
-                    hash_method,
-                }),
-                build_schema,
-                probe_schema,
-                hash_join_desc,
-            )?),
-            HashMethodKind::KeysU128(hash_method) => Arc::new(JoinHashTable::try_create(
-                ctx,
-                HashTable::KeysU128(FixedKeyHashTable {
-                    hash_table: HashMap::<u128, Vec<RowPtr>>::new(),
-                    hash_method,
-                }),
-                build_schema,
-                probe_schema,
-                hash_join_desc,
-            )?),
-            HashMethodKind::KeysU256(hash_method) => Arc::new(JoinHashTable::try_create(
-                ctx,
-                HashTable::KeysU256(FixedKeyHashTable {
-                    hash_table: HashMap::<U256, Vec<RowPtr>>::new(),
-                    hash_method,
-                }),
-                build_schema,
-                probe_schema,
-                hash_join_desc,
-            )?),
-        })
+        Ok(Arc::new(JoinHashTable::try_create(
+            ctx,
+            build_schema,
+            probe_schema,
+            hash_join_desc,
+            method,
+        )?))
     }
 
     pub fn try_create(
         ctx: Arc<QueryContext>,
-        hash_table: HashTable,
+        // hash_table: HashTable,
         mut build_data_schema: DataSchemaRef,
         mut probe_data_schema: DataSchemaRef,
         hash_join_desc: HashJoinDesc,
+        method: HashMethodKind,
     ) -> Result<Self> {
         if hash_join_desc.join_type == JoinType::Left
             || hash_join_desc.join_type == JoinType::Single
@@ -208,15 +177,24 @@ impl JoinHashTable {
         }
         Ok(Self {
             row_space: RowSpace::new(ctx.clone(), build_data_schema)?,
-            ref_count: Mutex::new(0),
-            is_finished: Mutex::new(false),
+            building_count: Mutex::new(0),
+            finalizing_count: Mutex::new(0),
+            is_built: Mutex::new(false),
+            is_finalized: Mutex::new(false),
             hash_join_desc,
             ctx,
-            hash_table: RwLock::new(hash_table),
+            hash_table: Arc::new(SyncUnsafeCell::new(HashJoinHashTable::Null)),
+            method: Arc::new(method),
             row_ptrs: RwLock::new(vec![]),
             probe_schema: probe_data_schema,
-            finished_notify: Arc::new(Notify::new()),
+            built_notify: Arc::new(Notify::new()),
+            finalized_notify: Arc::new(Notify::new()),
             interrupt: Arc::new(AtomicBool::new(false)),
+            max_threads: Mutex::new(1),
+            finalize_tasks: Arc::new(RwLock::new(vec![])),
+            unfinished_task_num: Arc::new(AtomicI32::new(0)),
+            entry_size: Arc::new(AtomicUsize::new(0)),
+            local_spaces: Mutex::new(vec![]),
         })
     }
 
@@ -283,14 +261,16 @@ impl JoinHashTable {
             probe_state.valids = valids;
         }
 
-        with_hash_method!(|T| match &*self.hash_table.read() {
-            HashTable::T(table) => {
+        let hash_table = unsafe { &*self.hash_table.get() };
+        with_hash_method!(|T| match hash_table {
+            HashJoinHashTable::T(table) => {
                 let keys_state = table
                     .hash_method
                     .build_keys_state(&probe_keys, input.num_rows())?;
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
                 self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
             }
+            _ => unreachable!(),
         })
     }
 }

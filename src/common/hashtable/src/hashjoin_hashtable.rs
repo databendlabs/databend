@@ -1,0 +1,214 @@
+// Copyright 2023 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::alloc::Allocator;
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+
+use common_base::mem_allocator::MmapAllocator;
+
+use super::traits::HashJoinHashtableLike;
+use super::traits::Keyable;
+
+#[derive(Clone, Copy, Debug)]
+pub struct RowPtr {
+    pub chunk_index: usize,
+    pub row_index: usize,
+    pub marker: Option<MarkerKind>,
+}
+
+impl RowPtr {
+    pub fn new(chunk_index: usize, row_index: usize) -> Self {
+        RowPtr {
+            chunk_index,
+            row_index,
+            marker: None,
+        }
+    }
+}
+
+impl PartialEq for RowPtr {
+    fn eq(&self, other: &Self) -> bool {
+        self.chunk_index == other.chunk_index && self.row_index == other.row_index
+    }
+}
+
+impl Eq for RowPtr {}
+
+impl Hash for RowPtr {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.chunk_index.hash(state);
+        self.row_index.hash(state);
+    }
+}
+
+use std::marker::PhantomData;
+
+#[derive(Clone, Copy, Eq, PartialEq, Debug, Hash)]
+pub enum MarkerKind {
+    True,
+    False,
+    Null,
+}
+
+pub struct RawEntry<K> {
+    pub row_ptr: RowPtr,
+    pub key: K,
+    pub next: u64,
+    pub(crate) _alignment: [u64; 0],
+}
+
+pub struct HashJoinHashTable<K: Keyable, A: Allocator + Clone = MmapAllocator> {
+    pub(crate) pointers: Box<[u64], A>,
+    pub(crate) atomic_pointers: *mut AtomicU64,
+    mask: usize,
+    phantom: PhantomData<K>,
+}
+
+unsafe impl<K: Keyable + Send, A: Allocator + Clone + Send> Send for HashJoinHashTable<K, A> {}
+
+unsafe impl<K: Keyable + Sync, A: Allocator + Clone + Sync> Sync for HashJoinHashTable<K, A> {}
+
+impl<K: Keyable, A: Allocator + Clone + Default> HashJoinHashTable<K, A> {
+    pub fn with_fixed_capacity(capacity: usize) -> Self {
+        let mut hashtable = Self {
+            pointers: unsafe {
+                Box::new_zeroed_slice_in(capacity, Default::default()).assume_init()
+            },
+            atomic_pointers: std::ptr::null_mut(),
+            mask: capacity - 1,
+            phantom: PhantomData::default(),
+        };
+        hashtable.atomic_pointers = unsafe {
+            std::mem::transmute::<*mut u64, *mut AtomicU64>(hashtable.pointers.as_mut_ptr())
+        };
+        hashtable
+    }
+
+    pub fn insert(&mut self, key: K, raw_entry: *mut RawEntry<K>) {
+        let index = (key.hash() as usize) & self.mask;
+        let mut head = unsafe { (*self.atomic_pointers.add(index)).load(Ordering::Relaxed) };
+        loop {
+            unsafe { (*raw_entry).next = head };
+            let res = unsafe {
+                (*self.atomic_pointers.add(index)).compare_exchange_weak(
+                    head,
+                    raw_entry as u64,
+                    Ordering::SeqCst,
+                    Ordering::SeqCst,
+                )
+            };
+            if res.is_ok() {
+                break;
+            }
+            head = unsafe { (*self.atomic_pointers.add(index)).load(Ordering::Relaxed) };
+        }
+    }
+}
+
+impl<K, A> HashJoinHashtableLike for HashJoinHashTable<K, A>
+where
+    K: Keyable,
+    A: Allocator + Clone + 'static,
+{
+    type Key = K;
+
+    fn contains(&self, key_ref: &Self::Key) -> bool {
+        let index = (key_ref.hash() as usize) & self.mask;
+        let mut ptr = self.pointers[index];
+        loop {
+            if ptr == 0 {
+                break;
+            }
+            let raw_entry_ptr = ptr as *mut RawEntry<K>;
+            let raw_entry = unsafe { &*raw_entry_ptr };
+            if key_ref == &raw_entry.key {
+                return true;
+            }
+            ptr = raw_entry.next;
+        }
+        false
+    }
+
+    fn probe_hash_table(
+        &self,
+        key_ref: &Self::Key,
+        vec_ptr: *mut RowPtr,
+        mut occupied: usize,
+        capacity: usize,
+    ) -> (usize, u64) {
+        let index = (key_ref.hash() as usize) & self.mask;
+        let origin = occupied;
+        let mut ptr = self.pointers[index];
+        loop {
+            if ptr == 0 || occupied >= capacity {
+                break;
+            }
+            let raw_entry_ptr = ptr as *mut RawEntry<K>;
+            let raw_entry = unsafe { &*raw_entry_ptr };
+            if key_ref == &raw_entry.key {
+                unsafe {
+                    std::ptr::copy_nonoverlapping(
+                        &raw_entry.row_ptr as *const RowPtr,
+                        vec_ptr.add(occupied),
+                        1,
+                    )
+                };
+                occupied += 1;
+            }
+            ptr = raw_entry.next;
+        }
+        if occupied > origin {
+            (occupied - origin, ptr)
+        } else {
+            (0, 0)
+        }
+    }
+
+    fn next_incomplete_ptr(
+        &self,
+        key_ref: &Self::Key,
+        mut incomplete_ptr: u64,
+        vec_ptr: *mut RowPtr,
+        mut occupied: usize,
+        capacity: usize,
+    ) -> (usize, u64) {
+        let origin = occupied;
+        loop {
+            if incomplete_ptr == 0 || occupied >= capacity {
+                break;
+            }
+            let raw_entry_ptr = incomplete_ptr as *mut RawEntry<K>;
+            let raw_entry = unsafe { &*raw_entry_ptr };
+            if key_ref == &raw_entry.key {
+                unsafe {
+                    std::ptr::copy_nonoverlapping(
+                        &raw_entry.row_ptr as *const RowPtr,
+                        vec_ptr.add(occupied),
+                        1,
+                    )
+                };
+                occupied += 1;
+            }
+            incomplete_ptr = raw_entry.next;
+        }
+        if occupied > origin {
+            (occupied - origin, incomplete_ptr)
+        } else {
+            (0, 0)
+        }
+    }
+}

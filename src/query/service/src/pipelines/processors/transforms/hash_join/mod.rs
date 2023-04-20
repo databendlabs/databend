@@ -25,6 +25,7 @@ mod util;
 
 pub use desc::HashJoinDesc;
 pub use hash_join_state::HashJoinState;
+pub use join_hash_table::FixedKeyHashJoinHashTable;
 pub use join_hash_table::FixedKeyHashTable;
 pub use join_hash_table::HashTable;
 pub use join_hash_table::JoinHashTable;

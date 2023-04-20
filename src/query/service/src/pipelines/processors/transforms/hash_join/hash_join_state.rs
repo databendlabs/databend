@@ -34,19 +34,6 @@ pub trait HashJoinState: Send + Sync {
     /// Attach to state
     fn attach(&self) -> Result<()>;
 
-    /// Detach to state
-    fn detach(&self) -> Result<()>;
-
-    /// Is building finished.
-    fn is_finished(&self) -> Result<bool>;
-
-    /// Finish building hash table, will be called only once as soon as all handles
-    /// have been detached from current state.
-    fn finish(&self) -> Result<()>;
-
-    /// Wait until the build phase is finished
-    async fn wait_finish(&self) -> Result<()>;
-
     /// Get mark join results
     fn mark_join_blocks(&self) -> Result<Vec<DataBlock>>;
 
@@ -58,4 +45,25 @@ pub trait HashJoinState: Send + Sync {
 
     /// Get left join results
     fn left_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>>;
+
+    /// TODO(dousir9)
+    fn build_end(&self) -> Result<()>;
+
+    /// TODO(dousir9)
+    fn finalize_end(&self) -> Result<()>;
+
+    /// TODO(dousir9)
+    fn finalize(&self) -> Result<bool>;
+
+    /// TODO(dousir9)
+    fn divide_finalize_task(&self) -> Result<()>;
+
+    /// TODO(dousir9)
+    fn set_max_threads(&self, max_threads: usize) -> Result<()>;
+
+    /// TODO(dousir9)
+    async fn wait_build_finish(&self) -> Result<()>;
+
+    /// TODO(dousir9)
+    async fn wait_finalize_finish(&self) -> Result<()>;
 }
