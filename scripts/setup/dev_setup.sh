@@ -8,8 +8,6 @@ set -e
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../.." || exit
 
-declare -A ARCH_RENAME=(["arm64"]="aarch64" ["aarch64"]="aarch64" ["amd64"]="x86_64" ["x86_64"]="x86_64")
-
 function add_to_profile {
 	eval "$1"
 	FOUND=$(grep -c "$1" "${HOME}/.profile" || true)
@@ -159,6 +157,10 @@ function install_openssl {
 function install_sccache {
 	PACKAGE_MANAGER=$1
 
+	if sccache --version; then
+		echo "==> sccache is already installed"
+		return
+	fi
 	echo "==> installing sccache..."
 
 	case "$PACKAGE_MANAGER" in
@@ -166,22 +168,38 @@ function install_sccache {
 		install_pkg sccache "$PACKAGE_MANAGER"
 		;;
 	*)
-		arch=${ARCH_RENAME[$(uname -m)]}
-		download_target="sccache-v0.4.1-${arch}-unknown-linux-musl"
+
+		arch=$(uname -m)
+		case "$arch" in
+		amd64)
+			arch="x86_64"
+			;;
+		arm64)
+			arch="aarch64"
+			;;
+		esac
+		download_version="v0.4.1"
+		download_target="sccache-${download_version}-${arch}-unknown-linux-musl"
 		SCCACHE_RELEASE="https://github.com/mozilla/sccache/releases/"
-		curl -fLo sccache.tar.gz ${SCCACHE_RELEASE}/download/v0.4.1/${download_target}.tar.gz
+		curl -fLo sccache.tar.gz "${SCCACHE_RELEASE}/download/${download_version}/${download_target}.tar.gz"
 		tar -xzf sccache.tar.gz
-		sudo cp ${download_target}/sccache /usr/local/bin/
+		sudo cp "${download_target}/sccache" /usr/local/bin/
 		sudo chmod +x /usr/local/bin/sccache
-		rm -rf ${download_target}
+		rm -rf "${download_target}"
 		rm sccache.tar.gz
 		;;
 	esac
+
+	sccache --version
 }
 
 function install_protobuf {
 	PACKAGE_MANAGER=$1
 
+	if protoc --version; then
+		echo "==> protoc is already installed"
+		return
+	fi
 	echo "==> installing protobuf compiler..."
 
 	case "$PACKAGE_MANAGER" in
@@ -198,6 +216,8 @@ function install_protobuf {
 		sudo chmod +x /usr/local/bin/protoc
 		;;
 	esac
+
+	protoc --version
 }
 
 function install_thrift {
