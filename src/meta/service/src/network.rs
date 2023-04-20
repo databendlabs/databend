@@ -23,7 +23,6 @@ use common_base::base::tokio::time::sleep;
 use common_base::containers::ItemManager;
 use common_base::containers::Pool;
 use common_meta_sled_store::openraft;
-use common_meta_sled_store::openraft::error::NetworkError;
 use common_meta_sled_store::openraft::MessageSummary;
 use common_meta_sled_store::openraft::RaftNetworkFactory;
 use common_meta_types::protobuf::RaftRequest;
@@ -34,6 +33,7 @@ use common_meta_types::InstallSnapshotRequest;
 use common_meta_types::InstallSnapshotResponse;
 use common_meta_types::MembershipNode;
 use common_meta_types::MetaNetworkError;
+use common_meta_types::NetworkError;
 use common_meta_types::NodeId;
 use common_meta_types::RPCError;
 use common_meta_types::RaftError;
@@ -245,20 +245,20 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
                     let mes = resp.into_inner();
                     match serde_json::from_str(&mes.data) {
                         Ok(resp) => return Ok(resp),
-                        Err(e) => {
+                        Err(serde_err) => {
                             // parsing error, won't increase send failures
-                            last_err = Some(openraft::error::NetworkError::new(
-                                &AnyError::new(&e).add_context(|| "send_append_entries"),
+                            last_err = Some(NetworkError::new(
+                                &AnyError::new(&serde_err).add_context(|| "send_append_entries"),
                             ));
                             // backoff and retry sending
                             sleep(back_off).await;
                         }
                     }
                 }
-                Err(e) => {
+                Err(status) => {
                     raft_metrics::network::incr_sent_failure_to_peer(&self.target);
-                    last_err = Some(openraft::error::NetworkError::new(
-                        &AnyError::new(&e).add_context(|| "send_append_entries"),
+                    last_err = Some(NetworkError::new(
+                        &AnyError::new(&status).add_context(|| "send_append_entries"),
                     ));
                     // backoff and retry sending
                     sleep(back_off).await;
@@ -321,7 +321,7 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
                         }
                         Err(e) => {
                             // parsing error, won't increase sending failures
-                            last_err = Some(openraft::error::NetworkError::new(
+                            last_err = Some(NetworkError::new(
                                 &AnyError::new(&e).add_context(|| "send_install_snapshot"),
                             ));
                             // back off and retry sending
@@ -332,7 +332,7 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
                 Err(e) => {
                     raft_metrics::network::incr_sent_failure_to_peer(&self.target);
                     raft_metrics::network::incr_snapshot_send_failures_to_peer(&self.target);
-                    last_err = Some(openraft::error::NetworkError::new(
+                    last_err = Some(NetworkError::new(
                         &AnyError::new(&e).add_context(|| "send_install_snapshot"),
                     ));
 
@@ -377,7 +377,7 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
                         Ok(resp) => return Ok(resp),
                         Err(e) => {
                             // parsing error, won't increase sending errors
-                            last_err = Some(openraft::error::NetworkError::new(
+                            last_err = Some(NetworkError::new(
                                 &AnyError::new(&e).add_context(|| "send_vote"),
                             ));
                             // back off and retry
@@ -387,7 +387,7 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
                 }
                 Err(e) => {
                     raft_metrics::network::incr_sent_failure_to_peer(&self.target);
-                    last_err = Some(openraft::error::NetworkError::new(
+                    last_err = Some(NetworkError::new(
                         &AnyError::new(&e).add_context(|| "send_vote"),
                     ));
                     // back off and retry

@@ -45,7 +45,7 @@ impl FuseTable {
         append_mode: AppendMode,
         need_output: bool,
     ) -> Result<()> {
-        let block_compact_thresholds = self.get_block_compact_thresholds();
+        let block_thresholds = self.get_block_thresholds();
         let write_settings = self.get_write_settings();
 
         match append_mode {
@@ -54,7 +54,7 @@ impl FuseTable {
                     Ok(ProcessorPtr::create(TransformCompact::try_create(
                         transform_input_port,
                         transform_output_port,
-                        BlockCompactor::new(block_compact_thresholds, true),
+                        BlockCompactor::new(block_thresholds, true),
                     )?))
                 })?;
             }
@@ -65,21 +65,69 @@ impl FuseTable {
                     Ok(ProcessorPtr::create(TransformCompact::try_create(
                         transform_input_port,
                         transform_output_port,
-                        BlockCompactorForCopy::new(block_compact_thresholds),
+                        BlockCompactorForCopy::new(block_thresholds),
                     )?))
                 })?;
                 pipeline.resize(size)?;
             }
         }
 
-        let max_page_size = self.get_max_page_size();
-        let cluster_stats_gen = self.get_cluster_stats_gen(
-            ctx.clone(),
-            max_page_size,
-            pipeline,
-            0,
-            block_compact_thresholds,
-        )?;
+        let cluster_stats_gen =
+            self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds)?;
+        if need_output {
+            pipeline.add_transform(|transform_input_port, transform_output_port| {
+                FuseTableSink::try_create(
+                    transform_input_port,
+                    ctx.clone(),
+                    write_settings.clone(),
+                    self.operator.clone(),
+                    self.meta_location_generator().clone(),
+                    cluster_stats_gen.clone(),
+                    block_thresholds,
+                    self.table_info.schema(),
+                    Some(transform_output_port),
+                )
+            })?;
+        } else {
+            pipeline.add_sink(|input| {
+                FuseTableSink::try_create(
+                    input,
+                    ctx.clone(),
+                    write_settings.clone(),
+                    self.operator.clone(),
+                    self.meta_location_generator().clone(),
+                    cluster_stats_gen.clone(),
+                    block_thresholds,
+                    self.table_info.schema(),
+                    None,
+                )
+            })?;
+        }
+        Ok(())
+    }
+
+    pub fn cluster_gen_for_append(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        block_thresholds: BlockThresholds,
+    ) -> Result<ClusterStatsGenerator> {
+        let cluster_stats_gen = self.get_cluster_stats_gen(ctx.clone(), 0, block_thresholds)?;
+
+        let operators = cluster_stats_gen.operators.clone();
+        if !operators.is_empty() {
+            let num_input_columns = self.table_info.schema().fields().len();
+            let func_ctx2 = cluster_stats_gen.func_ctx.clone();
+            pipeline.add_transform(move |input, output| {
+                Ok(ProcessorPtr::create(CompoundBlockOperator::create(
+                    input,
+                    output,
+                    num_input_columns,
+                    func_ctx2.clone(),
+                    operators.clone(),
+                )))
+            })?;
+        }
 
         let cluster_keys = &cluster_stats_gen.cluster_key_index;
         if !cluster_keys.is_empty() {
@@ -102,46 +150,14 @@ impl FuseTable {
                 )?))
             })?;
         }
-
-        if need_output {
-            pipeline.add_transform(|transform_input_port, transform_output_port| {
-                FuseTableSink::try_create(
-                    transform_input_port,
-                    ctx.clone(),
-                    write_settings.clone(),
-                    self.operator.clone(),
-                    self.meta_location_generator().clone(),
-                    cluster_stats_gen.clone(),
-                    block_compact_thresholds,
-                    self.table_info.schema(),
-                    Some(transform_output_port),
-                )
-            })?;
-        } else {
-            pipeline.add_sink(|input| {
-                FuseTableSink::try_create(
-                    input,
-                    ctx.clone(),
-                    write_settings.clone(),
-                    self.operator.clone(),
-                    self.meta_location_generator().clone(),
-                    cluster_stats_gen.clone(),
-                    block_compact_thresholds,
-                    self.table_info.schema(),
-                    None,
-                )
-            })?;
-        }
-        Ok(())
+        Ok(cluster_stats_gen)
     }
 
     pub fn get_cluster_stats_gen(
         &self,
         ctx: Arc<dyn TableContext>,
-        max_page_size: Option<usize>,
-        pipeline: &mut Pipeline,
         level: i32,
-        block_compactor: BlockThresholds,
+        block_thresholds: BlockThresholds,
     ) -> Result<ClusterStatsGenerator> {
         let cluster_keys = self.cluster_keys(ctx.clone());
         if cluster_keys.is_empty() {
@@ -158,14 +174,13 @@ impl FuseTable {
         let mut exprs = Vec::with_capacity(cluster_keys.len());
 
         for remote_expr in &cluster_keys {
-            let expr = remote_expr
+            let expr: Expr = remote_expr
                 .as_expr(&BUILTIN_FUNCTIONS)
                 .project_column_ref(|name| input_schema.index_of(name).unwrap());
-            let offset = match &expr {
+            let index = match &expr {
                 Expr::ColumnRef { id, .. } => *id,
                 _ => {
                     let cname = format!("{}", expr);
-
                     merged.push(DataField::new(cname.as_str(), expr.data_type().clone()));
                     exprs.push(expr);
 
@@ -174,36 +189,25 @@ impl FuseTable {
                     offset
                 }
             };
-            cluster_key_index.push(offset);
+            cluster_key_index.push(index);
         }
 
-        let func_ctx = ctx.get_function_context()?;
-        if !exprs.is_empty() {
-            let num_input_columns = input_schema.fields().len();
-            let func_ctx2 = func_ctx.clone();
-            pipeline.add_transform(move |input, output| {
-                Ok(ProcessorPtr::create(CompoundBlockOperator::create(
-                    input,
-                    output,
-                    num_input_columns,
-                    func_ctx2.clone(),
-                    vec![BlockOperator::Map {
-                        exprs: exprs.clone(),
-                    }],
-                )))
-            })?;
-        }
+        let operators = if exprs.is_empty() {
+            vec![]
+        } else {
+            vec![BlockOperator::Map { exprs }]
+        };
 
         Ok(ClusterStatsGenerator::new(
             self.cluster_key_meta.as_ref().unwrap().0,
             cluster_key_index,
             extra_key_num,
-            max_page_size,
+            self.get_max_page_size(),
             level,
-            block_compactor,
-            vec![],
+            block_thresholds,
+            operators,
             merged,
-            func_ctx,
+            ctx.get_function_context()?,
         ))
     }
 

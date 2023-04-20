@@ -24,9 +24,6 @@ io-uring = [
 
 enable-histogram = ["common-metrics/enable-histogram"]
 
-# Enable defensive check when accessing raft store.
-raft-store-defensive = []
-
 [dependencies]
 # Workspace dependencies
 common-arrow = { path = "../../common/arrow" }

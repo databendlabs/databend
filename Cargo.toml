@@ -106,7 +106,7 @@ jsonb = { git = "https://github.com/b41sh/jsonb", rev = "f8aa82d" }
 
 # openraft = { version = "0.8.2", features = ["compat-07"] }
 # For debugging
-openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.8.4-alpha.1", features = ["compat-07"] }
+openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.8.4-alpha.2", features = ["compat-07"] }
 
 # type helper
 derive_more = "0.99.17"
