@@ -14,6 +14,7 @@
 
 use std::net::SocketAddr;
 use std::path::Path;
+use std::time::Duration;
 
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
@@ -118,7 +119,12 @@ impl HttpService {
 
         let addr = self
             .shutdown_handler
-            .start_service(listening, Some(tls_config), self.build_router(), None)
+            .start_service(
+                listening,
+                Some(tls_config),
+                self.build_router(),
+                Some(Duration::from_millis(1000)),
+            )
             .await?;
         Ok(addr)
     }
@@ -129,7 +135,12 @@ impl HttpService {
 
         let addr = self
             .shutdown_handler
-            .start_service(listening, None, self.build_router(), None)
+            .start_service(
+                listening,
+                None,
+                self.build_router(),
+                Some(Duration::from_millis(1000)),
+            )
             .await?;
         Ok(addr)
     }

@@ -382,6 +382,79 @@ Explain {
 
 
 ---------- Input ----------
+explain pipeline select a from t1 ignore_result;
+---------- Output ---------
+EXPLAIN PIPELINE SELECT a FROM t1
+---------- AST ------------
+Explain {
+    kind: Pipeline,
+    query: Query(
+        Query {
+            span: Some(
+                17..33,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        17..33,
+                    ),
+                    distinct: false,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    24..25,
+                                ),
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Some(
+                                        24..25,
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                31..33,
+                            ),
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                name: "t1",
+                                quote: None,
+                                span: Some(
+                                    31..33,
+                                ),
+                            },
+                            alias: None,
+                            travel_point: None,
+                            pivot: None,
+                            unpivot: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: true,
+        },
+    ),
+}
+
+
+---------- Input ----------
 describe a;
 ---------- Output ---------
 DESCRIBE a
@@ -2116,6 +2189,51 @@ CreateTable(
 
 
 ---------- Input ----------
+CREATE TABLE t(c1 varbinary);
+---------- Output ---------
+CREATE TABLE t (c1 STRING NOT NULL)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                13..14,
+            ),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c1",
+                            quote: None,
+                            span: Some(
+                                15..17,
+                            ),
+                        },
+                        data_type: String,
+                        default_expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
 CREATE TABLE t(c1 int default 1);
 ---------- Output ---------
 CREATE TABLE t (c1 Int32 NOT NULL DEFAULT 1)
@@ -2164,6 +2282,98 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+create table abc as (select * from xyz limit 10)
+---------- Output ---------
+CREATE TABLE abc AS SELECT * FROM xyz LIMIT 10
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "abc",
+            quote: None,
+            span: Some(
+                13..16,
+            ),
+        },
+        source: None,
+        engine: None,
+        uri_location: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: Some(
+            Query {
+                span: Some(
+                    21..38,
+                ),
+                with: None,
+                body: Select(
+                    SelectStmt {
+                        span: Some(
+                            21..38,
+                        ),
+                        distinct: false,
+                        select_list: [
+                            QualifiedName {
+                                qualified: [
+                                    Star(
+                                        Some(
+                                            28..29,
+                                        ),
+                                    ),
+                                ],
+                                exclude: None,
+                            },
+                        ],
+                        from: [
+                            Table {
+                                span: Some(
+                                    35..38,
+                                ),
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    name: "xyz",
+                                    quote: None,
+                                    span: Some(
+                                        35..38,
+                                    ),
+                                },
+                                alias: None,
+                                travel_point: None,
+                                pivot: None,
+                                unpivot: None,
+                            },
+                        ],
+                        selection: None,
+                        group_by: None,
+                        having: None,
+                        window_list: None,
+                    },
+                ),
+                order_by: [],
+                limit: [
+                    Literal {
+                        span: Some(
+                            45..47,
+                        ),
+                        lit: UInt64(
+                            10,
+                        ),
+                    },
+                ],
+                offset: None,
+                ignore_result: false,
+            },
+        ),
         transient: false,
     },
 )
@@ -2744,7 +2954,7 @@ SELECT * FROM a, b, c ORDER BY "db"."a"."c1"
 Query(
     Query {
         span: Some(
-            0..44,
+            0..21,
         ),
         with: None,
         body: Select(

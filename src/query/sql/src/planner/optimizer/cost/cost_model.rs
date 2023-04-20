@@ -60,16 +60,15 @@ fn compute_cost_scan(memo: &Memo, m_expr: &MExpr, _plan: &Scan) -> Result<Cost> 
     // Since we don't have alternations(e.g. index scan) for table scan for now, we just ignore
     // the I/O cost and treat `PhysicalScan` as normal computation.
     let group = memo.group(m_expr.group_index)?;
-    let prop = &group.relational_prop;
-    let cost = prop.cardinality * COST_FACTOR_COMPUTE_PER_ROW;
+    let cost = group.stat_info.cardinality * COST_FACTOR_COMPUTE_PER_ROW;
     Ok(Cost(cost))
 }
 
 fn compute_cost_join(memo: &Memo, m_expr: &MExpr, plan: &Join) -> Result<Cost> {
     let build_group = m_expr.child_group(memo, 1)?;
     let probe_group = m_expr.child_group(memo, 0)?;
-    let build_card = build_group.relational_prop.cardinality;
-    let probe_card = probe_group.relational_prop.cardinality;
+    let build_card = build_group.stat_info.cardinality;
+    let probe_card = probe_group.stat_info.cardinality;
 
     let mut cost =
         build_card * COST_FACTOR_HASH_TABLE_PER_ROW + probe_card * COST_FACTOR_COMPUTE_PER_ROW;
@@ -88,7 +87,7 @@ fn compute_cost_join(memo: &Memo, m_expr: &MExpr, plan: &Join) -> Result<Cost> {
 /// treat `Aggregate` as normal computation.
 fn compute_cost_unary_common_operator(memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
     let group = m_expr.child_group(memo, 0)?;
-    let card = group.relational_prop.cardinality;
+    let card = group.stat_info.cardinality;
     let cost = card * COST_FACTOR_COMPUTE_PER_ROW;
     Ok(Cost(cost))
 }
@@ -96,14 +95,14 @@ fn compute_cost_unary_common_operator(memo: &Memo, m_expr: &MExpr) -> Result<Cos
 fn compute_cost_union_all(memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
     let left_group = m_expr.child_group(memo, 0)?;
     let right_group = m_expr.child_group(memo, 0)?;
-    let card = left_group.relational_prop.cardinality + right_group.relational_prop.cardinality;
+    let card = left_group.stat_info.cardinality + right_group.stat_info.cardinality;
     let cost = card * COST_FACTOR_COMPUTE_PER_ROW;
     Ok(Cost(cost))
 }
 
 fn compute_aggregate(memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
     let group = m_expr.child_group(memo, 0)?;
-    let card = group.relational_prop.cardinality;
+    let card = group.stat_info.cardinality;
     let cost = card * COST_FACTOR_AGGREGATE_PER_ROW;
     Ok(Cost(cost))
 }

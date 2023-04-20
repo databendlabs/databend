@@ -1996,7 +1996,7 @@ dependencies = [
  "pretty_assertions",
  "serde",
  "serde_json",
- "sled 0.34.6",
+ "sled",
  "tempfile",
  "thiserror",
  "tracing",
@@ -2010,7 +2010,7 @@ dependencies = [
  "prost",
  "serde",
  "serde_json",
- "sled 0.34.6",
+ "sled",
  "thiserror",
 ]
 
@@ -2306,6 +2306,7 @@ dependencies = [
  "common-meta-app",
  "flagset",
  "futures",
+ "log",
  "opendal",
  "regex",
  "reqwest",
@@ -3253,7 +3254,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serfig",
- "sled 0.34.6",
+ "sled",
  "temp-env",
  "tempfile",
  "tokio-stream",
@@ -4216,15 +4217,6 @@ dependencies = [
  "pin-project-lite",
  "pin-utils",
  "slab",
-]
-
-[[package]]
-name = "fxhash"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c31b6d751ae2c7f11320402d34e41349dd1016f8d5d45e48c4312bc8625af50c"
-dependencies = [
- "byteorder",
 ]
 
 [[package]]
@@ -6922,9 +6914,9 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.31.0"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf96af8fd158be23ee9c3a6adb3383a665424cc50b0c68774fe6d1a18892077f"
+checksum = "8c7c7970b5089b9dc08171898b961ba05d5faf8b420ad7920712f7947eedb710"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -6953,7 +6945,6 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "sled 0.34.7",
  "tokio",
  "tracing",
  "uuid",
@@ -9231,22 +9222,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sled"
-version = "0.34.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f96b4737c2ce5987354855aed3797279def4ebf734436c6aa4552cf8e169935"
-dependencies = [
- "crc32fast",
- "crossbeam-epoch",
- "crossbeam-utils",
- "fs2",
- "fxhash",
- "libc",
- "log",
- "parking_lot 0.11.2",
-]
-
-[[package]]
 name = "smallvec"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10289,7 +10264,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
