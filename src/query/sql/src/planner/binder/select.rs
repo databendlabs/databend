@@ -180,15 +180,18 @@ impl Binder {
             .await?;
 
         // After all analysis is done.
-        self.analyze_lazy_materialization(
-            &from_context,
-            stmt,
-            &scalar_items,
-            &select_list,
-            &where_scalar,
-            &order_items.items,
-            limit,
-        )?;
+        if set_returning_functions.is_empty() {
+            // Ignore SRFs.
+            self.analyze_lazy_materialization(
+                &from_context,
+                stmt,
+                &scalar_items,
+                &select_list,
+                &where_scalar,
+                &order_items.items,
+                limit,
+            )?;
+        }
 
         if !from_context.aggregate_info.aggregate_functions.is_empty()
             || !from_context.aggregate_info.group_items.is_empty()

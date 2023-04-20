@@ -38,6 +38,7 @@ use common_storage::DataOperator;
 use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
 use dashmap::DashMap;
+use storages_common_table_meta::meta::Location;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
@@ -101,8 +102,8 @@ pub trait TableContext: Send + Sync {
     fn get_cacheable(&self) -> bool;
     fn set_cacheable(&self, cacheable: bool);
 
-    fn set_snapshot(&self, location: String, ver: u64);
-    fn get_snapshot(&self) -> Option<(String, u64)>;
+    fn set_snapshot(&self, location: Location);
+    fn get_snapshot(&self) -> Option<Location>;
 
     fn attach_query_str(&self, kind: String, query: String);
     fn get_query_str(&self) -> String;

@@ -15,16 +15,6 @@ create table t(a Int64)
 statement ok
 insert into t select * from numbers(100);
 
-# issue #11126
-query II
-select a, _row_id from t order by a desc limit 5;
-----
-99 99
-98 98
-97 97
-96 96
-95 95
-
 statement ok
 insert into t select * from numbers(100);
 

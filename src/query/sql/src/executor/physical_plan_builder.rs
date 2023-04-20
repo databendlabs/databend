@@ -1129,7 +1129,7 @@ impl PhysicalPlanBuilder {
                     table_schema,
                     &prewhere.output_columns,
                     has_inner_column,
-                    false,
+                    true,
                     false,
                     true,
                 );
@@ -1138,7 +1138,7 @@ impl PhysicalPlanBuilder {
                     table_schema,
                     &prewhere.prewhere_columns,
                     has_inner_column,
-                    false,
+                    true,
                     true,
                     true,
                 );
@@ -1147,7 +1147,7 @@ impl PhysicalPlanBuilder {
                     table_schema,
                     &remain_columns,
                     has_inner_column,
-                    false,
+                    true,
                     true,
                     true,
                 );

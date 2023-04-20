@@ -1007,13 +1007,9 @@ impl PipelineBuilder {
     }
 
     fn build_row_fetch(&mut self, row_fetch: &RowFetch) -> Result<()> {
-        debug_assert!({
-            if let PhysicalPlan::Limit(limit) = &*row_fetch.input {
-                matches!(*limit.input, PhysicalPlan::Sort(_))
-            } else {
-                false
-            }
-        });
+        debug_assert!(
+            matches!(&*row_fetch.input, PhysicalPlan::Limit(limit) if matches!(*limit.input, PhysicalPlan::Sort(_)))
+        );
         self.build_pipeline(&row_fetch.input)?;
         build_row_fetcher_pipeline(
             self.ctx.clone(),

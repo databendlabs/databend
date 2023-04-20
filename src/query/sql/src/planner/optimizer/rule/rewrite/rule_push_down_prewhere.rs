@@ -84,7 +84,7 @@ impl RulePushDownPrewhere {
             ScalarExpr::CastExpr(cast) => {
                 Self::collect_columns_impl(table_index, schema, cast.argument.as_ref(), columns)?;
             }
-            ScalarExpr::ConstantExpr(_) => {}
+            ScalarExpr::ConstantExpr(_) | ScalarExpr::BoundInternalColumnRef(_) => {}
             _ => {
                 // SubqueryExpr and AggregateFunction will not appear in Filter-LogicalGet
                 return Err(ErrorCode::Unimplemented(format!(

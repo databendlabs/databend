@@ -687,7 +687,7 @@ impl Table for FuseTable {
     }
 
     fn support_row_id_column(&self) -> bool {
-        true
+        !self.is_native()
     }
 }
 

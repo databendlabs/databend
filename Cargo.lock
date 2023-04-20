@@ -1545,6 +1545,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "storages-common-table-meta",
  "typetag",
 ]
 

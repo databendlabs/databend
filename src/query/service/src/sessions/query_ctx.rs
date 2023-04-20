@@ -66,6 +66,7 @@ use common_users::UserApiProvider;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
 use parking_lot::RwLock;
+use storages_common_table_meta::meta::Location;
 use tracing::debug;
 
 use crate::api::DataExchangeManager;
@@ -95,7 +96,7 @@ pub struct QueryContext {
 
     /// This is held to support lazy materialization for TopN optimization, etc.
     /// It's only valid for **single-table** query on **Fuse** engine.
-    snapshot: Arc<RwLock<Option<(String, u64)>>>,
+    snapshot: Arc<RwLock<Option<Location>>>,
 }
 
 impl QueryContext {
@@ -333,12 +334,12 @@ impl TableContext for QueryContext {
         self.shared.cacheable.load(Ordering::Acquire)
     }
 
-    fn set_snapshot(&self, location: String, ver: u64) {
+    fn set_snapshot(&self, location: Location) {
         let mut snapshot = self.snapshot.write();
-        snapshot.replace((location, ver));
+        snapshot.replace(location);
     }
 
-    fn get_snapshot(&self) -> Option<(String, u64)> {
+    fn get_snapshot(&self) -> Option<Location> {
         self.snapshot.read().as_ref().cloned()
     }
 

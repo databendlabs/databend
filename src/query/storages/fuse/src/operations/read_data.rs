@@ -109,7 +109,7 @@ impl FuseTable {
                     let segment_id_map = if plan.query_internal_columns {
                         if let Some(loc) = table.snapshot_loc().await? {
                             let ver = table.snapshot_format_version().await?;
-                            ctx.set_snapshot(loc.clone(), ver);
+                            ctx.set_snapshot((loc.clone(), ver));
                             let snapshot =
                                 Self::read_table_snapshot_impl(loc, ver, dal.clone()).await?;
                             snapshot.map(|s| s.build_segment_id_map())
