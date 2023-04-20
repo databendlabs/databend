@@ -34,9 +34,7 @@ impl<'a> WindowChecker<'a> {
 
     pub fn resolve(&self, scalar: &ScalarExpr) -> Result<ScalarExpr> {
         match scalar {
-            ScalarExpr::BoundColumnRef(_)
-            | ScalarExpr::BoundInternalColumnRef(_)
-            | ScalarExpr::ConstantExpr(_) => Ok(scalar.clone()),
+            ScalarExpr::BoundColumnRef(_) | ScalarExpr::ConstantExpr(_) => Ok(scalar.clone()),
             ScalarExpr::FunctionCall(func) => {
                 let args = func
                     .arguments

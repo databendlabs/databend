@@ -424,7 +424,7 @@ impl BindContext {
         &mut self,
         column_binding: &InternalColumnBinding,
         metadata: MetadataRef,
-    ) {
+    ) -> ColumnBinding {
         let column_id = column_binding.internal_column.column_id();
         if let std::collections::btree_map::Entry::Vacant(e) =
             self.bound_internal_columns.entry(column_id)
@@ -449,6 +449,7 @@ impl BindContext {
 
             e.insert((table_index, column_binding.index));
         }
+        self.columns[column_binding.index].clone()
     }
 
     pub fn add_internal_column_into_expr(&self, s_expr: SExpr) -> SExpr {
