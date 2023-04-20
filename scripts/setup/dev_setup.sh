@@ -8,6 +8,8 @@ set -e
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../.." || exit
 
+declare -A ARCH_RENAME=(["arm64"]="aarch64" ["aarch64"]="aarch64" ["amd64"]="x86_64" ["x86_64"]="x86_64")
+
 function add_to_profile {
 	eval "$1"
 	FOUND=$(grep -c "$1" "${HOME}/.profile" || true)
@@ -150,6 +152,29 @@ function install_openssl {
 	*)
 		echo "Unable to install openssl with package manager: $PACKAGE_MANAGER"
 		exit 1
+		;;
+	esac
+}
+
+function install_sccache {
+	PACKAGE_MANAGER=$1
+
+	echo "==> installing sccache..."
+
+	case "$PACKAGE_MANAGER" in
+	brew)
+		install_pkg sccache "$PACKAGE_MANAGER"
+		;;
+	*)
+		arch=${ARCH_RENAME[$(uname -m)]}
+		download_target="sccache-v0.4.1-${arch}-unknown-linux-musl"
+		SCCACHE_RELEASE="https://github.com/mozilla/sccache/releases/"
+		curl -fLo sccache.tar.gz ${SCCACHE_RELEASE}/download/v0.4.1/${download_target}.tar.gz
+		tar -xzf sccache.tar.gz
+		sudo cp ${download_target}/sccache /usr/local/bin/
+		sudo chmod +x /usr/local/bin/sccache
+		rm -rf ${download_target}
+		rm sccache.tar.gz
 		;;
 	esac
 }
@@ -531,7 +556,7 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	cargo version
 
 	# Install tools that needed in build
-	cargo install sccache
+	install_sccache "$PACKAGE_MANAGER"
 fi
 
 if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then
