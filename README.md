@@ -231,7 +231,9 @@ For general help in using Databend, please refer to the official documentation. 
 
 ## License
 
-Databend is licensed under [Apache 2.0](LICENSE).
+Current Databend code is released under a combination of two licenses, the [Apache 2.0](https://github.com/datafuselabs/databend/blob/main/licenses/apache.md) and the [Databend Community License (DCL)](https://github.com/datafuselabs/databend/blob/main/licenses/dcl.md).
+
+When contributing to a Databend feature, you can find the relevant license in the comments at the top of each file.
 
 ## Acknowledgement
 
