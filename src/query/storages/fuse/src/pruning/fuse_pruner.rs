@@ -200,7 +200,7 @@ impl FusePruner {
             let limit = push_down.limit.unwrap();
             let sort = push_down.order_by.clone();
             let topn_pruner = TopNPrunner::create(schema, sort, limit);
-            return Ok(topn_pruner.prune(metas.clone()).unwrap_or_else(|_| metas));
+            return Ok(topn_pruner.prune(metas.clone()).unwrap_or(metas));
         }
         Ok(metas)
     }
