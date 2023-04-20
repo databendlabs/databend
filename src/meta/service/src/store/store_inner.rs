@@ -49,9 +49,8 @@ use crate::metrics::raft_metrics;
 use crate::store::ToStorageError;
 use crate::Opened;
 
-/// An storage implementing the `async_raft::RaftStorage` trait.
+/// This is the inner store that provides support utilities for implementing the raft storage API.
 ///
-/// It is the stateful part in a raft implementation.
 /// This store is backed by a sled db, contents are stored in 3 trees:
 ///   state:
 ///       id
@@ -165,8 +164,7 @@ impl StoreInner {
 
         info!("log compaction start");
 
-        // 1. Take a serialized snapshot
-
+        // Dump the data of a snapshot
         let (snap, last_applied_log, last_membership, snapshot_id) = {
             let sm = self.state_machine.clone();
 
