@@ -1229,6 +1229,7 @@ impl PhysicalPlanBuilder {
             limit: scan.limit,
             order_by: order_by.unwrap_or_default(),
             virtual_columns,
+            lazy_materialization: !metadata.lazy_columns().is_empty(),
         })
     }
 
