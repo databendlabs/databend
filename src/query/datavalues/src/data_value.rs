@@ -28,7 +28,6 @@ pub enum DataValue {
     UInt64(u64),
     Float64(f64),
     String(Vec<u8>),
-    Bitmap(Vec<u32>),
 
     // Container struct.
     Array(Vec<DataValue>),
@@ -53,7 +52,6 @@ impl std::hash::Hash for DataValue {
             DataValue::Int64(v) => v.hash(state),
             DataValue::Float64(v) => v.to_bits().hash(state),
             DataValue::String(v) => v.hash(state),
-            DataValue::Bitmap(v) => v.hash(state),
             DataValue::Array(v) => v.hash(state),
             DataValue::Struct(v) => v.hash(state),
             DataValue::Variant(v) => v.hash(state),
