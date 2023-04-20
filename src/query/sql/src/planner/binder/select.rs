@@ -188,7 +188,7 @@ impl Binder {
             &where_scalar,
             &order_items.items,
             limit,
-        );
+        )?;
 
         if !from_context.aggregate_info.aggregate_functions.is_empty()
             || !from_context.aggregate_info.group_items.is_empty()
@@ -704,7 +704,7 @@ impl Binder {
         where_scalar: &Option<ScalarExpr>,
         order_by: &[OrderItem],
         limit: usize,
-    ) {
+    ) -> Result<()> {
         // Only simple single table Top-N query is supported.
         // e.g.
         // SELECT ... FROM t WHERE ... ORDER BY ... LIMIT ...
@@ -715,21 +715,23 @@ impl Binder {
             || !bind_context.aggregate_info.group_items.is_empty()
             || !bind_context.aggregate_info.aggregate_functions.is_empty()
         {
-            return;
+            return Ok(());
         }
 
-        if !(!order_by.is_empty() && limit > 0 && limit <= 100) {
-            return;
+        let limit_threadhold = self.ctx.get_settings().get_lazy_topn_threshold()? as usize;
+
+        if !(!order_by.is_empty() && limit > 0 && limit <= limit_threadhold) {
+            return Ok(());
         }
 
         let mut metadata = self.metadata.write();
         if metadata.tables().len() != 1 {
             // Only support single table query.
-            return;
+            return Ok(());
         }
 
         if !metadata.table(0).table().support_row_id_column() {
-            return;
+            return Ok(());
         }
 
         let cols = metadata.columns();
@@ -742,7 +744,7 @@ impl Binder {
 
         if !virtual_cols.is_empty() {
             // Virtual columns are not supported now.
-            return;
+            return Ok(());
         }
 
         let mut select_cols = HashSet::with_capacity(select_list.items.len());
@@ -777,7 +779,9 @@ impl Binder {
         non_lazy_cols.extend(internal_cols);
 
         let lazy_cols = select_cols.difference(&non_lazy_cols).copied().collect();
-        metadata.add_lazy_columns(lazy_cols)
+        metadata.add_lazy_columns(lazy_cols);
+
+        Ok(())
     }
 }
 
