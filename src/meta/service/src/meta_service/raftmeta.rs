@@ -33,11 +33,8 @@ use common_meta_client::reply_to_api_result;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::key_spaces::GenericKV;
 use common_meta_sled_store::openraft;
+use common_meta_sled_store::openraft::storage::Adaptor;
 use common_meta_sled_store::openraft::ChangeMembers;
-#[cfg(feature = "raft-store-defensive")]
-use common_meta_sled_store::openraft::DefensiveCheckBase;
-#[cfg(feature = "raft-store-defensive")]
-use common_meta_sled_store::openraft::StoreExt;
 use common_meta_sled_store::SledKeySpace;
 use common_meta_stoerr::MetaStorageError;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
@@ -89,7 +86,6 @@ use crate::meta_service::RaftServiceImpl;
 use crate::metrics::server_metrics;
 use crate::network::Network;
 use crate::store::RaftStore;
-use crate::store::RaftStoreBare;
 use crate::watcher::DispatcherSender;
 use crate::watcher::EventDispatcher;
 use crate::watcher::EventDispatcherHandle;
@@ -127,8 +123,11 @@ pub struct MetaNodeStatus {
     pub last_seq: u64,
 }
 
+pub type LogStore = Adaptor<TypeConfig, RaftStore>;
+pub type SMStore = Adaptor<TypeConfig, RaftStore>;
+
 /// MetaRaft is a implementation of the generic Raft handling meta data R/W.
-pub type MetaRaft = Raft<TypeConfig, Network, RaftStore>;
+pub type MetaRaft = Raft<TypeConfig, Network, LogStore, SMStore>;
 
 /// MetaNode is the container of meta data related components and threads, such as storage, the raft node and a raft-state monitor.
 pub struct MetaNode {
@@ -173,7 +172,9 @@ impl MetaNodeBuilder {
 
         let net = Network::new(sto.clone());
 
-        let raft = MetaRaft::new(node_id, Arc::new(config), net, sto.clone())
+        let (log_store, sm_store) = Adaptor::new(sto.clone());
+
+        let raft = MetaRaft::new(node_id, Arc::new(config), net, log_store, sm_store)
             .await
             .map_err(|e| MetaStartupError::MetaServiceError(e.to_string()))?;
         let metrics_rx = raft.metrics();
@@ -368,14 +369,7 @@ impl MetaNode {
             config.no_sync = true;
         }
 
-        let sto = RaftStoreBare::open_create(&config, open, create).await?;
-
-        #[cfg(feature = "raft-store-defensive")]
-        let sto = {
-            let sto_ext = StoreExt::new(sto);
-            sto_ext.set_defensive(true);
-            sto_ext
-        };
+        let sto = RaftStore::open_create(&config, open, create).await?;
 
         // config.id only used for the first time
         let self_node_id = if sto.is_opened() { sto.id } else { config.id };

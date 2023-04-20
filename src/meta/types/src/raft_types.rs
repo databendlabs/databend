@@ -48,6 +48,7 @@ pub type ErrorSubject = openraft::ErrorSubject<NodeId>;
 
 pub type RPCError<E> = openraft::error::RPCError<NodeId, MembershipNode, E>;
 pub type RaftError<E = openraft::error::Infallible> = openraft::error::RaftError<NodeId, E>;
+pub type NetworkError = openraft::error::NetworkError;
 
 pub type StorageError = openraft::StorageError<NodeId>;
 pub type StorageIOError = openraft::StorageIOError<NodeId>;
