@@ -7,3 +7,4 @@ query I
 select length(sum_state(number)) from numbers(10000);
 ----
 5
+

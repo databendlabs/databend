@@ -18,9 +18,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;
-use common_expression::types::BooleanType;
 use common_expression::types::DataType;
-use common_expression::types::ValueType;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
@@ -30,7 +28,6 @@ use crate::aggregates::aggregate_function_factory::AggregateFunctionCreator;
 use crate::aggregates::aggregate_function_factory::CombinatorDescription;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
-use crate::aggregates::StateAddrs;
 
 #[derive(Clone)]
 pub struct AggregateStateCombinator {
