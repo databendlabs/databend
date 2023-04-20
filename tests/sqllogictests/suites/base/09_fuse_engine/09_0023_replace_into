@@ -262,19 +262,6 @@ statement ok
 DROP TABLE test;
 
 
-#####################################
-# clustered table not supported yet #
-#####################################
-
-statement ok
-create table t_clustered(a int,b int) CLUSTER BY(a);
-
-statement error 4000
-replace into t_clustered(a, b) on(a) values(1,2);
-
-statement ok
-DROP TABLE t_clustered;
-
 ##############
 # from stage #
 ##############
@@ -360,6 +347,34 @@ drop table test
 
 
 #####################
+
+statement ok
+CREATE TABLE test(a int, b int) cluster by(a+1, b)
+
+statement ok
+insert into test values(1, 1)
+
+statement ok
+insert into test values(2, 2), (3, 2)
+
+statement ok
+replace into test on(a) values(3, 3), (4, 4)
+
+query II
+select a, b FROM test order by a
+----
+1 1
+2 2
+3 3
+4 4
+
+query TIIFFT
+select * FROM clustering_information('db_09_0023','test')
+----
+((a + 1), b) 3 2 0.0 1.0 {"00001":3}
+
+statement ok
+DROP TABLE test
 
 
 statement ok

@@ -290,8 +290,15 @@ impl MergeIntoOperationAggregator {
         // serialization and compression is cpu intensive, send them to dedicated thread pool
         // and wait (asyncly, which will NOT block the executor thread)
         let block_builder = self.block_builder.clone();
+        let origin_stats = block_meta.cluster_stats.clone();
         let serialized = GlobalIORuntime::instance()
-            .spawn_blocking(move || block_builder.build(new_block))
+            .spawn_blocking(move || {
+                block_builder.build(new_block, |block, generator| {
+                    let cluster_stats =
+                        generator.gen_with_origin_stats(&block, origin_stats.clone())?;
+                    Ok((cluster_stats, block))
+                })
+            })
             .await?;
 
         // persistent data

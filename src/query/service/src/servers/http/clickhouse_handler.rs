@@ -328,7 +328,7 @@ pub async fn clickhouse_handler_post(
                     ctx.get_settings(),
                     table_schema,
                     ctx.get_scan_progress(),
-                    to_table.get_block_compact_thresholds(),
+                    to_table.get_block_thresholds(),
                 )
                 .await
                 .map_err(InternalServerError)?,
@@ -377,7 +377,7 @@ pub async fn clickhouse_handler_post(
                     table_schema,
                     ctx.get_scan_progress(),
                     false,
-                    to_table.get_block_compact_thresholds(),
+                    to_table.get_block_thresholds(),
                 )
                 .await
                 .map_err(|err| err.display_with_sql(&sql))
