@@ -643,10 +643,10 @@ impl MetaNode {
                 match res {
                     Ok(x) => return Ok(x),
                     Err(api_err) => {
-                        tracing::warn!("{} while joining cluster via {}", api_err, addr);
+                        warn!("{} while joining cluster via {}", api_err, addr);
+                        let can_retry = api_err.is_retryable();
 
-                        if let MetaAPIError::CanNotForward(_) = &api_err {
-                            // Leader is not ready, wait a while and retry
+                        if can_retry {
                             sleep(Duration::from_millis(1_000)).await;
                             continue;
                         } else {
@@ -823,6 +823,9 @@ impl MetaNode {
         let mut cluster_node_ids = BTreeSet::new();
         cluster_node_ids.insert(node_id);
 
+        // TODO(1): initialize() and add_node() are not done atomically.
+        //          There is an issue that just after initializing the cluster, the node will be used but no node info is found.
+        //          To address it, upgrade to membership with embedded Node.
         self.raft.initialize(cluster_node_ids).await?;
 
         info!("initialized cluster");

@@ -19,6 +19,7 @@ use sled::transaction::UnabortableTransactionError;
 
 use crate::MetaBytesError;
 
+/// Storage level error that is raised by meta service.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 pub enum MetaStorageError {
     /// An error raised when encode/decode data to/from underlying storage.
