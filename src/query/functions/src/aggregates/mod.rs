@@ -25,6 +25,7 @@ mod aggregate_array_agg;
 mod aggregate_avg;
 mod aggregate_combinator_distinct;
 mod aggregate_combinator_if;
+mod aggregate_combinator_state;
 mod aggregate_covariance;
 mod aggregate_distinct_state;
 mod aggregate_kurtosis;
