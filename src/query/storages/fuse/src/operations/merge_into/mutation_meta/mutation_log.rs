@@ -65,13 +65,6 @@ pub struct BlockMetaIndex {
 pub struct AppendOperationLogEntry {
     pub segment_location: String,
     pub segment_info: Arc<SegmentInfo>,
-
-    // Although it is now allowed to deploy different versions of databend query nodes in the same cluster,
-    // but we can not prevent users from doing that. In that case, different nodes may have different versions
-    // of SegmentInfo.
-    //
-    // The bottom line is, if user miss-configures the cluster, the cluster may be broken, but the data
-    // that might be persistent to object storage should be safe.
     pub format_version: FormatVersion,
 }
 

@@ -1,18 +1,18 @@
-checking that 3 snapshots exits
-1
+checking that 3 snapshots exit
+3
 checking that 5 snapshot exist
-1
-checking that after flashback to the 2nd last snapshot which is of version 3, the table is as expected
+5
+checking that after flashback to the 2nd last snapshot s4 which is of version 3, and now the table contains {1,2,3,4}
 1
 2
 3
 4
-checking that after flashback to the 3nd last snapshot which is of version 3, the table is as expected
+checking that after flashback to the 3rd last snapshot s3 which is of version 3, and the table contains {1,2,3}
 1
 2
 3
-checking that after flashback to the 3nd last snapshot which is of version 2, the table is as expected
+checking that after flashback to the 4th last snapshot s2 which is of version 2, the table contains {1,2}
 1
 2
-checking that after flashback to the 3nd last snapshot which is of version 2, the table is as expected
+checking that after flashback to the 5th last snapshot s1 which is of version 2, the table contains {1}
 1
