@@ -282,7 +282,10 @@ impl SampleSet for UniformSampleSet {
                 Ok(Datum::Float(upper_bound))
             }
 
-            _ => Err(format!("Unsupported datum type: {:?}", self.min,)),
+            _ => Err(format!(
+                "Unsupported datum type: {:?}, {:?}",
+                self.min, self.max
+            )),
         }
     }
 }
