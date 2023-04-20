@@ -1933,7 +1933,10 @@ impl ColumnBuilder {
                 ColumnBuilder::Array(Box::new(ArrayColumnBuilder::repeat(col, n)))
             }
             ScalarRef::Map(col) => ColumnBuilder::Map(Box::new(ArrayColumnBuilder::repeat(col, n))),
-            ScalarRef::Bitmap(bits) => ColumnBuilder::Bitmap()
+            ScalarRef::Bitmap(bits) => {
+                let roaring = RoaringBitmap::from_iter(bits.iter());
+                ColumnBuilder::Bitmap(vec![roaring; n])
+            }
             ScalarRef::Tuple(fields) => {
                 let fields_ty = match data_type {
                     DataType::Tuple(fields_ty) => fields_ty,
@@ -1964,6 +1967,7 @@ impl ColumnBuilder {
             ColumnBuilder::Date(builder) => builder.len(),
             ColumnBuilder::Array(builder) => builder.len(),
             ColumnBuilder::Map(builder) => builder.len(),
+            ColumnBuilder::Bitmap(builder) => builder.len(),
             ColumnBuilder::Nullable(builder) => builder.len(),
             ColumnBuilder::Tuple(fields) => fields[0].len(),
             ColumnBuilder::Variant(builder) => builder.len(),
@@ -1997,6 +2001,7 @@ impl ColumnBuilder {
             ColumnBuilder::Date(col) => col.len() * 4,
             ColumnBuilder::Array(col) => col.builder.memory_size() + col.offsets.len() * 8,
             ColumnBuilder::Map(col) => col.builder.memory_size() + col.offsets.len() * 8,
+            ColumnBuilder::Bitmap(col) => col.iter().map(|r| r.len() * 4).sum(),
             ColumnBuilder::Nullable(c) => c.builder.memory_size() + c.validity.as_slice().len(),
             ColumnBuilder::Tuple(fields) => fields.iter().map(|f| f.memory_size()).sum(),
             ColumnBuilder::Variant(col) => col.data.len() + col.offsets.len() * 8,
@@ -2027,6 +2032,7 @@ impl ColumnBuilder {
                 let inner = col.builder.data_type();
                 DataType::Map(Box::new(inner))
             }
+            ColumnBuilder::Bitmap(_) => DataType::Bitmap,
             ColumnBuilder::Nullable(col) => DataType::Nullable(Box::new(col.builder.data_type())),
             ColumnBuilder::Tuple(fields) => {
                 DataType::Tuple(fields.iter().map(|f| f.data_type()).collect::<Vec<_>>())
@@ -2094,6 +2100,7 @@ impl ColumnBuilder {
                         .collect(),
                 )
             }
+            DataType::Bitmap => ColumnBuilder::Bitmap(Vec::with_capacity(capacity)),
             DataType::Variant => {
                 let data_capacity = if enable_datasize_hint { 0 } else { capacity };
                 ColumnBuilder::Variant(StringColumnBuilder::with_capacity(capacity, data_capacity))
@@ -2125,6 +2132,10 @@ impl ColumnBuilder {
             }
             (ColumnBuilder::Map(builder), ScalarRef::Map(value)) => {
                 builder.push(value);
+            }
+            (ColumnBuilder::Bitmap(builder), ScalarRef::Bitmap(value)) => {
+                let roaring = RoaringBitmap::from_iter(value);
+                builder.push(roaring);
             }
             (ColumnBuilder::Nullable(builder), ScalarRef::Null) => {
                 builder.push_null();
@@ -2159,6 +2170,7 @@ impl ColumnBuilder {
             ColumnBuilder::Date(builder) => builder.push(0),
             ColumnBuilder::Array(builder) => builder.push_default(),
             ColumnBuilder::Map(builder) => builder.push_default(),
+            ColumnBuilder::Bitmap(builder) => builder.push(RoaringBitmap::default()),
             ColumnBuilder::Nullable(builder) => builder.push_null(),
             ColumnBuilder::Tuple(fields) => {
                 for field in fields {
@@ -2227,6 +2239,7 @@ impl ColumnBuilder {
                 }
                 builder.commit_row();
             }
+            ColumnBuilder::Bitmap(builder) => {}
             ColumnBuilder::Nullable(builder) => {
                 let valid: bool = reader.read_scalar()?;
                 if valid {
@@ -2373,6 +2386,10 @@ impl ColumnBuilder {
             ColumnBuilder::Date(builder) => builder.pop().map(Scalar::Date),
             ColumnBuilder::Array(builder) => builder.pop().map(Scalar::Array),
             ColumnBuilder::Map(builder) => builder.pop().map(Scalar::Map),
+            ColumnBuilder::Bitmap(builder) => builder.pop().map(|v| {
+                let v = v.into_iter().collect::<Vec<_>>();
+                Scalar::Bitmap(v)
+            }),
             ColumnBuilder::Nullable(builder) => Some(builder.pop()?.unwrap_or(Scalar::Null)),
             ColumnBuilder::Tuple(fields) => {
                 if fields[0].len() > 0 {
@@ -2428,6 +2445,9 @@ impl ColumnBuilder {
             (ColumnBuilder::Map(builder), Column::Map(other)) => {
                 builder.append_column(other.as_ref());
             }
+            (ColumnBuilder::Bitmap(builder), Column::Bitmap(other)) => {
+                builder.extend_from_slice(other);
+            }
             (ColumnBuilder::Nullable(builder), Column::Nullable(other)) => {
                 builder.append_column(other);
             }
@@ -2454,6 +2474,7 @@ impl ColumnBuilder {
             ColumnBuilder::Date(builder) => Column::Date(builder.into()),
             ColumnBuilder::Array(builder) => Column::Array(Box::new(builder.build())),
             ColumnBuilder::Map(builder) => Column::Map(Box::new(builder.build())),
+            ColumnBuilder::Bitmap(builder) => Column::Bitmap(builder.into()),
             ColumnBuilder::Nullable(builder) => Column::Nullable(Box::new(builder.build())),
             ColumnBuilder::Tuple(fields) => {
                 assert!(fields.iter().map(|field| field.len()).all_equal());
@@ -2477,6 +2498,9 @@ impl ColumnBuilder {
             ColumnBuilder::Date(builder) => Scalar::Date(builder[0]),
             ColumnBuilder::Array(builder) => Scalar::Array(builder.build_scalar()),
             ColumnBuilder::Map(builder) => Scalar::Map(builder.build_scalar()),
+            ColumnBuilder::Bitmap(buiilder) => {
+                Scalar::Bitmap(buiilder[0].into_iter().collect::<Vec<_>>())
+            }
             ColumnBuilder::Nullable(builder) => builder.build_scalar().unwrap_or(Scalar::Null),
             ColumnBuilder::Tuple(fields) => Scalar::Tuple(
                 fields
