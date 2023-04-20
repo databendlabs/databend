@@ -64,7 +64,7 @@ impl fmt::Display for Node {
         };
         write!(
             f,
-            "{}= raft: {}, grpc: {}",
+            "id={} raft={} grpc={}",
             self.name, self.endpoint, grpc_addr_display
         )
     }
