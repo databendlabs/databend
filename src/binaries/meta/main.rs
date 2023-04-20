@@ -172,6 +172,7 @@ async fn main() -> anyhow::Result<()> {
 /// The meta service GRPC API address can be changed by administrator in the config file.
 ///
 /// Thus every time a meta server starts up, re-register the node info to broadcast its latest grpc address
+#[tracing::instrument(level = "info", skip_all)]
 async fn register_node(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), anyhow::Error> {
     info!(
         "Register node to update raft_api_advertise_host_endpoint and grpc_api_advertise_address"

@@ -16,6 +16,7 @@ use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
 use nom::combinator::value;
+use nom::error::context;
 use pratt::Affix;
 use pratt::Associativity;
 use pratt::PrattParser;
@@ -32,33 +33,269 @@ use crate::rule;
 use crate::util::*;
 
 pub fn query(i: Input) -> IResult<Query> {
-    map(
-        consumed(rule! {
-            #with?
-            ~ #set_operation
-            ~ ( ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) )?
-            ~ ( LIMIT ~ ^#comma_separated_list1(expr) )?
-            ~ ( OFFSET ~ ^#expr )?
-            ~ IGNORE_RESULT?
-            : "`SELECT ...`"
-        }),
-        |(
-            span,
-            (with, body, opt_order_by_block, opt_limit_block, opt_offset_block, opt_ignore_result),
-        )| {
-            Query {
-                span: transform_span(span.0),
-                with,
-                body,
-                order_by: opt_order_by_block
-                    .map(|(_, _, order_by)| order_by)
-                    .unwrap_or_default(),
-                limit: opt_limit_block.map(|(_, limit)| limit).unwrap_or_default(),
-                offset: opt_offset_block.map(|(_, offset)| offset),
-                ignore_result: opt_ignore_result.is_some(),
+    context(
+        "`SELECT ...`",
+        map(set_operation, |set_expr| set_expr.into_query()),
+    )(i)
+}
+
+pub fn set_operation(i: Input) -> IResult<SetExpr> {
+    let (rest, set_operation_elements) = rule!(#set_operation_element+)(i)?;
+    let iter = &mut set_operation_elements.into_iter();
+    run_pratt_parser(SetOperationParser, iter, rest, i)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SetOperationElement {
+    With(With),
+    SelectStmt {
+        distinct: bool,
+        select_list: Box<Vec<SelectTarget>>,
+        from: Box<Vec<TableReference>>,
+        selection: Box<Option<Expr>>,
+        group_by: Option<GroupBy>,
+        having: Box<Option<Expr>>,
+        window_list: Option<Vec<WindowDefinition>>,
+    },
+    SetOperation {
+        op: SetOperator,
+        all: bool,
+    },
+    OrderBy {
+        order_by: Vec<OrderByExpr>,
+    },
+    Limit {
+        limit: Vec<Expr>,
+    },
+    Offset {
+        offset: Expr,
+    },
+    IgnoreResult,
+    Group(SetExpr),
+}
+
+pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>> {
+    let with = map(with, SetOperationElement::With);
+    let set_operator = map(
+        rule! {
+            ( UNION | EXCEPT | INTERSECT ) ~ ALL?
+        },
+        |(op, all)| {
+            let op = match op.kind {
+                UNION => SetOperator::Union,
+                INTERSECT => SetOperator::Intersect,
+                EXCEPT => SetOperator::Except,
+                _ => unreachable!(),
+            };
+            SetOperationElement::SetOperation {
+                op,
+                all: all.is_some(),
             }
         },
-    )(i)
+    );
+    let select_stmt = map(
+        rule! {
+             SELECT ~ DISTINCT? ~ ^#comma_separated_list1(select_target)
+                ~ ( FROM ~ ^#comma_separated_list1(table_reference) )?
+                ~ ( WHERE ~ ^#expr )?
+                ~ ( GROUP ~ ^BY ~ ^#group_by_items )?
+                ~ ( HAVING ~ ^#expr )?
+                ~ ( WINDOW ~ ^#comma_separated_list1(window_clause) )?
+        },
+        |(
+            _select,
+            opt_distinct,
+            select_list,
+            opt_from_block,
+            opt_where_block,
+            opt_group_by_block,
+            opt_having_block,
+            opt_window_block,
+        )| {
+            SetOperationElement::SelectStmt {
+                distinct: opt_distinct.is_some(),
+                select_list: Box::new(select_list),
+                from: Box::new(
+                    opt_from_block
+                        .map(|(_, table_refs)| table_refs)
+                        .unwrap_or_default(),
+                ),
+                selection: Box::new(opt_where_block.map(|(_, selection)| selection)),
+                group_by: opt_group_by_block.map(|(_, _, group_by)| group_by),
+                having: Box::new(opt_having_block.map(|(_, having)| having)),
+                window_list: opt_window_block.map(|(_, windows)| windows),
+            }
+        },
+    );
+    let order_by = map(
+        rule! {
+            ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr)
+        },
+        |(_, _, order_by)| SetOperationElement::OrderBy { order_by },
+    );
+    let limit = map(
+        rule! {
+            LIMIT ~ ^#comma_separated_list1(expr)
+        },
+        |(_, limit)| SetOperationElement::Limit { limit },
+    );
+    let offset = map(
+        rule! {
+            OFFSET ~ ^#expr
+        },
+        |(_, offset)| SetOperationElement::Offset { offset },
+    );
+    let ignore_result = map(
+        rule! {
+            IGNORE_RESULT
+        },
+        |_| SetOperationElement::IgnoreResult,
+    );
+    let group = map(
+        rule! {
+           "(" ~ #set_operation ~ ^")"
+        },
+        |(_, set_expr, _)| SetOperationElement::Group(set_expr),
+    );
+
+    let (rest, (span, elem)) = consumed(rule! {
+        #group
+        | #with
+        | #set_operator
+        | #select_stmt
+        | #order_by
+        | #limit
+        | #offset
+        | #ignore_result
+    })(i)?;
+    Ok((rest, WithSpan { span, elem }))
+}
+
+struct SetOperationParser;
+
+impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
+    for SetOperationParser
+{
+    type Error = &'static str;
+    type Input = WithSpan<'a, SetOperationElement>;
+    type Output = SetExpr;
+
+    fn query(&mut self, input: &Self::Input) -> Result<Affix, &'static str> {
+        let affix = match &input.elem {
+            SetOperationElement::SetOperation { op, .. } => match op {
+                SetOperator::Union | SetOperator::Except => {
+                    Affix::Infix(Precedence(10), Associativity::Left)
+                }
+                SetOperator::Intersect => Affix::Infix(Precedence(20), Associativity::Left),
+            },
+            SetOperationElement::With(_) => Affix::Prefix(Precedence(5)),
+            SetOperationElement::OrderBy { .. } => Affix::Postfix(Precedence(5)),
+            SetOperationElement::Limit { .. } => Affix::Postfix(Precedence(5)),
+            SetOperationElement::Offset { .. } => Affix::Postfix(Precedence(5)),
+            SetOperationElement::IgnoreResult => Affix::Postfix(Precedence(5)),
+            _ => Affix::Nilfix,
+        };
+        Ok(affix)
+    }
+
+    fn primary(&mut self, input: Self::Input) -> Result<Self::Output, &'static str> {
+        let set_expr = match input.elem {
+            SetOperationElement::Group(expr) => expr,
+            SetOperationElement::SelectStmt {
+                distinct,
+                select_list,
+                from,
+                selection,
+                group_by,
+                having,
+                window_list,
+            } => SetExpr::Select(Box::new(SelectStmt {
+                span: transform_span(input.span.0),
+                distinct,
+                select_list: *select_list,
+                from: *from,
+                selection: *selection,
+                group_by,
+                having: *having,
+                window_list,
+            })),
+            _ => unreachable!(),
+        };
+        Ok(set_expr)
+    }
+
+    fn infix(
+        &mut self,
+        lhs: Self::Output,
+        input: Self::Input,
+        rhs: Self::Output,
+    ) -> Result<Self::Output, &'static str> {
+        let set_expr = match input.elem {
+            SetOperationElement::SetOperation { op, all, .. } => {
+                SetExpr::SetOperation(Box::new(SetOperation {
+                    span: transform_span(input.span.0),
+                    op,
+                    all,
+                    left: Box::new(lhs),
+                    right: Box::new(rhs),
+                }))
+            }
+            _ => unreachable!(),
+        };
+        Ok(set_expr)
+    }
+
+    fn prefix(&mut self, op: Self::Input, rhs: Self::Output) -> Result<Self::Output, Self::Error> {
+        let mut query = rhs.into_query();
+        match op.elem {
+            SetOperationElement::With(with) => {
+                if query.with.is_some() {
+                    return Err("duplicated WITH clause");
+                }
+                query.with = Some(with);
+            }
+            _ => unreachable!(),
+        }
+        Ok(SetExpr::Query(Box::new(query)))
+    }
+
+    fn postfix(&mut self, lhs: Self::Output, op: Self::Input) -> Result<Self::Output, Self::Error> {
+        let mut query = lhs.into_query();
+        match op.elem {
+            SetOperationElement::OrderBy { order_by } => {
+                if !query.order_by.is_empty() {
+                    return Err("duplicated ORDER BY clause");
+                }
+                if !query.limit.is_empty() {
+                    return Err("ORDER BY must appear before LIMIT");
+                }
+                if query.offset.is_some() {
+                    return Err("ORDER BY must appear before OFFSET");
+                }
+                query.order_by = order_by;
+            }
+            SetOperationElement::Limit { limit } => {
+                if !query.limit.is_empty() {
+                    return Err("duplicated LIMIT clause");
+                }
+                if query.offset.is_some() {
+                    return Err("LIMIT must appear before OFFSET");
+                }
+                query.limit = limit;
+            }
+            SetOperationElement::Offset { offset } => {
+                if query.offset.is_some() {
+                    return Err("duplicated OFFSET clause");
+                }
+                query.offset = Some(offset);
+            }
+            SetOperationElement::IgnoreResult => {
+                query.ignore_result = true;
+            }
+            _ => unreachable!(),
+        }
+        Ok(SetExpr::Query(Box::new(query)))
+    }
 }
 
 pub fn with(i: Input) -> IResult<With> {
@@ -182,15 +419,6 @@ pub fn table_alias(i: Input) -> IResult<TableAlias> {
             name,
             columns: opt_columns.map(|(_, cols, _)| cols).unwrap_or_default(),
         },
-    )(i)
-}
-
-pub fn parenthesized_query(i: Input) -> IResult<Query> {
-    map(
-        rule! {
-            "(" ~ #query ~ ")"
-        },
-        |(_, query, _)| query,
     )(i)
 }
 
@@ -367,9 +595,9 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let subquery = map(
         rule! {
-            #parenthesized_query ~ #table_alias?
+            "(" ~ #query ~ ")" ~ #table_alias?
         },
-        |(subquery, alias)| TableReferenceElement::Subquery {
+        |(_, subquery, _, alias)| TableReferenceElement::Subquery {
             subquery: Box::new(subquery),
             alias,
         },
@@ -564,30 +792,6 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
     }
 }
 
-pub fn set_operation(i: Input) -> IResult<SetExpr> {
-    let (rest, set_operation_elements) = rule!(#set_operation_element+)(i)?;
-    let iter = &mut set_operation_elements.into_iter();
-    run_pratt_parser(SetOperationParser, iter, rest, i)
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum SetOperationElement {
-    SelectStmt {
-        distinct: bool,
-        select_list: Box<Vec<SelectTarget>>,
-        from: Box<Vec<TableReference>>,
-        selection: Box<Option<Expr>>,
-        group_by: Option<GroupBy>,
-        having: Box<Option<Expr>>,
-        window_list: Option<Vec<WindowDefinition>>,
-    },
-    SetOperation {
-        op: SetOperator,
-        all: bool,
-    },
-    Group(SetExpr),
-}
-
 pub fn group_by_items(i: Input) -> IResult<GroupBy> {
     let normal = map(rule! { ^#comma_separated_list1(expr) }, |groups| {
         GroupBy::Normal(groups)
@@ -699,153 +903,4 @@ pub fn window_clause(i: Input) -> IResult<WindowDefinition> {
             spec: window.2,
         },
     )(i)
-}
-
-pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>> {
-    let set_operator = map(
-        rule! {
-            ( UNION | EXCEPT | INTERSECT ) ~ ALL?
-        },
-        |(op, all)| {
-            let op = match op.kind {
-                UNION => SetOperator::Union,
-                INTERSECT => SetOperator::Intersect,
-                EXCEPT => SetOperator::Except,
-                _ => unreachable!(),
-            };
-            SetOperationElement::SetOperation {
-                op,
-                all: all.is_some(),
-            }
-        },
-    );
-    let select_stmt = map(
-        rule! {
-             SELECT ~ DISTINCT? ~ ^#comma_separated_list1(select_target)
-                ~ ( FROM ~ ^#comma_separated_list1(table_reference) )?
-                ~ ( WHERE ~ ^#expr )?
-                ~ ( GROUP ~ ^BY ~ ^#group_by_items )?
-                ~ ( HAVING ~ ^#expr )?
-                ~ ( WINDOW ~ ^#comma_separated_list1(window_clause) )?
-        },
-        |(
-            _select,
-            opt_distinct,
-            select_list,
-            opt_from_block,
-            opt_where_block,
-            opt_group_by_block,
-            opt_having_block,
-            opt_window_block,
-        )| {
-            SetOperationElement::SelectStmt {
-                distinct: opt_distinct.is_some(),
-                select_list: Box::new(select_list),
-                from: Box::new(
-                    opt_from_block
-                        .map(|(_, table_refs)| table_refs)
-                        .unwrap_or_default(),
-                ),
-                selection: Box::new(opt_where_block.map(|(_, selection)| selection)),
-                group_by: opt_group_by_block.map(|(_, _, group_by)| group_by),
-                having: Box::new(opt_having_block.map(|(_, having)| having)),
-                window_list: opt_window_block.map(|(_, windows)| windows),
-            }
-        },
-    );
-    let group = map(
-        rule! {
-           "(" ~ #set_operation ~ ^")"
-        },
-        |(_, set_expr, _)| SetOperationElement::Group(set_expr),
-    );
-
-    let (rest, (span, elem)) = consumed(rule!( #group | #set_operator | #select_stmt))(i)?;
-    Ok((rest, WithSpan { span, elem }))
-}
-
-struct SetOperationParser;
-
-impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
-    for SetOperationParser
-{
-    type Error = &'static str;
-    type Input = WithSpan<'a, SetOperationElement>;
-    type Output = SetExpr;
-
-    fn query(&mut self, input: &Self::Input) -> Result<Affix, &'static str> {
-        let affix = match &input.elem {
-            SetOperationElement::SetOperation { op, .. } => match op {
-                SetOperator::Union | SetOperator::Except => {
-                    Affix::Infix(Precedence(10), Associativity::Left)
-                }
-                SetOperator::Intersect => Affix::Infix(Precedence(20), Associativity::Left),
-            },
-            _ => Affix::Nilfix,
-        };
-        Ok(affix)
-    }
-
-    fn primary(&mut self, input: Self::Input) -> Result<Self::Output, &'static str> {
-        let set_expr = match input.elem {
-            SetOperationElement::Group(expr) => expr,
-            SetOperationElement::SelectStmt {
-                distinct,
-                select_list,
-                from,
-                selection,
-                group_by,
-                having,
-                window_list,
-            } => SetExpr::Select(Box::new(SelectStmt {
-                span: transform_span(input.span.0),
-                distinct,
-                select_list: *select_list,
-                from: *from,
-                selection: *selection,
-                group_by,
-                having: *having,
-                window_list,
-            })),
-            _ => unreachable!(),
-        };
-        Ok(set_expr)
-    }
-
-    fn infix(
-        &mut self,
-        lhs: Self::Output,
-        input: Self::Input,
-        rhs: Self::Output,
-    ) -> Result<Self::Output, &'static str> {
-        let set_expr = match input.elem {
-            SetOperationElement::SetOperation { op, all, .. } => {
-                SetExpr::SetOperation(Box::new(SetOperation {
-                    span: transform_span(input.span.0),
-                    op,
-                    all,
-                    left: Box::new(lhs),
-                    right: Box::new(rhs),
-                }))
-            }
-            _ => unreachable!(),
-        };
-        Ok(set_expr)
-    }
-
-    fn prefix(
-        &mut self,
-        _op: Self::Input,
-        _rhs: Self::Output,
-    ) -> Result<Self::Output, Self::Error> {
-        unreachable!()
-    }
-
-    fn postfix(
-        &mut self,
-        _lhs: Self::Output,
-        _op: Self::Input,
-    ) -> Result<Self::Output, Self::Error> {
-        unreachable!()
-    }
 }

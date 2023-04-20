@@ -607,7 +607,7 @@ impl<'a> TypeChecker<'a> {
                                 "no function matches the given name: '{func_name}', do you mean {}?",
                                 possible_funcs.join(", ")
                             ))
-                            .set_span(*span));
+                                .set_span(*span));
                         }
                     }
                 }
@@ -906,7 +906,7 @@ impl<'a> TypeChecker<'a> {
             })
         }
         let frame = self
-            .resolve_window_frame(span, &mut order_by, window.window_frame.clone())
+            .resolve_window_frame(span, &func, &mut order_by, window.window_frame.clone())
             .await?;
         let data_type = func.return_type();
         let window_func = WindowFunc {
@@ -1127,9 +1127,17 @@ impl<'a> TypeChecker<'a> {
     async fn resolve_window_frame(
         &mut self,
         span: Span,
+        func: &WindowFuncType,
         order_by: &mut [WindowOrderBy],
         window_frame: Option<WindowFrame>,
     ) -> Result<WindowFuncFrame> {
+        if matches!(func, WindowFuncType::PercentRank) {
+            return Ok(WindowFuncFrame {
+                units: WindowFuncFrameUnits::Rows,
+                start_bound: WindowFuncFrameBound::Preceding(None),
+                end_bound: WindowFuncFrameBound::Following(None),
+            });
+        }
         if let Some(frame) = window_frame {
             if frame.units.is_range() {
                 if order_by.len() != 1 {
@@ -1389,6 +1397,26 @@ impl<'a> TypeChecker<'a> {
                     .await?;
                 self.resolve_scalar_function_call(span, "not", vec![], vec![positive])
                     .await
+            }
+            BinaryOperator::SoundsLike => {
+                // rewrite "expr1 SOUNDS LIKE expr2" to "SOUNDEX(expr1) = SOUNDEX(expr2)"
+                let box (left, _) = self.resolve(left).await?;
+                let box (right, _) = self.resolve(right).await?;
+
+                let (left, _) = *self
+                    .resolve_scalar_function_call(span, "soundex", vec![], vec![left])
+                    .await?;
+                let (right, _) = *self
+                    .resolve_scalar_function_call(span, "soundex", vec![], vec![right])
+                    .await?;
+
+                self.resolve_scalar_function_call(
+                    span,
+                    &BinaryOperator::Eq.to_func_name(),
+                    vec![],
+                    vec![left, right],
+                )
+                .await
             }
             BinaryOperator::Gt
             | BinaryOperator::Lt

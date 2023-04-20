@@ -32,6 +32,7 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::SelectivityEstimator;
+use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics as OpStatistics;
 use crate::optimizer::DEFAULT_HISTOGRAM_BUCKETS;
 use crate::optimizer::MAX_SELECTIVITY;
@@ -94,6 +95,21 @@ impl Scan {
             prewhere,
         }
     }
+
+    fn used_columns(&self) -> ColumnSet {
+        let mut used_columns = ColumnSet::new();
+        if let Some(preds) = &self.push_down_predicates {
+            for pred in preds.iter() {
+                used_columns.extend(pred.used_columns());
+            }
+        }
+        if let Some(prewhere) = &self.prewhere {
+            used_columns.extend(prewhere.prewhere_columns.iter());
+        }
+
+        used_columns.extend(self.columns.iter());
+        used_columns
+    }
 }
 
 impl PartialEq for Scan {
@@ -122,17 +138,21 @@ impl Operator for Scan {
     }
 
     fn derive_relational_prop(&self, _rel_expr: &RelExpr) -> Result<RelationalProperty> {
-        let mut used_columns = ColumnSet::new();
-        if let Some(preds) = &self.push_down_predicates {
-            for pred in preds.iter() {
-                used_columns.extend(pred.used_columns());
-            }
-        }
-        if let Some(prewhere) = &self.prewhere {
-            used_columns.extend(prewhere.prewhere_columns.iter());
-        }
+        Ok(RelationalProperty {
+            output_columns: self.columns.clone(),
+            outer_columns: Default::default(),
+            used_columns: self.used_columns(),
+        })
+    }
 
-        used_columns.extend(self.columns.iter());
+    fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
+        Ok(PhysicalProperty {
+            distribution: Distribution::Random,
+        })
+    }
+
+    fn derive_cardinality(&self, _rel_expr: &RelExpr) -> Result<StatInfo> {
+        let used_columns = self.used_columns();
 
         let num_rows = self
             .statistics
@@ -190,7 +210,7 @@ impl Operator for Scan {
                 let mut selectivity = MAX_SELECTIVITY;
                 for pred in prewhere.predicates.iter() {
                     // Compute selectivity for each conjunction
-                    selectivity *= sb.compute_selectivity(pred);
+                    selectivity *= sb.compute_selectivity(pred)?;
                 }
                 (precise_cardinality as f64) * selectivity
             }
@@ -204,22 +224,12 @@ impl Operator for Scan {
         } else {
             None
         };
-
-        Ok(RelationalProperty {
-            output_columns: self.columns.clone(),
-            outer_columns: Default::default(),
-            used_columns,
+        Ok(StatInfo {
             cardinality,
             statistics: OpStatistics {
                 precise_cardinality,
                 column_stats,
             },
-        })
-    }
-
-    fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        Ok(PhysicalProperty {
-            distribution: Distribution::Random,
         })
     }
 

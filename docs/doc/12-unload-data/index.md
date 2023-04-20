@@ -34,7 +34,7 @@ COPY INTO @unload FROM (SELECT * FROM numbers(10000000)) FILE_FORMAT = (TYPE = P
 
 ### Step 3. Verify Export File
 
-Show the exported file with the [LIST STAGE](../14-sql-commands/50-list/list-stage.md) command:
+Show the exported file with the [LIST STAGE](../14-sql-commands/00-ddl/40-stage/04-ddl-list-stage.md) command:
 
 ```sql
 LIST @unload;

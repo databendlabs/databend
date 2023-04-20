@@ -34,6 +34,11 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn return_type(&self) -> Result<DataType>;
 
     fn init_state(&self, place: StateAddr);
+
+    fn is_state(&self) -> bool {
+        false
+    }
+
     fn state_layout(&self) -> Layout;
 
     // accumulate is to accumulate the arrays in batch mode

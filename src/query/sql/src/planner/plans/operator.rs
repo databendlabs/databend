@@ -32,6 +32,7 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
+use crate::optimizer::StatInfo;
 use crate::plans::runtime_filter_source::RuntimeFilterSource;
 use crate::plans::Exchange;
 use crate::plans::ProjectSet;
@@ -47,6 +48,8 @@ pub trait Operator {
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty>;
 
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty>;
+
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<StatInfo>;
 
     fn compute_required_prop_child(
         &self,
@@ -153,6 +156,25 @@ impl Operator for RelOperator {
             RelOperator::RuntimeFilterSource(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::ProjectSet(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Window(rel_op) => rel_op.derive_physical_prop(rel_expr),
+        }
+    }
+
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
+        match self {
+            RelOperator::Scan(rel_op) => rel_op.derive_cardinality(rel_expr),
+            RelOperator::Join(rel_op) => rel_op.derive_cardinality(rel_expr),
+            RelOperator::EvalScalar(rel_op) => rel_op.derive_cardinality(rel_expr),
+            RelOperator::Filter(rel_op) => rel_op.derive_cardinality(rel_expr),
+            RelOperator::Aggregate(rel_op) => rel_op.derive_cardinality(rel_expr),
+            RelOperator::Sort(rel_op) => rel_op.derive_cardinality(rel_expr),
+            RelOperator::Limit(rel_op) => rel_op.derive_cardinality(rel_expr),
+            RelOperator::Pattern(rel_op) => rel_op.derive_cardinality(rel_expr),
+            RelOperator::Exchange(rel_op) => rel_op.derive_cardinality(rel_expr),
+            RelOperator::UnionAll(rel_op) => rel_op.derive_cardinality(rel_expr),
+            RelOperator::DummyTableScan(rel_op) => rel_op.derive_cardinality(rel_expr),
+            RelOperator::RuntimeFilterSource(rel_op) => rel_op.derive_cardinality(rel_expr),
+            RelOperator::ProjectSet(rel_op) => rel_op.derive_cardinality(rel_expr),
+            RelOperator::Window(rel_op) => rel_op.derive_cardinality(rel_expr),
         }
     }
 

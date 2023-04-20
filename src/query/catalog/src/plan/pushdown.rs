@@ -79,6 +79,7 @@ pub struct PushDownInfo {
     /// Optional filter expression plan
     /// Assumption: expression's data type must be `DataType::Boolean`.
     pub filter: Option<RemoteExpr<String>>,
+    pub is_deterministic: bool,
     /// Optional prewhere information
     /// used for prewhere optimization
     pub prewhere: Option<PrewhereInfo>,

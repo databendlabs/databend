@@ -117,20 +117,25 @@ impl FuseTable {
         );
 
         type CacheItem = (PartStatistics, Partitions);
-
         let cache_key = format!(
             "{:x}",
             Sha256::digest(format!("{:?}_{:?}", segments_location, push_downs))
         );
 
-        if let Some(cache) = CacheItem::cache() {
-            if let Some(data) = cache.get(&cache_key) {
-                info!(
-                    "prune snapshot block from cache, final block numbers:{}, cost:{}",
-                    data.1.len(),
-                    start.elapsed().as_secs()
-                );
-                return Ok((data.0.clone(), data.1.clone()));
+        let is_derterministic = push_downs
+            .as_ref()
+            .map(|p| p.is_deterministic)
+            .unwrap_or_default();
+        if is_derterministic {
+            if let Some(cache) = CacheItem::cache() {
+                if let Some(data) = cache.get(&cache_key) {
+                    info!(
+                        "prune snapshot block from cache, final block numbers:{}, cost:{}",
+                        data.1.len(),
+                        start.elapsed().as_secs()
+                    );
+                    return Ok((data.0.clone(), data.1.clone()));
+                }
             }
         }
 
@@ -173,8 +178,10 @@ impl FuseTable {
             pruning_stats,
         )?;
 
-        if let Some(cache) = CacheItem::cache() {
-            cache.put(cache_key, Arc::new(result.clone()));
+        if is_derterministic {
+            if let Some(cache) = CacheItem::cache() {
+                cache.put(cache_key, Arc::new(result.clone()));
+            }
         }
         Ok(result)
     }

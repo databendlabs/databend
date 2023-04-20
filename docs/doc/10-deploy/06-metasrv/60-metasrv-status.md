@@ -80,7 +80,7 @@ Returns the status information of each meta node in the cluster.
 
 ## Meta Metrics API
 
-Shows a bunch of metrics that Databend captures and tracks about the meta service performance. For more information about the meta service metrics, see [Databend Meta Metrics](50-metasrv-metrics.md).
+Shows a bunch of metrics that Databend captures and tracks about the meta service performance. For more information about the meta service metrics, see [Databend Meta Metrics](../../13-monitor/10-metasrv-metrics.md).
 
 ### Request Endpoint
 

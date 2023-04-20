@@ -42,6 +42,14 @@ pub struct Statistics {
 }
 
 #[derive(Default, Clone, Debug)]
+pub struct StatInfo {
+    // TODO(leiysky): introduce upper bound of cardinality to
+    // reduce error in estimation.
+    pub cardinality: f64,
+    pub statistics: Statistics,
+}
+
+#[derive(Default, Clone, Debug)]
 pub struct RelationalProperty {
     /// Output columns of a relational expression
     pub output_columns: ColumnSet,
@@ -51,11 +59,6 @@ pub struct RelationalProperty {
 
     /// Used columns of a relational expression
     pub used_columns: ColumnSet,
-
-    // TODO(leiysky): introduce upper bound of cardinality to
-    // reduce error in estimation.
-    pub cardinality: f64,
-    pub statistics: Statistics,
 }
 
 #[derive(Default, Clone)]

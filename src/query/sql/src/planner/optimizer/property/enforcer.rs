@@ -36,7 +36,7 @@ pub fn require_property(
         .iter()
         .map(|child| require_property(ctx.clone(), required, child))
         .collect::<Result<Vec<SExpr>>>()?;
-    let optimized_expr = SExpr::create(s_expr.plan().clone(), optimized_children, None, None);
+    let optimized_expr = SExpr::create(s_expr.plan().clone(), optimized_children, None, None, None);
 
     let rel_expr = RelExpr::with_s_expr(&optimized_expr);
     let mut children = Vec::with_capacity(s_expr.arity());
@@ -85,6 +85,7 @@ pub fn require_property(
     Ok(SExpr::create(
         optimized_expr.plan().clone(),
         children,
+        None,
         None,
         None,
     ))

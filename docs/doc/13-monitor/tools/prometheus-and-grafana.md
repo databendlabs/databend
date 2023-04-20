@@ -2,13 +2,6 @@
 title: Prometheus & Grafana
 ---
 
-Databend captures real-time metrics of the meta and query services, which you can access through a web browser using the following URLs:
-
-- Meta Metrics: `http://<admin_api_address>/v1/metrics`
-- Query Metrics: `http://<metric_api_address>/metrics`
-
-Alternatively, you can use Prometheus to capture and store the metrics data from Databend. Then, you can visualize the captured time series data on a dashboard with Grafana.
-
 [Prometheus](https://prometheus.io/) is an open-source monitoring system with a dimensional data model, flexible query language, efficient time series database and modern alerting approach. [Grafana](https://grafana.com/grafana) is an open-source tool used for analyzing and visualizing metrics.
 
 This following tutorial guides you through deploying and integrating Databend, Prometheus, and Grafana. In this tutorial, you'll deploy a local Databend and install Prometheus and Grafana with Docker. Before you start, ensure that you have Docker installed.
@@ -75,7 +68,7 @@ The steps below describe how to install and deploy Prometheus using Docker.
 
    Check the value on the right of each instance. `1` means the instance is healthy, and `0` means that the scrape failed.
 
-   ![Prometheus up](../../public/img/tracing/prometheus-up.png)
+   ![Prometheus up](../../../public/img/tracing/prometheus-up.png)
 
 ### Step 3. Deploy Grafana
 
@@ -102,12 +95,12 @@ The steps below describe how to install and deploy Grafana using Docker.
 
    Please note that set the URL to `http://host.docker.internal:9090` for the data source.
 
-   ![Grafana data source](../../public/img/tracing/grafana-datasource.png)
+   ![Grafana data source](../../../public/img/tracing/grafana-datasource.png)
 
 4. Create dashboards.
 
    Databend recommend import the files in [datafuselabs/helm-charts - dashboards](https://github.com/datafuselabs/helm-charts/tree/main/dashboards) to create your dashboards. To do so, download the files first, then go to `http://0.0.0.0:3000/dashboard/import` to import the downloaded files one by one and select the `Prometheus` data source for each dashboard.
 
-   ![Grafana import query json](../../public/img/tracing/grafana-query-json.png)
+   ![Grafana import query json](../../../public/img/tracing/grafana-query-json.png)
 
-   ![Grafana query dashboard](../../public/img/tracing/grafana-query-dashboard.png)
+   ![Grafana query dashboard](../../../public/img/tracing/grafana-query-dashboard.png)

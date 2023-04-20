@@ -23,6 +23,7 @@ use super::RelationalProperty;
 use crate::optimizer::group::Group;
 use crate::optimizer::m_expr::MExpr;
 use crate::optimizer::s_expr::SExpr;
+use crate::optimizer::StatInfo;
 use crate::plans::RelOperator;
 use crate::IndexType;
 
@@ -100,7 +101,8 @@ impl Memo {
             _ => {
                 let rel_expr = RelExpr::with_s_expr(&s_expr);
                 let relational_prop = rel_expr.derive_relational_prop()?;
-                self.add_group(relational_prop)
+                let stat_info = rel_expr.derive_cardinality()?;
+                self.add_group(relational_prop, stat_info)
             }
         };
 
@@ -136,9 +138,9 @@ impl Memo {
             .ok_or_else(|| ErrorCode::Internal(format!("Group index {} not found", index)))
     }
 
-    fn add_group(&mut self, relational_prop: RelationalProperty) -> IndexType {
+    fn add_group(&mut self, relational_prop: RelationalProperty, stat_info: StatInfo) -> IndexType {
         let group_index = self.groups.len();
-        let group = Group::create(group_index, relational_prop);
+        let group = Group::create(group_index, relational_prop, stat_info);
         self.groups.push(group);
         group_index
     }

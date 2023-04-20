@@ -5,7 +5,7 @@ SELECT * EXCLUDE (c1), b.* EXCLUDE (c2, c3, c4) FROM customer INNER JOIN orders 
 ---------- AST ------------
 Query {
     span: Some(
-        0..94,
+        0..86,
     ),
     with: None,
     body: Select(
@@ -489,7 +489,7 @@ SELECT * FROM customer INNER JOIN orders ON (a = b) LIMIT 1
 ---------- AST ------------
 Query {
     span: Some(
-        0..57,
+        0..49,
     ),
     with: None,
     body: Select(
@@ -621,7 +621,7 @@ SELECT * FROM customer INNER JOIN orders ON (a = b) LIMIT 2 OFFSET 3
 ---------- AST ------------
 Query {
     span: Some(
-        0..66,
+        0..49,
     ),
     with: None,
     body: Select(
@@ -975,7 +975,7 @@ WITH t2(tt) AS (SELECT a FROM t) SELECT t2.tt FROM t2 WHERE (t2.tt > 1)
 ---------- AST ------------
 Query {
     span: Some(
-        0..70,
+        33..70,
     ),
     with: Some(
         With {
@@ -1181,7 +1181,7 @@ WITH t2 AS (SELECT a FROM t) SELECT t2.a FROM t2 WHERE (t2.a > 1)
 ---------- AST ------------
 Query {
     span: Some(
-        0..64,
+        29..64,
     ),
     with: Some(
         With {
@@ -1379,7 +1379,7 @@ WITH t2(tt) AS (SELECT a FROM t), t3 AS (SELECT * FROM t), t4 AS (SELECT a FROM 
 ---------- AST ------------
 Query {
     span: Some(
-        0..151,
+        95..151,
     ),
     with: Some(
         With {
@@ -1845,7 +1845,7 @@ WITH RECURSIVE t2(tt) AS (SELECT a FROM t1 UNION SELECT tt FROM t2) SELECT t2.tt
 ---------- AST ------------
 Query {
     span: Some(
-        0..88,
+        68..88,
     ),
     with: Some(
         With {
@@ -1878,7 +1878,7 @@ Query {
                     },
                     query: Query {
                         span: Some(
-                            26..66,
+                            43..48,
                         ),
                         with: None,
                         body: SetOperation(
@@ -2089,7 +2089,7 @@ SELECT c_count AS cc, COUNT(*) AS custdist, sum(c_acctbal) AS totacctbal FROM cu
 ---------- AST ------------
 Query {
     span: Some(
-        0..663,
+        0..547,
     ),
     with: None,
     body: Select(
@@ -2584,7 +2584,7 @@ SELECT * FROM t1 UNION SELECT * FROM t2
 ---------- AST ------------
 Query {
     span: Some(
-        0..39,
+        17..22,
     ),
     with: None,
     body: SetOperation(
@@ -2698,7 +2698,7 @@ SELECT * FROM t1 EXCEPT SELECT * FROM t2
 ---------- AST ------------
 Query {
     span: Some(
-        0..40,
+        17..23,
     ),
     with: None,
     body: SetOperation(
@@ -2812,7 +2812,7 @@ SELECT * FROM t1 UNION SELECT * FROM t2 UNION SELECT * FROM t3
 ---------- AST ------------
 Query {
     span: Some(
-        0..62,
+        40..45,
     ),
     with: None,
     body: SetOperation(
@@ -2979,7 +2979,7 @@ SELECT * FROM t1 UNION SELECT * FROM t2 UNION ALL SELECT * FROM t3
 ---------- AST ------------
 Query {
     span: Some(
-        0..66,
+        40..49,
     ),
     with: None,
     body: SetOperation(
@@ -3146,7 +3146,7 @@ SELECT * FROM t1 UNION SELECT * FROM t2 INTERSECT SELECT * FROM t3
 ---------- AST ------------
 Query {
     span: Some(
-        0..66,
+        17..22,
     ),
     with: None,
     body: SetOperation(
@@ -3313,7 +3313,7 @@ SELECT * FROM t1 UNION SELECT * FROM t2 UNION SELECT * FROM t3
 ---------- AST ------------
 Query {
     span: Some(
-        0..64,
+        42..47,
     ),
     with: None,
     body: SetOperation(
@@ -3480,7 +3480,7 @@ SELECT * FROM t1 UNION SELECT * FROM t2 UNION SELECT * FROM t3
 ---------- AST ------------
 Query {
     span: Some(
-        0..64,
+        17..22,
     ),
     with: None,
     body: SetOperation(
@@ -3675,7 +3675,7 @@ Query {
                     ),
                     subquery: Query {
                         span: Some(
-                            15..43,
+                            26..32,
                         ),
                         with: None,
                         body: SetOperation(
@@ -3804,7 +3804,7 @@ Query {
                     ),
                     subquery: Query {
                         span: Some(
-                            15..45,
+                            27..33,
                         ),
                         with: None,
                         body: SetOperation(
@@ -3933,7 +3933,7 @@ Query {
                     ),
                     subquery: Query {
                         span: Some(
-                            15..46,
+                            15..32,
                         ),
                         with: None,
                         body: Select(
@@ -4056,7 +4056,7 @@ SELECT * FROM monthly_sales PIVOT(sum(amount) FOR month IN ('JAN', 'FEB', 'MAR',
 ---------- AST ------------
 Query {
     span: Some(
-        0..103,
+        0..88,
     ),
     with: None,
     body: Select(
@@ -4211,7 +4211,7 @@ SELECT * FROM monthly_sales_1 UNPIVOT(sales FOR month IN (jan, feb, mar, april))
 ---------- AST ------------
 Query {
     span: Some(
-        0..95,
+        0..80,
     ),
     with: None,
     body: Select(
@@ -4562,7 +4562,7 @@ SELECT a, sum(a) OVER (WINDOW w), sum(a) OVER (WINDOW w1), sum(a) OVER (WINDOW w
 ---------- AST ------------
 Query {
     span: Some(
-        0..154,
+        0..143,
     ),
     with: None,
     body: Select(
@@ -4878,6 +4878,157 @@ Query {
             nulls_first: None,
         },
     ],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+SELECT * FROM ((SELECT * FROM xyu ORDER BY x, y)) AS xyu
+---------- Output ---------
+SELECT * FROM (SELECT * FROM xyu ORDER BY x, y) AS xyu
+---------- AST ------------
+Query {
+    span: Some(
+        0..56,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..56,
+            ),
+            distinct: false,
+            select_list: [
+                QualifiedName {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    exclude: None,
+                },
+            ],
+            from: [
+                Subquery {
+                    span: Some(
+                        14..56,
+                    ),
+                    subquery: Query {
+                        span: Some(
+                            16..33,
+                        ),
+                        with: None,
+                        body: Select(
+                            SelectStmt {
+                                span: Some(
+                                    16..33,
+                                ),
+                                distinct: false,
+                                select_list: [
+                                    QualifiedName {
+                                        qualified: [
+                                            Star(
+                                                Some(
+                                                    23..24,
+                                                ),
+                                            ),
+                                        ],
+                                        exclude: None,
+                                    },
+                                ],
+                                from: [
+                                    Table {
+                                        span: Some(
+                                            30..33,
+                                        ),
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            name: "xyu",
+                                            quote: None,
+                                            span: Some(
+                                                30..33,
+                                            ),
+                                        },
+                                        alias: None,
+                                        travel_point: None,
+                                        pivot: None,
+                                        unpivot: None,
+                                    },
+                                ],
+                                selection: None,
+                                group_by: None,
+                                having: None,
+                                window_list: None,
+                            },
+                        ),
+                        order_by: [
+                            OrderByExpr {
+                                expr: ColumnRef {
+                                    span: Some(
+                                        43..44,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "x",
+                                        quote: None,
+                                        span: Some(
+                                            43..44,
+                                        ),
+                                    },
+                                },
+                                asc: None,
+                                nulls_first: None,
+                            },
+                            OrderByExpr {
+                                expr: ColumnRef {
+                                    span: Some(
+                                        46..47,
+                                    ),
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "y",
+                                        quote: None,
+                                        span: Some(
+                                            46..47,
+                                        ),
+                                    },
+                                },
+                                asc: None,
+                                nulls_first: None,
+                            },
+                        ],
+                        limit: [],
+                        offset: None,
+                        ignore_result: false,
+                    },
+                    alias: Some(
+                        TableAlias {
+                            name: Identifier {
+                                name: "xyu",
+                                quote: None,
+                                span: Some(
+                                    53..56,
+                                ),
+                            },
+                            columns: [],
+                        },
+                    ),
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+        },
+    ),
+    order_by: [],
     limit: [],
     offset: None,
     ignore_result: false,

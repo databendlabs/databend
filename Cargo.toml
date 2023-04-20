@@ -93,7 +93,7 @@ members = [
 [workspace.dependencies]
 # databend maintains:
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
-opendal = { version = "0.31", features = [
+opendal = { version = "0.32", features = [
     "layers-tracing",
     "layers-metrics",
     "services-ipfs",
@@ -106,7 +106,7 @@ jsonb = { version = "0.1.1" }
 
 # openraft = { version = "0.8.2", features = ["compat-07"] }
 # For debugging
-openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.8.4-alpha.1", features = ["compat-07"] }
+openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.8.4-alpha.2", features = ["compat-07"] }
 
 # type helper
 derive_more = "0.99.17"
