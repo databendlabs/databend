@@ -20,9 +20,11 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::FormatVersion;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
+use storages_common_table_meta::meta::Versioned;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::merge_into::mutation_meta::mutation_log::AppendOperationLogEntry;
@@ -76,7 +78,7 @@ impl BlockMutations {
 pub struct MutationAccumulator {
     mutations: HashMap<SegmentIndex, BlockMutations>,
     // (path, segment_info)
-    appended_segments: Vec<(String, Arc<SegmentInfo>)>,
+    appended_segments: Vec<(String, Arc<SegmentInfo>, FormatVersion)>,
 }
 
 impl MutationAccumulator {
@@ -104,6 +106,7 @@ impl MutationAccumulator {
         self.appended_segments.push((
             append_log_entry.segment_location.clone(),
             append_log_entry.segment_info.clone(),
+            append_log_entry.format_version,
         ))
     }
 
@@ -175,8 +178,8 @@ impl MutationAccumulator {
 
                     let location = location_gen.gen_segment_info_location();
                     abort_operation.add_segment(location.clone());
-                    segments_editor
-                        .insert(seg_idx, (location.clone(), new_segment.format_version()));
+                    // for newly created segment, always use the latest version
+                    segments_editor.insert(seg_idx, (location.clone(), SegmentInfo::VERSION));
                     serialized_segments.push(SerializedSegment {
                         raw_data: new_segment.to_bytes()?,
                         path: location,
@@ -189,7 +192,7 @@ impl MutationAccumulator {
             }
         }
 
-        for (path, new_segment) in &self.appended_segments {
+        for (path, new_segment, _format_version) in &self.appended_segments {
             merge_statistics_mut(&mut table_statistics, &new_segment.summary)?;
             for block_meta in &new_segment.blocks {
                 abort_operation.add_block(block_meta);
@@ -203,7 +206,7 @@ impl MutationAccumulator {
         let new_segments = self
             .appended_segments
             .iter()
-            .map(|(path, segment)| (path.clone(), segment.version()))
+            .map(|(path, _segment, format_version)| (path.clone(), *format_version))
             .chain(updated_segments)
             .collect();
 
