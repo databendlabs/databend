@@ -55,6 +55,7 @@ common-metrics = { path = "../common/metrics" }
 common-tracing = { path = "../common/tracing" }
 databend-meta = { path = "../meta/service" }
 databend-query = { path = "../query/service" }
+enterprise = { path = "../query/dcl" }
 sharing-endpoint = { path = "../query/sharing-endpoint" }
 
 # Crates.io dependencies
@@ -100,6 +101,12 @@ test = false
 [[bin]]
 name = "databend-query"
 path = "query/main.rs"
+doctest = false
+test = false
+
+[[bin]]
+name = "databend-query-oss"
+path = "query/oss.rs"
 doctest = false
 test = false
 

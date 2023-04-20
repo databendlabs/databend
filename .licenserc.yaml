@@ -12,6 +12,8 @@ header:
     - "tools"
     - "benchmark"
     - "src/common/compress/tests"
+    # All files under dcl directory should be Databend Community License
+    - "src/query/dcl"
     # Ignore hidden files
     - ".cargo"
     - ".databend"
