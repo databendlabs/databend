@@ -84,7 +84,7 @@ SELECT count() FROM t0 WHERE not(t0.c0int)
 
 
 statement ok
-alter table t0 drop column c0 int;
+alter table t0 drop column c0int;
 
 statement ok
 alter table t0 add column ts bigint;
