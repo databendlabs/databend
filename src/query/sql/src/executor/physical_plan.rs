@@ -295,6 +295,7 @@ pub enum WindowFunction {
     RowNumber,
     Rank,
     DenseRank,
+    PercentRank,
 }
 
 impl WindowFunction {
@@ -304,6 +305,7 @@ impl WindowFunction {
             WindowFunction::RowNumber | WindowFunction::Rank | WindowFunction::DenseRank => {
                 DataType::Number(NumberDataType::UInt64)
             }
+            WindowFunction::PercentRank => DataType::Number(NumberDataType::Float64),
         }
     }
 }
@@ -315,6 +317,7 @@ impl Display for WindowFunction {
             WindowFunction::RowNumber => write!(f, "row_number"),
             WindowFunction::Rank => write!(f, "rank"),
             WindowFunction::DenseRank => write!(f, "dense_rank"),
+            WindowFunction::PercentRank => write!(f, "percent_rank"),
         }
     }
 }

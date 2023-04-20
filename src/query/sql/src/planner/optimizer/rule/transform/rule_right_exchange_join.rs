@@ -195,6 +195,7 @@ impl Rule for RuleRightExchangeJoin {
             ],
             None,
             None,
+            None,
         );
 
         // Disable the following rules for join 3

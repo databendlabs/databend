@@ -727,8 +727,7 @@ pub fn fixed_hash(
                                 unsafe {
                                     if valid {
                                         let slice = std::slice::from_raw_parts_mut(ptr, count);
-                                        let bytes = value.to_le_bytes();
-                                        slice.copy_from_slice(&bytes);
+                                        value.marshal(slice);
                                     } else {
                                         ptr.add(offsize).write(1u8);
                                     }
@@ -741,8 +740,7 @@ pub fn fixed_hash(
                             for value in t.iter() {
                                 unsafe {
                                     let slice = std::slice::from_raw_parts_mut(ptr, count);
-                                    let bytes = value.to_le_bytes();
-                                    slice.copy_from_slice(&bytes);
+                                    value.marshal(slice);
                                     ptr = ptr.add(step);
                                 }
                             }

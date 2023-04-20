@@ -1,14 +1,20 @@
 ---
-title: LIST
+title: ARRAY_AGG
+title_includes: LIST
 ---
 
 Aggregate function.
 
-The LIST() function converts all the values of a column to an Array.
+The `ARRAY_AGG()` function converts all the values of a column to an Array.
+
+:::tip
+The `LIST` function is alias to `ARRAY_AGG`.
+:::
 
 ## Syntax
 
 ```sql
+ARRAY_AGG(expression)
 LIST(expression)
 ```
 
@@ -44,7 +50,7 @@ VALUES (1, 'Inception', 1, 5),
 **Query Demo: List All Ratings for Inception Movie**
 
 ```sql
-SELECT movie_title, LIST(rating) AS ratings
+SELECT movie_title, ARRAY_AGG(rating) AS ratings
 FROM movie_ratings
 WHERE movie_title = 'Inception'
 GROUP BY movie_title;

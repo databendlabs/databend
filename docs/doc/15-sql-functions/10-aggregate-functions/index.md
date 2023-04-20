@@ -13,6 +13,7 @@ These functions help you extract and summarize data from databases to gain valua
 | [ARG_MAX](aggregate-arg-max.md)                             | Finds the arg value for the maximum val value                          | 
 | [ARG_MIN](aggregate-arg-min.md)                             | Finds the arg value for the minimum val value                          | 
 | [AVG_IF](aggregate-avg-if.md)                               | Calculates the average for rows meeting a condition                    | 
+| [ARRAY_AGG](aggregate-array-agg.md)                         | Converts all the values of a column to an Array                        |
 | [AVG](aggregate-avg.md)                                     | Calculates the average value of a specific column                      | 
 | [COUNT_DISTINCT](aggregate-count-distinct.md)               | Counts the number of distinct values in a column                       | 
 | [COUNT_IF](aggregate-count-if.md)                           | Counts rows meeting a specified condition                              | 
@@ -20,7 +21,6 @@ These functions help you extract and summarize data from databases to gain valua
 | [COVAR_POP](aggregate-covar-pop.md)                         | Returns the population covariance of a set of number pairs             | 
 | [COVAR_SAMP](aggregate-covar-samp.md)                       | Returns the sample covariance of a set of number pairs                 | 
 | [KURTOSIS](aggregate-kurtosis.md)                           | Calculates the excess kurtosis of a set of values                      | 
-| [LIST](aggregate-list.md)                                   | Converts all the values of a column to an Array                        |
 | [MAX_IF](aggregate-max-if.md)                               | Finds the maximum value for rows meeting a condition                   | 
 | [MAX](aggregate-max.md)                                     | Finds the largest value in a specific column                           | 
 | [MEDIAN](aggregate-median.md)                               | Calculates the median value of a specific column                       | 

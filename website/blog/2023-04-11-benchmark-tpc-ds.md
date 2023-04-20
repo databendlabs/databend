@@ -23,26 +23,27 @@ You can find more information about TPC-DS at https://www.tpc.org/tpcds/.
 
 ## Running TPC-DS Benchmark on Databend
 
-This section describes the steps to run the TPC-DS benchmark on Databend and provides the related scripts. Please clone the repo: https://github.com/RinChanNOWWW/tpcds-databend.
+This section describes the steps to run the TPC-DS benchmark on Databend and provides the related scripts. You can find more detail information at: https://github.com/datafuselabs/databend/tree/main/benchmark/tpcds.
 
 ### Step 1: Generate TPC-DS test data
 
 Leverage duckdb to generate TPC-DS data:
+
 ```sql
-duckdb> INSTALL tpcds;
-duckdb> LOAD tpcds;
-duckdb> SELECT * FROM dsdgen(sf=1);
-duckdb> EXPORT DATABASE 'TARGET_DIR' (FORMAT CSV, DELIMITER '|');
+INSTALL tpcds;
+LOAD tpcds;
+SELECT * FROM dsdgen(sf=1);
+EXPORT DATABASE 'TARGET_DIR' (FORMAT CSV, DELIMITER '|');
 ```
 
 ### Step 2: Load TPC-DS data into Databend
 ```shell
-./load.sh
+./load_data.sh
 ```
 
 ### Step3: Run TPC-DS queries
 ```shell
-./run.sh
+databend-sqllogictests --handlers mysql --database tpcds --run_dir tpcds --bench 
 ```
 
 

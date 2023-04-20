@@ -37,6 +37,7 @@ use common_meta_app::storage::StorageParams;
 use common_meta_app::storage::StorageRedisConfig;
 use common_meta_app::storage::StorageS3Config;
 use common_meta_app::storage::StorageWebhdfsConfig;
+use log::warn;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::MetricsLayer;
@@ -210,7 +211,16 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
     builder.endpoint(&cfg.endpoint_url);
 
     // Region
-    builder.region(&cfg.region);
+    if !cfg.region.is_empty() {
+        builder.region(&cfg.region);
+    } else if let Ok(region) = env::var("AWS_REGION") {
+        // Try to load region from env if not set.
+        builder.region(&region);
+    } else {
+        warn!(
+            "Region is not specified for S3 storage, we will attempt to load it from profiles. If it is still not found, we will use the default region of `us-east-1`."
+        )
+    }
 
     // Credential.
     builder.access_key_id(&cfg.access_key_id);

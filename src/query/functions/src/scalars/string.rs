@@ -596,39 +596,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| FunctionDomain::Full,
         vectorize_string_to_string(
             |col| usize::max(col.data.len(), 4 * col.len()),
-            |val, output, _| {
-                let mut last = None;
-                let mut count = 0;
-
-                for ch in String::from_utf8_lossy(val).chars() {
-                    let score = soundex::number_map(ch);
-                    if last.is_none() {
-                        if !soundex::is_uni_alphabetic(ch) {
-                            continue;
-                        }
-                        last = score;
-                        output.put_char(ch.to_ascii_uppercase());
-                    } else {
-                        if !ch.is_ascii_alphabetic()
-                            || soundex::is_drop(ch)
-                            || score.is_none()
-                            || score == last
-                        {
-                            continue;
-                        }
-                        last = score;
-                        output.put_char(score.unwrap() as char);
-                    }
-
-                    count += 1;
-                }
-                // add '0'
-                for _ in count..4 {
-                    output.put_char('0');
-                }
-
-                output.commit_row();
-            },
+            soundex::soundex,
         ),
     );
 
@@ -743,9 +711,42 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 }
 
-mod soundex {
+pub(crate) mod soundex {
+    use common_expression::types::string::StringColumnBuilder;
+    use common_expression::EvalContext;
+
+    pub fn soundex(val: &[u8], output: &mut StringColumnBuilder, _eval_context: &mut EvalContext) {
+        let mut last = None;
+        let mut count = 0;
+
+        for ch in String::from_utf8_lossy(val).chars() {
+            let score = number_map(ch);
+            if last.is_none() {
+                if !is_uni_alphabetic(ch) {
+                    continue;
+                }
+                last = score;
+                output.put_char(ch.to_ascii_uppercase());
+            } else {
+                if !ch.is_ascii_alphabetic() || is_drop(ch) || score.is_none() || score == last {
+                    continue;
+                }
+                last = score;
+                output.put_char(score.unwrap() as char);
+            }
+
+            count += 1;
+        }
+        // add '0'
+        for _ in count..4 {
+            output.put_char('0');
+        }
+
+        output.commit_row();
+    }
+
     #[inline(always)]
-    pub fn number_map(i: char) -> Option<u8> {
+    fn number_map(i: char) -> Option<u8> {
         match i.to_ascii_lowercase() {
             'b' | 'f' | 'p' | 'v' => Some(b'1'),
             'c' | 'g' | 'j' | 'k' | 'q' | 's' | 'x' | 'z' => Some(b'2'),
@@ -758,7 +759,7 @@ mod soundex {
     }
 
     #[inline(always)]
-    pub fn is_drop(c: char) -> bool {
+    fn is_drop(c: char) -> bool {
         matches!(
             c.to_ascii_lowercase(),
             'a' | 'e' | 'i' | 'o' | 'u' | 'y' | 'h' | 'w'
@@ -767,7 +768,7 @@ mod soundex {
 
     // https://github.com/mysql/mysql-server/blob/3290a66c89eb1625a7058e0ef732432b6952b435/sql/item_strfunc.cc#L1919
     #[inline(always)]
-    pub fn is_uni_alphabetic(c: char) -> bool {
+    fn is_uni_alphabetic(c: char) -> bool {
         c.is_ascii_lowercase() || c.is_ascii_uppercase() || c as i32 >= 0xC0
     }
 }
