@@ -2239,7 +2239,10 @@ impl ColumnBuilder {
                 }
                 builder.commit_row();
             }
-            ColumnBuilder::Bitmap(builder) => {}
+            ColumnBuilder::Bitmap(builder) => {
+                let rb = RoaringBitmap::deserialize_from(reader)?;
+                builder.push(rb);
+            }
             ColumnBuilder::Nullable(builder) => {
                 let valid: bool = reader.read_scalar()?;
                 if valid {
@@ -2334,6 +2337,13 @@ impl ColumnBuilder {
                         map_builder[VALUE].push_binary(&mut reader)?;
                     }
                     builder.commit_row();
+                }
+            }
+            ColumnBuilder::Bitmap(builder) => {
+                for row in 0..rows {
+                    let mut reader = &reader[step * row..];
+                    let rb = RoaringBitmap::deserialize_from(reader)?;
+                    builder.push(rb);
                 }
             }
             ColumnBuilder::Nullable(_) => {
