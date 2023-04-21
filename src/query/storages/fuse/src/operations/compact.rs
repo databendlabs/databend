@@ -144,7 +144,10 @@ impl FuseTable {
         let all_column_indices = self.all_column_indices();
         let projection = Projection::Columns(all_column_indices);
         let block_reader = self.create_block_reader(projection, false, ctx.clone())?;
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_threads = std::cmp::min(
+            ctx.get_settings().get_max_threads()? as usize,
+            mutator.compact_tasks.len(),
+        );
         // Add source pipe.
         pipeline.add_source(
             |output| {

@@ -200,10 +200,9 @@ impl FuseTable {
             (Arc::new(None), None)
         };
 
-        self.mutation_block_pruning(ctx.clone(), filter, projection, base_snapshot)
+        let max_threads = self
+            .mutation_block_pruning(ctx.clone(), filter, projection, base_snapshot)
             .await?;
-
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
         // Add source pipe.
         pipeline.add_source(
             |output| {

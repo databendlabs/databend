@@ -194,13 +194,14 @@ impl FuseTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let projection = Projection::Columns(col_indices.clone());
-        self.mutation_block_pruning(
-            ctx.clone(),
-            Some(filter.clone()),
-            projection.clone(),
-            base_snapshot,
-        )
-        .await?;
+        let max_threads = self
+            .mutation_block_pruning(
+                ctx.clone(),
+                Some(filter.clone()),
+                projection.clone(),
+                base_snapshot,
+            )
+            .await?;
 
         let block_reader = self.create_block_reader(projection, false, ctx.clone())?;
         let schema = block_reader.schema();
@@ -235,7 +236,6 @@ impl FuseTable {
         projection.sort_by_key(|&i| source_col_indices[i]);
         let ops = vec![BlockOperator::Project { projection }];
 
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
         // Add source pipe.
         pipeline.add_source(
             |output| {
@@ -261,7 +261,7 @@ impl FuseTable {
         filter: Option<RemoteExpr<String>>,
         projection: Projection,
         base_snapshot: &TableSnapshot,
-    ) -> Result<()> {
+    ) -> Result<usize> {
         let push_down = Some(PushDownInfo {
             projection: Some(projection),
             filter,
@@ -299,7 +299,10 @@ impl FuseTable {
                 .map(|(a, c)| MutationPartInfo::create(a.0, a.1.cluster_stats.clone(), c))
                 .collect(),
         );
-        ctx.set_partitions(parts)
+        let max_threads =
+            std::cmp::min(ctx.get_settings().get_max_threads()? as usize, parts.len());
+        ctx.set_partitions(parts)?;
+        Ok(max_threads)
     }
 
     pub fn try_add_mutation_transform(
