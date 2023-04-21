@@ -205,22 +205,29 @@ impl CopyInterpreter {
         )?;
 
         build_res.main_pipeline.set_on_finished(move |may_error| {
-            if may_error.is_none() {
-                CopyInterpreter::commit_copy_into_table(
-                    ctx.clone(),
-                    to_table,
-                    stage_info,
-                    need_copy_file_infos,
-                    force,
-                )?;
-                // Status.
-                {
-                    info!("all copy finished, elapsed:{}", start.elapsed().as_secs());
+            match may_error {
+                None => {
+                    CopyInterpreter::commit_copy_into_table(
+                        ctx.clone(),
+                        to_table,
+                        stage_info,
+                        need_copy_file_infos,
+                        force,
+                    )?;
+                    // Status.
+                    {
+                        info!("all copy finished, elapsed:{}", start.elapsed().as_secs());
+                    }
                 }
-                Ok(())
-            } else {
-                Err(may_error.as_ref().unwrap().clone())
+                Some(error) => {
+                    error!(
+                        "copy failed, elapsed:{}, reason: {}",
+                        start.elapsed().as_secs(),
+                        error
+                    );
+                }
             }
+            Ok(())
         });
 
         Ok(build_res)
@@ -333,7 +340,7 @@ impl CopyInterpreter {
         let to_table = ctx
             .get_table(catalog_name, database_name, table_name)
             .await?;
-        stage_table.set_block_compact_thresholds(to_table.get_block_compact_thresholds());
+        stage_table.set_block_thresholds(to_table.get_block_thresholds());
         stage_table.read_data(table_ctx, &read_source_plan, &mut build_res.main_pipeline)?;
 
         // Build Limit pipeline.
@@ -382,22 +389,29 @@ impl CopyInterpreter {
 
         let stage_table_info_clone = stage_table_info.clone();
         build_res.main_pipeline.set_on_finished(move |may_error| {
-            if may_error.is_none() {
-                CopyInterpreter::commit_copy_into_table(
-                    ctx.clone(),
-                    to_table,
-                    stage_table_info_clone.stage_info,
-                    need_copy_file_infos,
-                    force,
-                )?;
-                // Status.
-                {
-                    info!("all copy finished, elapsed:{}", start.elapsed().as_secs());
+            match may_error {
+                None => {
+                    CopyInterpreter::commit_copy_into_table(
+                        ctx.clone(),
+                        to_table,
+                        stage_table_info_clone.stage_info,
+                        need_copy_file_infos,
+                        force,
+                    )?;
+                    // Status.
+                    {
+                        info!("all copy finished, elapsed:{}", start.elapsed().as_secs());
+                    }
                 }
-                Ok(())
-            } else {
-                Err(may_error.as_ref().unwrap().clone())
+                Some(error) => {
+                    error!(
+                        "copy failed, elapsed:{}, reason: {}",
+                        start.elapsed().as_secs(),
+                        error
+                    );
+                }
             }
+            Ok(())
         });
 
         Ok(build_res)

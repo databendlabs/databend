@@ -117,20 +117,25 @@ impl FuseTable {
         );
 
         type CacheItem = (PartStatistics, Partitions);
-
         let cache_key = format!(
             "{:x}",
             Sha256::digest(format!("{:?}_{:?}", segments_location, push_downs))
         );
 
-        if let Some(cache) = CacheItem::cache() {
-            if let Some(data) = cache.get(&cache_key) {
-                info!(
-                    "prune snapshot block from cache, final block numbers:{}, cost:{}",
-                    data.1.len(),
-                    start.elapsed().as_secs()
-                );
-                return Ok((data.0.clone(), data.1.clone()));
+        let is_derterministic = push_downs
+            .as_ref()
+            .map(|p| p.is_deterministic)
+            .unwrap_or_default();
+        if is_derterministic {
+            if let Some(cache) = CacheItem::cache() {
+                if let Some(data) = cache.get(&cache_key) {
+                    info!(
+                        "prune snapshot block from cache, final block numbers:{}, cost:{}",
+                        data.1.len(),
+                        start.elapsed().as_secs()
+                    );
+                    return Ok((data.0.clone(), data.1.clone()));
+                }
             }
         }
 
@@ -173,8 +178,10 @@ impl FuseTable {
             pruning_stats,
         )?;
 
-        if let Some(cache) = CacheItem::cache() {
-            cache.put(cache_key, Arc::new(result.clone()));
+        if is_derterministic {
+            if let Some(cache) = CacheItem::cache() {
+                cache.put(cache_key, Arc::new(result.clone()));
+            }
         }
         Ok(result)
     }
@@ -232,26 +239,12 @@ impl FuseTable {
             .and_then(|p| p.limit)
             .unwrap_or(usize::MAX);
 
-        let mut block_metas = block_metas.to_vec();
-        if let Some(top_k) = &top_k {
-            block_metas.sort_by(|a, b| {
-                let a = a.1.col_stats.get(&top_k.column_id).unwrap();
-                let b = b.1.col_stats.get(&top_k.column_id).unwrap();
-
-                if top_k.asc {
-                    (a.min.as_ref(), a.max.as_ref()).cmp(&(b.min.as_ref(), b.max.as_ref()))
-                } else {
-                    (b.max.as_ref(), b.min.as_ref()).cmp(&(a.max.as_ref(), a.min.as_ref()))
-                }
-            });
-        }
-
         let (mut statistics, mut partitions) = match &push_down {
-            None => Self::all_columns_partitions(schema, &block_metas, top_k.clone(), limit),
+            None => Self::all_columns_partitions(schema, block_metas, top_k.clone(), limit),
             Some(extras) => match &extras.projection {
-                None => Self::all_columns_partitions(schema, &block_metas, top_k.clone(), limit),
+                None => Self::all_columns_partitions(schema, block_metas, top_k.clone(), limit),
                 Some(projection) => Self::projection_partitions(
-                    &block_metas,
+                    block_metas,
                     column_nodes,
                     projection,
                     top_k.clone(),
@@ -431,9 +424,9 @@ impl FuseTable {
         let location = meta.location.0.clone();
         let format_version = meta.location.1;
 
-        let sort_min_max = top_k.map(|top_k| {
-            let stat = meta.col_stats.get(&top_k.column_id).unwrap();
-            (stat.min.clone(), stat.max.clone())
+        let sort_min_max = top_k.and_then(|top_k| {
+            let stat = meta.col_stats.get(&top_k.column_id);
+            stat.map(|stat| (stat.min.clone(), stat.max.clone()))
         });
 
         // TODO

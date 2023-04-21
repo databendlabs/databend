@@ -154,9 +154,52 @@ function install_openssl {
 	esac
 }
 
+function install_sccache {
+	PACKAGE_MANAGER=$1
+
+	if sccache --version; then
+		echo "==> sccache is already installed"
+		return
+	fi
+	echo "==> installing sccache..."
+
+	case "$PACKAGE_MANAGER" in
+	brew)
+		install_pkg sccache "$PACKAGE_MANAGER"
+		;;
+	*)
+
+		arch=$(uname -m)
+		case "$arch" in
+		amd64)
+			arch="x86_64"
+			;;
+		arm64)
+			arch="aarch64"
+			;;
+		esac
+		download_version="v0.4.1"
+		download_target="sccache-${download_version}-${arch}-unknown-linux-musl"
+		SCCACHE_RELEASE="https://github.com/mozilla/sccache/releases/"
+		curl -fLo sccache.tar.gz "${SCCACHE_RELEASE}/download/${download_version}/${download_target}.tar.gz"
+		tar -xzf sccache.tar.gz
+		sudo cp "${download_target}/sccache" /usr/local/bin/
+		sudo chmod +x /usr/local/bin/sccache
+		rm -rf "${download_target}"
+		rm sccache.tar.gz
+		;;
+	esac
+
+	sccache --version
+}
+
 function install_protobuf {
 	PACKAGE_MANAGER=$1
 
+	if protoc --version; then
+		echo "==> protoc is already installed"
+		return
+	fi
 	echo "==> installing protobuf compiler..."
 
 	case "$PACKAGE_MANAGER" in
@@ -173,6 +216,8 @@ function install_protobuf {
 		sudo chmod +x /usr/local/bin/protoc
 		;;
 	esac
+
+	protoc --version
 }
 
 function install_thrift {
@@ -531,7 +576,7 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	cargo version
 
 	# Install tools that needed in build
-	cargo install sccache
+	install_sccache "$PACKAGE_MANAGER"
 fi
 
 if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then

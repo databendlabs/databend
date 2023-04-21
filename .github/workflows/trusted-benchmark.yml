@@ -62,7 +62,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ steps.metadata.outputs.head_sha }}
-          context: 'Benchmark Local / hits'
+          context: "Benchmark Local / hits"
           state: pending
           description: "Queued"
       # TODO: enable tpch benchmark for local
@@ -71,7 +71,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ steps.metadata.outputs.head_sha }}
-          context: 'Benchmark Cloud / hits (Medium)'
+          context: "Benchmark Cloud / hits (Medium)"
           state: pending
           description: "Queued"
       - uses: ./.github/actions/create_check_status
@@ -79,7 +79,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ steps.metadata.outputs.head_sha }}
-          context: 'Benchmark Cloud / hits (Large)'
+          context: "Benchmark Cloud / hits (Large)"
           state: pending
           description: "Queued"
       - uses: ./.github/actions/create_check_status
@@ -87,7 +87,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ steps.metadata.outputs.head_sha }}
-          context: 'Benchmark Cloud / tpch (Medium)'
+          context: "Benchmark Cloud / tpch (Medium)"
           state: pending
           description: "Queued"
       - uses: ./.github/actions/create_check_status
@@ -95,7 +95,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ steps.metadata.outputs.head_sha }}
-          context: 'Benchmark Cloud / tpch (Large)'
+          context: "Benchmark Cloud / tpch (Large)"
           state: pending
           description: "Queued"
 
@@ -145,7 +145,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ needs.metadata.outputs.head_sha }}
-          context: 'Benchmark Local / ${{ matrix.dataset }}'
+          context: "Benchmark Local / ${{ matrix.dataset }}"
           state: pending
           description: "Running"
       - uses: ./.github/actions/benchmark_local
@@ -163,7 +163,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ needs.metadata.outputs.head_sha }}
-          context: 'Benchmark Local / ${{ matrix.dataset }}'
+          context: "Benchmark Local / ${{ matrix.dataset }}"
           state: success
           description: "Completed"
 
@@ -225,12 +225,10 @@ jobs:
     runs-on: [self-hosted, X64, Linux, 4c8g]
     strategy:
       matrix:
-        dataset:
-          - hits
-          - tpch
-        size:
-          - Medium
-          - Large
+        include:
+          - { dataset: hits, size: Medium }
+          - { dataset: hits, size: Large }
+          - { dataset: tpch, size: Large }
       fail-fast: true
       max-parallel: 1
     steps:
@@ -242,7 +240,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ needs.metadata.outputs.head_sha }}
-          context: 'Benchmark Cloud / ${{ matrix.dataset }} (${{ matrix.size }})'
+          context: "Benchmark Cloud / ${{ matrix.dataset }} (${{ matrix.size }})"
           state: pending
           description: "Running"
       - uses: ./.github/actions/benchmark_cloud
@@ -267,7 +265,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ needs.metadata.outputs.head_sha }}
-          context: 'Benchmark Cloud / ${{ matrix.dataset }} (${{ matrix.size }})'
+          context: "Benchmark Cloud / ${{ matrix.dataset }} (${{ matrix.size }})"
           state: success
           description: "Completed"
 

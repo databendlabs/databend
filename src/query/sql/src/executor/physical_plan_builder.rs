@@ -991,30 +991,41 @@ impl PhysicalPlanBuilder {
             None
         };
 
+        let mut is_deterministic = true;
         let push_down_filter = scan
             .push_down_predicates
             .as_ref()
             .filter(|p| !p.is_empty())
-            .map(|predicates| -> Result<RemoteExpr<String>> {
-                let predicates: Result<Vec<Expr<String>>> = predicates
-                    .iter()
-                    .map(|p| p.as_expr_with_col_name())
-                    .collect();
+            .map(
+                |predicates: &Vec<ScalarExpr>| -> Result<RemoteExpr<String>> {
+                    let predicates: Result<Vec<Expr<String>>> = predicates
+                        .iter()
+                        .map(|p| p.as_expr_with_col_name())
+                        .collect();
 
-                let predicates = predicates?;
-                let expr = predicates
-                    .into_iter()
-                    .reduce(|lhs, rhs| {
-                        check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
+                    let predicates = predicates?;
+                    let expr = predicates
+                        .into_iter()
+                        .reduce(|lhs, rhs| {
+                            check_function(
+                                None,
+                                "and_filters",
+                                &[],
+                                &[lhs, rhs],
+                                &BUILTIN_FUNCTIONS,
+                            )
                             .unwrap()
-                    })
-                    .unwrap();
+                        })
+                        .unwrap();
 
-                let expr = cast_expr_to_non_null_boolean(expr)?;
+                    let expr = cast_expr_to_non_null_boolean(expr)?;
 
-                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                Ok(expr.as_remote_expr())
-            })
+                    let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+
+                    is_deterministic = expr.is_deterministic(&BUILTIN_FUNCTIONS);
+                    Ok(expr.as_remote_expr())
+                },
+            )
             .transpose()?;
 
         let prewhere_info = scan
@@ -1132,6 +1143,7 @@ impl PhysicalPlanBuilder {
             projection: Some(projection),
             output_columns,
             filter: push_down_filter,
+            is_deterministic,
             prewhere: prewhere_info,
             limit: scan.limit,
             order_by: order_by.unwrap_or_default(),
@@ -1141,10 +1153,10 @@ impl PhysicalPlanBuilder {
 
     fn build_plan_stat_info(&self, s_expr: &SExpr) -> Result<PlanStatsInfo> {
         let rel_expr = RelExpr::with_s_expr(s_expr);
-        let prop = rel_expr.derive_relational_prop()?;
+        let stat_info = rel_expr.derive_cardinality()?;
 
         Ok(PlanStatsInfo {
-            estimated_rows: prop.cardinality,
+            estimated_rows: stat_info.cardinality,
         })
     }
 }

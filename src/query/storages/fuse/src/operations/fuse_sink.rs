@@ -217,7 +217,7 @@ impl Processor for FuseTableSink {
         match std::mem::replace(&mut self.state, State::None) {
             State::NeedSerialize(data_block) => {
                 let (cluster_stats, block) =
-                    self.cluster_stats_gen.gen_stats_for_append(&data_block)?;
+                    self.cluster_stats_gen.gen_stats_for_append(data_block)?;
 
                 let (block_location, block_id) = self.meta_locations.gen_block_location();
 

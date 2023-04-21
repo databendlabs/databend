@@ -302,6 +302,21 @@ impl SetExpr {
             SetExpr::SetOperation(op) => op.span,
         }
     }
+
+    pub fn into_query(self) -> Query {
+        match self {
+            SetExpr::Query(query) => *query,
+            _ => Query {
+                span: self.span(),
+                with: None,
+                body: self,
+                order_by: vec![],
+                limit: vec![],
+                offset: None,
+                ignore_result: false,
+            },
+        }
+    }
 }
 
 impl Display for OrderByExpr {

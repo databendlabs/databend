@@ -123,7 +123,7 @@ impl CascadesOptimizer {
             .map(|index| self.find_optimal_plan(*index))
             .collect::<Result<Vec<_>>>()?;
 
-        let result = SExpr::create(m_expr.plan.clone(), children, None, None);
+        let result = SExpr::create(m_expr.plan.clone(), children, None, None, None);
 
         Ok(result)
     }

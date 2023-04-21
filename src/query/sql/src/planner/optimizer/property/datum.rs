@@ -52,6 +52,7 @@ impl Datum {
                 Some(Datum::Float(F64::from(f32::from(*v) as f64)))
             }
             Scalar::String(v) => Some(Datum::Bytes(v.clone())),
+            Scalar::Date(v) => Some(Datum::Int(*v as i64)),
             _ => None,
         }
     }

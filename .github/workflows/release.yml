@@ -110,6 +110,17 @@ jobs:
       - name: Build Binary
         run: |
           cargo build --release --target=${{ steps.target.outputs.target }}
+      - name: Basic Sqllogic Test
+        continue-on-error: true
+        if: matrix.arch == 'x86_64'
+        shell: bash
+        env:
+          TEST_HANDLERS: http
+          BUILD_PROFILE: release
+        run: |
+          mkdir -p target/release
+          cp ./target/${{ steps.target.outputs.target }}/release/databend-{meta,query,sqllogictests} ./target/release/
+          bash ./scripts/ci/ci-run-sqllogic-tests.sh base
       - name: Pack binaries
         run: |
           brew install gnu-tar
@@ -173,6 +184,17 @@ jobs:
           profile: release
           target: ${{ steps.target.outputs.target }}
           upload: false
+      - name: Basic Sqllogic Test
+        continue-on-error: true
+        if: matrix.arch == 'x86_64'
+        shell: bash
+        env:
+          TEST_HANDLERS: http
+          BUILD_PROFILE: release
+        run: |
+          mkdir -p target/release
+          cp ./target/${{ steps.target.outputs.target }}/release/databend-{meta,query,sqllogictests} ./target/release/
+          bash ./scripts/ci/ci-run-sqllogic-tests.sh base
       - name: Pack binaries
         run: |
           target=${{ steps.target.outputs.target }}

@@ -122,6 +122,7 @@ pub use crate::raft_types::LogId;
 pub use crate::raft_types::LogIndex;
 pub use crate::raft_types::Membership;
 pub use crate::raft_types::MembershipNode;
+pub use crate::raft_types::NetworkError;
 pub use crate::raft_types::NodeId;
 pub use crate::raft_types::RPCError;
 pub use crate::raft_types::RaftError;
