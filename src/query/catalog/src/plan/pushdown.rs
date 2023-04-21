@@ -89,6 +89,8 @@ pub struct PushDownInfo {
     pub order_by: Vec<(RemoteExpr<String>, bool, bool)>,
     /// Optional virtual columns
     pub virtual_columns: Option<Vec<VirtualColumnInfo>>,
+    /// If lazy materialization is enabled in this query.
+    pub lazy_materialization: bool,
 }
 
 /// TopK is a wrapper for topk push down items.

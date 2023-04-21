@@ -698,6 +698,10 @@ impl Table for FuseTable {
     fn support_virtual_columns(&self) -> bool {
         matches!(self.storage_format, FuseStorageFormat::Native)
     }
+
+    fn support_row_id_column(&self) -> bool {
+        !self.is_native()
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

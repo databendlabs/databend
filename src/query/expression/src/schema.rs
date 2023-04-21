@@ -43,6 +43,16 @@ pub type ColumnId = u32;
 // Index of TableSchema.fields array
 pub type FieldIndex = usize;
 
+pub const ROW_ID_COLUMN_ID: u32 = u32::MAX;
+pub const BLOCK_NAME_COLUMN_ID: u32 = u32::MAX - 1;
+pub const SEGMENT_NAME_COLUMN_ID: u32 = u32::MAX - 2;
+pub const SNAPSHOT_NAME_COLUMN_ID: u32 = u32::MAX - 3;
+
+#[inline]
+pub fn is_internal_column_id(column_id: ColumnId) -> bool {
+    column_id >= SNAPSHOT_NAME_COLUMN_ID
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct DataSchema {
     pub(crate) fields: Vec<DataField>,
@@ -743,6 +753,10 @@ impl TableSchema {
 
         let mut fields = Vec::new();
         for field in self.fields() {
+            if is_internal_column_id(field.column_id) {
+                // Skip internal columns
+                continue;
+            }
             let mut next_column_id = field.column_id;
             collect_in_field(field, &mut fields, &mut next_column_id);
         }

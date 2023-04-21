@@ -115,6 +115,11 @@ pub trait Table: Sync + Send {
         false
     }
 
+    /// Whether the table engine supports virtual column `_row_id`.
+    fn support_row_id_column(&self) -> bool {
+        false
+    }
+
     #[async_backtrace::framed]
     async fn alter_table_cluster_keys(
         &self,
