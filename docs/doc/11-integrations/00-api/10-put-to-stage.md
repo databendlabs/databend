@@ -18,7 +18,7 @@ In the body of the POST request, include the [Required Parameters](#required-par
 | Parameter  | Description |
 | ----------- | ----------- |
 | `stage_name:<your-stage-name>`  | Stage name. To specify a stage named **sales**, use "stage_name:sales". For the user stage, use "stage_name:~". |
-| `upload=@<your-file-path>`  | Files you want to upload.|
+| `upload=@<your-file-path>`  | File you want to upload.|
 
 ## Examples
 
