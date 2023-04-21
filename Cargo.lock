@@ -2497,6 +2497,7 @@ dependencies = [
  "storages-common-index",
  "storages-common-pruner",
  "storages-common-table-meta",
+ "tracing",
  "typetag",
 ]
 
