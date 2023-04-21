@@ -2,7 +2,7 @@
 title: system.settings
 ---
 
-Stores the system settings of the current session.
+Store the system settings of the current session.
 
 ```sql
 SELECT * FROM system.settings;
