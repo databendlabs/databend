@@ -211,7 +211,7 @@ async fn test_navigate_for_purge() -> Result<()> {
     assert_eq!(navigate, first_snapshot);
 
     // 5. navigate by snapshot id.
-    let snapshot_id = snapshots[1].snapshot_id.simple().to_string();
+    let snapshot_id = snapshots[1].0.snapshot_id.simple().to_string();
     let (navigate, files) = fuse_table
         .list_by_snapshot_id(&snapshot_id, time_point)
         .await?;

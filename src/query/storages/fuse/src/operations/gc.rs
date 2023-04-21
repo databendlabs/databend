@@ -80,7 +80,7 @@ impl FuseTable {
             .get_block_locations(ctx.clone(), &root_snapshot.segments, keep_last_snapshot)
             .await?;
         let root_snapshot_lite = Arc::new(SnapshotLiteExtended {
-            format_version: root_snapshot.format_version(),
+            format_version: ver,
             snapshot_id: root_snapshot.snapshot_id,
             timestamp: root_snapshot.timestamp,
             segments: HashSet::from_iter(root_snapshot.segments.clone()),

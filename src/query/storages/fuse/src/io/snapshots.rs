@@ -193,10 +193,14 @@ impl SnapshotsIO {
             }
         }
 
-        let root_snapshot =
+        let (root_snapshot, format_version) =
             Self::read_snapshot(root_snapshot_file.clone(), data_accessor.clone()).await?;
 
-        Ok(Self::chain_snapshots(snapshot_lites, &root_snapshot))
+        Ok(Self::chain_snapshots(
+            snapshot_lites,
+            &root_snapshot,
+            format_version,
+        ))
     }
 
     // read all the precedent snapshots of given `root_snapshot`
