@@ -1,0 +1,39 @@
+statement ok
+set lazy_topn_threshold=100
+
+statement ok
+drop table if exists t_lazy
+
+statement ok
+create table t_lazy (a int, b float, c string, d tuple(a int, b int), e date)
+
+query T
+explain select * from t_lazy order by a desc limit 2
+----
+EvalScalar
+├── expressions: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
+├── estimated rows: 0.00
+└── RowFetch
+    ├── columns to fetch: [b, c, d, e]
+    ├── estimated rows: 0.00
+    └── Limit
+        ├── limit: 2
+        ├── offset: 0
+        ├── estimated rows: 0.00
+        └── Sort
+            ├── sort keys: [a DESC NULLS LAST]
+            ├── estimated rows: 0.00
+            └── Exchange
+                ├── exchange type: Merge
+                └── TableScan
+                    ├── table: default.default.t_lazy
+                    ├── read rows: 0
+                    ├── read bytes: 0
+                    ├── partitions total: 0
+                    ├── partitions scanned: 0
+                    ├── push downs: [filters: [], limit: 2]
+                    ├── output columns: [a, _row_id]
+                    └── estimated rows: 0.00
+
+statement ok
+drop table t_lazy
