@@ -43,7 +43,9 @@ pub enum RaftStateKey {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RaftStateValue {
     NodeId(NodeId),
+
     HardState(Vote),
+
     /// active state machine, previous state machine
     StateMachineId((u64, u64)),
 }

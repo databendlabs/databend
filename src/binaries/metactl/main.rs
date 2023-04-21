@@ -34,9 +34,9 @@ use databend_meta::version::METASRV_COMMIT_VERSION;
 use serde::Deserialize;
 use serde::Serialize;
 
-/// TODO(xuanwo)
-///
-/// We should make metactl config keeps backward compatibility too.
+// TODO(xuanwo)
+//
+// We should make metactl config keeps backward compatibility too.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Parser)]
 #[clap(about, version = &**METASRV_COMMIT_VERSION, author)]
 pub struct Config {

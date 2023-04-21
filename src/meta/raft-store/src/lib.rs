@@ -18,5 +18,6 @@ pub(crate) mod compat07;
 pub mod config;
 pub mod key_spaces;
 pub mod log;
+pub mod ondisk;
 pub mod state;
 pub mod state_machine;
