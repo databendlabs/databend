@@ -360,7 +360,7 @@ select id, json_path_query_array(obj, '$.a') from t2
 query IT
 select id, json_path_query_array(obj, '$.b.c') from t2
 ----
-1 [1]
+1 [2]
 
 query IT
 select id, json_path_query_array(obj, '$.b?(@.c == 2)') from t2

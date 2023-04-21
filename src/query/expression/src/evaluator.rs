@@ -904,7 +904,7 @@ impl<'a> Evaluator<'a> {
                     tz: self.func_ctx.tz,
                     func_ctx: self.func_ctx,
                 };
-                let result = (eval)(&cols_ref, self.input_columns.num_rows(), &mut ctx);
+                let result = (eval)(&cols_ref, &mut ctx);
                 ctx.render_error(*span, &args, &function.signature.name)?;
                 assert_eq!(result.len(), self.input_columns.num_rows());
                 return Ok(result);

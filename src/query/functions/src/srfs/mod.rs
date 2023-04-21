@@ -77,10 +77,10 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
 
             eval: FunctionEval::SRF {
-                eval: Box::new(|args, num_rows, ctx| {
+                eval: Box::new(|args, ctx| {
                     let val_arg = args[0].clone().to_owned();
                     let path_arg = args[1].clone().to_owned();
-                    (0..num_rows)
+                    (0..ctx.num_rows)
                         .map(|row| {
                             let val = val_arg.index(row).unwrap();
                             let path = path_arg.index(row).unwrap();
@@ -131,8 +131,8 @@ fn build_unnest(
                     return_type: DataType::Tuple(vec![DataType::Null]),
                 },
                 eval: FunctionEval::SRF {
-                    eval: Box::new(|_, num_rows, _| {
-                        vec![(Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0); num_rows]
+                    eval: Box::new(|_, ctx| {
+                        vec![(Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0); ctx.num_rows]
                     }),
                 },
             })
@@ -158,9 +158,9 @@ fn build_unnest(
                 ))]),
             },
             eval: FunctionEval::SRF {
-                eval: Box::new(|args, num_rows, _| {
+                eval: Box::new(|args, ctx| {
                     let arg = args[0].clone().to_owned();
-                    (0..num_rows)
+                    (0..ctx.num_rows)
                         .map(|row| {
                             fn unnest_column(col: Column) -> Column {
                                 match col {
