@@ -2,13 +2,6 @@
 title: Prometheus & Grafana
 ---
 
-Databend captures real-time metrics of the meta and query services, which you can access through a web browser using the following URLs:
-
-- Meta Metrics: `http://<admin_api_address>/v1/metrics`
-- Query Metrics: `http://<metric_api_address>/metrics`
-
-Alternatively, you can use Prometheus to capture and store the metrics data from Databend. Then, you can visualize the captured time series data on a dashboard with Grafana.
-
 [Prometheus](https://prometheus.io/) is an open-source monitoring system with a dimensional data model, flexible query language, efficient time series database and modern alerting approach. [Grafana](https://grafana.com/grafana) is an open-source tool used for analyzing and visualizing metrics.
 
 This following tutorial guides you through deploying and integrating Databend, Prometheus, and Grafana. In this tutorial, you'll deploy a local Databend and install Prometheus and Grafana with Docker. Before you start, ensure that you have Docker installed.

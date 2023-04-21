@@ -1714,7 +1714,7 @@ pub fn copy_unit(i: Input) -> IResult<CopyUnit> {
 
     // Parse input like `( SELECT * from mytable )`
     let query = |i| {
-        map(parenthesized_query, |query| {
+        map(rule! { "(" ~ #query ~ ")" }, |(_, query, _)| {
             CopyUnit::Query(Box::new(query))
         })(i)
     };

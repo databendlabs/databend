@@ -142,10 +142,11 @@ With these indexes, Databend can speed up queries by reducing the I/O and CPU co
 
 The Databend community is open to data professionals, students, and anyone who has a passion for cloud data warehouses. Feel free to click on the links below to be a part of the excitement:
 
-- [Slack](https://link.databend.rs/join-slack): Chat with the community
-- [GitHub](https://github.com/datafuselabs/databend): Feature requests, bug reports, and contributions
-- [Twitter](https://twitter.com/DatabendLabs): Stay in the know
-- [Weekly](https://weekly.databend.rs/): Weekly updates
+- Slack: https://link.databend.rs/join-slack
+- GitHub: https://github.com/datafuselabs/databend
+- Twitter: https://twitter.com/DatabendLabs
+- LinkedIn: https://www.linkedin.com/company/datafuselabs
+- YouTube: https://www.youtube.com/@DatabendLabs
 
 ## Roadmap
 

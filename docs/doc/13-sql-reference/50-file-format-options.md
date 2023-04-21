@@ -113,7 +113,7 @@ Specifies the compression algorithm.
 **Available Values**:
 
 | Values        | Notes                                                           |
-| ------------- | --------------------------------------------------------------- |
+|---------------|-----------------------------------------------------------------|
 | `AUTO`        | Auto detect compression via file extensions                     |
 | `GZIP`        |                                                                 |
 | `BZ2`         |                                                                 |

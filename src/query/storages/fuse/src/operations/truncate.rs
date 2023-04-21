@@ -33,11 +33,11 @@ impl FuseTable {
     pub async fn do_truncate(&self, ctx: Arc<dyn TableContext>, purge: bool) -> Result<()> {
         if let Some(prev_snapshot) = self.read_table_snapshot().await? {
             let prev_id = prev_snapshot.snapshot_id;
-
+            let prev_format_version = self.snapshot_format_version().await?;
             let new_snapshot = TableSnapshot::new(
                 Uuid::new_v4(),
                 &prev_snapshot.timestamp,
-                Some((prev_id, prev_snapshot.format_version())),
+                Some((prev_id, prev_format_version)),
                 prev_snapshot.schema.clone(),
                 Default::default(),
                 vec![],
@@ -48,7 +48,7 @@ impl FuseTable {
             let loc = self.meta_location_generator();
             let new_snapshot_loc =
                 loc.snapshot_location_from_uuid(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
-            let bytes = serde_json::to_vec(&new_snapshot)?;
+            let bytes = new_snapshot.to_bytes()?;
             self.operator.write(&new_snapshot_loc, bytes).await?;
 
             if purge {

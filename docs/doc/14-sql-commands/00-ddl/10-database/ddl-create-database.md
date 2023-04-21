@@ -4,7 +4,7 @@ title: CREATE DATABASE
 
 Create a database.
 
-Please note that creating database from a share is part of the Share feature in Databend Cloud. For more information, see [Share](../90-share/index.md).
+Please note that creating a database from a share is part of the Share feature in Databend Cloud. For more information, see [Share](../90-share/index.md).
 
 ## Syntax
 

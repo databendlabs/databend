@@ -2,7 +2,7 @@
 title: SHOW PROCESSLIST
 ---
 
-The Databend process list indicates the operations currently being performed by the set of threads executing within the server.
+The Databend process list indicates the operations currently being performed by the set of threads executed within the server.
 
 The SHOW PROCESSLIST statement is one source of process information.
 

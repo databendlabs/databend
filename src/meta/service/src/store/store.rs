@@ -46,15 +46,15 @@ use crate::metrics::server_metrics;
 use crate::store::StoreInner;
 use crate::store::ToStorageError;
 
-/// A bare store that implements `RaftStorage` trait and provides full functions but without defensive check.
+/// A store that implements `RaftStorage` trait and provides full functions.
 ///
 /// It is designed to be cloneable in order to be shared by MetaNode and Raft.
 #[derive(Clone)]
-pub struct RaftStoreBare {
+pub struct RaftStore {
     pub(crate) inner: Arc<StoreInner>,
 }
 
-impl RaftStoreBare {
+impl RaftStore {
     pub fn new(sto: StoreInner) -> Self {
         Self {
             inner: Arc::new(sto),
@@ -72,7 +72,7 @@ impl RaftStoreBare {
     }
 }
 
-impl Deref for RaftStoreBare {
+impl Deref for RaftStore {
     type Target = StoreInner;
 
     fn deref(&self) -> &Self::Target {
@@ -81,7 +81,7 @@ impl Deref for RaftStoreBare {
 }
 
 #[async_trait]
-impl RaftLogReader<TypeConfig> for RaftStoreBare {
+impl RaftLogReader<TypeConfig> for RaftStore {
     async fn get_log_state(&mut self) -> Result<LogState<TypeConfig>, StorageError> {
         let last_purged_log_id = match self
             .log
@@ -146,7 +146,7 @@ impl RaftLogReader<TypeConfig> for RaftStoreBare {
 }
 
 #[async_trait]
-impl RaftSnapshotBuilder<TypeConfig, Cursor<Vec<u8>>> for RaftStoreBare {
+impl RaftSnapshotBuilder<TypeConfig, Cursor<Vec<u8>>> for RaftStore {
     #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
     async fn build_snapshot(&mut self) -> Result<Snapshot, StorageError> {
         self.do_build_snapshot().await
@@ -154,10 +154,10 @@ impl RaftSnapshotBuilder<TypeConfig, Cursor<Vec<u8>>> for RaftStoreBare {
 }
 
 #[async_trait]
-impl RaftStorage<TypeConfig> for RaftStoreBare {
+impl RaftStorage<TypeConfig> for RaftStore {
     type SnapshotData = Cursor<Vec<u8>>;
-    type LogReader = RaftStoreBare;
-    type SnapshotBuilder = RaftStoreBare;
+    type LogReader = RaftStore;
+    type SnapshotBuilder = RaftStore;
 
     async fn get_log_reader(&mut self) -> Self::LogReader {
         self.clone()
