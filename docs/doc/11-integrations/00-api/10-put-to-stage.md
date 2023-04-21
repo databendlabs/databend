@@ -36,7 +36,7 @@ CREATE STAGE my_internal_stage;
 Download [books.parquet](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.parquet)
 
 ```shell title='Put books.parquet to stage'
-curl  -H "stage_name:my_internal_stage" -F "upload=@books.parquet" -XPUT "http://localhost:8000/v1/upload_to_stage"
+curl -u root: -H "stage_name:my_internal_stage" -F "upload=@books.parquet" -XPUT "http://localhost:8000/v1/upload_to_stage"
 ```
 
 ```shell title='Response'
@@ -46,11 +46,10 @@ curl  -H "stage_name:my_internal_stage" -F "upload=@books.parquet" -XPUT "http:/
 Check the staged file:
 ```sql
 LIST @my_internal_stage;
-+---------------+
-| file_name     |
-+---------------+
-| books.parquet |
-+---------------+
+
+name         |size|md5|last_modified                |creator|
+-------------+----+---+-----------------------------+-------+
+books.parquet| 998|   |2023-04-19 19:34:51.303 +0000|       |
 ```
 
 The file `books.parquet` has been uploaded to your named internal stage.

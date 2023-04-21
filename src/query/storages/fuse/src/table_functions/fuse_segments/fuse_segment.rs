@@ -67,7 +67,7 @@ impl<'a> FuseSegment<'a> {
             );
 
             // find the element by snapshot_id in stream
-            while let Some(snapshot) = snapshot_stream.try_next().await? {
+            while let Some((snapshot, _)) = snapshot_stream.try_next().await? {
                 if snapshot.snapshot_id.simple().to_string() == self.snapshot_id {
                     return self.to_block(&snapshot.segments).await;
                 }

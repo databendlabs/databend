@@ -22,6 +22,7 @@ use educe::Educe;
 use super::RelationalProperty;
 use crate::optimizer::rule::AppliedRules;
 use crate::optimizer::rule::RuleID;
+use crate::optimizer::StatInfo;
 use crate::plans::Operator;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
@@ -48,6 +49,9 @@ pub struct SExpr {
     #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
     pub(crate) rel_prop: Arc<Mutex<Option<RelationalProperty>>>,
 
+    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    pub(crate) stat_info: Arc<Mutex<Option<StatInfo>>>,
+
     /// A bitmap to record applied rules on current SExpr, to prevent
     /// redundant transformations.
     pub(crate) applied_rules: AppliedRules,
@@ -59,27 +63,28 @@ impl SExpr {
         children: Vec<SExpr>,
         original_group: Option<IndexType>,
         rel_prop: Option<RelationalProperty>,
+        stat_info: Option<StatInfo>,
     ) -> Self {
         SExpr {
             plan,
             children: Arc::new(children),
             original_group,
             rel_prop: Arc::new(Mutex::new(rel_prop)),
-
+            stat_info: Arc::new(Mutex::new(stat_info)),
             applied_rules: AppliedRules::default(),
         }
     }
 
     pub fn create_unary(plan: RelOperator, child: SExpr) -> Self {
-        Self::create(plan, vec![child], None, None)
+        Self::create(plan, vec![child], None, None, None)
     }
 
     pub fn create_binary(plan: RelOperator, left_child: SExpr, right_child: SExpr) -> Self {
-        Self::create(plan, vec![left_child, right_child], None, None)
+        Self::create(plan, vec![left_child, right_child], None, None, None)
     }
 
     pub fn create_leaf(plan: RelOperator) -> Self {
-        Self::create(plan, vec![], None, None)
+        Self::create(plan, vec![], None, None, None)
     }
 
     pub fn create_pattern_leaf() -> Self {
@@ -89,6 +94,7 @@ impl SExpr {
             }
             .into(),
             vec![],
+            None,
             None,
             None,
         )
@@ -151,6 +157,7 @@ impl SExpr {
             plan: self.plan.clone(),
             original_group: None,
             rel_prop: Arc::new(Mutex::new(None)),
+            stat_info: Arc::new(Mutex::new(None)),
             applied_rules: self.applied_rules.clone(),
             children: Arc::new(children),
         }
@@ -161,6 +168,7 @@ impl SExpr {
             plan,
             original_group: self.original_group,
             rel_prop: self.rel_prop.clone(),
+            stat_info: self.stat_info.clone(),
             applied_rules: self.applied_rules.clone(),
             children: self.children.clone(),
         }
@@ -275,9 +283,7 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
 
 fn find_subquery_in_expr(expr: &ScalarExpr) -> bool {
     match expr {
-        ScalarExpr::BoundColumnRef(_)
-        | ScalarExpr::BoundInternalColumnRef(_)
-        | ScalarExpr::ConstantExpr(_) => false,
+        ScalarExpr::BoundColumnRef(_) | ScalarExpr::ConstantExpr(_) => false,
         ScalarExpr::WindowFunction(expr) => {
             let flag = match &expr.func {
                 WindowFuncType::Aggregate(agg) => agg.args.iter().any(find_subquery_in_expr),

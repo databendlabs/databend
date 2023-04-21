@@ -30,6 +30,7 @@ use opendal::EntryMode;
 use opendal::Metakey;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
+use storages_common_table_meta::meta::FormatVersion;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -46,7 +47,6 @@ use crate::io::TableMetaLocationGenerator;
 pub struct SnapshotsIO {
     ctx: Arc<dyn TableContext>,
     operator: Operator,
-    format_version: u64,
 }
 
 pub struct SnapshotLiteListExtended {
@@ -69,43 +69,40 @@ struct SnapshotLiteExtended {
 }
 
 impl SnapshotsIO {
-    pub fn create(ctx: Arc<dyn TableContext>, operator: Operator, format_version: u64) -> Self {
-        Self {
-            ctx,
-            operator,
-            format_version,
-        }
+    pub fn create(ctx: Arc<dyn TableContext>, operator: Operator) -> Self {
+        Self { ctx, operator }
     }
 
     #[async_backtrace::framed]
     async fn read_snapshot(
         snapshot_location: String,
-        format_version: u64,
         data_accessor: Operator,
-    ) -> Result<Arc<TableSnapshot>> {
+    ) -> Result<(Arc<TableSnapshot>, FormatVersion)> {
         let reader = MetaReaders::table_snapshot_reader(data_accessor);
+        let ver = TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
         let load_params = LoadParams {
             location: snapshot_location,
             len_hint: None,
-            ver: format_version,
+            ver,
             put_cache: true,
         };
-        reader.read(&load_params).await
+        let snapshot = reader.read(&load_params).await?;
+        Ok((snapshot, ver))
     }
 
     #[async_backtrace::framed]
     async fn read_snapshot_lite(
         snapshot_location: String,
-        format_version: u64,
         data_accessor: Operator,
         min_snapshot_timestamp: Option<DateTime<Utc>>,
         list_options: ListSnapshotLiteOption,
     ) -> Result<SnapshotLiteExtended> {
         let reader = MetaReaders::table_snapshot_reader(data_accessor);
+        let ver = TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
         let load_params = LoadParams {
             location: snapshot_location,
             len_hint: None,
-            ver: format_version,
+            ver,
             put_cache: false,
         };
         let snapshot = reader.read(&load_params).await?;
@@ -137,7 +134,7 @@ impl SnapshotsIO {
         }
 
         Ok(SnapshotLiteExtended {
-            snapshot_lite: TableSnapshotLite::from(snapshot.as_ref()),
+            snapshot_lite: TableSnapshotLite::from((snapshot.as_ref(), ver)),
             segment_locations,
         })
     }
@@ -156,7 +153,6 @@ impl SnapshotsIO {
             iter.next().map(|location| {
                 Self::read_snapshot_lite(
                     location.clone(),
-                    self.format_version,
                     self.operator.clone(),
                     min_snapshot_timestamp,
                     list_options.clone(),
@@ -201,9 +197,12 @@ impl SnapshotsIO {
     ) -> Result<Vec<TableSnapshotLite>> {
         let table_snapshot_reader =
             MetaReaders::table_snapshot_reader(self.ctx.get_data_operator()?.operator());
+        let format_version = TableMetaLocationGenerator::snapshot_version(root_snapshot.as_str());
         let lite_snapshot_stream = table_snapshot_reader
-            .snapshot_history(root_snapshot, self.format_version, location_generator)
-            .map_ok(|snapshot| TableSnapshotLite::from(snapshot.as_ref()));
+            .snapshot_history(root_snapshot, format_version, location_generator)
+            .map_ok(|(snapshot, format_version)| {
+                TableSnapshotLite::from((snapshot.as_ref(), format_version))
+            });
         if let Some(l) = limit {
             lite_snapshot_stream.take(l).try_collect::<Vec<_>>().await
         } else {
@@ -276,15 +275,11 @@ impl SnapshotsIO {
             }
         }
 
-        let root_snapshot = Self::read_snapshot(
-            root_snapshot_file.clone(),
-            self.format_version,
-            data_accessor.clone(),
-        )
-        .await?;
+        let (root_snapshot, format_version) =
+            Self::read_snapshot(root_snapshot_file.clone(), data_accessor.clone()).await?;
 
         let (chained_snapshot_lites, orphan_snapshot_lites) =
-            Self::chain_snapshots(snapshot_lites, &root_snapshot);
+            Self::chain_snapshots(snapshot_lites, &root_snapshot, format_version);
 
         Ok(SnapshotLiteListExtended {
             chained_snapshot_lites,
@@ -296,13 +291,14 @@ impl SnapshotsIO {
     fn chain_snapshots(
         snapshot_lites: Vec<TableSnapshotLite>,
         root_snapshot: &TableSnapshot,
+        format_version: FormatVersion,
     ) -> (Vec<TableSnapshotLite>, Vec<TableSnapshotLite>) {
         let mut snapshot_map = HashMap::new();
         let mut chained_snapshot_lites = vec![];
         for snapshot_lite in snapshot_lites.into_iter() {
             snapshot_map.insert(snapshot_lite.snapshot_id, snapshot_lite);
         }
-        let root_snapshot_lite = TableSnapshotLite::from(root_snapshot);
+        let root_snapshot_lite = TableSnapshotLite::from((root_snapshot, format_version));
         let mut prev_snapshot_id_tuple = root_snapshot_lite.prev_snapshot_id;
         chained_snapshot_lites.push(root_snapshot_lite);
         while let Some((prev_snapshot_id, _)) = prev_snapshot_id_tuple {

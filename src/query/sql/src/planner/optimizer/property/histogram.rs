@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
+use std::fmt;
 use std::fmt::Debug;
 
 use common_exception::Result;
@@ -23,7 +24,7 @@ pub const DEFAULT_HISTOGRAM_BUCKETS: usize = 100;
 
 /// A histogram is a representation of the distribution of a column.
 ///
-/// We are constructing this in an "Equi-depth" fashion, which means
+/// We are constructing this in an "Equi-height" fashion, which means
 /// every bucket has roughly the same number of rows.
 ///
 /// Real-world data distribution is often skewed,
@@ -281,7 +282,10 @@ impl SampleSet for UniformSampleSet {
                 Ok(Datum::Float(upper_bound))
             }
 
-            _ => Err(format!("Unsupported datum type: {:?}", self.min,)),
+            _ => Err(format!(
+                "Unsupported datum type: {:?}, {:?}",
+                self.min, self.max
+            )),
         }
     }
 }
@@ -291,4 +295,20 @@ pub struct InterleavedBucket {
     pub right_ndv: f64,
     pub left_num_rows: f64,
     pub right_num_rows: f64,
+    pub max_val: f64,
+}
+
+impl fmt::Display for Histogram {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for bucket in &self.buckets {
+            writeln!(
+                f,
+                "{}: {} values, {} distinct values",
+                bucket.upper_bound(),
+                bucket.num_values,
+                bucket.num_distinct
+            )?;
+        }
+        Ok(())
+    }
 }

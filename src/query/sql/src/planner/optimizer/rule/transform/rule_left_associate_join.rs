@@ -203,6 +203,7 @@ impl Rule for RuleLeftAssociateJoin {
             ],
             None,
             None,
+            None,
         );
 
         // Disable the following rules for join 3

@@ -277,6 +277,8 @@ pub enum TokenKind {
     BETWEEN,
     #[token("BIGINT", ignore(ascii_case))]
     BIGINT,
+    #[token("BINARY", ignore(ascii_case))]
+    BINARY,
     #[token("BOOL", ignore(ascii_case))]
     BOOL,
     #[token("BOOLEAN", ignore(ascii_case))]
@@ -751,6 +753,8 @@ pub enum TokenKind {
     SUBSTR,
     #[token("SEMI", ignore(ascii_case))]
     SEMI,
+    #[token("SOUNDS", ignore(ascii_case))]
+    SOUNDS,
     #[token("TABLE", ignore(ascii_case))]
     TABLE,
     #[token("TABLES", ignore(ascii_case))]
@@ -827,6 +831,8 @@ pub enum TokenKind {
     VALUES,
     #[token("VALIDATION_MODE", ignore(ascii_case))]
     VALIDATION_MODE,
+    #[token("VARBINARY", ignore(ascii_case))]
+    VARBINARY,
     #[token("VARCHAR", ignore(ascii_case))]
     VARCHAR,
     #[token("VARIANT", ignore(ascii_case))]

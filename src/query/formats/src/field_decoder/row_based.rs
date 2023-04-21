@@ -41,6 +41,7 @@ use common_io::cursor_ext::BufferReadDateTimeExt;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
 use common_io::cursor_ext::ReadNumberExt;
+use jsonb::parse_value;
 use lexical_core::FromLexical;
 
 use crate::field_decoder::FieldDecoder;
@@ -262,8 +263,20 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         reader: &mut Cursor<R>,
         raw: bool,
     ) -> Result<()> {
-        self.read_string_inner(reader, &mut column.data, raw)?;
-        column.commit_row();
+        let mut buf = Vec::new();
+        self.read_string_inner(reader, &mut buf, raw)?;
+        match parse_value(&buf) {
+            Ok(value) => {
+                value.write_to_vec(&mut column.data);
+                column.commit_row();
+            }
+            Err(_) => {
+                return Err(ErrorCode::BadBytes(format!(
+                    "Invalid JSON value: {:?}",
+                    String::from_utf8_lossy(&buf)
+                )));
+            }
+        }
         Ok(())
     }
 

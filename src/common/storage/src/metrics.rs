@@ -320,6 +320,11 @@ impl<R: oio::Write> oio::Write for StorageMetricsWrapper<R> {
     }
 
     #[async_backtrace::framed]
+    async fn abort(&mut self) -> Result<()> {
+        self.inner.abort().await
+    }
+
+    #[async_backtrace::framed]
     async fn close(&mut self) -> Result<()> {
         self.inner.close().await
     }

@@ -7,7 +7,12 @@ import Link from "@docusaurus/Link";
 import useBaseUrl from "@docusaurus/useBaseUrl";
 import AvatarGroup from "../BaseComponents/AvatarGroup";
 import Connectwithus from "./Connectwithus";
-
+import { MDXProvider } from "@mdx-js/react";
+import CodeBlock from "@theme/CodeBlock";
+const BlockCodeComponents = {
+  pre: (props) => <div {...props} />,
+  code: (props) => <CodeBlock {...props} />,
+};
 const BlogPostNav = ({ nextPost, prevPost }) => {
   return (
     <div className={styles.PostNav}>
@@ -81,7 +86,9 @@ const BlogPostDetails = (props) => {
               <hr></hr>
             </div>
             <div className={clsx("content", styles.Content)}>
-              <BlogPostContent />
+              <MDXProvider components={BlockCodeComponents}>
+                <BlogPostContent />
+              </MDXProvider>
               {metadata.frontMatter.contributors ? (
                 <>
                   <hr />
@@ -94,8 +101,7 @@ const BlogPostDetails = (props) => {
                     </div>
                   </h2>
                   <p>
-                    Thanks a lot to the contributors for their excellent work
-                    this week.
+                    Thanks a lot to the contributors for their excellent work.
                   </p>
                   <AvatarGroup
                     contributors={metadata.frontMatter.contributors}

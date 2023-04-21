@@ -62,12 +62,6 @@ impl Interpreter for ReplaceInterpreter {
             .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
 
-        if table.get_table_info().meta.default_cluster_key_id.is_some() {
-            return Err(ErrorCode::StorageOther(
-                "replace into table with cluster key definition is not supported yet",
-            ));
-        }
-
         let mut pipeline = self
             .connect_input_source(self.ctx.clone(), &self.plan.source, self.plan.schema())
             .await?;

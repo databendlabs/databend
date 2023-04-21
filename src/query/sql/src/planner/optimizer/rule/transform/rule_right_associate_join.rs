@@ -199,6 +199,7 @@ impl Rule for RuleRightAssociateJoin {
             ],
             None,
             None,
+            None,
         );
 
         // Disable the following rules for join 3

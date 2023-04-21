@@ -356,12 +356,6 @@ impl Binder {
             &[],
         );
         let (scalar, _) = scalar_binder.bind(expr).await?;
-        // if `Expr` is internal column, then add this internal column into `BindContext`
-        if let ScalarExpr::BoundInternalColumnRef(ref internal_column) = scalar {
-            bind_context
-                .add_internal_column_binding(&internal_column.column, self.metadata.clone());
-        };
-
         let filter_plan = Filter {
             predicates: split_conjunctions(&scalar),
             is_having: false,

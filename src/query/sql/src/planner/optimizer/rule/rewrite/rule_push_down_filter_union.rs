@@ -149,9 +149,6 @@ fn replace_column_binding(
             }
             Ok(ScalarExpr::BoundColumnRef(column))
         }
-        ScalarExpr::BoundInternalColumnRef(_) => {
-            unreachable!()
-        }
         constant_expr @ ScalarExpr::ConstantExpr(_) => Ok(constant_expr),
         ScalarExpr::WindowFunction(expr) => Ok(ScalarExpr::WindowFunction(WindowFunc {
             display_name: expr.display_name,

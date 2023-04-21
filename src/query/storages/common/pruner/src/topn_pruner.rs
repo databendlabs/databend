@@ -118,15 +118,15 @@ impl TopNPrunner {
             return Ok(metas);
         };
 
-        let sort_idx = if let Ok(index) = self.schema.index_of(column.as_str()) {
-            index as u32
+        let sort_column_id = if let Ok(index) = self.schema.column_id_of(column.as_str()) {
+            index
         } else {
             return Ok(metas);
         };
 
         // String Type min/max is truncated
         if matches!(
-            self.schema.field(sort_idx as usize).data_type(),
+            self.schema.field_with_name(column)?.data_type(),
             TableDataType::String
         ) {
             return Ok(metas);
@@ -135,10 +135,10 @@ impl TopNPrunner {
         let mut id_stats = metas
             .iter()
             .map(|(id, meta)| {
-                let stat = meta.col_stats.get(&sort_idx).ok_or_else(|| {
+                let stat = meta.col_stats.get(&sort_column_id).ok_or_else(|| {
                     ErrorCode::UnknownException(format!(
                         "Unable to get the colStats by ColumnId: {}",
-                        sort_idx
+                        sort_column_id
                     ))
                 })?;
                 Ok((id.clone(), stat.clone(), meta.clone()))
