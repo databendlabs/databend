@@ -14,7 +14,6 @@
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_base::base::uuid::Uuid;
 use common_expression::converts::from_schema;
 use common_expression::TableSchema;
 use serde::Deserialize;
@@ -94,25 +93,6 @@ impl TableSnapshot {
             cluster_key_meta,
             table_statistics_location,
         }
-    }
-
-    pub fn from_previous(previous: &TableSnapshot) -> Self {
-        let id = Uuid::new_v4();
-        let clone = previous.clone();
-        Self::new(
-            id,
-            &clone.timestamp,
-            Some((clone.snapshot_id, clone.format_version)),
-            clone.schema,
-            clone.summary,
-            clone.segments,
-            clone.cluster_key_meta,
-            clone.table_statistics_location,
-        )
-    }
-
-    pub fn format_version(&self) -> u64 {
-        self.format_version
     }
 }
 
