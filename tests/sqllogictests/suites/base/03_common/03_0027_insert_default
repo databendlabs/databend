@@ -82,5 +82,22 @@ SELECT count() FROM t0 WHERE not(t0.c0int)
 ----
 0
 
+
+statement ok
+alter table t0 drop column c0int;
+
+statement ok
+alter table t0 add column ts bigint;
+
+statement ok
+insert into t0 values ('1', '2', 1), ('2', '4', 2);
+
+query III
+select * from t0 order by ts desc limit 2;
+----
+2 4 2
+1 2 1
+
+
 statement ok
 drop table t0
