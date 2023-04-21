@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::intrinsics::unlikely;
 use std::sync::Arc;
 
 use common_arrow::parquet::metadata::ColumnDescriptor;
@@ -192,33 +193,28 @@ pub struct TransformRowsFetcher<F: RowFetcher> {
     row_id_col_offset: usize,
 
     part_map: HashMap<u64, PartInfoPtr>,
+    inited: bool,
 
     fetcher: F,
 }
 
 #[async_trait::async_trait]
-impl<F: RowFetcher + Send + Sync> AsyncTransform for TransformRowsFetcher<F> {
-    const NAME: &'static str = "TransformNativeRowsFetcher";
+impl<F> AsyncTransform for TransformRowsFetcher<F>
+where F: RowFetcher + Send + Sync + 'static
+{
+    const NAME: &'static str = "TransformRowsFetcher";
 
     #[async_backtrace::framed]
     async fn on_start(&mut self) -> Result<()> {
-        let (snapshot_loc, ver) = self
-            .ctx
-            .get_snapshot()
-            .ok_or_else(|| ErrorCode::Internal("Snapshot location is not found"))?;
-        self.part_map = build_partitions_map(
-            snapshot_loc,
-            ver,
-            self.fetcher.reader().operator.clone(),
-            self.table_schema.clone(),
-            &self.projection,
-        )
-        .await?;
-        Ok(())
+        self.init(false).await
     }
 
-    // #[async_backtrace::framed]
+    #[async_backtrace::framed]
     async fn transform(&mut self, mut data: DataBlock) -> Result<DataBlock> {
+        if unlikely(!self.inited) {
+            self.init(true).await?;
+        }
+
         let num_rows = data.num_rows();
         if num_rows == 0 {
             return Ok(data);
@@ -278,6 +274,27 @@ where F: RowFetcher + Send + Sync + 'static
             row_id_col_offset,
             part_map: HashMap::new(),
             fetcher,
+            inited: false,
         }))
+    }
+
+    #[async_backtrace::framed]
+    async fn init(&mut self, must: bool) -> Result<()> {
+        if !self.inited {
+            if let Some((snapshot_loc, ver)) = self.ctx.get_snapshot() {
+                self.part_map = build_partitions_map(
+                    snapshot_loc,
+                    ver,
+                    self.fetcher.reader().operator.clone(),
+                    self.table_schema.clone(),
+                    &self.projection,
+                )
+                .await?;
+                self.inited = true;
+            } else if must {
+                return Err(ErrorCode::Internal("Snapshot location is not found"));
+            }
+        }
+        Ok(())
     }
 }

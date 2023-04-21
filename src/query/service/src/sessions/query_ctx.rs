@@ -93,10 +93,6 @@ pub struct QueryContext {
     partition_queue: Arc<RwLock<VecDeque<PartInfoPtr>>>,
     shared: Arc<QueryContextShared>,
     fragment_id: Arc<AtomicUsize>,
-
-    /// This is held to support lazy materialization for TopN optimization, etc.
-    /// It's only valid for **single-table** query on **Fuse** engine.
-    snapshot: Arc<RwLock<Option<Location>>>,
 }
 
 impl QueryContext {
@@ -114,7 +110,6 @@ impl QueryContext {
             clickhouse_version: CLICKHOUSE_VERSION.to_string(),
             shared,
             fragment_id: Arc::new(AtomicUsize::new(0)),
-            snapshot: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -335,12 +330,12 @@ impl TableContext for QueryContext {
     }
 
     fn set_snapshot(&self, location: Location) {
-        let mut snapshot = self.snapshot.write();
+        let mut snapshot = self.shared.snapshot.write();
         snapshot.replace(location);
     }
 
     fn get_snapshot(&self) -> Option<Location> {
-        self.snapshot.read().as_ref().cloned()
+        self.shared.snapshot.read().as_ref().cloned()
     }
 
     fn set_cacheable(&self, cacheable: bool) {

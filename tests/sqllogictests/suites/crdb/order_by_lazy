@@ -412,3 +412,21 @@ NULL 6
 
 statement ok
 set lazy_topn_threshold=0
+
+statement ok
+drop table if exists t
+
+statement ok
+drop table if exists abc
+
+statement ok
+drop table if exists bar
+
+statement ok
+drop table if exists abcd
+
+statement ok
+drop table if exists store
+
+statement ok
+drop table if exists xy

@@ -37,6 +37,7 @@ use common_storage::StorageMetrics;
 use dashmap::DashMap;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
+use storages_common_table_meta::meta::Location;
 use uuid::Uuid;
 
 use crate::catalogs::CatalogManager;
@@ -93,6 +94,9 @@ pub struct QueryContextShared {
     pub(in crate::sessions) cacheable: Arc<AtomicBool>,
     // Status info.
     pub(in crate::sessions) status: Arc<RwLock<String>>,
+    /// This is held to support lazy materialization for TopN optimization, etc.
+    /// It's only valid for **single-table** query on **Fuse** engine.
+    pub(in crate::sessions) snapshot: Arc<RwLock<Option<Location>>>,
 }
 
 impl QueryContextShared {
@@ -126,6 +130,7 @@ impl QueryContextShared {
             partitions_shas: Arc::new(RwLock::new(vec![])),
             cacheable: Arc::new(AtomicBool::new(true)),
             status: Arc::new(RwLock::new("null".to_string())),
+            snapshot: Arc::new(RwLock::new(None)),
         }))
     }
 
