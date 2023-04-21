@@ -1,4 +1,4 @@
-//  Copyright 2022 Datafuse Labs.
+//  Copyright 2023 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -15,19 +15,26 @@
 use chrono::DateTime;
 use chrono::Utc;
 use common_base::base::uuid::Uuid;
-use common_datavalues as dv;
+use common_exception::Result;
+use common_expression::TableSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::super::v0::statistics::Statistics;
+use crate::meta::format::compress;
+use crate::meta::format::encode;
+use crate::meta::format::Compression;
 use crate::meta::monotonically_increased_timestamp;
 use crate::meta::statistics::FormatVersion;
 use crate::meta::trim_timestamp_to_micro_second;
+use crate::meta::v2;
 use crate::meta::ClusterKey;
+use crate::meta::Encoding;
 use crate::meta::Location;
 use crate::meta::SnapshotId;
+use crate::meta::Statistics;
 use crate::meta::Versioned;
 
+/// The structure of the segment is the same as that of v2, but the serialization and deserialization methods are different
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshot {
     /// format version of snapshot
@@ -44,7 +51,7 @@ pub struct TableSnapshot {
     pub prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
 
     /// For each snapshot, we keep a schema for it (in case of schema evolution)
-    pub schema: dv::DataSchema,
+    pub schema: TableSchema,
 
     /// Summary Statistics
     pub summary: Statistics,
@@ -57,7 +64,6 @@ pub struct TableSnapshot {
 
     // The metadata of the cluster keys.
     pub cluster_key_meta: Option<ClusterKey>,
-
     pub table_statistics_location: Option<String>,
 }
 
@@ -66,7 +72,7 @@ impl TableSnapshot {
         snapshot_id: SnapshotId,
         prev_timestamp: &Option<DateTime<Utc>>,
         prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
-        schema: dv::DataSchema,
+        schema: TableSchema,
         summary: Statistics,
         segments: Vec<Location>,
         cluster_key_meta: Option<ClusterKey>,
@@ -96,6 +102,7 @@ impl TableSnapshot {
     pub fn from_previous(previous: &TableSnapshot) -> Self {
         let id = Uuid::new_v4();
         let clone = previous.clone();
+        // the timestamp of the new snapshot will be adjusted by the `new` method
         Self::new(
             id,
             &clone.timestamp,
@@ -108,25 +115,56 @@ impl TableSnapshot {
         )
     }
 
-    pub fn format_version(&self) -> u64 {
-        self.format_version
+    /// Serializes the struct to a byte vector.
+    ///
+    /// The byte vector contains the format version, encoding, compression, and compressed data. The encoding
+    /// and compression are set to default values. The data is encoded and compressed.
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the serialized data as a byte vector. If any errors occur during
+    /// encoding, compression, or writing to the byte vector, an error will be returned.
+    pub fn to_bytes(&self) -> Result<Vec<u8>> {
+        let encoding = Encoding::default();
+        let compression = Compression::default();
+
+        let data = encode(&encoding, &self)?;
+        let data_compress = compress(&compression, data)?;
+
+        let data_size = self.format_version.to_le_bytes().len()
+            + 2
+            + data_compress.len().to_le_bytes().len()
+            + data_compress.len();
+        let mut buf = Vec::with_capacity(data_size);
+
+        buf.extend_from_slice(&self.format_version.to_le_bytes());
+        buf.push(encoding as u8);
+        buf.push(compression as u8);
+        buf.extend_from_slice(&data_compress.len().to_le_bytes());
+
+        buf.extend(data_compress);
+
+        Ok(buf)
+    }
+
+    #[inline]
+    pub fn encoding() -> Encoding {
+        Encoding::default()
     }
 }
 
-use super::super::v0;
-
-impl From<v0::TableSnapshot> for TableSnapshot {
-    fn from(s: v0::TableSnapshot) -> Self {
+impl From<v2::TableSnapshot> for TableSnapshot {
+    fn from(s: v2::TableSnapshot) -> Self {
         Self {
             format_version: TableSnapshot::VERSION,
             snapshot_id: s.snapshot_id,
-            timestamp: None,
-            prev_snapshot_id: s.prev_snapshot_id.map(|id| (id, 0)),
+            timestamp: s.timestamp,
+            prev_snapshot_id: s.prev_snapshot_id,
             schema: s.schema,
             summary: s.summary,
-            segments: s.segments.into_iter().map(|l| (l, 0)).collect(),
-            cluster_key_meta: None,
-            table_statistics_location: None,
+            segments: s.segments,
+            cluster_key_meta: s.cluster_key_meta,
+            table_statistics_location: s.table_statistics_location,
         }
     }
 }
@@ -147,10 +185,10 @@ pub struct TableSnapshotLite {
     pub segment_count: u64,
 }
 
-impl From<&TableSnapshot> for TableSnapshotLite {
-    fn from(value: &TableSnapshot) -> Self {
+impl From<(&TableSnapshot, FormatVersion)> for TableSnapshotLite {
+    fn from((value, ver): (&TableSnapshot, FormatVersion)) -> Self {
         TableSnapshotLite {
-            format_version: value.format_version(),
+            format_version: ver,
             snapshot_id: value.snapshot_id,
             timestamp: value.timestamp,
             prev_snapshot_id: value.prev_snapshot_id,
