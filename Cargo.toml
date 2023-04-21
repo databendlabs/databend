@@ -102,7 +102,7 @@ opendal = { version = "0.32", features = [
     "trust-dns",
 ] }
 ordered-float = { version = "3.4.0", default-features = false }
-jsonb = { git = "https://github.com/b41sh/jsonb", rev = "f8aa82d" }
+jsonb = { version = "0.2.0" }
 
 # openraft = { version = "0.8.2", features = ["compat-07"] }
 # For debugging
