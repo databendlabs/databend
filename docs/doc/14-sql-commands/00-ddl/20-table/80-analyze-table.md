@@ -2,17 +2,17 @@
 title: ANALYZE TABLE
 ---
 
-The objective of analyzing a table in Databend is to calculate table statistics, such as distinct number of columns.
+The objective of analyzing a table in Databend is to calculate table statistics, such as a distinct number of columns.
 
 ## What is Table statistic file?
 
-A table statistic file is a JSON file that save table statistic data, such as distinct values of table column.
+A table statistic file is a JSON file that saves table statistic data, such as distinct values of table column.
 
 Databend creates a unique ID for each database and table for storing the table statistic file and saves them to your object storage in the path `<bucket_name>/[root]/<db_id>/<table_id>/`. Each table statistic file is named with a UUID (32-character lowercase hexadecimal string).
 
-| File     | Format  | Filename                        | Storage Folder                                                               |
-|----------|---------|---------------------------------|----------------------------------------------------------------------------|
-| Table statistic | JSON    | `<32bitUUID>_<version>.json`    | `<bucket_name>/[root]/<db_id>/<table_id>/_ts/`   |
+| File            | Format | Filename                     | Storage Folder                                 |
+|-----------------|--------|------------------------------|------------------------------------------------|
+| Table statistic | JSON   | `<32bitUUID>_<version>.json` | `<bucket_name>/[root]/<db_id>/<table_id>/_ts/` |
 
 ## Syntax
 ```sql

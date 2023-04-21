@@ -1,7 +1,5 @@
 ---
 title: Data Types
-sidebar_position: 1
-slug: ./
 ---
 
 Databend is capable of handling both general and semi-structured data types.
