@@ -543,9 +543,11 @@ impl<'a> Evaluator<'a> {
 
         if let Some(cast_fn) = get_simple_cast_function(true, inner_dest_type) {
             // `try_to_xxx` functions must not return errors, so we can safely call them without concerning validity.
-            if let Ok(Some(new_value)) =
-                self.run_simple_cast(span, src_type, dest_type, value.clone(), &cast_fn, None)
-            {
+            let res =
+                self.run_simple_cast(span, src_type, dest_type, value.clone(), &cast_fn, None);
+
+            println!("res: {:?}", res);
+            if let Ok(Some(new_value)) = res {
                 return Ok(new_value);
             }
         }
@@ -725,7 +727,7 @@ impl<'a> Evaluator<'a> {
             display_name: String::new(),
         };
 
-        let params = if let DataType::Decimal(ty) = dest_type {
+        let params = if let DataType::Decimal(ty) = dest_type.remove_nullable() {
             vec![ty.precision() as usize, ty.scale() as usize]
         } else {
             vec![]

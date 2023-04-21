@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ops::BitAnd;
 use std::ops::BitOr;
@@ -33,6 +34,7 @@ use crate::property::Domain;
 use crate::property::FunctionProperty;
 use crate::type_check::try_unify_signature;
 use crate::types::nullable::NullableColumn;
+use crate::types::nullable::NullableDomain;
 use crate::types::*;
 use crate::utils::arrow::constant_bitmap;
 use crate::values::Value;
@@ -120,6 +122,7 @@ pub enum FunctionID {
         params: Vec<usize>,
         args_type: Vec<DataType>,
     },
+    TryAdaptor(TryAdaptor),
 }
 
 #[derive(Default)]
@@ -206,6 +209,10 @@ impl FunctionRegistry {
                     .map(|(func, _)| func)?;
                 factory(params, args_type)
             }
+            FunctionID::TryAdaptor(adaptor) => {
+                let inner = self.get(&adaptor.function_id)?;
+                adaptor.get_function(inner)
+            }
         }
     }
 
@@ -256,6 +263,19 @@ impl FunctionRegistry {
             }));
         }
 
+        if let Some(inner_name) = name.strip_prefix("try_") {
+            println!("yyy {:?}/{:?}/{:?}", inner_name, params, args);
+            for (inner_function_id, inner_function) in
+                self.search_candidates(inner_name, params, args)
+            {
+                let adpator = TryAdaptor {
+                    function_id: Box::new(inner_function_id),
+                };
+                if let Some(function) = adpator.get_function(inner_function) {
+                    candidates.push((FunctionID::TryAdaptor(adpator), function));
+                }
+            }
+        }
         candidates.sort_by_key(|(id, _)| id.id());
 
         candidates
@@ -402,13 +422,18 @@ impl FunctionID {
         match self {
             FunctionID::Builtin { id, .. } => *id,
             FunctionID::Factory { id, .. } => *id,
+            FunctionID::TryAdaptor(adaptor) => adaptor.function_id.id() << 1,
         }
     }
 
-    pub fn name(&self) -> &String {
+    pub fn name(&self) -> Cow<'_, str> {
         match self {
-            FunctionID::Builtin { name, .. } => name,
-            FunctionID::Factory { name, .. } => name,
+            FunctionID::Builtin { name, .. } => Cow::Borrowed(name),
+            FunctionID::Factory { name, .. } => Cow::Borrowed(name),
+            FunctionID::TryAdaptor(adaptor) => {
+                let name = format!("try_{}", adaptor.function_id.name());
+                Cow::Owned(name)
+            }
         }
     }
 
@@ -416,6 +441,7 @@ impl FunctionID {
         match self {
             FunctionID::Builtin { .. } => &[],
             FunctionID::Factory { params, .. } => params.as_slice(),
+            FunctionID::TryAdaptor(adaptor) => adaptor.function_id.params(),
         }
     }
 }
@@ -471,6 +497,74 @@ impl<'a> EvalContext<'a> {
             }
             None => Ok(()),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Hash, Eq, Serialize, Deserialize)]
+pub struct TryAdaptor {
+    function_id: Box<FunctionID>,
+}
+
+impl TryAdaptor {
+    pub fn get_function(&self, inner: Arc<Function>) -> Option<Arc<Function>> {
+        let mut sig = inner.signature.clone();
+        sig.name = format!("try_{}", sig.name);
+        sig.return_type = sig.return_type.wrap_nullable();
+
+        println!("sig {:?}", sig);
+        if inner.eval.as_scalar().is_none() {
+            return None;
+        }
+
+        let inner2 = inner.clone();
+
+        let calc_domain = Box::new(move |domains: &[Domain]| {
+            let (domain_eval, _) = match &inner2.eval {
+                FunctionEval::Scalar { calc_domain, eval } => (calc_domain, eval),
+                _ => unreachable!(),
+            };
+
+            match domain_eval(domains) {
+                FunctionDomain::Domain(d) => match d {
+                    Domain::Nullable(other) => {
+                        FunctionDomain::Domain(NullableType::<AnyType>::upcast_domain(other))
+                    }
+                    other => {
+                        let d = NullableDomain {
+                            has_null: false,
+                            value: Some(Box::new(other)),
+                        };
+                        FunctionDomain::Domain(NullableType::<AnyType>::upcast_domain(d))
+                    }
+                },
+                // Here we convert full to full, this may lose some internal information since it's runtime adpator
+                FunctionDomain::Full | FunctionDomain::MayThrow => FunctionDomain::Full,
+            }
+        });
+
+        Some(Arc::new(Function {
+            signature: sig,
+            eval: FunctionEval::Scalar {
+                calc_domain,
+                eval: Box::new(move |args, ctx| {
+                    let (_, func_eval) = match &inner.eval {
+                        FunctionEval::Scalar { calc_domain, eval } => (calc_domain, eval),
+                        _ => unreachable!(),
+                    };
+
+                    let res = func_eval(args, ctx);
+                    let validity: Option<Bitmap> = ctx.errors.take().map(|v| v.0.into());
+                    match res {
+                        Value::Scalar(s) => match validity {
+                            Some(v) if v.get_bit(0) => Value::Scalar(s),
+                            None => Value::Scalar(s),
+                            _ => Value::Scalar(Scalar::Null),
+                        },
+                        Value::Column(c) => Value::Column(c.wrap_nullable(validity)),
+                    }
+                }),
+            },
+        }))
     }
 }
 

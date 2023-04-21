@@ -395,8 +395,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         if args_type.len() != 1 {
             return None;
         }
+
+        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
+
         if !matches!(
-            args_type[0],
+            args_type[0].remove_nullable(),
             DataType::Number(_) | DataType::Decimal(_) | DataType::String
         ) {
             return None;
@@ -414,7 +417,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         let return_type = DecimalDataType::from_size(decimal_size).ok()?;
         let return_type = DataType::Decimal(return_type);
 
-        Some(Arc::new(Function {
+        let f = Function {
             signature: FunctionSignature {
                 name: "to_decimal".to_string(),
                 args_type: args_type.to_owned(),
@@ -426,7 +429,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                     convert_to_decimal(args, tx, from_type.clone(), return_type.clone())
                 }),
             },
-        }))
+        };
+
+        if has_null {
+            Some(Arc::new(f.wrap_nullable()))
+        } else {
+            Some(Arc::new(f))
+        }
     });
 }
 
@@ -436,12 +445,14 @@ pub(crate) fn register_decimal_to_float64(registry: &mut FunctionRegistry) {
             return None;
         }
 
+        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
         let arg_type = args_type[0].clone();
-        if !arg_type.is_decimal() {
+
+        if !arg_type.remove_nullable().is_decimal() {
             return None;
         }
 
-        Some(Arc::new(Function {
+        let f = Function {
             signature: FunctionSignature {
                 name: "to_float64".to_string(),
                 args_type: vec![arg_type.clone()],
@@ -451,7 +462,13 @@ pub(crate) fn register_decimal_to_float64(registry: &mut FunctionRegistry) {
                 calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
                 eval: Box::new(move |args, tx| decimal_to_float64(args, arg_type.clone(), tx)),
             },
-        }))
+        };
+
+        if has_null {
+            Some(Arc::new(f.wrap_nullable()))
+        } else {
+            Some(Arc::new(f))
+        }
     });
 }
 
@@ -461,12 +478,14 @@ pub(crate) fn register_decimal_to_float32(registry: &mut FunctionRegistry) {
             return None;
         }
 
+        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
+
         let arg_type = args_type[0].clone();
-        if !arg_type.is_decimal() {
+        if !arg_type.remove_nullable().is_decimal() {
             return None;
         }
 
-        Some(Arc::new(Function {
+        let f = Function {
             signature: FunctionSignature {
                 name: "to_float32".to_string(),
                 args_type: vec![arg_type.clone()],
@@ -476,7 +495,13 @@ pub(crate) fn register_decimal_to_float32(registry: &mut FunctionRegistry) {
                 calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
                 eval: Box::new(move |args, tx| decimal_to_float32(args, arg_type.clone(), tx)),
             },
-        }))
+        };
+
+        if has_null {
+            Some(Arc::new(f.wrap_nullable()))
+        } else {
+            Some(Arc::new(f))
+        }
     });
 }
 
