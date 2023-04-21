@@ -13,7 +13,6 @@ We also support pg casting style: `CAST(c as INT)` is same as `c::Int`
 2. `TRY_CAST` function if error happens during cast, it returns NULL.
 
 
-
 ## Implicit Casting ("Coercion")
 
 Some basic rules about "Coercion" aka (Auto casting)
@@ -28,7 +27,7 @@ Int32 --> bigint
 ```
 
 
-2. All numeric datatypes can be implicitly casted into  `Double` aka (`Float64`) datatype.
+2. All numeric datatypes can be implicitly cast into  `Double` aka (`Float64`) datatype.
 
 e.g.
 ```

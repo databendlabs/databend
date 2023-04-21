@@ -15,10 +15,10 @@ See Also: [COPY INTO location](dml-copy-into-location.md)
 
 Your data files must be located in one of these locations for COPY INTO to work:
 
-- **Named internal stage**: Databend internal named stages. Files can be staged using the [PUT to Stage](../../11-integrations/00-api/10-put-to-stage.md) API.
-- **Named external stage**: Stages created in [Supported Object Storage Solutions](../../10-deploy/00-understanding-deployment-modes.md#supported-object-storage-solutions).
+- **Named internal stage**: Databend internal named stages. Files can be staged using the `PUT to Stage`  API.
+- **Named external stage**: Stages created in `Supported Object Storage Solutions`.
 - **External location**:
-  - Buckets created in [Supported Object Storage Solutions](../../10-deploy/00-understanding-deployment-modes.md#supported-object-storage-solutions).
+  - Buckets created in `Supported Object Storage Solutions`.
   - Remote servers from where you can access the files by their URL (starting with "https://...").
   - [IPFS](https://ipfs.tech).
 
@@ -343,11 +343,3 @@ COPY INTO mytable
   PATTERN = '.*[.]csv'
   FILE_FORMAT = (type = CSV field_delimiter = ','  record_delimiter = '\n' skip_header = 1);
 ```
-
-## Tutorials
-
-Here are some tutorials to help you get started with COPY INTO:
-
-- [Tutorial: Load from an internal stage](../../12-load-data/00-stage.md): In this tutorial, you will create an internal stage, stage a sample file, and then load data from the file into Databend with the COPY INTO command.
-- [Tutorial: Load from an Amazon S3 bucket](../../12-load-data/01-s3.md): In this tutorial, you will upload a sample file to your Amazon S3 bucket, and then load data from the file into Databend with the COPY INTO command.
-- [Tutorial: Load from a remote file](../../12-load-data/04-http.md): In this tutorial, you will load data from a remote sample file into Databend with the COPY INTO command.
