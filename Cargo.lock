@@ -6976,7 +6976,7 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.8.4"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.4-alpha.1#8f83d590a5b417dcfa4133a268ba31fa52c6d4c5"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.4-alpha.2#dbdaf0a2c2f225754a20bf9fc06fc7137013dcdc"
 dependencies = [
  "anyerror",
  "anyhow",
@@ -8415,6 +8415,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "rmp"
+version = "0.8.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44519172358fd6d58656c86ab8e7fbc9e1490c3e8f14d35ed78ca0dd07403c9f"
+dependencies = [
+ "byteorder",
+ "num-traits",
+ "paste",
+]
+
+[[package]]
+name = "rmp-serde"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c5b13be192e0220b8afb7222aa5813cb62cc269ebb5cac346ca6487681d2913e"
+dependencies = [
+ "byteorder",
+ "rmp",
+ "serde",
+]
+
+[[package]]
 name = "roaring"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9413,6 +9435,7 @@ dependencies = [
 name = "storages-common-table-meta"
 version = "0.1.0"
 dependencies = [
+ "bincode 1.3.3",
  "chrono",
  "common-arrow",
  "common-base",
@@ -9421,7 +9444,11 @@ dependencies = [
  "common-expression",
  "enum-as-inner",
  "once_cell",
+ "rmp-serde",
  "serde",
+ "serde_json",
+ "snap",
+ "zstd 0.12.3+zstd.1.5.2",
 ]
 
 [[package]]

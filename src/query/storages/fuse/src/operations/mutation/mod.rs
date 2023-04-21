@@ -45,4 +45,3 @@ pub use mutation_source::MutationSource;
 pub use mutation_transform::MutationTransform;
 pub use recluster_mutator::ReclusterMutator;
 pub use serialize_data_transform::SerializeDataTransform;
-pub use serialize_data_transform::SerializeState;

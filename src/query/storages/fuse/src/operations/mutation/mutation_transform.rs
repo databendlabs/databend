@@ -31,6 +31,7 @@ use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
+use storages_common_table_meta::meta::Versioned;
 
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -292,9 +293,9 @@ impl Processor for MutationTransform {
                             let location = self.location_gen.gen_segment_info_location();
                             self.abort_operation.add_segment(location.clone());
                             segments_editor
-                                .insert(seg_idx, (location.clone(), new_segment.format_version()));
+                                .insert(seg_idx, (location.clone(), SegmentInfo::VERSION));
                             serialized_data.push(SerializedData {
-                                data: serde_json::to_vec(&new_segment)?,
+                                data: new_segment.to_bytes()?,
                                 location,
                                 segment: Arc::new(new_segment),
                             });

@@ -32,7 +32,6 @@ use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::Evaluator;
-use common_expression::Expr;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
@@ -54,7 +53,6 @@ use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::Pipeline;
 use crate::pruning::FusePruner;
-use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -129,7 +127,8 @@ impl FuseTable {
         self.try_add_deletion_source(ctx.clone(), &filter_expr, col_indices, &snapshot, pipeline)
             .await?;
 
-        let cluster_stats_gen = self.cluster_stats_gen(ctx.clone())?;
+        let cluster_stats_gen =
+            self.get_cluster_stats_gen(ctx.clone(), 0, self.get_block_thresholds())?;
         pipeline.add_transform(|input, output| {
             SerializeDataTransform::try_create(
                 ctx.clone(),
@@ -330,7 +329,7 @@ impl FuseTable {
                         self.get_operator(),
                         self.meta_location_generator().clone(),
                         base_segments,
-                        self.get_block_compact_thresholds(),
+                        self.get_block_thresholds(),
                     )?,
                     inputs_port,
                     vec![output_port],
@@ -339,53 +338,6 @@ impl FuseTable {
                 Ok(())
             }
         }
-    }
-
-    pub fn cluster_stats_gen(&self, ctx: Arc<dyn TableContext>) -> Result<ClusterStatsGenerator> {
-        if self.cluster_key_meta.is_none() {
-            return Ok(ClusterStatsGenerator::default());
-        }
-
-        let input_schema = self.table_info.schema();
-        let mut merged: Vec<DataField> =
-            input_schema.fields().iter().map(DataField::from).collect();
-        let func_ctx = ctx.get_function_context()?;
-        let cluster_keys = self.cluster_keys(ctx);
-        let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
-        let mut extra_key_num = 0;
-        let mut exprs = Vec::with_capacity(cluster_keys.len());
-
-        for remote_expr in &cluster_keys {
-            let expr: Expr = remote_expr
-                .as_expr(&BUILTIN_FUNCTIONS)
-                .project_column_ref(|name| input_schema.index_of(name).unwrap());
-            let index = match &expr {
-                Expr::ColumnRef { id, .. } => *id,
-                _ => {
-                    let cname = format!("{}", expr);
-                    merged.push(DataField::new(cname.as_str(), expr.data_type().clone()));
-                    exprs.push(expr);
-
-                    let offset = merged.len() - 1;
-                    extra_key_num += 1;
-                    offset
-                }
-            };
-            cluster_key_index.push(index);
-        }
-
-        let max_page_size = self.get_max_page_size();
-        Ok(ClusterStatsGenerator::new(
-            self.cluster_key_meta.as_ref().unwrap().0,
-            cluster_key_index,
-            extra_key_num,
-            max_page_size,
-            0,
-            self.get_block_compact_thresholds(),
-            vec![BlockOperator::Map { exprs }],
-            merged,
-            func_ctx,
-        ))
     }
 
     pub fn all_column_indices(&self) -> Vec<FieldIndex> {

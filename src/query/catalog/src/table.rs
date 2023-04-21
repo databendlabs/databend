@@ -300,7 +300,7 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    fn get_block_compact_thresholds(&self) -> BlockThresholds {
+    fn get_block_thresholds(&self) -> BlockThresholds {
         BlockThresholds {
             max_rows_per_block: DEFAULT_BLOCK_MAX_ROWS,
             min_rows_per_block: DEFAULT_BLOCK_MIN_ROWS,
@@ -308,7 +308,7 @@ pub trait Table: Sync + Send {
         }
     }
 
-    fn set_block_compact_thresholds(&self, _thresholds: BlockThresholds) {
+    fn set_block_thresholds(&self, _thresholds: BlockThresholds) {
         unimplemented!()
     }
 

@@ -650,7 +650,7 @@ impl Table for FuseTable {
             .await
     }
 
-    fn get_block_compact_thresholds(&self) -> BlockThresholds {
+    fn get_block_thresholds(&self) -> BlockThresholds {
         let max_rows_per_block =
             self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_MAX_ROWS);
         let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
