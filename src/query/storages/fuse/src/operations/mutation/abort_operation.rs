@@ -17,6 +17,8 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use opendal::Operator;
+use storages_common_cache::CacheAccessor;
+use storages_common_cache_manager::CacheManager;
 use storages_common_table_meta::meta::BlockMeta;
 
 use crate::io::Files;
@@ -50,8 +52,14 @@ impl AbortOperation {
 
     #[async_backtrace::framed]
     pub async fn abort(self, ctx: Arc<dyn TableContext>, operator: Operator) -> Result<()> {
+        // evict segment cache.
+        if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
+            for loc in self.segments.iter() {
+                segment_cache.evict(loc);
+            }
+        }
+
         let fuse_file = Files::create(ctx, operator);
-        // TODO the segments and the bloom filters?
         let locations = self
             .blocks
             .into_iter()
