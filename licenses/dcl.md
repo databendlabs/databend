@@ -46,7 +46,7 @@ this Agreement, to the exclusion of all other terms.
 
 2.  **<span class="smallcaps">Licenses</span>**.
 
-    1.  **LLicense to Databend Core.** The License for the applicable
+    1.  **License to Databend Core.** The License for the applicable
         version of Databend Core can be found in the applicable license
         file at the Databend GitHub. Databend Core is a no-cost,
         entry-level license and as such, contains the following disclaimers:
