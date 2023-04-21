@@ -86,7 +86,6 @@ use databend_query::sessions::QueryContext;
 use futures::TryStreamExt;
 use rand::thread_rng;
 use rand::Rng;
-use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use walkdir::WalkDir;
