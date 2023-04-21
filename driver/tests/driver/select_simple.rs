@@ -108,6 +108,32 @@ async fn select_datetime() {
     }
 }
 
+#[tokio::test]
+async fn select_null() {
+    let conn = prepare().await;
+    let row = conn
+        .query_row("select sum(number) from numbers(0)")
+        .await
+        .unwrap();
+    assert!(row.is_some());
+    let row = row.unwrap();
+    let (val,): (Option<u64>,) = row.try_into().unwrap();
+    assert_eq!(val, None);
+}
+
+#[tokio::test]
+async fn select_nullable_u64() {
+    let conn = prepare().await;
+    let row = conn
+        .query_row("select sum(number) from numbers(100)")
+        .await
+        .unwrap();
+    assert!(row.is_some());
+    let row = row.unwrap();
+    let (val,): (Option<u64>,) = row.try_into().unwrap();
+    assert_eq!(val, Some(4950));
+}
+
 // TODO:(everpcoc) parse to real array
 // #[tokio::test]
 // async fn select_array() {

@@ -18,6 +18,7 @@ use crate::error::{ConvertError, Error, Result};
 
 // Thu 1970-01-01 is R.D. 719163
 const DAYS_FROM_CE: i32 = 719_163;
+const NULL_VALUE: &str = "NULL";
 
 #[cfg(feature = "flight-sql")]
 use {
@@ -140,7 +141,13 @@ impl TryFrom<(&DataType, &str)> for Value {
             DataType::Date => Ok(Self::Date(
                 chrono::NaiveDate::parse_from_str(v, "%Y-%m-%d")?.num_days_from_ce() - DAYS_FROM_CE,
             )),
-            DataType::Nullable(inner) => Self::try_from((inner.as_ref(), v)),
+            DataType::Nullable(inner) => {
+                if v == NULL_VALUE {
+                    Ok(Self::Null)
+                } else {
+                    Self::try_from((inner.as_ref(), v))
+                }
+            }
             // TODO:(everpcpc) handle complex types
             _ => Ok(Self::String(v.to_string())),
         }
@@ -153,6 +160,9 @@ impl TryFrom<(&ArrowField, &Arc<dyn ArrowArray>, usize)> for Value {
     fn try_from(
         (field, array, seq): (&ArrowField, &Arc<dyn ArrowArray>, usize),
     ) -> std::result::Result<Self, Self::Error> {
+        if field.is_nullable() && array.is_null(seq) {
+            return Ok(Value::Null);
+        }
         match field.data_type() {
             ArrowDataType::Null => Ok(Value::Null),
             ArrowDataType::Boolean => match array.as_any().downcast_ref::<BooleanArray>() {
@@ -360,6 +370,40 @@ impl TryFrom<Value> for NaiveDate {
         }
     }
 }
+
+// This macro implements TryFrom to Option for Nullable column
+macro_rules! impl_try_from_to_option {
+    ($($t:ty),*) => {
+        $(
+            impl TryFrom<Value> for Option<$t> {
+                type Error = Error;
+                fn try_from(val: Value) -> Result<Self> {
+                    match val {
+                        Value::Null => Ok(None),
+                        _ => {
+                            let inner: $t = val.try_into()?;
+                            Ok(Some(inner))
+                        },
+                    }
+
+                }
+            }
+        )*
+    };
+}
+
+impl_try_from_to_option!(String);
+impl_try_from_to_option!(bool);
+impl_try_from_to_option!(u8);
+impl_try_from_to_option!(u16);
+impl_try_from_to_option!(u32);
+impl_try_from_to_option!(u64);
+impl_try_from_to_option!(i8);
+impl_try_from_to_option!(i16);
+impl_try_from_to_option!(i32);
+impl_try_from_to_option!(i64);
+impl_try_from_to_option!(f32);
+impl_try_from_to_option!(f64);
 
 impl std::fmt::Display for NumberValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
