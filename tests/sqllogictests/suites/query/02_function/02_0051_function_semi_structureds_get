@@ -334,7 +334,7 @@ query IT
 select id, json_path_query(obj, '$.b?(@.c > 2)') from t2
 ----
 
-statement error 1105
+statement error 1001
 select id, json_path_query(obj, '--') from t2
 
 query IT
@@ -372,7 +372,7 @@ select id, json_path_query_array(obj, '$.b?(@.c > 2)') from t2
 ----
 1 []
 
-statement error 1105
+statement error 1001
 select id, json_path_query_array(obj, '--') from t2
 
 query IT
@@ -410,7 +410,7 @@ select id, json_path_query_first(obj, '$.b?(@.c > 2)') from t2
 ----
 1 NULL
 
-statement error 1105
+statement error 1001
 select id, json_path_query_first(obj, '--') from t2
 
 statement ok

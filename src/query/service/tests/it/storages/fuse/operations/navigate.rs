@@ -92,7 +92,7 @@ async fn test_fuse_navigate() -> Result<()> {
 
     // 4. navigate to the first snapshot
     // history is order by timestamp DESC
-    let latest = &snapshots[0];
+    let (latest, _ver) = &snapshots[0];
     let instant = latest
         .timestamp
         .unwrap()
@@ -104,7 +104,7 @@ async fn test_fuse_navigate() -> Result<()> {
     assert_eq!(first_snapshot, tbl.snapshot_loc().await?.unwrap());
 
     // 4. navigate beyond the first snapshot
-    let first_insertion = &snapshots[1];
+    let (first_insertion, _ver) = &snapshots[1];
     let instant = first_insertion
         .timestamp
         .unwrap()

@@ -97,22 +97,6 @@ pub fn format_scalar(_metadata: &MetadataRef, scalar: &ScalarExpr) -> String {
                 )
             }
         }
-        ScalarExpr::BoundInternalColumnRef(column_ref) => {
-            if let Some(table_name) = &column_ref.column.table_name {
-                format!(
-                    "{}.{} (#{})",
-                    table_name,
-                    column_ref.column.internal_column.column_name(),
-                    column_ref.column.index
-                )
-            } else {
-                format!(
-                    "{} (#{})",
-                    column_ref.column.internal_column.column_name(),
-                    column_ref.column.index
-                )
-            }
-        }
         ScalarExpr::ConstantExpr(constant) => constant.value.to_string(),
         ScalarExpr::WindowFunction(win) => win.display_name.clone(),
         ScalarExpr::AggregateFunction(agg) => agg.display_name.clone(),

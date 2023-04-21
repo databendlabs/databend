@@ -26,6 +26,8 @@ use serde::Serialize;
 use crate::meta::statistics::ClusterStatistics;
 use crate::meta::statistics::ColumnStatistics;
 use crate::meta::statistics::FormatVersion;
+use crate::meta::v0;
+use crate::meta::v1;
 use crate::meta::Compression;
 use crate::meta::Location;
 use crate::meta::Statistics;
@@ -43,6 +45,15 @@ pub struct SegmentInfo {
 }
 
 impl SegmentInfo {
+    // for test.
+    pub fn new(blocks: Vec<Arc<BlockMeta>>, summary: Statistics) -> Self {
+        Self {
+            format_version: SegmentInfo::VERSION,
+            blocks,
+            summary,
+        }
+    }
+
     #[inline]
     pub fn version(&self) -> FormatVersion {
         self.format_version
@@ -102,6 +113,34 @@ impl BlockMeta {
     }
 }
 
+impl SegmentInfo {
+    pub fn from_v0(s: v0::SegmentInfo, fields: &[TableField]) -> Self {
+        let summary = Statistics::from_v0(s.summary, fields);
+        Self {
+            format_version: SegmentInfo::VERSION,
+            blocks: s
+                .blocks
+                .into_iter()
+                .map(|b| Arc::new(BlockMeta::from_v0(&b, fields)))
+                .collect::<_>(),
+            summary,
+        }
+    }
+
+    pub fn from_v1(s: v1::SegmentInfo, fields: &[TableField]) -> Self {
+        let summary = Statistics::from_v0(s.summary, fields);
+        Self {
+            format_version: SegmentInfo::VERSION,
+            blocks: s
+                .blocks
+                .into_iter()
+                .map(|b| Arc::new(BlockMeta::from_v1(b.as_ref(), fields)))
+                .collect::<_>(),
+            summary,
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, EnumAsInner)]
 pub enum ColumnMeta {
     Parquet(v0::ColumnMeta),
@@ -152,56 +191,6 @@ impl ColumnMeta {
                     .sum(),
                 None => v.pages.iter().map(|page| page.length).sum(),
             },
-        }
-    }
-}
-
-impl SegmentInfo {
-    pub fn new(blocks: Vec<Arc<BlockMeta>>, summary: Statistics) -> Self {
-        Self {
-            format_version: SegmentInfo::VERSION,
-            blocks,
-            summary,
-        }
-    }
-
-    pub fn format_version(&self) -> u64 {
-        self.format_version
-    }
-
-    // Total block bytes of this segment.
-    pub fn total_bytes(&self) -> u64 {
-        self.blocks.iter().map(|v| v.block_size).sum()
-    }
-}
-
-use super::super::v0;
-use super::super::v1;
-
-impl SegmentInfo {
-    pub fn from_v0(s: v0::SegmentInfo, fields: &[TableField]) -> Self {
-        let summary = Statistics::from_v0(s.summary, fields);
-        Self {
-            format_version: SegmentInfo::VERSION,
-            blocks: s
-                .blocks
-                .into_iter()
-                .map(|b| Arc::new(BlockMeta::from_v0(&b, fields)))
-                .collect::<_>(),
-            summary,
-        }
-    }
-
-    pub fn from_v1(s: v1::SegmentInfo, fields: &[TableField]) -> Self {
-        let summary = Statistics::from_v0(s.summary, fields);
-        Self {
-            format_version: SegmentInfo::VERSION,
-            blocks: s
-                .blocks
-                .into_iter()
-                .map(|b| Arc::new(BlockMeta::from_v1(b.as_ref(), fields)))
-                .collect::<_>(),
-            summary,
         }
     }
 }
