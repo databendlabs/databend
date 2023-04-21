@@ -154,6 +154,10 @@ impl TableSnapshot {
         Encoding::default()
     }
 
+    pub fn format_version(&self) -> u64 {
+        self.format_version
+    }
+
     pub fn build_segment_id_map(&self) -> HashMap<String, usize> {
         let segment_count = self.segments.len();
         let mut segment_id_map = HashMap::new();

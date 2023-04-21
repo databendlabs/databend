@@ -250,27 +250,18 @@ impl FuseTable {
     #[async_backtrace::framed]
     pub async fn read_table_snapshot(&self) -> Result<Option<Arc<TableSnapshot>>> {
         if let Some(loc) = self.snapshot_loc().await? {
+            let reader = MetaReaders::table_snapshot_reader(self.get_operator());
             let ver = self.snapshot_format_version().await?;
-            Self::read_table_snapshot_impl(loc, ver, self.get_operator()).await
+            let params = LoadParams {
+                location: loc,
+                len_hint: None,
+                ver,
+                put_cache: true,
+            };
+            Ok(Some(reader.read(&params).await?))
         } else {
             Ok(None)
         }
-    }
-
-    #[async_backtrace::framed]
-    pub async fn read_table_snapshot_impl(
-        loc: String,
-        ver: u64,
-        operator: Operator,
-    ) -> Result<Option<Arc<TableSnapshot>>> {
-        let reader = MetaReaders::table_snapshot_reader(operator);
-        let params = LoadParams {
-            location: loc,
-            len_hint: None,
-            ver,
-            put_cache: true,
-        };
-        Ok(Some(reader.read(&params).await?))
     }
 
     #[async_backtrace::framed]

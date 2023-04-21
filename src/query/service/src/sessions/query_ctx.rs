@@ -66,7 +66,6 @@ use common_users::UserApiProvider;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
 use parking_lot::RwLock;
-use storages_common_table_meta::meta::Location;
 use tracing::debug;
 
 use crate::api::DataExchangeManager;
@@ -327,15 +326,6 @@ impl TableContext for QueryContext {
 
     fn get_cacheable(&self) -> bool {
         self.shared.cacheable.load(Ordering::Acquire)
-    }
-
-    fn set_snapshot(&self, location: Location) {
-        let mut snapshot = self.shared.snapshot.write();
-        snapshot.replace(location);
-    }
-
-    fn get_snapshot(&self) -> Option<Location> {
-        self.shared.snapshot.read().as_ref().cloned()
     }
 
     fn set_cacheable(&self, cacheable: bool) {
