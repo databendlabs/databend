@@ -27,6 +27,7 @@ use crate::storages::fuse::utils::do_insertions;
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_analyze() -> Result<()> {
     let fixture = TestFixture::new().await;
+    let ctx = fixture.ctx();
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     let case_name = "analyze_statistic_optimize";
@@ -35,10 +36,11 @@ async fn test_fuse_snapshot_analyze() -> Result<()> {
     analyze_table(&fixture).await?;
     check_data_dir(&fixture, case_name, 3, 1, 2, 2, 2, Some(()), None).await?;
 
-    // After compact, all the count will become 1
+    // Purge will keep at least two snapshots.
+    ctx.get_settings().set_retention_period(0)?;
     let qry = format!("optimize table {}.{} all", db, tbl);
-    execute_command(fixture.ctx().clone(), &qry).await?;
-    check_data_dir(&fixture, case_name, 1, 1, 1, 1, 1, Some(()), Some(())).await
+    execute_command(ctx, &qry).await?;
+    check_data_dir(&fixture, case_name, 2, 1, 1, 1, 1, Some(()), Some(())).await
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -91,20 +93,21 @@ async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_analyze_purge() -> Result<()> {
     let fixture = TestFixture::new().await;
+    let ctx = fixture.ctx();
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     let case_name = "analyze_statistic_purge";
     do_insertions(&fixture).await?;
 
-    // optimize statistics twice
-    for i in 0..2 {
+    // optimize statistics three times
+    for i in 0..3 {
         analyze_table(&fixture).await?;
         check_data_dir(&fixture, case_name, 3 + i, 1 + i, 2, 2, 2, Some(()), None).await?;
     }
 
-    // After purge, all the count should be 1
+    // Purge will keep at least two snapshots.
+    ctx.get_settings().set_retention_period(0)?;
     let qry = format!("optimize table {}.{} purge", db, tbl);
-    execute_command(fixture.ctx().clone(), &qry).await?;
-    // note: purge statistic files exists bug, so the count of statistic files is 2.
-    check_data_dir(&fixture, case_name, 1, 2, 1, 1, 1, Some(()), Some(())).await
+    execute_command(ctx, &qry).await?;
+    check_data_dir(&fixture, case_name, 2, 2, 1, 1, 1, Some(()), Some(())).await
 }
