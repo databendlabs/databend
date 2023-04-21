@@ -890,7 +890,7 @@ impl Binder {
 
                     if !cast_expr_to_field_type.is_deterministic(&BUILTIN_FUNCTIONS) {
                         return Err(ErrorCode::SemanticError(format!(
-                            "default expression {cast_expr_to_field_type} is a valid constant",
+                            "default expression {cast_expr_to_field_type} is not a valid constant. Please provide a valid constant expression as the default value.",
                         )));
                     }
 
@@ -903,7 +903,7 @@ impl Binder {
                         Some(default_expr.to_string())
                     } else {
                         return Err(ErrorCode::SemanticError(format!(
-                            "default expression {cast_expr_to_field_type} is not a valid constant",
+                            "default expression {cast_expr_to_field_type} is not a valid constant expression. Please provide a valid constant expression as the default value.",
                         )));
                     }
                 } else {
