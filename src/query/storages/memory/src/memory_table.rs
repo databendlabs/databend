@@ -266,6 +266,13 @@ impl Table for MemoryTable {
     }
 
     #[async_backtrace::framed]
+    async fn gc(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
+        let _ = ctx;
+
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
     async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
         let mut blocks = self.blocks.write();
         blocks.clear();

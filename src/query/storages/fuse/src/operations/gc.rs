@@ -480,6 +480,122 @@ impl FuseTable {
             bloom_location: blooms,
         })
     }
+
+    #[async_backtrace::framed]
+    pub async fn do_gc(&self, ctx: &Arc<dyn TableContext>) -> Result<()> {
+        // 1. Find all snapshots
+        let snapshot_opt = match self.read_table_snapshot().await {
+            Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
+                warn!(
+                    "concurrent gc: snapshot {:?} already collected. table: {}, ident {}",
+                    self.snapshot_loc().await?,
+                    self.table_info.desc,
+                    self.table_info.ident,
+                );
+                return Ok(());
+            }
+            Err(e) => return Err(e),
+            Ok(v) => v,
+        };
+        // 1.1 Root snapshot.
+        let (root_snapshot_id, version, root_snapshot_ts, _root_ts_location_opt) =
+            if let Some(ref root_snapshot) = snapshot_opt {
+                (
+                    root_snapshot.snapshot_id,
+                    root_snapshot.format_version(),
+                    root_snapshot.timestamp,
+                    root_snapshot.table_statistics_location.clone(),
+                )
+            } else {
+                warn!(
+                    "concurrent gc: snapshot {:?} already collected. table: {}, ident {}",
+                    self.snapshot_loc().await?,
+                    self.table_info.desc,
+                    self.table_info.ident,
+                );
+                return Ok(());
+            };
+
+        let root_snapshot_location = match self.snapshot_loc().await? {
+            Some(root_snapshot_location) => root_snapshot_location,
+            None => {
+                warn!(
+                    "cannot get snapshot_loc of table: {}, ident {}",
+                    self.table_info.desc, self.table_info.ident,
+                );
+                return Ok(());
+            }
+        };
+
+        // 2. Find all segments referenced by the current snapshots
+        let snapshots_io = SnapshotsIO::create(ctx.clone(), self.operator.clone());
+        let (ref_segments, ref_blocks) = snapshots_io
+            .get_referenced_files(
+                root_snapshot_location,
+                root_snapshot_id,
+                version,
+                self.schema(),
+                None,
+                root_snapshot_ts,
+                |status| {
+                    ctx.set_status_info(&status);
+                },
+            )
+            .await?;
+
+        if ref_segments.is_empty() && ref_blocks.is_empty() {
+            return Ok(());
+        }
+
+        // 3. Find all the blocks and segments
+        let mut segment_locations_to_be_purged =
+            if let Some(segment_location) = ref_segments.first() {
+                snapshots_io
+                    .get_files_by_prefix(None, segment_location)
+                    .await?
+            } else {
+                vec![]
+            };
+        let mut block_locations_to_be_purged = if let Some(block_location) = ref_blocks.first() {
+            snapshots_io
+                .get_files_by_prefix(None, block_location)
+                .await?
+        } else {
+            vec![]
+        };
+
+        // 4. Filter out all referenced files.
+        segment_locations_to_be_purged
+            .retain(|segment_location| !ref_segments.contains(segment_location));
+        block_locations_to_be_purged.retain(|block_location| !ref_blocks.contains(block_location));
+
+        // 5. Filter out all files with retention time.
+        let timestamp = chrono::Utc::now()
+            .checked_sub_days(chrono::Days::new(12))
+            .unwrap()
+            .timestamp();
+        let with_time_segment_files = snapshots_io
+            .get_within_time_files(&segment_locations_to_be_purged, timestamp)
+            .await?;
+        segment_locations_to_be_purged
+            .retain(|location| !with_time_segment_files.contains(location));
+        let with_time_block_files = snapshots_io
+            .get_within_time_files(&block_locations_to_be_purged, timestamp)
+            .await?;
+        block_locations_to_be_purged.retain(|location| !with_time_block_files.contains(location));
+
+        // 6. Delete all the orphan segments and blocks
+        self.try_purge_location_files_and_cache::<SegmentInfo>(
+            ctx.clone(),
+            HashSet::from_iter(segment_locations_to_be_purged.into_iter()),
+        )
+        .await?;
+        self.try_purge_location_files(
+            ctx.clone(),
+            HashSet::from_iter(block_locations_to_be_purged.into_iter()),
+        )
+        .await
+    }
 }
 
 struct RetentionPartition {

@@ -469,6 +469,8 @@ pub enum TokenKind {
     TABLE_FUNCTIONS,
     #[token("FUSE", ignore(ascii_case))]
     FUSE,
+    #[token("GC", ignore(ascii_case))]
+    GC,
     #[token("GLOBAL", ignore(ascii_case))]
     GLOBAL,
     #[token("GRAPH", ignore(ascii_case))]

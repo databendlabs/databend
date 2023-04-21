@@ -544,6 +544,11 @@ impl Table for FuseTable {
         self.do_truncate(ctx, purge).await
     }
 
+    #[async_backtrace::framed]
+    async fn gc(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
+        self.do_gc(&ctx).await
+    }
+
     #[tracing::instrument(level = "debug", name = "fuse_table_optimize", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     #[async_backtrace::framed]
     async fn purge(&self, ctx: Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {

@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::Path;
@@ -24,6 +25,7 @@ use common_base::runtime::execute_futures_in_parallel;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::TableSchemaRef;
 use futures::stream::StreamExt;
 use futures_util::TryStreamExt;
 use opendal::EntryMode;
@@ -37,6 +39,7 @@ use storages_common_table_meta::meta::TableSnapshotLite;
 use tracing::info;
 use tracing::warn;
 use tracing::Instrument;
+use uuid::Uuid;
 
 use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
@@ -203,6 +206,258 @@ impl SnapshotsIO {
             lite_snapshot_stream.take(l).try_collect::<Vec<_>>().await
         } else {
             lite_snapshot_stream.try_collect::<Vec<_>>().await
+        }
+    }
+
+    // return from files that last modified time with timestamp
+    #[tracing::instrument(level = "debug", skip_all)]
+    #[async_backtrace::framed]
+    pub async fn get_within_time_files(
+        &self,
+        files: &[String],
+        timestamp: i64,
+    ) -> Result<HashSet<String>> {
+        async fn get_within_time_file(
+            file: String,
+            operator: Operator,
+            timestamp: i64,
+        ) -> Result<String> {
+            let metadata = operator.stat(&file).await?;
+            if let Some(last_modified) = metadata.last_modified() {
+                if last_modified.timestamp() >= timestamp {
+                    return Ok(file);
+                }
+            }
+
+            Ok("".to_string())
+        }
+
+        async fn get_within_time_files(
+            files: &[String],
+            operator: Operator,
+            timestamp: i64,
+            threads_nums: usize,
+            permit_nums: usize,
+        ) -> Result<Vec<Result<String>>> {
+            // combine all the tasks.
+            let mut iter = files.iter();
+            let tasks = std::iter::from_fn(move || {
+                iter.next().map(|location| {
+                    get_within_time_file(location.to_string(), operator.clone(), timestamp)
+                        .instrument(tracing::debug_span!("read_segment_blocks"))
+                })
+            });
+
+            execute_futures_in_parallel(
+                tasks,
+                threads_nums,
+                permit_nums,
+                "fuse-req-snapshots-worker".to_owned(),
+            )
+            .await
+        }
+
+        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
+        let permit_nums = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+        let max_io_requests = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+        let mut file_set = HashSet::new();
+        for chunk in files.chunks(max_io_requests) {
+            let results = get_within_time_files(
+                chunk,
+                self.operator.clone(),
+                timestamp,
+                threads_nums,
+                permit_nums,
+            )
+            .await?;
+            for file in results.into_iter().flatten() {
+                file_set.insert(file);
+            }
+        }
+
+        Ok(file_set)
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    #[async_backtrace::framed]
+    async fn read_segment_blocks(
+        &self,
+        segment_files: &[&String],
+        schema: TableSchemaRef,
+        version: u64,
+    ) -> Result<Vec<Result<Vec<String>>>> {
+        async fn read_segment_block(
+            location: String,
+            ver: u64,
+            operator: Operator,
+            schema: TableSchemaRef,
+        ) -> Result<Vec<String>> {
+            let reader = MetaReaders::segment_info_reader(operator, schema);
+            // Keep in mind that segment_info_read must need a schema
+            let load_params = LoadParams {
+                location,
+                len_hint: None,
+                ver,
+                put_cache: false,
+            };
+
+            let segment = reader.read(&load_params).await?;
+            let mut blocks = Vec::with_capacity(segment.blocks.len());
+            segment.blocks.iter().for_each(|block_meta| {
+                blocks.push(block_meta.location.0.clone());
+            });
+            Ok(blocks)
+        }
+
+        // combine all the tasks.
+        let mut iter = segment_files.iter();
+        let tasks = std::iter::from_fn(move || {
+            iter.next().map(|location| {
+                read_segment_block(
+                    location.to_string(),
+                    version,
+                    self.operator.clone(),
+                    schema.clone(),
+                )
+                .instrument(tracing::debug_span!("read_segment_blocks"))
+            })
+        });
+
+        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
+        let permit_nums = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+        execute_futures_in_parallel(
+            tasks,
+            threads_nums,
+            permit_nums,
+            "fuse-req-snapshots-worker".to_owned(),
+        )
+        .await
+    }
+
+    // Read all the referenced {segments|blocks} by the root file.
+    // limit: limits the number of snapshot files listed
+    // with_segment_locations: if true will get the segments of the snapshot
+    #[allow(clippy::too_many_arguments)]
+    #[async_backtrace::framed]
+    pub async fn get_referenced_files<T>(
+        &self,
+        root_snapshot_file: String,
+        root_snapshot_id: Uuid,
+        root_version: u64,
+        schema: TableSchemaRef,
+        limit: Option<usize>,
+        min_snapshot_timestamp: Option<DateTime<Utc>>,
+        status_callback: T,
+    ) -> Result<(BTreeSet<String>, BTreeSet<String>)>
+    where
+        T: Fn(String),
+    {
+        let ctx = self.ctx.clone();
+
+        // List all the snapshot file paths
+        // note that snapshot file paths of ongoing txs might be included
+        let mut snapshot_files = vec![];
+        if let Some(prefix) = Self::get_s3_prefix_from_file(&root_snapshot_file) {
+            snapshot_files = self.list_files(&prefix, limit, None).await?;
+        }
+
+        if snapshot_files.is_empty() {
+            return Ok((BTreeSet::new(), BTreeSet::new()));
+        }
+
+        // 1. Get all the snapshot by chunks.
+        let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+        let mut snapshot_lites = HashMap::new();
+
+        let start = Instant::now();
+        let mut count = 0;
+        for chunk in snapshot_files.chunks(max_io_requests) {
+            let results = self
+                .read_snapshot_lites(
+                    chunk,
+                    min_snapshot_timestamp,
+                    &ListSnapshotLiteOption::NeedNotSegments,
+                )
+                .await?;
+
+            for snapshot_lite_extend in results.into_iter().flatten() {
+                let snapshot_id = snapshot_lite_extend.snapshot_lite.snapshot_id;
+                snapshot_lites.insert(snapshot_id, snapshot_lite_extend);
+            }
+
+            // Refresh status.
+            {
+                count += chunk.len();
+                let status = format!(
+                    "gc orphan: read snapshot files:{}/{}, cost:{} sec",
+                    count,
+                    snapshot_files.len(),
+                    start.elapsed().as_secs()
+                );
+                info!(status);
+                (status_callback)(status);
+            }
+        }
+
+        // 2. Get all the referenced segments
+        let mut segments = BTreeSet::new();
+        let mut current_snapshot_id_opt = Some(root_snapshot_id);
+        while let Some(current_snapshot_id) = current_snapshot_id_opt {
+            let snapshot_lite_extend = snapshot_lites.get(&current_snapshot_id).unwrap();
+
+            snapshot_lite_extend
+                .segment_locations
+                .iter()
+                .for_each(|segment_location| {
+                    segments.insert(segment_location.0.to_owned());
+                });
+            current_snapshot_id_opt = snapshot_lite_extend
+                .snapshot_lite
+                .prev_snapshot_id
+                .map(|prev_snapshot_id| prev_snapshot_id.0);
+        }
+
+        // 3. Get all the referenced blocks
+        let mut count = 0;
+        let mut blocks = BTreeSet::new();
+        let segment_locations = Vec::from_iter(segments.iter());
+        for segment_chunk in segment_locations.chunks(max_io_requests) {
+            let results = self
+                .read_segment_blocks(segment_chunk, schema.clone(), root_version)
+                .await?;
+            for ret_blocks in results.into_iter().flatten() {
+                ret_blocks.iter().for_each(|block| {
+                    blocks.insert(block.to_string());
+                });
+            }
+
+            // Refresh status.
+            {
+                count += 1;
+                let status = format!(
+                    "gc orphan: read segments block files:{}/{}, cost:{} sec",
+                    count,
+                    segment_locations.len(),
+                    start.elapsed().as_secs()
+                );
+                info!(status);
+                (status_callback)(status);
+            }
+        }
+
+        Ok((segments, blocks))
+    }
+
+    #[async_backtrace::framed]
+    pub async fn get_files_by_prefix(
+        &self,
+        limit: Option<usize>,
+        input_file: &str,
+    ) -> Result<Vec<String>> {
+        if let Some(prefix) = SnapshotsIO::get_s3_prefix_from_file(input_file) {
+            self.list_files(&prefix, limit, None).await
+        } else {
+            Ok(vec![])
         }
     }
 

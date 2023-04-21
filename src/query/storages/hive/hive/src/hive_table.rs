@@ -611,6 +611,13 @@ impl Table for HiveTable {
     }
 
     #[async_backtrace::framed]
+    async fn gc(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
+        let _ = ctx;
+
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
     async fn purge(&self, _ctx: Arc<dyn TableContext>, _keep_last_snapshot: bool) -> Result<()> {
         Ok(())
     }

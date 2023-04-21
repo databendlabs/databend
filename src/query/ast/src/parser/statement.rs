@@ -1673,6 +1673,7 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
                 limit: opt_limit.map(|(_, limit)| limit),
             },
         ),
+        map(rule! { GC }, |_| OptimizeTableAction::Gc {}),
     ))(i)
 }
 

@@ -59,6 +59,7 @@ impl Interpreter for OptimizeTableInterpreter {
             action,
             OptimizeTableAction::Purge(_) | OptimizeTableAction::All
         );
+        let do_gc = matches!(action, OptimizeTableAction::Gc);
 
         let limit_opt = match action {
             OptimizeTableAction::CompactBlocks(limit_opt) => limit_opt,
@@ -98,6 +99,35 @@ impl Interpreter for OptimizeTableInterpreter {
                                 .get_table(ctx.get_tenant().as_str(), &db_name, &tbl_name)
                                 .await?;
                             purge(ctx, table, &action).await
+                        });
+                    }
+
+                    Err(may_error.as_ref().unwrap().clone())
+                });
+            }
+        }
+        if do_gc {
+            let ctx = self.ctx.clone();
+            let catalog_name = self.plan.catalog.clone();
+            let db_name = self.plan.database.clone();
+            let tbl_name = self.plan.table.clone();
+            let table = self
+                .ctx
+                .get_table(&catalog_name, &db_name, &tbl_name)
+                .await?;
+            if build_res.main_pipeline.is_empty() {
+                table.gc(ctx).await?;
+            } else {
+                build_res.main_pipeline.set_on_finished(move |may_error| {
+                    if may_error.is_none() {
+                        return GlobalIORuntime::instance().block_on(async move {
+                            // currently, context caches the table, we have to "refresh"
+                            // the table by using the catalog API directly
+                            let table = ctx
+                                .get_catalog(&catalog_name)?
+                                .get_table(ctx.get_tenant().as_str(), &db_name, &tbl_name)
+                                .await?;
+                            table.gc(ctx).await
                         });
                     }
 

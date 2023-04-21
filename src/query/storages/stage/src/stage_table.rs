@@ -265,6 +265,13 @@ impl Table for StageTable {
         ))
     }
 
+    #[async_backtrace::framed]
+    async fn gc(&self, _ctx: Arc<dyn TableContext>) -> Result<()> {
+        Err(ErrorCode::Unimplemented(
+            "S3 external table gc() unimplemented yet!",
+        ))
+    }
+
     fn get_block_compact_thresholds(&self) -> BlockThresholds {
         let guard = self.block_compact_threshold.lock();
         (*guard).expect("must success")

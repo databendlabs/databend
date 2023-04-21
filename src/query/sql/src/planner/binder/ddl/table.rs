@@ -803,6 +803,7 @@ impl Binder {
                     CompactTarget::Segment => OptimizeTableAction::CompactSegments(limit_cnt),
                 }
             }
+            AstOptimizeTableAction::Gc => OptimizeTableAction::Gc,
         };
 
         Ok(Plan::OptimizeTable(Box::new(OptimizeTablePlan {

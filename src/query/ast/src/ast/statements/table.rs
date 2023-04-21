@@ -505,6 +505,7 @@ pub enum OptimizeTableAction {
         target: CompactTarget,
         limit: Option<Expr>,
     },
+    Gc,
 }
 
 impl Display for OptimizeTableAction {
@@ -530,6 +531,10 @@ impl Display for OptimizeTableAction {
                 if let Some(limit) = limit {
                     write!(f, " LIMIT {limit}")?;
                 }
+                Ok(())
+            }
+            OptimizeTableAction::Gc => {
+                write!(f, "GC")?;
                 Ok(())
             }
         }

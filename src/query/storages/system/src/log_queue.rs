@@ -216,6 +216,13 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
 
         Ok(())
     }
+
+    #[async_backtrace::framed]
+    async fn gc(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
+        let _ = ctx;
+
+        Ok(())
+    }
 }
 
 struct SystemLogSource<Event: SystemLogElement> {
