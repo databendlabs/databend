@@ -70,6 +70,7 @@ use crate::executor::Window;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
+use crate::planner;
 use crate::plans::AggregateMode;
 use crate::plans::Exchange;
 use crate::plans::FunctionCall;
@@ -206,6 +207,80 @@ impl PhysicalPlanBuilder {
             }
             Projection::InnerColumns(col_indices)
         }
+    }
+
+    fn try_build_row_fetch_on_limit(
+        &mut self,
+        input_plan: PhysicalPlan,
+        limit: &planner::plans::Limit,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let next_plan_id = self.next_plan_id();
+        let metadata = self.metadata.read().clone();
+        if metadata.lazy_columns().is_empty() {
+            return Ok(PhysicalPlan::Limit(Limit {
+                plan_id: next_plan_id,
+                input: Box::new(input_plan),
+                limit: limit.limit,
+                offset: limit.offset,
+                stat_info: Some(stat_info),
+            }));
+        }
+        let input_schema = input_plan.output_schema()?;
+
+        // Lazy materialization is enabled.
+        let row_id_col_index = metadata
+            .columns()
+            .iter()
+            .position(|col| col.name() == ROW_ID)
+            .ok_or_else(|| ErrorCode::Internal("Internal column _row_id is not found"))?;
+        let row_id_col_offset = input_schema.index_of(&row_id_col_index.to_string())?;
+
+        let mut has_inner_column = false;
+        let fetched_fields = metadata
+            .lazy_columns()
+            .iter()
+            .sorted() // Needs sort because we need to make the order deterministic.
+            .map(|index| {
+                let col = metadata.column(*index);
+                if let ColumnEntry::BaseTableColumn(c) = col {
+                    if c.path_indices.is_some() {
+                        has_inner_column = true;
+                    }
+                }
+                DataField::new(&index.to_string(), col.data_type())
+            })
+            .collect();
+
+        let source = input_plan.try_find_single_data_source();
+        debug_assert!(source.is_some());
+        let source_info = source.cloned().unwrap();
+        let table_schema = source_info.source_info.schema();
+        let cols_to_fetch = Self::build_projection(
+            &metadata,
+            &table_schema,
+            metadata.lazy_columns(),
+            has_inner_column,
+            true,
+            true,
+            false,
+        );
+
+        Ok(PhysicalPlan::RowFetch(RowFetch {
+            plan_id: self.next_plan_id(),
+            input: Box::new(PhysicalPlan::Limit(Limit {
+                plan_id: next_plan_id,
+                input: Box::new(input_plan),
+                limit: limit.limit,
+                offset: limit.offset,
+                stat_info: Some(stat_info.clone()),
+            })),
+            source: Box::new(source_info),
+            row_id_col_offset,
+            cols_to_fetch,
+            fetched_fields,
+            stat_info: Some(stat_info),
+        }))
     }
 
     #[async_recursion::async_recursion]
@@ -834,78 +909,17 @@ impl PhysicalPlanBuilder {
 
             RelOperator::Limit(limit) => {
                 let input_plan = self.build(s_expr.child(0)?).await?;
-                let next_plan_id = self.next_plan_id();
-                let metadata = self.metadata.read().clone();
-
-                if let PhysicalPlan::Sort(_) = &input_plan {
-                    if !metadata.lazy_columns().is_empty() {
-                        // Lazy materialization is enabled.
-                        let input_schema = input_plan.output_schema()?;
-                        let row_id_col_index = metadata
-                            .columns()
-                            .iter()
-                            .position(|col| col.name() == ROW_ID)
-                            .ok_or_else(|| {
-                                ErrorCode::Internal("Internal column _row_id is not found")
-                            })?;
-                        let row_id_col_offset =
-                            input_schema.index_of(&row_id_col_index.to_string())?;
-
-                        let mut has_inner_column = false;
-                        let fetched_fields = metadata
-                            .lazy_columns()
-                            .iter()
-                            .sorted() // Needs sort because we need to make the order deterministic.
-                            .map(|index| {
-                                let col = metadata.column(*index);
-                                if let ColumnEntry::BaseTableColumn(c) = col {
-                                    if c.path_indices.is_some() {
-                                        has_inner_column = true;
-                                    }
-                                }
-                                DataField::new(&index.to_string(), col.data_type())
-                            })
-                            .collect();
-
-                        let source = input_plan.try_find_single_data_source();
-                        debug_assert!(source.is_some());
-                        let source_info = source.cloned().unwrap();
-                        let table_schema = source_info.source_info.schema();
-                        let cols_to_fetch = Self::build_projection(
-                            &metadata,
-                            &table_schema,
-                            metadata.lazy_columns(),
-                            has_inner_column,
-                            true,
-                            true,
-                            false,
-                        );
-
-                        return Ok(PhysicalPlan::RowFetch(RowFetch {
-                            plan_id: self.next_plan_id(),
-                            input: Box::new(PhysicalPlan::Limit(Limit {
-                                plan_id: next_plan_id,
-                                input: Box::new(input_plan),
-                                limit: limit.limit,
-                                offset: limit.offset,
-                                stat_info: Some(stat_info.clone()),
-                            })),
-                            source: Box::new(source_info),
-                            row_id_col_offset,
-                            cols_to_fetch,
-                            fetched_fields,
-                            stat_info: Some(stat_info),
-                        }));
-                    }
+                if let PhysicalPlan::Sort(_) = input_plan {
+                    self.try_build_row_fetch_on_limit(input_plan, limit, stat_info)
+                } else {
+                    Ok(PhysicalPlan::Limit(Limit {
+                        plan_id: self.next_plan_id(),
+                        input: Box::new(input_plan),
+                        limit: limit.limit,
+                        offset: limit.offset,
+                        stat_info: Some(stat_info),
+                    }))
                 }
-
-                Ok(PhysicalPlan::Limit(Limit {
-                    plan_id: next_plan_id,
-                    input: Box::new(input_plan),
-                    limit: limit.limit,
-                    offset: limit.offset,
-                    stat_info: Some(stat_info),
-                }))
             }
 
             RelOperator::Exchange(exchange) => {
