@@ -25,13 +25,13 @@ Returns the original datatype from the `Nullable` type; Returns the wrapped `Nul
 ## Examples
 
 ```sql
-select to_nullable(3);
+select to_nullable(3),typeof(to_nullable(3));
 
-+----------------+
-| to_nullable(3) |
-+----------------+
-|              3 |
-+----------------+
++----------------+-----------------------+
+| to_nullable(3) |typeof(to_nullable(3)) |
++----------------+-----------------------+
+|              3 | TINYINT UNSIGNED NULL |
++----------------+-----------------------+
 ```
 
 
