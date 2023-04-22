@@ -587,13 +587,8 @@ fn update_statistic(
     right_condition: &ScalarExpr,
     new_stat: NewStatistic,
 ) {
-    let left_index = left_condition.used_columns().iter().next().unwrap().clone();
-    let right_index = right_condition
-        .used_columns()
-        .iter()
-        .next()
-        .unwrap()
-        .clone();
+    let left_index = *left_condition.used_columns().iter().next().unwrap();
+    let right_index = *right_condition.used_columns().iter().next().unwrap();
     let left_col_stat = left_statistics.column_stats.get_mut(&left_index).unwrap();
     let right_col_stat = right_statistics.column_stats.get_mut(&right_index).unwrap();
     if let Some(new_min) = new_stat.min {
@@ -654,7 +649,7 @@ fn prune_buckets(
     Ok((left_hist.buckets.clone(), right_hist.buckets.clone()))
 }
 
-//
+// Prune the bucket's statistics according to `new_min` and `new_max`.
 fn prune_bucket(
     new_min: &Datum,
     new_max: &Datum,
@@ -682,8 +677,8 @@ fn prune_bucket(
         *bucket_min = new_min;
         *bucket_max = new_max;
         let ratio = (new_max - new_min) / (*bucket_max - *bucket_min);
-        *bucket_ndv = *bucket_ndv * ratio;
-        *bucket_num_rows = *bucket_num_rows * ratio;
+        *bucket_ndv *= ratio;
+        *bucket_num_rows *= ratio;
     }
-    return Ok(());
+    Ok(())
 }

@@ -135,7 +135,7 @@ impl<'a> SelectivityEstimator<'a> {
                     // For equal predicate, we just use cardinality of a single
                     // value to estimate the selectivity. This assumes that
                     // the column is in a uniform distribution.
-                    let sel = evaluate_equal(&column_stat, constant);
+                    let sel = evaluate_equal(column_stat, constant);
                     if update {
                         update_statistic(column_stat, const_datum.clone(), const_datum, sel)?;
                     }
@@ -143,7 +143,7 @@ impl<'a> SelectivityEstimator<'a> {
                 }
                 ComparisonOp::NotEqual => {
                     // For not equal predicate, we treat it as opposite of equal predicate.
-                    let sel = 1.0 - evaluate_equal(&column_stat, constant);
+                    let sel = 1.0 - evaluate_equal(column_stat, constant);
                     if update {
                         update_statistic(
                             column_stat,
