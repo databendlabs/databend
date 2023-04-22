@@ -3,7 +3,9 @@ title: Meet Databend Cloud
 sidebar_label: Databend Cloud 🔥
 ---
 
-Getting tired of deployment headaches and managing infrastructure? Introducing [Databend Cloud](https://www.databend.com/) - the cloud-hosted version of Databend. With Databend Cloud, you can leverage the full capabilities of Databend without having to worry about deployment or infrastructure management.
+Getting tired of deployment headaches and managing infrastructure?
+
+Introducing [Databend Cloud](https://www.databend.com/) - the cloud-hosted version of Databend! With Databend Cloud, you can leverage the full capabilities of Databend without having to worry about deployment or infrastructure management.
 
 :::tip NOW IN BETA
 Don't miss out on the chance to try Databend Cloud during its private beta phase. Sign up for beta access now at https://www.databend.com/apply and receive a $200 coupon to kickstart your exploration of the platform.
