@@ -50,6 +50,38 @@ pub enum MetaAPIError {
     RemoteError(MetaDataError),
 }
 
+impl MetaAPIError {
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            MetaAPIError::CanNotForward(_) => {
+                // Leader is not ready, wait a while and retry
+                true
+            }
+            MetaAPIError::RemoteError(data_err) => match data_err {
+                MetaDataError::ChangeMembershipError(cm_err) => match cm_err {
+                    ChangeMembershipError::InProgress(_) => {
+                        // Another node is joining, wait a while and retry
+                        true
+                    }
+                    ChangeMembershipError::EmptyMembership(_) => false,
+                    ChangeMembershipError::LearnerNotFound(_) => false,
+                },
+                MetaDataError::WriteError(_) => false,
+                MetaDataError::ReadError(_) => false,
+            },
+            MetaAPIError::ForwardToLeader(_) => {
+                // Leader is changing, wait a while and retry
+                true
+            }
+            MetaAPIError::NetworkError(_) => {
+                // Network is always unstable, retry.
+                true
+            }
+            MetaAPIError::DataError(_) => false,
+        }
+    }
+}
+
 /// Errors raised when handling a request by raft node.
 #[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum MetaOperationError {

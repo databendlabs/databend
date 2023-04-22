@@ -111,7 +111,6 @@ Output:
 +---------------+---------------+
 ```
 
-
 ### Group By Expression
 
 This query groups employees by the year they were hired and counts the number of employees hired in each year:

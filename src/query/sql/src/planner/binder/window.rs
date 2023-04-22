@@ -123,7 +123,6 @@ impl<'a> WindowRewriter<'a> {
     pub fn visit(&mut self, scalar: &ScalarExpr) -> Result<ScalarExpr> {
         match scalar {
             ScalarExpr::BoundColumnRef(_) => Ok(scalar.clone()),
-            ScalarExpr::BoundInternalColumnRef(_) => Ok(scalar.clone()),
             ScalarExpr::ConstantExpr(_) => Ok(scalar.clone()),
             ScalarExpr::FunctionCall(func) => {
                 let new_args = func

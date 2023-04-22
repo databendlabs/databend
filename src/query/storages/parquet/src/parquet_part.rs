@@ -33,6 +33,7 @@ pub struct ColumnMeta {
     pub offset: u64,
     pub length: u64,
     pub compression: Compression,
+    pub uncompressed_size: u64,
     pub min_max: Option<(Scalar, Scalar)>,
 
     // if has dictionary, we can not push down predicate to deserialization.
@@ -52,6 +53,13 @@ pub struct ParquetRowGroupPart {
 impl ParquetRowGroupPart {
     pub fn convert_to_part_info(self) -> PartInfoPtr {
         Arc::new(Box::new(self))
+    }
+
+    pub fn uncompressed_size(&self) -> u64 {
+        self.column_metas
+            .values()
+            .map(|c| c.uncompressed_size)
+            .sum()
     }
 }
 

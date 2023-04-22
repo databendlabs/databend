@@ -16,7 +16,7 @@ CREATE TABLE table_name (
 ) [ENGINE = Fuse] [CLUSTER BY(<expr> [, <expr>, ...] )] [options];
 ```
 
-Read more about the create table statement in [ddl-create-table](../../14-sql-commands/00-ddl/20-table/10-ddl-create-table.md)
+Read more about the created table statement in [ddl-create-table](../../14-sql-commands/00-ddl/20-table/10-ddl-create-table.md)
 
 ### Default engine
 

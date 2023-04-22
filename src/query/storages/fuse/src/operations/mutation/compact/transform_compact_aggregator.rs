@@ -31,6 +31,7 @@ use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
+use storages_common_table_meta::meta::Versioned;
 use tracing::info;
 use tracing::Instrument;
 
@@ -88,7 +89,7 @@ impl CompactAggregator {
 
     #[async_backtrace::framed]
     async fn write_segment(dal: Operator, segment: SerializedSegment) -> Result<()> {
-        dal.write(&segment.location, serde_json::to_vec(&segment.segment)?)
+        dal.write(&segment.location, segment.segment.to_bytes()?)
             .await?;
         if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
             segment_cache.put(segment.location.clone(), segment.segment.clone());
@@ -167,10 +168,8 @@ impl AsyncAccumulatingTransform for CompactAggregator {
             let new_segment = SegmentInfo::new(blocks, new_summary);
             let location = self.location_gen.gen_segment_info_location();
             self.abort_operation.add_segment(location.clone());
-            self.merged_segments.insert(
-                segment_idx,
-                (location.clone(), new_segment.format_version()),
-            );
+            self.merged_segments
+                .insert(segment_idx, (location.clone(), SegmentInfo::VERSION));
             serialized_segments.push(SerializedSegment {
                 location,
                 segment: Arc::new(new_segment),

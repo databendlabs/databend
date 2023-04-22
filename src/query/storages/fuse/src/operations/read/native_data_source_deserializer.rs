@@ -464,7 +464,7 @@ impl NativeDeserializeDataTransform {
         Ok(())
     }
 
-    fn build_array_iter(
+    pub(crate) fn build_array_iter(
         column_node: &ColumnNode,
         leaves: Vec<ColumnDescriptor>,
         readers: Vec<NativeReader<Box<dyn NativeReaderExt>>>,

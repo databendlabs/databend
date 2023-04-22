@@ -15,10 +15,10 @@ GET_PATH( <variant>, <path_name> )
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| `<variant>`     | The VARIANT value that contains either an ARRAY or an OBJECT
-| `<path_name>`   | The String value that consists of a concatenation of field names
+| Arguments     | Description                                                      |
+|---------------|------------------------------------------------------------------|
+| `<variant>`   | The VARIANT value that contains either an ARRAY or an OBJECT     |
+| `<path_name>` | The String value that consists of a concatenation of field names |
 
 ## Return Type
 

@@ -122,11 +122,6 @@ fn replace_column(scalar: &mut ScalarExpr, col_to_scalar: &HashMap<&IndexType, &
             // Safe to unwrap
             *scalar = (*col_to_scalar.get(&column_index).unwrap()).clone();
         }
-        ScalarExpr::BoundInternalColumnRef(column) => {
-            let column_index = column.column.index;
-            // Safe to unwrap
-            *scalar = (*col_to_scalar.get(&column_index).unwrap()).clone();
-        }
         ScalarExpr::WindowFunction(expr) => {
             if let WindowFuncType::Aggregate(agg) = &mut expr.func {
                 for arg in agg.args.iter_mut() {

@@ -58,10 +58,16 @@ impl FuseTable {
     ) -> Result<(PartStatistics, Partitions)> {
         debug!("fuse table do read partitions, push downs:{:?}", push_downs);
         let snapshot = self.read_table_snapshot().await?;
+        let is_lazy = push_downs
+            .as_ref()
+            .map(|p| p.lazy_materialization)
+            .unwrap_or_default();
         match snapshot {
             Some(snapshot) => {
                 let settings = ctx.get_settings();
-                if settings.get_enable_distributed_eval_index()? && !ctx.get_cluster().is_empty() {
+                if (settings.get_enable_distributed_eval_index()? && !ctx.get_cluster().is_empty())
+                    || is_lazy
+                {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
                     for segment_location in &snapshot.segments {
                         segments.push(FuseLazyPartInfo::create(segment_location.clone()))
@@ -239,26 +245,12 @@ impl FuseTable {
             .and_then(|p| p.limit)
             .unwrap_or(usize::MAX);
 
-        let mut block_metas = block_metas.to_vec();
-        if let Some(top_k) = &top_k {
-            block_metas.sort_by(|a, b| {
-                let a = a.1.col_stats.get(&top_k.column_id).unwrap();
-                let b = b.1.col_stats.get(&top_k.column_id).unwrap();
-
-                if top_k.asc {
-                    (a.min.as_ref(), a.max.as_ref()).cmp(&(b.min.as_ref(), b.max.as_ref()))
-                } else {
-                    (b.max.as_ref(), b.min.as_ref()).cmp(&(a.max.as_ref(), a.min.as_ref()))
-                }
-            });
-        }
-
         let (mut statistics, mut partitions) = match &push_down {
-            None => Self::all_columns_partitions(schema, &block_metas, top_k.clone(), limit),
+            None => Self::all_columns_partitions(schema, block_metas, top_k.clone(), limit),
             Some(extras) => match &extras.projection {
-                None => Self::all_columns_partitions(schema, &block_metas, top_k.clone(), limit),
+                None => Self::all_columns_partitions(schema, block_metas, top_k.clone(), limit),
                 Some(projection) => Self::projection_partitions(
-                    &block_metas,
+                    block_metas,
                     column_nodes,
                     projection,
                     top_k.clone(),
@@ -415,7 +407,7 @@ impl FuseTable {
         )
     }
 
-    fn projection_part(
+    pub(crate) fn projection_part(
         meta: &BlockMeta,
         block_meta_index: &Option<BlockMetaIndex>,
         column_nodes: &ColumnNodes,
@@ -438,9 +430,9 @@ impl FuseTable {
         let location = meta.location.0.clone();
         let format_version = meta.location.1;
 
-        let sort_min_max = top_k.map(|top_k| {
-            let stat = meta.col_stats.get(&top_k.column_id).unwrap();
-            (stat.min.clone(), stat.max.clone())
+        let sort_min_max = top_k.and_then(|top_k| {
+            let stat = meta.col_stats.get(&top_k.column_id);
+            stat.map(|stat| (stat.min.clone(), stat.max.clone()))
         });
 
         // TODO

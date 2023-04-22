@@ -389,7 +389,8 @@ impl Binder {
                         having: None,
                         window_list: None,
                     };
-                    self.bind_select_stmt(&mut bind_context, &stmt, &[]).await
+                    self.bind_select_stmt(&mut bind_context, &stmt, &[], 0)
+                        .await
                 } else {
                     // Other table functions always reside is default catalog
                     let table_meta: Arc<dyn TableFunction> = self

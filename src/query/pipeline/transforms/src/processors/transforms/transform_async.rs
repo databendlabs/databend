@@ -32,11 +32,11 @@ pub trait AsyncTransform: Send {
         Self::NAME.to_string()
     }
 
-    fn on_start(&mut self) -> Result<()> {
+    async fn on_start(&mut self) -> Result<()> {
         Ok(())
     }
 
-    fn on_finish(&mut self) -> Result<()> {
+    async fn on_finish(&mut self) -> Result<()> {
         Ok(())
     }
 }
@@ -98,7 +98,7 @@ impl<T: AsyncTransform + 'static> Processor for AsyncTransformer<T> {
     async fn async_process(&mut self) -> Result<()> {
         if !self.called_on_start {
             self.called_on_start = true;
-            self.transform.on_start()?;
+            self.transform.on_start().await?;
             return Ok(());
         }
 
@@ -110,7 +110,7 @@ impl<T: AsyncTransform + 'static> Processor for AsyncTransformer<T> {
 
         if !self.called_on_finish {
             self.called_on_finish = true;
-            self.transform.on_finish()?;
+            self.transform.on_finish().await?;
         }
 
         Ok(())
@@ -121,12 +121,12 @@ impl<T: AsyncTransform> AsyncTransformer<T> {
     fn pull_data(&mut self) -> Result<Event> {
         if self.input.has_data() {
             self.input_data = Some(self.input.pull_data().unwrap()?);
-            return Ok(Event::Sync);
+            return Ok(Event::Async);
         }
 
         if self.input.is_finished() {
             return match !self.called_on_finish {
-                true => Ok(Event::Sync),
+                true => Ok(Event::Async),
                 false => {
                     self.output.finish();
                     Ok(Event::Finished)
@@ -145,7 +145,7 @@ impl<T: AsyncTransform> AsyncTransformer<T> {
 
     fn finish_input(&mut self) -> Result<Event> {
         match !self.called_on_finish {
-            true => Ok(Event::Sync),
+            true => Ok(Event::Async),
             false => {
                 self.input.finish();
                 Ok(Event::Finished)

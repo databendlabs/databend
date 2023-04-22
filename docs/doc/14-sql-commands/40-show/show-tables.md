@@ -14,7 +14,7 @@ SHOW [FULL] TABLES
 ```
 Where:
 
-`[FULL]`: Lists the tables with their properties information. See [Examples](#examples) for more details.
+`[FULL]`: Lists the tables with their property information. See [Examples](#examples) for more details.
 
 `[{FROM | IN} <database_name>]`: Specifies a database. If omitted, the command returns the results from the current database.
 

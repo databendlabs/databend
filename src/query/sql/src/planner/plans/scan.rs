@@ -200,17 +200,17 @@ impl Operator for Scan {
 
         let cardinality = match (precise_cardinality, &self.prewhere) {
             (Some(precise_cardinality), Some(ref prewhere)) => {
-                let statistics = OpStatistics {
+                let mut statistics = OpStatistics {
                     precise_cardinality: Some(precise_cardinality),
                     column_stats: column_stats.clone(),
                 };
 
                 // Derive cardinality
-                let sb = SelectivityEstimator::new(&statistics);
+                let mut sb = SelectivityEstimator::new(&mut statistics);
                 let mut selectivity = MAX_SELECTIVITY;
                 for pred in prewhere.predicates.iter() {
                     // Compute selectivity for each conjunction
-                    selectivity *= sb.compute_selectivity(pred)?;
+                    selectivity *= sb.compute_selectivity(pred, true)?;
                 }
                 (precise_cardinality as f64) * selectivity
             }

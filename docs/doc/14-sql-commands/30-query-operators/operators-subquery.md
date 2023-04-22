@@ -14,7 +14,7 @@ A subquery is a query nested within another one. Databend supports the following
 
 ## Scalar Subquery
 
-A scalar subquery selects only one column or expression and returns only one row at most. A SQL query can have scalar subqueries in any places where a column or expression is expected.
+A scalar subquery selects only one column or expression and returns only one row at most. An SQL query can have scalar sub queries in any places where a column or expression is expected.
 
 - If a scalar subquery returns 0 rows, Databend will use NULL as the subquery output.
 - If a scalar subquery returns more than one row, Databend will throw an error.
@@ -158,7 +158,7 @@ You can use ANY (or SOME) to check whether a comparison is true for any of the v
 
 - The keyword ANY (or SOME) must follow a [comparison operator](../../15-sql-functions/02-comparisons-operators/index.md).
 - If the subquery doesn't return any values, the comparison evaluates to false.
-- SOME works the same way as ANY.
+- SOME work the same way as ANY.
 
 ### Syntax
 

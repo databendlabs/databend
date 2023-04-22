@@ -22,8 +22,10 @@ runs:
     - name: Test compatibility
       shell: bash
       run: |
-          bash ./tests/fuse-compat/test-fuse-compat.sh 0.7.150
-          bash ./tests/fuse-compat/test-fuse-compat.sh 0.7.151
+          bash ./tests/fuse-compat/test-fuse-compat.sh 0.7.150 base
+          bash ./tests/fuse-compat/test-fuse-compat.sh 0.7.151 base
+          bash ./tests/fuse-compat/test-fuse-compat.sh 1.0.56 base
+          bash ./tests/fuse-compat/test-fuse-compat.sh 1.0.56 01_meta_compression 01_flashback
     - name: Upload failure
       if: failure() || cancelled()
       uses: ./.github/actions/artifact_failure

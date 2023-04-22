@@ -14,12 +14,16 @@
 
 use std::io::Cursor;
 use std::io::ErrorKind;
+use std::sync::Arc;
+use std::time::Duration;
 
 use anyerror::AnyError;
+use common_base::base::tokio;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::tokio::sync::RwLockWriteGuard;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::log::RaftLog;
+use common_meta_raft_store::ondisk::TREE_HEADER;
 use common_meta_raft_store::state::RaftState;
 use common_meta_raft_store::state_machine::SerializableSnapshot;
 use common_meta_raft_store::state_machine::StateMachine;
@@ -27,6 +31,7 @@ use common_meta_raft_store::state_machine::StoredSnapshot;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::openraft::ErrorSubject;
 use common_meta_sled_store::openraft::ErrorVerb;
+use common_meta_sled_store::SledTree;
 use common_meta_stoerr::MetaStorageError;
 use common_meta_types::Endpoint;
 use common_meta_types::Membership;
@@ -38,6 +43,7 @@ use common_meta_types::NodeId;
 use common_meta_types::Snapshot;
 use common_meta_types::SnapshotMeta;
 use common_meta_types::StorageError;
+use common_meta_types::StorageIOError;
 use tracing::info;
 
 use crate::export::vec_kv_to_json;
@@ -45,9 +51,8 @@ use crate::metrics::raft_metrics;
 use crate::store::ToStorageError;
 use crate::Opened;
 
-/// An storage implementing the `async_raft::RaftStorage` trait.
+/// This is the inner store that provides support utilities for implementing the raft storage API.
 ///
-/// It is the stateful part in a raft implementation.
 /// This store is backed by a sled db, contents are stored in 3 trees:
 ///   state:
 ///       id
@@ -64,10 +69,7 @@ pub struct StoreInner {
     /// If the instance is opened from an existent state(e.g. load from fs) or created.
     is_opened: bool,
 
-    /// The sled db for log and raft_state.
-    /// state machine is stored in another sled db since it contains user data and needs to be export/import as a whole.
-    /// This db is also used to generate a locally unique id.
-    /// Currently the id is used to create a unique snapshot id.
+    /// The sled db for log, raft_state and state machine.
     pub(crate) db: sled::Db,
 
     /// Raft state includes:
@@ -85,7 +87,7 @@ pub struct StoreInner {
     ///
     /// - Acquire a read lock to WRITE or READ. Transactional RW relies on sled concurrency control.
     /// - Acquire a write lock before installing a snapshot, to prevent any write to the db.
-    pub state_machine: RwLock<StateMachine>,
+    pub state_machine: Arc<RwLock<StateMachine>>,
 
     /// The current snapshot.
     pub current_snapshot: RwLock<Option<StoredSnapshot>>,
@@ -134,7 +136,8 @@ impl StoreInner {
             raft_state.write_state_machine_id(&(sm_id, sm_id)).await?;
         }
 
-        let sm = RwLock::new(StateMachine::open(config, sm_id).await?);
+        let sm = StateMachine::open(config, sm_id).await?;
+        let sm = Arc::new(RwLock::new(sm));
         let current_snapshot = RwLock::new(None);
 
         Ok(Self {
@@ -160,25 +163,49 @@ impl StoreInner {
 
         info!("log compaction start");
 
-        // 1. Take a serialized snapshot
+        // Dump the data of a snapshot
+        let (snap, last_applied_log, last_membership, snapshot_id) = {
+            let sm = self.state_machine.clone();
 
-        let (snap, last_applied_log, last_membership, snapshot_id) = match self
-            .state_machine
-            .write()
-            .await
-            .build_snapshot()
-            .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)
-        {
-            Err(err) => {
-                raft_metrics::storage::incr_raft_storage_fail("build_snapshot", false);
-                return Err(err);
+            // An exclusive lock is required, because sled does not provide snapshot isolation.
+            let s = sm.write().await;
+
+            // Move heavy load task to a blocking thread pool.
+            let res = tokio::task::block_in_place(move || s.build_snapshot());
+
+            // build_snapshot error
+            match res {
+                Ok(res) => res,
+                Err(e) => {
+                    raft_metrics::storage::incr_raft_storage_fail("build_snapshot", false);
+                    return Err(StorageIOError::read_snapshot(None, AnyError::new(&e)).into());
+                }
             }
-            Ok(r) => r,
         };
 
         info!("log compaction serialization start");
 
-        let data = serde_json::to_vec(&snap)
+        let sl = if cfg!(debug_assertions) {
+            let sm = self.get_state_machine().await;
+            sm.blocking_config().serde_snapshot
+        } else {
+            Duration::from_secs(0)
+        };
+
+        // Move heavy load to a blocking thread pool.
+        let res = tokio::task::block_in_place(move || {
+            #[allow(clippy::collapsible_if)]
+            if cfg!(debug_assertions) {
+                if !sl.is_zero() {
+                    tracing::warn!("start    serializing snapshot sleep 1000s");
+                    std::thread::sleep(sl);
+                    tracing::warn!("finished serializing snapshot sleep 1000s");
+                }
+            }
+            serde_json::to_vec(&snap)
+        });
+
+        let data = res
             .map_err(MetaStorageError::from)
             .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)?;
 
@@ -282,6 +309,27 @@ impl StoreInner {
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn export(&self) -> Result<Vec<String>, std::io::Error> {
         let mut res = vec![];
+
+        // Export data header first
+        {
+            let header_tree = SledTree::open(&self.db, TREE_HEADER, false)
+                .map_err(|e| std::io::Error::new(ErrorKind::InvalidData, e))?;
+
+            let header_kvs = header_tree
+                .export()
+                .map_err(|e| std::io::Error::new(ErrorKind::InvalidData, e))?;
+
+            for kv in header_kvs.iter() {
+                let line = vec_kv_to_json(TREE_HEADER, kv)
+                    .map_err(|e| std::io::Error::new(ErrorKind::InvalidData, e))?;
+                res.push(line);
+            }
+        }
+
+        // TODO(1): raft_state and log should be exported in the same transaction.
+        //          The IO of saving vote and log operation must be sequentially done.
+
+        // TODO(1): lock sm/snapshot, then dump logs. Otherwise the log and sm may be inconsistent.
 
         let state_kvs = self
             .raft_state
