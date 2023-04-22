@@ -267,7 +267,6 @@ impl FunctionRegistry {
         }
 
         if let Some(inner_name) = name.strip_prefix("try_") {
-            println!("yyy {:?}/{:?}/{:?}", inner_name, params, args);
             for (inner_function_id, inner_function) in
                 self.search_candidates(inner_name, params, args)
             {
@@ -514,11 +513,7 @@ impl TryAdaptor {
         sig.name = format!("try_{}", sig.name);
         sig.return_type = sig.return_type.wrap_nullable();
 
-        println!("sig {:?}", sig);
-        if inner.eval.as_scalar().is_none() {
-            return None;
-        }
-
+        let _ = inner.eval.as_scalar()?;
         let inner2 = inner.clone();
 
         let calc_domain = Box::new(move |domains: &[Domain]| {

@@ -1659,7 +1659,7 @@ impl Column {
 
     pub fn wrap_nullable(self, validity: Option<Bitmap>) -> Self {
         match self {
-            c @ Column::Null { .. } => c.clone(),
+            c @ Column::Null { .. } => c,
             Column::Nullable(null_column) => {
                 let validity = match validity {
                     Some(v) => &v & (&null_column.validity),

@@ -543,11 +543,9 @@ impl<'a> Evaluator<'a> {
 
         if let Some(cast_fn) = get_simple_cast_function(true, inner_dest_type) {
             // `try_to_xxx` functions must not return errors, so we can safely call them without concerning validity.
-            let res =
-                self.run_simple_cast(span, src_type, dest_type, value.clone(), &cast_fn, None);
-
-            println!("res: {:?}", res);
-            if let Ok(Some(new_value)) = res {
+            if let Ok(Some(new_value)) =
+                self.run_simple_cast(span, src_type, dest_type, value.clone(), &cast_fn, None)
+            {
                 return Ok(new_value);
             }
         }
