@@ -115,6 +115,11 @@ pub trait Table: Sync + Send {
         false
     }
 
+    /// Whether the table engine supports virtual column `_row_id`.
+    fn support_row_id_column(&self) -> bool {
+        false
+    }
+
     #[async_backtrace::framed]
     async fn alter_table_cluster_keys(
         &self,
@@ -227,8 +232,13 @@ pub trait Table: Sync + Send {
     }
 
     #[async_backtrace::framed]
-    async fn purge(&self, ctx: Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
-        let (_, _) = (ctx, keep_last_snapshot);
+    async fn purge(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        instant: Option<NavigationPoint>,
+        keep_last_snapshot: bool,
+    ) -> Result<()> {
+        let (_, _, _) = (ctx, instant, keep_last_snapshot);
 
         Ok(())
     }

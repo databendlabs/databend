@@ -1651,7 +1651,7 @@ dependencies = [
  "micromarshal",
  "num-traits",
  "once_cell",
- "ordered-float 3.4.0",
+ "ordered-float 3.6.0",
  "pretty_assertions",
  "rand 0.8.5",
  "rust_decimal",
@@ -1678,7 +1678,7 @@ dependencies = [
  "match-template",
  "micromarshal",
  "num",
- "ordered-float 3.4.0",
+ "ordered-float 3.6.0",
  "pretty_assertions",
  "serde_json",
  "storages-common-blocks",
@@ -1724,7 +1724,7 @@ dependencies = [
  "naive-cityhash",
  "num-traits",
  "once_cell",
- "ordered-float 3.4.0",
+ "ordered-float 3.6.0",
  "rand 0.8.5",
  "regex",
  "serde",
@@ -1763,7 +1763,7 @@ dependencies = [
  "cfg-if",
  "common-base",
  "ethnum",
- "ordered-float 3.4.0",
+ "ordered-float 3.6.0",
  "rand 0.8.5",
 ]
 
@@ -1805,7 +1805,7 @@ dependencies = [
  "ethnum",
  "lexical-core",
  "micromarshal",
- "ordered-float 3.4.0",
+ "ordered-float 3.6.0",
  "rand 0.8.5",
  "serde",
 ]
@@ -2269,7 +2269,7 @@ dependencies = [
  "num-traits",
  "once_cell",
  "opendal",
- "ordered-float 3.4.0",
+ "ordered-float 3.6.0",
  "parking_lot 0.12.1",
  "percent-encoding",
  "regex",
@@ -2393,7 +2393,7 @@ dependencies = [
  "databend-thrift",
  "futures",
  "opendal",
- "ordered-float 3.4.0",
+ "ordered-float 3.6.0",
  "serde",
  "storages-common-cache",
  "storages-common-cache-manager",
@@ -2497,6 +2497,7 @@ dependencies = [
  "storages-common-index",
  "storages-common-pruner",
  "storages-common-table-meta",
+ "tracing",
  "typetag",
 ]
 
@@ -3370,7 +3371,7 @@ dependencies = [
  "once_cell",
  "opendal",
  "opensrv-mysql",
- "ordered-float 3.4.0",
+ "ordered-float 3.6.0",
  "p256 0.13.0",
  "parking_lot 0.12.1",
  "paste",
@@ -5888,13 +5889,14 @@ dependencies = [
 
 [[package]]
 name = "jsonb"
-version = "0.1.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd7cd23238fe597fd093ca5d3efc50fc1e805027a63220838d0c5cb9c03df897"
+checksum = "3ed36ed96d7d9364e3a386fe2a95ceec46bdbcd6676384cdf5563f9618c73ed0"
 dependencies = [
  "byteorder",
  "fast-float",
- "ordered-float 3.4.0",
+ "nom 7.1.3",
+ "ordered-float 3.6.0",
  "serde",
  "serde_json",
 ]
@@ -6401,7 +6403,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2777e7006e9b80afb5d2797e2b9e23865451708c9e280a61253586a0dd3a5db1"
 dependencies = [
  "ethnum",
- "ordered-float 3.4.0",
+ "ordered-float 3.6.0",
 ]
 
 [[package]]
@@ -7079,9 +7081,9 @@ dependencies = [
 
 [[package]]
 name = "ordered-float"
-version = "3.4.0"
+version = "3.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d84eb1409416d254e4a9c8fa56cc24701755025b458f0fcd8e59e1f5f40c23bf"
+checksum = "13a384337e997e6860ffbaa83708b2ef329fd8c54cb67a5f64d421e0f943254f"
 dependencies = [
  "num-traits",
  "rand 0.8.5",
@@ -8849,9 +8851,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.94"
+version = "1.0.96"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c533a59c9d8a93a09c6ab31f0fd5e5f4dd1b8fc9434804029839884765d04ea"
+checksum = "057d394a50403bcac12672b2b18fb387ab6d289d957dab67dd201875391e52f1"
 dependencies = [
  "indexmap",
  "itoa",

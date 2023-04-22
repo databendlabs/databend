@@ -21,6 +21,7 @@ use itertools::Itertools;
 use super::AggregateExpand;
 use super::DistributedInsertSelect;
 use super::ProjectSet;
+use super::RowFetch;
 use crate::executor::AggregateFinal;
 use crate::executor::AggregatePartial;
 use crate::executor::EvalScalar;
@@ -65,6 +66,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::Window(window) => write!(f, "{}", window)?,
             PhysicalPlan::Sort(sort) => write!(f, "{}", sort)?,
             PhysicalPlan::Limit(limit) => write!(f, "{}", limit)?,
+            PhysicalPlan::RowFetch(row_fetch) => write!(f, "{}", row_fetch)?,
             PhysicalPlan::HashJoin(join) => write!(f, "{}", join)?,
             PhysicalPlan::Exchange(exchange) => write!(f, "{}", exchange)?,
             PhysicalPlan::ExchangeSource(source) => write!(f, "{}", source)?,
@@ -245,6 +247,12 @@ impl Display for Limit {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let limit = self.limit.as_ref().cloned().unwrap_or(0);
         write!(f, "Limit: [{}], Offset: [{}]", limit, self.offset)
+    }
+}
+
+impl Display for RowFetch {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RowFetch: [{:?}]", self.cols_to_fetch)
     }
 }
 

@@ -12,13 +12,17 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+mod fuse_row_fetcher;
 pub mod fuse_source;
 mod native_data_source;
 mod native_data_source_deserializer;
 mod native_data_source_reader;
+mod native_rows_fetcher;
 mod parquet_data_source;
 mod parquet_data_source_deserializer;
 mod parquet_data_source_reader;
+mod parquet_rows_fetcher;
 
+pub use fuse_row_fetcher::build_row_fetcher_pipeline;
 pub use fuse_source::build_fuse_parquet_source_pipeline;
 pub use parquet_data_source::DataSourceMeta;

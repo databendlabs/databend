@@ -30,6 +30,7 @@ use common_meta_types::SeqV;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::ondisk::Header;
 use crate::state::RaftStateKey;
 use crate::state::RaftStateValue;
 use crate::state_machine::ClientLastRespValue;
@@ -123,10 +124,19 @@ impl SledKeySpace for ClientLastResps {
     type V = ClientLastRespValue;
 }
 
+pub struct DataHeader {}
+impl SledKeySpace for DataHeader {
+    const PREFIX: u8 = 11;
+    const NAME: &'static str = "data-header";
+    type K = String;
+    type V = Header;
+}
+
 /// Enum of key-value pairs that are used in the raft storage impl for meta-service.
 #[rustfmt::skip]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RaftStoreEntry {
+    DataHeader       { key: <DataHeader       as SledKeySpace>::K, value: <DataHeader       as SledKeySpace>::V, },
     Logs             { key: <Logs             as SledKeySpace>::K, value: <Logs             as SledKeySpace>::V, },
     Nodes            { key: <Nodes            as SledKeySpace>::K, value: <Nodes            as SledKeySpace>::V, },
     StateMachineMeta { key: <StateMachineMeta as SledKeySpace>::K, value: <StateMachineMeta as SledKeySpace>::V, },
@@ -168,6 +178,7 @@ impl RaftStoreEntry {
         }
 
         match kv {
+            Self::DataHeader       { key, value } => ser!(DataHeader,       key, value),
             Self::Logs             { key, value } => ser!(Logs,             key, value),
             Self::Nodes            { key, value } => ser!(Nodes,            key, value),
             Self::StateMachineMeta { key, value } => ser!(StateMachineMeta, key, value),
@@ -190,6 +201,7 @@ impl RaftStoreEntry {
             vec_key,
             vec_value,
             // Available key spaces:
+            DataHeader,
             Logs,
             Nodes,
             StateMachineMeta,
@@ -209,6 +221,7 @@ impl RaftStoreEntry {
 #[rustfmt::skip]
 #[derive(Serialize, Deserialize)]
 pub enum RaftStoreEntryCompat {
+    DataHeader       { key: <DataHeader       as SledKeySpace>::K, value: <DataHeader as SledKeySpace>::V,        },
     Logs             { key: <Logs             as SledKeySpace>::K, value: compat07::Entry,                        },
     Nodes            { key: <Nodes            as SledKeySpace>::K, value: <Nodes as SledKeySpace>::V,             },
     StateMachineMeta { key: <StateMachineMeta as SledKeySpace>::K, value: crate::compat07::StateMachineMetaValue, },
@@ -224,6 +237,7 @@ impl openraft::compat::Upgrade<RaftStoreEntry> for RaftStoreEntryCompat {
     #[rustfmt::skip]
     fn upgrade(self) -> RaftStoreEntry {
         match self {
+            RaftStoreEntryCompat::DataHeader       { key, value } => RaftStoreEntry::DataHeader       { key, value, },
             RaftStoreEntryCompat::Logs             { key, value } => RaftStoreEntry::Logs             { key, value: value.upgrade(), },
             RaftStoreEntryCompat::Nodes            { key, value } => RaftStoreEntry::Nodes            { key, value, },
             RaftStoreEntryCompat::StateMachineMeta { key, value } => RaftStoreEntry::StateMachineMeta { key, value: value.upgrade(), },

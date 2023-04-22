@@ -23,6 +23,7 @@ use common_base::base::tokio::sync::RwLock;
 use common_base::base::tokio::sync::RwLockWriteGuard;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::log::RaftLog;
+use common_meta_raft_store::ondisk::TREE_HEADER;
 use common_meta_raft_store::state::RaftState;
 use common_meta_raft_store::state_machine::SerializableSnapshot;
 use common_meta_raft_store::state_machine::StateMachine;
@@ -30,6 +31,7 @@ use common_meta_raft_store::state_machine::StoredSnapshot;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::openraft::ErrorSubject;
 use common_meta_sled_store::openraft::ErrorVerb;
+use common_meta_sled_store::SledTree;
 use common_meta_stoerr::MetaStorageError;
 use common_meta_types::Endpoint;
 use common_meta_types::Membership;
@@ -67,10 +69,7 @@ pub struct StoreInner {
     /// If the instance is opened from an existent state(e.g. load from fs) or created.
     is_opened: bool,
 
-    /// The sled db for log and raft_state.
-    /// state machine is stored in another sled db since it contains user data and needs to be export/import as a whole.
-    /// This db is also used to generate a locally unique id.
-    /// Currently the id is used to create a unique snapshot id.
+    /// The sled db for log, raft_state and state machine.
     pub(crate) db: sled::Db,
 
     /// Raft state includes:
@@ -310,6 +309,27 @@ impl StoreInner {
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn export(&self) -> Result<Vec<String>, std::io::Error> {
         let mut res = vec![];
+
+        // Export data header first
+        {
+            let header_tree = SledTree::open(&self.db, TREE_HEADER, false)
+                .map_err(|e| std::io::Error::new(ErrorKind::InvalidData, e))?;
+
+            let header_kvs = header_tree
+                .export()
+                .map_err(|e| std::io::Error::new(ErrorKind::InvalidData, e))?;
+
+            for kv in header_kvs.iter() {
+                let line = vec_kv_to_json(TREE_HEADER, kv)
+                    .map_err(|e| std::io::Error::new(ErrorKind::InvalidData, e))?;
+                res.push(line);
+            }
+        }
+
+        // TODO(1): raft_state and log should be exported in the same transaction.
+        //          The IO of saving vote and log operation must be sequentially done.
+
+        // TODO(1): lock sm/snapshot, then dump logs. Otherwise the log and sm may be inconsistent.
 
         let state_kvs = self
             .raft_state

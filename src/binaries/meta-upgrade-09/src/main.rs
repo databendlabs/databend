@@ -252,6 +252,7 @@ where F: Fn(&str, Vec<u8>) -> Result<Vec<u8>, anyhow::Error>
         input: RaftStoreEntry,
     ) -> Result<Option<RaftStoreEntry>, anyhow::Error> {
         match input {
+            RaftStoreEntry::DataHeader { .. } => Ok(None),
             RaftStoreEntry::Logs { key, value } => {
                 let x = RaftStoreEntry::Logs {
                     key,
