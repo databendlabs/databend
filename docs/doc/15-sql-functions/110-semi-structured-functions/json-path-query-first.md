@@ -13,7 +13,7 @@ JSON_PATH_QUERY_FIRST(<variant>, '<path_name>')
 
 ## Return Type
 
-String
+VARIANT
 
 ## Example
 
