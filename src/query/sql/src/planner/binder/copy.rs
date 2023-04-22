@@ -19,7 +19,9 @@ use std::time::Instant;
 
 use common_ast::ast::CopyStmt;
 use common_ast::ast::CopyUnit;
+use common_ast::ast::Expr;
 use common_ast::ast::FileLocation;
+use common_ast::ast::Identifier;
 use common_ast::ast::Query;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
@@ -38,6 +40,7 @@ use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageInfo;
 use common_storage::init_stage_operator;
@@ -62,7 +65,7 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         match (&stmt.src, &stmt.dst) {
             (
-                CopyUnit::StageLocation(stage_location),
+                CopyUnit::StageLocation(location),
                 CopyUnit::Table {
                     catalog,
                     database,
@@ -71,11 +74,21 @@ impl<'a> Binder {
             ) => {
                 let (catalog_name, database_name, table_name) =
                     self.normalize_object_identifier_triple(catalog, database, table);
+
+                let (mut stage_info, path) =
+                    parse_stage_location_v2(&self.ctx, &location.name, &location.path).await?;
+                self.apply_stage_options(stmt, &mut stage_info).await?;
+                let files_info = StageFilesInfo {
+                    path,
+                    files: stmt.files.clone(),
+                    pattern: stmt.pattern.clone(),
+                };
+
                 self.bind_copy_from_stage_into_table(
                     bind_context,
                     stmt,
-                    &stage_location.name,
-                    &stage_location.path,
+                    stage_info,
+                    files_info,
                     &catalog_name,
                     &database_name,
                     &table_name,
@@ -93,7 +106,7 @@ impl<'a> Binder {
                 let (catalog_name, database_name, table_name) =
                     self.normalize_object_identifier_triple(catalog, database, table);
 
-                let mut ul = UriLocation {
+                let mut uri_location = UriLocation {
                     protocol: uri_location.protocol.clone(),
                     name: uri_location.name.clone(),
                     path: uri_location.path.clone(),
@@ -101,10 +114,27 @@ impl<'a> Binder {
                     connection: uri_location.connection.clone(),
                 };
 
-                self.bind_copy_from_uri_into_table(
+                let (storage_params, path) = parse_uri_location(&mut uri_location)?;
+                if !storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
+                    return Err(ErrorCode::StorageInsecure(
+                        "copy from insecure storage is not allowed",
+                    ));
+                }
+
+                let mut stage_info = StageInfo::new_external_stage(storage_params, &path);
+                self.apply_stage_options(stmt, &mut stage_info).await?;
+
+                let files_info = StageFilesInfo {
+                    path,
+                    files: stmt.files.clone(),
+                    pattern: stmt.pattern.clone(),
+                };
+
+                self.bind_copy_from_stage_into_table(
                     bind_context,
                     stmt,
-                    &mut ul,
+                    stage_info,
+                    files_info,
                     &catalog_name,
                     &database_name,
                     &table_name,
@@ -194,10 +224,27 @@ impl<'a> Binder {
             ) => {
                 let (catalog_name, database_name, table_name) =
                     self.normalize_object_identifier_triple(catalog, database, table);
+                let (select_list, location, alias) = check_transform_query(query)?;
+                if matches!(location, FileLocation::Uri(_)) {
+                    return Err(ErrorCode::SyntaxException(
+                        "copy into table from uri with transform not supported yet",
+                    ));
+                }
+                let (mut stage_info, path) =
+                    parse_file_location(&self.ctx, location, BTreeMap::new()).await?;
+                self.apply_stage_options(stmt, &mut stage_info).await?;
+                let files_info = StageFilesInfo {
+                    path,
+                    pattern: stmt.pattern.clone(),
+                    files: stmt.files.clone(),
+                };
                 self.bind_copy_from_query_into_table(
                     bind_context,
                     stmt,
-                    query,
+                    select_list,
+                    alias,
+                    stage_info,
+                    files_info,
                     &catalog_name,
                     &database_name,
                     &table_name,
@@ -217,10 +264,10 @@ impl<'a> Binder {
     #[async_backtrace::framed]
     async fn bind_copy_from_stage_into_table(
         &mut self,
-        _: &BindContext,
+        bind_ctx: &BindContext,
         stmt: &CopyStmt,
-        src_stage: &str,
-        src_path: &str,
+        stage_info: StageInfo,
+        files_info: StageFilesInfo,
         dst_catalog_name: &str,
         dst_database_name: &str,
         dst_table_name: &str,
@@ -233,107 +280,67 @@ impl<'a> Binder {
             .get_table(dst_catalog_name, dst_database_name, dst_table_name)
             .await?;
 
-        let (mut stage_info, path) =
-            parse_stage_location_v2(&self.ctx, src_stage, src_path).await?;
-        self.apply_stage_options(stmt, &mut stage_info).await?;
-        let files_info = StageFilesInfo {
-            path,
-            files: stmt.files.clone(),
-            pattern: stmt.pattern.clone(),
-        };
+        if matches!(stage_info.file_format_params, FileFormatParams::Parquet(_)) {
+            let select_list = table
+                .schema()
+                .fields()
+                .iter()
+                .map(|f| SelectTarget::AliasedExpr {
+                    expr: Box::new(Expr::ColumnRef {
+                        span: None,
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: f.name().to_string(),
+                            quote: None,
+                            span: None,
+                        },
+                    }),
+                    alias: None,
+                })
+                .collect::<Vec<_>>();
 
-        let from = DataSourcePlan {
-            catalog: dst_catalog_name.to_string(),
-            source_info: DataSourceInfo::StageSource(StageTableInfo {
-                schema: table.schema(),
+            self.bind_copy_from_query_into_table(
+                bind_ctx,
+                stmt,
+                &select_list,
+                &None,
                 stage_info,
                 files_info,
-                files_to_copy: None,
-            }),
-            output_schema: table.schema(),
-            parts: Partitions::default(),
-            statistics: Default::default(),
-            description: "".to_string(),
-            tbl_args: None,
-            push_downs: None,
-            query_internal_columns: false,
-        };
+                dst_catalog_name,
+                dst_database_name,
+                dst_table_name,
+            )
+            .await
+        } else {
+            let from = DataSourcePlan {
+                catalog: dst_catalog_name.to_string(),
+                source_info: DataSourceInfo::StageSource(StageTableInfo {
+                    schema: table.schema(),
+                    stage_info,
+                    files_info,
+                    files_to_copy: None,
+                }),
+                output_schema: table.schema(),
+                parts: Partitions::default(),
+                statistics: Default::default(),
+                description: "".to_string(),
+                tbl_args: None,
+                push_downs: None,
+                query_internal_columns: false,
+            };
 
-        Ok(Plan::Copy(Box::new(CopyPlan::IntoTable {
-            catalog_name: dst_catalog_name.to_string(),
-            database_name: dst_database_name.to_string(),
-            table_name: dst_table_name.to_string(),
-            table_id: table.get_id(),
-            schema: table.schema(),
-            from: Box::new(from),
-            validation_mode,
-            force: stmt.force,
-        })))
-    }
-
-    /// Bind COPY INFO <table> FROM <uri_location>
-    #[allow(clippy::too_many_arguments)]
-    #[async_backtrace::framed]
-    async fn bind_copy_from_uri_into_table(
-        &mut self,
-        _: &BindContext,
-        stmt: &CopyStmt,
-        src_uri_location: &mut UriLocation,
-        dst_catalog_name: &str,
-        dst_database_name: &str,
-        dst_table_name: &str,
-    ) -> Result<Plan> {
-        let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
-            .map_err(ErrorCode::SyntaxException)?;
-
-        let table = self
-            .ctx
-            .get_table(dst_catalog_name, dst_database_name, dst_table_name)
-            .await?;
-
-        let (storage_params, path) = parse_uri_location(src_uri_location)?;
-        if !storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
-            return Err(ErrorCode::StorageInsecure(
-                "copy from insecure storage is not allowed",
-            ));
+            Ok(Plan::Copy(Box::new(CopyPlan::IntoTable {
+                catalog_name: dst_catalog_name.to_string(),
+                database_name: dst_database_name.to_string(),
+                table_name: dst_table_name.to_string(),
+                table_id: table.get_id(),
+                schema: table.schema(),
+                from: Box::new(from),
+                validation_mode,
+                force: stmt.force,
+            })))
         }
-
-        let mut stage_info = StageInfo::new_external_stage(storage_params, &path);
-        self.apply_stage_options(stmt, &mut stage_info).await?;
-
-        let files_info = StageFilesInfo {
-            path,
-            files: stmt.files.clone(),
-            pattern: stmt.pattern.clone(),
-        };
-
-        let from = DataSourcePlan {
-            catalog: dst_catalog_name.to_string(),
-            source_info: DataSourceInfo::StageSource(StageTableInfo {
-                schema: table.schema(),
-                stage_info,
-                files_info,
-                files_to_copy: None,
-            }),
-            output_schema: table.schema(),
-            parts: Partitions::default(),
-            statistics: Default::default(),
-            description: "".to_string(),
-            tbl_args: None,
-            push_downs: None,
-            query_internal_columns: false,
-        };
-
-        Ok(Plan::Copy(Box::new(CopyPlan::IntoTable {
-            catalog_name: dst_catalog_name.to_string(),
-            database_name: dst_database_name.to_string(),
-            table_name: dst_table_name.to_string(),
-            table_id: table.get_id(),
-            schema: table.schema(),
-            from: Box::new(from),
-            validation_mode,
-            force: stmt.force,
-        })))
     }
 
     /// Bind COPY INFO <stage_location> FROM <table>
@@ -501,11 +508,15 @@ impl<'a> Binder {
 
     /// Bind COPY INTO <table> FROM <query>
     #[async_backtrace::framed]
+    #[allow(clippy::too_many_arguments)]
     async fn bind_copy_from_query_into_table(
         &mut self,
         bind_context: &BindContext,
         stmt: &CopyStmt,
-        src_query: &Query,
+        select_list: &'a [SelectTarget],
+        alias: &Option<TableAlias>,
+        stage_info: StageInfo,
+        files_info: StageFilesInfo,
         dst_catalog_name: &str,
         dst_database_name: &str,
         dst_table_name: &str,
@@ -519,24 +530,6 @@ impl<'a> Binder {
             .ctx
             .get_table(dst_catalog_name, dst_database_name, dst_table_name)
             .await?;
-
-        // src
-        let (select_list, location, alias) = check_transform_query(src_query)?;
-        if matches!(location, FileLocation::Uri(_)) {
-            // todo!(youngsofun): need to refactor parser
-            return Err(ErrorCode::SyntaxException(
-                "copy into table from uri with transform not supported yet",
-            ));
-        }
-
-        let (mut stage_info, path) =
-            parse_file_location(&self.ctx, location, BTreeMap::new()).await?;
-        self.apply_stage_options(stmt, &mut stage_info).await?;
-        let files_info = StageFilesInfo {
-            path,
-            pattern: stmt.pattern.clone(),
-            files: stmt.files.clone(),
-        };
 
         let start = Instant::now();
         {
