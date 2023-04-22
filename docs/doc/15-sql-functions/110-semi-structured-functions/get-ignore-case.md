@@ -16,10 +16,10 @@ GET_IGNORE_CASE( <variant>, <field_name> )
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| `<variant>`     | The VARIANT value that contains either an ARRAY or an OBJECT
-| `<field_name>`  | The String value specifies the key in a key-value pair of OBJECT
+| Arguments      | Description                                                      |
+|----------------|------------------------------------------------------------------|
+| `<variant>`    | The VARIANT value that contains either an ARRAY or an OBJECT     |
+| `<field_name>` | The String value specifies the key in a key-value pair of OBJECT |
 
 ## Return Type
 

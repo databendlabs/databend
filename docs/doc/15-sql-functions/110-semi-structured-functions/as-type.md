@@ -19,9 +19,9 @@ AS_OBJECT( <variant> )
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| `<variant>` | The VARIANT value
+| Arguments   | Description       |
+|-------------|-------------------|
+| `<variant>` | The VARIANT value |
 
 ## Return Type
 

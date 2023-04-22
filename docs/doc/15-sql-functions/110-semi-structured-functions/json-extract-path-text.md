@@ -9,15 +9,15 @@ This function is equivalent to `to_varchar(GET_PATH(PARSE_JSON(JSON), PATH_NAME)
 ## Syntax
 
 ```sql
-json_extract_path_text( <expr>, <path_name> )
+JSON_EXTRACT_PATH_TEXT( <expr>, <path_name> )
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| `<expr>`    | The Json String value
-| `<path_name>`| The String value that consists of a concatenation of field names
+| Arguments     | Description                                                      |
+|---------------|------------------------------------------------------------------|
+| `<expr>`      | The Json String value                                            |
+| `<path_name>` | The String value that consists of a concatenation of field names |
 
 ## Return Type
 

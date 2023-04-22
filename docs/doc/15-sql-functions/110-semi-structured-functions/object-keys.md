@@ -13,9 +13,9 @@ OBJECT_KEYS(<variant>)
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| `<variant>` | The VARIANT value that contains an OBJECT
+| Arguments   | Description                               |
+|-------------|-------------------------------------------|
+| `<variant>` | The VARIANT value that contains an OBJECT |
 
 ## Return Type
 
