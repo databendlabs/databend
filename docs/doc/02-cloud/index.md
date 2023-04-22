@@ -45,7 +45,7 @@ Databend Cloud offers a seamless integration process for your applications throu
 
 ## Cloud-Based Design
 
-Databend Cloud currently uses Amazon Web Services (AWS) as its cloud provider, and is planning to add support for other cloud providers in the future.
+Databend Cloud currently uses Amazon S3 as its cloud provider, and is planning to add support for other cloud providers in the future.
 
 The following diagram provides a visual representation of the various layers that comprise the architecture of Databend Cloud. Each layer plays a critical role in enabling the functionality and performance of the cloud platform. By examining the architecture layers in detail, you can gain a better understanding of how Databend Cloud operates and how data flows through the system.
 
