@@ -199,8 +199,15 @@ pub trait FieldEncoderRowBased {
         column: &Buffer<BitmapWrapper>,
         row_index: usize,
         out_buf: &mut Vec<u8>,
-        raw: bool,
-    );
+        _raw: bool,
+    ) {
+        let v = unsafe { column.get_unchecked(row_index) };
+        let mut bytes = vec![];
+        v.bitmap
+            .serialize_into(&mut bytes)
+            .expect("write bitmap field error");
+        self.write_string_inner(&bytes, out_buf, false);
+    }
 
     fn write_tuple(&self, columns: &[Column], row_index: usize, out_buf: &mut Vec<u8>, raw: bool);
 }

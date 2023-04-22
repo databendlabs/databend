@@ -270,7 +270,7 @@ impl Column {
                 let builder = ArrayColumnBuilder { builder, offsets };
                 Self::take_block_value_types::<MapType<AnyType, AnyType>>(columns, builder, indices)
             }
-            Column::Bitmap(column) => {
+            Column::Bitmap(_) => {
                 let builder = BitmapType::create_builder(result_size, &[]);
                 Self::take_block_value_types::<BitmapType>(columns, builder, indices)
             }

@@ -447,7 +447,7 @@ impl<'a> ScalarRef<'a> {
                     Domain::Map(Some(map_domain))
                 }
             }
-            ScalarRef::Bitmap(b) => Domain::Bitmap(BitmapDomain {}), /* todo(ariesdevil): fix domain */
+            ScalarRef::Bitmap(_) => Domain::Bitmap(BitmapDomain {}), /* todo(ariesdevil): fix domain */
             ScalarRef::Tuple(fields) => {
                 let types = data_type.as_tuple().unwrap();
                 Domain::Tuple(
@@ -2332,7 +2332,7 @@ impl ColumnBuilder {
             }
             ColumnBuilder::Bitmap(builder) => {
                 for row in 0..rows {
-                    let mut reader = &reader[step * row..];
+                    let reader = &reader[step * row..];
                     let rb = BitmapWrapper {
                         bitmap: RoaringBitmap::deserialize_from(reader)?,
                     };

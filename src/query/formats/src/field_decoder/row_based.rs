@@ -44,6 +44,7 @@ use common_io::cursor_ext::ReadCheckPointExt;
 use common_io::cursor_ext::ReadNumberExt;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
+use roaring::RoaringBitmap;
 
 use crate::field_decoder::FieldDecoder;
 use crate::CommonSettings;
@@ -296,12 +297,19 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         raw: bool,
     ) -> Result<()>;
 
-    fn read_bitmap<R: AsRef<u8>>(
+    fn read_bitmap<R: AsRef<[u8]>>(
         &self,
         column: &mut Vec<BitmapWrapper>,
         reader: &mut Cursor<R>,
         raw: bool,
-    ) -> Result<()>;
+    ) -> Result<()> {
+        let mut buf = Vec::new();
+        self.read_string_inner(reader, &mut buf, raw)?;
+        let bitmap = RoaringBitmap::deserialize_from(&buf[..])?;
+        let b = BitmapWrapper { bitmap };
+        column.push(b);
+        Ok(())
+    }
 
     fn read_tuple<R: AsRef<[u8]>>(
         &self,

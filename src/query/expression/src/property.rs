@@ -203,7 +203,7 @@ impl Domain {
                 };
                 Domain::Map(Some(inner_domain))
             }
-            DataType::Bitmap => Domain::Undefined,
+            DataType::Bitmap => Domain::Bitmap(BitmapDomain {}),
             DataType::Variant => Domain::Undefined,
             DataType::Generic(_) => unreachable!(),
         }
@@ -324,10 +324,7 @@ impl Domain {
                 Box::new(self_key.merge(other_key)),
                 Box::new(self_val.merge(other_val)),
             ))),
-            (Domain::Bitmap(bit1), Domain::Bitmap(bit2)) => {
-                // todo(ariesdevil)
-                todo!()
-            }
+            (Domain::Bitmap(_), Domain::Bitmap(_)) => self.clone(), // todo(ariesdevil)
             (Domain::Tuple(self_tup), Domain::Tuple(other_tup)) => Domain::Tuple(
                 self_tup
                     .iter()
