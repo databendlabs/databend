@@ -14,9 +14,9 @@ CHECK_JSON( <expr> )
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| `<expr>` | An expression of string type
+| Arguments | Description                  |
+|-----------|------------------------------|
+| `<expr>`  | An expression of string type |
 
 ## Return Type
 

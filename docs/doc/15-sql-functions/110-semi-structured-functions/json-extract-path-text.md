@@ -14,10 +14,10 @@ json_extract_path_text( <expr>, <path_name> )
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| `<expr>`    | The Json String value
-| `<path_name>`| The String value that consists of a concatenation of field names
+| Arguments     | Description                                                      |
+|---------------|------------------------------------------------------------------|
+| `<expr>`      | The Json String value                                            |
+| `<path_name>` | The String value that consists of a concatenation of field names |
 
 ## Return Type
 
