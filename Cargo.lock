@@ -8369,6 +8369,7 @@ dependencies = [
  "bytemuck",
  "byteorder",
  "retain_mut",
+ "serde",
 ]
 
 [[package]]

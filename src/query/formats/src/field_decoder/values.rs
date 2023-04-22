@@ -20,6 +20,7 @@ use chrono_tz::Tz;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::array::ArrayColumnBuilder;
+use common_expression::types::bitmap::BitmapWrapper;
 use common_expression::types::nullable::NullableColumnBuilder;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::AnyType;
@@ -188,6 +189,41 @@ impl FieldDecoderRowBased for FieldDecoderValues {
             self.read_field(&mut map_builder[VALUE], reader, false)?;
         }
         column.commit_row();
+        Ok(())
+    }
+
+    fn read_bitmap<R: AsRef<u8>>(
+        &self,
+        column: &mut Vec<BitmapWrapper>,
+        reader: &mut Cursor<R>,
+        raw: bool,
+    ) -> Result<()> {
+        let mut buf = Vec::new();
+        self.read_string_inner(reader, &mut buf, raw)?;
+        let mut buffer_readr = Cursor::new(&buf);
+        let pos = buffer_readr.position();
+        let ts_result = buffer_readr.read
+        let ts = match ts_result {
+            Err(_) => {
+                buffer_readr
+                    .seek(SeekFrom::Start(pos))
+                    .expect("buffer reader seek must success");
+                let t = buffer_readr.read_timestamp_text(&self.common_settings().timezone)?;
+                if !buffer_readr.eof() {
+                    let data = buf.to_str().unwrap_or("not utf8");
+                    let msg = format!(
+                        "fail to deserialize timestamp, unexpected end at pos {} of {}",
+                        buffer_readr.position(),
+                        data
+                    );
+                    return Err(ErrorCode::BadBytes(msg));
+                }
+                t.timestamp_micros()
+            }
+            Ok(t) => t,
+        };
+        check_timestamp(ts)?;
+        column.push(ts);
         Ok(())
     }
 

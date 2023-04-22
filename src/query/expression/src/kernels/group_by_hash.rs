@@ -548,7 +548,7 @@ pub fn serialize_column_binary(column: &Column, row: usize, vec: &mut Vec<u8>) {
         Column::Bitmap(v) => {
             let data = unsafe { v.get_unchecked(row) };
             let mut bytes = vec![];
-            data.serialize_into(&mut bytes).unwrap();
+            data.bitmap.serialize_into(&mut bytes).unwrap();
             BinaryWrite::write_binary(vec, bytes).unwrap()
         }
         Column::Nullable(c) => {

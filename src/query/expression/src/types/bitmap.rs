@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::ops::Range;
 
 use common_arrow::arrow::buffer::Buffer;
 use roaring::RoaringBitmap;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::arrow::buffer_into_mut;
 use crate::property::Domain;
@@ -28,16 +31,39 @@ use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BitmapWrapper {
+    pub bitmap: RoaringBitmap,
+}
+
+impl Default for BitmapWrapper {
+    fn default() -> Self {
+        Self {
+            bitmap: RoaringBitmap::default(),
+        }
+    }
+}
+
+// The implementation of PartialOrd for BitmapWrapper is only to adapt to Scalar,
+// it does not have the meaning of actual ordering.
+impl PartialOrd for BitmapWrapper {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.bitmap.len().partial_cmp(&other.bitmap.len())
+    }
+}
+
+impl Eq for BitmapWrapper {}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BitmapType;
 
 impl ValueType for BitmapType {
-    type Scalar = Vec<u32>;
-    type ScalarRef<'a> = &'a [u32];
-    type Column = Buffer<RoaringBitmap>;
+    type Scalar = BitmapWrapper;
+    type ScalarRef<'a> = &'a BitmapWrapper;
+    type Column = Buffer<BitmapWrapper>;
     type Domain = BitmapDomain;
-    type ColumnIterator<'a> = std::iter::Cloned<std::slice::Iter<'a, &'a [u32]>>;
-    type ColumnBuilder = Vec<RoaringBitmap>;
+    type ColumnIterator<'a> = std::slice::Iter<'a, BitmapWrapper>;
+    type ColumnBuilder = Vec<BitmapWrapper>;
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {
@@ -45,7 +71,7 @@ impl ValueType for BitmapType {
     }
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
-        scalar.to_vec()
+        scalar.clone()
     }
 
     fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a> {
@@ -97,7 +123,6 @@ impl ValueType for BitmapType {
 
     fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>> {
         col.get(index)
-            .map(|c| c.into_iter().collect::<Vec<_>>().as_slice())
     }
 
     unsafe fn index_column_unchecked<'a>(
@@ -105,9 +130,6 @@ impl ValueType for BitmapType {
         index: usize,
     ) -> Self::ScalarRef<'a> {
         col.get_unchecked(index)
-            .into_iter()
-            .collect::<Vec<_>>()
-            .as_slice()
     }
 
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
@@ -115,11 +137,7 @@ impl ValueType for BitmapType {
     }
 
     fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a> {
-        col.iter()
-            .map(|c| c.into_iter().collect::<Vec<_>>().as_slice())
-            .collect::<Vec<_>>()
-            .iter()
-            .cloned()
+        col.iter().clone()
     }
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
@@ -131,11 +149,11 @@ impl ValueType for BitmapType {
     }
 
     fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
-        builder.push(RoaringBitmap::from_iter(item));
+        builder.push(item.clone());
     }
 
     fn push_default(builder: &mut Self::ColumnBuilder) {
-        builder.push(RoaringBitmap::new());
+        builder.push(BitmapWrapper::default());
     }
 
     fn append_column(builder: &mut Self::ColumnBuilder, bitmap: &Self::Column) {
@@ -150,8 +168,8 @@ impl ValueType for BitmapType {
         assert_eq!(builder.len(), 1);
         builder
             .get(0)
-            .map(|c| c.into_iter().collect())
-            .unwrap_or(vec![])
+            .map(|b| b.clone())
+            .unwrap_or(BitmapWrapper::default())
     }
 }
 
@@ -169,20 +187,18 @@ impl ArgType for BitmapType {
     }
 
     fn column_from_vec(vec: Vec<Self::Scalar>, _generics: &GenericMap) -> Self::Column {
-        vec.iter()
-            .map(|s| RoaringBitmap::from_iter(s.iter()))
-            .collect()
+        vec.into()
     }
 
     fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
-        iter.map(|s| RoaringBitmap::from_iter(s.iter())).collect()
+        iter.collect()
     }
 
     fn column_from_ref_iter<'a>(
         iter: impl Iterator<Item = Self::ScalarRef<'a>>,
         _generics: &GenericMap,
     ) -> Self::Column {
-        iter.map(|s| RoaringBitmap::from_iter(s.iter())).collect()
+        iter.map(|b| b.clone()).collect()
     }
 }
 

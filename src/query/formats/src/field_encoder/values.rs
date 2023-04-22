@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use chrono_tz::Tz;
+use common_arrow::arrow::buffer::Buffer;
 use common_expression::types::array::ArrayColumn;
+use common_expression::types::bitmap::BitmapWrapper;
 use common_expression::types::ValueType;
 use common_expression::Column;
 use common_io::constants::FALSE_BYTES_NUM;
@@ -142,6 +144,21 @@ impl FieldEncoderRowBased for FieldEncoderValues {
             _ => unreachable!(),
         }
         out_buf.push(b'}');
+    }
+
+    fn write_bitmap(
+        &self,
+        column: &Buffer<BitmapWrapper>,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+        _raw: bool,
+    ) {
+        let v = unsafe { column.get_unchecked(row_index) };
+        let mut bytes = vec![];
+        v.bitmap
+            .serialize_into(&mut bytes)
+            .expect("write bitmap field error");
+        self.write_string_inner(&bytes, out_buf, false);
     }
 
     fn write_tuple(&self, columns: &[Column], row_index: usize, out_buf: &mut Vec<u8>, _raw: bool) {

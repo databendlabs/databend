@@ -219,12 +219,16 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
                 })
                 .collect::<Vec<_>>();
             jsonb::build_object(kvs.iter().map(|(k, v)| (k, &v[..])), buf)
-                .expect("failed to build jsonb object");
+                .expect("failed to build jsonb object from map");
             return;
         }
-        ScalarRef::Bitmap(bits) => {
-            let data = serde_json::to_string(bits).unwrap();
-            data.into()
+        ScalarRef::Bitmap(b) => {
+            let mut bytes = vec![];
+            b.bitmap
+                .serialize_into(&mut bytes)
+                .expect("failed to build jsonb object from bitmap");
+            buf.extend_from_slice(&bytes);
+            return;
         }
         ScalarRef::Tuple(fields) => {
             let values = cast_scalars_to_variants(fields, tz);
@@ -235,7 +239,7 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
                     .map(|(i, bytes)| (format!("{}", i + 1), bytes)),
                 buf,
             )
-            .expect("failed to build jsonb object");
+            .expect("failed to build jsonb object from tuple");
             return;
         }
         ScalarRef::Variant(bytes) => {

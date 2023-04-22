@@ -15,6 +15,7 @@
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_expression::types::array::ArrayColumn;
+use common_expression::types::bitmap::BitmapWrapper;
 use common_expression::types::date::date_to_string;
 use common_expression::types::decimal::DecimalColumn;
 use common_expression::types::nullable::NullableColumn;
@@ -63,6 +64,7 @@ pub trait FieldEncoderRowBased {
             Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf, raw),
             Column::Array(box c) => self.write_array(c, row_index, out_buf, raw),
             Column::Map(box c) => self.write_map(c, row_index, out_buf, raw),
+            Column::Bitmap(b) => self.write_bitmap(b, row_index, out_buf, raw),
             Column::Tuple(fields) => self.write_tuple(fields, row_index, out_buf, raw),
             Column::Variant(c) => self.write_variant(c, row_index, out_buf, raw),
         }
@@ -187,6 +189,14 @@ pub trait FieldEncoderRowBased {
     fn write_map<T: ValueType>(
         &self,
         column: &ArrayColumn<T>,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+        raw: bool,
+    );
+
+    fn write_bitmap(
+        &self,
+        column: &Buffer<BitmapWrapper>,
         row_index: usize,
         out_buf: &mut Vec<u8>,
         raw: bool,

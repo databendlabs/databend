@@ -24,6 +24,7 @@ use common_exception::Result;
 use common_expression::serialize::read_decimal_with_size;
 use common_expression::serialize::uniform_date;
 use common_expression::types::array::ArrayColumnBuilder;
+use common_expression::types::bitmap::BitmapWrapper;
 use common_expression::types::date::check_date;
 use common_expression::types::decimal::Decimal;
 use common_expression::types::decimal::DecimalColumnBuilder;
@@ -90,6 +91,7 @@ pub trait FieldDecoderRowBased: FieldDecoder {
             ColumnBuilder::String(c) => self.read_string(c, reader, raw),
             ColumnBuilder::Array(c) => self.read_array(c, reader, raw),
             ColumnBuilder::Map(c) => self.read_map(c, reader, raw),
+            ColumnBuilder::Bitmap(c) => self.read_bitmap(c, reader, raw),
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, reader, raw),
             ColumnBuilder::Variant(c) => self.read_variant(c, reader, raw),
             _ => unimplemented!(),
@@ -290,6 +292,13 @@ pub trait FieldDecoderRowBased: FieldDecoder {
     fn read_map<R: AsRef<[u8]>>(
         &self,
         column: &mut ArrayColumnBuilder<AnyType>,
+        reader: &mut Cursor<R>,
+        raw: bool,
+    ) -> Result<()>;
+
+    fn read_bitmap<R: AsRef<u8>>(
+        &self,
+        column: &mut Vec<BitmapWrapper>,
         reader: &mut Cursor<R>,
         raw: bool,
     ) -> Result<()>;
