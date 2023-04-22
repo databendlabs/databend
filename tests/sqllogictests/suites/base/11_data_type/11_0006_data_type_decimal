@@ -903,5 +903,6 @@ NULL
 query T
 select try_cast('34343'  as Decimal(7,2)), try_cast(number::String as Decimal(7, 3)) from numbers(3) order by 1;
 ----
-NULL
-1.00
+34343.00 0.000
+34343.00 1.000
+34343.00 2.000
