@@ -9,14 +9,14 @@ The MAX() function returns the maximum value in a set of values.
 ## Syntax
 
 ```
-MAX(expression)
+MAX(<expr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| expression  | Any expression |
+| Arguments | Description |
+|-----------| ----------- |
+| `<expr>`  | Any expression |
 
 ## Return Type
 

@@ -18,16 +18,16 @@ NULL values are not counted.
 ## Syntax
 
 ```sql
-STDDEV_POP(expression)
-STDDEV(expression)
-STD(expression)
+STDDEV_POP(<expr>)
+STDDEV(<expr>)
+STD(<expr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| expression  | Any numerical expression |
+| Arguments | Description              |
+|-----------|--------------------------|
+| `<expr>`  | Any numerical expression |
 
 ## Return Type
 

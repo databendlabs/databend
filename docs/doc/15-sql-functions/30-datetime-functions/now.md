@@ -12,7 +12,7 @@ NOW()
 
 ## Return Type
 
-Datetime object, returns date and time in “YYYY-MM-DD hh:mm:ss.ffffff” format.
+`TIMESTAMP`, returns date and time in “YYYY-MM-DD hh:mm:ss.ffffff” format.
 
 ## Examples
 

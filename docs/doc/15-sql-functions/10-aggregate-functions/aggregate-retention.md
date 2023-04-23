@@ -18,8 +18,8 @@ RETENTION( <cond1> , <cond2> , ..., <cond32> );
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
+| Arguments | Description                                 |
+|-----------|---------------------------------------------|
 | `<cond>`  | An expression that returns a Boolean result |
 
 ## Return Type
