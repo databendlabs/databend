@@ -21,10 +21,9 @@ use std::task::{Context, Poll};
 use async_trait::async_trait;
 use databend_client::response::QueryResponse;
 use databend_client::APIClient;
-use tokio::io::AsyncRead;
 use tokio_stream::{Stream, StreamExt};
 
-use crate::conn::{Connection, ConnectionInfo};
+use crate::conn::{Connection, ConnectionInfo, Reader};
 use crate::error::{Error, Result};
 use crate::rows::{Row, RowIterator, RowProgressIterator, RowWithProgress};
 use crate::schema::{Schema, SchemaRef};
@@ -86,7 +85,7 @@ impl Connection for RestAPIConnection {
     async fn stream_load(
         &self,
         sql: &str,
-        data: Box<dyn AsyncRead + Send + Sync + Unpin + 'static>,
+        data: Reader,
         size: u64,
         file_format_options: Option<BTreeMap<&str, &str>>,
         copy_options: Option<BTreeMap<&str, &str>>,

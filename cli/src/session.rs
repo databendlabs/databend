@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::io::BufRead;
+use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -21,6 +23,8 @@ use rustyline::config::Builder;
 use rustyline::error::ReadlineError;
 use rustyline::history::DefaultHistory;
 use rustyline::{CompletionType, Editor};
+use tokio::fs::{remove_file, File};
+use tokio::io::AsyncWriteExt;
 use tokio::time::Instant;
 
 use crate::ast::{TokenKind, Tokenizer};
@@ -159,34 +163,79 @@ impl Session {
 
         let kind = QueryKind::from(query);
 
-        if kind == QueryKind::Update {
-            let affected = self.conn.exec(query).await?;
-            if is_repl {
-                if affected > 0 {
-                    println!(
-                        "{} rows affected in ({:.3} sec)",
-                        affected,
-                        start.elapsed().as_secs_f64()
-                    );
-                } else {
-                    println!("Processed in ({:.3} sec)", start.elapsed().as_secs_f64());
+        match kind {
+            QueryKind::Update => {
+                let affected = self.conn.exec(query).await?;
+                if is_repl {
+                    if affected > 0 {
+                        println!(
+                            "{} rows affected in ({:.3} sec)",
+                            affected,
+                            start.elapsed().as_secs_f64()
+                        );
+                    } else {
+                        println!("Processed in ({:.3} sec)", start.elapsed().as_secs_f64());
+                    }
+                    println!();
                 }
-                println!();
+                Ok(false)
             }
-            return Ok(false);
-        }
-        let (schema, data) = self.conn.query_iter_ext(query).await?;
+            QueryKind::Query | QueryKind::Explain => {
+                let (schema, data) = self.conn.query_iter_ext(query).await?;
 
-        if is_repl {
-            let mut displayer =
-                ReplDisplay::new(&self.settings, query, start, Arc::new(schema), data);
-            displayer.display().await?;
-        } else {
-            let mut displayer = FormatDisplay::new(Arc::new(schema), data);
-            displayer.display().await?;
+                if is_repl {
+                    let mut displayer =
+                        ReplDisplay::new(&self.settings, query, start, Arc::new(schema), data);
+                    displayer.display().await?;
+                } else {
+                    let mut displayer =
+                        FormatDisplay::new(&self.settings, start, Arc::new(schema), data);
+                    displayer.display().await?;
+                }
+                Ok(false)
+            }
         }
+    }
 
-        Ok(false)
+    pub async fn stream_load_stdin(
+        &mut self,
+        query: &str,
+        options: BTreeMap<&str, &str>,
+    ) -> Result<()> {
+        let dir = std::env::temp_dir();
+        // TODO:(everpcpc) write by chunks
+        let mut lines = std::io::stdin().lock().lines();
+        let tmp_file = dir.join(format!("bendsql_{}", chrono::Utc::now().timestamp_nanos()));
+        {
+            let mut file = File::create(&tmp_file).await?;
+            while let Some(Ok(line)) = lines.next() {
+                file.write_all(line.as_bytes()).await?;
+                file.write_all(b"\n").await?;
+            }
+            file.flush().await?;
+        }
+        self.stream_load_file(query, &tmp_file, options).await?;
+        remove_file(tmp_file).await?;
+        Ok(())
+    }
+
+    pub async fn stream_load_file(
+        &mut self,
+        query: &str,
+        file: &Path,
+        options: BTreeMap<&str, &str>,
+    ) -> Result<()> {
+        let _start = Instant::now();
+        let file = File::open(file).await?;
+        let metadata = file.metadata().await?;
+
+        let _progress = self
+            .conn
+            .stream_load(query, Box::new(file), metadata.len(), Some(options), None)
+            .await?;
+
+        // TODO:(everpcpc) show progress
+        Ok(())
     }
 
     async fn reconnect(&mut self) -> Result<()> {

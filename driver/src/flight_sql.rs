@@ -23,14 +23,13 @@ use arrow_flight::utils::flight_data_to_arrow_batch;
 use arrow_flight::{sql::client::FlightSqlServiceClient, FlightData};
 use arrow_schema::SchemaRef as ArrowSchemaRef;
 use async_trait::async_trait;
-use tokio::io::AsyncRead;
 use tokio::sync::Mutex;
 use tokio_stream::{Stream, StreamExt};
 use tonic::transport::{Channel, ClientTlsConfig, Endpoint};
 use tonic::Streaming;
 use url::Url;
 
-use crate::conn::{Connection, ConnectionInfo};
+use crate::conn::{Connection, ConnectionInfo, Reader};
 use crate::error::{Error, Result};
 use crate::rows::{QueryProgress, Row, RowIterator, RowProgressIterator, RowWithProgress, Rows};
 use crate::Schema;
@@ -93,7 +92,7 @@ impl Connection for FlightSQLConnection {
     async fn stream_load(
         &self,
         _sql: &str,
-        _data: Box<dyn AsyncRead + Send + Sync + Unpin + 'static>,
+        _data: Reader,
         _size: u64,
         _file_format_options: Option<BTreeMap<&str, &str>>,
         _copy_options: Option<BTreeMap<&str, &str>>,

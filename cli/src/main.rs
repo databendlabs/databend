@@ -22,9 +22,61 @@ mod session;
 
 use std::collections::BTreeMap;
 
-use anyhow::Result;
-use clap::{CommandFactory, Parser};
+use anyhow::{anyhow, Result};
+use clap::{CommandFactory, Parser, ValueEnum};
 use config::Config;
+
+/// Supported file format and options:
+/// https://databend.rs/doc/sql-reference/file-format-options
+#[derive(ValueEnum, Clone, Debug, PartialEq)]
+enum InputFormat {
+    CSV,
+    TSV,
+    NDJSON,
+    Parquet,
+    XML,
+}
+
+impl InputFormat {
+    fn get_options<'o>(&self, opts: &'o Vec<(String, String)>) -> BTreeMap<&'o str, &'o str> {
+        let mut options = BTreeMap::new();
+        match self {
+            InputFormat::CSV => {
+                options.insert("type", "CSV");
+                options.insert("record_delimiter", "\n");
+                options.insert("field_delimiter", ",");
+                options.insert("quote", "\"");
+                options.insert("escape", "\"");
+                options.insert("skip_header", "0");
+                options.insert("compression", "NONE");
+            }
+            InputFormat::TSV => {
+                options.insert("record_delimiter", "\n");
+                options.insert("field_delimiter", "\t");
+                options.insert("compression", "NONE");
+            }
+            InputFormat::NDJSON => {
+                options.insert("compression", "NONE");
+            }
+            InputFormat::XML => {
+                options.insert("compression", "NONE");
+                options.insert("row_tag", "row");
+            }
+            _ => {}
+        }
+        for (k, v) in opts {
+            options.insert(k, v);
+        }
+        options
+    }
+}
+
+#[derive(ValueEnum, Clone, Debug, PartialEq)]
+enum OutputFormat {
+    Table,
+    CSV,
+    TSV,
+}
 
 #[derive(Debug, Parser, PartialEq)]
 // disable default help flag since it would conflict with --host
@@ -70,15 +122,16 @@ struct Args {
     data: Option<String>,
 
     #[clap(short = 'f', long, default_value = "csv", help = "Data format to load")]
-    format: String,
+    format: InputFormat,
+
+    #[clap(long, value_parser = parse_key_val::<String, String>, help = "Data format options")]
+    format_opt: Vec<(String, String)>,
 
     #[clap(short = 'o', long, default_value = "table", help = "Output format")]
-    output: String,
+    output: OutputFormat,
 
     #[clap(long, help = "Show progress for data loading in stderr")]
     progress: bool,
-    // #[clap(long, help = "Save current arguments to config file")]
-    // save_args: bool,
 }
 
 /// Parse a single key-value pair
@@ -183,8 +236,49 @@ pub async fn main() -> Result<()> {
         }
     };
 
-    let is_repl = atty::is(atty::Stream::Stdin) && !args.non_interactive;
+    let is_repl = atty::is(atty::Stream::Stdin) && !args.non_interactive && args.query.is_none();
     let mut session = session::Session::try_new(dsn, config.settings, is_repl).await?;
-    session.handle().await;
+
+    if is_repl {
+        session.handle().await;
+        return Ok(());
+    }
+
+    match args.query {
+        None => {
+            if args.non_interactive {
+                return Err(anyhow!("no query specified"));
+            }
+            session.handle_stdin().await
+        }
+        Some(query) => match args.data {
+            None => {
+                if let Err(e) = session.handle_query(false, &query).await {
+                    eprintln!("{}", e);
+                }
+            }
+            Some(data) => {
+                let options = args.format.get_options(&args.format_opt);
+                if data.starts_with('@') {
+                    match data.strip_prefix('@') {
+                        Some("-") => session.stream_load_stdin(&query, options).await?,
+                        Some(fname) => {
+                            let path = std::path::Path::new(fname);
+                            if !path.exists() {
+                                return Err(anyhow!("file not found: {}", fname));
+                            }
+                            session.stream_load_file(&query, path, options).await?
+                        }
+                        None => {
+                            return Err(anyhow!("invalid data input: {}", data));
+                        }
+                    }
+                } else {
+                    // TODO: should we allow passing data directly?
+                    return Err(anyhow!("invalid data input: {}", data));
+                }
+            }
+        },
+    }
     Ok(())
 }

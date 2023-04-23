@@ -35,6 +35,8 @@ pub struct ConnectionInfo {
     pub user: String,
 }
 
+pub type Reader = Box<dyn AsyncRead + Send + Sync + Unpin + 'static>;
+
 #[async_trait]
 pub trait Connection: DynClone + Send + Sync {
     fn info(&self) -> ConnectionInfo;
@@ -59,7 +61,7 @@ pub trait Connection: DynClone + Send + Sync {
     async fn stream_load(
         &self,
         sql: &str,
-        data: Box<dyn AsyncRead + Send + Sync + Unpin + 'static>,
+        data: Reader,
         size: u64,
         file_format_options: Option<BTreeMap<&str, &str>>,
         copy_options: Option<BTreeMap<&str, &str>>,

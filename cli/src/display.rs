@@ -79,35 +79,9 @@ impl<'a> ChunkDisplay for ReplDisplay<'a> {
         while let Some(line) = self.data.next().await {
             match line {
                 Ok(RowWithProgress::Progress(pg)) => {
+                    let pgo = self.progress.take();
+                    self.progress = Some(display_read_progress(pgo, &pg));
                     progress = pg;
-                    if self.progress.as_mut().is_none() {
-                        let pb = ProgressBar::new(progress.total_bytes as u64);
-                        let progress_color = &self.settings.progress_color;
-                        let template = "{spinner:.${progress_color}} [{elapsed_precise}] {msg} {wide_bar:.${progress_color}/blue} ({eta})".replace("${progress_color}", progress_color);
-
-                        pb.set_style(
-                            ProgressStyle::with_template(&template)
-                                .unwrap()
-                                .with_key("eta", |state: &ProgressState, w: &mut dyn Write| {
-                                    write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap()
-                                })
-                                .progress_chars("█▓▒░ "),
-                        );
-                        self.progress = Some(pb);
-                    }
-                    let pb = self.progress.as_mut().unwrap();
-                    pb.set_position(progress.read_bytes as u64);
-                    pb.set_message(format!(
-                        "Processing {}/{} ({} rows/s), {}/{} ({}/s)",
-                        humanize_count(progress.read_rows as f64),
-                        humanize_count(progress.total_rows as f64),
-                        humanize_count(progress.read_rows as f64 / pb.elapsed().as_secs_f64()),
-                        HumanBytes(progress.read_bytes as u64),
-                        HumanBytes(progress.total_bytes as u64),
-                        HumanBytes(
-                            (progress.read_bytes as f64 / pb.elapsed().as_secs_f64()) as u64
-                        )
-                    ));
                 }
                 Ok(RowWithProgress::Row(row)) => {
                     rows.push(row);
@@ -148,24 +122,36 @@ impl<'a> ChunkDisplay for ReplDisplay<'a> {
     }
 }
 
-pub struct FormatDisplay {
+pub struct FormatDisplay<'a> {
+    _settings: &'a Settings,
     _schema: SchemaRef,
     data: RowProgressIterator,
+
     rows: usize,
+    _progress: Option<ProgressBar>,
+    _start: Instant,
 }
 
-impl FormatDisplay {
-    pub fn new(schema: SchemaRef, data: RowProgressIterator) -> Self {
+impl<'a> FormatDisplay<'a> {
+    pub fn new(
+        settings: &'a Settings,
+        start: Instant,
+        schema: SchemaRef,
+        data: RowProgressIterator,
+    ) -> Self {
         Self {
+            _settings: settings,
             _schema: schema,
             data,
             rows: 0,
+            _progress: None,
+            _start: start,
         }
     }
 }
 
 #[async_trait::async_trait]
-impl ChunkDisplay for FormatDisplay {
+impl<'a> ChunkDisplay for FormatDisplay<'a> {
     async fn display(&mut self) -> Result<()> {
         let mut rows = Vec::new();
         while let Some(line) = self.data.next().await {
@@ -183,7 +169,7 @@ impl ChunkDisplay for FormatDisplay {
         }
         let mut wtr = csv::WriterBuilder::new()
             .delimiter(b'\t')
-            .quote_style(csv::QuoteStyle::NonNumeric)
+            .quote_style(csv::QuoteStyle::Necessary)
             .from_writer(std::io::stdout());
         for row in rows {
             let values: Vec<String> = row.values().iter().map(|v| v.to_string()).collect();
@@ -202,6 +188,52 @@ fn print_rows(schema: SchemaRef, results: &[Row], _settings: &Settings) -> Resul
         println!("{}", create_table(schema, results)?);
     }
     Ok(())
+}
+
+fn format_read_progress(progress: &QueryProgress, elapsed: f64) -> String {
+    let mut s = String::new();
+    s.push_str(&format!(
+        "{} rows, {} processed, ({} rows/s, {}/s)",
+        humanize_count(progress.total_rows as f64),
+        HumanBytes(progress.total_bytes as u64),
+        humanize_count(progress.total_rows as f64 / elapsed),
+        HumanBytes((progress.total_bytes as f64 / elapsed) as u64)
+    ));
+    s
+}
+
+// TODO:(everpcpc)
+fn _format_write_progress(progress: &QueryProgress, elapsed: f64) -> String {
+    let mut s = String::new();
+    s.push_str(&format!(
+        "{} rows, {} written, ({} rows/s., {}/s.)",
+        humanize_count(progress.write_rows as f64),
+        HumanBytes(progress.write_bytes as u64),
+        humanize_count(progress.write_rows as f64 / elapsed),
+        HumanBytes((progress.write_bytes as f64 / elapsed) as u64)
+    ));
+    s
+}
+
+fn display_read_progress(pb: Option<ProgressBar>, current: &QueryProgress) -> ProgressBar {
+    let pb = pb.unwrap_or_else(|| {
+        let pbn = ProgressBar::new(current.total_bytes as u64);
+        let progress_color = "green";
+        let template = "{spinner:.${progress_color}} [{elapsed_precise}] {msg} {wide_bar:.${progress_color}/blue} ({eta})".replace("${progress_color}", progress_color);
+        pbn.set_style(
+            ProgressStyle::with_template(&template)
+                .unwrap()
+                .with_key("eta", |state: &ProgressState, w: &mut dyn Write| {
+                    write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap()
+                })
+                .progress_chars("█▓▒░ "),
+        );
+        pbn
+    });
+
+    pb.set_position(current.read_bytes as u64);
+    pb.set_message(format_read_progress(current, pb.elapsed().as_secs_f64()));
+    pb
 }
 
 /// Convert a series of rows into a table
