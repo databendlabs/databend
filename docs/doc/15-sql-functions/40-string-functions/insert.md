@@ -7,21 +7,21 @@ Returns the string str, with the substring beginning at position pos and len cha
 ## Syntax
 
 ```sql
-INSERT(str,pos,len,newstr)
+INSERT(<str>, <pos>, <len>, <newstr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| str | The string. |
-| pos | The position. |
-| len | The length. |
-| newstr | The new string. |
+| Arguments  | Description     |
+|------------|-----------------|
+| `<str>`    | The string.     |
+| `<pos>`    | The position.   |
+| `<len>`    | The length.     |
+| `<newstr>` | The new string. |
 
 ## Return Type
 
-A string data type value.
+`VARCHAR`
 
 ## Examples
 

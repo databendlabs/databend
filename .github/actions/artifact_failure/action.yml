@@ -13,6 +13,12 @@ runs:
         killall -9 databend-query || true
         killall -9 databend-meta || true
 
+        docker ps -a
+        mkdir -p .databend/docker/
+        docker ps -a --format "{{.Names}}" | while read -r line; do
+            docker logs "$line" > .databend/docker/"$line".log
+        done
+
         tar --exclude='target' \
             --exclude='website' \
             --exclude='docs' \

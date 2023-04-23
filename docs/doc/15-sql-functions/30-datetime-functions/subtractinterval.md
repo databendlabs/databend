@@ -8,18 +8,18 @@ Subtract time interval from a date or timestamp, return the result of date or ti
 ## Syntax
 
 ```sql
-subtract_years(exp0, expr1)
-subtract_quarters(exp0, expr1)
-subtract_months(exp0, expr1)
-subtract_days(exp0, expr1)
-subtract_hours(exp0, expr1)
-subtract_minutes(exp0, expr1)
-subtract_seconds(exp0, expr1)
+SUBTRACT_YEARS(<exp0>, <expr1>)
+SUBTRACT_QUARTERS(<exp0>, <expr1>)
+SUBTRACT_MONTHS(<exp0>, <expr1>)
+SUBTRACT_DAYS(<exp0>, <expr1>)
+SUBTRACT_HOURS(<exp0>, <expr1>)
+SUBTRACT_MINUTES(<exp0>, <expr1>)
+SUBTRACT_SECONDS(<exp0>, <expr1>)
 ```
 
 ## Return Type
 
-Date, Timestamp depends on the input.
+`DATE`, `TIMESTAMP` depends on the input.
 
 ## Examples
 

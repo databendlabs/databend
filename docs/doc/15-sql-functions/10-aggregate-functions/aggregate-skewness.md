@@ -9,14 +9,14 @@ The `SKEWNESS()` function returns the skewness of all input values.
 ## Syntax
 
 ```sql
-SKEWNESS(expression)
+SKEWNESS(<expr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description                     |
-| ----------- | -----------                     |
-| expression  | Any numerical expression        |
+| Arguments | Description                     |
+|-----------| -----------                     |
+| `<expr>`  | Any numerical expression        |
 
 ## Return Type
 

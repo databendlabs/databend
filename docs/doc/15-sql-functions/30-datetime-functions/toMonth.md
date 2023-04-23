@@ -2,23 +2,23 @@
 title: TO_MONTH
 ---
 
-Converts a date or date with time (timestamp/datetime) to a UInt8 number containing the month number (1-12).
+Convert a date or date with time (timestamp/datetime) to a UInt8 number containing the month number (1-12).
 
 ## Syntax
 
 ```sql
-to_month( <expr> )
+TO_MONTH(<expr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| `<expr>` | date/timestamp |
+| Arguments | Description    |
+|-----------|----------------|
+| `<expr>`  | date/timestamp |
 
 ## Return Type
 
- `UInt8` datatype.
+ `TINYINT`
 
 ## Examples
 
