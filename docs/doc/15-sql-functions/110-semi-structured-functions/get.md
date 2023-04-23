@@ -17,11 +17,11 @@ GET( <variant>, <field_name> )
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| `<variant>`     | The VARIANT value that contains either an ARRAY or an OBJECT
-| `<index>`       | The Uint32 value specifies the position of the value in ARRAY  
-| `<field_name>`  | The String value specifies the key in a key-value pair of OBJECT
+| Arguments      | Description                                                      |
+|----------------|------------------------------------------------------------------|
+| `<variant>`    | The VARIANT value that contains either an ARRAY or an OBJECT     |
+| `<index>`      | The Uint32 value specifies the position of the value in ARRAY    |
+| `<field_name>` | The String value specifies the key in a key-value pair of OBJECT |
 
 ## Return Type
 
