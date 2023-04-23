@@ -34,6 +34,7 @@ pub use read::UncompressedBuffer;
 pub use segments::SegmentsIO;
 pub use snapshots::ListSnapshotLiteOption;
 pub use snapshots::SnapshotLiteListExtended;
+pub use snapshots::SnapshotReferencedFiles;
 pub use snapshots::SnapshotsIO;
 pub use write::serialize_block;
 pub use write::write_data;

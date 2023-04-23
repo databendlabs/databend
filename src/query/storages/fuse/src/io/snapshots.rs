@@ -46,6 +46,13 @@ use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
 use crate::io::TableMetaLocationGenerator;
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct SnapshotReferencedFiles {
+    pub segments: BTreeSet<String>,
+    pub blocks: BTreeSet<String>,
+    pub blocks_index: BTreeSet<String>,
+}
+
 // Read snapshot related operations.
 pub struct SnapshotsIO {
     ctx: Arc<dyn TableContext>,
@@ -60,8 +67,10 @@ pub struct SnapshotLiteListExtended {
 
 #[derive(Clone)]
 pub enum ListSnapshotLiteOption {
-    // do not case about the segments
+    // do not care about the segments
     NeedNotSegments,
+    // need the segments
+    NeedSegments,
     // need segment, and exclude the locations if Some(Hashset<Location>) is provided
     NeedSegmentsWithExclusion(Option<Arc<HashSet<Location>>>),
 }
@@ -134,6 +143,8 @@ impl SnapshotsIO {
                 }
                 segment_locations.push(segment_location.clone());
             }
+        } else if let ListSnapshotLiteOption::NeedSegments = list_options {
+            segment_locations.extend(snapshot.segments.clone().into_iter());
         }
 
         Ok(SnapshotLiteExtended {
@@ -213,7 +224,7 @@ impl SnapshotsIO {
         }
     }
 
-    // return from files that last modified time with timestamp
+    // return from files that last modified time within timestamp
     #[tracing::instrument(level = "debug", skip_all)]
     #[async_backtrace::framed]
     pub async fn get_within_time_files(
@@ -229,11 +240,11 @@ impl SnapshotsIO {
             let metadata = operator.stat(&file).await?;
             if let Some(last_modified) = metadata.last_modified() {
                 if last_modified.timestamp() >= timestamp {
-                    return Ok(file);
+                    return Ok("".to_string());
                 }
             }
 
-            Ok("".to_string())
+            Ok(file)
         }
 
         async fn get_within_time_files(
@@ -289,13 +300,13 @@ impl SnapshotsIO {
         segment_files: &[&String],
         schema: TableSchemaRef,
         version: u64,
-    ) -> Result<Vec<Result<Vec<String>>>> {
+    ) -> Result<Vec<Result<(Vec<String>, Vec<String>)>>> {
         async fn read_segment_block(
             location: String,
             ver: u64,
             operator: Operator,
             schema: TableSchemaRef,
-        ) -> Result<Vec<String>> {
+        ) -> Result<(Vec<String>, Vec<String>)> {
             let reader = MetaReaders::segment_info_reader(operator, schema);
             // Keep in mind that segment_info_read must need a schema
             let load_params = LoadParams {
@@ -307,10 +318,14 @@ impl SnapshotsIO {
 
             let segment = reader.read(&load_params).await?;
             let mut blocks = Vec::with_capacity(segment.blocks.len());
+            let mut blocks_index = Vec::with_capacity(segment.blocks.len());
             segment.blocks.iter().for_each(|block_meta| {
                 blocks.push(block_meta.location.0.clone());
+                if let Some(bloom_loc) = &block_meta.bloom_filter_index_location {
+                    blocks_index.push(bloom_loc.0.clone());
+                }
             });
-            Ok(blocks)
+            Ok((blocks, blocks_index))
         }
 
         // combine all the tasks.
@@ -352,7 +367,7 @@ impl SnapshotsIO {
         limit: Option<usize>,
         min_snapshot_timestamp: Option<DateTime<Utc>>,
         status_callback: T,
-    ) -> Result<(BTreeSet<String>, BTreeSet<String>)>
+    ) -> Result<Option<SnapshotReferencedFiles>>
     where
         T: Fn(String),
     {
@@ -366,7 +381,7 @@ impl SnapshotsIO {
         }
 
         if snapshot_files.is_empty() {
-            return Ok((BTreeSet::new(), BTreeSet::new()));
+            return Ok(None);
         }
 
         // 1. Get all the snapshot by chunks.
@@ -380,7 +395,7 @@ impl SnapshotsIO {
                 .read_snapshot_lites(
                     chunk,
                     min_snapshot_timestamp,
-                    &ListSnapshotLiteOption::NeedNotSegments,
+                    &ListSnapshotLiteOption::NeedSegments,
                 )
                 .await?;
 
@@ -424,14 +439,18 @@ impl SnapshotsIO {
         // 3. Get all the referenced blocks
         let mut count = 0;
         let mut blocks = BTreeSet::new();
+        let mut blocks_index = BTreeSet::new();
         let segment_locations = Vec::from_iter(segments.iter());
         for segment_chunk in segment_locations.chunks(max_io_requests) {
             let results = self
                 .read_segment_blocks(segment_chunk, schema.clone(), root_version)
                 .await?;
-            for ret_blocks in results.into_iter().flatten() {
+            for (ret_blocks, ref_index) in results.into_iter().flatten() {
                 ret_blocks.iter().for_each(|block| {
                     blocks.insert(block.to_string());
+                });
+                ref_index.iter().for_each(|index| {
+                    blocks_index.insert(index.to_string());
                 });
             }
 
@@ -449,7 +468,11 @@ impl SnapshotsIO {
             }
         }
 
-        Ok((segments, blocks))
+        Ok(Some(SnapshotReferencedFiles {
+            segments,
+            blocks,
+            blocks_index,
+        }))
     }
 
     #[async_backtrace::framed]

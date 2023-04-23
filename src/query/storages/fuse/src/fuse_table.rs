@@ -546,7 +546,11 @@ impl Table for FuseTable {
 
     #[async_backtrace::framed]
     async fn gc(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
-        self.do_gc(&ctx).await
+        let timestamp = chrono::Utc::now()
+            .checked_sub_days(chrono::Days::new(12))
+            .unwrap()
+            .timestamp();
+        self.do_gc(&ctx, timestamp).await
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_optimize", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]

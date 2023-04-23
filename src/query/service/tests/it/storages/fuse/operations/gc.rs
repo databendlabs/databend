@@ -173,7 +173,7 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
     // 1. prepare `S_current`
     let number_of_block = 1;
     append_sample_data(number_of_block, &fixture).await?;
-    // no we have 1 snapshot, 1 segment, 1 blocks
+    // now we have 1 snapshot, 1 segment, 1 blocks
 
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
@@ -290,6 +290,196 @@ async fn test_fuse_purge_older_version() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_fuse_gc_orphan_retention_files() -> Result<()> {
+    // verifies that:
+    //
+    // - snapshots that beyond retention period shall be collected, but
+    // - if segments are referenced by snapshot within retention period,
+    //   they shall not be collected during purge.
+    //   the blocks referenced by those segments, shall not be collected as well.
+    //
+    // for example :
+    //
+    //   ──┬──           S_current───────────► seg_c ──────────────► block_c
+    //     │
+    //  within retention
+    //     │
+    //     │             S_2 ───────────┐
+    //   ──┴──                          └───────┐
+    //  beyond retention                        ▼
+    //     │             S_1 ────────────────► seg_1 ──────────────► block_1
+    //     │
+    //     │             S_0 ────────────────► seg_0 ──────────────► block_0
+    //
+    // - S_current is the gc root
+    // - S_2, S_1, S_0 are all orphan snapshots in S_current's point of view
+    //   each of them is not a number of  S_current's precedents
+    //
+    // - s_current, seg_c, and block_c shall NOT be purged
+    //   since they are referenced by the current table snapshot
+    // - S_2 should NOT be purged
+    //   since it is within the retention period
+    // - S_1 should be purged, since it is beyond the retention period
+    //    BUT
+    //    - seg_1 shall NOT be purged, since it is still referenced by s_1
+    //      although it is not referenced by the current snapshot.
+    //    - block_1 shall NOT be purged , since it is referenced by seg_1
+    // - S_0 should be purged, since it is beyond the retention period
+    //    - seg_0 and block_0 shall be purged
+    //
+    //  put them together, after GC, there will be
+    //  - 2 snapshots left: s_current, s_2
+    //  - 2 segments left: seg_c, seg_1
+    //  - 2 blocks left: block_c, block_1
+
+    let fixture = TestFixture::new().await;
+    let ctx = fixture.ctx();
+    fixture.create_default_table().await?;
+
+    // 1. prepare `S_current`
+    let number_of_block = 1;
+    append_sample_data(number_of_block, &fixture).await?;
+    // now we have 1 snapshot, 1 segment, 1 blocks
+
+    // before generate retention files, verify the files number.
+    let expected_num_of_snapshot = 1;
+    let expected_num_of_segment = 1;
+    let expected_num_of_blocks = 1;
+    let expected_num_of_index = expected_num_of_blocks;
+    check_data_dir(
+        &fixture,
+        "do_gc_orphan_files: verify files",
+        expected_num_of_snapshot,
+        0,
+        expected_num_of_segment,
+        expected_num_of_blocks,
+        expected_num_of_index,
+        Some(()),
+        None,
+    )
+    .await?;
+
+    // save all the referenced files
+    let table_ctx: Arc<dyn TableContext> = ctx.clone();
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let old_referenced_files = fuse_table.get_referenced_files(&table_ctx).await?.unwrap();
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+    let orphan_segment_file_num = 1;
+    let orphan_block_per_segment_num = 1;
+
+    // generate some orphan files out of retention time
+    {
+        let table = fixture.latest_default_table().await?;
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        utils::generate_orphan_files(
+            fuse_table,
+            orphan_segment_file_num,
+            orphan_block_per_segment_num,
+        )
+        .await?;
+    }
+
+    // after generate orphan files, verify the files number
+    {
+        let expected_num_of_snapshot = 1;
+        let expected_num_of_segment = 1 + orphan_segment_file_num as u32;
+        let expected_num_of_blocks =
+            1 + (orphan_segment_file_num * orphan_block_per_segment_num) as u32;
+        let expected_num_of_index = expected_num_of_blocks;
+        check_data_dir(
+            &fixture,
+            "do_gc_orphan_files: verify generate retention files",
+            expected_num_of_snapshot,
+            0,
+            expected_num_of_segment,
+            expected_num_of_blocks,
+            expected_num_of_index,
+            Some(()),
+            None,
+        )
+        .await?;
+    }
+
+    // sleep to make orphan files out of retention time
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+    // generate some orphan files within retention time
+    {
+        let table = fixture.latest_default_table().await?;
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        utils::generate_orphan_files(
+            fuse_table,
+            orphan_segment_file_num,
+            orphan_block_per_segment_num,
+        )
+        .await?;
+    }
+    // after generate orphan files, verify the files number
+    {
+        let expected_num_of_snapshot = 1;
+        let expected_num_of_segment = 1 + (orphan_segment_file_num * 2) as u32;
+        let expected_num_of_blocks =
+            1 + (orphan_segment_file_num * orphan_block_per_segment_num * 2) as u32;
+        let expected_num_of_index = expected_num_of_blocks;
+        check_data_dir(
+            &fixture,
+            "do_gc_orphan_files: verify generate retention files",
+            expected_num_of_snapshot,
+            0,
+            expected_num_of_segment,
+            expected_num_of_blocks,
+            expected_num_of_index,
+            Some(()),
+            None,
+        )
+        .await?;
+    }
+
+    // do gc.
+    {
+        let table_ctx: Arc<dyn TableContext> = ctx.clone();
+        let table = fixture.latest_default_table().await?;
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let timestamp = chrono::Utc::now().timestamp() - 2;
+        fuse_table.do_gc(&table_ctx, timestamp).await?;
+    }
+
+    // check files number
+    {
+        let expected_num_of_snapshot = 1;
+        let expected_num_of_segment = 1 + orphan_segment_file_num as u32;
+        let expected_num_of_blocks =
+            1 + (orphan_segment_file_num * orphan_block_per_segment_num) as u32;
+        let expected_num_of_index = expected_num_of_blocks;
+        check_data_dir(
+            &fixture,
+            "do_gc_orphan_files: after gc",
+            expected_num_of_snapshot,
+            0,
+            expected_num_of_segment,
+            expected_num_of_blocks,
+            expected_num_of_index,
+            Some(()),
+            None,
+        )
+        .await?;
+    }
+
+    // check all referenced files exist
+    {
+        let table_ctx: Arc<dyn TableContext> = ctx.clone();
+        let table = fixture.latest_default_table().await?;
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let referenced_files = fuse_table.get_referenced_files(&table_ctx).await?.unwrap();
+
+        assert_eq!(referenced_files, old_referenced_files);
+    }
+    Ok(())
+}
+
 mod utils {
     use std::io::Error;
     use std::sync::Arc;
@@ -331,6 +521,20 @@ mod utils {
             .await?;
 
         Ok(new_snapshot_location)
+    }
+
+    pub async fn generate_orphan_files(
+        fuse_table: &FuseTable,
+        orphan_segment_number: usize,
+        orphan_block_number_per_segment: usize,
+    ) -> Result<()> {
+        utils::generate_segments_v2(
+            fuse_table,
+            orphan_segment_number,
+            orphan_block_number_per_segment,
+        )
+        .await?;
+        Ok(())
     }
 
     pub async fn generate_segments_v2(

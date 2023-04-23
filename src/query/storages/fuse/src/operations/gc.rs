@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -39,6 +40,7 @@ use tracing::warn;
 use crate::io::Files;
 use crate::io::ListSnapshotLiteOption;
 use crate::io::SegmentsIO;
+use crate::io::SnapshotReferencedFiles;
 use crate::io::SnapshotsIO;
 use crate::FuseTable;
 
@@ -481,8 +483,38 @@ impl FuseTable {
         })
     }
 
+    // return orphan files to be purged
     #[async_backtrace::framed]
-    pub async fn do_gc(&self, ctx: &Arc<dyn TableContext>) -> Result<()> {
+    async fn get_orphan_files_to_be_purged(
+        referenced_files: &BTreeSet<String>,
+        snapshots_io: &SnapshotsIO,
+        retention_sec: i64,
+    ) -> Result<Vec<String>> {
+        // 1. Get all the files in the same directory
+        let mut files_to_be_purged = if let Some(location) = referenced_files.first() {
+            snapshots_io.get_files_by_prefix(None, location).await?
+        } else {
+            vec![]
+        };
+
+        // 2. Filter out all the referenced files.
+        files_to_be_purged.retain(|location| !referenced_files.contains(location));
+
+        // 3. Filter out all files within retention time
+        let within_time_files = snapshots_io
+            .get_within_time_files(&files_to_be_purged, retention_sec)
+            .await?;
+        files_to_be_purged.retain(|location| !within_time_files.contains(location));
+
+        Ok(files_to_be_purged)
+    }
+
+    // return all the segment\block\index files referenced by current snapshot.
+    #[async_backtrace::framed]
+    pub async fn get_referenced_files(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+    ) -> Result<Option<SnapshotReferencedFiles>> {
         // 1. Find all snapshots
         let snapshot_opt = match self.read_table_snapshot().await {
             Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
@@ -492,7 +524,7 @@ impl FuseTable {
                     self.table_info.desc,
                     self.table_info.ident,
                 );
-                return Ok(());
+                return Ok(None);
             }
             Err(e) => return Err(e),
             Ok(v) => v,
@@ -513,7 +545,7 @@ impl FuseTable {
                     self.table_info.desc,
                     self.table_info.ident,
                 );
-                return Ok(());
+                return Ok(None);
             };
 
         let root_snapshot_location = match self.snapshot_loc().await? {
@@ -523,13 +555,13 @@ impl FuseTable {
                     "cannot get snapshot_loc of table: {}, ident {}",
                     self.table_info.desc, self.table_info.ident,
                 );
-                return Ok(());
+                return Ok(None);
             }
         };
 
         // 2. Find all segments referenced by the current snapshots
         let snapshots_io = SnapshotsIO::create(ctx.clone(), self.operator.clone());
-        let (ref_segments, ref_blocks) = snapshots_io
+        snapshots_io
             .get_referenced_files(
                 root_snapshot_location,
                 root_snapshot_id,
@@ -541,50 +573,39 @@ impl FuseTable {
                     ctx.set_status_info(&status);
                 },
             )
-            .await?;
+            .await
+    }
 
-        if ref_segments.is_empty() && ref_blocks.is_empty() {
-            return Ok(());
-        }
-
-        // 3. Find all the blocks and segments
-        let mut segment_locations_to_be_purged =
-            if let Some(segment_location) = ref_segments.first() {
-                snapshots_io
-                    .get_files_by_prefix(None, segment_location)
-                    .await?
-            } else {
-                vec![]
-            };
-        let mut block_locations_to_be_purged = if let Some(block_location) = ref_blocks.first() {
-            snapshots_io
-                .get_files_by_prefix(None, block_location)
-                .await?
-        } else {
-            vec![]
+    #[async_backtrace::framed]
+    pub async fn do_gc(&self, ctx: &Arc<dyn TableContext>, retention_sec: i64) -> Result<()> {
+        // 1. Get all the files referenced by the current snapshot
+        let referenced_files = match self.get_referenced_files(ctx).await? {
+            Some(referenced_files) => referenced_files,
+            None => return Ok(()),
         };
 
-        // 4. Filter out all referenced files.
-        segment_locations_to_be_purged
-            .retain(|segment_location| !ref_segments.contains(segment_location));
-        block_locations_to_be_purged.retain(|block_location| !ref_blocks.contains(block_location));
+        // 2. Get orphan files to be purged
+        let snapshots_io = SnapshotsIO::create(ctx.clone(), self.operator.clone());
+        let segment_locations_to_be_purged = Self::get_orphan_files_to_be_purged(
+            &referenced_files.segments,
+            &snapshots_io,
+            retention_sec,
+        )
+        .await?;
+        let block_locations_to_be_purged = Self::get_orphan_files_to_be_purged(
+            &referenced_files.blocks,
+            &snapshots_io,
+            retention_sec,
+        )
+        .await?;
+        let index_locations_to_be_purged = Self::get_orphan_files_to_be_purged(
+            &referenced_files.blocks_index,
+            &snapshots_io,
+            retention_sec,
+        )
+        .await?;
 
-        // 5. Filter out all files with retention time.
-        let timestamp = chrono::Utc::now()
-            .checked_sub_days(chrono::Days::new(12))
-            .unwrap()
-            .timestamp();
-        let with_time_segment_files = snapshots_io
-            .get_within_time_files(&segment_locations_to_be_purged, timestamp)
-            .await?;
-        segment_locations_to_be_purged
-            .retain(|location| !with_time_segment_files.contains(location));
-        let with_time_block_files = snapshots_io
-            .get_within_time_files(&block_locations_to_be_purged, timestamp)
-            .await?;
-        block_locations_to_be_purged.retain(|location| !with_time_block_files.contains(location));
-
-        // 6. Delete all the orphan segments and blocks
+        // 3. Delete all the orphan files
         self.try_purge_location_files_and_cache::<SegmentInfo>(
             ctx.clone(),
             HashSet::from_iter(segment_locations_to_be_purged.into_iter()),
@@ -594,7 +615,14 @@ impl FuseTable {
             ctx.clone(),
             HashSet::from_iter(block_locations_to_be_purged.into_iter()),
         )
-        .await
+        .await?;
+        self.try_purge_location_files(
+            ctx.clone(),
+            HashSet::from_iter(index_locations_to_be_purged.into_iter()),
+        )
+        .await?;
+
+        Ok(())
     }
 }
 
