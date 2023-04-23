@@ -3060,6 +3060,7 @@ Functions overloads:
 2 to_day_of_year(Timestamp) :: UInt16
 3 to_day_of_year(Timestamp NULL) :: UInt16 NULL
 0 to_decimal FACTORY
+1 to_decimal FACTORY
 0 to_float32(Variant) :: Float32
 1 to_float32(Variant NULL) :: Float32 NULL
 2 to_float32(String) :: Float32
@@ -3497,6 +3498,7 @@ Functions overloads:
 5 try_to_date(Timestamp NULL) :: Date NULL
 6 try_to_date(Int64) :: Date NULL
 7 try_to_date(Int64 NULL) :: Date NULL
+0 try_to_decimal FACTORY
 0 try_to_float32(Variant) :: Float32 NULL
 1 try_to_float32(Variant NULL) :: Float32 NULL
 2 try_to_float32(String) :: Float32 NULL

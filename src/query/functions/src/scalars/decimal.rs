@@ -389,14 +389,12 @@ pub(crate) fn register_decimal_arithmetic(registry: &mut FunctionRegistry) {
     register_decimal_binary_op!(registry, "multiply", mul);
 }
 
+// int float to decimal
 pub fn register(registry: &mut FunctionRegistry) {
-    // int float to decimal
-    registry.register_function_factory("to_decimal", |params, args_type| {
+    let factory = |params: &[usize], args_type: &[DataType]| {
         if args_type.len() != 1 {
             return None;
         }
-
-        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
 
         if !matches!(
             args_type[0].remove_nullable(),
@@ -417,7 +415,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         let return_type = DecimalDataType::from_size(decimal_size).ok()?;
         let return_type = DataType::Decimal(return_type);
 
-        let f = Function {
+        Some(Function {
             signature: FunctionSignature {
                 name: "to_decimal".to_string(),
                 args_type: args_type.to_owned(),
@@ -429,13 +427,20 @@ pub fn register(registry: &mut FunctionRegistry) {
                     convert_to_decimal(args, tx, from_type.clone(), return_type.clone())
                 }),
             },
-        };
+        })
+    };
 
-        if has_null {
-            Some(Arc::new(f.wrap_nullable()))
-        } else {
-            Some(Arc::new(f))
-        }
+    registry.register_function_factory("to_decimal", move |params, args_type| {
+        Some(Arc::new(factory(params, args_type)?))
+    });
+    registry.register_function_factory("to_decimal", move |params, args_type| {
+        let f = factory(params, args_type)?;
+        Some(Arc::new(f.wrap_nullable()))
+    });
+    registry.register_function_factory("try_to_decimal", move |params, args_type| {
+        let mut f = factory(params, args_type)?;
+        f.signature.name = "try_to_decimal".to_string();
+        Some(Arc::new(f.error_to_null()))
     });
 }
 
