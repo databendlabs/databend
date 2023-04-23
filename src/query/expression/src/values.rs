@@ -26,6 +26,7 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::compute::cast as arrow_cast;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::datatypes::TimeUnit;
 use common_arrow::arrow::offset::OffsetsBuffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
@@ -930,7 +931,12 @@ impl Column {
         use common_arrow::arrow::datatypes::Field as ArrowField;
         let dummy = "DUMMY".to_string();
         let is_nullable = matches!(&self, Column::Nullable(_));
-        let arrow_type: ArrowDataType = (&self.data_type()).into();
+        let arrow_type: ArrowDataType = match &self.data_type() {
+            DataType::Bitmap => {
+                ArrowDataType::List(Box::new(Field::new("item", ArrowDataType::UInt32, false)))
+            }
+            _ => (&self.data_type()).into(),
+        };
         ArrowField::new(dummy, arrow_type, is_nullable)
     }
 

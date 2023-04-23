@@ -25,6 +25,7 @@ use common_exception::Result;
 use common_expression::serialize::read_decimal_with_size;
 use common_expression::serialize::uniform_date;
 use common_expression::types::array::ArrayColumnBuilder;
+use common_expression::types::bitmap::BitmapWrapper;
 use common_expression::types::date::check_date;
 use common_expression::types::decimal::Decimal;
 use common_expression::types::decimal::DecimalColumnBuilder;
@@ -52,6 +53,7 @@ use common_io::prelude::FormatSettings;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
 use num::cast::AsPrimitive;
+use roaring::RoaringBitmap;
 
 use crate::CommonSettings;
 use crate::FieldDecoder;
@@ -133,6 +135,7 @@ impl FastFieldDecoderValues {
             ColumnBuilder::String(c) => self.read_string(c, reader, positions),
             ColumnBuilder::Array(c) => self.read_array(c, reader, positions),
             ColumnBuilder::Map(c) => self.read_map(c, reader, positions),
+            ColumnBuilder::Bitmap(c) => self.read_bitmap(c, reader, positions),
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, reader, positions),
             ColumnBuilder::Variant(c) => self.read_variant(c, reader, positions),
             _ => unimplemented!(),
@@ -361,6 +364,20 @@ impl FastFieldDecoderValues {
             }
         }
         column.commit_row();
+        Ok(())
+    }
+
+    fn read_bitmap<R: AsRef<[u8]>>(
+        &self,
+        column: &mut Vec<BitmapWrapper>,
+        reader: &mut Cursor<R>,
+        positions: &mut VecDeque<usize>,
+    ) -> Result<()> {
+        let mut buf = Vec::new();
+        self.read_string_inner(reader, &mut buf, positions)?;
+        let bitmap = RoaringBitmap::deserialize_from(&buf[..])?;
+        let b = BitmapWrapper { bitmap };
+        column.push(b);
         Ok(())
     }
 

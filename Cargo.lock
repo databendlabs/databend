@@ -1729,6 +1729,7 @@ dependencies = [
  "ordered-float 3.6.0",
  "rand 0.8.5",
  "regex",
+ "roaring",
  "serde",
  "sha1",
  "sha2",
