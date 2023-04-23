@@ -168,6 +168,7 @@ impl Function {
 
     pub fn error_to_null(self) -> Self {
         let mut signature = self.signature;
+        debug_assert!(!signature.return_type.is_nullable_or_null());
         signature.return_type = signature.return_type.wrap_nullable();
 
         let (calc_domain, eval) = self.eval.into_scalar().unwrap();
@@ -612,6 +613,7 @@ pub fn error_to_null<I1: ArgType, O: ArgType>(
     func: impl for<'a> Fn(ValueRef<'a, I1>, &mut EvalContext) -> Value<O> + Copy + Send + Sync,
 ) -> impl for<'a> Fn(ValueRef<'a, I1>, &mut EvalContext) -> Value<NullableType<O>> + Copy + Send + Sync
 {
+    debug_assert!(!O::data_type().is_nullable_or_null());
     move |val, ctx| {
         let output = func(val, ctx);
         if let Some((validity, _)) = ctx.errors.take() {
