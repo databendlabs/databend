@@ -7,18 +7,18 @@ Returns a soundex string from str. Two strings that sound almost the same should
 ## Syntax
 
 ```sql
-SOUNDEX(str)
+SOUNDEX(<str>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| str | The string. |
+| Arguments | Description |
+|-----------|-------------|
+| `<str>`   | The string. |
 
 ## Return Type
 
-A string data type value or null.
+A `VARCHAR` data type value or `NULL`.
 
 ## Examples
 

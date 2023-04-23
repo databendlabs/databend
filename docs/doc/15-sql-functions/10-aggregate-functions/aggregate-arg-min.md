@@ -7,15 +7,15 @@ Calculates the `arg` value for a minimum `val` value. If there are several diffe
 ## Syntax
 
 ```sql
-ARG_MIN(arg, val)
+ARG_MIN(<arg>, <val>)
 ```
 
 ## Arguments
 
 | Arguments | Description                                                                                       |
 |-----------|---------------------------------------------------------------------------------------------------|
-| arg       | Argument of [any data type that Databend supports](../../13-sql-reference/10-data-types/index.md) |
-| val       | Value of [any data type that Databend supports](../../13-sql-reference/10-data-types/index.md)    |
+| `<arg>`   | Argument of [any data type that Databend supports](../../13-sql-reference/10-data-types/index.md) |
+| `<val>`   | Value of [any data type that Databend supports](../../13-sql-reference/10-data-types/index.md)    |
 
 ## Return Type
 

@@ -14,15 +14,15 @@ The `LIST` function is alias to `ARRAY_AGG`.
 ## Syntax
 
 ```sql
-ARRAY_AGG(expression)
-LIST(expression)
+ARRAY_AGG(<expr>)
+LIST(<expr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description    |
-| ----------- | -------------- |
-| expression  | Any expression |
+| Arguments | Description    |
+|-----------| -------------- |
+| `<expr>`  | Any expression |
 
 ## Return Type
 

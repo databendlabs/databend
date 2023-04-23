@@ -7,5 +7,5 @@ Synonym for LOWER(str).
 ## Syntax
 
 ```sql
-LCASE(str);
+LCASE(<str>);
 ```

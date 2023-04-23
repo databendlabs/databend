@@ -7,7 +7,7 @@ Returns a string representation of the octal value of N.
 ## Syntax
 
 ```sql
-OCT(expr)
+OCT(<expr>)
 ```
 
 ## Examples
