@@ -7,18 +7,18 @@ Returns the string that results from concatenating the arguments. May have one o
 ## Syntax
 
 ```sql
-CONCAT(column1, ...)
+CONCAT(<expr1>, ...)
 ```
 
 ## Arguments
 
-| Arguments   | Description   |
-| ----------- | ------------- |
-| column      | string column |
+| Arguments | Description |
+|-----------|-------------|
+| `<expr1>` | string      |
 
 ## Return Type
 
-A String data type value Or Null data type.
+A `VARCHAR` data type value Or `NULL` data type.
 
 ## Examples
 

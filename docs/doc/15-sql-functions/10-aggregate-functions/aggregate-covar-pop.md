@@ -7,15 +7,15 @@ COVAR_POP returns the population covariance of a set of number pairs.
 ## Syntax
 
 ```sql
-COVAR_POP(<expr0>, <expr1>)
+COVAR_POP(<expr1>, <expr2>)
 ```
 
 ## Arguments
 
 | Arguments |        Description       |
 |-----------| ------------------------ |
-| `<expr0>` | Any numerical expression |
 | `<expr1>` | Any numerical expression |
+| `<expr2>` | Any numerical expression |
 
 ## Return Type
 

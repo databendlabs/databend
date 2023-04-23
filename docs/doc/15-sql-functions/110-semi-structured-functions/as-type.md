@@ -25,10 +25,10 @@ AS_OBJECT( <variant> )
 
 ## Return Type
 
-- AS_BOOLEAN: Boolean
-- AS_INTEGER: Int64
-- AS_FLOAT:   Float64
-- AS_STRING:  String
+- AS_BOOLEAN: BOOLEAN
+- AS_INTEGER: BIGINT
+- AS_FLOAT:   DOUBLE
+- AS_STRING:  VARCHAR
 - AS_ARRAY:   Variant contains Array
 - AS_OBJECT:  Variant contains Object
 

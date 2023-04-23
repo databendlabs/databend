@@ -7,20 +7,20 @@ Returns the string str with all occurrences of the string from_str replaced by t
 ## Syntax
 
 ```sql
-REPLACE(str,from_str,to_str)
+REPLACE(<str>, <from_str>, <to_str>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| str | The string. |
-| from_str | The from string. |
-| to_str | The to string. |
+| Arguments    | Description      |
+|--------------|------------------|
+| `<str>`      | The string.      |
+| `<from_str>` | The from string. |
+| `<to_str>`   | The to string.   |
 
 ## Return Type
 
-A String data type value.
+`VARCHAR`
 
 ## Examples
 

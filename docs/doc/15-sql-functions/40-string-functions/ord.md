@@ -16,18 +16,18 @@ calculated from the numeric values of its constituent bytes using this formula:
 ## Syntax
 
 ```sql
-ORD(str)
+ORD(<str>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| str | The string. |
+| Arguments | Description |
+|-----------|-------------|
+| `<str>`   | The string. |
 
 ## Return Type
 
-A number data type value.
+`BIGINT`
 
 ## Examples
 
