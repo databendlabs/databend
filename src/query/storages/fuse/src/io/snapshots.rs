@@ -53,6 +53,8 @@ pub struct SnapshotReferencedFiles {
     pub blocks_index: BTreeSet<String>,
 }
 
+type BlockLocationTuple = (BTreeSet<String>, BTreeSet<String>);
+
 // Read snapshot related operations.
 pub struct SnapshotsIO {
     ctx: Arc<dyn TableContext>,
@@ -300,13 +302,13 @@ impl SnapshotsIO {
         segment_files: &[&String],
         schema: TableSchemaRef,
         version: u64,
-    ) -> Result<Vec<Result<(Vec<String>, Vec<String>)>>> {
+    ) -> Result<Vec<Result<BlockLocationTuple>>> {
         async fn read_segment_block(
             location: String,
             ver: u64,
             operator: Operator,
             schema: TableSchemaRef,
-        ) -> Result<(Vec<String>, Vec<String>)> {
+        ) -> Result<BlockLocationTuple> {
             let reader = MetaReaders::segment_info_reader(operator, schema);
             // Keep in mind that segment_info_read must need a schema
             let load_params = LoadParams {
@@ -317,12 +319,12 @@ impl SnapshotsIO {
             };
 
             let segment = reader.read(&load_params).await?;
-            let mut blocks = Vec::with_capacity(segment.blocks.len());
-            let mut blocks_index = Vec::with_capacity(segment.blocks.len());
+            let mut blocks = BTreeSet::new();
+            let mut blocks_index = BTreeSet::new();
             segment.blocks.iter().for_each(|block_meta| {
-                blocks.push(block_meta.location.0.clone());
+                blocks.insert(block_meta.location.0.clone());
                 if let Some(bloom_loc) = &block_meta.bloom_filter_index_location {
-                    blocks_index.push(bloom_loc.0.clone());
+                    blocks_index.insert(bloom_loc.0.clone());
                 }
             });
             Ok((blocks, blocks_index))
@@ -445,13 +447,9 @@ impl SnapshotsIO {
             let results = self
                 .read_segment_blocks(segment_chunk, schema.clone(), root_version)
                 .await?;
-            for (ret_blocks, ref_index) in results.into_iter().flatten() {
-                ret_blocks.iter().for_each(|block| {
-                    blocks.insert(block.to_string());
-                });
-                ref_index.iter().for_each(|index| {
-                    blocks_index.insert(index.to_string());
-                });
+            for (ret_blocks, ret_index) in results.into_iter().flatten() {
+                blocks.extend(ret_blocks);
+                blocks_index.extend(ret_index);
             }
 
             // Refresh status.

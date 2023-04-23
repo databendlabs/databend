@@ -578,11 +578,21 @@ impl FuseTable {
 
     #[async_backtrace::framed]
     pub async fn do_gc(&self, ctx: &Arc<dyn TableContext>, retention_sec: i64) -> Result<()> {
+        let start = Instant::now();
         // 1. Get all the files referenced by the current snapshot
         let referenced_files = match self.get_referenced_files(ctx).await? {
             Some(referenced_files) => referenced_files,
             None => return Ok(()),
         };
+        let status = format!(
+            "gc orphan: read referenced files:{},{},{}, cost:{} sec",
+            referenced_files.segments.len(),
+            referenced_files.blocks.len(),
+            referenced_files.blocks_index.len(),
+            start.elapsed().as_secs()
+        );
+        info!(status);
+        ctx.set_status_info(&status);
 
         // 2. Get orphan files to be purged
         let snapshots_io = SnapshotsIO::create(ctx.clone(), self.operator.clone());
@@ -592,35 +602,85 @@ impl FuseTable {
             retention_sec,
         )
         .await?;
+        let status = format!(
+            "gc orphan: read segment_locations_to_be_purged:{}, cost:{} sec",
+            segment_locations_to_be_purged.len(),
+            start.elapsed().as_secs()
+        );
+        info!(status);
+        ctx.set_status_info(&status);
+
         let block_locations_to_be_purged = Self::get_orphan_files_to_be_purged(
             &referenced_files.blocks,
             &snapshots_io,
             retention_sec,
         )
         .await?;
+        let status = format!(
+            "gc orphan: read block_locations_to_be_purged:{}, cost:{} sec",
+            segment_locations_to_be_purged.len(),
+            start.elapsed().as_secs()
+        );
+        info!(status);
+        ctx.set_status_info(&status);
+
         let index_locations_to_be_purged = Self::get_orphan_files_to_be_purged(
             &referenced_files.blocks_index,
             &snapshots_io,
             retention_sec,
         )
         .await?;
+        let status = format!(
+            "gc orphan: read index_locations_to_be_purged:{}, cost:{} sec",
+            index_locations_to_be_purged.len(),
+            start.elapsed().as_secs()
+        );
+        info!(status);
+        ctx.set_status_info(&status);
+        drop(referenced_files);
 
         // 3. Delete all the orphan files
+        let purged_file_num = segment_locations_to_be_purged.len();
         self.try_purge_location_files_and_cache::<SegmentInfo>(
             ctx.clone(),
             HashSet::from_iter(segment_locations_to_be_purged.into_iter()),
         )
         .await?;
+        let status = format!(
+            "gc orphan: purged segment files:{}, cost:{} sec",
+            purged_file_num,
+            start.elapsed().as_secs()
+        );
+        info!(status);
+        ctx.set_status_info(&status);
+
+        let purged_file_num = block_locations_to_be_purged.len();
         self.try_purge_location_files(
             ctx.clone(),
             HashSet::from_iter(block_locations_to_be_purged.into_iter()),
         )
         .await?;
+        let status = format!(
+            "gc orphan: purged block files:{}, cost:{} sec",
+            purged_file_num,
+            start.elapsed().as_secs()
+        );
+        info!(status);
+        ctx.set_status_info(&status);
+
+        let purged_file_num = index_locations_to_be_purged.len();
         self.try_purge_location_files(
             ctx.clone(),
             HashSet::from_iter(index_locations_to_be_purged.into_iter()),
         )
         .await?;
+        let status = format!(
+            "gc orphan: purged block index files:{}, cost:{} sec",
+            purged_file_num,
+            start.elapsed().as_secs()
+        );
+        info!(status);
+        ctx.set_status_info(&status);
 
         Ok(())
     }

@@ -546,10 +546,9 @@ impl Table for FuseTable {
 
     #[async_backtrace::framed]
     async fn gc(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
-        let timestamp = chrono::Utc::now()
-            .checked_sub_days(chrono::Days::new(12))
-            .unwrap()
-            .timestamp();
+        let timestamp = chrono::Utc::now().timestamp()
+            - chrono::Duration::hours(ctx.get_settings().get_retention_period()? as i64)
+                .num_seconds();
         self.do_gc(&ctx, timestamp).await
     }
 
