@@ -57,6 +57,11 @@ pub fn split_row_id(id: u64) -> (u64, u64) {
     (prefix, idx)
 }
 
+#[inline(always)]
+pub fn block_id_in_segment(block_num: usize, block_idx: usize) -> usize {
+    block_num - block_idx - 1
+}
+
 // meta data for generate internal columns
 #[derive(Debug)]
 pub struct InternalColumnMeta {

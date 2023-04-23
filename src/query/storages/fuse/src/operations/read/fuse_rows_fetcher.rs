@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_arrow::parquet::metadata::ColumnDescriptor;
+use common_catalog::plan::block_id_in_segment;
 use common_catalog::plan::compute_row_id_prefix;
 use common_catalog::plan::split_row_id;
 use common_catalog::plan::DataSourcePlan;
@@ -38,8 +39,8 @@ use common_pipeline_transforms::processors::transforms::AsyncTransformer;
 use common_storage::ColumnNodes;
 use storages_common_cache::LoadParams;
 
-use super::native_rows_fetcher::NativeRowFetcher;
-use super::parquet_rows_fetcher::ParquetRowFetcher;
+use super::native_rows_fetcher::NativeRowsFetcher;
+use super::parquet_rows_fetcher::ParquetRowsFetcher;
 use crate::io::BlockReader;
 use crate::io::MetaReaders;
 use crate::io::ReadSettings;
@@ -82,7 +83,7 @@ pub fn build_row_fetcher_pipeline(
                         fuse_table.clone(),
                         row_id_col_offset,
                         projection.clone(),
-                        NativeRowFetcher::<true>::create(block_reader.clone(), column_leaves),
+                        NativeRowsFetcher::<true>::create(block_reader.clone(), column_leaves),
                     )
                 } else {
                     TransformRowsFetcher::create(
@@ -91,7 +92,7 @@ pub fn build_row_fetcher_pipeline(
                         fuse_table.clone(),
                         row_id_col_offset,
                         projection.clone(),
-                        NativeRowFetcher::<false>::create(block_reader.clone(), column_leaves),
+                        NativeRowsFetcher::<false>::create(block_reader.clone(), column_leaves),
                     )
                 }
             }
@@ -106,7 +107,7 @@ pub fn build_row_fetcher_pipeline(
                         fuse_table.clone(),
                         row_id_col_offset,
                         projection.clone(),
-                        ParquetRowFetcher::<true>::create(
+                        ParquetRowsFetcher::<true>::create(
                             block_reader.clone(),
                             read_settings,
                             buffer_size,
@@ -119,7 +120,7 @@ pub fn build_row_fetcher_pipeline(
                         fuse_table.clone(),
                         row_id_col_offset,
                         projection.clone(),
-                        ParquetRowFetcher::<false>::create(
+                        ParquetRowsFetcher::<false>::create(
                             block_reader.clone(),
                             read_settings,
                             buffer_size,
@@ -132,7 +133,7 @@ pub fn build_row_fetcher_pipeline(
 }
 
 #[async_trait::async_trait]
-pub trait RowFetcher {
+pub trait RowsFetcher {
     async fn fetch(
         &self,
         part_map: &HashMap<u64, PartInfoPtr>,
@@ -142,7 +143,7 @@ pub trait RowFetcher {
     fn reader(&self) -> &BlockReader;
 }
 
-pub struct TransformRowsFetcher<F: RowFetcher> {
+pub struct TransformRowsFetcher<F: RowsFetcher> {
     table: Arc<FuseTable>,
     projection: Projection,
 
@@ -153,7 +154,7 @@ pub struct TransformRowsFetcher<F: RowFetcher> {
 
 #[async_trait::async_trait]
 impl<F> AsyncTransform for TransformRowsFetcher<F>
-where F: RowFetcher + Send + Sync + 'static
+where F: RowsFetcher + Send + Sync + 'static
 {
     const NAME: &'static str = "TransformRowsFetcher";
 
@@ -182,6 +183,7 @@ where F: RowFetcher + Send + Sync + 'static
                     put_cache: true,
                 })
                 .await?;
+            let block_num = segment_info.blocks.len();
             for (block_idx, block_meta) in segment_info.blocks.iter().enumerate() {
                 let part_info = FuseTable::projection_part(
                     block_meta,
@@ -190,7 +192,8 @@ where F: RowFetcher + Send + Sync + 'static
                     None,
                     &self.projection,
                 );
-                let part_id = compute_row_id_prefix(*seg_id as u64, block_idx as u64);
+                let block_id = block_id_in_segment(block_num, block_idx) as u64;
+                let part_id = compute_row_id_prefix(*seg_id as u64, block_id);
                 map.insert(part_id, part_info);
             }
         }
@@ -242,7 +245,7 @@ where F: RowFetcher + Send + Sync + 'static
 }
 
 impl<F> TransformRowsFetcher<F>
-where F: RowFetcher + Send + Sync + 'static
+where F: RowsFetcher + Send + Sync + 'static
 {
     fn create(
         input: Arc<InputPort>,

@@ -22,18 +22,18 @@ use common_catalog::plan::PartInfoPtr;
 use common_exception::Result;
 use common_expression::DataBlock;
 
-use super::fuse_row_fetcher::RowFetcher;
+use super::fuse_rows_fetcher::RowsFetcher;
 use super::native_data_source::DataChunks;
 use super::native_data_source_deserializer::NativeDeserializeDataTransform;
 use crate::io::BlockReader;
 
-pub(super) struct NativeRowFetcher<const BLOCKING_IO: bool> {
+pub(super) struct NativeRowsFetcher<const BLOCKING_IO: bool> {
     reader: Arc<BlockReader>,
     column_leaves: Vec<Vec<ColumnDescriptor>>,
 }
 
 #[async_trait::async_trait]
-impl<const BLOCKING_IO: bool> RowFetcher for NativeRowFetcher<BLOCKING_IO> {
+impl<const BLOCKING_IO: bool> RowsFetcher for NativeRowsFetcher<BLOCKING_IO> {
     async fn fetch(
         &self,
         part_map: &HashMap<u64, PartInfoPtr>,
@@ -71,7 +71,7 @@ impl<const BLOCKING_IO: bool> RowFetcher for NativeRowFetcher<BLOCKING_IO> {
     }
 }
 
-impl<const BLOCKING_IO: bool> NativeRowFetcher<BLOCKING_IO> {
+impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
     pub fn create(reader: Arc<BlockReader>, column_leaves: Vec<Vec<ColumnDescriptor>>) -> Self {
         Self {
             reader,
