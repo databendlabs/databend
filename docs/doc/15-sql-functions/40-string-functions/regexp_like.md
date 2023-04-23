@@ -7,16 +7,16 @@ REGEXP_LIKE function is used to check that whether the string matches regular ex
 ## Syntax
 
 ```sql
-REGEXP_LIKE(expr, pat[, match_type])
+REGEXP_LIKE(<expr>, <pat[, match_type]>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| expr  |  The string expr that to be matched |
-| pat   |  The regular expression |
-| match_type  |  Optional. match_type argument is a string that specifying how to perform matching |
+| Arguments      | Description                                                                       |
+|----------------|-----------------------------------------------------------------------------------|
+| `<expr>`       | The string expr that to be matched                                                |
+| `<pat>`        | The regular expression                                                            |
+| `[match_type]` | Optional. match_type argument is a string that specifying how to perform matching |
 
 `match_type` may contain any or all the following characters:
 
@@ -28,7 +28,7 @@ REGEXP_LIKE(expr, pat[, match_type])
 
 ## Return Type
 
-A number data type value.
+`BIGINT`
 Returns `1` if the string expr matches the regular expression specified by the pattern pat, `0` otherwise. If expr or pat is NULL, the return value is NULL.
 
 ## Examples

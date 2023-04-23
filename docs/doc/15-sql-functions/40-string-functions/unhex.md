@@ -7,14 +7,14 @@ For a string argument str, UNHEX(str) interprets each pair of characters in the 
 ## Syntax
 
 ```sql
-UNHEX(expr)
+UNHEX(<expr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| expr        | The string. |
+| Arguments | Description |
+|-----------|-------------|
+| `<expr>`  | The string. |
 
 ## Examples
 

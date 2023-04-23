@@ -11,14 +11,14 @@ The AVG() function returns the average value of an expression.
 ## Syntax
 
 ```sql
-AVG(expression)
+AVG(<expr>)
 ```
 
 ## Arguments
 
-| Arguments  | Description              |
-|------------|--------------------------|
-| expression | Any numerical expression |
+| Arguments | Description              |
+|-----------|--------------------------|
+| `<expr>`  | Any numerical expression |
 
 ## Return Type
 

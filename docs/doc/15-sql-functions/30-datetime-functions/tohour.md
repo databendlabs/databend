@@ -8,18 +8,18 @@ This function assumes that if clocks are moved ahead, it is by one hour and occu
 ## Syntax
 
 ```sql
-to_hour( <expr> )
+TO_HOUR(<expr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| `<expr>` | timestamp |
+| Arguments | Description |
+|-----------|-------------|
+| `<expr>`  | timestamp   |
 
 ## Return Type
 
- `UInt8` datatype.
+`TINYINT`
 
 ## Examples
 
