@@ -594,7 +594,7 @@ impl<'a> Binder {
         );
 
         if need_copy_file_infos.is_empty() {
-            return Err(ErrorCode::EmptyData("no file need to copy"));
+            return Ok(Plan::Copy(Box::new(CopyPlan::NoFileToCopy)));
         }
 
         let (s_expr, mut from_context) = self
