@@ -371,16 +371,27 @@ async fn test_fuse_gc_orphan_retention_files() -> Result<()> {
     let orphan_block_per_segment_num = 1;
 
     // generate some orphan files out of retention time
-    {
+    let outof_retention_time_orphan_files = {
         let table = fixture.latest_default_table().await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        utils::generate_orphan_files(
+        let files = utils::generate_orphan_files(
             fuse_table,
             orphan_segment_file_num,
             orphan_block_per_segment_num,
         )
         .await?;
-    }
+        let mut orphan_files = vec![];
+        for (location, segment) in files {
+            orphan_files.push(location.0);
+            for block_meta in segment.blocks {
+                orphan_files.push(block_meta.location.0.clone());
+                if let Some(block_index) = &block_meta.bloom_filter_index_location {
+                    orphan_files.push(block_index.0.clone());
+                }
+            }
+        }
+        orphan_files
+    };
 
     // after generate orphan files, verify the files number
     {
@@ -407,16 +418,28 @@ async fn test_fuse_gc_orphan_retention_files() -> Result<()> {
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
     // generate some orphan files within retention time
-    {
+    let within_retention_time_orphan_files = {
         let table = fixture.latest_default_table().await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        utils::generate_orphan_files(
+        let files = utils::generate_orphan_files(
             fuse_table,
             orphan_segment_file_num,
             orphan_block_per_segment_num,
         )
         .await?;
-    }
+        let mut orphan_files = vec![];
+        for (location, segment) in files {
+            orphan_files.push(location.0);
+            for block_meta in segment.blocks {
+                orphan_files.push(block_meta.location.0.clone());
+                if let Some(block_index) = &block_meta.bloom_filter_index_location {
+                    orphan_files.push(block_index.0.clone());
+                }
+            }
+        }
+        orphan_files
+    };
+
     // after generate orphan files, verify the files number
     {
         let expected_num_of_snapshot = 1;
@@ -468,6 +491,23 @@ async fn test_fuse_gc_orphan_retention_files() -> Result<()> {
         .await?;
     }
 
+    let dal = fuse_table.get_operator_ref();
+    // check that all orphan files outof retention time have been purged
+    {
+        for file in outof_retention_time_orphan_files {
+            let ret = dal.is_exist(&file).await?;
+            assert!(!ret);
+        }
+    }
+
+    // check that all orphan files within retention time exist
+    {
+        for file in within_retention_time_orphan_files {
+            let ret = dal.is_exist(&file).await?;
+            assert!(ret);
+        }
+    }
+
     // check all referenced files exist
     {
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
@@ -476,6 +516,10 @@ async fn test_fuse_gc_orphan_retention_files() -> Result<()> {
         let referenced_files = fuse_table.get_referenced_files(&table_ctx).await?.unwrap();
 
         assert_eq!(referenced_files, old_referenced_files);
+
+        for file in referenced_files.all_files() {
+            assert!(dal.is_exist(&file).await?);
+        }
     }
     Ok(())
 }
@@ -527,14 +571,13 @@ mod utils {
         fuse_table: &FuseTable,
         orphan_segment_number: usize,
         orphan_block_number_per_segment: usize,
-    ) -> Result<()> {
+    ) -> Result<Vec<(Location, SegmentInfoV2)>> {
         utils::generate_segments_v2(
             fuse_table,
             orphan_segment_number,
             orphan_block_number_per_segment,
         )
-        .await?;
-        Ok(())
+        .await
     }
 
     pub async fn generate_segments_v2(

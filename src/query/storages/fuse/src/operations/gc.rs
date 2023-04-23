@@ -496,15 +496,26 @@ impl FuseTable {
         } else {
             vec![]
         };
+        warn!(
+            "referenced_files: {:?}, files_to_be_purged: {:?}",
+            referenced_files, files_to_be_purged
+        );
 
         // 2. Filter out all the referenced files.
         files_to_be_purged.retain(|location| !referenced_files.contains(location));
+
+        warn!("files_to_be_purged: {:?}", files_to_be_purged);
 
         // 3. Filter out all files within retention time
         let within_time_files = snapshots_io
             .get_within_time_files(&files_to_be_purged, retention_sec)
             .await?;
         files_to_be_purged.retain(|location| !within_time_files.contains(location));
+
+        warn!(
+            "files_to_be_purged: {:?}, within_time_files: {:?}",
+            files_to_be_purged, within_time_files
+        );
 
         Ok(files_to_be_purged)
     }

@@ -53,6 +53,22 @@ pub struct SnapshotReferencedFiles {
     pub blocks_index: BTreeSet<String>,
 }
 
+impl SnapshotReferencedFiles {
+    pub fn all_files(&self) -> Vec<String> {
+        let mut files = vec![];
+        for file in &self.segments {
+            files.push(file.clone());
+        }
+        for file in &self.blocks {
+            files.push(file.clone());
+        }
+        for file in &self.blocks_index {
+            files.push(file.clone());
+        }
+        files
+    }
+}
+
 type BlockLocationTuple = (BTreeSet<String>, BTreeSet<String>);
 
 // Read snapshot related operations.
@@ -242,11 +258,12 @@ impl SnapshotsIO {
             let metadata = operator.stat(&file).await?;
             if let Some(last_modified) = metadata.last_modified() {
                 if last_modified.timestamp() >= timestamp {
-                    return Ok("".to_string());
+                    warn!("within retention time file: {:?}", file);
+                    return Ok(file);
                 }
             }
 
-            Ok(file)
+            Ok("".to_string())
         }
 
         async fn get_within_time_files(
