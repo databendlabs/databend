@@ -292,7 +292,7 @@ jobs:
         if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-stateful-standalone-linux
+          name: test-stateful-cluster-linux
 
   test_stateful_large_data:
     timeout-minutes: 60
