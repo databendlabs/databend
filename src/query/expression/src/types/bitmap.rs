@@ -31,17 +31,9 @@ use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BitmapWrapper {
     pub bitmap: RoaringBitmap,
-}
-
-impl Default for BitmapWrapper {
-    fn default() -> Self {
-        Self {
-            bitmap: RoaringBitmap::default(),
-        }
-    }
 }
 
 // The implementation of PartialOrd for BitmapWrapper is only to adapt to Scalar,
@@ -80,7 +72,7 @@ impl ValueType for BitmapType {
 
     fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
         match scalar {
-            ScalarRef::Bitmap(scalar) => Some(scalar.clone()),
+            ScalarRef::Bitmap(scalar) => Some(scalar),
             _ => None,
         }
     }
@@ -137,7 +129,7 @@ impl ValueType for BitmapType {
     }
 
     fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a> {
-        col.iter().clone()
+        col.iter()
     }
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
@@ -166,10 +158,7 @@ impl ValueType for BitmapType {
 
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         assert_eq!(builder.len(), 1);
-        builder
-            .get(0)
-            .map(|b| b.clone())
-            .unwrap_or(BitmapWrapper::default())
+        builder.get(0).cloned().unwrap_or(BitmapWrapper::default())
     }
 }
 
@@ -198,7 +187,7 @@ impl ArgType for BitmapType {
         iter: impl Iterator<Item = Self::ScalarRef<'a>>,
         _generics: &GenericMap,
     ) -> Self::Column {
-        iter.map(|b| b.clone()).collect()
+        iter.cloned().collect()
     }
 }
 
