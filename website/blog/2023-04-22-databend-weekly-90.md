@@ -94,7 +94,7 @@ Here are some noteworthy items recorded here, perhaps you can find something tha
 - Supported window function `percent_rank`.
 - Supported JSON path functions: `jsonb_path_query_first`,`jsonb_path_query`,`jsonb_path_query_array`.
 - Added `SOUNDS LIKE` syntax for String comparing.
-- Splitted log store and state-machine store in Meta Service.
+- Split log store and state-machine store in Meta Service.
 - Lazy materialize according to virtual column `_row_id`.
 
 ## What's Up Next
