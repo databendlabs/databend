@@ -65,7 +65,6 @@ jobs:
           context: "Benchmark Local / hits"
           state: pending
           description: "Queued"
-      # TODO: enable tpch benchmark for local
       - uses: ./.github/actions/create_check_status
         if: steps.metadata.outputs.source == 'pr'
         with:
@@ -80,14 +79,6 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ steps.metadata.outputs.head_sha }}
           context: "Benchmark Cloud / hits (Large)"
-          state: pending
-          description: "Queued"
-      - uses: ./.github/actions/create_check_status
-        if: steps.metadata.outputs.source == 'pr'
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          sha: ${{ steps.metadata.outputs.head_sha }}
-          context: "Benchmark Cloud / tpch (Medium)"
           state: pending
           description: "Queued"
       - uses: ./.github/actions/create_check_status
