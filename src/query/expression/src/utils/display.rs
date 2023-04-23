@@ -187,7 +187,7 @@ impl<'a> Display for ScalarRef<'a> {
             ScalarRef::Decimal(val) => write!(f, "{val}"),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
             ScalarRef::String(s) => match std::str::from_utf8(s) {
-                Ok(v) => write!(f, "{:?}", v),
+                Ok(v) => write!(f, "'{}'", v),
                 Err(_e) => {
                     write!(f, "0x")?;
                     for c in *s {
@@ -196,8 +196,8 @@ impl<'a> Display for ScalarRef<'a> {
                     Ok(())
                 }
             },
-            ScalarRef::Timestamp(t) => write!(f, "{}", timestamp_to_string(*t, Tz::UTC)),
-            ScalarRef::Date(d) => write!(f, "{}", date_to_string(*d as i64, Tz::UTC)),
+            ScalarRef::Timestamp(t) => write!(f, "'{}'", timestamp_to_string(*t, Tz::UTC)),
+            ScalarRef::Date(d) => write!(f, "'{}'", date_to_string(*d as i64, Tz::UTC)),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Map(col) => {
                 write!(f, "{{")?;
@@ -227,7 +227,7 @@ impl<'a> Display for ScalarRef<'a> {
             }
             ScalarRef::Variant(s) => {
                 let value = jsonb::to_string(s);
-                write!(f, "{value}")
+                write!(f, "'{}'", value)
             }
         }
     }
