@@ -302,7 +302,13 @@ fn evaluate_equal(column_stat: &ColumnStat, constant: &ConstantExpr) -> f64 {
             | NumberDataType::Float64 => compare_equal(&constant_datum, column_stat),
         },
         DataType::Boolean | DataType::String => compare_equal(&constant_datum, column_stat),
-        _ => 1.0 / column_stat.ndv,
+        _ => {
+            if column_stat.ndv == 0.0 {
+                0.0
+            } else {
+                1.0 / column_stat.ndv
+            }
+        }
     }
 }
 
@@ -320,7 +326,11 @@ fn compare_equal(datum: &Option<Datum>, column_stat: &ColumnStat) -> f64 {
         }
     }
 
-    1.0 / column_stat.ndv
+    if column_stat.ndv == 0.0 {
+        0.0
+    } else {
+        1.0 / column_stat.ndv
+    }
 }
 
 fn try_constant_fold(scalar_expr: &ScalarExpr) -> Result<ScalarExpr> {
