@@ -535,7 +535,7 @@ impl TryAdaptor {
                         FunctionDomain::Domain(NullableType::<AnyType>::upcast_domain(d))
                     }
                 },
-                // Here we convert full to full, this may lose some internal information since it's runtime adpator
+                // Here we convert MayThrow to full, this may lose some internal information since it's runtime adpator
                 FunctionDomain::Full | FunctionDomain::MayThrow => FunctionDomain::Full,
             }
         });
