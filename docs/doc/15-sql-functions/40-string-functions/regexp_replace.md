@@ -7,23 +7,23 @@ Replaces occurrences in the string `expr` that match the regular expression spec
 ## Syntax
 
 ```sql
-REGEXP_REPLACE(expr, pat, repl[, pos[, occurrence[, match_type]]])
+REGEXP_REPLACE(<expr>, <pat>, <repl[, pos[, occurrence[, match_type]]]>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| expr  |  The string expr that to be matched |
-| pat   |  The regular expression |
-| repl   |  The replacement string |
-| pos   |  Optional. The position in expr at which to start the search. If omitted, the default is 1. |
-| occurrence   |  Optional. Which occurrence of a match to replace. If omitted, the default is 0 (which means "replace all occurrences"). |
-| match_type  |  Optional. A string that specifies how to perform matching. The meaning is as described for REGEXP_LIKE(). |
+| Arguments  | Description                                                                                                             |
+|------------|-------------------------------------------------------------------------------------------------------------------------|
+| expr       | The string expr that to be matched                                                                                      |
+| pat        | The regular expression                                                                                                  |
+| repl       | The replacement string                                                                                                  |
+| pos        | Optional. The position in expr at which to start the search. If omitted, the default is 1.                              |
+| occurrence | Optional. Which occurrence of a match to replace. If omitted, the default is 0 (which means "replace all occurrences"). |
+| match_type | Optional. A string that specifies how to perform matching. The meaning is as described for REGEXP_LIKE().               |
 
 ## Return Type
 
-A String data type value.
+`VARCHAR`
 
 ## Examples
 

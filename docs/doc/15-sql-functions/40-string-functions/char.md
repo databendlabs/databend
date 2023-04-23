@@ -19,7 +19,7 @@ CHAR(N, ...)
 
 ## Return Type
 
-A String data type value.
+`VARCHAR`
 
 ## Examples
 

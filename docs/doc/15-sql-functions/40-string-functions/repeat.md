@@ -7,15 +7,15 @@ Returns a string consisting of the string str repeated count times. If count is 
 ## Syntax
 
 ```sql
-REPEAT(str, count)
+REPEAT(<str>, <count>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| str         | The string. |
-| count       | The number. |
+| Arguments | Description |
+|-----------|-------------|
+| `<str>`   | The string. |
+| `<count>` | The number. |
 
 ## Examples
 

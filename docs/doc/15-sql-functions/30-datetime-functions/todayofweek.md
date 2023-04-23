@@ -7,17 +7,18 @@ Converts a date or date with time (timestamp/datetime) to a UInt8 number contain
 ## Syntax
 
 ```sql
-to_day_of_week( <expr> )
+TO_DAY_OF_WEEK(<expr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| `<expr>` | date/timestamp |
+| Arguments | Description    |
+|-----------|----------------|
+| `<expr>`  | date/timestamp |
 
 ## Return Type
-`UInt8` datatype.
+
+``TINYINT`
 
 ## Examples
 

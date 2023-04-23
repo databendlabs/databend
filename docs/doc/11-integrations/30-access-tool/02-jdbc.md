@@ -34,7 +34,7 @@ To connect to Databend from DBeaver with the Databend JDBC driver, you need to a
 <dependency>
     <groupId>com.databend</groupId>
     <artifactId>databend-jdbc</artifactId>
-    <version>0.0.6</version>
+    <version>0.0.7</version>
 </dependency>
 ```
 

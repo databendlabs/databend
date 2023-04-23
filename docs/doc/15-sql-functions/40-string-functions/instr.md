@@ -8,19 +8,19 @@ This is the same as the two-argument form of LOCATE(), except that the order of 
 ## Syntax
 
 ```sql
-INSTR(str,substr)
+INSTR(<str>, <substr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| str | The string. |
-| substr | The substring. |
+| Arguments  | Description    |
+|------------|----------------|
+| `<str>`    | The string.    |
+| `<substr>` | The substring. |
 
 ## Return Type
 
-A number data type value.
+`BIGINT`
 
 ## Examples
 

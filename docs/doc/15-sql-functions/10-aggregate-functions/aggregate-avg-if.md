@@ -8,7 +8,7 @@ title: AVG_IF
 The suffix -If can be appended to the name of any aggregate function. In this case, the aggregate function accepts an extra argument – a condition.
 
 ```sql
-AVG_IF(column, cond)
+AVG_IF(<column>, <cond>)
 ```
 
 ## Example

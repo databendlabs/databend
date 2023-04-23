@@ -7,18 +7,18 @@ Converts a date with time (timestamp/datetime) to a UInt8 number containing the 
 ## Syntax
 
 ```sql
-to_second( <expr> )
+TO_SECOND(<expr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| `<expr>` | timestamp |
+| Arguments | Description |
+|-----------|-------------|
+| `<expr>`  | timestamp   |
 
 ## Return Type
 
-`UInt8` datatype.
+`TINYINT`
 
 ## Examples
 

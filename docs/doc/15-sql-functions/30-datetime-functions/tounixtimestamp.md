@@ -7,7 +7,7 @@ Converts a timestamp in a date/time format to a Unix timestamp format. A Unix ti
 ## Syntax
 
 ```sql
-to_unix_timestamp( <expr> )
+TO_UNIX_TIMESTAMP(<expr>)
 ```
 
 ## Arguments
@@ -20,7 +20,7 @@ For more information about the timestamp data type, see [Date & Time](../../13-s
 
 ## Return Type
 
-BIGINT
+`BIGINT`
 
 ## Examples
 
