@@ -608,7 +608,7 @@ impl Binder {
             }
             AlterTableAction::AddColumn { column } => {
                 let (schema, field_default_exprs, field_comments) = self
-                    .analyze_create_table_schema_by_columns(&[column.clone()])
+                    .analyze_create_table_schema_by_columns(&[column.clone()], true)
                     .await?;
                 Ok(Plan::AddTableColumn(Box::new(AddTableColumnPlan {
                     catalog,
@@ -859,6 +859,7 @@ impl Binder {
     async fn analyze_create_table_schema_by_columns(
         &self,
         columns: &[ColumnDefinition],
+        is_add_column: bool,
     ) -> Result<(TableSchemaRef, Vec<Option<String>>, Vec<String>)> {
         let mut bind_context = BindContext::new();
         let mut scalar_binder = ScalarBinder::new(
@@ -887,6 +888,14 @@ impl Binder {
                         argument: Box::new(expr),
                     })
                     .as_expr_with_col_index()?;
+
+                    // Added columns are not allowed to use expressions,
+                    // as the default values will be generated at at each query.
+                    if is_add_column && !cast_expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "default expression `{}` is not a valid constant. Please provide a valid constant expression as the default value.", cast_expr.sql_display(),
+                        )));
+                    }
 
                     let expr = if cast_expr.is_deterministic(&BUILTIN_FUNCTIONS) {
                         let (fold_to_constant, _) = ConstantFolder::fold(
@@ -917,7 +926,8 @@ impl Binder {
     ) -> Result<(TableSchemaRef, Vec<Option<String>>, Vec<String>)> {
         match source {
             CreateTableSource::Columns(columns) => {
-                self.analyze_create_table_schema_by_columns(columns).await
+                self.analyze_create_table_schema_by_columns(columns, false)
+                    .await
             }
             CreateTableSource::Like {
                 catalog,
