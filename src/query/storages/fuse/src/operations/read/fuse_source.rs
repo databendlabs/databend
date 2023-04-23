@@ -15,7 +15,6 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::InternalColumnMeta;
 use common_catalog::plan::PartInfoPtr;
@@ -269,21 +268,17 @@ pub fn adjust_threads_and_request(
 pub(super) fn fill_internal_column_meta(
     data_block: DataBlock,
     fuse_part: &FusePartInfo,
-    validity: Option<Bitmap>,
+    offsets: Option<Vec<usize>>,
 ) -> Result<DataBlock> {
     // Fill `BlockMetaInfoPtr` if query internal columns
     let block_meta = fuse_part.block_meta_index().unwrap();
-    let validity = validity.map(|bitmap| {
-        let (raw, _, len) = bitmap.as_slice();
-        (raw.to_vec(), len)
-    });
     let internal_column_meta = InternalColumnMeta {
         segment_id: block_meta.segment_id,
         block_id: block_meta.block_id,
         block_location: block_meta.block_location.clone(),
         segment_location: block_meta.segment_location.clone(),
         snapshot_location: block_meta.snapshot_location.as_ref().unwrap().clone(),
-        validity,
+        offsets,
     };
 
     let meta: Option<BlockMetaInfoPtr> = Some(Box::new(internal_column_meta));

@@ -121,7 +121,7 @@ impl ToReadDataSourcePlan for dyn Table {
         if let Some(ref internal_columns) = internal_columns {
             let mut schema = output_schema.as_ref().clone();
             for internal_column in internal_columns.values() {
-                schema.add_internal_column(
+                schema.add_internal_field(
                     internal_column.column_name(),
                     internal_column.table_data_type(),
                     internal_column.column_id(),

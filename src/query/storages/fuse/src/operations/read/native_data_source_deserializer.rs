@@ -90,6 +90,9 @@ pub struct NativeDeserializeDataTransform {
     prewhere_virtual_columns: Option<Vec<VirtualColumnInfo>>,
 
     skipped_page: usize,
+    // The row offset of current part.
+    // It's used to compute the row offset in one block (single data file in one segment).
+    offset_in_part: usize,
 
     read_columns: Vec<usize>,
     top_k: Option<(TopK, TopKSorter, usize)>,
@@ -144,7 +147,10 @@ impl NativeDeserializeDataTransform {
         let remain_columns: Vec<usize> = (0..src_schema.num_fields())
             .filter(|i| !prewhere_columns.contains(i))
             .collect();
-        let output_schema: DataSchema = plan.schema().into();
+
+        let mut output_schema = plan.schema().as_ref().clone();
+        output_schema.remove_internal_fields();
+        let output_schema: DataSchema = (&output_schema).into();
 
         let func_ctx = ctx.get_function_context()?;
         let mut prewhere_schema = src_schema.project(&prewhere_columns);
@@ -224,6 +230,7 @@ impl NativeDeserializeDataTransform {
                 inited: false,
                 array_iters: BTreeMap::new(),
                 array_skip_pages: BTreeMap::new(),
+                offset_in_part: 0,
             },
         )))
     }
@@ -392,6 +399,7 @@ impl NativeDeserializeDataTransform {
         self.inited = false;
         self.array_iters.clear();
         self.array_skip_pages.clear();
+        self.offset_in_part = 0;
         Ok(())
     }
 
@@ -424,6 +432,7 @@ impl NativeDeserializeDataTransform {
         self.inited = false;
         self.array_iters.clear();
         self.array_skip_pages.clear();
+        self.offset_in_part = 0;
         Ok(())
     }
 
@@ -587,6 +596,7 @@ impl Processor for NativeDeserializeDataTransform {
                                 arrays.push((*index, array));
                                 self.array_iters.insert(*index, array_iter);
                                 if sorter.never_match_any(&col) {
+                                    self.offset_in_part += col.len();
                                     return self.finish_process_skip_page();
                                 }
                             }
@@ -654,6 +664,7 @@ impl Processor for NativeDeserializeDataTransform {
 
                         // Step 3: Apply the filter, if it's all filtered, we can skip the remain columns.
                         if FilterHelpers::is_all_unset(&filter) {
+                            self.offset_in_part += prewhere_block.num_rows();
                             return self.finish_process_skip_page();
                         }
 
@@ -679,6 +690,7 @@ impl Processor for NativeDeserializeDataTransform {
                         };
 
                         if FilterHelpers::is_all_unset(&filter) {
+                            self.offset_in_part += prewhere_block.num_rows();
                             return self.finish_process_skip_page();
                         }
                         Some(filter)
@@ -709,6 +721,7 @@ impl Processor for NativeDeserializeDataTransform {
             }
 
             let block = self.block_reader.build_block(arrays, None)?;
+            let origin_num_rows = block.num_rows();
             let block = if let Some(filter) = &filter {
                 block.filter_boolean_value(filter)?
             } else {
@@ -728,18 +741,22 @@ impl Processor for NativeDeserializeDataTransform {
 
             // Step 8: Fill `InternalColumnMeta` as `DataBlock.meta` if query internal columns,
             // `FillInternalColumnProcessor` will generate internal columns using `InternalColumnMeta` in next pipeline.
-            let block = if !self.block_reader.query_internal_columns() {
-                block.resort(&self.src_schema, &self.output_schema)?
-            } else {
-                let validity = filter
-                    .as_ref()
-                    .filter(|v| matches!(v, Value::Column(_)))
-                    .map(|v| v.as_column().unwrap().clone());
+            let mut block = block.resort(&self.src_schema, &self.output_schema)?;
+            if self.block_reader.query_internal_columns() {
+                let offsets = if let Some(Value::Column(bitmap)) = filter.as_ref() {
+                    (self.offset_in_part..self.offset_in_part + origin_num_rows)
+                        .filter(|i| unsafe { bitmap.get_bit_unchecked(i - self.offset_in_part) })
+                        .collect()
+                } else {
+                    (self.offset_in_part..self.offset_in_part + origin_num_rows).collect()
+                };
+
                 let fuse_part = FusePartInfo::from_part(&self.parts[0])?;
-                fill_internal_column_meta(block, fuse_part, validity)?
+                block = fill_internal_column_meta(block, fuse_part, Some(offsets))?;
             };
 
             // Step 9: Add the block to output data
+            self.offset_in_part += origin_num_rows;
             self.add_block(block)?;
         }
 

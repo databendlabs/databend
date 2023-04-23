@@ -19,6 +19,13 @@ INSERT INTO TABLE `05_0031_t` (a) values(1),(2)
 statement ok
 INSERT INTO TABLE `05_0031_t` (a) values(3)
 
+query I
+SELECT _row_id FROM `05_0031_t` where b > 0 order by _row_id
+----
+0
+1
+4398046511104
+
 query II
 SELECT b,_row_id,a FROM `05_0031_t` order by _row_id
 ----
