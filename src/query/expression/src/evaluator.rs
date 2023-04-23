@@ -725,7 +725,7 @@ impl<'a> Evaluator<'a> {
             display_name: String::new(),
         };
 
-        let params = if let DataType::Decimal(ty) = dest_type {
+        let params = if let DataType::Decimal(ty) = dest_type.remove_nullable() {
             vec![ty.precision() as usize, ty.scale() as usize]
         } else {
             vec![]
