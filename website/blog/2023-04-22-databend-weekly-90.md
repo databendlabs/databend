@@ -90,9 +90,9 @@ The script, written in bash, removes unnecessary arguments and adds necessary on
 Here are some noteworthy items recorded here, perhaps you can find something that interests you.
 
 - [Deploying Databend on Docker](https://databend.rs/doc/deploy/deploying-local#deploying-databend-on-docker)
-- Supported table with cluster key definition for `REPLACE INTO` statement.
-- Supported window function `percent_rank`.
-- Supported JSON path functions: `jsonb_path_query_first`,`jsonb_path_query`,`jsonb_path_query_array`.
+- Added support for table with cluster key definition for `REPLACE INTO` statement.
+- Added window function `percent_rank`.
+- Added JSON path functions: `jsonb_path_query_first`,`jsonb_path_query`,`jsonb_path_query_array`.
 - Added `SOUNDS LIKE` syntax for String comparing.
 - Split log store and state-machine store in Meta Service.
 - Lazy materialize according to virtual column `_row_id`.
