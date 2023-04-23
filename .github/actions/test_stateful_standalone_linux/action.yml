@@ -22,7 +22,7 @@ runs:
     - name: Minio Setup for (ubuntu-latest only)
       shell: bash
       run: |
-        docker run -d -p 9900:9000 --name minio \
+        docker run -d --network host --name minio \
                 -e "MINIO_ACCESS_KEY=minioadmin" \
                 -e "MINIO_SECRET_KEY=minioadmin" \
                 -v /tmp/data:/data \
