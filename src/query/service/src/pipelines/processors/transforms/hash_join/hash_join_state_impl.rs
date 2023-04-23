@@ -18,18 +18,26 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::HashMethod;
 use common_expression::HashMethodKind;
+use common_expression::HashMethodSerializer;
+use common_expression::HashMethodSingleString;
+use common_expression::KeysState;
 use common_hashtable::HashJoinHashMap;
 use common_hashtable::MarkerKind;
 use common_hashtable::RawEntry;
 use common_hashtable::RowPtr;
+use common_hashtable::StringHashJoinHashMap;
+use common_hashtable::StringRawEntry;
 use ethnum::U256;
 
 use super::ProbeState;
 use crate::pipelines::processors::transforms::hash_join::desc::JoinState;
 use crate::pipelines::processors::transforms::hash_join::join_hash_table::HashJoinHashTable;
+use crate::pipelines::processors::transforms::hash_join::join_hash_table::SerializerHashJoinHashTable;
+use crate::pipelines::processors::transforms::hash_join::join_hash_table::SingleStringHashJoinHashTable;
 use crate::pipelines::processors::transforms::FixedKeyHashJoinHashTable;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::processors::JoinHashTable;
@@ -87,7 +95,11 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn mark_join_blocks(&self) -> Result<Vec<DataBlock>> {
-        let data_blocks = self.row_space.datablocks();
+        let data_blocks = self.row_space.chunks.read().unwrap();
+        let data_blocks = data_blocks
+            .iter()
+            .map(|c| &c.data_block)
+            .collect::<Vec<_>>();
         let num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
@@ -173,7 +185,11 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn right_semi_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
-        let data_blocks = self.row_space.datablocks();
+        let data_blocks = self.row_space.chunks.read().unwrap();
+        let data_blocks = data_blocks
+            .iter()
+            .map(|c| &c.data_block)
+            .collect::<Vec<_>>();
         let num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
@@ -298,81 +314,74 @@ impl HashJoinState for JoinHashTable {
                 row_num += chunk.num_rows();
             }
             let capacity = (row_num * 2).next_power_of_two();
-            let mut entry_size = 0;
             let hashtable = match (*self.method).clone() {
-                // HashMethodKind::Serializer(_) => Arc::new(JoinHashTable::try_create(
-                //     ctx,
-                //     HashTable::Serializer(SerializerHashTable {
-                //         hash_table: StringHashMap::<[u8], Vec<RowPtr>>::new(),
-                //         hash_method: HashMethodSerializer::default(),
-                //     }),
-                //     build_schema,
-                //     probe_schema,
-                //     hash_join_desc,
-                //     hash_key_types,
-                //     nullable_size,
-                //     row_size,
-                // )?),
-                // HashMethodKind::SingleString(_) => Arc::new(JoinHashTable::try_create(
-                //     ctx,
-                //     HashTable::SingleString(SingleStringHashTable {
-                //         hash_table: ShortStringHashMap::<[u8], Vec<RowPtr>>::new(),
-                //         hash_method: HashMethodSingleString::default(),
-                //     }),
-                //     build_schema,
-                //     probe_schema,
-                //     hash_join_desc,
-                //     hash_key_types,
-                //     nullable_size,
-                //     row_size,
-                // )?),
+                HashMethodKind::Serializer(_) => {
+                    self.entry_size
+                        .store(std::mem::size_of::<StringRawEntry>(), Ordering::SeqCst);
+                    HashJoinHashTable::Serializer(SerializerHashJoinHashTable {
+                        hash_table: StringHashJoinHashMap::with_fixed_capacity(capacity),
+                        hash_method: HashMethodSerializer::default(),
+                    })
+                }
+                HashMethodKind::SingleString(_) => {
+                    self.entry_size
+                        .store(std::mem::size_of::<StringRawEntry>(), Ordering::SeqCst);
+                    HashJoinHashTable::SingleString(SingleStringHashJoinHashTable {
+                        hash_table: StringHashJoinHashMap::with_fixed_capacity(capacity),
+                        hash_method: HashMethodSingleString::default(),
+                    })
+                }
                 HashMethodKind::KeysU8(hash_method) => {
-                    entry_size = std::mem::size_of::<RawEntry<u8>>();
+                    self.entry_size
+                        .store(std::mem::size_of::<RawEntry<u8>>(), Ordering::SeqCst);
                     HashJoinHashTable::KeysU8(FixedKeyHashJoinHashTable {
                         hash_table: HashJoinHashMap::<u8>::with_fixed_capacity(capacity),
                         hash_method,
                     })
                 }
                 HashMethodKind::KeysU16(hash_method) => {
-                    entry_size = std::mem::size_of::<RawEntry<u16>>();
+                    self.entry_size
+                        .store(std::mem::size_of::<RawEntry<u16>>(), Ordering::SeqCst);
                     HashJoinHashTable::KeysU16(FixedKeyHashJoinHashTable {
                         hash_table: HashJoinHashMap::<u16>::with_fixed_capacity(capacity),
                         hash_method,
                     })
                 }
                 HashMethodKind::KeysU32(hash_method) => {
-                    entry_size = std::mem::size_of::<RawEntry<u32>>();
+                    self.entry_size
+                        .store(std::mem::size_of::<RawEntry<u32>>(), Ordering::SeqCst);
                     HashJoinHashTable::KeysU32(FixedKeyHashJoinHashTable {
                         hash_table: HashJoinHashMap::<u32>::with_fixed_capacity(capacity),
                         hash_method,
                     })
                 }
                 HashMethodKind::KeysU64(hash_method) => {
-                    entry_size = std::mem::size_of::<RawEntry<u64>>();
+                    self.entry_size
+                        .store(std::mem::size_of::<RawEntry<u64>>(), Ordering::SeqCst);
                     HashJoinHashTable::KeysU64(FixedKeyHashJoinHashTable {
                         hash_table: HashJoinHashMap::<u64>::with_fixed_capacity(capacity),
                         hash_method,
                     })
                 }
                 HashMethodKind::KeysU128(hash_method) => {
-                    entry_size = std::mem::size_of::<RawEntry<u128>>();
+                    self.entry_size
+                        .store(std::mem::size_of::<RawEntry<u128>>(), Ordering::SeqCst);
                     HashJoinHashTable::KeysU128(FixedKeyHashJoinHashTable {
                         hash_table: HashJoinHashMap::<u128>::with_fixed_capacity(capacity),
                         hash_method,
                     })
                 }
                 HashMethodKind::KeysU256(hash_method) => {
-                    entry_size = std::mem::size_of::<RawEntry<U256>>();
+                    self.entry_size
+                        .store(std::mem::size_of::<RawEntry<U256>>(), Ordering::SeqCst);
                     HashJoinHashTable::KeysU256(FixedKeyHashJoinHashTable {
                         hash_table: HashJoinHashMap::<U256>::with_fixed_capacity(capacity),
                         hash_method,
                     })
                 }
-                _ => unreachable!(),
             };
             let ht = unsafe { &mut *self.hash_table.get() };
             *ht = hashtable;
-            self.entry_size.store(entry_size, Ordering::SeqCst);
 
             let mut is_built = self.is_built.lock().unwrap();
             *is_built = true;
@@ -402,27 +411,26 @@ impl HashJoinState for JoinHashTable {
         if task_idx < 0 {
             return Ok(false);
         }
-        let chunks = self.row_space.chunks.read().unwrap();
-        let mut row_num = 0;
+
         let task = {
             let finalize_tasks = self.finalize_tasks.read();
             finalize_tasks[task_idx as usize]
         };
-        for chunk_index in task.0..task.1 {
-            row_num += chunks[chunk_index].num_rows();
-        }
+
         let hashtable = unsafe { &mut *self.hash_table.get() };
         let entry_size = self.entry_size.load(Ordering::Relaxed);
-        let mut local_space: Vec<u8> = Vec::with_capacity(row_num * entry_size);
-        let local_space_ptr = local_space.as_mut_ptr();
-        let mut offset = 0;
-        for chunk_index in task.0..task.1 {
-            row_num += chunks[chunk_index].num_rows();
-        }
+        let mut local_raw_entry_spaces: Vec<Vec<u8>> = Vec::new();
+
         macro_rules! insert_key {
-            ($table: expr, $markers: expr, $method: expr, $chunk: expr, $columns: expr,  $chunk_index: expr, $local_space_ptr: expr, $offset: expr, $entry_size: expr, $t: ty, ) => {{
+            ($table: expr, $markers: expr, $method: expr, $chunk: expr, $columns: expr,  $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, $t: ty,) => {{
                 let keys_state = $method.build_keys_state(&$columns, $chunk.num_rows())?;
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
+
+                let mut local_space: Vec<u8> = Vec::with_capacity($chunk.num_rows() * entry_size);
+                let local_space_ptr = local_space.as_mut_ptr();
+                let mut offset = 0;
+                local_raw_entry_spaces.push(local_space);
+
                 for (row_index, key) in build_keys_iter.enumerate().take($chunk.num_rows()) {
                     let raw_entry_ptr = unsafe {
                         std::mem::transmute::<*mut u8, *mut RawEntry<$t>>(
@@ -441,10 +449,65 @@ impl HashJoinState for JoinHashTable {
                     }
                     unsafe {
                         (*raw_entry_ptr).row_ptr = row_ptr;
-                        (*raw_entry_ptr).key = key.clone();
+                        (*raw_entry_ptr).key = *key;
                         (*raw_entry_ptr).next = 0;
                     }
-                    $table.insert(*key, raw_entry_ptr)
+                    $table.insert(*key, raw_entry_ptr);
+                }
+            }};
+        }
+
+        macro_rules! insert_string_key {
+            ($table: expr, $markers: expr, $method: expr, $chunk: expr, $columns: expr,  $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, ) => {{
+                let keys_state = $method.build_keys_state(&$columns, $chunk.num_rows())?;
+                let build_keys_iter = $method.build_keys_iter(&keys_state)?;
+
+                let space_size = match &keys_state {
+                    KeysState::Column(Column::String(col)) => col.offsets.last(),
+                    _ => unreachable!(),
+                };
+                let mut entry_local_space: Vec<u8> =
+                    Vec::with_capacity($chunk.num_rows() * entry_size);
+                let mut string_local_space: Vec<u8> =
+                    Vec::with_capacity(*space_size.unwrap() as usize);
+                let entry_local_space_ptr = entry_local_space.as_mut_ptr();
+                let string_local_space_ptr = string_local_space.as_mut_ptr();
+                local_raw_entry_spaces.push(entry_local_space);
+                local_raw_entry_spaces.push(string_local_space);
+
+                let mut entry_offset = 0;
+                let mut string_offset = 0;
+                for (row_index, key) in build_keys_iter.enumerate().take($chunk.num_rows()) {
+                    let raw_entry_ptr = unsafe {
+                        std::mem::transmute::<*mut u8, *mut StringRawEntry>(
+                            entry_local_space_ptr.add(entry_offset),
+                        )
+                    };
+                    entry_offset += entry_size;
+                    let row_ptr = RowPtr {
+                        chunk_index: $chunk_index,
+                        row_index,
+                        marker: $markers[row_index],
+                    };
+                    if self.hash_join_desc.join_type == JoinType::LeftMark {
+                        let mut self_row_ptrs = self.row_ptrs.write();
+                        self_row_ptrs.push(row_ptr.clone());
+                    }
+                    unsafe {
+                        (*raw_entry_ptr).row_ptr = row_ptr;
+                        (*raw_entry_ptr).length = key.len() as u32;
+                        (*raw_entry_ptr).next = 0;
+                        std::ptr::copy_nonoverlapping(
+                            key.as_ptr(),
+                            (*raw_entry_ptr).early.as_mut_ptr(),
+                            std::cmp::min(4, key.len()),
+                        );
+                        let dst = string_local_space_ptr.add(string_offset);
+                        (*raw_entry_ptr).key = dst;
+                        std::ptr::copy_nonoverlapping(key.as_ptr(), dst, key.len());
+                    }
+                    string_offset += key.len();
+                    $table.insert(key, raw_entry_ptr);
                 }
             }};
         }
@@ -485,37 +548,37 @@ impl HashJoinState for JoinHashTable {
             };
 
             match hashtable {
-                // HashTable::Serializer(table) => insert_string_key! {
-                //   &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,
-                // },
-                // HashTable::SingleString(table) => insert_string_key! {
-                //   &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,
-                // },
+                HashJoinHashTable::Serializer(table) => insert_string_key! {
+                  &mut table.hash_table, &markers, &table.hash_method, chunk, columns, chunk_index, entry_size, &mut local_raw_entry_spaces,
+                },
+                HashJoinHashTable::SingleString(table) => insert_string_key! {
+                  &mut table.hash_table, &markers, &table.hash_method, chunk, columns, chunk_index, entry_size, &mut local_raw_entry_spaces,
+                },
                 HashJoinHashTable::KeysU8(table) => insert_key! {
-                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,local_space_ptr, &mut offset, entry_size, u8,
+                  &mut table.hash_table, &markers, &table.hash_method, chunk,columns, chunk_index, entry_size, &mut local_raw_entry_spaces, u8,
                 },
                 HashJoinHashTable::KeysU16(table) => insert_key! {
-                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,local_space_ptr, &mut offset, entry_size, u16,
+                  &mut table.hash_table, &markers, &table.hash_method, chunk,columns, chunk_index, entry_size, &mut local_raw_entry_spaces, u16,
                 },
                 HashJoinHashTable::KeysU32(table) => insert_key! {
-                    &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,local_space_ptr, &mut offset, entry_size, u32,
+                  &mut table.hash_table, &markers, &table.hash_method, chunk, columns, chunk_index, entry_size, &mut local_raw_entry_spaces, u32,
                 },
                 HashJoinHashTable::KeysU64(table) => insert_key! {
-                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,local_space_ptr, &mut offset, entry_size, u64,
+                  &mut table.hash_table, &markers, &table.hash_method, chunk, columns, chunk_index, entry_size, &mut local_raw_entry_spaces, u64,
                 },
                 HashJoinHashTable::KeysU128(table) => insert_key! {
-                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,local_space_ptr, &mut offset, entry_size, u128,
+                  &mut table.hash_table, &markers, &table.hash_method, chunk, columns, chunk_index, entry_size, &mut local_raw_entry_spaces, u128,
                 },
                 HashJoinHashTable::KeysU256(table) => insert_key! {
-                  &mut table.hash_table, &markers, &table.hash_method,chunk,columns,chunk_index,local_space_ptr, &mut offset, entry_size, U256,
+                  &mut table.hash_table, &markers, &table.hash_method, chunk, columns, chunk_index, entry_size, &mut local_raw_entry_spaces, U256,
                 },
                 _ => unreachable!(),
             }
         }
 
         {
-            let mut local_spaces = self.local_spaces.lock().unwrap();
-            local_spaces.push(local_space);
+            let mut raw_entry_spaces = self.raw_entry_spaces.lock().unwrap();
+            raw_entry_spaces.extend(local_raw_entry_spaces);
         }
         Ok(true)
     }
@@ -532,14 +595,14 @@ impl HashJoinState for JoinHashTable {
         // let interrupt = self.interrupt.clone();
         let chunks = self.row_space.chunks.read().unwrap();
         let chunks_len = chunks.len();
+        if chunks_len == 0 {
+            self.unfinished_task_num.store(0, Ordering::Relaxed);
+            return Ok(());
+        }
         let mut finalize_tasks = self.finalize_tasks.write();
-        // TODO(dousir9)
-        let mut max_threads = *self.max_threads.lock().unwrap();
-        max_threads = 10;
-        debug_assert!(chunks_len > 0);
-        debug_assert!(max_threads > 0);
-        let (task_size, task_num) = if chunks_len >= max_threads {
-            (chunks_len / max_threads, max_threads)
+        let task_num = 10;
+        let (task_size, task_num) = if chunks_len >= task_num {
+            (chunks_len / task_num, task_num)
         } else {
             (1, chunks_len)
         };

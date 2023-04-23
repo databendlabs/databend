@@ -35,6 +35,7 @@ use common_hashtable::MarkerKind;
 use common_hashtable::RowPtr;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
+use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::pipelines::processors::JoinHashTable;
 use crate::sql::plans::JoinType;
 
@@ -68,7 +69,7 @@ impl JoinHashTable {
     }
 
     #[inline]
-    pub(crate) fn probe_key2<'a, H: HashJoinHashtableLike>(
+    pub(crate) fn probe_key<'a, H: HashJoinHashtableLike>(
         &self,
         hash_table: &'a H,
         key: &'a H::Key,
@@ -76,10 +77,9 @@ impl JoinHashTable {
         i: usize,
         vec_ptr: *mut RowPtr,
         occupied: usize,
-        capacity: usize,
     ) -> (usize, u64) {
         if valids.as_ref().map_or(true, |v| v.get_bit(i)) {
-            return hash_table.probe_hash_table(key, vec_ptr, occupied, capacity);
+            return hash_table.probe_hash_table(key, vec_ptr, occupied, JOIN_MAX_BLOCK_SIZE);
         }
         (0, 0)
     }
@@ -270,7 +270,11 @@ impl JoinHashTable {
         &self,
         unmatched_build_indexes: &Vec<RowPtr>,
     ) -> Result<DataBlock> {
-        let data_blocks = self.row_space.datablocks();
+        let data_blocks = self.row_space.chunks.read().unwrap();
+        let data_blocks = data_blocks
+            .iter()
+            .map(|c| &c.data_block)
+            .collect::<Vec<_>>();
         let num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
@@ -333,7 +337,11 @@ impl JoinHashTable {
     }
 
     pub(crate) fn rest_block(&self) -> Result<DataBlock> {
-        let data_blocks = self.row_space.datablocks();
+        let data_blocks = self.row_space.chunks.read().unwrap();
+        let data_blocks = data_blocks
+            .iter()
+            .map(|c| &c.data_block)
+            .collect::<Vec<_>>();
         let num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());

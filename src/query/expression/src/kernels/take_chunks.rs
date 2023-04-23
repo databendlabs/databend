@@ -46,7 +46,7 @@ pub type BlockRowIndex = (usize, usize, usize);
 
 impl DataBlock {
     pub fn take_blocks(
-        blocks: &[DataBlock],
+        blocks: &[&DataBlock],
         indices: &[BlockRowIndex],
         result_size: usize,
     ) -> Self {

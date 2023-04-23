@@ -90,7 +90,11 @@ impl JoinHashTable {
         let build_indexes = &mut probe_state.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
 
-        let data_blocks = self.row_space.datablocks();
+        let data_blocks = self.row_space.chunks.read().unwrap();
+        let data_blocks = data_blocks
+            .iter()
+            .map(|c| &c.data_block)
+            .collect::<Vec<_>>();
         let num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
@@ -102,15 +106,7 @@ impl JoinHashTable {
             {
                 hash_table.probe_hash_table(key, build_indexes_ptr, occupied, JOIN_MAX_BLOCK_SIZE)
             } else {
-                self.probe_key2(
-                    hash_table,
-                    key,
-                    valids,
-                    i,
-                    build_indexes_ptr,
-                    occupied,
-                    JOIN_MAX_BLOCK_SIZE,
-                )
+                self.probe_key(hash_table, key, valids, i, build_indexes_ptr, occupied)
             };
             if match_count == 0 {
                 continue;

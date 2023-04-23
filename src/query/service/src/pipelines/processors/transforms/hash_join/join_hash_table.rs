@@ -36,11 +36,9 @@ use common_expression::HashMethodSingleString;
 use common_expression::RemoteExpr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::HashJoinHashMap;
-use common_hashtable::HashMap;
 use common_hashtable::HashtableKeyable;
 use common_hashtable::RowPtr;
-use common_hashtable::ShortStringHashMap;
-use common_hashtable::StringHashMap;
+use common_hashtable::StringHashJoinHashMap;
 use common_sql::plans::JoinType;
 use ethnum::U256;
 use parking_lot::RwLock;
@@ -53,28 +51,13 @@ use crate::pipelines::processors::transforms::hash_join::util::probe_schema_wrap
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
-pub struct SerializerHashTable {
-    pub(crate) hash_table: StringHashMap<[u8], Vec<RowPtr>>,
-    pub(crate) hash_method: HashMethodSerializer,
-}
-
-pub struct SingleStringHashTable {
-    pub(crate) hash_table: ShortStringHashMap<[u8], Vec<RowPtr>>,
-    pub(crate) hash_method: HashMethodSingleString,
-}
-
-pub struct FixedKeyHashTable<T: HashtableKeyable> {
-    pub(crate) hash_table: HashMap<T, Vec<RowPtr>>,
-    pub(crate) hash_method: HashMethodFixedKeys<T>,
-}
-
 pub struct SerializerHashJoinHashTable {
-    pub(crate) hash_table: StringHashMap<[u8], u64>,
+    pub(crate) hash_table: StringHashJoinHashMap,
     pub(crate) hash_method: HashMethodSerializer,
 }
 
 pub struct SingleStringHashJoinHashTable {
-    pub(crate) hash_table: ShortStringHashMap<[u8], u64>,
+    pub(crate) hash_table: StringHashJoinHashMap,
     pub(crate) hash_method: HashMethodSingleString,
 }
 
@@ -83,23 +66,10 @@ pub struct FixedKeyHashJoinHashTable<T: HashtableKeyable> {
     pub(crate) hash_method: HashMethodFixedKeys<T>,
 }
 
-pub enum HashTable {
-    Serializer(SerializerHashTable),
-    SingleString(SingleStringHashTable),
-    KeysU8(FixedKeyHashTable<u8>),
-    KeysU16(FixedKeyHashTable<u16>),
-    KeysU32(FixedKeyHashTable<u32>),
-    KeysU64(FixedKeyHashTable<u64>),
-    KeysU128(FixedKeyHashTable<u128>),
-    KeysU256(FixedKeyHashTable<U256>),
-}
-
 pub enum HashJoinHashTable {
     Null,
-    // TODO(dousir9)
-    Serializer(FixedKeyHashJoinHashTable<u8>),
-    // TODO(dousir9)
-    SingleString(FixedKeyHashJoinHashTable<u8>),
+    Serializer(SerializerHashJoinHashTable),
+    SingleString(SingleStringHashJoinHashTable),
     KeysU8(FixedKeyHashJoinHashTable<u8>),
     KeysU16(FixedKeyHashJoinHashTable<u16>),
     KeysU32(FixedKeyHashJoinHashTable<u32>),
@@ -130,7 +100,7 @@ pub struct JoinHashTable {
     pub(crate) unfinished_task_num: Arc<AtomicI32>,
     pub(crate) method: Arc<HashMethodKind>,
     pub(crate) entry_size: Arc<AtomicUsize>,
-    pub(crate) local_spaces: Mutex<Vec<Vec<u8>>>,
+    pub(crate) raw_entry_spaces: Mutex<Vec<Vec<u8>>>,
 }
 
 impl JoinHashTable {
@@ -194,7 +164,7 @@ impl JoinHashTable {
             finalize_tasks: Arc::new(RwLock::new(vec![])),
             unfinished_task_num: Arc::new(AtomicI32::new(0)),
             entry_size: Arc::new(AtomicUsize::new(0)),
-            local_spaces: Mutex::new(vec![]),
+            raw_entry_spaces: Mutex::new(vec![]),
         })
     }
 
@@ -270,7 +240,7 @@ impl JoinHashTable {
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
                 self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
             }
-            _ => unreachable!(),
+            HashJoinHashTable::Null => unreachable!(),
         })
     }
 }

@@ -232,6 +232,7 @@ where F: RowFetcher + Send + Sync + 'static
             })
             .collect::<Vec<_>>();
 
+        let fetched_blocks = fetched_blocks.iter().collect::<Vec<_>>();
         let needed_block = DataBlock::take_blocks(&fetched_blocks, &indices, num_rows);
         for col in needed_block.columns().iter() {
             data.add_column(col.clone());

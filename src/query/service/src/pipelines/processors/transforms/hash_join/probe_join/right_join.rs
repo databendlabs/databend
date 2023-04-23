@@ -50,28 +50,26 @@ impl JoinHashTable {
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
         let mut validity = MutableBitmap::with_capacity(JOIN_MAX_BLOCK_SIZE);
 
-        let data_blocks = self.row_space.datablocks();
+        let data_blocks = self.row_space.chunks.read().unwrap();
+        let data_blocks = data_blocks
+            .iter()
+            .map(|c| &c.data_block)
+            .collect::<Vec<_>>();
         let num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
 
         for (i, key) in keys_iter.enumerate() {
-            let (mut match_count, mut incomplete_ptr) = self.probe_key2(
+            let (mut match_count, mut incomplete_ptr) = self.probe_key(
                 hash_table,
                 key,
                 valids,
                 i,
                 local_build_indexes_ptr,
                 occupied,
-                JOIN_MAX_BLOCK_SIZE,
             );
             if match_count == 0 {
                 continue;
-            }
-            {
-                let mut build_indexes = self.hash_join_desc.join_state.build_indexes.write();
-                build_indexes
-                    .extend_from_slice(&local_build_indexes[occupied..occupied + match_count]);
             }
             occupied += match_count;
             local_probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
@@ -83,6 +81,12 @@ impl JoinHashTable {
                         return Err(ErrorCode::AbortedQuery(
                             "Aborted query, because the server is shutting down or the query was killed.",
                         ));
+                    }
+
+                    {
+                        let mut build_indexes =
+                            self.hash_join_desc.join_state.build_indexes.write();
+                        build_indexes.extend_from_slice(local_build_indexes);
                     }
 
                     let build_block =
@@ -128,14 +132,6 @@ impl JoinHashTable {
                         break;
                     }
 
-                    {
-                        let mut build_indexes =
-                            self.hash_join_desc.join_state.build_indexes.write();
-                        build_indexes.extend_from_slice(
-                            &local_build_indexes[occupied..occupied + match_count],
-                        );
-                    }
-
                     occupied += match_count;
                     local_probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
                     probe_indexes_len += 1;
@@ -146,6 +142,11 @@ impl JoinHashTable {
                     }
                 }
             }
+        }
+
+        {
+            let mut build_indexes = self.hash_join_desc.join_state.build_indexes.write();
+            build_indexes.extend_from_slice(&local_build_indexes[0..occupied]);
         }
 
         let mut probe_block = DataBlock::take_compacted_indices(

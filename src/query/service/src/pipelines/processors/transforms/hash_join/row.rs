@@ -80,7 +80,7 @@ impl RowSpace {
     pub fn gather(
         &self,
         row_ptrs: &[RowPtr],
-        data_blocks: &Vec<DataBlock>,
+        data_blocks: &Vec<&DataBlock>,
         num_rows: &usize,
     ) -> Result<DataBlock> {
         let mut indices = Vec::with_capacity(row_ptrs.len());
