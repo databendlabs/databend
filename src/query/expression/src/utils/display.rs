@@ -187,7 +187,7 @@ impl<'a> Display for ScalarRef<'a> {
             ScalarRef::Decimal(val) => write!(f, "{val}"),
             ScalarRef::Boolean(val) => write!(f, "{val}"),
             ScalarRef::String(s) => match std::str::from_utf8(s) {
-                Ok(v) => write!(f, "'{}'", v),
+                Ok(v) => write!(f, "{:?}", v),
                 Err(_e) => {
                     write!(f, "0x")?;
                     for c in *s {
