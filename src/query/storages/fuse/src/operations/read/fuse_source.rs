@@ -15,12 +15,16 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_arrow::arrow::bitmap::Bitmap;
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::InternalColumnMeta;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::StealablePartitions;
 use common_catalog::plan::TopK;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::BlockMetaInfoPtr;
+use common_expression::DataBlock;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
@@ -260,4 +264,28 @@ pub fn adjust_threads_and_request(
         max_io_requests = std::cmp::min(max_io_requests, block_nums);
     }
     (max_threads, max_io_requests)
+}
+
+pub(super) fn fill_internal_column_meta(
+    data_block: DataBlock,
+    fuse_part: &FusePartInfo,
+    validity: Option<Bitmap>,
+) -> Result<DataBlock> {
+    // Fill `BlockMetaInfoPtr` if query internal columns
+    let block_meta = fuse_part.block_meta_index().unwrap();
+    let validity = validity.map(|bitmap| {
+        let (raw, _, len) = bitmap.as_slice();
+        (raw.to_vec(), len)
+    });
+    let internal_column_meta = InternalColumnMeta {
+        segment_id: block_meta.segment_id,
+        block_id: block_meta.block_id,
+        block_location: block_meta.block_location.clone(),
+        segment_location: block_meta.segment_location.clone(),
+        snapshot_location: block_meta.snapshot_location.as_ref().unwrap().clone(),
+        validity,
+    };
+
+    let meta: Option<BlockMetaInfoPtr> = Some(Box::new(internal_column_meta));
+    data_block.add_meta(meta)
 }
