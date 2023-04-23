@@ -3499,6 +3499,7 @@ Functions overloads:
 6 try_to_date(Int64) :: Date NULL
 7 try_to_date(Int64 NULL) :: Date NULL
 0 try_to_decimal FACTORY
+1 try_to_decimal FACTORY
 0 try_to_float32(Variant) :: Float32 NULL
 1 try_to_float32(Variant NULL) :: Float32 NULL
 2 try_to_float32(String) :: Float32 NULL

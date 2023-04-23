@@ -22,7 +22,6 @@ use common_expression::types::decimal::*;
 use common_expression::types::string::StringColumn;
 use common_expression::types::*;
 use common_expression::with_integer_mapped_type;
-use common_expression::wrap_nullable;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::EvalContext;
