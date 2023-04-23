@@ -9,19 +9,19 @@ Returns 0 if substr is not in str. Returns NULL if any argument is NULL.
 ## Syntax
 
 ```sql
-POSITION(substr IN str)
+POSITION(<substr> IN <str>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| substr | The substring. |
-| str | The string. |
+| Arguments  | Description    |
+|------------|----------------|
+| `<substr>` | The substring. |
+| `<str>`    | The string.    |
 
 ## Return Type
 
-A number data type value.
+`BIGINT`
 
 ## Examples
 

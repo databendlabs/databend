@@ -7,7 +7,7 @@ title: MAX_IF
 The suffix `_IF` can be appended to the name of any aggregate function. In this case, the aggregate function accepts an extra argument – a condition.
 
 ```sql
-MAX_IF(column, cond)
+MAX_IF(<column>, <cond>)
 ```
 
 ## Example

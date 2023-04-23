@@ -7,19 +7,19 @@ Returns the string str with all characters changed to uppercase.
 ## Syntax
 
 ```sql
-UPPER(str);
+UPPER(<str>);
 ```
 
 ## Arguments
 
 | Arguments | Description                |
 |-----------|----------------------------|
-| str       | The string to be uppercase |
+| `<str>`   | The string to be uppercase |
 
 
 ## Return Type
 
-A string data type value.
+`VARCHAR`
 
 ## Examples
 

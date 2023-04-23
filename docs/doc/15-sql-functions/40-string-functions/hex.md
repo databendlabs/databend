@@ -9,14 +9,14 @@ For a numeric argument N, HEX() returns a hexadecimal string representation of t
 ## Syntax
 
 ```sql
-HEX(expr)
+HEX(<expr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| expr        | The number or string. |
+| Arguments | Description           |
+|-----------|-----------------------|
+| `<expr>`  | The number or string. |
 
 ## Examples
 

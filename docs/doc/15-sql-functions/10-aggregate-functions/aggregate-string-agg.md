@@ -9,16 +9,30 @@ The STRING_AGG() function converts all the non-NULL values of a column to String
 ## Syntax
 
 ```sql
-STRING_AGG(expression)
-STRING_AGG(expression, delimiter)
+STRING_AGG(<expr>)
+STRING_AGG(<expr> [, delimiter])
 ```
+
+:::info
+If `<expr>` is not a String expression, should use `::VARCHAR` to convert.
+
+For example:
+```sql
+SELECT string_agg(number::VARCHAR, '|') AS s FROM numbers(5);
++-----------+
+| s         |
++-----------+
+| 0|1|2|3|4 |
++-----------+
+```
+:::
 
 ## Arguments
 
-| Arguments  | Description                                                  |
-|------------|--------------------------------------------------------------|
-| expression | Any String expression                                        |
-| delimiter  | Optional constant String, if not specified, use empty String |
+| Arguments   | Description                                                         |
+|-------------|---------------------------------------------------------------------|
+| `<expr>`    | Any string expression (if not a string, use `::VARCHAR` to convert) |
+| `delimiter` | Optional constant String, if not specified, use empty String        |
 
 ## Return Type
 
