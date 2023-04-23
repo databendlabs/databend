@@ -19,15 +19,7 @@ runs:
             docker logs "$line" > .databend/docker/"$line".log
         done
 
-        tar --exclude='target' \
-            --exclude='website' \
-            --exclude='docs' \
-            --exclude='docker' \
-            --exclude='bins' \
-            --exclude='.git' \
-            --exclude='*.tar.gz' \
-            --exclude='tests/suites/0_stateless/13_tpch/data' \
-            -zcf target/failure-${{ inputs.name }}.tar.gz .
+        tar -zcf target/failure-${{ inputs.name }}.tar.gz .databend
     - uses: actions/upload-artifact@v3
       with:
         name: ${{ inputs.name }}
