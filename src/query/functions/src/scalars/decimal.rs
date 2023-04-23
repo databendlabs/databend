@@ -22,6 +22,7 @@ use common_expression::types::decimal::*;
 use common_expression::types::string::StringColumn;
 use common_expression::types::*;
 use common_expression::with_integer_mapped_type;
+use common_expression::wrap_nullable;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::EvalContext;
@@ -395,14 +396,13 @@ pub fn register(registry: &mut FunctionRegistry) {
         if args_type.len() != 1 {
             return None;
         }
-
+        if params.len() != 2 {
+            return None;
+        }
         if !matches!(
             args_type[0].remove_nullable(),
             DataType::Number(_) | DataType::Decimal(_) | DataType::String
         ) {
-            return None;
-        }
-        if params.len() != 2 {
             return None;
         }
 
@@ -410,15 +410,13 @@ pub fn register(registry: &mut FunctionRegistry) {
             precision: params[0] as u8,
             scale: params[1] as u8,
         };
-
-        let from_type = args_type[0].clone();
-        let return_type = DecimalDataType::from_size(decimal_size).ok()?;
-        let return_type = DataType::Decimal(return_type);
+        let from_type = args_type[0].remove_nullable();
+        let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size).ok()?);
 
         Some(Function {
             signature: FunctionSignature {
                 name: "to_decimal".to_string(),
-                args_type: args_type.to_owned(),
+                args_type: vec![from_type.clone()],
                 return_type: return_type.clone(),
             },
             eval: FunctionEval::Scalar {
@@ -441,6 +439,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         let mut f = factory(params, args_type)?;
         f.signature.name = "try_to_decimal".to_string();
         Some(Arc::new(f.error_to_null()))
+    });
+    registry.register_function_factory("try_to_decimal", move |params, args_type| {
+        let mut f = factory(params, args_type)?;
+        f.signature.name = "try_to_decimal".to_string();
+        Some(Arc::new(f.error_to_null().wrap_nullable()))
     });
 }
 
