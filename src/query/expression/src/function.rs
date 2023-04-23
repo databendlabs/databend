@@ -176,18 +176,13 @@ impl Function {
         let new_calc_domain = Box::new(move |domains: &[Domain]| {
             let domain = calc_domain(domains);
             match domain {
-                FunctionDomain::Domain(d) => match d {
-                    Domain::Nullable(domain) => {
-                        FunctionDomain::Domain(NullableType::<AnyType>::upcast_domain(domain))
-                    }
-                    domain => {
-                        let d = NullableDomain {
-                            has_null: false,
-                            value: Some(Box::new(domain)),
-                        };
-                        FunctionDomain::Domain(NullableType::<AnyType>::upcast_domain(d))
-                    }
-                },
+                FunctionDomain::Domain(domain) => {
+                    let new_domain = NullableDomain {
+                        has_null: false,
+                        value: Some(Box::new(domain)),
+                    };
+                    FunctionDomain::Domain(NullableType::<AnyType>::upcast_domain(new_domain))
+                }
                 // Here we convert MayThrow to full, this may lose some internal information since it's runtime adpator
                 FunctionDomain::Full | FunctionDomain::MayThrow => FunctionDomain::Full,
             }
