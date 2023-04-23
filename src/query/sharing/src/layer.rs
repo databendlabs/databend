@@ -31,7 +31,6 @@ use opendal::raw::parse_error_response;
 use opendal::raw::parse_etag;
 use opendal::raw::parse_last_modified;
 use opendal::raw::Accessor;
-use opendal::raw::AccessorCapability;
 use opendal::raw::AccessorInfo;
 use opendal::raw::AsyncBody;
 use opendal::raw::ErrorResponse;
@@ -42,6 +41,7 @@ use opendal::raw::PresignedRequest;
 use opendal::raw::RpRead;
 use opendal::raw::RpStat;
 use opendal::Builder;
+use opendal::Capability;
 use opendal::EntryMode;
 use opendal::Error;
 use opendal::ErrorKind;
@@ -137,7 +137,14 @@ impl Accessor for SharedAccessor {
     fn info(&self) -> AccessorInfo {
         let mut meta = AccessorInfo::default();
         meta.set_scheme(Scheme::Custom("shared"))
-            .set_capabilities(AccessorCapability::Read);
+            .set_capability(Capability {
+                read: true,
+                read_with_range: true,
+
+                stat: true,
+                ..Default::default()
+            });
+
         meta
     }
 

@@ -8,18 +8,18 @@ Return the length of a string in bits.
 ## Syntax
 
 ```sql
-BIT_LENGTH(str)
+BIT_LENGTH(<expr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| str         | The string. |
+| Arguments | Description |
+|-----------| ----------- |
+| `<expr>`  | The string. |
 
 ## Return Type
 
-A number data type value.
+`BIGINT`
 
 ## Examples
 

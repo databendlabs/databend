@@ -2,13 +2,13 @@
 title: TO_MONDAY
 ---
 
-Rounds down a date or date with time (timestamp/datetime) to the nearest Monday.
+Round down a date or date with time (timestamp/datetime) to the nearest Monday.
 Returns the date.
 
 ## Syntax
 
 ```sql
-to_monday( <expr> )
+TO_MONDAY(<expr>)
 ```
 
 ## Arguments
@@ -19,7 +19,7 @@ to_monday( <expr> )
 
 ## Return Type
 
-Datetime object, returns date in “YYYY-MM-DD” format.
+`DATE`, returns date in “YYYY-MM-DD” format.
 
 ## Examples
 

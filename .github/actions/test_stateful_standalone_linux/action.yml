@@ -48,9 +48,3 @@ runs:
       shell: bash
       run: |
         ./scripts/ci/ci-run-sharding-tests.sh
-
-    - name: Upload failure
-      if: failure() || cancelled()
-      uses: ./.github/actions/artifact_failure
-      with:
-        name: test-stateful-standalone-linux

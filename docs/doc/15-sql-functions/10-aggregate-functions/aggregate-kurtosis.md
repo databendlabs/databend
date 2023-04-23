@@ -9,14 +9,14 @@ The `KURTOSIS()` function returns the excess kurtosis of all input values.
 ## Syntax
 
 ```sql
-KURTOSIS(expression)
+KURTOSIS(<expr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description                     |
-| ----------- | -----------                     |
-| expression  | Any numerical expression        |
+| Arguments | Description                     |
+|-----------| -----------                     |
+| `<expr>`  | Any numerical expression        |
 
 ## Return Type
 

@@ -2,7 +2,7 @@
 title: DATE_ADD
 ---
 
-Adds the time interval or date interval to the provided date or date with time (timestamp/datetime).
+Add the time interval or date interval to the provided date or date with time (timestamp/datetime).
 
 ## Syntax
 

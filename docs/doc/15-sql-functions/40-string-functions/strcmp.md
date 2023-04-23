@@ -7,19 +7,19 @@ Returns 0 if the strings are the same, -1 if the first argument is smaller than 
 ## Syntax
 
 ```sql
-STRCMP(expr1,expr2)
+STRCMP(<expr1> ,<expr2>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| expr1 | The string. |
-| expr2 | The string. |
+| Arguments | Description |
+|-----------|-------------|
+| `<expr1>` | The string. |
+| `<expr2>` | The string. |
 
 ## Return Type
 
-A number data type value.
+`BIGINT`
 
 ## Examples
 
