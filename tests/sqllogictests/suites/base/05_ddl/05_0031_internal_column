@@ -41,7 +41,7 @@ statement ok
 INSERT INTO TABLE `05_0031_t_1` values(5),(6)
 
 query II
-SELECT a,`05_0031_t_1`._row_id FROM `05_0031_t` NATURAL JOIN `05_0031_t_1` order by a;
+SELECT a,`05_0031_t_1`._row_id FROM `05_0031_t` NATURAL JOIN `05_0031_t_1` order by a, `05_0031_t_1`._row_id;
 ----
 1 0
 1 1
