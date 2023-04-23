@@ -10,4 +10,4 @@ SQL
 
 ${BENDSQL} --query='INSERT INTO test_books VALUES;' --format=csv --data=@cli/tests/data/books.csv
 
-${BENDSQL} --query='SELECT * FROM test_books LIMIT 10;'
+${BENDSQL} --query='SELECT * FROM test_books LIMIT 10;' --output=tsv

@@ -97,7 +97,7 @@ impl Connection for FlightSQLConnection {
         _file_format_options: Option<BTreeMap<&str, &str>>,
         _copy_options: Option<BTreeMap<&str, &str>>,
     ) -> Result<QueryProgress> {
-        unimplemented!()
+        unimplemented!("stream_load is not supported in FlightSQL")
     }
 }
 

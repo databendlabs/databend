@@ -25,7 +25,11 @@ use tokio::time::Instant;
 
 use indicatif::{HumanBytes, ProgressBar, ProgressState, ProgressStyle};
 
-use crate::{ast::format_query, config::Settings, helper::CliHelper};
+use crate::{
+    ast::format_query,
+    config::{OutputFormat, Settings},
+    helper::CliHelper,
+};
 
 #[async_trait::async_trait]
 pub trait ChunkDisplay {
@@ -97,9 +101,10 @@ impl<'a> ChunkDisplay for ReplDisplay<'a> {
         if let Some(pb) = self.progress.take() {
             pb.finish_and_clear();
         }
-        print_rows(self.schema.clone(), &rows, self.settings)?;
-
-        println!();
+        if !rows.is_empty() {
+            println!("{}", create_table(self.schema.clone(), &rows)?);
+            println!();
+        }
 
         let rows_str = if self.rows > 1 { "rows" } else { "row" };
         println!(
@@ -123,8 +128,8 @@ impl<'a> ChunkDisplay for ReplDisplay<'a> {
 }
 
 pub struct FormatDisplay<'a> {
-    _settings: &'a Settings,
-    _schema: SchemaRef,
+    settings: &'a Settings,
+    schema: SchemaRef,
     data: RowProgressIterator,
 
     rows: usize,
@@ -140,8 +145,8 @@ impl<'a> FormatDisplay<'a> {
         data: RowProgressIterator,
     ) -> Self {
         Self {
-            _settings: settings,
-            _schema: schema,
+            settings,
+            schema,
             data,
             rows: 0,
             _progress: None,
@@ -167,13 +172,32 @@ impl<'a> ChunkDisplay for FormatDisplay<'a> {
                 }
             }
         }
-        let mut wtr = csv::WriterBuilder::new()
-            .delimiter(b'\t')
-            .quote_style(csv::QuoteStyle::Necessary)
-            .from_writer(std::io::stdout());
-        for row in rows {
-            let values: Vec<String> = row.values().iter().map(|v| v.to_string()).collect();
-            wtr.write_record(values)?;
+        if rows.is_empty() {
+            return Ok(());
+        }
+        match self.settings.output_format {
+            OutputFormat::Table => {
+                println!("{}", create_table(self.schema.clone(), &rows)?);
+            }
+            OutputFormat::CSV => {
+                let mut wtr = csv::WriterBuilder::new()
+                    .quote_style(csv::QuoteStyle::Necessary)
+                    .from_writer(std::io::stdout());
+                for row in rows {
+                    let record = row.into_iter().map(|v| v.to_string()).collect::<Vec<_>>();
+                    wtr.write_record(record)?;
+                }
+            }
+            OutputFormat::TSV => {
+                let mut wtr = csv::WriterBuilder::new()
+                    .delimiter(b'\t')
+                    .quote_style(csv::QuoteStyle::Necessary)
+                    .from_writer(std::io::stdout());
+                for row in rows {
+                    let record = row.into_iter().map(|v| v.to_string()).collect::<Vec<_>>();
+                    wtr.write_record(record)?;
+                }
+            }
         }
         Ok(())
     }
@@ -183,36 +207,26 @@ impl<'a> ChunkDisplay for FormatDisplay<'a> {
     }
 }
 
-fn print_rows(schema: SchemaRef, results: &[Row], _settings: &Settings) -> Result<()> {
-    if !results.is_empty() {
-        println!("{}", create_table(schema, results)?);
-    }
-    Ok(())
-}
-
 fn format_read_progress(progress: &QueryProgress, elapsed: f64) -> String {
-    let mut s = String::new();
-    s.push_str(&format!(
-        "{} rows, {} processed, ({} rows/s, {}/s)",
+    format!(
+        "Processing {}/{} ({} rows/s), {}/{} ({}/s)",
+        humanize_count(progress.read_rows as f64),
         humanize_count(progress.total_rows as f64),
+        humanize_count(progress.read_rows as f64 / elapsed),
+        HumanBytes(progress.read_bytes as u64),
         HumanBytes(progress.total_bytes as u64),
-        humanize_count(progress.total_rows as f64 / elapsed),
-        HumanBytes((progress.total_bytes as f64 / elapsed) as u64)
-    ));
-    s
+        HumanBytes((progress.read_bytes as f64 / elapsed) as u64)
+    )
 }
 
-// TODO:(everpcpc)
-fn _format_write_progress(progress: &QueryProgress, elapsed: f64) -> String {
-    let mut s = String::new();
-    s.push_str(&format!(
-        "{} rows, {} written, ({} rows/s., {}/s.)",
+pub fn format_write_progress(progress: &QueryProgress, elapsed: f64) -> String {
+    format!(
+        "Written {} ({} rows/s), {} ({}/s)",
         humanize_count(progress.write_rows as f64),
-        HumanBytes(progress.write_bytes as u64),
         humanize_count(progress.write_rows as f64 / elapsed),
+        HumanBytes(progress.write_bytes as u64),
         HumanBytes((progress.write_bytes as f64 / elapsed) as u64)
-    ));
-    s
+    )
 }
 
 fn display_read_progress(pb: Option<ProgressBar>, current: &QueryProgress) -> ProgressBar {

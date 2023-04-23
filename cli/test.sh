@@ -36,7 +36,7 @@ for tf in cli/tests/*.{sql,sh}; do
 		bash "${tf}" >"cli/tests/${suite}.output" 2>&1
 	elif [[ $tf == *.sql ]]; then
 		suite=$(basename "${tf}" | sed -e 's#.sql##')
-		"${BENDSQL}" <"${tf}" >"cli/tests/${suite}.output" 2>&1
+		"${BENDSQL}" --output tsv <"${tf}" >"cli/tests/${suite}.output" 2>&1
 	fi
 	diff "cli/tests/${suite}.output" "cli/tests/${suite}.result"
 done
@@ -50,7 +50,7 @@ for tf in cli/tests/"$TEST_HANDLER"/*.{sql,sh}; do
 		bash "${tf}" >"cli/tests/${TEST_HANDLER}/${suite}.output" 2>&1
 	elif [[ $tf == *.sql ]]; then
 		suite=$(basename "${tf}" | sed -e 's#.sql##')
-		"${BENDSQL}" <"${tf}" >"cli/tests/${TEST_HANDLER}/${suite}.output" 2>&1
+		"${BENDSQL}" --output tsv <"${tf}" >"cli/tests/${TEST_HANDLER}/${suite}.output" 2>&1
 	fi
 	diff "cli/tests/${TEST_HANDLER}/${suite}.output" "cli/tests/${TEST_HANDLER}/${suite}.result"
 done

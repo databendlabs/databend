@@ -24,12 +24,12 @@ use std::collections::BTreeMap;
 
 use anyhow::{anyhow, Result};
 use clap::{CommandFactory, Parser, ValueEnum};
-use config::Config;
+use config::{Config, OutputFormat};
 
 /// Supported file format and options:
 /// https://databend.rs/doc/sql-reference/file-format-options
 #[derive(ValueEnum, Clone, Debug, PartialEq)]
-enum InputFormat {
+pub enum InputFormat {
     CSV,
     TSV,
     NDJSON,
@@ -69,13 +69,6 @@ impl InputFormat {
         }
         options
     }
-}
-
-#[derive(ValueEnum, Clone, Debug, PartialEq)]
-enum OutputFormat {
-    Table,
-    CSV,
-    TSV,
 }
 
 #[derive(Debug, Parser, PartialEq)]
@@ -235,6 +228,8 @@ pub async fn main() -> Result<()> {
             conn_args.get_dsn()?
         }
     };
+    config.settings.output_format = args.output;
+    config.settings.show_progress = args.progress;
 
     let is_repl = atty::is(atty::Stream::Stdin) && !args.non_interactive && args.query.is_none();
     let mut session = session::Session::try_new(dsn, config.settings, is_repl).await?;
