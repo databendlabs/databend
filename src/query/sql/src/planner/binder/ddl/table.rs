@@ -880,7 +880,7 @@ impl Binder {
                 if let Some(default_expr) = &column.default_expr {
                     let (expr, _) = scalar_binder.bind(default_expr).await?;
                     let is_try = schema_data_type.is_nullable();
-                    let cast_expr_to_field_type = ScalarExpr::CastExpr(CastExpr {
+                    let cast_expr = ScalarExpr::CastExpr(CastExpr {
                         span: expr.span(),
                         is_try,
                         target_type: Box::new(DataType::from(&schema_data_type)),
@@ -888,24 +888,17 @@ impl Binder {
                     })
                     .as_expr_with_col_index()?;
 
-                    if !cast_expr_to_field_type.is_deterministic(&BUILTIN_FUNCTIONS) {
-                        return Err(ErrorCode::SemanticError(format!(
-                            "default expression {cast_expr_to_field_type} is not a valid constant. Please provide a valid constant expression as the default value.",
-                        )));
-                    }
-
-                    let (fold_to_constant, _) = ConstantFolder::fold(
-                        &cast_expr_to_field_type,
-                        &self.ctx.get_function_context()?,
-                        &BUILTIN_FUNCTIONS,
-                    );
-                    if let common_expression::Expr::Constant { .. } = fold_to_constant {
-                        Some(default_expr.to_string())
+                    let expr = if cast_expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+                        let (fold_to_constant, _) = ConstantFolder::fold(
+                            &cast_expr,
+                            &self.ctx.get_function_context()?,
+                            &BUILTIN_FUNCTIONS,
+                        );
+                        fold_to_constant
                     } else {
-                        return Err(ErrorCode::SemanticError(format!(
-                            "default expression {cast_expr_to_field_type} is not a valid constant expression. Please provide a valid constant expression as the default value.",
-                        )));
-                    }
+                        cast_expr
+                    };
+                    Some(expr.sql_display())
                 } else {
                     None
                 }

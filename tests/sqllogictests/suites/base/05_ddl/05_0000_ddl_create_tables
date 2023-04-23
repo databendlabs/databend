@@ -142,7 +142,22 @@ statement error 1065
 create table db2.test6(id Int8, created timestamp  DEFAULT today() + a)
 
 statement ok
-create table db2.test6(id Int8, created timestamp)
+create table db2.test6(id Int8, a Int8 DEFAULT 1 + 2, created timestamp DEFAULT now())
+
+query TTTTT
+desc db2.test6
+----
+id TINYINT NO 0 (empty)
+a TINYINT NO 3 (empty)
+created TIMESTAMP NO now() (empty)
+
+statement ok
+INSERT INTO db2.test6 (id) VALUES (1)
+
+query IIT
+SELECT id, a, now() >= created FROM db2.test6;
+----
+1 3 1
 
 statement ok
 create table db2.test7(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED,float FLOAT, double DOUBLE, date DATE, datetime DATETIME, ts TIMESTAMP, str VARCHAR default '3', bool BOOLEAN, arr ARRAY(INT), tup TUPLE(INT, BOOL), map MAP(INT, STRING), variant VARIANT)
