@@ -9,17 +9,18 @@ Returns the date.
 ## Syntax
 
 ```sql
-to_start_of_quarter(expr)
+TO_START_OF_QUARTER(<expr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| expr | date/timestamp |
+| Arguments | Description    |
+|-----------|----------------|
+| `<expr>`   | date/timestamp |
 
 ## Return Type
-Datetime object, returns date in “YYYY-MM-DD” format.
+
+`DATE`, returns date in “YYYY-MM-DD” format.
 
 ## Examples
 

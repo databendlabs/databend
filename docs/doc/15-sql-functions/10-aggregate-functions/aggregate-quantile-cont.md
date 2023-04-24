@@ -13,17 +13,17 @@ NULL values are not counted.
 ## Syntax
 
 ```sql
-QUANTILE_CONT(level)(expression)
+QUANTILE_CONT(<levels>)(<expr>)
     
-QUANTILE_CONT(level1, level2, ...)(expression)
+QUANTILE_CONT(level1, level2, ...)(<expr>)
 ```
 
 ## Arguments
 
-| Arguments     | Description                                                                                                                                     |
-|---------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
-| level(s)      | level(s) of quantile. Each level is constant floating-point number from 0 to 1. We recommend using a level value in the range of [0.01, 0.99]   |
-| expression    | Any numerical expression                                                                                                                        |
+| Arguments   | Description                                                                                                                                     |
+|-------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
+| `<level(s)` | level(s) of quantile. Each level is constant floating-point number from 0 to 1. We recommend using a level value in the range of [0.01, 0.99]   |
+| `<expr>`    | Any numerical expression                                                                                                                        |
 
 ## Return Type
 

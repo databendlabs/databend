@@ -21,6 +21,6 @@ common-exception = { path = "../exception" }
 # Crates.io dependencies
 log = "0.4"
 metrics = "0.20.1"
-openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "5f977a4" }
+openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "87a140c" }
 
 [dev-dependencies]

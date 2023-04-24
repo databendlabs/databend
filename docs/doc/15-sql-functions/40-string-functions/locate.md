@@ -9,21 +9,21 @@ Returns 0 if substr is not in str. Returns NULL if any argument is NULL.
 ## Syntax
 
 ```sql
-LOCATE(substr,str)
-LOCATE(substr,str,pos)
+LOCATE(<substr>, <str>)
+LOCATE(<substr>, <str>, <pos>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| substr | The substring. |
-| str | The string. |
-| str | The position. |
+| Arguments  | Description    |
+|------------|----------------|
+| `<substr>` | The substring. |
+| `<str>`    | The string.    |
+| `<pos>`    | The position.  |
 
 ## Return Type
 
-A number data type value.
+`BIGINT`
 
 ## Examples
 

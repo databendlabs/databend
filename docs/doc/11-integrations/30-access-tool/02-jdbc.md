@@ -30,11 +30,15 @@ To connect to Databend from DBeaver with the Databend JDBC driver, you need to a
 
 3. On the **Libraries** tab, click **Add Artifact**, then copy and paste the following to the **Dependency Declaration** textbox:
 
+:::tip Check for and Update to New Version 
+Databend recommends updating to the latest version of the Databend JDBC driver to access the latest features and enhancements, and to resolve any issues you may encounter. Please check for available updates at ​https://github.com/databendcloud/databend-jdbc/releases and install the latest version.
+:::
+
 ```java
 <dependency>
     <groupId>com.databend</groupId>
     <artifactId>databend-jdbc</artifactId>
-    <version>0.0.6</version>
+    <version>0.0.7</version>
 </dependency>
 ```
 

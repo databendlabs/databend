@@ -7,7 +7,7 @@ Converts a date or date with time (timestamp/datetime) to a UInt16 number contai
 ## Syntax
 
 ```sql
-to_day_of_year( <expr> )
+TO_DAY_OF_YEAR(<expr>)
 ```
 
 ## Arguments
@@ -18,7 +18,7 @@ to_day_of_year( <expr> )
 
 ## Return Type
 
-A `UInt16` number datatype.
+`SMALLINT`
 
 ## Examples
 

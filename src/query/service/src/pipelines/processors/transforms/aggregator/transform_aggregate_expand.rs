@@ -86,7 +86,7 @@ impl Transform for TransformExpandGroupingSets {
                 } else {
                     *entry = BlockEntry {
                         data_type: entry.data_type.wrap_nullable(),
-                        value: entry.value.clone().wrap_nullable(),
+                        value: entry.value.clone().wrap_nullable(None),
                     }
                 }
             }

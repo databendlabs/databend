@@ -6872,7 +6872,7 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 [[package]]
 name = "openai_api_rust"
 version = "0.1.4"
-source = "git+https://github.com/datafuse-extras/openai-api?rev=5f977a4#5f977a4382499758188db2982cc790cbde1190f4"
+source = "git+https://github.com/datafuse-extras/openai-api?rev=87a140c#87a140cb32a08f2a65c230d29d5e0f085f3ade4c"
 dependencies = [
  "log",
  "serde",
@@ -6882,9 +6882,9 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.32.0"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c7c7970b5089b9dc08171898b961ba05d5faf8b420ad7920712f7947eedb710"
+checksum = "e5400b31f85d6fb0d835f696be302d0582f84886859361ca241178b8c6af834f"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -10219,7 +10219,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 

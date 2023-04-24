@@ -9,19 +9,19 @@ CONCAT_WS() does not skip empty strings. However, it does skip any NULL values a
 ## Syntax
 
 ```sql
-CONCAT_WS(separator, column1, ...)
+CONCAT_WS(<separator>, <expr1>, ...)
 ```
 
 ## Arguments
 
-| Arguments   | Description   |
-| ----------- | ------------- |
-| separator   | string column |
-| column      | value column  |
+| Arguments     | Description   |
+|---------------| ------------- |
+| `<separator>` | string column |
+| `<expr1>`     | value column  |
 
 ## Return Type
 
-A String data type value Or Null data type.
+A `VARCHAR` data type value Or `NULL` data type.
 
 ## Examples
 

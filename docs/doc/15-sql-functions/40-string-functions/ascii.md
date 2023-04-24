@@ -7,18 +7,18 @@ Returns the numeric value of the leftmost character of the string str.
 ## Syntax
 
 ```sql
-ASCII(expr)
+ASCII(<expr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| expr         | The string. |
+| Arguments | Description |
+|-----------|-------------|
+| `<expr>`  | The string. |
 
 ## Return Type
 
-A number data type value.
+`TINYINT`
 
 ## Examples
 

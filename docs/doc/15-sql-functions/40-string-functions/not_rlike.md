@@ -7,7 +7,7 @@ Returns 1 if the string expr doesn't match the regular expression specified by t
 ## Syntax
 
 ```sql
-<expr> not rlike <pattern>
+<expr> NOT RLIKE <pattern>
 ```
 
 ## Examples

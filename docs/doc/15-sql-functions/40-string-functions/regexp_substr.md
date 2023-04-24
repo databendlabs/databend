@@ -7,22 +7,22 @@ Returns the substring of the string `expr` that matches the regular expression s
 ## Syntax
 
 ```sql
-REGEXP_SUBSTR(expr, pat[, pos[, occurrence[, match_type]]])
+REGEXP_SUBSTR(<expr>, <pat[, pos[, occurrence[, match_type]]]>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| expr  |  The string expr that to be matched |
-| pat   |  The regular expression |
-| pos   |  Optional. The position in expr at which to start the search. If omitted, the default is 1. |
-| occurrence   |  Optional. Which occurrence of a match to search for. If omitted, the default is 1. |
-| match_type  |  Optional. A string that specifies how to perform matching. The meaning is as described for REGEXP_LIKE(). |
+| Arguments  | Description                                                                                               |
+|------------|-----------------------------------------------------------------------------------------------------------|
+| expr       | The string expr that to be matched                                                                        |
+| pat        | The regular expression                                                                                    |
+| pos        | Optional. The position in expr at which to start the search. If omitted, the default is 1.                |
+| occurrence | Optional. Which occurrence of a match to search for. If omitted, the default is 1.                        |
+| match_type | Optional. A string that specifies how to perform matching. The meaning is as described for REGEXP_LIKE(). |
 
 ## Return Type
 
-A String data type value.
+`VARCHAR`
 
 ## Examples
 

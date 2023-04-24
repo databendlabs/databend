@@ -7,7 +7,7 @@ Converts the input expression to a date.
 ## Syntax
 
 ```sql
-to_date( <expr> )
+to_date(<expr>)
 ```
 
 ## Arguments
@@ -20,7 +20,7 @@ The function extracts a date from the provided string. If the argument is an int
 
 ## Return Type
 
-Returns a of Date type in the format “YYYY-MM-DD”.
+`DATE`, returns in the format “YYYY-MM-DD”.
 
 ## Examples
 
