@@ -63,6 +63,8 @@ use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
+use common_meta_app::schema::GetTableMutationLockReply;
+use common_meta_app::schema::GetTableMutationLockReq;
 use common_meta_app::schema::GetTableReq;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListTableReq;
@@ -79,6 +81,8 @@ use common_meta_app::schema::TableIdToName;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_meta_app::schema::TableMutationLock;
+use common_meta_app::schema::TableMutationLockKey;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
@@ -88,6 +92,8 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpdateTableMutationLockReply;
+use common_meta_app::schema::UpdateTableMutationLockReq;
 use common_meta_app::schema::UpsertTableCopiedFileReply;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
@@ -2312,6 +2318,70 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         );
 
         Ok(CountTablesReply { count })
+    }
+
+    async fn get_table_mutation_lock(
+        &self,
+        req: GetTableMutationLockReq,
+    ) -> Result<GetTableMutationLockReply, KVAppError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        let table_id = req.table_id;
+
+        let tbid = TableId { table_id };
+
+        let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
+
+        if tb_meta_seq == 0 {
+            return Err(KVAppError::AppError(AppError::UnknownTableId(
+                UnknownTableId::new(table_id, ""),
+            )));
+        }
+
+        debug!(
+            ident = display(&tbid),
+            table_meta = debug(&tb_meta),
+            "get_table_mutation_lock"
+        );
+
+        let lock_key = TableMutationLockKey { table_id };
+        let (_lock_key_seq, lock_op): (_, Option<TableMutationLock>) =
+            get_pb_value(self, &lock_key).await?;
+
+        let locked = lock_op.is_some();
+        Ok(GetTableMutationLockReply { locked })
+    }
+
+    async fn update_table_mutation_lock(
+        &self,
+        req: UpdateTableMutationLockReq,
+    ) -> Result<UpdateTableMutationLockReply, KVAppError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        let table_id = req.table_id;
+
+        let tbid = TableId { table_id };
+
+        let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
+
+        if tb_meta_seq == 0 {
+            return Err(KVAppError::AppError(AppError::UnknownTableId(
+                UnknownTableId::new(table_id, ""),
+            )));
+        }
+
+        debug!(
+            ident = display(&tbid),
+            table_meta = debug(&tb_meta),
+            "update_table_mutation_lock"
+        );
+
+        let lock_key = TableMutationLockKey { table_id };
+        let (lock_key_seq, lock_op): (_, Option<TableMutationLock>) =
+            get_pb_value(self, &lock_key).await?;
+
+        
+        todo!()
     }
 
     fn name(&self) -> String {

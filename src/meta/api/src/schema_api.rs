@@ -28,6 +28,8 @@ use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
+use common_meta_app::schema::GetTableMutationLockReply;
+use common_meta_app::schema::GetTableMutationLockReq;
 use common_meta_app::schema::GetTableReq;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListTableReq;
@@ -47,6 +49,8 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpdateTableMutationLockReply;
+use common_meta_app::schema::UpdateTableMutationLockReq;
 use common_meta_app::schema::UpsertTableCopiedFileReply;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
@@ -151,6 +155,16 @@ pub trait SchemaApi: Send + Sync {
     ) -> Result<GCDroppedDataReply, KVAppError>;
 
     async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply, KVAppError>;
+
+    async fn get_table_mutation_lock(
+        &self,
+        req: GetTableMutationLockReq,
+    ) -> Result<GetTableMutationLockReply, KVAppError>;
+
+    async fn update_table_mutation_lock(
+        &self,
+        req: UpdateTableMutationLockReq,
+    ) -> Result<UpdateTableMutationLockReply, KVAppError>;
 
     fn name(&self) -> String;
 }

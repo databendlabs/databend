@@ -165,3 +165,8 @@ message TableCopiedFileLock {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 }
+
+message TableMutationLock {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+}
