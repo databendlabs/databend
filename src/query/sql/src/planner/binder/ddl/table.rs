@@ -886,7 +886,7 @@ impl Binder {
                         target_type: Box::new(DataType::from(&schema_data_type)),
                         argument: Box::new(expr),
                     })
-                    .as_expr_with_col_index()?;
+                    .as_expr()?;
 
                     if !cast_expr_to_field_type.is_deterministic(&BUILTIN_FUNCTIONS) {
                         return Err(ErrorCode::SemanticError(format!(
@@ -1013,7 +1013,7 @@ impl Binder {
         let mut cluster_keys = Vec::with_capacity(cluster_by.len());
         for cluster_by in cluster_by.iter() {
             let (cluster_key, _) = scalar_binder.bind(cluster_by).await?;
-            let expr = cluster_key.as_expr_with_col_index()?;
+            let expr = cluster_key.as_expr()?;
             if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Cluster by expression `{:#}` is not deterministic",

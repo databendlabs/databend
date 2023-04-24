@@ -298,7 +298,7 @@ fn compare_equal(datum: &Option<Datum>, col_hist: &Histogram, column_stat: &Colu
 }
 
 fn try_constant_fold(scalar_expr: &ScalarExpr) -> Result<ScalarExpr> {
-    let expr = scalar_expr.as_expr_with_col_index()?;
+    let expr = scalar_expr.as_expr()?;
     let (expr, _) = ConstantFolder::fold(&expr, &FunctionContext::default(), &BUILTIN_FUNCTIONS);
     if let Expr::Constant { scalar, span, .. } = expr {
         return Ok(ScalarExpr::ConstantExpr(ConstantExpr {

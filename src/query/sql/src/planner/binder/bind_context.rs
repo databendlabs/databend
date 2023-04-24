@@ -23,6 +23,7 @@ use common_exception::Result;
 use common_exception::Span;
 use common_expression::types::DataType;
 use common_expression::ColumnId;
+use common_expression::ColumnIndex;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
@@ -125,6 +126,8 @@ impl Hash for InternalColumnBinding {
         self.index.hash(state);
     }
 }
+
+impl ColumnIndex for ColumnBinding {}
 
 #[derive(Debug, Clone)]
 pub enum NameResolutionResult {

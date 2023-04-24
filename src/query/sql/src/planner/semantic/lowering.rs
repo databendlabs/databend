@@ -24,13 +24,16 @@ use common_expression::Expr;
 use common_expression::RawExpr;
 use common_functions::BUILTIN_FUNCTIONS;
 
+use crate::plans::BoundColumnRef;
+use crate::plans::CastExpr;
+use crate::plans::ConstantExpr;
+use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
+use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::Metadata;
-
-const DUMMY_NAME: &str = "DUMMY";
-const DUMMY_INDEX: usize = usize::MAX;
+use crate::Visibility;
 
 pub trait LoweringContext {
     type ColumnID: ColumnIndex;
@@ -152,32 +155,17 @@ impl<Index: ColumnIndex> TypeCheck<Index> for RawExpr<Index> {
     }
 }
 
-impl TypeCheck<String> for ScalarExpr {
-    fn resolve_and_check(
-        &self,
-        resolver: &impl LoweringContext<ColumnID = String>,
-    ) -> Result<Expr<String>> {
-        let raw_expr = self.as_raw_expr_with_col_name();
-        raw_expr.resolve_and_check(resolver)
-    }
-
-    fn type_check(&self) -> Result<Expr<String>> {
-        let raw_expr = self.as_raw_expr_with_col_name();
-        raw_expr.type_check()
-    }
-}
-
 impl TypeCheck<IndexType> for ScalarExpr {
     fn resolve_and_check(
         &self,
         resolver: &impl LoweringContext<ColumnID = IndexType>,
     ) -> Result<Expr<IndexType>> {
-        let raw_expr = self.as_raw_expr_with_col_index();
+        let raw_expr = self.as_raw_expr().project_column_ref(|col| col.index);
         raw_expr.resolve_and_check(resolver)
     }
 
     fn type_check(&self) -> Result<Expr<IndexType>> {
-        let raw_expr = self.as_raw_expr_with_col_index();
+        let raw_expr = self.as_raw_expr().project_column_ref(|col| col.index);
         raw_expr.type_check()
     }
 }
@@ -185,11 +173,11 @@ impl TypeCheck<IndexType> for ScalarExpr {
 impl ScalarExpr {
     /// Lowering `Scalar` into `RawExpr` to utilize with `common_expression::types::type_check`.
     /// Specific variants will be replaced with a `RawExpr::ColumnRef` with a dummy name.
-    pub fn as_raw_expr_with_col_name(&self) -> RawExpr<String> {
+    pub fn as_raw_expr(&self) -> RawExpr<ColumnBinding> {
         match self {
             ScalarExpr::BoundColumnRef(column_ref) => RawExpr::ColumnRef {
                 span: column_ref.span,
-                id: column_ref.column.column_name.clone(),
+                id: column_ref.column.clone(),
                 data_type: *column_ref.column.data_type.clone(),
                 display_name: format!(
                     "{}{} (#{})",
@@ -208,13 +196,13 @@ impl ScalarExpr {
             },
             ScalarExpr::WindowFunction(win) => RawExpr::ColumnRef {
                 span: None,
-                id: win.display_name.clone(),
+                id: new_dummy_column(win.func.return_type()),
                 data_type: win.func.return_type(),
                 display_name: win.display_name.clone(),
             },
             ScalarExpr::AggregateFunction(agg) => RawExpr::ColumnRef {
                 span: None,
-                id: agg.display_name.clone(),
+                id: new_dummy_column((*agg.return_type).clone()),
                 data_type: (*agg.return_type).clone(),
                 display_name: agg.display_name.clone(),
             },
@@ -222,90 +210,71 @@ impl ScalarExpr {
                 span: func.span,
                 name: func.func_name.clone(),
                 params: func.params.clone(),
-                args: func
-                    .arguments
-                    .iter()
-                    .map(ScalarExpr::as_raw_expr_with_col_name)
-                    .collect(),
+                args: func.arguments.iter().map(ScalarExpr::as_raw_expr).collect(),
             },
             ScalarExpr::CastExpr(cast) => RawExpr::Cast {
                 span: cast.span,
                 is_try: cast.is_try,
-                expr: Box::new(cast.argument.as_raw_expr_with_col_name()),
+                expr: Box::new(cast.argument.as_raw_expr()),
                 dest_type: (*cast.target_type).clone(),
             },
             ScalarExpr::SubqueryExpr(subquery) => RawExpr::ColumnRef {
                 span: subquery.span,
-                id: DUMMY_NAME.to_string(),
+                id: new_dummy_column(subquery.data_type()),
                 data_type: subquery.data_type(),
-                display_name: DUMMY_NAME.to_string(),
+                display_name: "DUMMY".to_string(),
             },
         }
     }
 
-    pub fn as_expr_with_col_name(&self) -> Result<Expr<String>> {
-        self.as_raw_expr_with_col_name().type_check()
+    pub fn as_expr(&self) -> Result<Expr<ColumnBinding>> {
+        self.as_raw_expr().type_check()
     }
 
-    pub fn as_raw_expr_with_col_index(&self) -> RawExpr {
-        match self {
-            ScalarExpr::BoundColumnRef(column_ref) => RawExpr::ColumnRef {
-                span: column_ref.span,
-                id: column_ref.column.index,
-                data_type: *column_ref.column.data_type.clone(),
-                display_name: format!(
-                    "{}{} (#{})",
-                    column_ref
-                        .column
-                        .table_name
-                        .as_ref()
-                        .map_or("".to_string(), |t| t.to_string() + "."),
-                    column_ref.column.column_name.clone(),
-                    column_ref.column.index
-                ),
-            },
-            ScalarExpr::ConstantExpr(constant) => RawExpr::Constant {
-                span: constant.span,
-                scalar: constant.value.clone(),
-            },
-            ScalarExpr::WindowFunction(win) => RawExpr::ColumnRef {
-                span: None,
-                id: DUMMY_INDEX,
-                data_type: win.func.return_type(),
-                display_name: win.display_name.clone(),
-            },
-            ScalarExpr::AggregateFunction(agg) => RawExpr::ColumnRef {
-                span: None,
-                id: DUMMY_INDEX,
-                data_type: (*agg.return_type).clone(),
-                display_name: agg.display_name.clone(),
-            },
-            ScalarExpr::FunctionCall(func) => RawExpr::FunctionCall {
-                span: func.span,
-                name: func.func_name.clone(),
-                params: func.params.clone(),
-                args: func
-                    .arguments
-                    .iter()
-                    .map(ScalarExpr::as_raw_expr_with_col_index)
-                    .collect(),
-            },
-            ScalarExpr::CastExpr(cast) => RawExpr::Cast {
-                span: cast.span,
-                is_try: cast.is_try,
-                expr: Box::new(cast.argument.as_raw_expr_with_col_index()),
-                dest_type: (*cast.target_type).clone(),
-            },
-            ScalarExpr::SubqueryExpr(subquery) => RawExpr::ColumnRef {
-                span: subquery.span,
-                id: DUMMY_INDEX,
-                data_type: subquery.data_type(),
-                display_name: DUMMY_NAME.to_string(),
-            },
+    pub fn from_expr(expr: &Expr<ColumnBinding>) -> Result<ScalarExpr> {
+        match expr {
+            Expr::ColumnRef { span, id, .. } => Ok(ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: *span,
+                column: id.clone(),
+            })),
+            Expr::Constant { span, scalar, .. } => Ok(ScalarExpr::ConstantExpr(ConstantExpr {
+                span: *span,
+                value: scalar.clone(),
+            })),
+            Expr::FunctionCall { span, id, args, .. } => {
+                Ok(ScalarExpr::FunctionCall(FunctionCall {
+                    span: *span,
+                    func_name: id.name().into(),
+                    params: id.params().into(),
+                    arguments: args
+                        .iter()
+                        .map(ScalarExpr::from_expr)
+                        .collect::<Result<Vec<_>>>()?,
+                }))
+            }
+            Expr::Cast {
+                span,
+                is_try,
+                expr,
+                dest_type,
+            } => Ok(ScalarExpr::CastExpr(CastExpr {
+                span: *span,
+                is_try: *is_try,
+                argument: Box::new(ScalarExpr::from_expr(expr)?),
+                target_type: Box::new(dest_type.clone()),
+            })),
         }
     }
+}
 
-    pub fn as_expr_with_col_index(&self) -> Result<Expr> {
-        self.as_raw_expr_with_col_index().type_check()
+fn new_dummy_column(data_type: DataType) -> ColumnBinding {
+    ColumnBinding {
+        database_name: None,
+        table_name: None,
+        table_index: None,
+        column_name: "DUMMY".to_string(),
+        index: usize::MAX,
+        data_type: Box::new(data_type),
+        visibility: Visibility::Visible,
     }
 }

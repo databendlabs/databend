@@ -819,8 +819,8 @@ async fn fill_default_value(
         scalar = wrap_cast(&scalar, field.data_type());
 
         let expr = scalar
-            .as_expr_with_col_index()?
-            .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());
+            .as_expr()?
+            .project_column_ref(|col| schema.index_of(&col.index.to_string()).unwrap());
         map_exprs.push(expr);
     } else {
         // If field data type is nullable, then we'll fill it with null.
@@ -914,8 +914,8 @@ async fn exprs_to_scalar(
             wrap_cast(&scalar, field_data_type)
         };
         let expr = scalar
-            .as_expr_with_col_index()?
-            .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());
+            .as_expr()?
+            .project_column_ref(|col| schema.index_of(&col.index.to_string()).unwrap());
         map_exprs.push(expr);
     }
 

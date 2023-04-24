@@ -161,6 +161,51 @@ impl<Index: ColumnIndex> RawExpr<Index> {
         walk(self, &mut buf);
         buf
     }
+
+    pub fn project_column_ref<ToIndex: ColumnIndex>(
+        &self,
+        f: impl Fn(&Index) -> ToIndex + Copy,
+    ) -> RawExpr<ToIndex> {
+        match self {
+            RawExpr::Constant { span, scalar } => RawExpr::Constant {
+                span: *span,
+                scalar: scalar.clone(),
+            },
+            RawExpr::ColumnRef {
+                span,
+                id,
+                data_type,
+                display_name,
+            } => RawExpr::ColumnRef {
+                span: *span,
+                id: f(id),
+                data_type: data_type.clone(),
+                display_name: display_name.clone(),
+            },
+            RawExpr::Cast {
+                span,
+                is_try,
+                expr,
+                dest_type,
+            } => RawExpr::Cast {
+                span: *span,
+                is_try: *is_try,
+                expr: Box::new(expr.project_column_ref(f)),
+                dest_type: dest_type.clone(),
+            },
+            RawExpr::FunctionCall {
+                span,
+                name,
+                params,
+                args,
+            } => RawExpr::FunctionCall {
+                span: *span,
+                name: name.clone(),
+                params: params.clone(),
+                args: args.iter().map(|expr| expr.project_column_ref(f)).collect(),
+            },
+        }
+    }
 }
 
 impl<Index: ColumnIndex> Expr<Index> {
