@@ -269,6 +269,10 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                                         )?;
                                     }
                                 },
+                                ScalarRef::Bitmap(_) => {
+                                    let bitmap_result = "<bitmap binary>".as_bytes();
+                                    row_writer.write_col(bitmap_result)?;
+                                }
                                 _ => write_field(
                                     &mut row_writer,
                                     column,
