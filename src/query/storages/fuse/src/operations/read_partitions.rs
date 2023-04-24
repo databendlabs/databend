@@ -114,7 +114,7 @@ impl FuseTable {
         table_info: TableInfo,
         segments_location: Vec<Location>,
         summary: usize,
-        segment_id_map: Option<HashMap<String, usize>>,
+        segment_id_map: Option<HashMap<Location, usize>>,
     ) -> Result<(PartStatistics, Partitions)> {
         let start = Instant::now();
         info!(
