@@ -178,7 +178,7 @@ where F: RowFetcher + Send + Sync + 'static
                 .read(&LoadParams {
                     location: location.clone(),
                     len_hint: None,
-                    ver: snapshot.format_version(),
+                    ver: snapshot.format_version, // TODO this is buggy, should use segment version
                     put_cache: true,
                 })
                 .await?;

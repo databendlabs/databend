@@ -30,8 +30,21 @@ use crate::meta::Versioned;
 /// The structure of the segment is the same as that of v2, but the serialization and deserialization methods are different
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct SegmentInfo {
-    /// format version
-    format_version: FormatVersion,
+    /// format version of SegmentInfo table meta data
+    ///
+    /// Note that:
+    ///
+    /// - A instance of v3::SegmentInfo may have a value of v2/v1::SegmentInfo::VERSION for this field.
+    ///
+    ///   That indicates this instance is converted from a v2/v1::SegmentInfo.
+    ///
+    /// - The meta writers are responsible for only writing down the latest version of SegmentInfo, and
+    /// the format_version being written is of the latest version.
+    ///
+    ///   e.g. if the current version of SegmentInfo is v3::SegmentInfo, then the format_version
+    ///   that will be written down to object storage as part of SegmentInfo table meta data,
+    ///   should always be v3::SegmentInfo::VERSION (which is 3)
+    pub format_version: FormatVersion,
     /// blocks belong to this segment
     pub blocks: Vec<Arc<BlockMeta>>,
     /// summary statistics
@@ -61,8 +74,10 @@ use super::super::v2;
 
 impl SegmentInfo {
     pub fn from_v2(s: v2::SegmentInfo) -> Self {
+        // NOTE: it is important to let the format_version return from here
+        // carries the format_version of segment info being converted.
         Self {
-            format_version: SegmentInfo::VERSION,
+            format_version: s.format_version,
             blocks: s.blocks,
             summary: s.summary,
         }
