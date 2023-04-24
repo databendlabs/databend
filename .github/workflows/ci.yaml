@@ -58,7 +58,7 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           cache-key: integration
-      - run: make -C tests
-      - run: make -C tests test-flight-sql
+      - run: make -C tests test-core
+      - run: make -C tests test-driver
       - run: make -C tests test-bendsql
       - run: sudo chown -R runner ~/.cargo/registry

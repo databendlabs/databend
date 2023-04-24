@@ -29,9 +29,13 @@ async fn insert_with_stage(presigned: bool) {
     let file = File::open("tests/core/data/sample.csv").await.unwrap();
     let metadata = file.metadata().await.unwrap();
 
-    let path = chrono::Utc::now().format("%Y%m%d%H%M%S%.9f").to_string();
+    let path = chrono::Utc::now().format("%Y%m%d%H%M%S%9f").to_string();
     let stage_location = format!("@~/{}/sample.csv", path);
-    let table = format!("sample_{}", path);
+    let table = if presigned {
+        format!("sample_insert_presigned_{}", path)
+    } else {
+        format!("sample_insert_stream_{}", path)
+    };
 
     client
         .upload_to_stage(&stage_location, file, metadata.len())
@@ -72,6 +76,9 @@ async fn insert_with_stage(presigned: bool) {
         ["6", "Beijing", "99"],
     ];
     assert_eq!(resp.data, expect);
+
+    let sql = format!("DROP TABLE `{}` ALL;", table);
+    client.query_wait(&sql).await.unwrap();
 }
 
 #[tokio::test]

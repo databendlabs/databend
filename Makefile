@@ -13,14 +13,17 @@ build:
 test:
 	cargo test --all --all-features --lib -- --nocapture
 
+integration:
+	make -C tests
+
 integration-down:
 	make -C tests down
 
-integration-tests:
-	make -C tests
+integration-core:
+	make -C tests test-core
 
-integration-tests-flight-sql:
-	make -C tests test-flight-sql
+integration-driver:
+	make -C tests test-driver
 
 integration-bendsql:
 	make -C tests test-bendsql

@@ -83,7 +83,7 @@ impl Default for Settings {
         Settings {
             display_pretty_sql: true,
             progress_color: "cyan".to_string(),
-            prompt: "bendsql> ".to_string(),
+            prompt: "{user}@{host}> ".to_string(),
             output_format: OutputFormat::Table,
             show_progress: false,
         }

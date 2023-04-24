@@ -100,6 +100,10 @@ async fn select_iter() {
         assert_eq!(v, expected[row_count]);
         row_count += 1;
     }
+    assert_eq!(row_count, 3);
+
+    let sql_drop = format!("DROP TABLE `{}`", table);
+    conn.exec(&sql_drop).await.unwrap();
 }
 
 #[tokio::test]

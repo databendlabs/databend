@@ -62,6 +62,7 @@ impl Session {
         {
             prompt = prompt.replace("{host}", &info.host);
             prompt = prompt.replace("{user}", &info.user);
+            prompt = prompt.replace("{port}", &info.port.to_string());
         }
 
         Ok(Self {
@@ -96,7 +97,7 @@ impl Session {
             let prompt = if self.query.is_none() {
                 &self.prompt
             } else {
-                "    -> "
+                ""
             };
             match rl.readline(prompt) {
                 Ok(line) => {

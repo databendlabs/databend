@@ -1,6 +1,4 @@
-PHONY: test
-
-default: test
+default: run
 
 prepare:
 	mkdir -p data/databend
@@ -10,17 +8,18 @@ up: prepare
 
 start: up
 
-test: up
-	cargo test --test '*'
+test-core: up
+	cargo test --test core
 
-run: test
-
-test-flight-sql: up
+test-driver: up
+	cargo test --test driver
 	TEST_DATABEND_DSN=databend+flight://root:@localhost:8900/default?sslmode=disable cargo test --features flight-sql --test driver
 
 test-bendsql: up
 	cd .. && ./cli/test.sh http
 	cd .. && ./cli/test.sh flight
+
+run: test-core test-driver test-bendsql
 
 down:
 	docker compose down

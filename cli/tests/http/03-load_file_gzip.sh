@@ -15,3 +15,7 @@ ${BENDSQL} \
 
 echo "SELECT COUNT(*) FROM test_ontime;" | ${BENDSQL} --output=tsv
 echo 'SELECT * FROM test_ontime LIMIT 1;' | ${BENDSQL} --output=csv
+
+cat <<SQL | ${BENDSQL}
+DROP TABLE test_ontime;
+SQL

@@ -39,8 +39,12 @@ async fn stream_load(presigned: bool, file_type: &str) {
         .unwrap();
     let metadata = file.metadata().await.unwrap();
 
-    let path = Utc::now().format("%Y%m%d%H%M%S%.9f").to_string();
-    let table = format!("books_{}", path);
+    let path = Utc::now().format("%Y%m%d%H%M%S%9f").to_string();
+    let table = if presigned {
+        format!("books_stream_load_{}_presigned_{}", file_type, path)
+    } else {
+        format!("books_stream_load_{}_{}", file_type, path)
+    };
 
     let sql = format!(
         "CREATE TABLE `{}` (
@@ -99,6 +103,9 @@ async fn stream_load(presigned: bool, file_type: &str) {
         ),
     ];
     assert_eq!(result, expected);
+
+    let sql = format!("DROP TABLE `{}` ALL;", table);
+    client.exec(&sql).await.unwrap();
 }
 
 #[tokio::test]
