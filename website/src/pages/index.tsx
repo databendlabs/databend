@@ -6,7 +6,7 @@ import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import styles from './index.module.scss';
 import * as icons from "../components/Icons"
 import useGetReleases from '@site/src/hooks/useGetReleases';
-import JoinComunity from '../components/JoinCommunity';
+import JoinCommunity from '../components/JoinCommunity';
 
 function HomepageHeader() {
     const {siteConfig} = useDocusaurusContext();
@@ -57,7 +57,7 @@ function HomepageHeader() {
                   Tutorials
               </Link>
             </div>
-            <JoinComunity />
+            <JoinCommunity />
             <hr/>
             <div className={clsx('cloud-banner', styles.cloudBanner)}>
               <div style={{textAlign:'center'}}>

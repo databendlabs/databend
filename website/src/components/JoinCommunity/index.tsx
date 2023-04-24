@@ -11,7 +11,7 @@ interface TProps {
   justifyContent?: 'center' | 'flex-start' | 'flex-end';
 }
 
-const JoinComunity:  FC<TProps> = ({titleAlign, maxWidth, justifyContent}): ReactElement=> {
+const JoinCommunity:  FC<TProps> = ({titleAlign, maxWidth, justifyContent}): ReactElement=> {
     const { formatStargazersCount } = useGetReleases();
     const community = [
       {
@@ -50,9 +50,9 @@ const JoinComunity:  FC<TProps> = ({titleAlign, maxWidth, justifyContent}): Reac
   </div>
   );
 };
-JoinComunity.defaultProps = {
+JoinCommunity.defaultProps = {
   titleAlign: 'center',
   maxWidth: 720,
   justifyContent: 'center'
 }
-export default JoinComunity;
+export default JoinCommunity;

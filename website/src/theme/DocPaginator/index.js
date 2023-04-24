@@ -1,7 +1,7 @@
 import React from 'react';
 import Translate, {translate} from '@docusaurus/Translate';
 import PaginatorNavLink from '@theme/PaginatorNavLink';
-import JoinComunity from '@site/src/components/JoinCommunity';
+import JoinCommunity from '@site/src/components/JoinCommunity';
 import styles from './styles.module.scss';
 export default function DocPaginator(props) {
   const {previous, next} = props;
@@ -41,7 +41,7 @@ export default function DocPaginator(props) {
         )}
       </nav>
       <div className={styles.community}>
-        <JoinComunity maxWidth={720} justifyContent='flex-start' titleAlign='left'/>
+        <JoinCommunity maxWidth={720} justifyContent='flex-start' titleAlign='left'/>
       </div>
     </div>
   );
