@@ -39,7 +39,7 @@ impl From<&DataType> for ArrowDataType {
         match ty {
             DataType::Null => ArrowDataType::Null,
             DataType::Boolean => ArrowDataType::Boolean,
-            DataType::String => ArrowDataType::LargeBinary,
+            DataType::String | DataType::Bitmap => ArrowDataType::LargeBinary,
             DataType::Number(ty) => with_number_type!(|TYPE| match ty {
                 NumberDataType::TYPE => ArrowDataType::TYPE,
             }),

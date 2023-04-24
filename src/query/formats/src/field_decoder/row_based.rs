@@ -24,7 +24,6 @@ use common_exception::Result;
 use common_expression::serialize::read_decimal_with_size;
 use common_expression::serialize::uniform_date;
 use common_expression::types::array::ArrayColumnBuilder;
-use common_expression::types::bitmap::BitmapWrapper;
 use common_expression::types::date::check_date;
 use common_expression::types::decimal::Decimal;
 use common_expression::types::decimal::DecimalColumnBuilder;
@@ -44,7 +43,6 @@ use common_io::cursor_ext::ReadCheckPointExt;
 use common_io::cursor_ext::ReadNumberExt;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
-use roaring::RoaringBitmap;
 
 use crate::field_decoder::FieldDecoder;
 use crate::CommonSettings;
@@ -92,7 +90,7 @@ pub trait FieldDecoderRowBased: FieldDecoder {
             ColumnBuilder::String(c) => self.read_string(c, reader, raw),
             ColumnBuilder::Array(c) => self.read_array(c, reader, raw),
             ColumnBuilder::Map(c) => self.read_map(c, reader, raw),
-            ColumnBuilder::Bitmap(c) => self.read_bitmap(c, reader, raw),
+            ColumnBuilder::Bitmap(c) => self.read_string(c, reader, raw),
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, reader, raw),
             ColumnBuilder::Variant(c) => self.read_variant(c, reader, raw),
             _ => unimplemented!(),
@@ -296,20 +294,6 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         reader: &mut Cursor<R>,
         raw: bool,
     ) -> Result<()>;
-
-    fn read_bitmap<R: AsRef<[u8]>>(
-        &self,
-        column: &mut Vec<BitmapWrapper>,
-        reader: &mut Cursor<R>,
-        raw: bool,
-    ) -> Result<()> {
-        let mut buf = Vec::new();
-        self.read_string_inner(reader, &mut buf, raw)?;
-        let bitmap = RoaringBitmap::deserialize_from(&buf[..])?;
-        let b = BitmapWrapper { bitmap };
-        column.push(b);
-        Ok(())
-    }
 
     fn read_tuple<R: AsRef<[u8]>>(
         &self,

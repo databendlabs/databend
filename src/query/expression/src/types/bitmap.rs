@@ -12,16 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
 use std::ops::Range;
 
-use common_arrow::arrow::buffer::Buffer;
-use roaring::RoaringBitmap;
-use serde::Deserialize;
-use serde::Serialize;
-
-use crate::arrow::buffer_into_mut;
 use crate::property::Domain;
+use crate::types::string::StringColumn;
+use crate::types::string::StringColumnBuilder;
+use crate::types::string::StringIterator;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::GenericMap;
@@ -31,31 +27,16 @@ use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct BitmapWrapper {
-    pub bitmap: RoaringBitmap,
-}
-
-// The implementation of PartialOrd for BitmapWrapper is only to adapt to Scalar,
-// it does not have the meaning of actual ordering.
-impl PartialOrd for BitmapWrapper {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.bitmap.len().partial_cmp(&other.bitmap.len())
-    }
-}
-
-impl Eq for BitmapWrapper {}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BitmapType;
 
 impl ValueType for BitmapType {
-    type Scalar = BitmapWrapper;
-    type ScalarRef<'a> = &'a BitmapWrapper;
-    type Column = Buffer<BitmapWrapper>;
+    type Scalar = Vec<u8>;
+    type ScalarRef<'a> = &'a [u8];
+    type Column = StringColumn;
     type Domain = BitmapDomain;
-    type ColumnIterator<'a> = std::slice::Iter<'a, BitmapWrapper>;
-    type ColumnBuilder = Vec<BitmapWrapper>;
+    type ColumnIterator<'a> = StringIterator<'a>;
+    type ColumnBuilder = StringColumnBuilder;
 
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short> {
@@ -63,7 +44,7 @@ impl ValueType for BitmapType {
     }
 
     fn to_owned_scalar<'a>(scalar: Self::ScalarRef<'a>) -> Self::Scalar {
-        scalar.clone()
+        scalar.to_vec()
     }
 
     fn to_scalar_ref<'a>(scalar: &'a Self::Scalar) -> Self::ScalarRef<'a> {
@@ -78,10 +59,7 @@ impl ValueType for BitmapType {
     }
 
     fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column> {
-        match col {
-            Column::Bitmap(column) => Some(column.clone()),
-            _ => None,
-        }
+        col.as_string().cloned()
     }
 
     fn try_downcast_builder<'a>(
@@ -102,7 +80,7 @@ impl ValueType for BitmapType {
     }
 
     fn upcast_column(col: Self::Column) -> Column {
-        Column::Bitmap(col)
+        Column::String(col)
     }
 
     fn upcast_domain(domain: Self::Domain) -> Domain {
@@ -114,18 +92,18 @@ impl ValueType for BitmapType {
     }
 
     fn index_column<'a>(col: &'a Self::Column, index: usize) -> Option<Self::ScalarRef<'a>> {
-        col.get(index)
+        col.index(index)
     }
 
     unsafe fn index_column_unchecked<'a>(
         col: &'a Self::Column,
         index: usize,
     ) -> Self::ScalarRef<'a> {
-        col.get_unchecked(index)
+        col.index_unchecked(index)
     }
 
     fn slice_column<'a>(col: &'a Self::Column, range: Range<usize>) -> Self::Column {
-        col.clone().sliced(range.start, range.end - range.start)
+        col.slice(range)
     }
 
     fn iter_column<'a>(col: &'a Self::Column) -> Self::ColumnIterator<'a> {
@@ -133,7 +111,7 @@ impl ValueType for BitmapType {
     }
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
-        buffer_into_mut(col)
+        StringColumnBuilder::from_column(col)
     }
 
     fn builder_len(builder: &Self::ColumnBuilder) -> usize {
@@ -141,24 +119,32 @@ impl ValueType for BitmapType {
     }
 
     fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
-        builder.push(item.clone());
+        builder.put_slice(item);
+        builder.commit_row();
     }
 
     fn push_default(builder: &mut Self::ColumnBuilder) {
-        builder.push(BitmapWrapper::default());
+        builder.commit_row();
     }
 
     fn append_column(builder: &mut Self::ColumnBuilder, bitmap: &Self::Column) {
-        builder.extend_from_slice(bitmap)
+        builder.append_column(bitmap)
     }
 
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
-        builder.into()
+        builder.build()
     }
 
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
-        assert_eq!(builder.len(), 1);
-        builder.get(0).cloned().unwrap_or(BitmapWrapper::default())
+        builder.build_scalar()
+    }
+
+    fn scalar_memory_size<'a>(scalar: &Self::ScalarRef<'a>) -> usize {
+        scalar.len()
+    }
+
+    fn column_memory_size(col: &Self::Column) -> usize {
+        col.data.len() + col.offsets.len() * 8
     }
 }
 
@@ -172,22 +158,7 @@ impl ArgType for BitmapType {
     }
 
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
-        Vec::with_capacity(capacity)
-    }
-
-    fn column_from_vec(vec: Vec<Self::Scalar>, _generics: &GenericMap) -> Self::Column {
-        vec.into()
-    }
-
-    fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
-        iter.collect()
-    }
-
-    fn column_from_ref_iter<'a>(
-        iter: impl Iterator<Item = Self::ScalarRef<'a>>,
-        _generics: &GenericMap,
-    ) -> Self::Column {
-        iter.cloned().collect()
+        StringColumnBuilder::with_capacity(capacity, 0)
     }
 }
 

@@ -3023,8 +3023,8 @@ Functions overloads:
 1 time_slot(Timestamp NULL) :: Timestamp NULL
 0 to_base64(String) :: String
 1 to_base64(String NULL) :: String NULL
-0 to_bitmap(UInt32) :: Bitmap
-1 to_bitmap(UInt32 NULL) :: Bitmap NULL
+0 to_bitmap(UInt64) :: Bitmap
+1 to_bitmap(UInt64 NULL) :: Bitmap NULL
 0 to_boolean(Variant) :: Boolean
 1 to_boolean(Variant NULL) :: Boolean NULL
 2 to_boolean(String) :: Boolean

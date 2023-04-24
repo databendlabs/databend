@@ -230,7 +230,7 @@ impl Column {
             }
             Column::Bitmap(column) => Self::scatter_scalars::<BitmapType, _>(
                 column,
-                Vec::with_capacity(length),
+                StringColumnBuilder::with_capacity(length, 0),
                 indices,
                 scatter_size,
             ),

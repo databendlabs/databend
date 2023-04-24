@@ -152,8 +152,7 @@ impl Column {
                 )
             }
             Column::Bitmap(column) => {
-                let builder = Self::take_primitive_types(column, indices, row_num);
-                BitmapType::upcast_column(Buffer::from(builder))
+                BitmapType::upcast_column(Self::take_string_types(column, indices, row_num))
             }
             Column::Nullable(c) => {
                 let column = c.column.take_compacted_indices(indices, row_num);

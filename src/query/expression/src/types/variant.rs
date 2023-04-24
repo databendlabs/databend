@@ -223,11 +223,7 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
             return;
         }
         ScalarRef::Bitmap(b) => {
-            let mut bytes = vec![];
-            b.bitmap
-                .serialize_into(&mut bytes)
-                .expect("failed to build jsonb object from bitmap");
-            buf.extend_from_slice(&bytes);
+            buf.extend_from_slice(b);
             return;
         }
         ScalarRef::Tuple(fields) => {

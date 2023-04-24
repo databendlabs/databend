@@ -26,7 +26,6 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::compute::cast as arrow_cast;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::datatypes::TimeUnit;
 use common_arrow::arrow::offset::OffsetsBuffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
@@ -36,8 +35,6 @@ use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
-use rand::distributions::Uniform;
-use roaring::RoaringBitmap;
 use serde::de::Visitor;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -48,7 +45,7 @@ use crate::property::Domain;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::bitmap::BitmapDomain;
-use crate::types::bitmap::BitmapWrapper;
+use crate::types::bitmap::BitmapType;
 use crate::types::boolean::BooleanDomain;
 use crate::types::date::DATE_MAX;
 use crate::types::date::DATE_MIN;
@@ -112,7 +109,7 @@ pub enum Scalar {
     String(Vec<u8>),
     Array(Column),
     Map(Column),
-    Bitmap(BitmapWrapper),
+    Bitmap(Vec<u8>),
     Tuple(Vec<Scalar>),
     Variant(Vec<u8>),
 }
@@ -131,7 +128,7 @@ pub enum ScalarRef<'a> {
     Date(i32),
     Array(Column),
     Map(Column),
-    Bitmap(&'a BitmapWrapper),
+    Bitmap(&'a [u8]),
     Tuple(Vec<ScalarRef<'a>>),
     Variant(&'a [u8]),
 }
@@ -149,7 +146,7 @@ pub enum Column {
     Date(Buffer<i32>),
     Array(Box<ArrayColumn<AnyType>>),
     Map(Box<ArrayColumn<AnyType>>),
-    Bitmap(Buffer<BitmapWrapper>),
+    Bitmap(StringColumn),
     Nullable(Box<NullableColumn<AnyType>>),
     Tuple(Vec<Column>),
     Variant(StringColumn),
@@ -168,7 +165,7 @@ pub enum ColumnBuilder {
     Date(Vec<i32>),
     Array(Box<ArrayColumnBuilder<AnyType>>),
     Map(Box<ArrayColumnBuilder<AnyType>>),
-    Bitmap(Vec<BitmapWrapper>),
+    Bitmap(StringColumnBuilder),
     Nullable(Box<NullableColumnBuilder<AnyType>>),
     Tuple(Vec<ColumnBuilder>),
     Variant(StringColumnBuilder),
@@ -313,7 +310,7 @@ impl Scalar {
             Scalar::Date(d) => ScalarRef::Date(*d),
             Scalar::Array(col) => ScalarRef::Array(col.clone()),
             Scalar::Map(col) => ScalarRef::Map(col.clone()),
-            Scalar::Bitmap(b) => ScalarRef::Bitmap(b),
+            Scalar::Bitmap(b) => ScalarRef::Bitmap(b.as_slice()),
             Scalar::Tuple(fields) => ScalarRef::Tuple(fields.iter().map(Scalar::as_ref).collect()),
             Scalar::Variant(s) => ScalarRef::Variant(s.as_slice()),
         }
@@ -352,7 +349,7 @@ impl Scalar {
                 let col = builder.build();
                 Scalar::Map(col)
             }
-            DataType::Bitmap => Scalar::Bitmap(BitmapWrapper::default()),
+            DataType::Bitmap => Scalar::Bitmap(vec![]),
             DataType::Tuple(tys) => Scalar::Tuple(tys.iter().map(Scalar::default_value).collect()),
             DataType::Variant => Scalar::Variant(vec![]),
 
@@ -385,7 +382,7 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Date(d) => Scalar::Date(*d),
             ScalarRef::Array(col) => Scalar::Array(col.clone()),
             ScalarRef::Map(col) => Scalar::Map(col.clone()),
-            ScalarRef::Bitmap(b) => Scalar::Bitmap((*b).clone()),
+            ScalarRef::Bitmap(b) => Scalar::Bitmap(b.to_vec()),
             ScalarRef::Tuple(fields) => {
                 Scalar::Tuple(fields.iter().map(ScalarRef::to_owned).collect())
             }
@@ -484,7 +481,7 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Date(_) => 4,
             ScalarRef::Array(col) => col.memory_size(),
             ScalarRef::Map(col) => col.memory_size(),
-            ScalarRef::Bitmap(b) => b.bitmap.len() as usize,
+            ScalarRef::Bitmap(b) => b.len(),
             ScalarRef::Tuple(scalars) => scalars.iter().map(|s| s.memory_size()).sum(),
             ScalarRef::Variant(buf) => buf.len(),
         }
@@ -620,10 +617,7 @@ impl Hash for ScalarRef<'_> {
                 let str = serialize_column(v);
                 str.hash(state);
             }
-            ScalarRef::Bitmap(v) => {
-                let data = v.bitmap.clone().into_iter().collect::<Vec<u32>>();
-                data.hash(state);
-            }
+            ScalarRef::Bitmap(v) => v.hash(state),
             ScalarRef::Tuple(v) => {
                 v.hash(state);
             }
@@ -716,7 +710,7 @@ impl Column {
             Column::Date(col) => Some(ScalarRef::Date(col.get(index).cloned()?)),
             Column::Array(col) => Some(ScalarRef::Array(col.index(index)?)),
             Column::Map(col) => Some(ScalarRef::Map(col.index(index)?)),
-            Column::Bitmap(col) => Some(ScalarRef::Bitmap(col.get(index)?)),
+            Column::Bitmap(col) => Some(ScalarRef::Bitmap(col.index(index)?)),
             Column::Nullable(col) => Some(col.index(index)?.unwrap_or(ScalarRef::Null)),
             Column::Tuple(fields) => Some(ScalarRef::Tuple(
                 fields
@@ -744,7 +738,7 @@ impl Column {
             Column::Date(col) => ScalarRef::Date(*col.get_unchecked(index)),
             Column::Array(col) => ScalarRef::Array(col.index_unchecked(index)),
             Column::Map(col) => ScalarRef::Map(col.index_unchecked(index)),
-            Column::Bitmap(col) => ScalarRef::Bitmap(col.get_unchecked(index)),
+            Column::Bitmap(col) => ScalarRef::Bitmap(col.index_unchecked(index)),
             Column::Nullable(col) => col.index_unchecked(index).unwrap_or(ScalarRef::Null),
             Column::Tuple(fields) => ScalarRef::Tuple(
                 fields
@@ -793,9 +787,7 @@ impl Column {
             }
             Column::Array(col) => Column::Array(Box::new(col.slice(range))),
             Column::Map(col) => Column::Map(Box::new(col.slice(range))),
-            Column::Bitmap(col) => {
-                Column::Bitmap(col.clone().sliced(range.start, range.end - range.start))
-            }
+            Column::Bitmap(col) => Column::Bitmap(col.slice(range)),
             Column::Nullable(col) => Column::Nullable(Box::new(col.slice(range))),
             Column::Tuple(fields) => Column::Tuple(
                 fields
@@ -931,12 +923,7 @@ impl Column {
         use common_arrow::arrow::datatypes::Field as ArrowField;
         let dummy = "DUMMY".to_string();
         let is_nullable = matches!(&self, Column::Nullable(_));
-        let arrow_type: ArrowDataType = match &self.data_type() {
-            DataType::Bitmap => {
-                ArrowDataType::List(Box::new(Field::new("item", ArrowDataType::UInt32, false)))
-            }
-            _ => (&self.data_type()).into(),
-        };
+        let arrow_type: ArrowDataType = (&self.data_type()).into();
         ArrowField::new(dummy, arrow_type, is_nullable)
     }
 
@@ -1129,38 +1116,13 @@ impl Column {
                 )
             }
             Column::Bitmap(col) => {
-                let roaring_bitmaps = col
-                    .iter()
-                    .map(|rb| rb.bitmap.clone().into_iter().collect::<Vec<u32>>())
-                    .collect::<Buffer<_>>();
-                // store all u32
-                let mut values_data = Vec::new();
-                // store offsets of sub vector.
-                let mut offsets = Vec::<i32>::new();
-                let mut cur_offset = 0;
-
-                for rb in roaring_bitmaps.iter() {
-                    offsets.push(cur_offset);
-                    // store current roaring bitmap to values_data
-                    for value in rb {
-                        values_data.push(*value);
-                    }
-                    // update offset
-                    cur_offset += rb.len() as i32;
-                }
-                // add last offset
-                offsets.push(cur_offset);
-
-                let offsets_buffer = unsafe { OffsetsBuffer::new_unchecked(Buffer::from(offsets)) };
-                let values = Box::new(common_arrow::arrow::array::UInt32Array::from_vec(
-                    values_data,
-                ));
-
+                let offsets: Buffer<i64> =
+                    col.offsets.iter().map(|offset| *offset as i64).collect();
                 Box::new(
-                    common_arrow::arrow::array::ListArray::try_new(
+                    common_arrow::arrow::array::BinaryArray::<i64>::try_new(
                         arrow_type,
-                        offsets_buffer,
-                        values,
+                        unsafe { OffsetsBuffer::new_unchecked(offsets) },
+                        col.data.clone(),
                         None,
                     )
                     .unwrap(),
@@ -1670,22 +1632,14 @@ impl Column {
                     offsets: offsets.into(),
                 }))
             }
-            DataType::Bitmap => {
-                let data = (0..len)
-                    .map(|_| {
-                        let die_range = Uniform::new_inclusive(1, 6);
-                        let rolls = SmallRng::from_entropy()
-                            .sample_iter(&die_range)
-                            .map(|v| v as u32)
-                            .collect::<Vec<_>>();
-
-                        BitmapWrapper {
-                            bitmap: RoaringBitmap::from_iter(rolls),
-                        }
-                    })
-                    .collect::<Buffer<_>>();
-                Column::Bitmap(data)
-            }
+            DataType::Bitmap => BitmapType::from_data((0..len).map(|_| {
+                let rng = SmallRng::from_entropy();
+                rng.sample_iter(&Alphanumeric)
+                    // randomly generate 5 characters.
+                    .take(5)
+                    .map(u8::from)
+                    .collect::<Vec<_>>()
+            })),
             DataType::Tuple(fields) => {
                 let fields = fields
                     .iter()
@@ -1796,7 +1750,7 @@ impl Column {
             Column::Date(col) => col.len() * 4,
             Column::Array(col) => col.values.memory_size() + col.offsets.len() * 8,
             Column::Map(col) => col.values.memory_size() + col.offsets.len() * 8,
-            Column::Bitmap(col) => col.iter().map(|r| r.bitmap.len() as usize * 4).sum(),
+            Column::Bitmap(col) => col.data.len() + col.offsets.len() * 8,
             Column::Nullable(c) => c.column.memory_size() + c.validity.as_slice().0.len(),
             Column::Tuple(fields) => fields.iter().map(|f| f.memory_size()).sum(),
             Column::Variant(col) => col.data.len() + col.offsets.len() * 8,
@@ -1875,7 +1829,7 @@ impl ColumnBuilder {
             Column::Map(box col) => {
                 ColumnBuilder::Map(Box::new(ArrayColumnBuilder::from_column(col)))
             }
-            Column::Bitmap(col) => ColumnBuilder::Bitmap(buffer_into_mut(col)),
+            Column::Bitmap(col) => ColumnBuilder::Bitmap(StringColumnBuilder::from_column(col)),
             Column::Nullable(box col) => {
                 ColumnBuilder::Nullable(Box::new(NullableColumnBuilder::from_column(col)))
             }
@@ -1932,7 +1886,7 @@ impl ColumnBuilder {
                 ColumnBuilder::Array(Box::new(ArrayColumnBuilder::repeat(col, n)))
             }
             ScalarRef::Map(col) => ColumnBuilder::Map(Box::new(ArrayColumnBuilder::repeat(col, n))),
-            ScalarRef::Bitmap(b) => ColumnBuilder::Bitmap(vec![(*b).clone(); n]),
+            ScalarRef::Bitmap(b) => ColumnBuilder::Bitmap(StringColumnBuilder::repeat(b, n)),
             ScalarRef::Tuple(fields) => {
                 let fields_ty = match data_type {
                     DataType::Tuple(fields_ty) => fields_ty,
@@ -1997,7 +1951,7 @@ impl ColumnBuilder {
             ColumnBuilder::Date(col) => col.len() * 4,
             ColumnBuilder::Array(col) => col.builder.memory_size() + col.offsets.len() * 8,
             ColumnBuilder::Map(col) => col.builder.memory_size() + col.offsets.len() * 8,
-            ColumnBuilder::Bitmap(col) => col.iter().map(|r| r.bitmap.len() as usize * 4).sum(),
+            ColumnBuilder::Bitmap(col) => col.data.len() + col.offsets.len() * 8,
             ColumnBuilder::Nullable(c) => c.builder.memory_size() + c.validity.as_slice().len(),
             ColumnBuilder::Tuple(fields) => fields.iter().map(|f| f.memory_size()).sum(),
             ColumnBuilder::Variant(col) => col.data.len() + col.offsets.len() * 8,
@@ -2096,7 +2050,10 @@ impl ColumnBuilder {
                         .collect(),
                 )
             }
-            DataType::Bitmap => ColumnBuilder::Bitmap(Vec::with_capacity(capacity)),
+            DataType::Bitmap => {
+                let data_capacity = if enable_datasize_hint { 0 } else { capacity };
+                ColumnBuilder::Bitmap(StringColumnBuilder::with_capacity(capacity, data_capacity))
+            }
             DataType::Variant => {
                 let data_capacity = if enable_datasize_hint { 0 } else { capacity };
                 ColumnBuilder::Variant(StringColumnBuilder::with_capacity(capacity, data_capacity))
@@ -2130,7 +2087,8 @@ impl ColumnBuilder {
                 builder.push(value);
             }
             (ColumnBuilder::Bitmap(builder), ScalarRef::Bitmap(value)) => {
-                builder.push(value.clone());
+                builder.put_slice(value);
+                builder.commit_row();
             }
             (ColumnBuilder::Nullable(builder), ScalarRef::Null) => {
                 builder.push_null();
@@ -2165,7 +2123,7 @@ impl ColumnBuilder {
             ColumnBuilder::Date(builder) => builder.push(0),
             ColumnBuilder::Array(builder) => builder.push_default(),
             ColumnBuilder::Map(builder) => builder.push_default(),
-            ColumnBuilder::Bitmap(builder) => builder.push(BitmapWrapper::default()),
+            ColumnBuilder::Bitmap(builder) => builder.commit_row(),
             ColumnBuilder::Nullable(builder) => builder.push_null(),
             ColumnBuilder::Tuple(fields) => {
                 for field in fields {
@@ -2200,7 +2158,9 @@ impl ColumnBuilder {
                 let v: bool = reader.read_scalar()?;
                 builder.push(v);
             }
-            ColumnBuilder::String(builder) | ColumnBuilder::Variant(builder) => {
+            ColumnBuilder::String(builder)
+            | ColumnBuilder::Variant(builder)
+            | ColumnBuilder::Bitmap(builder) => {
                 let offset: u64 = reader.read_uvarint()?;
                 builder.data.resize(offset as usize + builder.data.len(), 0);
                 let last = *builder.offsets.last().unwrap() as usize;
@@ -2233,12 +2193,6 @@ impl ColumnBuilder {
                     map_builder[VALUE].push_binary(reader)?;
                 }
                 builder.commit_row();
-            }
-            ColumnBuilder::Bitmap(builder) => {
-                let rb = BitmapWrapper {
-                    bitmap: RoaringBitmap::deserialize_from(reader)?,
-                };
-                builder.push(rb);
             }
             ColumnBuilder::Nullable(builder) => {
                 let valid: bool = reader.read_scalar()?;
@@ -2290,7 +2244,9 @@ impl ColumnBuilder {
                     builder.push(v);
                 }
             }
-            ColumnBuilder::String(builder) | ColumnBuilder::Variant(builder) => {
+            ColumnBuilder::String(builder)
+            | ColumnBuilder::Variant(builder)
+            | ColumnBuilder::Bitmap(builder) => {
                 for row in 0..rows {
                     let reader = &reader[step * row..];
                     builder.put_slice(reader);
@@ -2334,15 +2290,6 @@ impl ColumnBuilder {
                         map_builder[VALUE].push_binary(&mut reader)?;
                     }
                     builder.commit_row();
-                }
-            }
-            ColumnBuilder::Bitmap(builder) => {
-                for row in 0..rows {
-                    let reader = &reader[step * row..];
-                    let rb = BitmapWrapper {
-                        bitmap: RoaringBitmap::deserialize_from(reader)?,
-                    };
-                    builder.push(rb);
                 }
             }
             ColumnBuilder::Nullable(_) => {
@@ -2452,7 +2399,7 @@ impl ColumnBuilder {
                 builder.append_column(other.as_ref());
             }
             (ColumnBuilder::Bitmap(builder), Column::Bitmap(other)) => {
-                builder.extend_from_slice(other);
+                builder.append_column(other);
             }
             (ColumnBuilder::Nullable(builder), Column::Nullable(other)) => {
                 builder.append_column(other);
@@ -2480,7 +2427,7 @@ impl ColumnBuilder {
             ColumnBuilder::Date(builder) => Column::Date(builder.into()),
             ColumnBuilder::Array(builder) => Column::Array(Box::new(builder.build())),
             ColumnBuilder::Map(builder) => Column::Map(Box::new(builder.build())),
-            ColumnBuilder::Bitmap(builder) => Column::Bitmap(builder.into()),
+            ColumnBuilder::Bitmap(builder) => Column::Bitmap(builder.build()),
             ColumnBuilder::Nullable(builder) => Column::Nullable(Box::new(builder.build())),
             ColumnBuilder::Tuple(fields) => {
                 assert!(fields.iter().map(|field| field.len()).all_equal());
@@ -2504,7 +2451,7 @@ impl ColumnBuilder {
             ColumnBuilder::Date(builder) => Scalar::Date(builder[0]),
             ColumnBuilder::Array(builder) => Scalar::Array(builder.build_scalar()),
             ColumnBuilder::Map(builder) => Scalar::Map(builder.build_scalar()),
-            ColumnBuilder::Bitmap(buiilder) => Scalar::Bitmap(buiilder[0].clone()),
+            ColumnBuilder::Bitmap(builder) => Scalar::Bitmap(builder.build_scalar()),
             ColumnBuilder::Nullable(builder) => builder.build_scalar().unwrap_or(Scalar::Null),
             ColumnBuilder::Tuple(fields) => Scalar::Tuple(
                 fields

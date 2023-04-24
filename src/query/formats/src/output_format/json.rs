@@ -119,7 +119,10 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
                 .collect();
             JsonValue::Object(vals)
         }
-        ScalarRef::Bitmap(b) => serde_json::to_value(b.bitmap.clone()).unwrap(),
+        ScalarRef::Bitmap(b) => {
+            let b = jsonb::from_slice(b).unwrap();
+            b.into()
+        }
         ScalarRef::Tuple(x) => {
             let vals = x
                 .iter()
