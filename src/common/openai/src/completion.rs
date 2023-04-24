@@ -12,6 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::time::Duration;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use log::trace;
@@ -51,11 +53,12 @@ impl OpenAI {
                 organization: None,
             },
             &self.api_base,
+            Duration::from_secs(120),
         );
 
         let (max_tokens, stop) = match mode {
             CompletionMode::Sql => (Some(150), Some(vec!["#".to_string(), ";".to_string()])),
-            CompletionMode::Text => (Some(1024), None),
+            CompletionMode::Text => (Some(800), None),
         };
 
         let body = ChatBody {

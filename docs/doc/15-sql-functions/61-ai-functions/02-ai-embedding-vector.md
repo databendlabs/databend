@@ -7,6 +7,8 @@ This document provides an overview of the ai_embedding_vector function in Databe
 
 The main code implementation can be found [here](https://github.com/datafuselabs/databend/blob/1e93c5b562bd159ecb0f336bb88fd1b7f9dc4a62/src/common/openai/src/embedding.rs).
 
+By default, Databend leverages the [text-embedding-ada](https://platform.openai.com/docs/models/embeddings) model for generating embeddings.
+
 :::caution
 Databend relies on OpenAI for `AI_EMBEDDING_VECTOR` and sends the embedding column data to OpenAI.
 
@@ -16,7 +18,6 @@ This function is available by default on [Databend Cloud](https://databend.com) 
 :::
 
 ## Overview of ai_embedding_vector
-
 
 The `ai_embedding_vector` function in Databend is a built-in function that generates vector embeddings for text data. It is useful for natural language processing tasks, such as document similarity, clustering, and recommendation systems.
 
@@ -28,36 +29,42 @@ To create embeddings for a text document using the `ai_embedding_vector` functio
 1. Create a table to store the documents:
 ```sql
 CREATE TABLE documents (
-    doc_id INT,
-    text_content TEXT
+                           id INT,
+                           title VARCHAR,
+                           content VARCHAR,
+                           embedding ARRAY(FLOAT32)
 );
 ```
 
 2. Insert example documents into the table:
 ```sql
-INSERT INTO documents (doc_id, text_content)
+INSERT INTO documents(id, title, content)
 VALUES
-    (1, 'Artificial intelligence is a fascinating field.'),
-    (2, 'Machine learning is a subset of AI.'),
-    (3, 'I love going to the beach on weekends.');
+    (1, 'A Brief History of AI', 'Artificial intelligence (AI) has been a fascinating concept of science fiction for decades...'),
+    (2, 'Machine Learning vs. Deep Learning', 'Machine learning and deep learning are two subsets of artificial intelligence...'),
+    (3, 'Neural Networks Explained', 'A neural network is a series of algorithms that endeavors to recognize underlying relationships...'),
 ```
 
-3. Create a table to store the embeddings:
+3. Generate the embeddings:
 ```sql
-CREATE TABLE embeddings (
-    doc_id INT,
-    text_content TEXT,
-    embedding ARRAY(FLOAT32)
-);
+UPDATE documents SET embedding = ai_embedding_vector(content) WHERE length(embedding) = 0;
 ```
+After running the query, the embedding column in the table will contain the generated embeddings.
 
-4. Generate embeddings for the text content and store them in the embeddings table:
-```sql
-INSERT INTO embeddings (doc_id, text_content, embedding)
-SELECT doc_id, text_content, ai_embedding_vector(text_content)
-FROM documents;
-
-```
-After running these SQL queries, the embeddings table will contain the generated embeddings for each document in the documents table. The embeddings are stored as an array of `FLOAT32` values in the embedding column, which has the `ARRAY(FLOAT32)` column type.
+The embeddings are stored as an array of `FLOAT32` values in the embedding column, which has the `ARRAY(FLOAT32)` column type.
 
 You can now use these embeddings for various natural language processing tasks, such as finding similar documents or clustering documents based on their content.
+
+4. Inspect the embeddings:
+
+```sql
+SELECT length(embedding) FROM documents;
++-------------------+
+| length(embedding) |
++-------------------+
+|              1536 |
+|              1536 |
+|              1536 |
++-------------------+
+```
+The query above shows that the generated embeddings have a length of 1536(dimensions) for each document.
