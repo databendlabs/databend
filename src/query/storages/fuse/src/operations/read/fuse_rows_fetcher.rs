@@ -165,17 +165,17 @@ where F: RowsFetcher + Send + Sync + 'static
         let segment_id_map = snapshot.build_segment_id_map();
         let segment_reader =
             MetaReaders::segment_info_reader(self.table.operator.clone(), table_schema.clone());
-        let mut segments = Vec::with_capacity(segment_id_map.len());
-        for (location, seg_id) in segment_id_map.iter() {
+        let mut segments = Vec::with_capacity(snapshot.segments.len());
+        for ((location, ver), seg_id) in segment_id_map.into_iter() {
             let segment_info = segment_reader
                 .read(&LoadParams {
-                    location: location.clone(),
+                    location,
                     len_hint: None,
-                    ver: snapshot.format_version(),
-                    put_cache: true,
+                    ver,
+                    put_cache: false,
                 })
                 .await?;
-            segments.push((*seg_id as u64, segment_info));
+            segments.push((seg_id as u64, segment_info));
         }
 
         self.fetcher

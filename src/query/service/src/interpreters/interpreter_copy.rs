@@ -604,6 +604,7 @@ impl Interpreter for CopyInterpreter {
             CopyPlan::IntoStage {
                 stage, from, path, ..
             } => self.build_copy_into_stage_pipeline(stage, path, from).await,
+            CopyPlan::NoFileToCopy => Ok(PipelineBuildResult::create()),
         }
     }
 }

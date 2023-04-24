@@ -164,7 +164,7 @@ EvalScalar
     ├── estimated rows: 0.00
     ├── Filter(Build)
     │   ├── filters: [t.number (#0) = 1]
-    │   ├── estimated rows: 0.33
+    │   ├── estimated rows: 0.00
     │   └── TableScan
     │       ├── table: default.default.t
     │       ├── read rows: 0
@@ -224,13 +224,13 @@ explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where
 ----
 EvalScalar
 ├── expressions: [a.x (#0), b.x (#1), b.y (#2)]
-├── estimated rows: 0.50
+├── estimated rows: 1.78
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [a.x (#0)]
     ├── probe keys: [b.x (#1)]
     ├── filters: []
-    ├── estimated rows: 0.50
+    ├── estimated rows: 1.78
     ├── Filter(Build)
     │   ├── filters: [is_true(a.x (#0) > 42)]
     │   ├── estimated rows: 1.33
@@ -261,13 +261,13 @@ explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where
 ----
 EvalScalar
 ├── expressions: [a.x (#0), b.x (#1), b.y (#2)]
-├── estimated rows: 0.50
+├── estimated rows: 1.98
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [b.x (#1)]
     ├── probe keys: [a.x (#0)]
     ├── filters: []
-    ├── estimated rows: 0.50
+    ├── estimated rows: 1.98
     ├── Filter(Build)
     │   ├── filters: [is_true(b.x (#1) > 44 OR b.x (#1) < 43)]
     │   ├── estimated rows: 2.22
@@ -298,16 +298,16 @@ explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where
 ----
 EvalScalar
 ├── expressions: [a.x (#0), b.x (#1), b.y (#2)]
-├── estimated rows: 0.50
+├── estimated rows: 0.40
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [a.x (#0)]
     ├── probe keys: [b.x (#1)]
     ├── filters: []
-    ├── estimated rows: 0.50
+    ├── estimated rows: 0.40
     ├── Filter(Build)
     │   ├── filters: [is_true(a.x (#0) > 42), is_true(a.x (#0) < 45)]
-    │   ├── estimated rows: 1.33
+    │   ├── estimated rows: 0.44
     │   └── TableScan
     │       ├── table: default.default.onecolumn
     │       ├── read rows: 4
@@ -319,7 +319,7 @@ EvalScalar
     │       └── estimated rows: 4.00
     └── Filter(Probe)
         ├── filters: [is_true(b.x (#1) > 42), is_true(b.x (#1) < 45)]
-        ├── estimated rows: 1.78
+        ├── estimated rows: 0.89
         └── TableScan
             ├── table: default.default.twocolumn
             ├── read rows: 4
@@ -371,16 +371,16 @@ explain select * from onecolumn as a right join twocolumn as b on a.x = b.x wher
 ----
 EvalScalar
 ├── expressions: [a.x (#0), b.x (#1), b.y (#2)]
-├── estimated rows: 1.78
+├── estimated rows: 0.89
 └── HashJoin
     ├── join type: RIGHT OUTER
     ├── build keys: [b.x (#1)]
     ├── probe keys: [a.x (#0)]
     ├── filters: []
-    ├── estimated rows: 1.78
+    ├── estimated rows: 0.89
     ├── Filter(Build)
     │   ├── filters: [is_true(b.x (#1) > 42), is_true(b.x (#1) < 45)]
-    │   ├── estimated rows: 1.78
+    │   ├── estimated rows: 0.89
     │   └── TableScan
     │       ├── table: default.default.twocolumn
     │       ├── read rows: 4
@@ -707,16 +707,16 @@ explain SELECT o.x, t.y FROM onecolumn o INNER JOIN twocolumn t ON (o.x=t.x AND 
 ----
 EvalScalar
 ├── expressions: [o.x (#0), t.y (#2)]
-├── estimated rows: 8.00
+├── estimated rows: 1.00
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [t.x (#1)]
     ├── probe keys: [o.x (#0)]
     ├── filters: []
-    ├── estimated rows: 8.00
+    ├── estimated rows: 1.00
     ├── Filter(Build)
     │   ├── filters: [is_true(t.y (#2) = 53)]
-    │   ├── estimated rows: 1.14
+    │   ├── estimated rows: 1.00
     │   └── TableScan
     │       ├── table: default.default.twocolumn
     │       ├── read rows: 8
