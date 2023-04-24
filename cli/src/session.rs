@@ -177,6 +177,7 @@ impl Session {
     }
 
     pub async fn handle_query(&mut self, is_repl: bool, query: &str) -> Result<bool> {
+        let query = query.trim_end_matches(';').trim();
         if is_repl && (query == "exit" || query == "quit") {
             return Ok(true);
         }
