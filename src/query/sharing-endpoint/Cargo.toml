@@ -24,7 +24,7 @@ time = { version = "0.3", features = ["serde"] }
 
 base64 = "0.21.0"
 clap = { workspace = true }
-enumflags2 = { version = "0.7.5", features = ["serde"] }
+enumflags2 = { version = "0.7.7", features = ["serde"] }
 opendal = { workspace = true }
 poem = { version = "1", features = ["rustls", "multipart", "compression"] }
 serde = { workspace = true }
