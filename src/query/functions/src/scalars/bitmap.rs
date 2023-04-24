@@ -36,7 +36,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<StringType, BitmapType, _, _>(
         "bitmap_from_string",
-        |_| FunctionDomain::Full,
+        |_| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, BitmapType>(|s, builder, ctx| {
             match std::str::from_utf8(s)
                 .map_err(|e| e.to_string())
@@ -64,12 +64,19 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<BitmapType, StringType, _, _>(
         "bitmap_to_string",
-        |_| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<BitmapType, StringType>(|b, builder, _ctx| {
-            let rb = RoaringTreemap::deserialize_from(b).unwrap();
-            let raw = rb.into_iter().collect::<Vec<_>>();
-            let s = join(raw.iter(), ",");
-            builder.put_str(&s);
+        |_| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<BitmapType, StringType>(|b, builder, ctx| {
+            match RoaringTreemap::deserialize_from(b) {
+                Ok(rb) => {
+                    let raw = rb.into_iter().collect::<Vec<_>>();
+                    let s = join(raw.iter(), ",");
+                    builder.put_str(&s);
+                }
+                Err(e) => {
+                    ctx.set_error(builder.len(), e.to_string());
+                }
+            }
+
             builder.commit_row();
         }),
     );

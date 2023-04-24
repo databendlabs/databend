@@ -34,6 +34,7 @@ use crate::types::DataType;
 use crate::types::NumberDataType;
 use crate::with_number_type;
 use crate::Scalar;
+use crate::ARROW_EXT_TYPE_BITMAP;
 use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use crate::ARROW_EXT_TYPE_EMPTY_MAP;
 use crate::ARROW_EXT_TYPE_VARIANT;
@@ -1232,6 +1233,7 @@ impl From<&ArrowField> for TableDataType {
                 ARROW_EXT_TYPE_VARIANT => TableDataType::Variant,
                 ARROW_EXT_TYPE_EMPTY_ARRAY => TableDataType::EmptyArray,
                 ARROW_EXT_TYPE_EMPTY_MAP => TableDataType::EmptyMap,
+                ARROW_EXT_TYPE_BITMAP => TableDataType::Bitmap,
                 _ => unimplemented!("data_type: {:?}", f.data_type()),
             },
             // this is safe, because we define the datatype firstly
@@ -1343,7 +1345,11 @@ impl From<&DataType> for ArrowDataType {
                     false,
                 )
             }
-            DataType::Bitmap => ArrowDataType::Binary,
+            DataType::Bitmap => ArrowDataType::Extension(
+                ARROW_EXT_TYPE_BITMAP.to_string(),
+                Box::new(ArrowDataType::LargeBinary),
+                None,
+            ),
             DataType::Tuple(types) => {
                 let fields = types
                     .iter()
@@ -1424,7 +1430,11 @@ impl From<&TableDataType> for ArrowDataType {
                     false,
                 )
             }
-            TableDataType::Bitmap => ArrowDataType::Binary,
+            TableDataType::Bitmap => ArrowDataType::Extension(
+                ARROW_EXT_TYPE_BITMAP.to_string(),
+                Box::new(ArrowDataType::LargeBinary),
+                None,
+            ),
             TableDataType::Tuple {
                 fields_name,
                 fields_type,

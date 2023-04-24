@@ -28,6 +28,7 @@ use crate::types::number::F64;
 use crate::types::string::StringDomain;
 use crate::types::AnyType;
 use crate::types::ArgType;
+use crate::types::BitmapType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
@@ -203,7 +204,7 @@ impl Domain {
                 };
                 Domain::Map(Some(inner_domain))
             }
-            DataType::Bitmap => Domain::Bitmap(BitmapDomain {}),
+            DataType::Bitmap => Domain::Bitmap(BitmapType::full_domain()),
             DataType::Variant => Domain::Undefined,
             DataType::Generic(_) => unreachable!(),
         }

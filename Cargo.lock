@@ -1654,7 +1654,6 @@ dependencies = [
  "ordered-float 3.6.0",
  "pretty_assertions",
  "rand 0.8.5",
- "roaring",
  "rust_decimal",
  "serde",
  "serde_json",
@@ -1681,7 +1680,6 @@ dependencies = [
  "num",
  "ordered-float 3.6.0",
  "pretty_assertions",
- "roaring",
  "serde_json",
  "storages-common-blocks",
  "storages-common-table-meta",
@@ -8371,7 +8369,6 @@ dependencies = [
  "bytemuck",
  "byteorder",
  "retain_mut",
- "serde",
 ]
 
 [[package]]

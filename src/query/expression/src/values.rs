@@ -445,7 +445,10 @@ impl<'a> ScalarRef<'a> {
                     Domain::Map(Some(map_domain))
                 }
             }
-            ScalarRef::Bitmap(_) => Domain::Bitmap(BitmapDomain {}), /* todo(ariesdevil): fix domain */
+            ScalarRef::Bitmap(b) => Domain::Bitmap(BitmapDomain {
+                min: b.to_vec(),
+                max: Some(b.to_vec()),
+            }),
             ScalarRef::Tuple(fields) => {
                 let types = data_type.as_tuple().unwrap();
                 Domain::Tuple(
@@ -675,6 +678,7 @@ pub const EXTENSION_KEY: &str = "Extension";
 pub const ARROW_EXT_TYPE_EMPTY_ARRAY: &str = "EmptyArray";
 pub const ARROW_EXT_TYPE_EMPTY_MAP: &str = "EmptyMap";
 pub const ARROW_EXT_TYPE_VARIANT: &str = "Variant";
+pub const ARROW_EXT_TYPE_BITMAP: &str = "Bitmap";
 
 impl Column {
     pub fn len(&self) -> usize {
@@ -865,7 +869,13 @@ impl Column {
                     Domain::Map(Some(map_domain))
                 }
             }
-            Column::Bitmap(_) => Domain::Bitmap(BitmapDomain {}), /* todo(ariesdevil): fix domain */
+            Column::Bitmap(col) => {
+                let (min, max) = BitmapType::iter_column(col).minmax().into_option().unwrap();
+                Domain::Bitmap(BitmapDomain {
+                    min: min.to_vec(),
+                    max: Some(max.to_vec()),
+                })
+            }
             Column::Nullable(col) => {
                 let inner_domain = col.column.domain();
                 Domain::Nullable(NullableDomain {
@@ -1529,6 +1539,19 @@ impl Column {
                     precision: *precision as u8,
                     scale: *scale as u8,
                 }))
+            }
+            ArrowDataType::Extension(name, _, None) if name == ARROW_EXT_TYPE_BITMAP => {
+                let arrow_col = arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()
+                    .expect("fail to read from arrow: array should be `BinaryArray<i64>`");
+                let offsets = arrow_col.offsets().clone().into_inner();
+
+                let offsets = unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
+                Column::Bitmap(StringColumn {
+                    data: arrow_col.values().clone(),
+                    offsets,
+                })
             }
             ty => unimplemented!("unsupported arrow type {ty:?}"),
         };

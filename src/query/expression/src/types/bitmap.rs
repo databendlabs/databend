@@ -52,14 +52,11 @@ impl ValueType for BitmapType {
     }
 
     fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
-        match scalar {
-            ScalarRef::Bitmap(scalar) => Some(scalar),
-            _ => None,
-        }
+        scalar.as_bitmap().cloned()
     }
 
     fn try_downcast_column<'a>(col: &'a Column) -> Option<Self::Column> {
-        col.as_string().cloned()
+        col.as_bitmap().cloned()
     }
 
     fn try_downcast_builder<'a>(
@@ -71,8 +68,8 @@ impl ValueType for BitmapType {
         }
     }
 
-    fn try_downcast_domain(_domain: &Domain) -> Option<Self::Domain> {
-        None
+    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+        domain.as_bitmap().map(BitmapDomain::clone)
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
@@ -80,7 +77,7 @@ impl ValueType for BitmapType {
     }
 
     fn upcast_column(col: Self::Column) -> Column {
-        Column::String(col)
+        Column::Bitmap(col)
     }
 
     fn upcast_domain(domain: Self::Domain) -> Domain {
@@ -154,7 +151,10 @@ impl ArgType for BitmapType {
     }
 
     fn full_domain() -> Self::Domain {
-        BitmapDomain {}
+        BitmapDomain {
+            min: vec![],
+            max: None,
+        }
     }
 
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
@@ -162,5 +162,8 @@ impl ArgType for BitmapType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct BitmapDomain {}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BitmapDomain {
+    pub(crate) min: Vec<u8>,
+    pub(crate) max: Option<Vec<u8>>,
+}
