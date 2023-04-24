@@ -189,7 +189,6 @@ impl<'a> Evaluator<'a> {
                     num_rows: self.input_columns.num_rows(),
                     validity,
                     errors: None,
-                    tz: self.func_ctx.tz,
                     func_ctx: self.func_ctx,
                 };
                 let (_, eval) = function.eval.as_scalar().unwrap();
@@ -901,7 +900,6 @@ impl<'a> Evaluator<'a> {
                     num_rows: self.input_columns.num_rows(),
                     validity: None,
                     errors: None,
-                    tz: self.func_ctx.tz,
                     func_ctx: self.func_ctx,
                 };
                 let result = (eval)(&cols_ref, &mut ctx);
