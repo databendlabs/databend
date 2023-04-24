@@ -14,6 +14,7 @@ runs:
   using: "composite"
   steps:
     - uses: dtolnay/rust-toolchain@stable
+      id: toolchain
       with:
         toolchain: stable
         targets: ${{ inputs.target }}
@@ -26,8 +27,9 @@ runs:
       with:
         path: |
           ~/.cargo/registry/
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}-${{ inputs.cache-key }}
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}-${{ steps.toolchain.outputs.cachekey }}-${{ inputs.cache-key }}
         restore-keys: |
+          ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}-${{ steps.toolchain.outputs.cachekey }}
           ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
           ${{ runner.os }}-cargo
 
