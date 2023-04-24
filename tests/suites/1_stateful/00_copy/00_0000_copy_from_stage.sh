@@ -66,7 +66,7 @@ copy_from_named_external_stage_cases=(
   "copy into ontime200 from @named_external_stage FILES = ('ontime_200.csv.gz','ontime_200.csv.bz2','ontime_200.csv.zst') FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'auto'  record_delimiter = '\n' skip_header = 1) FORCE = true;"
 )
 
-## Copy file twiice but return the same result to test idempotent-copy
+## Copy file twice but return the same result to test idempotent-copy
 for i in "${copy_from_named_external_stage_cases[@]}"; do
   echo "$i" | $MYSQL_CLIENT_CONNECT
   echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIENT_CONNECT
