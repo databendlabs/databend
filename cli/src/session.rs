@@ -127,6 +127,7 @@ impl Session {
                         eprintln!("io err: {err}");
                     }
                     ReadlineError::Interrupted => {
+                        self.query = None;
                         println!("^C");
                     }
                     ReadlineError::Eof => {
