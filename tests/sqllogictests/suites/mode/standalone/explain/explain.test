@@ -989,7 +989,7 @@ EvalScalar
 ├── expressions: [t4.a (#0), t4.b (#1)]
 ├── estimated rows: 0.00
 └── Filter
-    ├── filters: [t4.a (#0) = 1, is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL) = "xx")]
+    ├── filters: [t4.a (#0) = 1, is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')]
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t4
@@ -997,7 +997,7 @@ EvalScalar
         ├── read bytes: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [and_filters(CAST(t4.a (#0) = 1 AS Boolean NULL), TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL) = "xx")], limit: NONE]
+        ├── push downs: [filters: [and_filters(CAST(t4.a (#0) = 1 AS Boolean NULL), TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')], limit: NONE]
         └── estimated rows: 0.00
 
 statement ok
@@ -1013,10 +1013,10 @@ EvalScalar
 ├── expressions: [v4.a (#0), v4.b (#2)]
 ├── estimated rows: 0.00
 └── EvalScalar
-    ├── expressions: [t4.a (#0), TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL)]
+    ├── expressions: [t4.a (#0), TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL)]
     ├── estimated rows: 0.00
     └── Filter
-        ├── filters: [is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL) = "xx")]
+        ├── filters: [is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')]
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.default.t4
@@ -1024,7 +1024,7 @@ EvalScalar
             ├── read bytes: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
-            ├── push downs: [filters: [is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL) = "xx")], limit: NONE]
+            ├── push downs: [filters: [is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')], limit: NONE]
             └── estimated rows: 0.00
 
 query T
@@ -1034,7 +1034,7 @@ EvalScalar
 ├── expressions: [v4.a (#0), v4.b (#2)]
 ├── estimated rows: 0.00
 └── EvalScalar
-    ├── expressions: [t4.a (#0), TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL)]
+    ├── expressions: [t4.a (#0), TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL)]
     ├── estimated rows: 0.00
     └── Filter
         ├── filters: [t4.a (#0) > 100]
