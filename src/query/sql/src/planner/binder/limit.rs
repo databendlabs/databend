@@ -20,17 +20,12 @@ use common_exception::Result;
 use crate::binder::Binder;
 use crate::optimizer::SExpr;
 use crate::plans::Limit;
-use crate::BindContext;
 
 impl Binder {
-    #[async_backtrace::framed]
-    pub(super) async fn bind_limit(
-        &mut self,
-        _bind_context: &BindContext,
-        child: SExpr,
+    pub(super) fn analyze_limit(
         limit: Option<&Expr>,
         offset: &Option<Expr>,
-    ) -> Result<SExpr> {
+    ) -> Result<(Option<usize>, usize)> {
         let limit_cnt = match limit {
             Some(limit) => Some(
                 Self::bind_limit_argument(limit)
@@ -48,12 +43,12 @@ impl Binder {
             0
         };
 
-        let limit_plan = Limit {
-            limit: limit_cnt,
-            offset: offset_cnt,
-        };
-        let new_expr = SExpr::create_unary(limit_plan.into(), child);
-        Ok(new_expr)
+        Ok((limit_cnt, offset_cnt))
+    }
+
+    pub(super) fn bind_limit(child: SExpr, limit: Option<usize>, offset: usize) -> SExpr {
+        let limit_plan = Limit { limit, offset };
+        SExpr::create_unary(limit_plan.into(), child)
     }
 
     /// So far, we only support integer literal as limit argument.

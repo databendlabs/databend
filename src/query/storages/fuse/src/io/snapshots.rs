@@ -30,6 +30,7 @@ use opendal::EntryMode;
 use opendal::Metakey;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
+use storages_common_table_meta::meta::FormatVersion;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -42,29 +43,19 @@ use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
 use crate::io::TableMetaLocationGenerator;
 
+#[derive(Clone, Debug)]
+pub struct SnapshotLiteExtended {
+    pub format_version: u64,
+    pub snapshot_id: SnapshotId,
+    pub timestamp: Option<DateTime<Utc>>,
+    pub segments: HashSet<Location>,
+    pub table_statistics_location: Option<String>,
+}
+
 // Read snapshot related operations.
 pub struct SnapshotsIO {
     ctx: Arc<dyn TableContext>,
     operator: Operator,
-}
-
-pub struct SnapshotLiteListExtended {
-    pub chained_snapshot_lites: Vec<TableSnapshotLite>,
-    pub segment_locations: HashMap<Location, HashSet<SnapshotId>>,
-    pub orphan_snapshot_lites: Vec<TableSnapshotLite>,
-}
-
-#[derive(Clone)]
-pub enum ListSnapshotLiteOption {
-    // do not case about the segments
-    NeedNotSegments,
-    // need segment, and exclude the locations if Some(Hashset<Location>) is provided
-    NeedSegmentsWithExclusion(Option<Arc<HashSet<Location>>>),
-}
-
-struct SnapshotLiteExtended {
-    snapshot_lite: TableSnapshotLite,
-    segment_locations: Vec<Location>,
 }
 
 impl SnapshotsIO {
@@ -76,7 +67,7 @@ impl SnapshotsIO {
     async fn read_snapshot(
         snapshot_location: String,
         data_accessor: Operator,
-    ) -> Result<Arc<TableSnapshot>> {
+    ) -> Result<(Arc<TableSnapshot>, FormatVersion)> {
         let reader = MetaReaders::table_snapshot_reader(data_accessor);
         let ver = TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
         let load_params = LoadParams {
@@ -85,7 +76,8 @@ impl SnapshotsIO {
             ver,
             put_cache: true,
         };
-        reader.read(&load_params).await
+        let snapshot = reader.read(&load_params).await?;
+        Ok((snapshot, ver))
     }
 
     #[async_backtrace::framed]
@@ -93,8 +85,7 @@ impl SnapshotsIO {
         snapshot_location: String,
         data_accessor: Operator,
         min_snapshot_timestamp: Option<DateTime<Utc>>,
-        list_options: ListSnapshotLiteOption,
-    ) -> Result<SnapshotLiteExtended> {
+    ) -> Result<TableSnapshotLite> {
         let reader = MetaReaders::table_snapshot_reader(data_accessor);
         let ver = TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
         let load_params = LoadParams {
@@ -118,23 +109,7 @@ impl SnapshotsIO {
                 "The timestamp of snapshot need less than the min_snapshot_timestamp",
             ));
         }
-        let mut segment_locations = Vec::new();
-        if let ListSnapshotLiteOption::NeedSegmentsWithExclusion(filter) = list_options {
-            // collects segments, and the snapshots that reference them.
-            for segment_location in &snapshot.segments {
-                if let Some(excludes) = filter.as_ref() {
-                    if excludes.contains(segment_location) {
-                        continue;
-                    }
-                }
-                segment_locations.push(segment_location.clone());
-            }
-        }
-
-        Ok(SnapshotLiteExtended {
-            snapshot_lite: TableSnapshotLite::from(snapshot.as_ref()),
-            segment_locations,
-        })
+        Ok(TableSnapshotLite::from((snapshot.as_ref(), ver)))
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
@@ -143,8 +118,7 @@ impl SnapshotsIO {
         &self,
         snapshot_files: &[String],
         min_snapshot_timestamp: Option<DateTime<Utc>>,
-        list_options: &ListSnapshotLiteOption,
-    ) -> Result<Vec<Result<SnapshotLiteExtended>>> {
+    ) -> Result<Vec<Result<TableSnapshotLite>>> {
         // combine all the tasks.
         let mut iter = snapshot_files.iter();
         let tasks = std::iter::from_fn(move || {
@@ -153,7 +127,6 @@ impl SnapshotsIO {
                     location.clone(),
                     self.operator.clone(),
                     min_snapshot_timestamp,
-                    list_options.clone(),
                 )
                 .instrument(tracing::debug_span!("read_snapshot"))
             })
@@ -170,19 +143,64 @@ impl SnapshotsIO {
         .await
     }
 
-    // Read all the table statistic files by the root file(exclude the root file).
-    // limit: read how many table statistic files
+    // Read all the snapshots by the root file.
     #[async_backtrace::framed]
-    pub async fn read_table_statistic_files(
+    pub async fn read_snapshot_lites_ext<T>(
         &self,
-        root_ts_file: &str,
-        limit: Option<usize>,
-    ) -> Result<Vec<String>> {
-        // Get all file list.
-        if let Some(prefix) = Self::get_s3_prefix_from_file(root_ts_file) {
-            return self.list_files(&prefix, limit, Some(root_ts_file)).await;
+        root_snapshot_file: String,
+        min_snapshot_timestamp: Option<DateTime<Utc>>,
+        status_callback: T,
+    ) -> Result<(Vec<TableSnapshotLite>, Vec<TableSnapshotLite>)>
+    where
+        T: Fn(String),
+    {
+        let ctx = self.ctx.clone();
+        let data_accessor = self.operator.clone();
+
+        // List all the snapshot file paths
+        // note that snapshot file paths of ongoing txs might be included
+        let mut snapshot_files = vec![];
+        if let Some(prefix) = Self::get_s3_prefix_from_file(&root_snapshot_file) {
+            snapshot_files = Self::list_files(self.operator.clone(), &prefix, None).await?;
         }
-        Ok(vec![])
+
+        // 1. Get all the snapshot by chunks.
+        let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+        let mut snapshot_lites = Vec::with_capacity(snapshot_files.len());
+
+        let start = Instant::now();
+        let mut count = 0;
+        for chunk in snapshot_files.chunks(max_io_requests) {
+            let results = self
+                .read_snapshot_lites(chunk, min_snapshot_timestamp)
+                .await?;
+
+            for snapshot_lite in results.into_iter().flatten() {
+                snapshot_lites.push(snapshot_lite);
+            }
+
+            // Refresh status.
+            {
+                count += chunk.len();
+                let status = format!(
+                    "read snapshot files:{}/{}, cost:{} sec",
+                    count,
+                    snapshot_files.len(),
+                    start.elapsed().as_secs()
+                );
+                info!(status);
+                (status_callback)(status);
+            }
+        }
+
+        let (root_snapshot, format_version) =
+            Self::read_snapshot(root_snapshot_file.clone(), data_accessor.clone()).await?;
+
+        Ok(Self::chain_snapshots(
+            snapshot_lites,
+            &root_snapshot,
+            format_version,
+        ))
     }
 
     // read all the precedent snapshots of given `root_snapshot`
@@ -198,7 +216,9 @@ impl SnapshotsIO {
         let format_version = TableMetaLocationGenerator::snapshot_version(root_snapshot.as_str());
         let lite_snapshot_stream = table_snapshot_reader
             .snapshot_history(root_snapshot, format_version, location_generator)
-            .map_ok(|snapshot| TableSnapshotLite::from(snapshot.as_ref()));
+            .map_ok(|(snapshot, format_version)| {
+                TableSnapshotLite::from((snapshot.as_ref(), format_version))
+            });
         if let Some(l) = limit {
             lite_snapshot_stream.take(l).try_collect::<Vec<_>>().await
         } else {
@@ -206,94 +226,100 @@ impl SnapshotsIO {
         }
     }
 
-    // Read all the snapshots by the root file.
-    // limit: limits the number of snapshot files listed
-    // with_segment_locations: if true will get the segments of the snapshot
     #[async_backtrace::framed]
-    pub async fn read_snapshot_lites_ext<T>(
-        &self,
-        root_snapshot_file: String,
-        limit: Option<usize>,
-        list_options: &ListSnapshotLiteOption,
-        min_snapshot_timestamp: Option<DateTime<Utc>>,
-        status_callback: T,
-    ) -> Result<SnapshotLiteListExtended>
-    where
-        T: Fn(String),
-    {
-        let ctx = self.ctx.clone();
-        let data_accessor = self.operator.clone();
+    async fn read_snapshot_lite_extend(
+        snapshot_location: String,
+        data_accessor: Operator,
+        root_snapshot: Arc<SnapshotLiteExtended>,
+    ) -> Result<SnapshotLiteExtended> {
+        let reader = MetaReaders::table_snapshot_reader(data_accessor);
+        let ver = TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
+        let load_params = LoadParams {
+            location: snapshot_location,
+            len_hint: None,
+            ver,
+            put_cache: false,
+        };
+        let snapshot = reader.read(&load_params).await?;
 
-        // List all the snapshot file paths
-        // note that snapshot file paths of ongoing txs might be included
-        let mut snapshot_files = vec![];
-        let mut segment_location_with_index: HashMap<Location, HashSet<SnapshotId>> =
-            HashMap::new();
-        if let Some(prefix) = Self::get_s3_prefix_from_file(&root_snapshot_file) {
-            snapshot_files = self.list_files(&prefix, limit, None).await?;
+        if snapshot.timestamp >= root_snapshot.timestamp {
+            // filter out snapshots which have larger (artificial)timestamp , they are
+            // not members of precedents of the current snapshot, whose timestamp is
+            // min_snapshot_timestamp.
+            //
+            // NOTE: it is NOT the case that all those have lesser timestamp, are
+            // members of precedents of the current snapshot, though.
+            // Error is directly returned, since we can be ignored through flatten.
+            return Err(ErrorCode::StorageOther(
+                "The timestamp of snapshot need less than the min_snapshot_timestamp",
+            ));
         }
-
-        // 1. Get all the snapshot by chunks.
-        let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
-        let mut snapshot_lites = Vec::with_capacity(snapshot_files.len());
-
-        let start = Instant::now();
-        let mut count = 0;
-        for chunk in snapshot_files.chunks(max_io_requests) {
-            let results = self
-                .read_snapshot_lites(chunk, min_snapshot_timestamp, list_options)
-                .await?;
-
-            for snapshot_lite_extend in results.into_iter().flatten() {
-                let snapshot_id = snapshot_lite_extend.snapshot_lite.snapshot_id;
-                snapshot_lites.push(snapshot_lite_extend.snapshot_lite);
-                for location in snapshot_lite_extend.segment_locations.into_iter() {
-                    segment_location_with_index
-                        .entry(location)
-                        .and_modify(|val| {
-                            val.insert(snapshot_id);
-                        })
-                        .or_insert(HashSet::from([snapshot_id]));
-                }
+        let mut segments = HashSet::new();
+        // collects extended segments.
+        for segment_location in &snapshot.segments {
+            if root_snapshot.segments.contains(segment_location) {
+                continue;
             }
-
-            // Refresh status.
-            {
-                count += chunk.len();
-                let status = format!(
-                    "gc: read snapshot files:{}/{}, cost:{} sec",
-                    count,
-                    snapshot_files.len(),
-                    start.elapsed().as_secs()
-                );
-                info!(status);
-                (status_callback)(status);
-            }
+            segments.insert(segment_location.clone());
         }
+        let table_statistics_location =
+            if snapshot.table_statistics_location != root_snapshot.table_statistics_location {
+                snapshot.table_statistics_location.clone()
+            } else {
+                None
+            };
 
-        let root_snapshot =
-            Self::read_snapshot(root_snapshot_file.clone(), data_accessor.clone()).await?;
-
-        let (chained_snapshot_lites, orphan_snapshot_lites) =
-            Self::chain_snapshots(snapshot_lites, &root_snapshot);
-
-        Ok(SnapshotLiteListExtended {
-            chained_snapshot_lites,
-            segment_locations: segment_location_with_index,
-            orphan_snapshot_lites,
+        Ok(SnapshotLiteExtended {
+            format_version: ver,
+            snapshot_id: snapshot.snapshot_id,
+            timestamp: snapshot.timestamp,
+            segments,
+            table_statistics_location,
         })
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    #[async_backtrace::framed]
+    pub async fn read_snapshot_lite_extends(
+        &self,
+        snapshot_files: &[String],
+        root_snapshot: Arc<SnapshotLiteExtended>,
+    ) -> Result<Vec<Result<SnapshotLiteExtended>>> {
+        // combine all the tasks.
+        let mut iter = snapshot_files.iter();
+        let tasks = std::iter::from_fn(move || {
+            iter.next().map(|location| {
+                Self::read_snapshot_lite_extend(
+                    location.clone(),
+                    self.operator.clone(),
+                    root_snapshot.clone(),
+                )
+                .instrument(tracing::debug_span!("read_snapshot"))
+            })
+        });
+
+        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
+        let permit_nums = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+        execute_futures_in_parallel(
+            tasks,
+            threads_nums,
+            permit_nums,
+            "fuse-req-snapshots-worker".to_owned(),
+        )
+        .await
     }
 
     fn chain_snapshots(
         snapshot_lites: Vec<TableSnapshotLite>,
         root_snapshot: &TableSnapshot,
+        format_version: FormatVersion,
     ) -> (Vec<TableSnapshotLite>, Vec<TableSnapshotLite>) {
         let mut snapshot_map = HashMap::new();
         let mut chained_snapshot_lites = vec![];
         for snapshot_lite in snapshot_lites.into_iter() {
             snapshot_map.insert(snapshot_lite.snapshot_id, snapshot_lite);
         }
-        let root_snapshot_lite = TableSnapshotLite::from(root_snapshot);
+        let root_snapshot_lite = TableSnapshotLite::from((root_snapshot, format_version));
         let mut prev_snapshot_id_tuple = root_snapshot_lite.prev_snapshot_id;
         chained_snapshot_lites.push(root_snapshot_lite);
         while let Some((prev_snapshot_id, _)) = prev_snapshot_id_tuple {
@@ -314,14 +340,11 @@ impl SnapshotsIO {
     }
 
     #[async_backtrace::framed]
-    async fn list_files(
-        &self,
+    pub async fn list_files(
+        op: Operator,
         prefix: &str,
-        limit: Option<usize>,
         exclude_file: Option<&str>,
     ) -> Result<Vec<String>> {
-        let op = self.operator.clone();
-
         let mut file_list = vec![];
         let mut ds = op.list(prefix).await?;
         while let Some(de) = ds.try_next().await? {
@@ -349,19 +372,11 @@ impl SnapshotsIO {
         // Result:
         // [(3, Some(3)), (1, Some(1)), (2, None),(4, None)]
         file_list.sort_by(|(_, m1), (_, m2)| m2.cmp(m1));
-
-        Ok(match limit {
-            None => file_list.into_iter().map(|v| v.0).collect::<Vec<String>>(),
-            Some(v) => file_list
-                .into_iter()
-                .take(v)
-                .map(|v| v.0)
-                .collect::<Vec<String>>(),
-        })
+        Ok(file_list.into_iter().map(|v| v.0).collect())
     }
 
     // _ss/xx/yy.json -> _ss/xx/
-    fn get_s3_prefix_from_file(file_path: &str) -> Option<String> {
+    pub fn get_s3_prefix_from_file(file_path: &str) -> Option<String> {
         if let Some(path) = Path::new(&file_path).parent() {
             let mut prefix = path.to_str().unwrap_or("").to_string();
 

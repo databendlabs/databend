@@ -37,6 +37,7 @@ use crate::MetadataRef;
 use crate::ScalarExpr;
 
 const MOCK_NUMBER: usize = 1000;
+const RELATION_THRESHOLD: usize = 10;
 
 // The join reorder algorithm follows the paper: Dynamic Programming Strikes Back
 // See the paper for more details.
@@ -51,8 +52,6 @@ pub struct DPhpy {
     query_graph: QueryGraph,
     relation_set_tree: RelationSetTree,
     filters: HashSet<Filter>,
-    // to avoid duplicate
-    visited: HashSet<(Vec<IndexType>, Vec<IndexType>)>,
 }
 
 impl DPhpy {
@@ -66,7 +65,6 @@ impl DPhpy {
             query_graph: QueryGraph::new(),
             relation_set_tree: Default::default(),
             filters: HashSet::new(),
-            visited: Default::default(),
         }
     }
 
@@ -324,13 +322,14 @@ impl DPhpy {
         for (idx, relation) in self.join_relations.iter().enumerate() {
             // Get nodes  in `relation_set_tree`
             let nodes = self.relation_set_tree.get_relation_set_by_index(idx)?;
+            let ce = relation.cardinality()?;
             let join = JoinNode {
                 join_type: JoinType::Inner,
                 leaves: Arc::new(nodes.clone()),
                 children: Arc::new(vec![]),
                 join_conditions: Arc::new(vec![]),
                 cost: 0.0,
-                cardinality: Some(relation.cardinality()?),
+                cardinality: Some(ce),
                 s_expr: None,
             };
             let _ = self.dp_table.insert(nodes, join);
@@ -377,9 +376,10 @@ impl DPhpy {
                 .relation_set_tree
                 .get_relation_set_by_index(*neighbor)?;
             // Check if neighbor is connected with `nodes`
-            let (connected, join_conditions) =
-                self.query_graph.is_connected(nodes, &neighbor_relations)?;
-            if connected && !self.emit_csg_cmp(nodes, &neighbor_relations, join_conditions)? {
+            let join_conditions = self.query_graph.is_connected(nodes, &neighbor_relations)?;
+            if !join_conditions.is_empty()
+                && !self.emit_csg_cmp(nodes, &neighbor_relations, join_conditions)?
+            {
                 return Ok(false);
             }
             if !self.enumerate_cmp_rec(nodes, &neighbor_relations, &forbidden_nodes)? {
@@ -396,9 +396,17 @@ impl DPhpy {
         nodes: &[IndexType],
         forbidden_nodes: &HashSet<IndexType>,
     ) -> Result<bool> {
-        let neighbors = self.query_graph.neighbors(nodes, forbidden_nodes)?;
+        let mut neighbors = self.query_graph.neighbors(nodes, forbidden_nodes)?;
         if neighbors.is_empty() {
             return Ok(true);
+        }
+        if self.join_relations.len() >= RELATION_THRESHOLD {
+            // Only consider the nodes.len() neighbors to reduce search space
+            neighbors = neighbors
+                .iter()
+                .take(nodes.len())
+                .copied()
+                .collect::<Vec<IndexType>>();
         }
         let mut merged_sets = Vec::new();
         for neighbor in neighbors.iter() {
@@ -417,7 +425,9 @@ impl DPhpy {
 
         let mut new_forbidden_nodes = forbidden_nodes.clone();
         for (idx, neighbor) in neighbors.iter().enumerate() {
-            // new_forbidden_nodes = forbidden_nodes.clone();
+            if self.join_relations.len() < RELATION_THRESHOLD {
+                new_forbidden_nodes = forbidden_nodes.clone();
+            }
             new_forbidden_nodes.insert(*neighbor);
             if !self.enumerate_csg_rec(&merged_sets[idx], &new_forbidden_nodes)? {
                 return Ok(false);
@@ -435,12 +445,6 @@ impl DPhpy {
     ) -> Result<bool> {
         debug_assert!(self.dp_table.contains_key(left));
         debug_assert!(self.dp_table.contains_key(right));
-        if self.visited.contains(&(left.to_vec(), right.to_vec()))
-            || self.visited.contains(&(right.to_vec(), left.to_vec()))
-        {
-            return Ok(true);
-        }
-        self.visited.insert((left.to_vec(), right.to_vec()));
         let parent_set = union(left, right);
         let mut left_join = self.dp_table.get(left).unwrap().clone();
         let mut right_join = self.dp_table.get(right).unwrap().clone();
@@ -511,11 +515,10 @@ impl DPhpy {
                 .get_relation_set_by_index(*neighbor)?;
             // Merge `right` with `neighbor_relations`
             let merged_relation_set = union(right, &neighbor_relations);
-            let (connected, join_conditions) =
-                self.query_graph.is_connected(left, &merged_relation_set)?;
+            let join_conditions = self.query_graph.is_connected(left, &merged_relation_set)?;
             if merged_relation_set.len() > right.len()
                 && self.dp_table.contains_key(&merged_relation_set)
-                && connected
+                && !join_conditions.is_empty()
                 && !self.emit_csg_cmp(left, &merged_relation_set, join_conditions)?
             {
                 return Ok(false);

@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
 use std::any::Any;
 use std::ops::Range;
@@ -24,6 +23,7 @@ use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::FormatVersion;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
@@ -64,13 +64,19 @@ pub struct BlockMetaIndex {
 pub struct AppendOperationLogEntry {
     pub segment_location: String,
     pub segment_info: Arc<SegmentInfo>,
+    pub format_version: FormatVersion,
 }
 
 impl AppendOperationLogEntry {
-    pub fn new(segment_location: String, segment_info: Arc<SegmentInfo>) -> Self {
+    pub fn new(
+        segment_location: String,
+        segment_info: Arc<SegmentInfo>,
+        format_version: FormatVersion,
+    ) -> Self {
         Self {
             segment_location,
             segment_info,
+            format_version,
         }
     }
 }

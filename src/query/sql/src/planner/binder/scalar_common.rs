@@ -169,7 +169,6 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
 
     match scalar {
         ScalarExpr::BoundColumnRef(_) => false,
-        ScalarExpr::BoundInternalColumnRef(_) => false,
         ScalarExpr::ConstantExpr(_) => true,
         ScalarExpr::WindowFunction(scalar) => {
             let flag = match &scalar.func {

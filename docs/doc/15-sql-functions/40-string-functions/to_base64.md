@@ -9,18 +9,18 @@ The result is NULL if the argument is NULL.
 ## Syntax
 
 ```sql
-TO_BASE64(v)
+TO_BASE64(<v>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| v | The value. |
+| Arguments | Description |
+|-----------|-------------|
+| `<v>`     | The value.  |
 
 ## Return Type
 
-A String data type value.
+`VARCHAR`
 
 ## Examples
 

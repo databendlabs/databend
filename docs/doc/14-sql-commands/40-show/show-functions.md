@@ -2,7 +2,7 @@
 title: SHOW FUNCTIONS
 ---
 
-Shows the list of supported functions currently, including builtin scalar/aggregate functions and user defined functions.
+Shows the list of supported functions currently, including builtin scalar/aggregate functions and user-defined functions.
 
 ## Syntax
 

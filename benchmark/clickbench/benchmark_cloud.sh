@@ -67,6 +67,10 @@ bendsql cloud warehouse use "${CLOUD_WAREHOUSE}"
 
 echo "Running queries..."
 
+# analyze table
+echo "Analyze table..."
+bendsql query <"${BENCHMARK_DATASET}/analyze.sql"
+
 function run_query() {
     local query_num=$1
     local seq=$2
@@ -85,7 +89,7 @@ function run_query() {
     fi
 }
 
-TRIES=5
+TRIES=3
 QUERY_NUM=0
 while read -r query; do
     echo "Running Q${QUERY_NUM}: ${query}"

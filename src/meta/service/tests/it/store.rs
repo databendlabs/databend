@@ -17,10 +17,11 @@ use common_meta_raft_store::state_machine::testing::pretty_snapshot;
 use common_meta_raft_store::state_machine::testing::snapshot_logs;
 use common_meta_raft_store::state_machine::SerializableSnapshot;
 use common_meta_sled_store::openraft::async_trait::async_trait;
+use common_meta_sled_store::openraft::storage::Adaptor;
+use common_meta_sled_store::openraft::storage::RaftLogReaderExt;
 use common_meta_sled_store::openraft::testing::StoreBuilder;
 use common_meta_sled_store::openraft::RaftSnapshotBuilder;
 use common_meta_sled_store::openraft::RaftStorage;
-use common_meta_sled_store::openraft::StorageHelper;
 use common_meta_types::new_log_id;
 use common_meta_types::CommittedLeaderId;
 use common_meta_types::Entry;
@@ -32,7 +33,9 @@ use common_meta_types::StoredMembership;
 use common_meta_types::TypeConfig;
 use common_meta_types::Vote;
 use databend_meta::init_meta_ut;
-use databend_meta::store::RaftStoreBare;
+use databend_meta::meta_service::raftmeta::LogStore;
+use databend_meta::meta_service::raftmeta::SMStore;
+use databend_meta::store::RaftStore;
 use databend_meta::Opened;
 use maplit::btreeset;
 use pretty_assertions::assert_eq;
@@ -44,13 +47,14 @@ use crate::tests::service::MetaSrvTestContext;
 struct MetaStoreBuilder {}
 
 #[async_trait]
-impl StoreBuilder<TypeConfig, RaftStoreBare, MetaSrvTestContext> for MetaStoreBuilder {
-    async fn build(&self) -> Result<(MetaSrvTestContext, RaftStoreBare), StorageError> {
+impl StoreBuilder<TypeConfig, LogStore, SMStore, MetaSrvTestContext> for MetaStoreBuilder {
+    async fn build(&self) -> Result<(MetaSrvTestContext, LogStore, SMStore), StorageError> {
         let tc = MetaSrvTestContext::new(555);
-        let sto = RaftStoreBare::open_create(&tc.config.raft_config, None, Some(()))
+        let sto = RaftStore::open_create(&tc.config.raft_config, None, Some(()))
             .await
             .expect("fail to create store");
-        Ok((tc, sto))
+        let (log_store, sm_store) = Adaptor::new(sto);
+        Ok((tc, log_store, sm_store))
     }
 }
 
@@ -76,7 +80,7 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
 
     info!("--- new meta store");
     {
-        let mut sto = RaftStoreBare::open_create(&tc.config.raft_config, None, Some(())).await?;
+        let mut sto = RaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
         assert_eq!(id, sto.id);
         assert!(!sto.is_opened());
         assert_eq!(None, sto.read_vote().await?);
@@ -100,14 +104,14 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
 
     info!("--- reopen meta store");
     {
-        let mut sto = RaftStoreBare::open_create(&tc.config.raft_config, Some(()), None).await?;
+        let mut sto = RaftStore::open_create(&tc.config.raft_config, Some(()), None).await?;
         assert_eq!(id, sto.id);
         assert!(sto.is_opened());
         assert_eq!(Some(Vote::new(10, 5)), sto.read_vote().await?);
 
         assert_eq!(
             LogId::new(CommittedLeaderId::new(1, 2), 1),
-            StorageHelper::new(&mut sto).get_log_id(1).await?
+            sto.get_log_id(1).await?
         );
         assert_eq!(
             Some(LogId::new(CommittedLeaderId::new(1, 2), 2)),
@@ -126,7 +130,7 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
     let id = 3;
     let tc = MetaSrvTestContext::new(id);
 
-    let mut sto = RaftStoreBare::open_create(&tc.config.raft_config, None, Some(())).await?;
+    let mut sto = RaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
 
     info!("--- feed logs and state machine");
 
@@ -163,7 +167,7 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
     let id = 3;
     let tc = MetaSrvTestContext::new(id);
 
-    let mut sto = RaftStoreBare::open_create(&tc.config.raft_config, None, Some(())).await?;
+    let mut sto = RaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
 
     info!("--- feed logs and state machine");
 
@@ -209,7 +213,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
     {
         let tc = MetaSrvTestContext::new(id);
 
-        let mut sto = RaftStoreBare::open_create(&tc.config.raft_config, None, Some(())).await?;
+        let mut sto = RaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
 
         info!("--- feed logs and state machine");
 
@@ -226,7 +230,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
     {
         let tc = MetaSrvTestContext::new(id);
 
-        let mut sto = RaftStoreBare::open_create(&tc.config.raft_config, None, Some(())).await?;
+        let mut sto = RaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
 
         info!("--- rejected because old sm is not cleaned");
         {

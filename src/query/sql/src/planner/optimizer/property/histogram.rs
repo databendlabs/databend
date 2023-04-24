@@ -24,7 +24,7 @@ pub const DEFAULT_HISTOGRAM_BUCKETS: usize = 100;
 
 /// A histogram is a representation of the distribution of a column.
 ///
-/// We are constructing this in an "Equi-depth" fashion, which means
+/// We are constructing this in an "Equi-height" fashion, which means
 /// every bucket has roughly the same number of rows.
 ///
 /// Real-world data distribution is often skewed,
@@ -282,7 +282,10 @@ impl SampleSet for UniformSampleSet {
                 Ok(Datum::Float(upper_bound))
             }
 
-            _ => Err(format!("Unsupported datum type: {:?}", self.min,)),
+            _ => Err(format!(
+                "Unsupported datum type: {:?}, {:?}",
+                self.min, self.max
+            )),
         }
     }
 }

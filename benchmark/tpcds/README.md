@@ -19,7 +19,7 @@ Then, move the data to current directory:
 mv /tmp/tpcds_0_01/ "$(pwd)/data/"
 ```
 
-After that, you can load data to Datbend:
+After that, you can load data to Databend:
 
 ```shell
 ./load_data.sh

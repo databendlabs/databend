@@ -30,6 +30,9 @@ use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::key_spaces::RaftStoreEntry;
 use common_meta_raft_store::key_spaces::RaftStoreEntryCompat;
 use common_meta_raft_store::log::RaftLog;
+use common_meta_raft_store::ondisk::DataVersion;
+use common_meta_raft_store::ondisk::DATA_VERSION;
+use common_meta_raft_store::ondisk::TREE_HEADER;
 use common_meta_raft_store::state::RaftState;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::get_sled_db;
@@ -91,7 +94,50 @@ fn import_lines<B: BufRead>(lines: Lines<B>) -> anyhow::Result<Option<LogId>> {
     let mut trees = BTreeMap::new();
     let mut n = 0;
     let mut max_log_id: Option<LogId> = None;
-    for line in lines {
+
+    #[allow(clippy::useless_conversion)]
+    let mut it = lines.into_iter();
+
+    // First line is the data header that containing version.
+    {
+        let first_line = it
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("no data to import"))??;
+
+        let (tree_name, kv_entry): (String, RaftStoreEntryCompat) =
+            serde_json::from_str(&first_line)?;
+
+        let kv_entry = kv_entry.upgrade();
+
+        let version = if tree_name == TREE_HEADER {
+            // There is a explicit header.
+            if let RaftStoreEntry::DataHeader { key, value } = &kv_entry {
+                assert_eq!(key, "header", "The key can only be 'header'");
+                value.version
+            } else {
+                unreachable!("The header tree can only contain DataHeader");
+            }
+        } else {
+            // Without header, the data version is V0 by default.
+            DataVersion::V0
+        };
+
+        if version != DATA_VERSION {
+            return Err(anyhow!(
+                "invalid data version: {:?}, This program can only import {:?}",
+                version,
+                DATA_VERSION
+            ));
+        }
+
+        let (k, v) = RaftStoreEntry::serialize(&kv_entry)?;
+
+        let tree = db.open_tree(&tree_name)?;
+        tree.insert(k, v)?;
+        tree.flush()?;
+    }
+
+    for line in it {
         let l = line?;
         let (tree_name, kv_entry): (String, RaftStoreEntryCompat) = serde_json::from_str(&l)?;
         let kv_entry = kv_entry.upgrade();
@@ -315,19 +361,35 @@ fn export_from_dir(config: &Config) -> anyhow::Result<()> {
     };
 
     let mut cnt = 0;
-    let mut tree_names = db.tree_names();
-    tree_names.sort();
-    for n in tree_names.iter() {
-        let name = String::from_utf8(n.to_vec())?;
+    let mut tree_names = {
+        let mut tree_names = BTreeSet::new();
+        for n in db.tree_names() {
+            let name = String::from_utf8(n.to_vec())?;
+            tree_names.insert(name);
+        }
+        tree_names
+    };
 
-        let tree = db.open_tree(&name)?;
-        for x in tree.iter() {
-            let kv = x?;
+    let tree_names = if tree_names.contains(TREE_HEADER) {
+        // Always export data header first.
+        tree_names.remove(TREE_HEADER);
+        let mut tree_names = tree_names.into_iter().collect::<Vec<_>>();
+        tree_names.insert(0, TREE_HEADER.to_string());
+        tree_names
+    } else {
+        eprintln!("tree {} not found", TREE_HEADER);
+        tree_names.into_iter().collect::<Vec<_>>()
+    };
+
+    for tree_name in tree_names.iter() {
+        let tree = db.open_tree(tree_name)?;
+        for ivec_pair_res in tree.iter() {
+            let kv = ivec_pair_res?;
             let k = kv.0.to_vec();
             let v = kv.1.to_vec();
 
             let kv_entry = RaftStoreEntry::deserialize(&k, &v)?;
-            let tree_kv = (name.clone(), kv_entry);
+            let tree_kv = (tree_name.clone(), kv_entry);
 
             let line = serde_json::to_string(&tree_kv)?;
             cnt += 1;
@@ -362,7 +424,7 @@ async fn export_from_running_node(config: &Config) -> Result<(), anyhow::Error> 
 }
 
 // if port is open, service is running
-async fn service_is_running(addr: SocketAddr) -> Result<bool, io::Error> {
+async fn is_service_running(addr: SocketAddr) -> Result<bool, io::Error> {
     let socket = TcpSocket::new_v4()?;
     let stream = socket.connect(addr).await;
 
@@ -373,7 +435,7 @@ async fn service_is_running(addr: SocketAddr) -> Result<bool, io::Error> {
 async fn get_available_socket_addr(endpoint: &str) -> Result<SocketAddr, anyhow::Error> {
     let addrs_iter = endpoint.to_socket_addrs()?;
     for addr in addrs_iter {
-        if service_is_running(addr).await? {
+        if is_service_running(addr).await? {
             return Ok(addr);
         }
         eprintln!("WARN: {} is not available", addr);

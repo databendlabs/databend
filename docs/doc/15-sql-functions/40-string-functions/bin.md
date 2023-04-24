@@ -7,18 +7,18 @@ Returns a string representation of the binary value of N.
 ## Syntax
 
 ```sql
-BIN(expr)
+BIN(<expr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| expr        | The number. |
+| Arguments | Description |
+|-----------|-------------|
+| `<expr>`  | The number. |
 
 ## Return Type
 
-A string.
+`VARCHAR`
 
 ## Examples
 

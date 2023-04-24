@@ -12,6 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::time::Duration;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use openai_api_rust::embeddings::EmbeddingsApi;
@@ -31,6 +33,7 @@ impl OpenAI {
                 organization: None,
             },
             &self.api_base,
+            Duration::from_secs(120),
         );
         let body = EmbeddingsBody {
             model: self.embedding_model.to_string(),

@@ -33,6 +33,7 @@ chrono = { workspace = true }
 futures = "0.3.24"
 opendal = { workspace = true }
 serde = { workspace = true }
+tracing = "0.1.36"
 typetag = "0.2.3"
 
 [dev-dependencies]

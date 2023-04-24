@@ -115,6 +115,11 @@ pub trait Table: Sync + Send {
         false
     }
 
+    /// Whether the table engine supports virtual column `_row_id`.
+    fn support_row_id_column(&self) -> bool {
+        false
+    }
+
     #[async_backtrace::framed]
     async fn alter_table_cluster_keys(
         &self,
@@ -227,8 +232,13 @@ pub trait Table: Sync + Send {
     }
 
     #[async_backtrace::framed]
-    async fn purge(&self, ctx: Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
-        let (_, _) = (ctx, keep_last_snapshot);
+    async fn purge(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        instant: Option<NavigationPoint>,
+        keep_last_snapshot: bool,
+    ) -> Result<()> {
+        let (_, _, _) = (ctx, instant, keep_last_snapshot);
 
         Ok(())
     }
@@ -295,7 +305,7 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    fn get_block_compact_thresholds(&self) -> BlockThresholds {
+    fn get_block_thresholds(&self) -> BlockThresholds {
         BlockThresholds {
             max_rows_per_block: DEFAULT_BLOCK_MAX_ROWS,
             min_rows_per_block: DEFAULT_BLOCK_MIN_ROWS,
@@ -303,7 +313,7 @@ pub trait Table: Sync + Send {
         }
     }
 
-    fn set_block_compact_thresholds(&self, _thresholds: BlockThresholds) {
+    fn set_block_thresholds(&self, _thresholds: BlockThresholds) {
         unimplemented!()
     }
 

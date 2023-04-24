@@ -79,6 +79,7 @@ pub struct PushDownInfo {
     /// Optional filter expression plan
     /// Assumption: expression's data type must be `DataType::Boolean`.
     pub filter: Option<RemoteExpr<String>>,
+    pub is_deterministic: bool,
     /// Optional prewhere information
     /// used for prewhere optimization
     pub prewhere: Option<PrewhereInfo>,
@@ -88,6 +89,8 @@ pub struct PushDownInfo {
     pub order_by: Vec<(RemoteExpr<String>, bool, bool)>,
     /// Optional virtual columns
     pub virtual_columns: Option<Vec<VirtualColumnInfo>>,
+    /// If lazy materialization is enabled in this query.
+    pub lazy_materialization: bool,
 }
 
 /// TopK is a wrapper for topk push down items.
@@ -124,11 +127,12 @@ impl PushDownInfo {
                 }
 
                 // Only do topk in storage for cluster key.
-
                 if let Some(cluster_key) = cluster_key.as_ref() {
                     if !cluster_key.contains(id) {
                         return None;
                     }
+                } else {
+                    return None;
                 }
 
                 let leaf_fields = schema.leaf_fields();

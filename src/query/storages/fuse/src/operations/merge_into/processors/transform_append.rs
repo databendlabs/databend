@@ -34,9 +34,11 @@ use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CachedObject;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
+use storages_common_table_meta::meta::Versioned;
 
 use crate::io;
 use crate::io::BlockBuilder;
+use crate::io::MetaWriter;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
 use crate::metrics::metrics_inc_block_index_write_bytes;
@@ -47,6 +49,7 @@ use crate::metrics::metrics_inc_block_write_milliseconds;
 use crate::metrics::metrics_inc_block_write_nums;
 use crate::operations::merge_into::mutation_meta::mutation_log::AppendOperationLogEntry;
 use crate::operations::merge_into::mutation_meta::mutation_log::MutationLogs;
+use crate::statistics::ClusterStatsGenerator;
 use crate::statistics::StatisticsAccumulator;
 
 // Write down data blocks, generate indexes, emits append log entries
@@ -66,12 +69,14 @@ impl AppendTransform {
         meta_locations: TableMetaLocationGenerator,
         source_schema: Arc<TableSchema>,
         thresholds: BlockThresholds,
+        cluster_stats_gen: ClusterStatsGenerator,
     ) -> AppendTransform {
         let block_builder = BlockBuilder {
             ctx,
             meta_locations: meta_locations.clone(),
             source_schema,
             write_settings: write_settings.clone(),
+            cluster_stats_gen,
         };
         AppendTransform {
             data_accessor,
@@ -127,19 +132,20 @@ impl AppendTransform {
             col_stats,
         });
 
-        let data = serde_json::to_vec(&segment_info)?;
         let location = self.meta_locations.gen_segment_info_location();
         let segment = Arc::new(segment_info);
-
-        // write down segments (TODO use meta writer, cache & retry)
-        self.data_accessor.write(&location, data).await?;
+        segment
+            .as_ref()
+            .write_meta(&self.data_accessor, &location)
+            .await?;
 
         if let Some(segment_cache) = SegmentInfo::cache() {
             segment_cache.put(location.clone(), segment.clone());
         }
 
-        // emit log entry
-        let log_entry = AppendOperationLogEntry::new(location, segment);
+        // emit log entry.
+        // for newly created segment, always use the latest version
+        let log_entry = AppendOperationLogEntry::new(location, segment, SegmentInfo::VERSION);
         Ok(Some(log_entry))
     }
 
@@ -173,7 +179,11 @@ impl AsyncAccumulatingTransform for AppendTransform {
         // 1. serialize block and index
         let block_builder = self.block_builder.clone();
         let serialized_block_state = GlobalIORuntime::instance()
-            .spawn_blocking(move || block_builder.build(data_block))
+            .spawn_blocking(move || {
+                block_builder.build(data_block, |block, generator| {
+                    generator.gen_stats_for_append(block)
+                })
+            })
             .await?;
 
         let progress_values = ProgressValues {

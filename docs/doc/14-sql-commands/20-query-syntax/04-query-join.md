@@ -12,8 +12,8 @@ The *join* combines columns from two or more tables into a single result set. Da
 * [Left Join](#left-join)
 * [Right Join](#right-join)
 * [Full Outer Join](#full-outer-join)
-* [Left / Right Semi Join](#left--right-semi-join)
-* [Left / Right Anti Join](#left--right-anti-join)
+* [Left / Right Semi-Join](#left--right-semi-join)
+* [Left / Right Anti-Join](#left--right-anti-join)
 
 ## Example Tables
 
@@ -21,29 +21,29 @@ Unless explicitly specified, the join examples on this page are created based on
 
 Table "vip_info": This table stores the VIP client information.
 
-| Client_ID 	| Region    	|
-|-------------	|-----------	|
-| 101         	| Toronto   	|
-| 102         	| Quebec    	|
-| 103         	| Vancouver 	|
+| Client_ID 	   | Region    	 |
+|---------------|-------------|
+| 101         	 | Toronto   	 |
+| 102         	 | Quebec    	 |
+| 103         	 | Vancouver 	 |
 
 Table "purchase_records": This table lists the purchase records for all the clients.
 
-| Client_ID 	| Item      	| QTY 	|
-|-------------	|-----------	|-----	|
-| 100         	| Croissant 	| 2,000   	|
-| 102         	| Donut     	| 3,000   	|
-| 103         	| Coffee    	| 6,000   	|
-| 106         	| Soda      	| 4,000   	|
+| Client_ID 	   | Item      	 | QTY 	     |
+|---------------|-------------|-----------|
+| 100         	 | Croissant 	 | 2,000   	 |
+| 102         	 | Donut     	 | 3,000   	 |
+| 103         	 | Coffee    	 | 6,000   	 |
+| 106         	 | Soda      	 | 4,000   	 |
 
 Table "gift": This table lists the gift options for the VIP clients.
 
-| Gift      	|
-|-----------	|
-| Croissant 	|
-| Donut     	|
-| Coffee    	|
-| Soda      	|
+| Gift      	 |
+|-------------|
+| Croissant 	 |
+| Donut     	 |
+| Coffee    	 |
+| Soda      	 |
 
 ## Inner Join
 

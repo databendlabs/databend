@@ -19,7 +19,7 @@ REPLACE INTO <target_table> [ ( <col_name> [ , ... ] ) ]
 
 ## Conflict Key in REPLACE Statement
 
-The conflict key is a column or combination of columns in a table that uniquely identifies a row and is used to determine whether to insert a new row or update an existing row in the table using the `REPLACE INTO` statement. It can be any column or combination of columns with a unique constraint, not just the primary key(Databend does not have primary key).
+The conflict key is a column or combination of columns in a table that uniquely identifies a row and is used to determine whether to insert a new row or update an existing row in the table using the `REPLACE INTO` statement. It can be any column or combination of columns with a unique constraint, not just the primary key(Databend doesn't have primary key).
 
 For example, in a table called `employees` with a unique constraint on the `employee_email` column, you can use the `employee_email` column as the conflict key in the `REPLACE INTO` statement like this:
 

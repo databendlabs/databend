@@ -269,20 +269,30 @@ jobs:
       - uses: ./.github/actions/test_stateless_cluster_linux
 
   test_stateful_standalone:
-    timeout-minutes: 20
     runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_standalone_linux
+        timeout-minutes: 20
+      - name: Upload failure
+        if: failure() || cancelled()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-stateful-standalone-linux
 
   test_stateful_cluster:
-    timeout-minutes: 20
     runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_cluster_linux
+        timeout-minutes: 20
+      - name: Upload failure
+        if: failure() || cancelled()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-stateful-cluster-linux
 
   test_stateful_large_data:
     timeout-minutes: 60

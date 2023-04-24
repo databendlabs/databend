@@ -7,19 +7,19 @@ Returns the string str with all characters changed to lowercase.
 ## Syntax
 
 ```sql
-LOWER(str);
+LOWER(<str>);
 ```
 
 ## Arguments
 
 | Arguments | Description                |
 |-----------|----------------------------|
-| str       | The string to be lowercase |
+| `<str>`   | The string to be lowercase |
 
 
 ## Return Type
 
-A string data type value.
+`VARCHAR`
 
 ## Examples
 

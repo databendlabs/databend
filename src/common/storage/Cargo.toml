@@ -24,6 +24,7 @@ bytes = "1"
 chrono = { workspace = true }
 flagset = "0.4"
 futures = "0.3"
+log = "0.4"
 opendal = { workspace = true }
 regex = "1.6.0"
 reqwest = { workspace = true }

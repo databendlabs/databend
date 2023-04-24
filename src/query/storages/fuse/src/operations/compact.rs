@@ -122,7 +122,7 @@ impl FuseTable {
             return Ok(());
         }
 
-        let thresholds = self.get_block_compact_thresholds();
+        let thresholds = self.get_block_thresholds();
         let schema = self.schema();
         let write_settings = self.get_write_settings();
 

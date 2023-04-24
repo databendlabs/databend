@@ -283,9 +283,7 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
 
 fn find_subquery_in_expr(expr: &ScalarExpr) -> bool {
     match expr {
-        ScalarExpr::BoundColumnRef(_)
-        | ScalarExpr::BoundInternalColumnRef(_)
-        | ScalarExpr::ConstantExpr(_) => false,
+        ScalarExpr::BoundColumnRef(_) | ScalarExpr::ConstantExpr(_) => false,
         ScalarExpr::WindowFunction(expr) => {
             let flag = match &expr.func {
                 WindowFuncType::Aggregate(agg) => agg.args.iter().any(find_subquery_in_expr),
