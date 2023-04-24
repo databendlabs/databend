@@ -104,6 +104,10 @@ impl Datum {
         )
     }
 
+    pub fn is_numeric(&self) -> bool {
+        matches!(self, Datum::Int(_) | Datum::UInt(_) | Datum::Float(_))
+    }
+
     pub fn compare(&self, other: &Self) -> Result<std::cmp::Ordering> {
         match (self, other) {
             (Datum::Bool(l), Datum::Bool(r)) => Ok(l.cmp(r)),
