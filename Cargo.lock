@@ -3539,16 +3539,7 @@ version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca3aa72a6f96ea37bbc5aa912f6788242832f75369bdfdadcb0e38423f100059"
 dependencies = [
- "dirs-sys 0.3.7",
-]
-
-[[package]]
-name = "dirs"
-version = "5.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dece029acd3353e3a58ac2e3eb3c8d6c35827a892edc6cc4138ef9c33df46ecd"
-dependencies = [
- "dirs-sys 0.4.0",
+ "dirs-sys",
 ]
 
 [[package]]
@@ -3560,17 +3551,6 @@ dependencies = [
  "libc",
  "redox_users",
  "winapi",
-]
-
-[[package]]
-name = "dirs-sys"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04414300db88f70d74c5ff54e50f9e1d1737d9a5b90f53fcf2e95ca2a9ab554b"
-dependencies = [
- "libc",
- "redox_users",
- "windows-sys 0.45.0",
 ]
 
 [[package]]
@@ -5059,7 +5039,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8ffa5bf0772f9b01de501c035b6b084cf9b8bb07dec41e3afc6a17336a65f47"
 dependencies = [
  "bitflags",
- "dirs 4.0.0",
+ "dirs",
  "gix-path",
  "libc",
  "windows 0.43.0",
@@ -6872,7 +6852,7 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 [[package]]
 name = "openai_api_rust"
 version = "0.1.4"
-source = "git+https://github.com/datafuse-extras/openai-api?rev=5f977a4#5f977a4382499758188db2982cc790cbde1190f4"
+source = "git+https://github.com/datafuse-extras/openai-api?rev=87a140c#87a140cb32a08f2a65c230d29d5e0f085f3ade4c"
 dependencies = [
  "log",
  "serde",
@@ -6882,9 +6862,9 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.32.0"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c7c7970b5089b9dc08171898b961ba05d5faf8b420ad7920712f7947eedb710"
+checksum = "e5400b31f85d6fb0d835f696be302d0582f84886859361ca241178b8c6af834f"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -8168,19 +8148,19 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.9.3"
+version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27adc6f5f5d3711d5ee04b8e670a67f0a191af305a13f600f99d95c50166fea5"
+checksum = "6f753b768a9d691395e7db3dc74452cc39a5da55293c3fa2241e2aeaf9d94028"
 dependencies = [
  "anyhow",
  "async-trait",
  "base64 0.21.0",
  "bytes",
  "chrono",
- "dirs 5.0.0",
  "form_urlencoded",
  "hex",
  "hmac",
+ "home",
  "http",
  "jsonwebtoken",
  "log",

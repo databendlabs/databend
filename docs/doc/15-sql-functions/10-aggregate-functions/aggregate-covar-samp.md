@@ -13,15 +13,15 @@ NULL values are not counted.
 ## Syntax
 
 ```sql
-COVAR_SAMP(expr0, expr1)
+COVAR_SAMP(<expr1>, <expr2>)
 ```
 
 ## Arguments
 
-| Arguments    |        Description       |
-| ------------ | ------------------------ |
-| expression0  | Any numerical expression |
-| expression1  | Any numerical expression |
+| Arguments |        Description       |
+|-----------| ------------------------ |
+| `<expr1>` | Any numerical expression |
+| `<expr2>` | Any numerical expression |
 
 ## Return Type
 

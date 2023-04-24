@@ -56,6 +56,7 @@ impl FromStr for ValidationMode {
 /// CopyPlan supports CopyIntoTable & CopyIntoStage
 #[derive(Clone)]
 pub enum CopyPlan {
+    NoFileToCopy,
     IntoTable {
         catalog_name: String,
         database_name: String,
@@ -123,6 +124,9 @@ impl Debug for CopyPlan {
                 write!(f, "Copy into {stage:?}")?;
                 write!(f, ", path: {path:?}")?;
                 write!(f, ", validation_mode: {validation_mode:?}")?;
+            }
+            CopyPlan::NoFileToCopy => {
+                write!(f, "No file to copy")?;
             }
         }
         Ok(())

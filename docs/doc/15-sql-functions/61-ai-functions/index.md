@@ -59,82 +59,80 @@ Databend provides built-in AI functions for various natural language processing 
 
 ## Creating and storing embeddings using Databend
 
-
-Here's an example:
+Let's create a table to store some sample text documents and their corresponding embeddings:
 ```sql
-CREATE TABLE documents (
-    doc_id INT,
-    text_content TEXT
-);
-
-INSERT INTO documents (doc_id, text_content)
-VALUES
-    (1, 'Artificial intelligence is a fascinating field.'),
-    (2, 'Machine learning is a subset of AI.'),
-    (3, 'I love going to the beach on weekends.');
-
-CREATE TABLE embeddings (
-    doc_id INT,
-    text_content TEXT,
+CREATE TABLE articles (
+    id INT,
+    title VARCHAR,
+    content VARCHAR,
     embedding ARRAY(FLOAT32)
 );
-
-INSERT INTO embeddings (doc_id, text_content, embedding)
-SELECT doc_id, text_content, ai_embedding_vector(text_content)
-FROM documents;
 ```
 
-This SQL script creates a `documents` table, inserts the example documents, and then generates embeddings using the `ai_embedding_vector` function. The embeddings are stored in the embeddings table with the `ARRAY(FLOAT32)` column type.
+Now, let's insert some sample documents into the table:
+```sql
+INSERT INTO articles (id, title, content, embedding)
+VALUES
+    (1, 'Python for Data Science', 'Python is a versatile programming language widely used in data science...', ai_embedding_vector('Python is a versatile programming language widely used in data science...')),
+    (2, 'Introduction to R', 'R is a popular programming language for statistical computing and graphics...', ai_embedding_vector('R is a popular programming language for statistical computing and graphics...')),
+    (3, 'Getting Started with SQL', 'Structured Query Language (SQL) is a domain-specific language used for managing relational databases...', ai_embedding_vector('Structured Query Language (SQL) is a domain-specific language used for managing relational databases...'));
+```
 
 ## Searching for similarity documents using cosine distance
 
-Suppose you have a question, "What is a subfield of artificial intelligence?", and you want to find the most related document from the stored embeddings. First, generate an embedding for the question using the `ai_embedding_vector` function:
+Now, let's find the documents that are most similar to a given query using the [cosine_distance](04-ai-cosine-distance.md) function:
 ```sql
-SELECT doc_id, text_content, cosine_distance(embedding, ai_embedding_vector('What is a subfield of artificial intelligence?')) AS distance
-FROM embeddings
-ORDER BY distance ASC
-LIMIT 5;
+SELECT
+    id,
+    title,
+    content,
+    cosine_distance(embedding, ai_embedding_vector('How to use Python in data analysis?')) AS similarity
+FROM
+    articles
+ORDER BY
+    similarity ASC
+    LIMIT 3;
 ```
-This query will return the top 5 most similar documents to the input question, ordered by their cosine distance, with the smallest distance indicating the highest similarity.
 
 Result:
 ```sql
-+--------+-------------------------------------------------+------------+
-| doc_id | text_content                                    | distance   |
-+--------+-------------------------------------------------+------------+
-|      1 | Artificial intelligence is a fascinating field. | 0.10928339 |
-|      2 | Machine learning is a subset of AI.             | 0.13584924 |
-|      3 | I love going to the beach on weekends.          | 0.30774158 |
-+--------+-------------------------------------------------+------------+
++------+--------------------------+---------------------------------------------------------------------------------------------------------+------------+
+| id   | title                    | content                                                                                                 | similarity |
++------+--------------------------+---------------------------------------------------------------------------------------------------------+------------+
+|    1 | Python for Data Science  | Python is a versatile programming language widely used in data science...                               |  0.1142081 |
+|    2 | Introduction to R        | R is a popular programming language for statistical computing and graphics...                           | 0.18741018 |
+|    3 | Getting Started with SQL | Structured Query Language (SQL) is a domain-specific language used for managing relational databases... | 0.25137568 |
++------+--------------------------+---------------------------------------------------------------------------------------------------------+------------+
 ```
 
 ## Generating text completions with Databend
 
-Databend also supports a text completion function, ai_text_completion. For example, from the above output, we choose the document with the smallest cosine distance: "Artificial intelligence is a fascinating field." We can use this as context and provide the original question to the ai_text_completion function to generate a completion:
+Databend also supports a text completion function, [ai_text_completion](03-ai-text-completion.md).
+
+For example, from the above output, we choose the document with the smallest cosine distance: "Python is a versatile programming language widely used in data science...".
+
+We can use this as context and provide the original question to the [ai_text_completion](03-ai-text-completion.md) function to generate a completion:
 
 ```sql
-SELECT ai_text_completion('Artificial intelligence is a fascinating field. What is a subfield of artificial intelligence?') AS completion;
+SELECT ai_text_completion('Python is a versatile programming language widely used in data science...') AS completion;
 ```
 
 Result:
 ```sql
-+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| completion                                                                                                                                                                                                                                                                        |
-+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-|
-| A subfield of artificial intelligence is machine learning, which is the study of algorithms that allow computers to learn from data and improve their performance over time. Other subfields include natural language processing, computer vision, robotics, and deep learning.   |
-+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+*************************** 1. row ***************************
+completion: and machine learning. It is known for its simplicity, readability, and ease of use. Python has a vast collection of libraries and frameworks that make it easy to perform complex tasks such as data analysis, visualization, and machine learning. Some of the popular libraries used in data science include NumPy, Pandas, Matplotlib, and Scikit-learn. Python is also used in web development, game development, and automation. Its popularity and versatility make it a valuable skill for programmers and data scientists.
 ```
 
+You can experience these functions on our [Databend Cloud](https://databend.com), where you can sign up for a free trial and start using these AI functions right away.
 
-You can experience these functions on our [Databend Cloud](https://databend.com), where you can sign up for a free trial and start using these AI functions right away. Databend's AI functions are designed to be easy to use, even for users who are not familiar with machine learning or natural language processing. With Databend, you can quickly and easily add powerful AI capabilities to your SQL queries and take your data analysis to the next level.
-
+Databend's AI functions are designed to be easy to use, even for users who are not familiar with machine learning or natural language processing. With Databend, you can quickly and easily add powerful AI capabilities to your SQL queries and take your data analysis to the next level.
 
 ## Examples(https://ask.databend.rs)
 
 We have utilized [Databend Cloud](https://databend.com) and its AI functions to create an interactive Q&A system for the https://databend.rs website. The demo site, https://ask.databend.rs, allows users to ask questions about any topic related to the https://databend.rs website.
 
-:::note
+:::info
 You can also deploy Databend and configure the `openai_api_key`.
 :::
 

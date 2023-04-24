@@ -2,22 +2,23 @@
 title: TO_YYYYMMDDHHMMSS
 ---
 
-Converts a date or date with time (timestamp/datetime) to a UInt64 number containing the year and month number (YYYY * 10000000000 + MM * 100000000 + DD * 1000000 + hh * 10000 + mm * 100 + ss).
+Convert a date or date with time (timestamp/datetime) to a UInt64 number containing the year and month number (YYYY * 10000000000 + MM * 100000000 + DD * 1000000 + hh * 10000 + mm * 100 + ss).
+
 ## Syntax
 
 ```sql
-to_yyyymmddhhmmss( <expr> )
+TO_YYYYMMDDHHMMSS(<expr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| `<expr>` | date/timestamp |
+| Arguments | Description    |
+|-----------|----------------|
+| `<expr>`  | date/timestamp |
 
 ## Return Type
 
-UInt64, returns in `YYYYMMDDhhmmss` format.
+`BIGINT`, returns in `YYYYMMDDhhmmss` format.
 
 ## Examples
 
