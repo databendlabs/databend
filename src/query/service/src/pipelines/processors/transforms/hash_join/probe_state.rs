@@ -34,7 +34,6 @@ pub struct ProbeState {
 
 impl ProbeState {
     pub fn clear(&mut self) {
-        // self.build_indexes.clear();
         self.row_state.clear();
         self.valids = None;
     }
