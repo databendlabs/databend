@@ -20,11 +20,11 @@ use common_functions::BUILTIN_FUNCTIONS;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
+use crate::plans::Exchange;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
-use crate::plans::ScalarItem;
 
 pub struct RuleFoldConstant {
     id: RuleID,
@@ -67,6 +67,51 @@ impl RuleFoldConstant {
                         .into(),
                     ),
                 ),
+                // ProjectSet
+                //  \
+                //   *
+                SExpr::create_unary(
+                    PatternPlan {
+                        plan_type: RelOp::ProjectSet,
+                    }
+                    .into(),
+                    SExpr::create_leaf(
+                        PatternPlan {
+                            plan_type: RelOp::Pattern,
+                        }
+                        .into(),
+                    ),
+                ),
+                // Exchange
+                //  \
+                //   *
+                SExpr::create_unary(
+                    PatternPlan {
+                        plan_type: RelOp::Exchange,
+                    }
+                    .into(),
+                    SExpr::create_leaf(
+                        PatternPlan {
+                            plan_type: RelOp::Pattern,
+                        }
+                        .into(),
+                    ),
+                ),
+                // Join
+                //  \
+                //   *
+                SExpr::create_unary(
+                    PatternPlan {
+                        plan_type: RelOp::Join,
+                    }
+                    .into(),
+                    SExpr::create_leaf(
+                        PatternPlan {
+                            plan_type: RelOp::Pattern,
+                        }
+                        .into(),
+                    ),
+                ),
             ],
             func_ctx,
         }
@@ -90,38 +135,45 @@ impl Rule for RuleFoldConstant {
         s_expr: &SExpr,
         state: &mut crate::optimizer::rule::TransformResult,
     ) -> Result<()> {
-        match s_expr.plan().clone() {
-            RelOperator::EvalScalar(mut eval_scalar) => {
-                let new_items = eval_scalar
-                    .items
-                    .iter()
-                    .map(|scalar| {
-                        Ok(ScalarItem {
-                            scalar: self.fold_constant(&scalar.scalar)?,
-                            index: scalar.index,
-                        })
-                    })
-                    .collect::<Result<_>>()?;
-                if new_items != eval_scalar.items {
-                    eval_scalar.items = new_items;
-                    state.add_result(SExpr::create_unary(
-                        eval_scalar.into(),
-                        s_expr.child(0)?.clone(),
-                    ));
+        let mut new_plan = s_expr.plan().clone();
+        match &mut new_plan {
+            RelOperator::EvalScalar(eval_scalar) => {
+                for scalar in eval_scalar.items.iter_mut() {
+                    scalar.scalar = self.fold_constant(&scalar.scalar)?;
                 }
             }
-            RelOperator::Filter(mut filter) => {
-                let new_predicates = filter
-                    .predicates
-                    .iter()
-                    .map(|scalar| self.fold_constant(scalar))
-                    .collect::<Result<_>>()?;
-                if new_predicates != filter.predicates {
-                    filter.predicates = new_predicates;
-                    state.add_result(SExpr::create_unary(filter.into(), s_expr.child(0)?.clone()));
+            RelOperator::Filter(filter) => {
+                for predicate in filter.predicates.iter_mut() {
+                    *predicate = self.fold_constant(predicate)?;
+                }
+            }
+            RelOperator::ProjectSet(project_set) => {
+                for srf in project_set.srfs.iter_mut() {
+                    srf.scalar = self.fold_constant(&srf.scalar)?;
+                }
+            }
+            RelOperator::Exchange(Exchange::Hash(scalars)) => {
+                for scalar in scalars.iter_mut() {
+                    *scalar = self.fold_constant(scalar)?;
+                }
+            }
+            RelOperator::Join(join) => {
+                for cond in join.left_conditions.iter_mut() {
+                    *cond = self.fold_constant(cond)?;
+                }
+                for cond in join.right_conditions.iter_mut() {
+                    *cond = self.fold_constant(cond)?;
+                }
+                for cond in join.non_equi_conditions.iter_mut() {
+                    *cond = self.fold_constant(cond)?;
                 }
             }
             _ => unreachable!(),
+        }
+        dbg!(s_expr.plan());
+        dbg!(&new_plan);
+        if &new_plan != s_expr.plan() {
+            state.add_result(s_expr.replace_plan(new_plan));
         }
         Ok(())
     }
