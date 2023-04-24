@@ -166,6 +166,7 @@ impl FuseTable {
         }?;
 
         let table = self.navigate_to_time_point(location, time_point).await?;
+
         Ok((table, files))
     }
 

@@ -34,7 +34,7 @@ ERROR 1105 (HY000) at line 1: Code: 1001, Text = error:
   --> SQL:1:12
   |
 1 | select 1 + 'a'
-  |            ^^^ invalid digit found in string while evaluating function `to_uint8("a")`
+  |            ^^^ invalid digit found in string while evaluating function `to_uint8('a')`
 
 .
 ERROR 1105 (HY000) at line 1: Code: 1025, Text = error: 

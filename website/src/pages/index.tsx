@@ -6,6 +6,7 @@ import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import styles from './index.module.scss';
 import * as icons from "../components/Icons"
 import useGetReleases from '@site/src/hooks/useGetReleases';
+import JoinCommunity from '../components/JoinCommunity';
 
 function HomepageHeader() {
     const {siteConfig} = useDocusaurusContext();
@@ -56,17 +57,7 @@ function HomepageHeader() {
                   Tutorials
               </Link>
             </div>
-            <div className={clsx('community', styles.Community)}>
-              <h6>Join our growing community</h6>
-              <div className={clsx('community-group', styles.CommunityGroup)}>
-                {community.map((item,index)=>{
-                  const Icon = icons[item.icon]
-                  return <Link to={item.link} key={index}>
-                    <div className={clsx('community-item', styles.communityItem)}><div className={clsx('icon', styles.Icon)}><Icon size={24}/></div><h6>{item.title}</h6>{item.star?<span className={clsx('tag', styles.tag)}>🌟 {item.star} Stars</span>:''}</div>
-                  </Link>
-                })}
-              </div>
-            </div>
+            <JoinCommunity />
             <hr/>
             <div className={clsx('cloud-banner', styles.cloudBanner)}>
               <div style={{textAlign:'center'}}>

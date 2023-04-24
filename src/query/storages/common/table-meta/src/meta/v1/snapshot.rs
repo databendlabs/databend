@@ -31,7 +31,7 @@ use crate::meta::Versioned;
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshot {
     /// format version of snapshot
-    format_version: FormatVersion,
+    pub format_version: FormatVersion,
 
     /// id of snapshot
     pub snapshot_id: SnapshotId,
@@ -118,7 +118,8 @@ use super::super::v0;
 impl From<v0::TableSnapshot> for TableSnapshot {
     fn from(s: v0::TableSnapshot) -> Self {
         Self {
-            format_version: TableSnapshot::VERSION,
+            // the is no version before v0, and no versions other then 0 can be converted into v0
+            format_version: v0::TableSnapshot::VERSION,
             snapshot_id: s.snapshot_id,
             timestamp: None,
             prev_snapshot_id: s.prev_snapshot_id.map(|id| (id, 0)),
@@ -150,6 +151,8 @@ pub struct TableSnapshotLite {
 impl From<&TableSnapshot> for TableSnapshotLite {
     fn from(value: &TableSnapshot) -> Self {
         TableSnapshotLite {
+            // NOTE: it is important to let the format_version return from here
+            // carries the format_version of snapshot being converted.
             format_version: value.format_version(),
             snapshot_id: value.snapshot_id,
             timestamp: value.timestamp,

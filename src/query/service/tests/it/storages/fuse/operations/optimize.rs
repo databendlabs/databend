@@ -24,12 +24,12 @@ use crate::storages::fuse::utils::do_purge_test;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_optimize_purge() -> Result<()> {
-    do_purge_test("explicit purge", "purge", 2, 0, 2, 2, 2).await
+    do_purge_test("test_fuse_snapshot_optimize_purge", 1, 0, 1, 1, 1).await
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_optimize_all() -> Result<()> {
-    do_purge_test("explicit purge", "all", 2, 0, 2, 2, 2).await
+    do_purge_test("test_fuse_snapshot_optimize_all", 1, 0, 1, 1, 1).await
 }
 
 #[tokio::test(flavor = "multi_thread")]
