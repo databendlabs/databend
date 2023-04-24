@@ -25,7 +25,7 @@ use crate::meta::Versioned;
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshotStatistics {
     /// format version of snapshot
-    format_version: FormatVersion,
+    pub format_version: FormatVersion,
 
     /// id of snapshot
     pub snapshot_id: SnapshotId,

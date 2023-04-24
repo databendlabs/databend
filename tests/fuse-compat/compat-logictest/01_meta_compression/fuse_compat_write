@@ -1,4 +1,7 @@
-# prepare the data for logic test
+###################################
+# prepare the data for logic test #
+###################################
+
 
 statement ok
 DROP TABLE IF EXISTS fuse_test_snapshots;
@@ -16,8 +19,9 @@ INSERT INTO fuse_test_snapshots VALUES(2);
 statement ok
 INSERT INTO fuse_test_snapshots VALUES(3);
 
-
-# prepare the data for stateless test
+#######################################
+# prepare the data for stateless test #
+#######################################
 #
 # TODO (refine compat test)
 #
@@ -48,3 +52,22 @@ INSERT INTO fuse_test_flashback VALUES(2);
 
 statement ok
 INSERT INTO fuse_test_flashback VALUES(3);
+
+########################################
+# prepare the data for compaction test #
+#  issue 11204                         #
+########################################
+
+statement ok
+DROP TABLE IF EXISTS fuse_test_compaction;
+
+statement ok
+CREATE TABLE fuse_test_compaction( c int);
+
+# prepare 3 blocks and segments
+statement ok
+INSERT INTO fuse_test_compaction VALUES(1);
+
+statement ok
+INSERT INTO fuse_test_compaction VALUES(2);
+
