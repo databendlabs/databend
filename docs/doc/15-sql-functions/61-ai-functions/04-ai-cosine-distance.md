@@ -1,59 +1,66 @@
 ---
 title: 'COSINE_DISTANCE'
-description: 'Measuring document similarity using the cosine_distance function in Databend'
+description: 'Measuring similarity using the cosine_distance function in Databend'
 ---
 
-This document provides an overview of the `cosine_distance` function in Databend and demonstrates how to measure document similarity using this function.
+This document provides an overview of the cosine_distance function in Databend and demonstrates how to measure document similarity using this function.
 
 :::info
-The `cosine_distance` function performs vector computations within Databend and does not rely on the OpenAI API.
+
+The cosine_distance function performs vector computations within Databend and does not rely on the OpenAI API. 
+
 :::
 
-## Overview of cosine_distance
-
-The `cosine_distance` function in Databend is a built-in function that calculates the cosine distance between two vectors. It is commonly used in natural language processing tasks, such as document similarity and recommendation systems.
+The cosine_distance function in Databend is a built-in function that calculates the cosine distance between two vectors. It is commonly used in natural language processing tasks, such as document similarity and recommendation systems.
 
 Cosine distance is a measure of similarity between two vectors, based on the cosine of the angle between them. The function takes two input vectors and returns a value between 0 and 1, with 0 indicating identical vectors and 1 indicating orthogonal (completely dissimilar) vectors.
 
-## Measuring similarity using cosine_distance
+## Examples
 
-To measure document similarity using the cosine_distance function, follow the example below. This example assumes that you have already created document embeddings using the ai_embedding_vector function and stored them in a table with the `ARRAY(FLOAT32)` column type.
+**Creating a Table and Inserting Sample Data**
 
-1. Create a table to store the documents and their embeddings:
+Let's create a table to store some sample text documents and their corresponding embeddings:
 ```sql
-CREATE TABLE documents (
-    doc_id INT,
-    text_content TEXT,
+CREATE TABLE articles (
+    id INT,
+    title VARCHAR,
+    content VARCHAR,
     embedding ARRAY(FLOAT32)
 );
-
 ```
 
-2. Insert example documents and their embeddings into the table:
+Now, let's insert some sample documents into the table:
 ```sql
-INSERT INTO documents (doc_id, text_content, embedding)
+INSERT INTO articles (id, title, content, embedding)
 VALUES
-    (1, 'Artificial intelligence is a fascinating field.', ai_embedding_vector('Artificial intelligence is a fascinating field.')),
-    (2, 'Machine learning is a subset of AI.', ai_embedding_vector('Machine learning is a subset of AI.')),
-    (3, 'I love going to the beach on weekends.', ai_embedding_vector('I love going to the beach on weekends.'));
+    (1, 'Python for Data Science', 'Python is a versatile programming language widely used in data science...', ai_embedding_vector('Python is a versatile programming language widely used in data science...')),
+    (2, 'Introduction to R', 'R is a popular programming language for statistical computing and graphics...', ai_embedding_vector('R is a popular programming language for statistical computing and graphics...')),
+    (3, 'Getting Started with SQL', 'Structured Query Language (SQL) is a domain-specific language used for managing relational databases...', ai_embedding_vector('Structured Query Language (SQL) is a domain-specific language used for managing relational databases...'));
 ```
 
-3. Measure the similarity between a query document and the stored documents using the `cosine_distance` function:
+**Querying for Similar Documents**
+
+Now, let's find the documents that are most similar to a given query using the cosine_distance function:
 ```sql
-SELECT doc_id, text_content, cosine_distance(embedding, ai_embedding_vector('What is a subfield of artificial intelligence?')) AS distance
-FROM embeddings
-ORDER BY distance ASC
-LIMIT 5;
+SELECT
+    id,
+    title,
+    content,
+    cosine_distance(embedding, ai_embedding_vector('How to use Python in data analysis?')) AS similarity
+FROM
+    articles
+ORDER BY
+    similarity ASC
+    LIMIT 3;
 ```
-This SQL query calculates the cosine distance between the query document's embedding and the embeddings of the stored documents. The results are ordered by ascending distance, with the smallest distance indicating the highest similarity.
 
 Result:
 ```sql
-+--------+-------------------------------------------------+------------+
-| doc_id | text_content                                    | distance   |
-+--------+-------------------------------------------------+------------+
-|      1 | Artificial intelligence is a fascinating field. | 0.10928339 |
-|      2 | Machine learning is a subset of AI.             | 0.13584924 |
-|      3 | I love going to the beach on weekends.          | 0.30774158 |
-+--------+-------------------------------------------------+------------+
++------+--------------------------+---------------------------------------------------------------------------------------------------------+------------+
+| id   | title                    | content                                                                                                 | similarity |
++------+--------------------------+---------------------------------------------------------------------------------------------------------+------------+
+|    1 | Python for Data Science  | Python is a versatile programming language widely used in data science...                               |  0.1142081 |
+|    2 | Introduction to R        | R is a popular programming language for statistical computing and graphics...                           | 0.18741018 |
+|    3 | Getting Started with SQL | Structured Query Language (SQL) is a domain-specific language used for managing relational databases... | 0.25137568 |
++------+--------------------------+---------------------------------------------------------------------------------------------------------+------------+
 ```
