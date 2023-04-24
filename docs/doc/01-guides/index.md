@@ -35,7 +35,7 @@ import TabItem from '@theme/TabItem';
 
 <TabItem value="Manage" label="Manage">
 
-* [Managing Databend Settings](../10-deploy/06-manage-settings.md)
+* [Managing Databend Settings](../13-sql-reference/42-manage-settings.md)
 * [Backing Up and Restoring a Meta Service Cluster](../10-deploy/06-metasrv/30-metasrv-backup-restore.md)
 * [Backing Up and Restoring Schema Data](../10-deploy/09-upgrade/10-backup-and-restore-schema.md)
 * [Upgrading Databend](../10-deploy/09-upgrade/50-upgrade.md)

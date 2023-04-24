@@ -1,66 +1,61 @@
 ---
-title: Try Databend Cloud Free
-sidebar_label: Databend Cloud
+title: Meet Databend Cloud
+sidebar_label: Databend Cloud 🔥
 ---
 
-[Databend Cloud](https://www.databend.com) is a powerful data cloud for everyone, which is built on top of the open-source project Databend with **Simplicity**, **Elasticity**, **Security**, and **Low Cost**.
+Getting tired of deployment headaches and managing infrastructure?
 
-## Databend Cloud Architecture
+Introducing [Databend Cloud](https://www.databend.com/) - the cloud-hosted version of Databend! With Databend Cloud, you can leverage the full capabilities of Databend without having to worry about deployment or infrastructure management.
 
-<div align="center">
-<img src="https://user-images.githubusercontent.com/172204/221402796-646f5bc7-40b9-4e42-b837-2e60e1ba4583.png" alt="Databend Cloud Architecture"  width="70%"/>
-</div>
+:::tip NOW IN BETA
+Don't miss out on the chance to try Databend Cloud during its private beta phase. Sign up for beta access now at https://www.databend.com/apply and receive a $200 coupon to kickstart your exploration of the platform.
+:::
 
+## At a Glance
 
-## Create a Databend Cloud Account
+Before you dive in, let's have a preview of the main components and features of Databend Cloud to give you an idea of what it looks like.
 
-Databend Cloud is now in private beta. To create a Databend Cloud account, go to https://www.databend.com/apply to apply for beta access.
+### Warehouse: Your Compute Capability
 
-## Logging into Your Account
-
-To log into your account, go to https://app.databend.com.
-
-<img src="/img/cloud/databend-cloud-login.png"/>
-
-
-## Databend Cloud Overview
-
-### Warehouses
-
-Databend Cloud offers serverless warehouses that can be automatically suspended if there is no activity for a specific period.
-
-A demonstration of how Databend Cloud's warehouses work is shown below.
+A warehouse comprises of computing resources such as CPU, memory, and local caches, which can be tailored to your specific computing needs by creating warehouses in varying sizes. In Databend Cloud, a warehouse is necessary for executing queries and performing data loading or unloading tasks.
 
 <img src="/img/cloud/databend-cloud-warehouses.gif"/>
 
+### Data: Visualized Databases & Tables
 
-### Databases
+With its user-friendly interface, Databend Cloud allows users to easily visualize complex data sets and quickly analyze the information they need.
 
-This page shows a list of your databases in Databend Cloud:
+:::tip DID YOU KNOW?
+Databend Cloud now has a pipeline feature that facilitates automatic discovery of file updates from Amazon S3 and subsequent loading of the updates into a table. Read this blog post to learn more: https://www.databend.com/blog/2023/04/16/pipeline
+:::
 
 <img src="/img/cloud/databend-cloud-data.png"/>
 
-### Worksheets
+### Worksheet: Powerful SQL Editor
 
-Worksheets is a powerful SQL editor where you can run SQL queries. For example, you can now do [Conversion Funnel Analysis](../21-use-cases/04-analyze-funnel-with-databend.md) online.
+Worksheet is a powerful and user-friendly SQL editor that simplifies database management. Its advanced features include syntax highlighting, autocomplete, error checking, and formatting options for efficient query writing.
 
 <img src="/img/cloud/databend-cloud-worksheet.png"/>
 
-### Connect
+### Connect: Effortlessly Connecting to Your Dataflow
 
-Databend Cloud provides a connection string for your applications to connect to it:
+Databend Cloud offers a seamless integration process for your applications through a connection string. This connection string allows your applications to effortlessly connect to Databend Cloud and access its powerful features and capabilities.
 
 <img src="/img/cloud/databend-cloud-connect.gif"/>
 
-```shell
-https://<tenant>--<warehouse>.ch.aws-us-east-2.default.databend.com/
-```
+## Cloud-Based Design
 
-Run query with curl:
-```shell
-curl --user 'cloudapp:password' --data-binary 'SHOW TABLES' 'https://<tenant>--<warehouse>.ch.aws-us-east-2.default.databend.com?database=default'
-```
+Databend Cloud currently uses Amazon S3 as its cloud provider, and is planning to add support for other cloud providers in the future.
 
-## Databend Cloud Documentation
+The following diagram provides a visual representation of the various layers that comprise the architecture of Databend Cloud. Each layer plays a critical role in enabling the functionality and performance of the cloud platform. By examining the architecture layers in detail, you can gain a better understanding of how Databend Cloud operates and how data flows through the system.
 
- - [Databend Cloud Documentation](https://docs.databend.com/)
+<div>
+<img src="https://user-images.githubusercontent.com/172204/221402796-646f5bc7-40b9-4e42-b837-2e60e1ba4583.png" alt="Databend Cloud Architecture" />
+</div>
+
+## More Resources 🔗
+
+- Website: https://www.databend.com
+- Pricing: https://www.databend.com/plan
+- Documentation: https://docs.databend.com
+- Blog: https://www.databend.com/blog 

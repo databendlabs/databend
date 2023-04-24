@@ -47,7 +47,7 @@ fn test_parse_json(file: &mut impl Write) {
     run_ast(file, "parse_json(NULL)", &[]);
     run_ast(file, "parse_json('nuLL')", &[]);
     run_ast(file, "parse_json('null')", &[]);
-    run_ast(file, "parse_json(' \t')", &[]);
+    run_ast(file, "parse_json('  ')", &[]);
     run_ast(file, "parse_json('true')", &[]);
     run_ast(file, "parse_json('false')", &[]);
     run_ast(file, "parse_json('\"测试\"')", &[]);

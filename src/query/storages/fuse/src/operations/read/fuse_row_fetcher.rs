@@ -173,12 +173,12 @@ where F: RowFetcher + Send + Sync + 'static
             MetaReaders::segment_info_reader(self.table.operator.clone(), table_schema);
         let mut map = HashMap::new();
 
-        for (location, seg_id) in segment_id_map.iter() {
+        for ((location, ver), seg_id) in segment_id_map.into_iter() {
             let segment_info = segment_reader
                 .read(&LoadParams {
-                    location: location.clone(),
+                    location,
                     len_hint: None,
-                    ver: snapshot.format_version(),
+                    ver,
                     put_cache: true,
                 })
                 .await?;
@@ -190,7 +190,7 @@ where F: RowFetcher + Send + Sync + 'static
                     None,
                     &self.projection,
                 );
-                let part_id = compute_row_id_prefix(*seg_id as u64, block_idx as u64);
+                let part_id = compute_row_id_prefix(seg_id as u64, block_idx as u64);
                 map.insert(part_id, part_info);
             }
         }

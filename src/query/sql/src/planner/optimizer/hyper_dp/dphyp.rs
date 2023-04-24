@@ -327,13 +327,14 @@ impl DPhpy {
         for (idx, relation) in self.join_relations.iter().enumerate() {
             // Get nodes  in `relation_set_tree`
             let nodes = self.relation_set_tree.get_relation_set_by_index(idx)?;
+            let ce = relation.cardinality()?;
             let join = JoinNode {
                 join_type: JoinType::Inner,
                 leaves: Arc::new(nodes.clone()),
                 children: Arc::new(vec![]),
                 join_conditions: Arc::new(vec![]),
                 cost: 0.0,
-                cardinality: Some(relation.cardinality()?),
+                cardinality: Some(ce),
                 s_expr: None,
             };
             let _ = self.dp_table.insert(nodes, join);

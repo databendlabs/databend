@@ -608,7 +608,7 @@ impl Binder {
             }
             AlterTableAction::AddColumn { column } => {
                 let (schema, field_default_exprs, field_comments) = self
-                    .analyze_create_table_schema_by_columns(&[column.clone()])
+                    .analyze_create_table_schema_by_columns(&[column.clone()], true)
                     .await?;
                 Ok(Plan::AddTableColumn(Box::new(AddTableColumnPlan {
                     catalog,
@@ -859,6 +859,7 @@ impl Binder {
     async fn analyze_create_table_schema_by_columns(
         &self,
         columns: &[ColumnDefinition],
+        is_add_column: bool,
     ) -> Result<(TableSchemaRef, Vec<Option<String>>, Vec<String>)> {
         let mut bind_context = BindContext::new();
         let mut scalar_binder = ScalarBinder::new(
@@ -880,7 +881,7 @@ impl Binder {
                 if let Some(default_expr) = &column.default_expr {
                     let (expr, _) = scalar_binder.bind(default_expr).await?;
                     let is_try = schema_data_type.is_nullable();
-                    let cast_expr_to_field_type = ScalarExpr::CastExpr(CastExpr {
+                    let cast_expr = ScalarExpr::CastExpr(CastExpr {
                         span: expr.span(),
                         is_try,
                         target_type: Box::new(DataType::from(&schema_data_type)),
@@ -888,24 +889,25 @@ impl Binder {
                     })
                     .as_expr()?;
 
-                    if !cast_expr_to_field_type.is_deterministic(&BUILTIN_FUNCTIONS) {
+                    // Added columns are not allowed to use expressions,
+                    // as the default values will be generated at at each query.
+                    if is_add_column && !cast_expr.is_deterministic(&BUILTIN_FUNCTIONS) {
                         return Err(ErrorCode::SemanticError(format!(
-                            "default expression {cast_expr_to_field_type} is not a valid constant. Please provide a valid constant expression as the default value.",
+                            "default expression `{}` is not a valid constant. Please provide a valid constant expression as the default value.", cast_expr.sql_display(),
                         )));
                     }
 
-                    let (fold_to_constant, _) = ConstantFolder::fold(
-                        &cast_expr_to_field_type,
-                        &self.ctx.get_function_context()?,
-                        &BUILTIN_FUNCTIONS,
-                    );
-                    if let common_expression::Expr::Constant { .. } = fold_to_constant {
-                        Some(default_expr.to_string())
+                    let expr = if cast_expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+                        let (fold_to_constant, _) = ConstantFolder::fold(
+                            &cast_expr,
+                            &self.ctx.get_function_context()?,
+                            &BUILTIN_FUNCTIONS,
+                        );
+                        fold_to_constant
                     } else {
-                        return Err(ErrorCode::SemanticError(format!(
-                            "default expression {cast_expr_to_field_type} is not a valid constant expression. Please provide a valid constant expression as the default value.",
-                        )));
-                    }
+                        cast_expr
+                    };
+                    Some(expr.sql_display())
                 } else {
                     None
                 }
@@ -924,7 +926,8 @@ impl Binder {
     ) -> Result<(TableSchemaRef, Vec<Option<String>>, Vec<String>)> {
         match source {
             CreateTableSource::Columns(columns) => {
-                self.analyze_create_table_schema_by_columns(columns).await
+                self.analyze_create_table_schema_by_columns(columns, false)
+                    .await
             }
             CreateTableSource::Like {
                 catalog,

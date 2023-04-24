@@ -511,11 +511,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |val, ctx| match val {
             ValueRef::Scalar(scalar) => {
                 let mut buf = Vec::new();
-                cast_scalar_to_variant(scalar, ctx.tz, &mut buf);
+                cast_scalar_to_variant(scalar, ctx.func_ctx.tz, &mut buf);
                 Value::Scalar(buf)
             }
             ValueRef::Column(col) => {
-                let new_col = cast_scalars_to_variants(col.iter(), ctx.tz);
+                let new_col = cast_scalars_to_variants(col.iter(), ctx.func_ctx.tz);
                 Value::Column(new_col)
             }
         },
@@ -532,11 +532,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |val, ctx| match val {
             ValueRef::Scalar(scalar) => {
                 let mut buf = Vec::new();
-                cast_scalar_to_variant(scalar, ctx.tz, &mut buf);
+                cast_scalar_to_variant(scalar, ctx.func_ctx.tz, &mut buf);
                 Value::Scalar(Some(buf))
             }
             ValueRef::Column(col) => {
-                let new_col = cast_scalars_to_variants(col.iter(), ctx.tz);
+                let new_col = cast_scalars_to_variants(col.iter(), ctx.func_ctx.tz);
                 Value::Column(NullableColumn {
                     validity: constant_bitmap(true, new_col.len()).into(),
                     column: new_col,
@@ -639,7 +639,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            match as_str(val).and_then(|val| string_to_date(val.as_bytes(), ctx.tz.tz)) {
+            match as_str(val).and_then(|val| string_to_date(val.as_bytes(), ctx.func_ctx.tz.tz)) {
                 Some(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
                 None => {
                     ctx.set_error(output.len(), "unable to cast to type `DATE`");
@@ -659,7 +659,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            match as_str(val).and_then(|str_value| string_to_date(str_value.as_bytes(), ctx.tz.tz))
+            match as_str(val)
+                .and_then(|str_value| string_to_date(str_value.as_bytes(), ctx.func_ctx.tz.tz))
             {
                 Some(date) => output.push(date.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
                 None => output.push_null(),
@@ -677,7 +678,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            match as_str(val).and_then(|val| string_to_timestamp(val.as_bytes(), ctx.tz.tz)) {
+            match as_str(val)
+                .and_then(|val| string_to_timestamp(val.as_bytes(), ctx.func_ctx.tz.tz))
+            {
                 Some(ts) => output.push(ts.timestamp_micros()),
                 None => {
                     ctx.set_error(output.len(), "unable to cast to type `TIMESTAMP`");
@@ -700,7 +703,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 match as_str(val) {
                     Some(str_val) => {
-                        let timestamp = string_to_timestamp(str_val.as_bytes(), ctx.tz.tz)
+                        let timestamp = string_to_timestamp(str_val.as_bytes(), ctx.func_ctx.tz.tz)
                             .map(|ts| ts.timestamp_micros());
                         match timestamp {
                             Some(timestamp) => output.push(timestamp),
@@ -889,7 +892,7 @@ fn json_object_fn(
                 }
                 set.insert(key.clone());
                 let mut val = vec![];
-                cast_scalar_to_variant(v, ctx.tz, &mut val);
+                cast_scalar_to_variant(v, ctx.func_ctx.tz, &mut val);
                 kvs.push((key, val));
             }
             if let Err(err) = build_object(kvs.iter().map(|(k, v)| (k, &v[..])), &mut builder.data)
