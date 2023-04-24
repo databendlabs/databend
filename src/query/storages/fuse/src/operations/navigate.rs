@@ -28,6 +28,7 @@ use opendal::Metakey;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use tracing::error;
 use tracing::warn;
 
 use crate::io::MetaReaders;
@@ -142,16 +143,43 @@ impl FuseTable {
         instant: Option<NavigationPoint>,
     ) -> Result<(Arc<FuseTable>, Vec<String>)> {
         let retention = Duration::hours(ctx.get_settings().get_retention_period()? as i64);
-        let root_snapshot = if let Some(snapshot) = self.read_table_snapshot().await? {
-            snapshot
-        } else {
-            return Err(ErrorCode::TableHistoricalDataNotFound(
-                "No historical data found at given point",
-            ));
+
+        let root_snapshot_location = match self.snapshot_loc().await? {
+            Some(root_snapshot_location) => root_snapshot_location,
+            None => {
+                return Err(ErrorCode::TableHistoricalDataNotFound(
+                    "No historical data found at given point",
+                ));
+            }
         };
 
-        assert!(root_snapshot.timestamp.is_some());
-        let mut time_point = root_snapshot.timestamp.unwrap() - retention;
+        let op = self.operator.clone();
+        let meta = op.stat(&root_snapshot_location).await?;
+        let timestamp = match meta.mode() {
+            EntryMode::FILE => {
+                let modified = if let Some(modified) = meta.last_modified() {
+                    modified
+                } else {
+                    // since opendal cannot get last_modified time, use snapshot metadata instead
+                    if let Some(snapshot) = self.read_table_snapshot().await? {
+                        snapshot.timestamp.unwrap()
+                    } else {
+                        return Err(ErrorCode::TableHistoricalDataNotFound(
+                            "No historical data found at given point",
+                        ));
+                    }
+                };
+                modified
+            }
+            _ => {
+                error!("found not snapshot file in {:}", root_snapshot_location);
+                return Err(ErrorCode::TableHistoricalDataNotFound(
+                    "found not snapshot file",
+                ));
+            }
+        };
+
+        let mut time_point = timestamp - retention;
 
         let (location, files) = match instant {
             Some(NavigationPoint::TimePoint(point)) => {
@@ -166,6 +194,7 @@ impl FuseTable {
         }?;
 
         let table = self.navigate_to_time_point(location, time_point).await?;
+
         Ok((table, files))
     }
 
