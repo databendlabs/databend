@@ -14,14 +14,12 @@
 //
 
 use std::io::Cursor;
-use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_exception::Result;
 use common_io::prelude::BinaryRead;
 use futures::AsyncRead;
 use futures_util::AsyncReadExt;
-use serde::de::DeserializeOwned;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Encoding;
 use storages_common_table_meta::meta::MetaCompression;
@@ -45,11 +43,8 @@ use crate::io::read::meta::meta_readers::read_and_deserialize;
 /// decompresses them using the specified compression format, and deserializes them using the specified
 /// encoding format. Finally, it constructs a `SegmentInfo` object using the deserialized block metadata
 /// and segment summary, and returns it.
-pub async fn load_segment_v3<R, T>(mut reader: R, _v: &PhantomData<T>) -> Result<SegmentInfo>
-where
-    T: DeserializeOwned,
-    R: AsyncRead + Unpin + Send,
-{
+pub async fn load_segment_v3<R>(mut reader: R) -> Result<SegmentInfo>
+where R: AsyncRead + Unpin + Send {
     let mut buffer: Vec<u8> = vec![];
     reader.read_to_end(&mut buffer).await?;
 

@@ -49,6 +49,7 @@ common-meta-stoerr = { path = "../meta/stoerr" }
 common-meta-store = { path = "../meta/store" }
 common-meta-types = { path = "../meta/types" }
 common-metrics = { path = "../common/metrics" }
+common-storages-fuse = { path = "../query/storages/fuse" }
 common-tracing = { path = "../common/tracing" }
 databend-meta = { path = "../meta/service" }
 databend-query = { path = "../query/service" }
@@ -61,6 +62,7 @@ async-backtrace = { workspace = true }
 clap = { workspace = true }
 comfy-table = "6.1.3"
 limits-rs = "0.2.0"
+opendal = { workspace = true }
 poem = { version = "1", features = ["rustls", "multipart", "compression"] }
 sentry = { version = "0.30", default-features = false, features = [
     "backtrace",
@@ -71,6 +73,7 @@ sentry = { version = "0.30", default-features = false, features = [
 ] }
 serde = { workspace = true }
 serde_json = { workspace = true }
+tokio = { workspace = true }
 tokio-stream = "0.1.10"
 tonic = { workspace = true }
 tracing = "0.1.36"
@@ -103,5 +106,11 @@ test = false
 [[bin]]
 name = "open-sharing"
 path = "opensharing/main.rs"
+doctest = false
+test = false
+
+[[bin]]
+name = "table-meta-inspector"
+path = "tool/table_meta_inspector.rs"
 doctest = false
 test = false

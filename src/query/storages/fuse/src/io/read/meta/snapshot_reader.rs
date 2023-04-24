@@ -12,13 +12,11 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 use std::io::Cursor;
-use std::marker::PhantomData;
 
 use common_exception::Result;
 use common_io::prelude::BinaryRead;
 use futures_util::AsyncRead;
 use futures_util::AsyncReadExt;
-use serde::de::DeserializeOwned;
 use storages_common_table_meta::meta::Encoding;
 use storages_common_table_meta::meta::MetaCompression;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -38,11 +36,8 @@ use crate::io::read::meta::meta_readers::read_and_deserialize;
 /// The function then reads the compressed snapshot data from the stream, decompresses it using
 /// the specified compression format, and deserializes it using the specified encoding format.
 /// Finally, it constructs a `TableSnapshot` object using the deserialized data and returns it.
-pub async fn load_snapshot_v3<R, T>(mut reader: R, _v: &PhantomData<T>) -> Result<TableSnapshot>
-where
-    T: DeserializeOwned,
-    R: AsyncRead + Unpin + Send,
-{
+pub async fn load_snapshot_v3<R>(mut reader: R) -> Result<TableSnapshot>
+where R: AsyncRead + Unpin + Send {
     let mut buffer: Vec<u8> = vec![];
     reader.read_to_end(&mut buffer).await?;
 
