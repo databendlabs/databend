@@ -15,11 +15,11 @@ LIST { userStage | internalStage | externalStage } [ PATTERN = '<regex_pattern>'
 
 The stage below contains a file named **books.parquet** and a folder named **2023**.
 
-![Alt text](../../../../public/img/sql/list-stage.png)
+![Alt text](/img/sql/list-stage.png)
 
 And the folder **2023** contains the following files:
 
-![Alt text](../../../../public/img/sql/list-stage-2.png)
+![Alt text](/img/sql/list-stage-2.png)
 
 The LIST command lists all the files in a stage by default:
 
