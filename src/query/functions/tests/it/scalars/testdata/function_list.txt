@@ -1605,20 +1605,24 @@ Functions overloads:
 1 geohash_encode(Float64 NULL, Float64 NULL) :: String NULL
 2 geohash_encode(Float64, Float64, UInt8) :: String
 3 geohash_encode(Float64 NULL, Float64 NULL, UInt8 NULL) :: String NULL
-0 get(Variant NULL, String NULL) :: Variant NULL
-1 get(Variant NULL, UInt64 NULL) :: Variant NULL
-2 get(Array(Nothing) NULL, UInt64 NULL) :: NULL
-3 get(Array(NULL) NULL, UInt64 NULL) :: NULL
-4 get(Array(T0 NULL), UInt64) :: T0 NULL
-5 get(Array(T0 NULL) NULL, UInt64 NULL) :: T0 NULL
-6 get(Map(Nothing) NULL, T0 NULL) :: NULL
-7 get(Map(T0, T1), T0) :: T1 NULL
-8 get(Map(T0, T1) NULL, T0 NULL) :: T1 NULL
-9 get FACTORY
-10 get FACTORY
+0 get(Variant, String) :: Variant NULL
+1 get(Variant NULL, String NULL) :: Variant NULL
+2 get(Variant, Int64) :: Variant NULL
+3 get(Variant NULL, Int64 NULL) :: Variant NULL
+4 get(Array(Nothing) NULL, UInt64 NULL) :: NULL
+5 get(Array(NULL) NULL, UInt64 NULL) :: NULL
+6 get(Array(T0 NULL), UInt64) :: T0 NULL
+7 get(Array(T0 NULL) NULL, UInt64 NULL) :: T0 NULL
+8 get(Map(Nothing) NULL, T0 NULL) :: NULL
+9 get(Map(T0, T1), T0) :: T1 NULL
+10 get(Map(T0, T1) NULL, T0 NULL) :: T1 NULL
 11 get FACTORY
-0 get_ignore_case(Variant NULL, String NULL) :: Variant NULL
-0 get_path(Variant NULL, String NULL) :: Variant NULL
+12 get FACTORY
+13 get FACTORY
+0 get_ignore_case(Variant, String) :: Variant NULL
+1 get_ignore_case(Variant NULL, String NULL) :: Variant NULL
+0 get_path(Variant, String) :: Variant NULL
+1 get_path(Variant NULL, String NULL) :: Variant NULL
 0 great_circle_angle(Float64, Float64, Float64, Float64) :: Float32
 1 great_circle_angle(Float64 NULL, Float64 NULL, Float64 NULL, Float64 NULL) :: Float32 NULL
 0 great_circle_distance(Float64, Float64, Float64, Float64) :: Float32
@@ -1723,6 +1727,11 @@ Functions overloads:
 0 json_object FACTORY
 0 json_object_keep_null FACTORY
 0 json_object_keys(Variant NULL) :: Variant NULL
+0 json_path_query FACTORY
+0 json_path_query_array(Variant, String) :: Variant NULL
+1 json_path_query_array(Variant NULL, String NULL) :: Variant NULL
+0 json_path_query_first(Variant, String) :: Variant NULL
+1 json_path_query_first(Variant NULL, String NULL) :: Variant NULL
 0 left(String, UInt64) :: String
 1 left(String NULL, UInt64 NULL) :: String NULL
 0 length(Variant NULL) :: UInt32 NULL
@@ -3051,6 +3060,7 @@ Functions overloads:
 2 to_day_of_year(Timestamp) :: UInt16
 3 to_day_of_year(Timestamp NULL) :: UInt16 NULL
 0 to_decimal FACTORY
+1 to_decimal FACTORY
 0 to_float32(Variant) :: Float32
 1 to_float32(Variant NULL) :: Float32 NULL
 2 to_float32(String) :: Float32
@@ -3488,6 +3498,8 @@ Functions overloads:
 5 try_to_date(Timestamp NULL) :: Date NULL
 6 try_to_date(Int64) :: Date NULL
 7 try_to_date(Int64 NULL) :: Date NULL
+0 try_to_decimal FACTORY
+1 try_to_decimal FACTORY
 0 try_to_float32(Variant) :: Float32 NULL
 1 try_to_float32(Variant NULL) :: Float32 NULL
 2 try_to_float32(String) :: Float32 NULL

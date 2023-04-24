@@ -157,6 +157,13 @@ impl Binder {
                     lit: Literal::UInt64(index),
                     ..
                 } => {
+                    if *index == 0 {
+                        return Err(ErrorCode::SemanticError(
+                            "ORDER BY position 0 is not in select list",
+                        )
+                        .set_span(order.expr.span()));
+                    }
+
                     let index = *index as usize - 1;
                     if index >= projections.len() {
                         return Err(ErrorCode::SemanticError(format!(

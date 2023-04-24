@@ -8,7 +8,7 @@ title: COUNT_IF
 The suffix `_IF` can be appended to the name of any aggregate function. In this case, the aggregate function accepts an extra argument – a condition.
 
 ```sql
-COUNT_IF(column, cond)
+COUNT_IF(<column>, <cond>)
 ```
 
 ## Example

@@ -22,6 +22,7 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
+use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
@@ -60,10 +61,17 @@ impl Operator for Limit {
             output_columns: input_prop.output_columns,
             outer_columns: input_prop.outer_columns,
             used_columns: input_prop.used_columns,
-            cardinality: match self.limit {
-                Some(limit) if (limit as f64) < input_prop.cardinality => limit as f64,
-                _ => input_prop.cardinality,
-            },
+        })
+    }
+
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
+        let stat_info = rel_expr.derive_cardinality_child(0)?;
+        let cardinality = match self.limit {
+            Some(limit) if (limit as f64) < stat_info.cardinality => limit as f64,
+            _ => stat_info.cardinality,
+        };
+        Ok(StatInfo {
+            cardinality,
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats: Default::default(),

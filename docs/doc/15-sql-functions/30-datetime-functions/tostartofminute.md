@@ -7,18 +7,18 @@ Rounds down a date with time (timestamp/datetime) to the start of the minute.
 ## Syntax
 
 ```sql
-to_start_of_minute( <expr> )
+TO_START_OF_MINUTE( <expr> )
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| `<expr>` | timestamp |
+| Arguments | Description |
+|-----------|-------------|
+| `<expr>`  | timestamp   |
 
 ## Return Type
 
-Datetime object, returns date in “YYYY-MM-DD hh:mm:ss.ffffff” format.
+`TIMESTAMP`, returns date in “YYYY-MM-DD hh:mm:ss.ffffff” format.
 
 ## Examples
 

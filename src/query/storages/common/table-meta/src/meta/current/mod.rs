@@ -16,10 +16,13 @@ pub use v0::ColumnMeta as SingleColumnMeta;
 pub use v1::TableSnapshotStatistics;
 pub use v2::BlockMeta;
 pub use v2::ColumnMeta;
-pub use v2::SegmentInfo;
-pub use v2::TableSnapshot;
-pub use v2::TableSnapshotLite;
+pub use v2::SegmentInfo as SegmentInfoV2;
+pub use v2::TableSnapshot as TableSnapshotV2;
+pub use v3::SegmentInfo;
+pub use v3::TableSnapshot;
+pub use v3::TableSnapshotLite;
 
 use super::v0;
 use super::v1;
 use super::v2;
+use super::v3;

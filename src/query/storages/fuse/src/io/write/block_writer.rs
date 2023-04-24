@@ -26,6 +26,7 @@ use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use opendal::Operator;
 use storages_common_blocks::blocks_to_parquet;
 use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::ClusterStatistics;
 use storages_common_table_meta::meta::ColumnMeta;
 
 use crate::fuse_table::FuseStorageFormat;
@@ -34,6 +35,7 @@ use crate::io::TableMetaLocationGenerator;
 use crate::operations::util;
 use crate::operations::BloomIndexState;
 use crate::statistics::gen_columns_statistics;
+use crate::statistics::ClusterStatsGenerator;
 
 // TODO rename this, it is serialization, or pass in a writer(if not rename)
 pub fn serialize_block(
@@ -100,13 +102,14 @@ pub struct BlockBuilder {
     pub meta_locations: TableMetaLocationGenerator,
     pub source_schema: TableSchemaRef,
     pub write_settings: WriteSettings,
+    pub cluster_stats_gen: ClusterStatsGenerator,
 }
 
 impl BlockBuilder {
-    pub fn build(&self, data_block: DataBlock) -> Result<BlockSerialization> {
-        // TODO cluster stats
-        // let (cluster_stats, block) = self.cluster_stats_gen.gen_stats_for_append(data_block)?;
-
+    pub fn build<F>(&self, data_block: DataBlock, f: F) -> Result<BlockSerialization>
+    where F: Fn(DataBlock, &ClusterStatsGenerator) -> Result<(Option<ClusterStatistics>, DataBlock)>
+    {
+        let (cluster_stats, data_block) = f(data_block, &self.cluster_stats_gen)?;
         let (block_location, block_id) = self.meta_locations.gen_block_location();
 
         let bloom_index_location = self.meta_locations.block_bloom_index_location(&block_id);
@@ -119,9 +122,6 @@ impl BlockBuilder {
         let column_distinct_count = bloom_index_state
             .as_ref()
             .map(|i| i.column_distinct_count.clone());
-
-        // TODO, generate the cluster stats
-        let cluster_stats = None;
 
         let row_count = data_block.num_rows() as u64;
         let block_size = data_block.memory_size() as u64;

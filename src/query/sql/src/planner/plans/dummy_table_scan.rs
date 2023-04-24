@@ -20,7 +20,9 @@ use common_exception::Result;
 use super::Operator;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::PhysicalProperty;
+use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
+use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -45,11 +47,6 @@ impl Operator for DummyTableScan {
             output_columns: ColumnSet::new(),
             outer_columns: ColumnSet::new(),
             used_columns: ColumnSet::new(),
-            cardinality: 1.0,
-            statistics: Statistics {
-                precise_cardinality: Some(1),
-                column_stats: Default::default(),
-            },
         })
     }
 
@@ -59,6 +56,16 @@ impl Operator for DummyTableScan {
     ) -> Result<PhysicalProperty> {
         Ok(PhysicalProperty {
             distribution: crate::optimizer::Distribution::Serial,
+        })
+    }
+
+    fn derive_cardinality(&self, _rel_expr: &RelExpr) -> Result<StatInfo> {
+        Ok(StatInfo {
+            cardinality: 1.0,
+            statistics: Statistics {
+                precise_cardinality: Some(1),
+                column_stats: Default::default(),
+            },
         })
     }
 

@@ -437,6 +437,7 @@ impl AccessChecker for PrivilegeAccess {
                         .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Super])
                         .await?;
                 }
+                CopyPlan::NoFileToCopy => {}
             },
             Plan::CreateShareEndpoint(_)
             | Plan::ShowShareEndpoint(_)

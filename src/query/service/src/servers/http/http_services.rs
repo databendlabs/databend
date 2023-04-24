@@ -14,6 +14,7 @@
 
 use std::net::SocketAddr;
 use std::path::Path;
+use std::time::Duration;
 
 use common_config::GlobalConfig;
 use common_config::InnerConfig;
@@ -150,7 +151,12 @@ impl HttpHandler {
 
         let router = self.build_router(listening).await;
         self.shutdown_handler
-            .start_service(listening, Some(tls_config), router, None)
+            .start_service(
+                listening,
+                Some(tls_config),
+                router,
+                Some(Duration::from_millis(1000)),
+            )
             .await
     }
 
@@ -158,7 +164,7 @@ impl HttpHandler {
     async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr, HttpError> {
         let router = self.build_router(listening).await;
         self.shutdown_handler
-            .start_service(listening, None, router, None)
+            .start_service(listening, None, router, Some(Duration::from_millis(1000)))
             .await
     }
 }

@@ -11,14 +11,14 @@ NULL values are not counted.
 ## Syntax
 
 ```sql
-COUNT(expression)
+COUNT(<expr>)
 ```
 
 ## Arguments
 
-| Arguments  | Description                                                                                                                                                     |
-|------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| expression | Any expression. <br /> This may be a column name, the result of another function, or a math operation.<br />`*` is also allowed, to indicate pure row counting. |
+| Arguments | Description                                                                                                                                                     |
+|-----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `<expr>`  | Any expression. <br /> This may be a column name, the result of another function, or a math operation.<br />`*` is also allowed, to indicate pure row counting. |
 
 ## Return Type
 

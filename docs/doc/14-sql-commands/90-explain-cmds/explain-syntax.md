@@ -2,7 +2,7 @@
 title: EXPLAIN SYNTAX
 ---
 
-Outputs formatted SQL code. This command works as a SQL formatter that makes your code easy to read.
+Outputs formatted SQL code. This command works as an SQL formatter that makes your code easy to read.
 
 ## Syntax
 

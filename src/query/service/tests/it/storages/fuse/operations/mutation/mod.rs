@@ -18,4 +18,5 @@ mod recluster_mutator;
 mod segments_compact_mutator;
 
 pub use deletion::do_deletion;
+pub use segments_compact_mutator::compact_segment;
 pub use segments_compact_mutator::CompactSegmentTestFixture;

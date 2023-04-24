@@ -169,7 +169,6 @@ impl SubqueryRewriter {
     ) -> Result<(ScalarExpr, SExpr)> {
         match scalar {
             ScalarExpr::BoundColumnRef(_) => Ok((scalar.clone(), s_expr.clone())),
-            ScalarExpr::BoundInternalColumnRef(_) => Ok((scalar.clone(), s_expr.clone())),
             ScalarExpr::ConstantExpr(_) => Ok((scalar.clone(), s_expr.clone())),
             ScalarExpr::WindowFunction(_) => Ok((scalar.clone(), s_expr.clone())),
             ScalarExpr::AggregateFunction(_) => Ok((scalar.clone(), s_expr.clone())),

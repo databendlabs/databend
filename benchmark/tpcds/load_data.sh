@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-. "$CURDIR"/env.sh
+. "$CURDIR"/shell_env.sh
 
 # Create Database
 echo "CREATE DATABASE IF NOT EXISTS ${MYSQL_DATABASE}" | $MYSQL_CLIENT_CONNECT_DEFAULT

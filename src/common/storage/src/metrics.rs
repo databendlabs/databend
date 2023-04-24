@@ -306,17 +306,8 @@ impl<R: oio::Write> oio::Write for StorageMetricsWrapper<R> {
     }
 
     #[async_backtrace::framed]
-    async fn append(&mut self, bs: Bytes) -> Result<()> {
-        let size = bs.len();
-        let start = Instant::now();
-
-        let result = self.inner.append(bs).await;
-        if result.is_ok() {
-            self.metrics.inc_write_bytes(size);
-            self.metrics
-                .inc_write_bytes_cost(start.elapsed().as_millis() as u64);
-        }
-        result
+    async fn abort(&mut self) -> Result<()> {
+        self.inner.abort().await
     }
 
     #[async_backtrace::framed]
@@ -332,19 +323,6 @@ impl<R: oio::BlockingWrite> oio::BlockingWrite for StorageMetricsWrapper<R> {
         let start = Instant::now();
 
         let result = self.inner.write(bs);
-        if result.is_ok() {
-            self.metrics.inc_write_bytes(size);
-            self.metrics
-                .inc_write_bytes_cost(start.elapsed().as_millis() as u64);
-        }
-        result
-    }
-
-    fn append(&mut self, bs: Bytes) -> Result<()> {
-        let size = bs.len();
-        let start = Instant::now();
-
-        let result = self.inner.append(bs);
         if result.is_ok() {
             self.metrics.inc_write_bytes(size);
             self.metrics

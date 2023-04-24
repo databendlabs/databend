@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Read;
 use std::io::SeekFrom;
 
 use common_arrow::parquet::metadata::ThriftFileMetaData;
@@ -24,11 +25,16 @@ use futures_util::AsyncReadExt;
 use futures_util::AsyncSeekExt;
 use opendal::Operator;
 use opendal::Reader;
+use serde::de::DeserializeOwned;
 use storages_common_cache::InMemoryItemCacheReader;
 use storages_common_cache::LoadParams;
 use storages_common_cache::Loader;
 use storages_common_cache_manager::CacheManager;
 use storages_common_index::BloomIndexMeta;
+use storages_common_table_meta::meta::decode;
+use storages_common_table_meta::meta::decompress;
+use storages_common_table_meta::meta::Encoding;
+use storages_common_table_meta::meta::MetaCompression;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SegmentInfoVersion;
 use storages_common_table_meta::meta::SnapshotVersion;
@@ -242,4 +248,22 @@ mod thrift_file_meta_read {
         let meta = ThriftFileMetaData::read_from_in_protocol(&mut prot)?;
         Ok(meta)
     }
+}
+
+pub fn read_and_deserialize<R, T>(
+    reader: &mut R,
+    size: u64,
+    encoding: &Encoding,
+    compression: &MetaCompression,
+) -> Result<T>
+where
+    R: Read + Unpin + Send,
+    T: DeserializeOwned,
+{
+    let mut compressed_data = vec![0; size as usize];
+    reader.read_exact(&mut compressed_data)?;
+
+    let decompressed_data = decompress(compression, compressed_data)?;
+
+    decode(encoding, &decompressed_data)
 }

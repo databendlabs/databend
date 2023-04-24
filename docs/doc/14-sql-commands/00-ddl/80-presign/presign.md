@@ -4,7 +4,7 @@ description:
   Generates the pre-signed URL for a staged file.
 ---
 
-Generates the pre-signed URL for a staged file by the stage name and file path you provide. The pre-signed URL enables you to access the file through a web browser or an API request.
+Generate the pre-signed URL for a staged file by the stage name and file path you provide. The pre-signed URL enables you to access the file through a web browser or an API request.
 
 :::tip
 This command currently works with files stored at Amazon S3 only.

@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_base::runtime::Thread;
 use common_exception::Result;
 
 use crate::optimizer::hyper_dp::join_node::JoinNode;
@@ -29,17 +30,14 @@ use crate::optimizer::RuleFactory;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::Filter;
-use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;
 
-static COST_FACTOR_COMPUTE_PER_ROW: f64 = 1.0;
-static COST_FACTOR_HASH_TABLE_PER_ROW: f64 = 10.0;
-
 const MOCK_NUMBER: usize = 1000;
+const RELATION_THRESHOLD: usize = 10;
 
 // The join reorder algorithm follows the paper: Dynamic Programming Strikes Back
 // See the paper for more details.
@@ -141,21 +139,56 @@ impl DPhpy {
                     };
                     self.filters.insert(filter);
                 }
-                let left_res = self.get_base_relations(
-                    &s_expr.children()[0],
-                    join_conditions,
-                    true,
-                    left_is_subquery,
-                    None,
-                )?;
-                let right_res = self.get_base_relations(
-                    &s_expr.children()[1],
-                    join_conditions,
-                    true,
-                    right_is_subquery,
-                    None,
-                )?;
-                Ok(left_res && right_res)
+                if left_is_subquery && right_is_subquery {
+                    // Parallel process subquery
+                    let metadata = self.metadata.clone();
+                    let left_expr = s_expr.children()[0].clone();
+                    let left_res = Thread::spawn(move || {
+                        let mut dphyp = DPhpy::new(metadata.clone());
+                        (dphyp.optimize(left_expr), dphyp.table_index_map)
+                    });
+                    let metadata = self.metadata.clone();
+                    let right_expr = s_expr.children()[1].clone();
+                    let right_res = Thread::spawn(move || {
+                        let mut dphyp = DPhpy::new(metadata.clone());
+                        (dphyp.optimize(right_expr), dphyp.table_index_map)
+                    });
+                    let left_res = left_res.join()?;
+                    let (left_expr, left_optimized) = left_res.0?;
+                    let right_res = right_res.join()?;
+                    let (right_expr, right_optimized) = right_res.0?;
+                    if left_optimized && right_optimized {
+                        let key = self.subquery_table_index_map.len() + MOCK_NUMBER;
+                        self.subquery_table_index_map.insert(key, left_res.1);
+                        self.table_index_map
+                            .insert(key, self.join_relations.len() as IndexType);
+                        self.join_relations.push(JoinRelation::new(&left_expr));
+                        let key = self.subquery_table_index_map.len() + MOCK_NUMBER;
+                        self.subquery_table_index_map.insert(key, right_res.1);
+                        self.table_index_map
+                            .insert(key, self.join_relations.len() as IndexType);
+                        self.join_relations.push(JoinRelation::new(&right_expr));
+                        Ok(true)
+                    } else {
+                        Ok(false)
+                    }
+                } else {
+                    let left_res = self.get_base_relations(
+                        &s_expr.children()[0],
+                        join_conditions,
+                        true,
+                        left_is_subquery,
+                        None,
+                    )?;
+                    let right_res = self.get_base_relations(
+                        &s_expr.children()[1],
+                        join_conditions,
+                        true,
+                        right_is_subquery,
+                        None,
+                    )?;
+                    Ok(left_res && right_res)
+                }
             }
 
             RelOperator::ProjectSet(_)
@@ -291,11 +324,12 @@ impl DPhpy {
             let nodes = self.relation_set_tree.get_relation_set_by_index(idx)?;
             let join = JoinNode {
                 join_type: JoinType::Inner,
-                leaves: nodes.clone(),
-                children: vec![],
-                join_conditions: vec![],
-                cost: relation.cardinality()?,
+                leaves: Arc::new(nodes.clone()),
+                children: Arc::new(vec![]),
+                join_conditions: Arc::new(vec![]),
+                cost: 0.0,
                 cardinality: Some(relation.cardinality()?),
+                s_expr: None,
             };
             let _ = self.dp_table.insert(nodes, join);
         }
@@ -341,9 +375,10 @@ impl DPhpy {
                 .relation_set_tree
                 .get_relation_set_by_index(*neighbor)?;
             // Check if neighbor is connected with `nodes`
-            let (connected, join_conditions) =
-                self.query_graph.is_connected(nodes, &neighbor_relations)?;
-            if connected && !self.emit_csg_cmp(nodes, &neighbor_relations, join_conditions)? {
+            let join_conditions = self.query_graph.is_connected(nodes, &neighbor_relations)?;
+            if !join_conditions.is_empty()
+                && !self.emit_csg_cmp(nodes, &neighbor_relations, join_conditions)?
+            {
                 return Ok(false);
             }
             if !self.enumerate_cmp_rec(nodes, &neighbor_relations, &forbidden_nodes)? {
@@ -360,9 +395,17 @@ impl DPhpy {
         nodes: &[IndexType],
         forbidden_nodes: &HashSet<IndexType>,
     ) -> Result<bool> {
-        let neighbors = self.query_graph.neighbors(nodes, forbidden_nodes)?;
+        let mut neighbors = self.query_graph.neighbors(nodes, forbidden_nodes)?;
         if neighbors.is_empty() {
             return Ok(true);
+        }
+        if self.join_relations.len() >= RELATION_THRESHOLD {
+            // Only consider the nodes.len() neighbors to reduce search space
+            neighbors = neighbors
+                .iter()
+                .take(nodes.len())
+                .copied()
+                .collect::<Vec<IndexType>>();
         }
         let mut merged_sets = Vec::new();
         for neighbor in neighbors.iter() {
@@ -379,9 +422,11 @@ impl DPhpy {
             merged_sets.push(merged_relation_set);
         }
 
-        let mut new_forbidden_nodes;
+        let mut new_forbidden_nodes = forbidden_nodes.clone();
         for (idx, neighbor) in neighbors.iter().enumerate() {
-            new_forbidden_nodes = forbidden_nodes.clone();
+            if self.join_relations.len() < RELATION_THRESHOLD {
+                new_forbidden_nodes = forbidden_nodes.clone();
+            }
             new_forbidden_nodes.insert(*neighbor);
             if !self.enumerate_csg_rec(&merged_sets[idx], &new_forbidden_nodes)? {
                 return Ok(false);
@@ -402,51 +447,46 @@ impl DPhpy {
         let parent_set = union(left, right);
         let mut left_join = self.dp_table.get(left).unwrap().clone();
         let mut right_join = self.dp_table.get(right).unwrap().clone();
-        let left_cardinality = match left_join.cardinality {
-            Some(cardinality) => cardinality,
-            None => left_join.cardinality(self)?,
-        };
-        let right_cardinality = match right_join.cardinality {
-            Some(cardinality) => cardinality,
-            None => right_join.cardinality(self)?,
-        };
+        let left_cardinality = left_join.cardinality(&self.join_relations)?;
+        let right_cardinality = right_join.cardinality(&self.join_relations)?;
 
-        self.dp_table
-            .entry(left.to_vec())
-            .and_modify(|v| *v = left_join.clone());
-        self.dp_table
-            .entry(right.to_vec())
-            .and_modify(|v| *v = right_join.clone());
         if left_cardinality < right_cardinality {
             for join_condition in join_conditions.iter_mut() {
                 std::mem::swap(&mut join_condition.0, &mut join_condition.1);
             }
         }
         let parent_node = self.dp_table.get(&parent_set);
-        let join_node = if !join_conditions.is_empty() {
+        let mut join_node = if !join_conditions.is_empty() {
             JoinNode {
                 join_type: JoinType::Inner,
-                leaves: parent_set.clone(),
+                leaves: Arc::new(parent_set.clone()),
                 children: if left_cardinality < right_cardinality {
-                    vec![right_join, left_join]
+                    Arc::new(vec![right_join, left_join])
                 } else {
-                    vec![left_join, right_join]
+                    Arc::new(vec![left_join, right_join])
                 },
-                cost: left_cardinality * COST_FACTOR_COMPUTE_PER_ROW
-                    + right_cardinality * COST_FACTOR_HASH_TABLE_PER_ROW,
-                join_conditions,
+                cost: 0.0,
+                join_conditions: Arc::new(join_conditions),
                 cardinality: None,
+                s_expr: None,
             }
         } else {
             JoinNode {
                 join_type: JoinType::Cross,
-                leaves: parent_set.clone(),
-                children: vec![left_join.clone(), right_join.clone()],
+                leaves: Arc::new(parent_set.clone()),
+                children: Arc::new(vec![left_join, right_join]),
                 cost: left_cardinality * right_cardinality,
-                join_conditions: vec![],
+                join_conditions: Arc::new(vec![]),
                 cardinality: None,
+                s_expr: None,
             }
         };
+        if join_node.join_type == JoinType::Inner {
+            let cost = join_node.cardinality(&self.join_relations)?
+                + join_node.children[0].cost
+                + join_node.children[1].cost;
+            join_node.set_cost(cost);
+        }
 
         if parent_node.is_none() || parent_node.unwrap().cost > join_node.cost {
             // Update `dp_table`
@@ -474,11 +514,10 @@ impl DPhpy {
                 .get_relation_set_by_index(*neighbor)?;
             // Merge `right` with `neighbor_relations`
             let merged_relation_set = union(right, &neighbor_relations);
-            let (connected, join_conditions) =
-                self.query_graph.is_connected(left, &merged_relation_set)?;
+            let join_conditions = self.query_graph.is_connected(left, &merged_relation_set)?;
             if merged_relation_set.len() > right.len()
                 && self.dp_table.contains_key(&merged_relation_set)
-                && connected
+                && !join_conditions.is_empty()
                 && !self.emit_csg_cmp(left, &merged_relation_set, join_conditions)?
             {
                 return Ok(false);
@@ -499,7 +538,7 @@ impl DPhpy {
     // Map join order in `JoinNode` to `SExpr`
     fn join_reorder(&self, final_plan: &JoinNode, s_expr: SExpr) -> Result<(SExpr, bool)> {
         // Convert `final_plan` to `SExpr`
-        let join_expr = self.s_expr(final_plan);
+        let join_expr = final_plan.s_expr(&self.join_relations);
         // Find first join node in `s_expr`, then replace it with `join_expr`
         let new_s_expr = self.replace_join_expr(&join_expr, &s_expr)?;
         Ok((new_s_expr, true))
@@ -537,45 +576,6 @@ impl DPhpy {
             }
         }
         Ok(new_s_expr)
-    }
-
-    pub fn s_expr(&self, join_node: &JoinNode) -> SExpr {
-        // Traverse JoinNode
-        if join_node.children.is_empty() {
-            // The node is leaf, get relation for `join_relations`
-            let idx = join_node.leaves[0];
-            let relation = self.join_relations[idx].s_expr();
-            return relation;
-        }
-
-        // The node is join
-        // Split `join_conditions` to `left_conditions` and `right_conditions`
-        let left_conditions = join_node
-            .join_conditions
-            .iter()
-            .map(|(l, _)| l.clone())
-            .collect();
-        let right_conditions = join_node
-            .join_conditions
-            .iter()
-            .map(|(_, r)| r.clone())
-            .collect();
-        let rel_op = RelOperator::Join(Join {
-            left_conditions,
-            right_conditions,
-            // Todo: consider non_equi_conditions
-            non_equi_conditions: vec![],
-            join_type: join_node.join_type.clone(),
-            marker_index: None,
-            from_correlated_subquery: false,
-            contain_runtime_filter: false,
-        });
-        let children = join_node
-            .children
-            .iter()
-            .map(|child| self.s_expr(child))
-            .collect::<Vec<_>>();
-        SExpr::create(rel_op, children, None, None)
     }
 
     fn check_filter(&mut self, expr: &SExpr) {

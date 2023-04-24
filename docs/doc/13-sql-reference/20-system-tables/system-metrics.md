@@ -2,7 +2,7 @@
 title: system.metrics
 ---
 
-Contains information about [metric events](../../10-deploy/07-query/10-query-config.md).
+Contains information about metric events.
 
 ```sql
 SELECT * FROM system.metrics;
