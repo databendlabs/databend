@@ -632,7 +632,7 @@ fn prune_buckets(
             if idx == 0 {
                 continue;
             }
-            if left_hist.buckets[idx-1].upper_bound() <= new_max && bucket.upper_bound() >= new_min {
+            if left_hist.buckets[idx-1].upper_bound() <= new_max && bucket.upper_bound() > new_min {
                 left_buckets.push(bucket.clone());
             }
         }
@@ -640,7 +640,7 @@ fn prune_buckets(
             if idx == 0 {
                 continue;
             }
-            if right_hist.buckets[idx-1].upper_bound() <= new_max && bucket.upper_bound() >= new_min {
+            if right_hist.buckets[idx-1].upper_bound() <= new_max && bucket.upper_bound() > new_min {
                 right_buckets.push(bucket.clone());
             }
         }
@@ -662,9 +662,9 @@ fn prune_bucket(
     let mut new_max = new_max.to_double()?;
     (new_min, new_max) = if *bucket_min <= new_min && *bucket_max >= new_max {
         (new_min, new_max)
-    } else if *bucket_min <= new_min && *bucket_max >= new_min {
+    } else if *bucket_min <= new_min && *bucket_max > new_min {
         (new_min, *bucket_max)
-    } else if *bucket_min <= new_max && *bucket_max >= new_max {
+    } else if *bucket_min < new_max && *bucket_max >= new_max {
         (*bucket_min, new_max)
     } else {
         (*bucket_min, *bucket_max)

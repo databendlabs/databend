@@ -216,13 +216,13 @@ explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where
 ----
 EvalScalar
 ├── expressions: [a.x (#0), b.x (#1), b.y (#2)]
-├── estimated rows: 0.50
+├── estimated rows: 0.00
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [a.x (#0)]
     ├── probe keys: [b.x (#1)]
     ├── filters: []
-    ├── estimated rows: 0.50
+    ├── estimated rows: 0.00
     ├── TableScan(Build)
     │   ├── table: default.default.onecolumn
     │   ├── read rows: 4
@@ -247,13 +247,13 @@ explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where
 ----
 EvalScalar
 ├── expressions: [a.x (#0), b.x (#1), b.y (#2)]
-├── estimated rows: 0.50
+├── estimated rows: 0.00
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [b.x (#1)]
     ├── probe keys: [a.x (#0)]
     ├── filters: []
-    ├── estimated rows: 0.50
+    ├── estimated rows: 0.00
     ├── TableScan(Build)
     │   ├── table: default.default.twocolumn
     │   ├── read rows: 4
@@ -278,13 +278,13 @@ explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where
 ----
 EvalScalar
 ├── expressions: [a.x (#0), b.x (#1), b.y (#2)]
-├── estimated rows: 0.40
+├── estimated rows: 0.00
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [a.x (#0)]
     ├── probe keys: [b.x (#1)]
     ├── filters: []
-    ├── estimated rows: 0.40
+    ├── estimated rows: 0.00
     ├── TableScan(Build)
     │   ├── table: default.default.onecolumn
     │   ├── read rows: 4
