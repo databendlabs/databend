@@ -58,10 +58,16 @@ impl FuseTable {
     ) -> Result<(PartStatistics, Partitions)> {
         debug!("fuse table do read partitions, push downs:{:?}", push_downs);
         let snapshot = self.read_table_snapshot().await?;
+        let is_lazy = push_downs
+            .as_ref()
+            .map(|p| p.lazy_materialization)
+            .unwrap_or_default();
         match snapshot {
             Some(snapshot) => {
                 let settings = ctx.get_settings();
-                if settings.get_enable_distributed_eval_index()? && !ctx.get_cluster().is_empty() {
+                if (settings.get_enable_distributed_eval_index()? && !ctx.get_cluster().is_empty())
+                    || is_lazy
+                {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
                     for segment_location in &snapshot.segments {
                         segments.push(FuseLazyPartInfo::create(segment_location.clone()))
@@ -401,7 +407,7 @@ impl FuseTable {
         )
     }
 
-    fn projection_part(
+    pub(crate) fn projection_part(
         meta: &BlockMeta,
         block_meta_index: &Option<BlockMetaIndex>,
         column_nodes: &ColumnNodes,

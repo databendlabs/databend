@@ -13,14 +13,14 @@ NULL values are not counted.
 ## Syntax
 
 ```
-SUM(expression)
+SUM(<expr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| expression  | Any numerical expression |
+| Arguments | Description              |
+|-----------|--------------------------|
+| `<expr>`  | Any numerical expression |
 
 ## Return Type
 

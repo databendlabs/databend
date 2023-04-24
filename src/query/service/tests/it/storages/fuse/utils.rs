@@ -15,6 +15,7 @@
 use std::str;
 
 use common_exception::Result;
+use common_storages_fuse::TableContext;
 
 use super::table_test_fixture::append_sample_data;
 use super::table_test_fixture::append_sample_data_overwrite;
@@ -49,8 +50,12 @@ pub async fn do_purge_test(
     // insert, and then insert overwrite (1 snapshot, 1 segment, 1 data block, 1 index block for each insertion);
     do_insertions(&fixture).await?;
 
+    // overwrite the table again, new data set: 1 block, 1 segment, 1 snapshot
+    append_sample_data_overwrite(1, true, &fixture).await?;
+
     // execute the query
     let ctx = fixture.ctx();
+    ctx.get_settings().set_retention_period(0)?;
     execute_command(ctx, &qry).await?;
 
     check_data_dir(

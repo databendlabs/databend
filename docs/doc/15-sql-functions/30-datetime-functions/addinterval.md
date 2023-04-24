@@ -4,22 +4,23 @@ description: Add time interval function
 title_includes: add_years, add_quarters, add_months, add_days, add_hours, add_minutes, add_seconds
 ---
 
-Add time interval to a date or timestamp, return the result of date or timestamp type.
+Add a time interval to a date or timestamp, return the result of date or timestamp type.
+
 ## Syntax
 
 ```sql
-add_years(exp0, expr1)
-add_quarters(exp0, expr1)
-add_months(exp0, expr1)
-add_days(exp0, expr1)
-add_hours(exp0, expr1)
-add_minutes(exp0, expr1)
-add_seconds(exp0, expr1)
+ADD_YEARS(<exp0>, <expr1>)
+ADD_QUARTERs(<exp0>, <expr1>)
+ADD_MONTHS(<exp0>, <expr1>)
+ADD_DAYS(<exp0>, <expr1>)
+ADD_HOURS(<exp0>, <expr1>)
+ADD_MINUTES(<exp0>, <expr1>)
+ADD_SECONDS(<exp0>, <expr1>)
 ```
 
 ## Return Type
 
-Date, Timestamp, depends on the input.
+`DATE`, `TIMESTAMP`, depends on the input.
 
 ## Examples
 

@@ -67,6 +67,7 @@ use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use tracing::error;
+use tracing::warn;
 use uuid::Uuid;
 
 use crate::io::MetaReaders;
@@ -554,8 +555,20 @@ impl Table for FuseTable {
 
     #[tracing::instrument(level = "debug", name = "fuse_table_optimize", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     #[async_backtrace::framed]
-    async fn purge(&self, ctx: Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
-        self.do_purge(&ctx, keep_last_snapshot).await
+    async fn purge(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        instant: Option<NavigationPoint>,
+        keep_last_snapshot: bool,
+    ) -> Result<()> {
+        match self.navigate_for_purge(&ctx, instant).await {
+            Ok((table, files)) => table.do_purge(&ctx, files, keep_last_snapshot).await,
+            Err(e) if e.code() == ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND => {
+                warn!("navigate failed: {:?}", e);
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
     }
 
     #[tracing::instrument(level = "debug", name = "analyze", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
@@ -602,13 +615,22 @@ impl Table for FuseTable {
     #[tracing::instrument(level = "debug", name = "fuse_table_navigate_to", skip_all)]
     #[async_backtrace::framed]
     async fn navigate_to(&self, point: &NavigationPoint) -> Result<Arc<dyn Table>> {
+        let snapshot_location = if let Some(loc) = self.snapshot_loc().await? {
+            loc
+        } else {
+            // not an error?
+            return Err(ErrorCode::TableHistoricalDataNotFound(
+                "Empty Table has no historical data",
+            ));
+        };
+
         match point {
-            NavigationPoint::SnapshotID(snapshot_id) => {
-                Ok(self.navigate_to_snapshot(snapshot_id.as_str()).await?)
-            }
-            NavigationPoint::TimePoint(time_point) => {
-                Ok(self.navigate_to_time_point(*time_point).await?)
-            }
+            NavigationPoint::SnapshotID(snapshot_id) => Ok(self
+                .navigate_to_snapshot(snapshot_location, snapshot_id.as_str())
+                .await?),
+            NavigationPoint::TimePoint(time_point) => Ok(self
+                .navigate_to_time_point(snapshot_location, *time_point)
+                .await?),
         }
     }
 
@@ -683,6 +705,10 @@ impl Table for FuseTable {
 
     fn support_virtual_columns(&self) -> bool {
         matches!(self.storage_format, FuseStorageFormat::Native)
+    }
+
+    fn support_row_id_column(&self) -> bool {
+        !self.is_native()
     }
 }
 

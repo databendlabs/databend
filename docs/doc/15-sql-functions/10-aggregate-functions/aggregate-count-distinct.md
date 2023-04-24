@@ -16,15 +16,15 @@ To obtain an estimated result from large data sets with little memory and time, 
 ## Syntax
 
 ```sql
-COUNT(distinct arguments ...)
-UNIQ(arguments)
+COUNT(distinct <expr> ...)
+UNIQ(<expr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| expression  | Any expression, size of the arguments is [1, 32] |
+| Arguments | Description                                      |
+|-----------|--------------------------------------------------|
+| `<expr>`  | Any expression, size of the arguments is [1, 32] |
 
 ## Return Type
 

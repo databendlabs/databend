@@ -13,15 +13,13 @@ runs:
         killall -9 databend-query || true
         killall -9 databend-meta || true
 
-        tar --exclude='target' \
-            --exclude='website' \
-            --exclude='docs' \
-            --exclude='docker' \
-            --exclude='bins' \
-            --exclude='.git' \
-            --exclude='*.tar.gz' \
-            --exclude='tests/suites/0_stateless/13_tpch/data' \
-            -zcf target/failure-${{ inputs.name }}.tar.gz .
+        docker ps -a
+        mkdir -p .databend/docker/
+        docker ps -a --format "{{.Names}}" | while read -r line; do
+            docker logs "$line" > .databend/docker/"$line".log
+        done
+
+        tar -zcf target/failure-${{ inputs.name }}.tar.gz .databend
     - uses: actions/upload-artifact@v3
       with:
         name: ${{ inputs.name }}

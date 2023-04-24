@@ -48,4 +48,5 @@ pub use mutation::SegmentCompactionState;
 pub use mutation::SegmentCompactor;
 pub use operation_log::AppendOperationLogEntry;
 pub use operation_log::TableOperationLog;
+pub use read::build_row_fetcher_pipeline;
 pub use util::column_parquet_metas;

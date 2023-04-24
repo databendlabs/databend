@@ -9,14 +9,14 @@ The ANY() function selects the first encountered (non-NULL) value, unless all ro
 ## Syntax
 
 ```sql
-ANY(expression)
+ANY(<expr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| expression  | Any expression |
+| Arguments | Description    |
+|-----------|----------------|
+| `<expr>`  | Any expression |
 
 ## Return Type
 

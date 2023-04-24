@@ -6,7 +6,7 @@ Rounds the time to the half hour.
 ## Syntax
 
 ```sql
-time_slot( <expr> )
+time_slot(<expr>)
 ```
 
 ## Arguments
@@ -16,7 +16,8 @@ time_slot( <expr> )
 | `<expr>`    | timestamp   |
 
 ## Return Type
-Datetime object, returns date in “YYYY-MM-DD hh:mm:ss.ffffff” format.
+
+`TIMESTAMP`, returns in “YYYY-MM-DD hh:mm:ss.ffffff” format.
 
 ## Examples
 

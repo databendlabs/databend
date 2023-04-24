@@ -7,19 +7,19 @@ Returns the leftmost len characters from the string str, or NULL if any argument
 ## Syntax
 
 ```sql
-LEFT(str,len);
+LEFT(<str>, <len>);
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| str | The main string from where the character to be extracted |
-| len | The count of characters |
+| Arguments | Description                                              |
+|-----------|----------------------------------------------------------|
+| `<str>`   | The main string from where the character to be extracted |
+| `<len>`   | The count of characters                                  |
 
 ## Return Type
 
-String data type value.
+`VARCHAR`
 
 ## Examples
 

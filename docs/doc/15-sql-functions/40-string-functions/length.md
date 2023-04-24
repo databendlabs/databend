@@ -8,18 +8,18 @@ Return the length of a string in bytes.
 ## Syntax
 
 ```sql
-LENGTH(str)
+LENGTH(<str>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| str         | The string. |
+| Arguments | Description |
+|-----------|-------------|
+| `<str>`   | The string. |
 
 ## Return Type
 
-A number data type value.
+`BIGINT`
 
 ## Examples
 
