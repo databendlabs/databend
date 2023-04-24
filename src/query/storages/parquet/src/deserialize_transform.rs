@@ -46,6 +46,7 @@ use common_pipeline_core::processors::Processor;
 
 use crate::parquet_part::ParquetPart;
 use crate::parquet_part::ParquetRowGroupPart;
+use crate::parquet_part::ParquetSmallFilesPart;
 use crate::parquet_reader::IndexedReaders;
 use crate::parquet_reader::ParquetPartData;
 use crate::parquet_reader::ParquetReader;
@@ -121,6 +122,23 @@ impl ParquetDeserializeTransform {
         };
         self.scan_progress.incr(&progress_values);
         self.output_data = Some(data_block);
+        Ok(())
+    }
+
+    #[allow(unused)]
+    fn process_small_files(
+        &mut self,
+        part: &ParquetSmallFilesPart,
+        buffers: &Vec<Vec<u8>>,
+    ) -> Result<()> {
+        assert_eq!(part.files.len(), buffers.len());
+        for (path, data) in part.files.iter().zip(buffers) {
+            self.process_small_file(path.0.as_str(), data)?;
+        }
+        Ok(())
+    }
+
+    fn process_small_file(&mut self, _path: &str, _data: &[u8]) -> Result<()> {
         Ok(())
     }
 

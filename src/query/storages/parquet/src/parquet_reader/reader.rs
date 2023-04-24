@@ -220,8 +220,14 @@ impl ParquetReader {
                 }
                 Ok(ParquetPartData::RowGroup(readers))
             }
-            ParquetPart::SmallFiles(_part) => {
-                todo!()
+            ParquetPart::SmallFiles(part) => {
+                let op = self.operator.blocking();
+                let mut buffers = Vec::with_capacity(part.files.len());
+                for path in &part.files {
+                    let buffer = op.read(path.0.as_str())?;
+                    buffers.push(buffer);
+                }
+                Ok(ParquetPartData::SmallFiles(buffers))
             }
         }
     }
@@ -254,8 +260,15 @@ impl ParquetReader {
                 let readers = readers.into_iter().collect::<IndexedReaders>();
                 Ok(ParquetPartData::RowGroup(readers))
             }
-            ParquetPart::SmallFiles(_) => {
-                todo!()
+            ParquetPart::SmallFiles(part) => {
+                let mut join_handlers = Vec::with_capacity(part.files.len());
+                for (path, _) in part.files.iter() {
+                    let op = self.operator.clone();
+                    join_handlers.push(async move { op.read(path.as_str()).await });
+                }
+
+                let buffers = futures::future::try_join_all(join_handlers).await?;
+                Ok(ParquetPartData::SmallFiles(buffers))
             }
         }
     }
