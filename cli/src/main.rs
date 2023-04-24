@@ -51,18 +51,23 @@ impl InputFormat {
                 options.insert("compression", "NONE");
             }
             InputFormat::TSV => {
+                options.insert("type", "TSV");
                 options.insert("record_delimiter", "\n");
                 options.insert("field_delimiter", "\t");
                 options.insert("compression", "NONE");
             }
             InputFormat::NDJSON => {
+                options.insert("type", "NDJSON");
                 options.insert("compression", "NONE");
             }
+            InputFormat::Parquet => {
+                options.insert("type", "Parquet");
+            }
             InputFormat::XML => {
+                options.insert("type", "XML");
                 options.insert("compression", "NONE");
                 options.insert("row_tag", "row");
             }
-            _ => {}
         }
         for (k, v) in opts {
             options.insert(k, v);
