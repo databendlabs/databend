@@ -24,6 +24,7 @@ use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
+use crate::plans::ScalarItem;
 
 pub struct RuleFoldConstant {
     id: RuleID,
@@ -71,7 +72,7 @@ impl RuleFoldConstant {
         }
     }
 
-    fn fold_constant(&self, scalar: ScalarExpr) -> Result<ScalarExpr> {
+    fn fold_constant(&self, scalar: &ScalarExpr) -> Result<ScalarExpr> {
         let expr = scalar.as_expr()?;
         let (new_expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
         let new_scalar = ScalarExpr::from_expr(&new_expr)?;
@@ -91,21 +92,34 @@ impl Rule for RuleFoldConstant {
     ) -> Result<()> {
         match s_expr.plan().clone() {
             RelOperator::EvalScalar(mut eval_scalar) => {
-                for scalar in eval_scalar.items.iter_mut() {
-                    scalar.scalar = self.fold_constant(scalar.scalar.clone())?;
+                let new_items = eval_scalar
+                    .items
+                    .iter()
+                    .map(|scalar| {
+                        Ok(ScalarItem {
+                            scalar: self.fold_constant(&scalar.scalar)?,
+                            index: scalar.index,
+                        })
+                    })
+                    .collect::<Result<_>>()?;
+                if new_items != eval_scalar.items {
+                    eval_scalar.items = new_items;
+                    state.add_result(SExpr::create_unary(
+                        eval_scalar.into(),
+                        s_expr.child(0)?.clone(),
+                    ));
                 }
-                state.add_result(SExpr::create_unary(
-                    eval_scalar.into(),
-                    s_expr.child(0)?.clone(),
-                ));
             }
             RelOperator::Filter(mut filter) => {
-                filter.predicates = filter
+                let new_predicates = filter
                     .predicates
-                    .into_iter()
+                    .iter()
                     .map(|scalar| self.fold_constant(scalar))
                     .collect::<Result<_>>()?;
-                state.add_result(SExpr::create_unary(filter.into(), s_expr.child(0)?.clone()));
+                if new_predicates != filter.predicates {
+                    filter.predicates = new_predicates;
+                    state.add_result(SExpr::create_unary(filter.into(), s_expr.child(0)?.clone()));
+                }
             }
             _ => unreachable!(),
         }
