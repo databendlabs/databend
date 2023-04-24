@@ -44,7 +44,9 @@ use storages_common_pruner::RangePruner;
 use storages_common_pruner::RangePrunerCreator;
 
 use crate::parquet_part::ColumnMeta;
+use crate::parquet_part::ParquetPart;
 use crate::parquet_part::ParquetRowGroupPart;
+use crate::parquet_part::ParquetSmallFilesPart;
 use crate::statistics::collect_row_group_stats;
 use crate::statistics::BatchStatistics;
 
@@ -96,15 +98,34 @@ impl PartitionPruner {
         let mut partitions_scanned = 0;
         let mut partitions_total = 0;
 
+        let mut large_files = vec![];
+        let mut small_files = vec![];
+        for (location, size) in locations {
+            if *size > 1 {
+                large_files.push((location.clone(), *size));
+            } else {
+                small_files.push((location.clone(), *size));
+            }
+        }
+
         let mut partitions = Vec::with_capacity(locations.len());
+        for paths in small_files.chunks(columns_to_read.len()) {
+            read_rows += paths.len();
+            read_bytes += paths.iter().map(|(_, size)| *size as usize).sum::<usize>();
+            partitions_scanned += 1;
+            partitions_total += 1;
+            partitions.push(ParquetPart::SmallFiles(ParquetSmallFilesPart {
+                files: paths.to_vec(),
+            }))
+        }
 
         let is_blocking_io = operator.info().can_blocking();
 
         // 1. Read parquet meta data. Distinguish between sync and async reading.
         let file_metas = if is_blocking_io {
             let mut file_metas = Vec::with_capacity(locations.len());
-            for (location, _size) in locations {
-                let mut reader = operator.blocking().reader(location)?;
+            for (location, _size) in large_files {
+                let mut reader = operator.blocking().reader(&location)?;
                 let file_meta = pread::read_metadata(&mut reader).map_err(|e| {
                     ErrorCode::Internal(format!(
                         "Read parquet file '{}''s meta error: {}",
@@ -115,7 +136,7 @@ impl PartitionPruner {
             }
             file_metas
         } else {
-            read_parquet_metas_in_parallel(operator.clone(), locations.clone(), 16, 64).await?
+            read_parquet_metas_in_parallel(operator.clone(), large_files.clone(), 16, 64).await?
         };
 
         // 2. Use file meta to prune row groups or pages.
@@ -207,13 +228,13 @@ impl PartitionPruner {
                     });
                 }
 
-                partitions.push(ParquetRowGroupPart {
+                partitions.push(ParquetPart::RowGroup(ParquetRowGroupPart {
                     location: locations[file_id].0.clone(),
                     num_rows: rg.num_rows(),
                     column_metas,
                     row_selection,
                     sort_min_max: None,
-                })
+                }))
             }
         }
 

@@ -44,8 +44,10 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
+use crate::parquet_part::ParquetPart;
 use crate::parquet_part::ParquetRowGroupPart;
 use crate::parquet_reader::IndexedReaders;
+use crate::parquet_reader::ParquetPartData;
 use crate::parquet_reader::ParquetReader;
 use crate::parquet_source::ParquetSourceMeta;
 
@@ -66,8 +68,7 @@ pub struct ParquetDeserializeTransform {
     output_data: Option<DataBlock>,
 
     // data from input
-    parts: VecDeque<PartInfoPtr>,
-    data_readers: VecDeque<IndexedReaders>,
+    parts: VecDeque<(PartInfoPtr, ParquetPartData)>,
 
     src_schema: DataSchemaRef,
     output_schema: DataSchemaRef,
@@ -99,7 +100,6 @@ impl ParquetDeserializeTransform {
                 output_data: None,
 
                 parts: VecDeque::new(),
-                data_readers: VecDeque::new(),
 
                 src_schema,
                 output_schema,
@@ -121,6 +121,141 @@ impl ParquetDeserializeTransform {
         };
         self.scan_progress.incr(&progress_values);
         self.output_data = Some(data_block);
+        Ok(())
+    }
+
+    fn process_row_group(
+        &mut self,
+        part: &ParquetRowGroupPart,
+        readers: &mut IndexedReaders,
+    ) -> Result<()> {
+        let row_selection = part
+            .row_selection
+            .as_ref()
+            .map(|sel| intervals_to_bitmap(sel, part.num_rows));
+
+        // this means it's empty projection
+        if readers.is_empty() {
+            let data_block = DataBlock::new(vec![], part.num_rows);
+            self.add_block(data_block)?;
+            return Ok(());
+        }
+
+        let data_block = match self.prewhere_info.as_mut() {
+            Some(ParquetPrewhereInfo {
+                func_ctx,
+                reader,
+                filter,
+                top_k,
+            }) => {
+                let chunks = reader.read_from_readers(readers)?;
+
+                // only if there is not dictionary page, we can push down the row selection
+                let can_push_down = chunks
+                    .iter()
+                    .all(|(id, _)| !part.column_metas[id].has_dictionary);
+                let push_down = if can_push_down {
+                    row_selection.clone()
+                } else {
+                    None
+                };
+
+                let mut prewhere_block = reader.deserialize(part, chunks, push_down)?;
+                // Step 1: Check TOP_K, if prewhere_columns contains not only TOP_K, we can check if TOP_K column can satisfy the heap.
+                if let Some((index, sorter)) = top_k {
+                    let col = prewhere_block
+                        .get_by_offset(*index)
+                        .value
+                        .as_column()
+                        .unwrap();
+                    if sorter.never_match_any(col) {
+                        return Ok(());
+                    }
+                }
+
+                // Step 2: Read Prewhere columns and get the filter
+                let evaluator = Evaluator::new(&prewhere_block, func_ctx, &BUILTIN_FUNCTIONS);
+                let filter = evaluator
+                    .run(filter)
+                    .map_err(|e| e.add_message("eval prewhere filter failed:"))?
+                    .try_downcast::<BooleanType>()
+                    .unwrap();
+
+                // Step 3: Apply the filter, if it's all filtered, we can skip the remain columns.
+                if FilterHelpers::is_all_unset(&filter) {
+                    return Ok(());
+                }
+
+                // Step 4: Apply the filter to topk and update the bitmap, this will filter more results
+                let filter = if let Some((index, sorter)) = top_k {
+                    let top_k_column = prewhere_block
+                        .get_by_offset(*index)
+                        .value
+                        .as_column()
+                        .unwrap();
+                    let mut bitmap =
+                        FilterHelpers::filter_to_bitmap(filter, prewhere_block.num_rows());
+                    sorter.push_column(top_k_column, &mut bitmap);
+                    Value::Column(bitmap.into())
+                } else {
+                    filter
+                };
+
+                if FilterHelpers::is_all_unset(&filter) {
+                    return Ok(());
+                }
+
+                // Step 5 Remove columns that are not needed for output. Use dummy column to replace them.
+                let mut columns = prewhere_block.columns().to_vec();
+                for (col, f) in columns.iter_mut().zip(reader.output_schema.fields()) {
+                    if !self.output_schema.has_field(f.name()) {
+                        *col = BlockEntry {
+                            data_type: DataType::Null,
+                            value: Value::Scalar(Scalar::Null),
+                        };
+                    }
+                }
+
+                // Step 6: Read remain columns.
+                let chunks = self.remain_reader.read_from_readers(readers)?;
+                let can_push_down = chunks
+                    .iter()
+                    .all(|(id, _)| !part.column_metas[id].has_dictionary);
+                let push_down = if can_push_down { row_selection } else { None };
+                if push_down.is_some() || !can_push_down {
+                    let remain_block = self.remain_reader.deserialize(part, chunks, push_down)?;
+
+                    // Combine two blocks.
+                    for col in remain_block.columns() {
+                        prewhere_block.add_column(col.clone());
+                    }
+
+                    let block = prewhere_block.resort(&self.src_schema, &self.output_schema)?;
+                    block.filter_boolean_value(&filter)
+                } else {
+                    // filter prewhere columns first.
+                    let mut prewhere_block = prewhere_block.filter_boolean_value(&filter)?;
+                    // If row_selection is None, we can push down the prewhere filter to remain data deserialization.
+                    let remain_block = match filter {
+                        Value::Column(bitmap) => {
+                            self.remain_reader.deserialize(part, chunks, Some(bitmap))?
+                        }
+                        _ => self.remain_reader.deserialize(part, chunks, None)?, // all true
+                    };
+                    for col in remain_block.columns() {
+                        prewhere_block.add_column(col.clone());
+                    }
+
+                    prewhere_block.resort(&self.src_schema, &self.output_schema)
+                }
+            }
+            None => {
+                let chunks = self.remain_reader.read_from_readers(readers)?;
+                self.remain_reader.deserialize(part, chunks, row_selection)
+            }
+        }?;
+
+        self.add_block(data_block)?;
         Ok(())
     }
 }
@@ -150,7 +285,7 @@ impl Processor for ParquetDeserializeTransform {
             return Ok(Event::NeedConsume);
         }
 
-        if !self.data_readers.is_empty() {
+        if !self.parts.is_empty() {
             if !self.input.has_data() {
                 self.input.set_need_data();
             }
@@ -163,7 +298,6 @@ impl Processor for ParquetDeserializeTransform {
             let source_meta = ParquetSourceMeta::downcast_from(source_meta).unwrap();
 
             self.parts = VecDeque::from(source_meta.parts);
-            self.data_readers = VecDeque::from(source_meta.readers);
             return Ok(Event::Sync);
         }
 
@@ -177,137 +311,16 @@ impl Processor for ParquetDeserializeTransform {
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(mut readers) = self.data_readers.pop_front() {
-            let part = self.parts.pop_front().unwrap();
-            let part = ParquetRowGroupPart::from_part(&part)?;
-            let row_selection = part
-                .row_selection
-                .as_ref()
-                .map(|sel| intervals_to_bitmap(sel, part.num_rows));
-
-            // this means it's empty projection
-            if readers.is_empty() {
-                let data_block = DataBlock::new(vec![], part.num_rows);
-                self.add_block(data_block)?;
-                return Ok(());
+        if let Some((part, data)) = self.parts.pop_front() {
+            let part = ParquetPart::from_part(&part)?;
+            match (&part, data) {
+                (ParquetPart::RowGroup(rg), ParquetPartData::RowGroup(mut reader)) => {
+                    self.process_row_group(rg, &mut reader)?;
+                }
+                _ => {
+                    todo!()
+                }
             }
-
-            let data_block = match self.prewhere_info.as_mut() {
-                Some(ParquetPrewhereInfo {
-                    func_ctx,
-                    reader,
-                    filter,
-                    top_k,
-                }) => {
-                    let chunks = reader.read_from_readers(&mut readers)?;
-
-                    // only if there is not dictionary page, we can push down the row selection
-                    let can_push_down = chunks
-                        .iter()
-                        .all(|(id, _)| !part.column_metas[id].has_dictionary);
-                    let push_down = if can_push_down {
-                        row_selection.clone()
-                    } else {
-                        None
-                    };
-
-                    let mut prewhere_block = reader.deserialize(part, chunks, push_down)?;
-                    // Step 1: Check TOP_K, if prewhere_columns contains not only TOP_K, we can check if TOP_K column can satisfy the heap.
-                    if let Some((index, sorter)) = top_k {
-                        let col = prewhere_block
-                            .get_by_offset(*index)
-                            .value
-                            .as_column()
-                            .unwrap();
-                        if sorter.never_match_any(col) {
-                            return Ok(());
-                        }
-                    }
-
-                    // Step 2: Read Prewhere columns and get the filter
-                    let evaluator = Evaluator::new(&prewhere_block, func_ctx, &BUILTIN_FUNCTIONS);
-                    let filter = evaluator
-                        .run(filter)
-                        .map_err(|e| e.add_message("eval prewhere filter failed:"))?
-                        .try_downcast::<BooleanType>()
-                        .unwrap();
-
-                    // Step 3: Apply the filter, if it's all filtered, we can skip the remain columns.
-                    if FilterHelpers::is_all_unset(&filter) {
-                        return Ok(());
-                    }
-
-                    // Step 4: Apply the filter to topk and update the bitmap, this will filter more results
-                    let filter = if let Some((index, sorter)) = top_k {
-                        let top_k_column = prewhere_block
-                            .get_by_offset(*index)
-                            .value
-                            .as_column()
-                            .unwrap();
-                        let mut bitmap =
-                            FilterHelpers::filter_to_bitmap(filter, prewhere_block.num_rows());
-                        sorter.push_column(top_k_column, &mut bitmap);
-                        Value::Column(bitmap.into())
-                    } else {
-                        filter
-                    };
-
-                    if FilterHelpers::is_all_unset(&filter) {
-                        return Ok(());
-                    }
-
-                    // Step 5 Remove columns that are not needed for output. Use dummy column to replace them.
-                    let mut columns = prewhere_block.columns().to_vec();
-                    for (col, f) in columns.iter_mut().zip(reader.output_schema.fields()) {
-                        if !self.output_schema.has_field(f.name()) {
-                            *col = BlockEntry {
-                                data_type: DataType::Null,
-                                value: Value::Scalar(Scalar::Null),
-                            };
-                        }
-                    }
-
-                    // Step 6: Read remain columns.
-                    let chunks = self.remain_reader.read_from_readers(&mut readers)?;
-                    let can_push_down = chunks
-                        .iter()
-                        .all(|(id, _)| !part.column_metas[id].has_dictionary);
-                    let push_down = if can_push_down { row_selection } else { None };
-                    if push_down.is_some() || !can_push_down {
-                        let remain_block =
-                            self.remain_reader.deserialize(part, chunks, push_down)?;
-
-                        // Combine two blocks.
-                        for col in remain_block.columns() {
-                            prewhere_block.add_column(col.clone());
-                        }
-
-                        let block = prewhere_block.resort(&self.src_schema, &self.output_schema)?;
-                        block.filter_boolean_value(&filter)
-                    } else {
-                        // filter prewhere columns first.
-                        let mut prewhere_block = prewhere_block.filter_boolean_value(&filter)?;
-                        // If row_selection is None, we can push down the prewhere filter to remain data deserialization.
-                        let remain_block = match filter {
-                            Value::Column(bitmap) => {
-                                self.remain_reader.deserialize(part, chunks, Some(bitmap))?
-                            }
-                            _ => self.remain_reader.deserialize(part, chunks, None)?, // all true
-                        };
-                        for col in remain_block.columns() {
-                            prewhere_block.add_column(col.clone());
-                        }
-
-                        prewhere_block.resort(&self.src_schema, &self.output_schema)
-                    }
-                }
-                None => {
-                    let chunks = self.remain_reader.read_from_readers(&mut readers)?;
-                    self.remain_reader.deserialize(part, chunks, row_selection)
-                }
-            }?;
-
-            self.add_block(data_block)?;
         }
 
         Ok(())
