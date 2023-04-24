@@ -193,7 +193,6 @@ impl Column {
 
         let mut offset = 0;
         let mut remain;
-        let mut power;
         for (index, cnt) in indices {
             if *cnt == 1 {
                 // # Safety
@@ -239,27 +238,18 @@ impl Column {
             remain -= max_segment;
             offset += max_segment;
 
-            // Divide `remain` into binary digits and then copy the memory in powers of 2 size.
+            // Copy the remaining memory directly.
             // [xxxxxxxxxx____] => [xxxxxxxxxxxxxx]
             //  ^^^^ ---> ^^^^
-            power = 0;
-            while remain > 0 {
-                if remain & 1 == 1 {
-                    let cur_segment = 1 << power;
-                    // # Safety
-                    // offset + cur_segment <= row_num
-                    unsafe {
-                        std::ptr::copy_nonoverlapping(
-                            builder_ptr.add(base_offset),
-                            builder_ptr.add(offset),
-                            cur_segment,
-                        )
-                    };
-                    offset += cur_segment;
-                }
-                power += 1;
-                remain >>= 1;
-            }
+            // # Safety
+            // max_segment > remain and offset + remain <= row_num
+            unsafe {
+                std::ptr::copy_nonoverlapping(
+                    builder_ptr.add(base_offset),
+                    builder_ptr.add(offset),
+                    remain,
+                )
+            };
         }
         // # Safety
         // `offset` is equal to `row_num`
@@ -301,7 +291,6 @@ impl Column {
 
         let mut offset = 0;
         let mut remain;
-        let mut power;
         for (index, cnt) in indices {
             let len =
                 col_offset[*index as usize + 1] as usize - col_offset[*index as usize] as usize;
@@ -351,27 +340,18 @@ impl Column {
             remain -= max_bit_num;
             offset += max_segment;
 
-            // Divide `remain` into binary digits and then copy the memory in powers of 2 size.
+            // Copy the remaining memory directly.
             // [xxxxxxxxxx____] => [xxxxxxxxxxxxxx]
             //  ^^^^ ---> ^^^^
-            power = 0;
-            while remain > 0 {
-                if remain & 1 == 1 {
-                    let cur_segment = (1 << power) * len;
-                    // # Safety
-                    // offset + cur_segment <= data_capacity
-                    unsafe {
-                        std::ptr::copy_nonoverlapping(
-                            res_data_ptr.add(base_offset),
-                            res_data_ptr.add(offset),
-                            cur_segment,
-                        )
-                    };
-                    offset += cur_segment;
-                }
-                power += 1;
-                remain >>= 1;
-            }
+            // # Safety
+            // max_segment > remain * len and offset + remain * len <= data_capacity
+            unsafe {
+                std::ptr::copy_nonoverlapping(
+                    res_data_ptr.add(base_offset),
+                    res_data_ptr.add(offset),
+                    remain * len,
+                )
+            };
         }
         // # Safety
         // `offset` is equal to `data_capacity`
