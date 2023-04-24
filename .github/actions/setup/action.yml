@@ -5,12 +5,22 @@ inputs:
     description: 'the rust cache key suffix'
     required: false
     default: ''
+  target:
+    description: 'the rust target to build'
+    required: false
+    default: x86_64-unknown-linux-gnu
 
 runs:
   using: "composite"
   steps:
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+        targets: ${{ inputs.target }}
+
     - name: Setup sccache
       uses: mozilla-actions/sccache-action@v0.0.3
+
     - name: Cache Cargo
       uses: actions/cache@v3
       with:
@@ -20,11 +30,13 @@ runs:
         restore-keys: |
           ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
           ${{ runner.os }}-cargo
+
     - name: Setup rust related environment variables
       shell: bash
       run: |
-        # Update rust to latest stable
-        # rustup update stable
+
+        # Enable terminal color
+        echo "CARGO_TERM_COLOR=always" >> $GITHUB_ENV
         # Disable full debug symbol generation to speed up CI build and keep memory down
         # "1" means line tables only, which is useful for panic tracebacks.
         echo "RUSTFLAGS=-C debuginfo=1" >> $GITHUB_ENV

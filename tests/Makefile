@@ -6,20 +6,21 @@ prepare:
 	mkdir -p data/databend
 
 up: prepare
-	docker compose up --quiet-pull -d databend
+	docker compose up --quiet-pull -d databend --wait
 
 start: up
 
 test: up
-	docker compose run --quiet-pull --rm test
+	cargo test --test '*'
 
 run: test
 
 test-flight-sql: up
-	docker compose run --quiet-pull --rm test-flight-sql
+	TEST_DATABEND_DSN=databend+flight://root:@localhost:8900/default?sslmode=disable cargo test --features flight-sql --test driver
 
 test-bendsql: up
-	docker compose run --quiet-pull --rm test-bendsql
+	cd .. && ./cli/test.sh http
+	cd .. && ./cli/test.sh flight
 
 down:
 	docker compose down

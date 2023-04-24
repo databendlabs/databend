@@ -24,17 +24,22 @@ jobs:
 
   build:
     runs-on: ${{ matrix.os }}-latest
+    name: build-${{ matrix.os }}
     strategy:
       matrix:
-        os:
-          - ubuntu
-          - macos
-          - windows
+        include:
+          - os: ubuntu
+            target: x86_64-unknown-linux-gnu
+          - os: macos
+            target: x86_64-apple-darwin
+          - os: windows
+            target: x86_64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup
         with:
           cache-key: build
+          target: ${{ matrix.target }}
       - run: cargo build
 
   unit:

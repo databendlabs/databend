@@ -3,17 +3,17 @@ services:
   minio:
     image: docker.io/minio/minio
     command: server /data
+    network_mode: "host"
     volumes:
       - ./data:/data
   databend:
     image: docker.io/datafuselabs/databend
     environment:
-      - QUERY_DEFAULT_USER=databend
-      - QUERY_DEFAULT_PASSWORD=databend
       - QUERY_STORAGE_TYPE=s3
-      - AWS_S3_ENDPOINT=http://minio:9000
+      - AWS_S3_ENDPOINT=http://localhost:9000
       - AWS_ACCESS_KEY_ID=minioadmin
       - AWS_SECRET_ACCESS_KEY=minioadmin
+    network_mode: "host"
     depends_on:
       - minio
     healthcheck:
@@ -22,57 +22,3 @@ services:
       retries: 10
       start_period: 2s
       timeout: 1s
-  test:
-    image: rust
-    command: cargo test --test *
-    working_dir: /workspace
-    environment:
-      - CARGO_TARGET_DIR=/target
-      - RUST_BACKTRACE=1
-      - TEST_DATABEND_DSN=databend://databend:databend@databend:8000/default?sslmode=disable
-    volumes:
-      - ../:/workspace
-      - rustup:/usr/local/rustup
-      - ${HOME}/.cargo/registry:/usr/local/cargo/registry
-      - target:/target
-    depends_on:
-      databend:
-        condition: service_healthy
-  test-flight-sql:
-    image: rust
-    command: cargo test --features flight-sql --test driver
-    working_dir: /workspace
-    environment:
-      - CARGO_TARGET_DIR=/target
-      - RUST_BACKTRACE=1
-      - TEST_DATABEND_DSN=databend+flight://databend:databend@databend:8900/default?sslmode=disable
-    volumes:
-      - ../:/workspace
-      - rustup:/usr/local/rustup
-      - ${HOME}/.cargo/registry:/usr/local/cargo/registry
-      - target:/target
-    depends_on:
-      databend:
-        condition: service_healthy
-  test-bendsql:
-    image: rust
-    command: bash -c './cli/test.sh http && ./cli/test.sh flight'
-    working_dir: /workspace
-    environment:
-      - CARGO_TARGET_DIR=/target
-      - RUST_BACKTRACE=1
-      - DATABEND_USER=databend
-      - DATABEND_PASSWORD=databend
-      - DATABEND_HOST=databend
-    volumes:
-      - ../:/workspace
-      - rustup:/usr/local/rustup
-      - ${HOME}/.cargo/registry:/usr/local/cargo/registry
-      - target:/target
-    depends_on:
-      databend:
-        condition: service_healthy
-
-volumes:
-  rustup:
-  target:
