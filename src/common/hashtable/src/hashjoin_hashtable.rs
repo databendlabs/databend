@@ -15,6 +15,7 @@
 use std::alloc::Allocator;
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::marker::PhantomData;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
@@ -55,8 +56,6 @@ impl Hash for RowPtr {
     }
 }
 
-use std::marker::PhantomData;
-
 #[derive(Clone, Copy, Eq, PartialEq, Debug, Hash)]
 pub enum MarkerKind {
     True,
@@ -74,8 +73,8 @@ pub struct RawEntry<K> {
 pub struct HashJoinHashTable<K: Keyable, A: Allocator + Clone = MmapAllocator> {
     pub(crate) pointers: Box<[u64], A>,
     pub(crate) atomic_pointers: *mut AtomicU64,
-    mask: usize,
-    phantom: PhantomData<K>,
+    pub(crate) hash_mask: usize,
+    pub(crate) phantom: PhantomData<K>,
 }
 
 unsafe impl<K: Keyable + Send, A: Allocator + Clone + Send> Send for HashJoinHashTable<K, A> {}
@@ -89,7 +88,7 @@ impl<K: Keyable, A: Allocator + Clone + Default> HashJoinHashTable<K, A> {
                 Box::new_zeroed_slice_in(capacity, Default::default()).assume_init()
             },
             atomic_pointers: std::ptr::null_mut(),
-            mask: capacity - 1,
+            hash_mask: capacity - 1,
             phantom: PhantomData::default(),
         };
         hashtable.atomic_pointers = unsafe {
@@ -98,15 +97,17 @@ impl<K: Keyable, A: Allocator + Clone + Default> HashJoinHashTable<K, A> {
         hashtable
     }
 
-    pub fn insert(&mut self, key: K, raw_entry: *mut RawEntry<K>) {
-        let index = (key.hash() as usize) & self.mask;
+    pub fn insert(&mut self, key: K, raw_entry_ptr: *mut RawEntry<K>) {
+        let index = key.hash() as usize & self.hash_mask;
+        // # Safety
+        // `index` is less than the capacity of hash table.
         let mut head = unsafe { (*self.atomic_pointers.add(index)).load(Ordering::Relaxed) };
         loop {
-            unsafe { (*raw_entry).next = head };
+            unsafe { (*raw_entry_ptr).next = head };
             let res = unsafe {
                 (*self.atomic_pointers.add(index)).compare_exchange_weak(
                     head,
-                    raw_entry as u64,
+                    raw_entry_ptr as u64,
                     Ordering::SeqCst,
                     Ordering::SeqCst,
                 )
@@ -127,17 +128,17 @@ where
     type Key = K;
 
     fn contains(&self, key_ref: &Self::Key) -> bool {
-        let index = (key_ref.hash() as usize) & self.mask;
-        let mut ptr = self.pointers[index];
+        let index = key_ref.hash() as usize & self.hash_mask;
+        let mut raw_entry_ptr = self.pointers[index];
         loop {
-            if ptr == 0 {
+            if raw_entry_ptr == 0 {
                 break;
             }
-            let raw_entry = unsafe { &*(ptr as *mut RawEntry<K>) };
+            let raw_entry = unsafe { &*(raw_entry_ptr as *mut RawEntry<K>) };
             if key_ref == &raw_entry.key {
                 return true;
             }
-            ptr = raw_entry.next;
+            raw_entry_ptr = raw_entry.next;
         }
         false
     }
@@ -149,15 +150,17 @@ where
         mut occupied: usize,
         capacity: usize,
     ) -> (usize, u64) {
-        let index = (key_ref.hash() as usize) & self.mask;
+        let index = key_ref.hash() as usize & self.hash_mask;
         let origin = occupied;
-        let mut ptr = self.pointers[index];
+        let mut raw_entry_ptr = self.pointers[index];
         loop {
-            if ptr == 0 || occupied >= capacity {
+            if raw_entry_ptr == 0 || occupied >= capacity {
                 break;
             }
-            let raw_entry = unsafe { &*(ptr as *mut RawEntry<K>) };
+            let raw_entry = unsafe { &*(raw_entry_ptr as *mut RawEntry<K>) };
             if key_ref == &raw_entry.key {
+                // # Safety
+                // occupied is less than the capacity of vec_ptr.
                 unsafe {
                     std::ptr::copy_nonoverlapping(
                         &raw_entry.row_ptr as *const RowPtr,
@@ -167,10 +170,10 @@ where
                 };
                 occupied += 1;
             }
-            ptr = raw_entry.next;
+            raw_entry_ptr = raw_entry.next;
         }
         if occupied > origin {
-            (occupied - origin, ptr)
+            (occupied - origin, raw_entry_ptr)
         } else {
             (0, 0)
         }
@@ -191,6 +194,8 @@ where
             }
             let raw_entry = unsafe { &*(incomplete_ptr as *mut RawEntry<K>) };
             if key_ref == &raw_entry.key {
+                // # Safety
+                // occupied is less than the capacity of vec_ptr.
                 unsafe {
                     std::ptr::copy_nonoverlapping(
                         &raw_entry.row_ptr as *const RowPtr,

@@ -232,10 +232,7 @@ impl PipelineBuilder {
         let create_sink_processor = |input| {
             let transform = TransformHashJoinBuild::create(
                 input,
-                TransformHashJoinBuild::attach(
-                    join_state.clone(),
-                    self.main_pipeline.get_max_threads(),
-                )?,
+                TransformHashJoinBuild::attach(join_state.clone())?,
             );
 
             if self.enable_profiling {
@@ -1313,10 +1310,7 @@ impl PipelineBuilder {
             items.push(PipeItem::create(
                 ProcessorPtr::create(TransformHashJoinBuild::create(
                     input.clone(),
-                    TransformHashJoinBuild::attach(
-                        self.join_state.as_ref().unwrap().clone(),
-                        self.main_pipeline.get_max_threads(),
-                    )?,
+                    TransformHashJoinBuild::attach(self.join_state.as_ref().unwrap().clone())?,
                 )),
                 vec![input],
                 vec![],

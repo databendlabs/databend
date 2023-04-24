@@ -34,7 +34,7 @@ pub struct StringRawEntry {
 pub struct HashJoinStringHashTable<A: Allocator + Clone = MmapAllocator> {
     pub(crate) pointers: Box<[u64], A>,
     pub(crate) atomic_pointers: *mut AtomicU64,
-    mask: usize,
+    pub(crate) hash_mask: usize,
 }
 
 unsafe impl<A: Allocator + Clone + Send> Send for HashJoinStringHashTable<A> {}
@@ -48,7 +48,7 @@ impl<A: Allocator + Clone + Default> HashJoinStringHashTable<A> {
                 Box::new_zeroed_slice_in(capacity, Default::default()).assume_init()
             },
             atomic_pointers: std::ptr::null_mut(),
-            mask: capacity - 1,
+            hash_mask: capacity - 1,
         };
         hashtable.atomic_pointers = unsafe {
             std::mem::transmute::<*mut u64, *mut AtomicU64>(hashtable.pointers.as_mut_ptr())
@@ -56,15 +56,17 @@ impl<A: Allocator + Clone + Default> HashJoinStringHashTable<A> {
         hashtable
     }
 
-    pub fn insert(&mut self, key: &[u8], raw_entry: *mut StringRawEntry) {
-        let index = (key.fast_hash() as usize) & self.mask;
+    pub fn insert(&mut self, key: &[u8], raw_entry_ptr: *mut StringRawEntry) {
+        let index = key.fast_hash() as usize & self.hash_mask;
+        // # Safety
+        // `index` is less than the capacity of hash table.
         let mut head = unsafe { (*self.atomic_pointers.add(index)).load(Ordering::Relaxed) };
         loop {
-            unsafe { (*raw_entry).next = head };
+            unsafe { (*raw_entry_ptr).next = head };
             let res = unsafe {
                 (*self.atomic_pointers.add(index)).compare_exchange_weak(
                     head,
-                    raw_entry as u64,
+                    raw_entry_ptr as u64,
                     Ordering::SeqCst,
                     Ordering::SeqCst,
                 )
@@ -83,13 +85,13 @@ where A: Allocator + Clone + 'static
     type Key = [u8];
 
     fn contains(&self, key_ref: &Self::Key) -> bool {
-        let index = (key_ref.fast_hash() as usize) & self.mask;
-        let mut ptr = self.pointers[index];
+        let index = key_ref.fast_hash() as usize & self.hash_mask;
+        let mut raw_entry_ptr = self.pointers[index];
         loop {
-            if ptr == 0 {
+            if raw_entry_ptr == 0 {
                 break;
             }
-            let raw_entry = unsafe { &*(ptr as *mut StringRawEntry) };
+            let raw_entry = unsafe { &*(raw_entry_ptr as *mut StringRawEntry) };
             let min_len = std::cmp::min(4, std::cmp::min(key_ref.len(), raw_entry.length as usize));
             if raw_entry.length as usize == key_ref.len()
                 && key_ref[0..min_len] == raw_entry.early[0..min_len]
@@ -104,7 +106,7 @@ where A: Allocator + Clone + 'static
                     return true;
                 }
             }
-            ptr = raw_entry.next;
+            raw_entry_ptr = raw_entry.next;
         }
         false
     }
@@ -116,14 +118,14 @@ where A: Allocator + Clone + 'static
         mut occupied: usize,
         capacity: usize,
     ) -> (usize, u64) {
-        let index = (key_ref.fast_hash() as usize) & self.mask;
+        let index = key_ref.fast_hash() as usize & self.hash_mask;
         let origin = occupied;
-        let mut ptr = self.pointers[index];
+        let mut raw_entry_ptr = self.pointers[index];
         loop {
-            if ptr == 0 || occupied >= capacity {
+            if raw_entry_ptr == 0 || occupied >= capacity {
                 break;
             }
-            let raw_entry = unsafe { &*(ptr as *mut StringRawEntry) };
+            let raw_entry = unsafe { &*(raw_entry_ptr as *mut StringRawEntry) };
             let min_len = std::cmp::min(4, key_ref.len());
             if raw_entry.length as usize == key_ref.len()
                 && key_ref[0..min_len] == raw_entry.early[0..min_len]
@@ -135,6 +137,8 @@ where A: Allocator + Clone + 'static
                     )
                 };
                 if key == key_ref {
+                    // # Safety
+                    // occupied is less than the capacity of vec_ptr.
                     unsafe {
                         std::ptr::copy_nonoverlapping(
                             &raw_entry.row_ptr as *const RowPtr,
@@ -145,10 +149,10 @@ where A: Allocator + Clone + 'static
                     occupied += 1;
                 }
             }
-            ptr = raw_entry.next;
+            raw_entry_ptr = raw_entry.next;
         }
         if occupied > origin {
-            (occupied - origin, ptr)
+            (occupied - origin, raw_entry_ptr)
         } else {
             (0, 0)
         }
@@ -179,6 +183,8 @@ where A: Allocator + Clone + 'static
                     )
                 };
                 if key == key_ref {
+                    // # Safety
+                    // occupied is less than the capacity of vec_ptr.
                     unsafe {
                         std::ptr::copy_nonoverlapping(
                             &raw_entry.row_ptr as *const RowPtr,

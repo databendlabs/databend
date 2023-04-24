@@ -21,49 +21,46 @@ use crate::pipelines::processors::transforms::hash_join::desc::JoinState;
 #[async_trait::async_trait]
 /// Concurrent hash table for hash join.
 pub trait HashJoinState: Send + Sync {
-    /// Build hash table with input DataBlock
+    /// Add input `DataBlock` to `row_space`.
     fn build(&self, input: DataBlock) -> Result<()>;
 
-    /// Probe the hash table and retrieve matched rows as DataBlocks
+    /// Probe the hash table and retrieve matched rows as DataBlocks.
     fn probe(&self, input: &DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>>;
 
     fn interrupt(&self);
 
     fn join_state(&self) -> &JoinState;
 
-    /// Attach to state
+    /// Attach to state: `build_count` and `finalize_count`
     fn attach(&self) -> Result<()>;
 
-    /// Get mark join results
-    fn mark_join_blocks(&self) -> Result<Vec<DataBlock>>;
-
-    /// Get right join results
-    fn right_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>>;
-
-    /// Get right semi/anti join results
-    fn right_semi_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>>;
-
-    /// Get left join results
-    fn left_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>>;
-
-    /// TODO(dousir9)
+    /// Detach to state: `build_count`, create finalize task and initialize the hash table.
     fn build_end(&self) -> Result<()>;
 
-    /// TODO(dousir9)
-    fn finalize_end(&self) -> Result<()>;
-
-    /// TODO(dousir9)
-    fn finalize(&self) -> Result<bool>;
-
-    /// TODO(dousir9)
+    /// Divide the finalize phase into multiple tasks.
     fn divide_finalize_task(&self) -> Result<()>;
 
-    /// TODO(dousir9)
-    fn set_max_threads(&self, max_threads: usize) -> Result<()>;
+    /// Get the finalize task and using the `chunks` in `row_space` to build hash table in parallel.
+    fn finalize(&self) -> Result<bool>;
 
-    /// TODO(dousir9)
+    /// Detach to state: `finalize_count`.
+    fn finalize_end(&self) -> Result<()>;
+
+    /// Wait until the build phase is finished.
     async fn wait_build_finish(&self) -> Result<()>;
 
-    /// TODO(dousir9)
+    /// Wait until the finalize phase is finished.
     async fn wait_finalize_finish(&self) -> Result<()>;
+
+    /// Get mark join results.
+    fn mark_join_blocks(&self) -> Result<Vec<DataBlock>>;
+
+    /// Get right join results.
+    fn right_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>>;
+
+    /// Get right semi/anti join results.
+    fn right_semi_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>>;
+
+    /// Get left join results.
+    fn left_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>>;
 }

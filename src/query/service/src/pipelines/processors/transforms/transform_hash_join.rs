@@ -189,12 +189,8 @@ impl TransformHashJoinBuild {
         })
     }
 
-    pub fn attach(
-        join_state: Arc<dyn HashJoinState>,
-        max_threads: usize,
-    ) -> Result<Arc<dyn HashJoinState>> {
+    pub fn attach(join_state: Arc<dyn HashJoinState>) -> Result<Arc<dyn HashJoinState>> {
         join_state.attach()?;
-        join_state.set_max_threads(max_threads)?;
         Ok(join_state)
     }
 }

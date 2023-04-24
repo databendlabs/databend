@@ -81,26 +81,26 @@ pub enum HashJoinHashTable {
 pub struct JoinHashTable {
     pub(crate) ctx: Arc<QueryContext>,
     /// Reference count
-    pub(crate) building_count: Mutex<usize>,
-    pub(crate) finalizing_count: Mutex<usize>,
+    pub(crate) build_count: Mutex<usize>,
+    pub(crate) finalize_count: Mutex<usize>,
     pub(crate) is_built: Mutex<bool>,
     pub(crate) is_finalized: Mutex<bool>,
+    /// Notifier
+    pub(crate) built_notify: Arc<Notify>,
+    pub(crate) finalized_notify: Arc<Notify>,
     /// A shared big hash table stores all the rows from build side
     pub(crate) hash_table: Arc<SyncUnsafeCell<HashJoinHashTable>>,
+    pub(crate) method: Arc<HashMethodKind>,
     pub(crate) row_space: RowSpace,
+    pub(crate) entry_size: Arc<AtomicUsize>,
+    pub(crate) raw_entry_spaces: Mutex<Vec<Vec<u8>>>,
     pub(crate) hash_join_desc: HashJoinDesc,
     pub(crate) row_ptrs: RwLock<Vec<RowPtr>>,
     pub(crate) probe_schema: DataSchemaRef,
     pub(crate) interrupt: Arc<AtomicBool>,
-    pub(crate) built_notify: Arc<Notify>,
-    pub(crate) finalized_notify: Arc<Notify>,
-
-    pub(crate) max_threads: Mutex<usize>,
+    /// Finalize tasks
     pub(crate) finalize_tasks: Arc<RwLock<Vec<(usize, usize)>>>,
     pub(crate) unfinished_task_num: Arc<AtomicI32>,
-    pub(crate) method: Arc<HashMethodKind>,
-    pub(crate) entry_size: Arc<AtomicUsize>,
-    pub(crate) raw_entry_spaces: Mutex<Vec<Vec<u8>>>,
 }
 
 impl JoinHashTable {
@@ -127,7 +127,6 @@ impl JoinHashTable {
 
     pub fn try_create(
         ctx: Arc<QueryContext>,
-        // hash_table: HashTable,
         mut build_data_schema: DataSchemaRef,
         mut probe_data_schema: DataSchemaRef,
         hash_join_desc: HashJoinDesc,
@@ -147,24 +146,23 @@ impl JoinHashTable {
         }
         Ok(Self {
             row_space: RowSpace::new(ctx.clone(), build_data_schema)?,
-            building_count: Mutex::new(0),
-            finalizing_count: Mutex::new(0),
+            ctx,
+            build_count: Mutex::new(0),
+            finalize_count: Mutex::new(0),
             is_built: Mutex::new(false),
             is_finalized: Mutex::new(false),
-            hash_join_desc,
-            ctx,
-            hash_table: Arc::new(SyncUnsafeCell::new(HashJoinHashTable::Null)),
-            method: Arc::new(method),
-            row_ptrs: RwLock::new(vec![]),
-            probe_schema: probe_data_schema,
             built_notify: Arc::new(Notify::new()),
             finalized_notify: Arc::new(Notify::new()),
-            interrupt: Arc::new(AtomicBool::new(false)),
-            max_threads: Mutex::new(1),
-            finalize_tasks: Arc::new(RwLock::new(vec![])),
-            unfinished_task_num: Arc::new(AtomicI32::new(0)),
+            hash_table: Arc::new(SyncUnsafeCell::new(HashJoinHashTable::Null)),
+            method: Arc::new(method),
             entry_size: Arc::new(AtomicUsize::new(0)),
             raw_entry_spaces: Mutex::new(vec![]),
+            hash_join_desc,
+            row_ptrs: RwLock::new(vec![]),
+            probe_schema: probe_data_schema,
+            interrupt: Arc::new(AtomicBool::new(false)),
+            finalize_tasks: Arc::new(RwLock::new(vec![])),
+            unfinished_task_num: Arc::new(AtomicI32::new(0)),
         })
     }
 
