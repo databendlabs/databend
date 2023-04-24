@@ -58,10 +58,6 @@ pub struct PartitionPruner {
     pub row_group_pruner: Option<Arc<dyn RangePruner + Send + Sync>>,
     /// Pruners to prune pages.
     pub page_pruners: Option<ColumnRangePruners>,
-    /// Parquet file locations
-    pub locations: Vec<(String, u64)>,
-    /// OpenDAL operator
-    pub operator: Operator,
     /// The projected column indices.
     pub columns_to_read: HashSet<FieldIndex>,
     /// The projected column nodes.
@@ -79,13 +75,15 @@ impl PartitionPruner {
     /// Try to read parquet meta to generate row-group-wise partitions.
     /// And prune row groups an pages to generate the final row group partitions.
     #[async_backtrace::framed]
-    pub async fn read_and_prune_partitions(&self) -> Result<(PartStatistics, Partitions)> {
+    pub async fn read_and_prune_partitions(
+        &self,
+        operator: Operator,
+        locations: &Vec<(String, u64)>,
+    ) -> Result<(PartStatistics, Partitions)> {
         let PartitionPruner {
             schema,
             row_group_pruner,
             page_pruners,
-            locations,
-            operator,
             columns_to_read,
             column_nodes,
             skip_pruning,
