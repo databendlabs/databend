@@ -38,3 +38,8 @@ suite: mixed versioned segment compaction test
 check segments after compaction, there should be 2 segments, a version v2 and a version v3
 1	2
 1	3
+check table contains {1,2,3,4} after compaction
+1
+2
+3
+4

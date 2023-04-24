@@ -146,3 +146,7 @@ FST_SNAPSHOT_S6_ID=$(echo "select snapshot_id from fuse_snapshot('default','t2')
 
 echo "check segments after compaction, there should be 2 segments, a version v2 and a version v3"
 echo "select count() c, format_version v from fuse_segment('default', 't2', '$FST_SNAPSHOT_S6_ID') group by v order by v " | $MYSQL_CLIENT_CONNECT
+
+echo "check table contains {1,2,3,4} after compaction"
+echo "select * from t2 order by c" | $MYSQL_CLIENT_CONNECT
+
