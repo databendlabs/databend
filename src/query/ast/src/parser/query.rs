@@ -425,10 +425,10 @@ pub fn table_alias(i: Input) -> IResult<TableAlias> {
 pub fn join_operator(i: Input) -> IResult<JoinOperator> {
     alt((
         value(JoinOperator::Inner, rule! { INNER }),
-        value(JoinOperator::LeftSemi, rule! {LEFT? ~ SEMI}),
-        value(JoinOperator::RightSemi, rule! {RIGHT ~ SEMI}),
-        value(JoinOperator::LeftAnti, rule! {LEFT? ~ ANTI}),
-        value(JoinOperator::RightAnti, rule! {RIGHT ~ ANTI}),
+        value(JoinOperator::LeftSemi, rule! { LEFT? ~ SEMI }),
+        value(JoinOperator::RightSemi, rule! { RIGHT ~ SEMI }),
+        value(JoinOperator::LeftAnti, rule! { LEFT? ~ ANTI }),
+        value(JoinOperator::RightAnti, rule! { RIGHT ~ ANTI }),
         value(JoinOperator::LeftOuter, rule! { LEFT ~ OUTER? }),
         value(JoinOperator::RightOuter, rule! { RIGHT ~ OUTER? }),
         value(JoinOperator::FullOuter, rule! { FULL ~ OUTER? }),
@@ -560,7 +560,6 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
             }
         },
     );
-
     let join = map(
         rule! {
             NATURAL? ~ #join_operator? ~ JOIN
@@ -582,7 +581,6 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         },
         |(_, _, idents, _)| TableReferenceElement::JoinCondition(JoinCondition::Using(idents)),
     );
-
     let table_function = map(
         rule! {
             #function_name ~ "(" ~ #comma_separated_list0(table_function_param) ~ ")" ~ #table_alias?
@@ -609,7 +607,6 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         },
         |(_, table_ref, _)| TableReferenceElement::Group(table_ref),
     );
-
     let stage_location = |i| map(stage_location, FileLocation::Stage)(i);
     let uri_location = |i| map(literal_string, FileLocation::Uri)(i);
     let aliased_stage = map(
