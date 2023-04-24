@@ -12,32 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_ast::ast::TableIndexType;
+use common_meta_types::MetaId;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CreateViewPlan {
+pub struct CreateIndexPlan {
+    pub tenant: String,
     pub if_not_exists: bool,
-    pub tenant: String,
-    pub catalog: String,
-    pub database: String,
-    pub view_name: String,
-    pub column_names: Vec<String>,
+    pub index_type: TableIndexType,
+    pub index_name: String,
     pub subquery: String,
+    pub table_id: MetaId,
 }
 
+/// Drop.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AlterViewPlan {
-    pub tenant: String,
-    pub catalog: String,
-    pub database: String,
-    pub view_name: String,
-    pub column_names: Vec<String>,
-    pub subquery: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DropViewPlan {
+pub struct DropIndexPlan {
     pub if_exists: bool,
     pub tenant: String,
     pub catalog: String,
-    pub database: String,
-    pub view_name: String,
+    pub index: String,
 }

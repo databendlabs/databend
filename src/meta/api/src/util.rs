@@ -21,6 +21,7 @@ use common_meta_app::app_error::AppError;
 use common_meta_app::app_error::ShareHasNoGrantedDatabase;
 use common_meta_app::app_error::TxnRetryMaxTimes;
 use common_meta_app::app_error::UnknownDatabase;
+use common_meta_app::app_error::UnknownIndex;
 use common_meta_app::app_error::UnknownShare;
 use common_meta_app::app_error::UnknownShareAccounts;
 use common_meta_app::app_error::UnknownShareEndpoint;
@@ -36,6 +37,9 @@ use common_meta_app::schema::DatabaseIdToName;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DatabaseType;
+use common_meta_app::schema::IndexId;
+use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::IndexNameIdent;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdToName;
 use common_meta_app::schema::TableIdent;
@@ -76,8 +80,9 @@ pub const DEFAULT_MGET_SIZE: usize = 256;
 /// Get value that its type is `u64`.
 ///
 /// It expects the kv-value's type is `u64`, such as:
-/// `__fd_table/<db_id>/<table_name> -> (seq, table_id)`, or
-/// `__fd_database/<tenant>/<db_name> -> (seq, db_id)`.
+/// `__fd_table/<db_id>/<table_name> -> (seq, table_id)`,
+/// `__fd_database/<tenant>/<db_name> -> (seq, db_id)`, or
+/// `__fd_index/<tenant>/<index_name> -> (seq, index_id)`.
 ///
 /// It returns (seq, `u64` value).
 /// If not found, (0,0) is returned.
@@ -163,8 +168,9 @@ pub async fn list_keys<K: kvapi::Key>(
 /// List kvs whose value's type is `u64`.
 ///
 /// It expects the kv-value' type is `u64`, such as:
-/// `__fd_table/<db_id>/<table_name> -> (seq, table_id)`, or
-/// `__fd_database/<tenant>/<db_name> -> (seq, db_id)`.
+/// `__fd_table/<db_id>/<table_name> -> (seq, table_id)`,
+/// `__fd_database/<tenant>/<db_name> -> (seq, db_id)`, or
+/// `__fd_index/<tenant>/<index_name> -> (seq, index_id)`.
 ///
 /// It returns a vec of structured key(such as DatabaseNameIdent) and a vec of `u64`.
 pub async fn list_u64_value<K: kvapi::Key>(
@@ -430,6 +436,25 @@ pub async fn get_table_by_id_or_err(
     );
 
     Ok((seq, table_meta))
+}
+
+/// Return OK if an index_id or index_meta exists by checking the seq.
+///
+/// Otherwise returns UnknownIndex error
+pub fn index_has_to_exist(
+    seq: u64,
+    index_ident: &IndexNameIdent,
+    msg: impl Display,
+) -> Result<(), KVAppError> {
+    if seq == 0 {
+        debug!(seq, ?index_ident, "index does not exist");
+
+        Err(KVAppError::AppError(AppError::UnknownIndex(
+            UnknownIndex::new(&index_ident.index_name, format!("{}: {}", msg, index_ident)),
+        )))
+    } else {
+        Ok(())
+    }
 }
 
 // Return (share_endpoint_id_seq, share_endpoint_id, share_endpoint_meta_seq, share_endpoint_meta)
@@ -1159,4 +1184,32 @@ pub async fn get_share_table_info(
         }
         None => Ok((share_name.share_name.clone(), None)),
     }
+}
+
+pub async fn get_index_metas_by_ids(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    ids: &[u64],
+) -> Result<Vec<IndexMeta>, KVAppError> {
+    let mut index_meta_keys = Vec::with_capacity(ids.len());
+    for id in ids.iter() {
+        let index_id = IndexId { index_id: *id };
+
+        index_meta_keys.push(index_id.to_string_key());
+    }
+
+    let seq_index_metas = kv_api.mget_kv(&index_meta_keys).await?;
+
+    let mut index_metas = Vec::with_capacity(ids.len());
+
+    for (i, seq_meta_opt) in seq_index_metas.iter().enumerate() {
+        if let Some(seq_meta) = seq_meta_opt {
+            let index_meta: IndexMeta = deserialize_struct(&seq_meta.data)?;
+
+            index_metas.push(index_meta);
+        } else {
+            debug!(k = display(&index_meta_keys[i]), "index_meta not found");
+        }
+    }
+
+    Ok(index_metas)
 }

@@ -268,6 +268,13 @@ build_exceptions! {
     UnknownShareTable(2717),
     CannotShareDatabaseCreatedFromShare(2718),
 
+    // Index error codes.
+    UnsupportedIndex(2719),
+    CreateIndexWithDropTime(2720),
+    IndexAlreadyExists(2721),
+    UnknownIndex(2722),
+    DropIndexWithDropTime(2723),
+
     // Variable error codes.
     UnknownVariable(2801),
     OnlySupportAsciiChars(2802),

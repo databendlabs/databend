@@ -49,6 +49,9 @@ use common_expression::Scalar;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageInfo;
+use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::ListIndexByTableIdReq;
+use common_meta_types::MetaId;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
@@ -214,6 +217,33 @@ impl Binder {
                         .set_span(*span));
                     }
                 };
+
+                if table_meta.support_index() {
+                    let indexes = self
+                        .resolve_table_indexes(
+                            tenant.as_str(),
+                            catalog.as_str(),
+                            table_meta.get_id(),
+                        )
+                        .await?
+                        .unwrap_or(vec![]);
+
+                    let mut s_exprs = Vec::with_capacity(indexes.len());
+                    for index in indexes {
+                        let tokens = tokenize_sql(&index.query)?;
+                        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+                        let mut new_bind_context =
+                            BindContext::with_parent(Box::new(bind_context.clone()));
+                        if let Statement::Query(query) = &stmt {
+                            let (s_expr, _) = self.bind_query(&mut new_bind_context, query).await?;
+                            s_exprs.push(s_expr);
+                        }
+                    }
+
+                    self.metadata
+                        .write()
+                        .add_table_indexes(table_meta.get_id(), s_exprs);
+                }
 
                 match table_meta.engine() {
                     "VIEW" => {
@@ -787,6 +817,21 @@ impl Binder {
                 }
             }
         }
+    }
+
+    #[async_backtrace::framed]
+    pub(crate) async fn resolve_table_indexes(
+        &self,
+        tenant: &str,
+        catalog_name: &str,
+        table_id: MetaId,
+    ) -> Result<Option<Vec<IndexMeta>>> {
+        let catalog = self.catalogs.get_catalog(catalog_name)?;
+        let index_metas = catalog
+            .get_indexes_by_table_id(ListIndexByTableIdReq::new(tenant, table_id))
+            .await?;
+
+        Ok(index_metas)
     }
 }
 

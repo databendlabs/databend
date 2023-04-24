@@ -451,6 +451,9 @@ pub trait VisitorMut: Sized {
 
     fn visit_drop_view(&mut self, _stmt: &mut DropViewStmt) {}
 
+    fn visit_create_index(&mut self, _stmt: &mut CreateIndexStmt) {}
+    fn visit_drop_index(&mut self, _stmt: &mut DropIndexStmt) {}
+
     fn visit_show_users(&mut self) {}
 
     fn visit_create_user(&mut self, _stmt: &mut CreateUserStmt) {}
