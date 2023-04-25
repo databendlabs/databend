@@ -17,22 +17,22 @@ use common_expression::FunctionRegistry;
 mod arithmetic;
 mod arithmetic_modulo;
 mod array;
+mod bitmap;
 mod boolean;
+mod comparison;
 mod control;
 mod datetime;
+mod decimal;
 mod geo;
+mod hash;
 mod map;
 mod math;
-mod tuple;
-mod variant;
-mod vector;
-
-mod comparison;
-mod decimal;
-mod hash;
 mod other;
 mod string;
 mod string_multi_args;
+mod tuple;
+mod variant;
+mod vector;
 
 pub use comparison::check_pattern_type;
 pub use comparison::is_like_pattern_escape;
@@ -57,4 +57,5 @@ pub fn register(registry: &mut FunctionRegistry) {
     other::register(registry);
     decimal::register(registry);
     vector::register(registry);
+    bitmap::register(registry);
 }

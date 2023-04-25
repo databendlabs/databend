@@ -228,6 +228,7 @@ pub(crate) fn new_latest_schema() -> TableSchema {
             })),
         ),
         TableField::new("empty_map", TableDataType::EmptyMap),
+        TableField::new("bitmap", TableDataType::Bitmap),
     ];
     TableSchema::new(fields)
 }

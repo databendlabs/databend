@@ -90,6 +90,7 @@ pub trait FieldDecoderRowBased: FieldDecoder {
             ColumnBuilder::String(c) => self.read_string(c, reader, raw),
             ColumnBuilder::Array(c) => self.read_array(c, reader, raw),
             ColumnBuilder::Map(c) => self.read_map(c, reader, raw),
+            ColumnBuilder::Bitmap(c) => self.read_string(c, reader, raw),
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, reader, raw),
             ColumnBuilder::Variant(c) => self.read_variant(c, reader, raw),
             _ => unimplemented!(),

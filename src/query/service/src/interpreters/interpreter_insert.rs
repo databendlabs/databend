@@ -889,6 +889,7 @@ async fn exprs_to_scalar(
                 | DataType::Decimal(_)
                 | DataType::Timestamp
                 | DataType::Date
+                | DataType::Bitmap
                 | DataType::Variant => wrap_cast(&scalar, field_data_type),
                 DataType::String => {
                     // parse string to JSON value

@@ -29,6 +29,7 @@ use crate::types::NumberDataType;
 use crate::with_number_type;
 use crate::DataField;
 use crate::DataSchema;
+use crate::ARROW_EXT_TYPE_BITMAP;
 use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use crate::ARROW_EXT_TYPE_EMPTY_MAP;
 use crate::ARROW_EXT_TYPE_VARIANT;
@@ -39,7 +40,7 @@ impl From<&DataType> for ArrowDataType {
         match ty {
             DataType::Null => ArrowDataType::Null,
             DataType::Boolean => ArrowDataType::Boolean,
-            DataType::String => ArrowDataType::LargeBinary,
+            DataType::String | DataType::Bitmap => ArrowDataType::LargeBinary,
             DataType::Number(ty) => with_number_type!(|TYPE| match ty {
                 NumberDataType::TYPE => ArrowDataType::TYPE,
             }),
@@ -140,6 +141,9 @@ impl From<&DataField> for ArrowField {
                     ARROW_EXT_TYPE_VARIANT.to_string(),
                 );
             }
+            DataType::Bitmap => {
+                metadata.insert(EXTENSION_KEY.to_string(), ARROW_EXT_TYPE_BITMAP.to_string());
+            }
             _ => Default::default(),
         };
         match ty {
@@ -194,6 +198,7 @@ impl TryFrom<&ArrowField> for DataType {
             Some(ARROW_EXT_TYPE_EMPTY_ARRAY) => Some(DataType::EmptyArray),
             Some(ARROW_EXT_TYPE_EMPTY_MAP) => Some(DataType::EmptyMap),
             Some(ARROW_EXT_TYPE_VARIANT) => Some(DataType::Variant),
+            Some(ARROW_EXT_TYPE_BITMAP) => Some(DataType::Bitmap),
             _ => None,
         };
 

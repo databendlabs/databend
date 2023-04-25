@@ -428,6 +428,7 @@ pub enum TypeName {
         key_type: Box<TypeName>,
         val_type: Box<TypeName>,
     },
+    Bitmap,
     Tuple {
         fields_name: Option<Vec<String>>,
         fields_type: Vec<TypeName>,
@@ -841,6 +842,9 @@ impl Display for TypeName {
             }
             TypeName::Map { key_type, val_type } => {
                 write!(f, "MAP({}, {})", key_type, val_type)?;
+            }
+            TypeName::Bitmap => {
+                write!(f, "BITMAP")?;
             }
             TypeName::Tuple {
                 fields_name,

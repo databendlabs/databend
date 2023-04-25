@@ -17,6 +17,7 @@ use itertools::Itertools;
 
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
+use crate::types::bitmap::BitmapType;
 use crate::types::decimal::DecimalColumn;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
@@ -128,6 +129,7 @@ impl Column {
                 let column = ArrayColumn::try_downcast(column).unwrap();
                 Self::take_value_types::<MapType<AnyType, AnyType>, _>(&column, builder, indices)
             }
+            Column::Bitmap(column) => Self::take_arg_types::<BitmapType, _>(column, indices),
             Column::Nullable(c) => {
                 let column = c.column.take(indices);
                 let validity = Self::take_arg_types::<BooleanType, _>(&c.validity, indices);

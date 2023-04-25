@@ -346,7 +346,7 @@ impl PhysicalPlanBuilder {
                 if !project_internal_columns.is_empty() {
                     let mut schema = table_schema.as_ref().clone();
                     for internal_column in project_internal_columns.values() {
-                        schema.add_internal_column(
+                        schema.add_internal_field(
                             internal_column.column_name(),
                             internal_column.table_data_type(),
                             internal_column.column_id(),

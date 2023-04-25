@@ -2892,6 +2892,7 @@ pub fn resolve_type_name(type_name: &TypeName) -> Result<TableDataType> {
                 }
             }
         }
+        TypeName::Bitmap => TableDataType::Bitmap,
         TypeName::Tuple {
             fields_type,
             fields_name,
