@@ -35,6 +35,10 @@ pub struct BlockMetaIndex {
     pub segment_idx: usize,
     pub block_idx: usize,
     pub range: Option<Range<usize>>,
+    /// The page size of the block.
+    /// If the block format is parquet, its page size is the rows count of the block.
+    /// If the block format is native, its page size is the rows count of each page. (The rows count of the last page may be smaller than the page size.)
+    pub page_size: usize,
     pub block_id: usize,
     pub block_location: String,
     pub segment_id: usize,
