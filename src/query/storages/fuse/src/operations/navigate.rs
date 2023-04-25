@@ -180,7 +180,9 @@ impl FuseTable {
             self.meta_location_generator().prefix(),
             FUSE_TBL_SNAPSHOT_PREFIX,
         );
-        let files = self.list_files(prefix, time_point, |_| {}).await?;
+        let files = self
+            .list_files(prefix, time_point, |_| {}, |_| false)
+            .await?;
         let location = files[0].clone();
         let reader = MetaReaders::table_snapshot_reader(self.get_operator());
         let ver = TableMetaLocationGenerator::snapshot_version(location.as_str());
@@ -226,11 +228,16 @@ impl FuseTable {
             FUSE_TBL_SNAPSHOT_PREFIX,
         );
         let files = self
-            .list_files(prefix, retention_point, |loc| {
-                if loc.as_str().starts_with(&prefix_loc) {
-                    location = Some(loc);
-                }
-            })
+            .list_files(
+                prefix,
+                retention_point,
+                |loc| {
+                    if loc.as_str().starts_with(&prefix_loc) {
+                        location = Some(loc);
+                    }
+                },
+                |_| false,
+            )
             .await?;
         let location = location.ok_or(ErrorCode::TableHistoricalDataNotFound(
             "No historical data found at given point",
@@ -244,6 +251,7 @@ impl FuseTable {
         prefix: String,
         time_point: DateTime<Utc>,
         mut pred: P,
+        filter: impl for<'a> Fn(&'a String) -> bool + Copy + Send + Sync,
     ) -> Result<Vec<String>>
     where
         P: FnMut(String),
@@ -262,7 +270,7 @@ impl FuseTable {
                     let location = de.path().to_string();
                     pred(location.clone());
                     if let Some(modified) = modified {
-                        if modified <= time_point {
+                        if modified <= time_point && !filter(&location) {
                             file_list.push((location, modified));
                         }
                     }

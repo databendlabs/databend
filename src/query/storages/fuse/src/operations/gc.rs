@@ -477,12 +477,18 @@ impl FuseTable {
         referenced_files: HashSet<String>,
         retention_time: DateTime<Utc>,
     ) -> Result<Vec<String>> {
-        // 1. Get all the files outof retention time in the same directory
-        let mut files_to_be_purged = match referenced_files.iter().next().cloned() {
+        let files_to_be_purged = match referenced_files.iter().next().cloned() {
             Some(location) => {
                 let prefix = SnapshotsIO::get_s3_prefix_from_file(&location);
                 if let Some(prefix) = prefix {
-                    self.list_files(prefix, retention_time, |_| {}).await?
+                    self.list_files(
+                        prefix,
+                        retention_time,
+                        |_| {},
+                        // filter out all the referenced files
+                        |location| referenced_files.contains(location),
+                    )
+                    .await?
                 } else {
                     vec![]
                 }
@@ -491,9 +497,6 @@ impl FuseTable {
                 vec![]
             }
         };
-
-        // 2. Filter out all the referenced files.
-        files_to_be_purged.retain(|location| !referenced_files.contains(location));
 
         Ok(files_to_be_purged)
     }
