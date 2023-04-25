@@ -115,6 +115,7 @@ impl Binder {
                         self.metadata.clone(),
                         &aliases,
                     );
+                    scalar_binder.allow_ambiguity();
                     let (bound_expr, _) = scalar_binder.bind(&order.expr).await?;
 
                     if let Some((idx, (alias, _))) = aliases
