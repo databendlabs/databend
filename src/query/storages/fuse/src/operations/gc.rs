@@ -12,7 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
@@ -472,15 +471,16 @@ impl FuseTable {
     // return orphan files to be purged
     #[async_backtrace::framed]
     async fn get_orphan_files_to_be_purged(
-        referenced_files: BTreeSet<String>,
+        referenced_files: HashSet<String>,
         snapshots_io: &SnapshotsIO,
         retention_sec: i64,
     ) -> Result<Vec<String>> {
         // 1. Get all the files in the same directory
-        let mut files_to_be_purged = if let Some(location) = referenced_files.first() {
-            snapshots_io.get_files_by_prefix(location).await?
-        } else {
-            vec![]
+        let mut files_to_be_purged = match referenced_files.iter().next().cloned() {
+            Some(location) => snapshots_io.get_files_by_prefix(&location).await?,
+            None => {
+                vec![]
+            }
         };
 
         // 2. Filter out all the referenced files.
@@ -543,16 +543,36 @@ impl FuseTable {
 
         // 2. Find all segments referenced by the current snapshots
         let snapshots_io = SnapshotsIO::create(ctx.clone(), self.operator.clone());
-        snapshots_io
-            .get_snapshot_referenced_files(
+        let segments_opt = snapshots_io
+            .get_snapshot_referenced_segments(
                 root_snapshot_location,
                 root_snapshot_lite,
-                self.schema(),
                 |status| {
                     ctx.set_status_info(&status);
                 },
             )
-            .await
+            .await?;
+
+        let segments_vec = match segments_opt {
+            Some(segments) => segments,
+            None => {
+                return Ok(None);
+            }
+        };
+
+        let locations_referenced = self
+            .get_block_locations(ctx.clone(), &segments_vec, false)
+            .await?;
+
+        let mut segments = HashSet::with_capacity(segments_vec.len());
+        segments_vec.into_iter().for_each(|(location, _)| {
+            segments.insert(location);
+        });
+        Ok(Some(SnapshotReferencedFiles {
+            segments,
+            blocks: locations_referenced.block_location,
+            blocks_index: locations_referenced.bloom_location,
+        }))
     }
 
     #[async_backtrace::framed]

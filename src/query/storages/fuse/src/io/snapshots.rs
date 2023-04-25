@@ -12,8 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::Path;
@@ -26,7 +24,6 @@ use common_base::runtime::execute_futures_in_parallel;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::TableSchemaRef;
 use futures::stream::StreamExt;
 use futures_util::TryStreamExt;
 use opendal::EntryMode;
@@ -48,9 +45,9 @@ use crate::io::TableMetaLocationGenerator;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct SnapshotReferencedFiles {
-    pub segments: BTreeSet<String>,
-    pub blocks: BTreeSet<String>,
-    pub blocks_index: BTreeSet<String>,
+    pub segments: HashSet<String>,
+    pub blocks: HashSet<String>,
+    pub blocks_index: HashSet<String>,
 }
 
 impl SnapshotReferencedFiles {
@@ -68,8 +65,6 @@ impl SnapshotReferencedFiles {
         files
     }
 }
-
-type BlockLocationTuple = (BTreeSet<String>, BTreeSet<String>);
 
 #[derive(Clone, Debug)]
 pub struct SnapshotLiteExtended {
@@ -325,77 +320,16 @@ impl SnapshotsIO {
         Ok(file_set)
     }
 
-    #[tracing::instrument(level = "debug", skip_all)]
-    #[async_backtrace::framed]
-    async fn read_segment_blocks(
-        &self,
-        segment_files: &[&String],
-        schema: TableSchemaRef,
-        version: u64,
-    ) -> Result<Vec<Result<BlockLocationTuple>>> {
-        async fn read_segment_block(
-            location: String,
-            ver: u64,
-            operator: Operator,
-            schema: TableSchemaRef,
-        ) -> Result<BlockLocationTuple> {
-            let reader = MetaReaders::segment_info_reader(operator, schema);
-            // Keep in mind that segment_info_read must need a schema
-            let load_params = LoadParams {
-                location,
-                len_hint: None,
-                ver,
-                put_cache: false,
-            };
-
-            let segment = reader.read(&load_params).await?;
-            let mut blocks = BTreeSet::new();
-            let mut blocks_index = BTreeSet::new();
-            segment.blocks.iter().for_each(|block_meta| {
-                blocks.insert(block_meta.location.0.clone());
-                if let Some(bloom_loc) = &block_meta.bloom_filter_index_location {
-                    blocks_index.insert(bloom_loc.0.clone());
-                }
-            });
-            Ok((blocks, blocks_index))
-        }
-
-        // combine all the tasks.
-        let mut iter = segment_files.iter();
-        let tasks = std::iter::from_fn(move || {
-            iter.next().map(|location| {
-                read_segment_block(
-                    location.to_string(),
-                    version,
-                    self.operator.clone(),
-                    schema.clone(),
-                )
-                .instrument(tracing::debug_span!("read_segment_blocks"))
-            })
-        });
-
-        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
-        let permit_nums = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
-        execute_futures_in_parallel(
-            tasks,
-            threads_nums,
-            permit_nums,
-            "fuse-req-snapshots-worker".to_owned(),
-        )
-        .await
-    }
-
-    // Read all the referenced {segments|blocks|blocks_index} by the snapshot file.
+    // Read all the referenced segments by all the snapshot file.
     // limit: limits the number of snapshot files listed
     #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
-    pub async fn get_snapshot_referenced_files<T>(
+    pub async fn get_snapshot_referenced_segments<T>(
         &self,
         root_snapshot_location: String,
         root_snapshot_lite: Arc<SnapshotLiteExtended>,
-        schema: TableSchemaRef,
         status_callback: T,
-    ) -> Result<Option<SnapshotReferencedFiles>>
+    ) -> Result<Option<Vec<Location>>>
     where
         T: Fn(String),
     {
@@ -416,26 +350,36 @@ impl SnapshotsIO {
         let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
 
         let start = Instant::now();
-        let mut count = 0;
-
-        let mut snapshot_lites = BTreeMap::new();
+        let mut count = 1;
+        // 2. Get all the referenced segments
+        let mut segments = vec![];
+        // first save root snapshot segments
+        root_snapshot_lite.segments.iter().for_each(|location| {
+            segments.push(location.to_owned());
+        });
         for chunk in snapshot_files.chunks(max_io_requests) {
             // Since we want to get all the snapshot referenced files, so set `ignore_timestamp` true
             let results = self
                 .read_snapshot_lite_extends(chunk, root_snapshot_lite.clone(), true)
                 .await?;
 
-            for snapshot_lite_extend in results.into_iter().flatten() {
-                snapshot_lites.insert(snapshot_lite_extend.snapshot_id, snapshot_lite_extend);
-            }
+            results
+                .into_iter()
+                .flatten()
+                .for_each(|snapshot_lite_extend| {
+                    snapshot_lite_extend.segments.iter().for_each(|location| {
+                        segments.push(location.to_owned());
+                    });
+                });
 
             // Refresh status.
             {
                 count += chunk.len();
                 let status = format!(
-                    "gc orphan: read snapshot files:{}/{}, cost:{} sec",
+                    "gc orphan: read snapshot files:{}/{}, segment files: {}, cost:{} sec",
                     count,
                     snapshot_files.len(),
+                    segments.len(),
                     start.elapsed().as_secs()
                 );
                 info!(status);
@@ -443,71 +387,7 @@ impl SnapshotsIO {
             }
         }
 
-        // 2. Get all the referenced segments
-        let mut segments = BTreeSet::new();
-        let mut current_snapshot_lite_opt = Some(root_snapshot_lite.as_ref());
-        while let Some(current_snapshot_lite) = current_snapshot_lite_opt {
-            current_snapshot_lite
-                .segments
-                .iter()
-                .for_each(|(location, _)| {
-                    segments.insert(location.to_owned());
-                });
-
-            current_snapshot_lite_opt = match current_snapshot_lite.prev_snapshot_id {
-                Some(prev_snapshot_id) => snapshot_lites.get(&prev_snapshot_id),
-                None => None,
-            };
-        }
-        drop(snapshot_lites);
-        // Refresh status.
-        {
-            let status = format!(
-                "gc orphan: read segments files:{}, cost:{} sec",
-                segments.len(),
-                start.elapsed().as_secs()
-            );
-            info!(status);
-            (status_callback)(status);
-        }
-
-        // 3. Get all the referenced blocks
-        let mut count = 0;
-        let mut blocks = BTreeSet::new();
-        let mut blocks_index = BTreeSet::new();
-        let segment_locations = Vec::from_iter(segments.iter());
-        for segment_chunk in segment_locations.chunks(max_io_requests) {
-            let results = self
-                .read_segment_blocks(
-                    segment_chunk,
-                    schema.clone(),
-                    root_snapshot_lite.format_version,
-                )
-                .await?;
-            for (ret_blocks, ret_index) in results.into_iter().flatten() {
-                blocks.extend(ret_blocks);
-                blocks_index.extend(ret_index);
-            }
-
-            // Refresh status.
-            {
-                count += 1;
-                let status = format!(
-                    "gc orphan: read segments block files:{}/{}, cost:{} sec",
-                    count,
-                    segment_locations.len(),
-                    start.elapsed().as_secs()
-                );
-                info!(status);
-                (status_callback)(status);
-            }
-        }
-
-        Ok(Some(SnapshotReferencedFiles {
-            segments,
-            blocks,
-            blocks_index,
-        }))
+        Ok(Some(segments))
     }
 
     #[async_backtrace::framed]
@@ -576,7 +456,8 @@ impl SnapshotsIO {
         })
     }
 
-    // If `ignore_timestamp` is true, ignore filter out snapshots which have larger (artificial)timestamp
+    // If `ignore_timestamp` is true, ignore filter out snapshots which have larger timestamp
+    // If `ignore_root_segments` is true, save segment ignore whether or not it is referenced by root snapshot
     #[tracing::instrument(level = "debug", skip_all)]
     #[async_backtrace::framed]
     pub async fn read_snapshot_lite_extends(
