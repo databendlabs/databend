@@ -21,7 +21,9 @@ use std::path::PathBuf;
 use clap::App;
 use clap::Arg;
 use clap::ArgMatches;
+use clap::Parser;
 use common_config::Config;
+use common_config::StorageConfig;
 use common_config::StorageConfig as InnerStorageConfig;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::Result;
@@ -31,14 +33,36 @@ use common_storages_fuse::io::read::meta::snapshot_reader::load_snapshot_v3;
 use opendal::services::Fs;
 use opendal::Operator;
 use opendal::Reader;
+use serde::Deserialize;
+use serde::Serialize;
 use serde_json;
 use serfig::collectors::from_file;
 use serfig::parsers::Toml;
 
-async fn read_meta_data(reader: &mut Reader, meta_type: &str) -> Result<Vec<u8>> {
-    let out = match meta_type {
-        "sg" | "segment" => serde_json::to_vec(&load_segment_v3(reader).await?)?,
-        "ss" | "snapshot" => serde_json::to_vec(&load_snapshot_v3(reader).await?)?,
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Parser)]
+#[clap(about, version = &**DATABEND_COMMIT_VERSION, author)]
+pub struct InspectorConfig {
+    #[clap(long, short = 'i')]
+    pub input: String,
+
+    #[clap(long, short = 'o')]
+    pub output: Option<String>,
+
+    #[clap(long, short = 'c')]
+    pub config: Option<String>,
+
+    #[clap(long = "type", short = 't')]
+    pub meta_type: String,
+}
+
+async fn read_meta_data(reader: &mut Reader, config: &InspectorConfig) -> Result<Vec<u8>> {
+    let out = match config.meta_type {
+        String::from("sg") | String::from("segment") => {
+            serde_json::to_vec(&load_segment_v3(reader).await?)?
+        }
+        String::from("ss") | String::from("snapshot") => {
+            serde_json::to_vec(&load_snapshot_v3(reader).await?)?
+        }
         _ => {
             return Err(format!(
                 "Unsupported type: {}, only support ss/snapshot or sg/segment",
@@ -50,24 +74,26 @@ async fn read_meta_data(reader: &mut Reader, meta_type: &str) -> Result<Vec<u8>>
     Ok(out)
 }
 
-fn parse_output_file(args: &ArgMatches, input_val: &String) -> PathBuf {
-    args.get_one::<String>("output")
-        .map(|output_val| Path::new(output_val).to_path_buf())
-        .unwrap_or_else(|| {
-            let path = Path::new(input_val);
+fn parse_output_file(config: &InspectorConfig) -> PathBuf {
+    match &config.output {
+        Some(output) => Path::new(&output).to_path_buf(),
+        None => {
+            let path = Path::new(&config.input);
             let mut new_name = path.file_name().unwrap().to_owned();
             new_name.push("-decode");
-            path.with_file_name(new_name).to_path_buf()
-        })
+            match &config.config {
+                Some(_) => {
+                    let current_dir = env::current_dir()?;
+                    current_dir.join(new_name)
+                }
+                None => path.with_file_name(new_name),
+            }
+        }
+    }
 }
 
-async fn parse_reader(args: &ArgMatches) -> Result<Reader> {
-    let input_path = args
-        .get_one::<String>("input")
-        .ok_or("Need input file path")?;
-    println!("Input file: {:?}", input_path);
-    let config_file = args.get_one::<String>("config");
-    let op = match config_file {
+async fn parse_reader(config: &InspectorConfig) -> Result<Reader> {
+    let op = match &config.config {
         Some(config_file) => {
             let mut builder: serfig::Builder<Config> = serfig::Builder::default();
             builder = builder.collect(from_file(Toml, &config_file));
@@ -81,64 +107,64 @@ async fn parse_reader(args: &ArgMatches) -> Result<Reader> {
             Operator::new(builder)?.finish()
         }
     };
-    Ok(op.reader(input_path).await?)
+    Ok(op.reader(&config.input).await?)
 }
 
-async fn run(args: &ArgMatches) -> Result<()> {
-    let mut reader = parse_reader(args).await?;
+async fn run(config: &InspectorConfig) -> Result<()> {
+    let mut reader = parse_reader(config).await?;
 
-    let meta_type = args.get_one::<String>("type").ok_or("Need meta type")?;
+    let out = read_meta_data(&mut reader, config).await?;
 
-    let out = read_meta_data(&mut reader, meta_type).await?;
+    let output_path = parse_output_file(config);
 
-    let output_path = parse_output_file(args, input_path);
     let mut file = File::create(&output_path)?;
-
     file.write_all(&out)?;
+
     println!("Output file: {:?}", output_path);
     Ok(())
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = App::new("table-meta-inspector")
-        .arg(
-            Arg::with_name("input")
-                .short('i')
-                .long("input")
-                .value_name("FILE")
-                .help("Sets the input file to use")
-                .required(false),
-        )
-        .arg(
-            Arg::with_name("config")
-                .short('c')
-                .long("config")
-                .value_name("CONFIG")
-                .help("Sets the config file to use")
-                .required(false),
-        )
-        .arg(
-            Arg::with_name("output")
-                .short('o')
-                .long("output")
-                .value_name("FILE")
-                .help("Sets the output file to use"),
-        )
-        .arg(
-            Arg::with_name("type")
-                .short('t')
-                .long("type")
-                .help("Sets the type of meta data - ss/snapshot or sg/segment")
-                .value_name("TYPE")
-                .required(true),
-        )
-        .about("Decode v3 meta data tool")
-        .version(&**DATABEND_COMMIT_VERSION)
-        .author(env!("CARGO_PKG_AUTHORS"))
-        .get_matches();
+    let config = InspectorConfig::parse();
+    // let args = App::new("table-meta-inspector")
+    //     .arg(
+    //         Arg::with_name("input")
+    //             .short('i')
+    //             .long("input")
+    //             .value_name("FILE")
+    //             .help("Sets the input file to use")
+    //             .required(false),
+    //     )
+    //     .arg(
+    //         Arg::with_name("config")
+    //             .short('c')
+    //             .long("config")
+    //             .value_name("CONFIG")
+    //             .help("Sets the config file to use")
+    //             .required(false),
+    //     )
+    //     .arg(
+    //         Arg::with_name("output")
+    //             .short('o')
+    //             .long("output")
+    //             .value_name("FILE")
+    //             .help("Sets the output file to use"),
+    //     )
+    //     .arg(
+    //         Arg::with_name("type")
+    //             .short('t')
+    //             .long("type")
+    //             .help("Sets the type of meta data - ss/snapshot or sg/segment")
+    //             .value_name("TYPE")
+    //             .required(true),
+    //     )
+    //     .about("Decode v3 meta data tool")
+    //     .version(&**DATABEND_COMMIT_VERSION)
+    //     .author(env!("CARGO_PKG_AUTHORS"))
+    //     .get_matches();
 
-    if let Err(err) = run(&args).await {
+    if let Err(err) = run(&config).await {
         println!("Error: {:?}", err);
     }
     Ok(())
