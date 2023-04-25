@@ -3207,6 +3207,7 @@ dependencies = [
  "serde_json",
  "serfig",
  "sharing-endpoint",
+ "storages-common-table-meta",
  "tokio",
  "tokio-stream",
  "tonic 0.9.2",

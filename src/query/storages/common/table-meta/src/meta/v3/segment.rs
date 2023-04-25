@@ -1,3 +1,4 @@
+use std::io::Cursor;
 //  Copyright 2023 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,6 +24,7 @@ use crate::meta::format::Compression;
 use crate::meta::statistics::FormatVersion;
 use crate::meta::v2::BlockMeta;
 use crate::meta::Encoding;
+use crate::meta::MetaCompression;
 use crate::meta::Statistics;
 use crate::meta::Versioned;
 
@@ -106,5 +108,22 @@ impl SegmentInfo {
         buf.extend(summary_compress);
 
         Ok(buf)
+    }
+
+    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self> {
+        let mut cursor = Cursor::new(bytes);
+        let version = cursor.read_scalar::<u64>()?;
+        assert_eq!(version, SegmentInfo::VERSION);
+        let encoding = Encoding::try_from(cursor.read_scalar::<u8>()?)?;
+        let compression = MetaCompression::try_from(cursor.read_scalar::<u8>()?)?;
+        let blocks_size: u64 = cursor.read_scalar::<u64>()?;
+        let summary_size: u64 = cursor.read_scalar::<u64>()?;
+
+        let blocks: Vec<Arc<BlockMeta>> =
+            read_and_deserialize(&mut cursor, blocks_size, &encoding, &compression)?;
+        let summary: Statistics =
+            read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
+
+        Ok(Self::new(blocks, summary))
     }
 }

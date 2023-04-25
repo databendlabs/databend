@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::collections::HashMap;
+use std::io::Cursor;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -32,6 +33,7 @@ use crate::meta::v2;
 use crate::meta::ClusterKey;
 use crate::meta::Encoding;
 use crate::meta::Location;
+use crate::meta::MetaCompression;
 use crate::meta::SnapshotId;
 use crate::meta::Statistics;
 use crate::meta::Versioned;
@@ -149,6 +151,16 @@ impl TableSnapshot {
         Ok(buf)
     }
 
+    pub fn from_bytes(buffer: Vec<u8>) -> Result<TableSnapshot> {
+        let mut cursor = Cursor::new(buffer);
+        let version = cursor.read_scalar::<u64>()?;
+        assert_eq!(version, TableSnapshot::VERSION);
+        let encoding = Encoding::try_from(cursor.read_scalar::<u8>()?)?;
+        let compression = MetaCompression::try_from(cursor.read_scalar::<u8>()?)?;
+        let snapshot_size: u64 = cursor.read_scalar::<u64>()?;
+
+        read_and_deserialize(&mut cursor, snapshot_size, &encoding, &compression)
+    }
     #[inline]
     pub fn encoding() -> Encoding {
         Encoding::default()

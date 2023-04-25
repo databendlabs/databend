@@ -55,6 +55,7 @@ common-tracing = { path = "../common/tracing" }
 databend-meta = { path = "../meta/service" }
 databend-query = { path = "../query/service" }
 sharing-endpoint = { path = "../query/sharing-endpoint" }
+storages-common-table-meta = { path = "../query/storages/common/table-meta" }
 
 # Crates.io dependencies
 anyerror = { workspace = true }

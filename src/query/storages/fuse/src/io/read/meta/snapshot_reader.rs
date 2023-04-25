@@ -40,13 +40,5 @@ pub async fn load_snapshot_v3<R>(mut reader: R) -> Result<TableSnapshot>
 where R: AsyncRead + Unpin + Send {
     let mut buffer: Vec<u8> = vec![];
     reader.read_to_end(&mut buffer).await?;
-
-    let mut cursor = Cursor::new(buffer);
-    let version = cursor.read_scalar::<u64>()?;
-    assert_eq!(version, TableSnapshot::VERSION);
-    let encoding = Encoding::try_from(cursor.read_scalar::<u8>()?)?;
-    let compression = MetaCompression::try_from(cursor.read_scalar::<u8>()?)?;
-    let snapshot_size: u64 = cursor.read_scalar::<u64>()?;
-
-    read_and_deserialize(&mut cursor, snapshot_size, &encoding, &compression)
+    TableSnapshot::from_bytes(buffer)
 }

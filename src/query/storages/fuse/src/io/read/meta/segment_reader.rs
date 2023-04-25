@@ -48,18 +48,5 @@ where R: AsyncRead + Unpin + Send {
     let mut buffer: Vec<u8> = vec![];
     reader.read_to_end(&mut buffer).await?;
 
-    let mut cursor = Cursor::new(buffer);
-    let version = cursor.read_scalar::<u64>()?;
-    assert_eq!(version, SegmentInfo::VERSION);
-    let encoding = Encoding::try_from(cursor.read_scalar::<u8>()?)?;
-    let compression = MetaCompression::try_from(cursor.read_scalar::<u8>()?)?;
-    let blocks_size: u64 = cursor.read_scalar::<u64>()?;
-    let summary_size: u64 = cursor.read_scalar::<u64>()?;
-
-    let blocks: Vec<Arc<BlockMeta>> =
-        read_and_deserialize(&mut cursor, blocks_size, &encoding, &compression)?;
-    let summary: Statistics =
-        read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
-
-    Ok(SegmentInfo::new(blocks, summary))
+    SegmentInfo::from_bytes(buffer)
 }
