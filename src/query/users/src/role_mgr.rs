@@ -33,6 +33,11 @@ impl UserApiProvider {
     // Get one role from by tenant.
     #[async_backtrace::framed]
     pub async fn get_role(&self, tenant: &str, role: String) -> Result<RoleInfo> {
+        let builtin_roles = self.builtin_roles();
+        if let Some(role_info) = builtin_roles.into_iter().filter(|r| r.name == role).next() {
+            return Ok(role_info);
+        }
+
         let client = self.get_role_api_client(tenant)?;
         let role_data = client.get_role(&role, MatchSeq::GE(0)).await?.data;
         Ok(role_data)
@@ -97,11 +102,31 @@ impl UserApiProvider {
         }
     }
 
-    // Ensure the builtin roles inside a tenant. Currently we have two builtin roles:
+    // Currently we have two builtin roles:
     // 1. ACCOUNT_ADMIN, which has the equivalent privileges of `GRANT ALL ON *.* TO ROLE account_admin`,
     //    it also contains all roles. ACCOUNT_ADMIN can access the data objects which owned by any role.
     // 2. PUBLIC, on the other side only includes the public accessible privileges, but every role
     //    contains the PUBLIC role. The data objects which owned by PUBLIC can be accessed by any role.
+    fn builtin_roles(&self) -> Vec<RoleInfo> {
+        let mut account_admin = RoleInfo::new(BUILTIN_ROLE_ACCOUNT_ADMIN);
+        account_admin.grants.grant_privileges(
+            &GrantObject::Global,
+            UserPrivilegeSet::available_privileges_on_global(),
+        );
+
+        let mut public = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
+        public.grants.grant_privileges(
+            &GrantObject::Table(
+                "default".to_string(),
+                "system".to_string(),
+                "one".to_string(),
+            ),
+            UserPrivilegeType::Select.into(),
+        );
+
+        vec![account_admin, public]
+    }
+
     #[async_backtrace::framed]
     pub async fn ensure_builtin_roles(&self, tenant: &str) -> Result<()> {
         let mut account_admin = RoleInfo::new(BUILTIN_ROLE_ACCOUNT_ADMIN);
