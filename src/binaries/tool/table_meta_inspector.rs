@@ -36,6 +36,7 @@ use serfig::parsers::Toml;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
 use tokio::io::AsyncReadExt;
+use url::form_urlencoded::parse;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Parser)]
 #[clap(about, version = &**DATABEND_COMMIT_VERSION, author)]
@@ -53,13 +54,10 @@ pub struct InspectorConfig {
     pub meta_type: String,
 }
 
-async fn read_meta_data(config: &InspectorConfig) -> Result<Vec<u8>> {
-    let mut buffer: Vec<u8> = vec![];
-    let mut reader = parse_reader(config).await?;
-    reader.read_to_end(&mut buffer).await?;
+fn convert_input_data(data: Vec<u8>, config: &InspectorConfig) -> Result<Vec<u8>> {
     match config.meta_type.as_str() {
-        "sg" | "segment" => Ok(serde_json::to_vec(&SegmentInfo::from_bytes(buffer)?)?),
-        "ss" | "snapshot" => Ok(serde_json::to_vec(&TableSnapshot::from_bytes(buffer)?)?),
+        "sg" | "segment" => Ok(serde_json::to_vec(&SegmentInfo::from_bytes(data)?)?),
+        "ss" | "snapshot" => Ok(serde_json::to_vec(&TableSnapshot::from_bytes(data)?)?),
         _ => Err(format!(
             "Unsupported type: {}, only support ss/snapshot or sg/segment",
             config.meta_type
@@ -78,8 +76,9 @@ fn parse_output(config: &InspectorConfig) -> Result<Box<dyn Write>> {
     Ok(writer)
 }
 
-async fn parse_reader(config: &InspectorConfig) -> Result<Box<dyn Read>> {
-    let reader = match &config.input {
+async fn parse_input_data(config: &InspectorConfig) -> Result<Vec<u8>> {
+    let mut buffer: Vec<u8> = vec![];
+    match &config.input {
         Some(input) => {
             let op = match &config.config {
                 Some(config_file) => {
@@ -95,20 +94,21 @@ async fn parse_reader(config: &InspectorConfig) -> Result<Box<dyn Read>> {
                     Operator::new(builder)?.finish()
                 }
             };
-            Box::new(op.reader(input).await?) as Box<dyn Read>
+            op.reader(input).await?.read_to_end(&mut buffer).await?;
         }
         None => {
             let stdin = io::stdin();
             let handle = stdin.lock();
-            let reader = io::BufReader::new(handle);
-            Box::new(reader) as Box<dyn Read>
+            io::BufReader::new(handle).read_to_end(&mut buffer)?;
         }
     };
-    Ok(reader)
+    Ok(buffer)
 }
 
 async fn run(config: &InspectorConfig) -> Result<()> {
-    let out = read_meta_data(config).await?;
+    let input = parse_input_data(config).await?;
+
+    let out = convert_input_data(input, config)?;
 
     let mut writer = parse_output(config)?;
 
