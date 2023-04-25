@@ -84,11 +84,11 @@ async fn main() {
         println!("{} {} {}", title, author, date);
     }
 
-    let sql_table_dorp = "DROP TABLE books;";
-    conn.exec(sql_table_dorp).await.unwrap();
+    let sql_table_drop = "DROP TABLE books;";
+    conn.exec(sql_table_drop).await.unwrap();
 
-    let sql_db_dorp = "DROP DATABASE book_db;";
-    conn.exec(sql_db_dorp).await.unwrap();
+    let sql_db_drop = "DROP DATABASE book_db;";
+    conn.exec(sql_db_drop).await.unwrap();
 }
 ```
 
