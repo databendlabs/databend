@@ -127,6 +127,10 @@ impl FuseTable {
         self.try_add_deletion_source(ctx.clone(), &filter_expr, col_indices, &snapshot, pipeline)
             .await?;
 
+        if pipeline.is_empty() {
+            return Ok(());
+        }
+
         let cluster_stats_gen =
             self.get_cluster_stats_gen(ctx.clone(), 0, self.get_block_thresholds())?;
         pipeline.add_transform(|input, output| {
@@ -202,6 +206,9 @@ impl FuseTable {
                 base_snapshot,
             )
             .await?;
+        if max_threads == 0 {
+            return Ok(());
+        }
 
         let block_reader = self.create_block_reader(projection, false, ctx.clone())?;
         let schema = block_reader.schema();

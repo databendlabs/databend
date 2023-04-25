@@ -153,17 +153,21 @@ impl Interpreter for UpdateInterpreter {
         )
         .await?;
 
-        build_res.main_pipeline.set_on_finished(move |may_error| {
-            // Drop table mutation lock.
-            GlobalIORuntime::instance().block_on(async move {
-                let _res = catalog.drop_table_mutation_lock(&table_info).await?;
-                Ok(())
-            })?;
-            match may_error {
-                None => Ok(()),
-                Some(error_code) => Err(error_code.clone()),
-            }
-        });
+        if build_res.main_pipeline.is_empty() {
+            let _res = catalog.drop_table_mutation_lock(&table_info).await?;
+        } else {
+            build_res.main_pipeline.set_on_finished(move |may_error| {
+                // Drop table mutation lock.
+                GlobalIORuntime::instance().block_on(async move {
+                    let _res = catalog.drop_table_mutation_lock(&table_info).await?;
+                    Ok(())
+                })?;
+                match may_error {
+                    None => Ok(()),
+                    Some(error_code) => Err(error_code.clone()),
+                }
+            });
+        }
         Ok(build_res)
     }
 }

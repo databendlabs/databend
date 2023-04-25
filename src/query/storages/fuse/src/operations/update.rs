@@ -84,6 +84,10 @@ impl FuseTable {
         )
         .await?;
 
+        if pipeline.is_empty() {
+            return Ok(());
+        }
+
         // TODO(zhyass): support cluster stats generator.
         pipeline.add_transform(|input, output| {
             SerializeDataTransform::try_create(
@@ -203,21 +207,25 @@ impl FuseTable {
         let max_threads = self
             .mutation_block_pruning(ctx.clone(), filter, projection, base_snapshot)
             .await?;
-        // Add source pipe.
-        pipeline.add_source(
-            |output| {
-                MutationSource::try_create(
-                    ctx.clone(),
-                    MutationAction::Update,
-                    output,
-                    filter_expr.clone(),
-                    block_reader.clone(),
-                    remain_reader.clone(),
-                    ops.clone(),
-                    self.storage_format,
-                )
-            },
-            max_threads,
-        )
+        if max_threads > 0 {
+            // Add source pipe.
+            pipeline.add_source(
+                |output| {
+                    MutationSource::try_create(
+                        ctx.clone(),
+                        MutationAction::Update,
+                        output,
+                        filter_expr.clone(),
+                        block_reader.clone(),
+                        remain_reader.clone(),
+                        ops.clone(),
+                        self.storage_format,
+                    )
+                },
+                max_threads,
+            )?;
+        }
+
+        Ok(())
     }
 }
