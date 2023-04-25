@@ -51,14 +51,14 @@ impl UserApiProvider {
             .get_role_api_client(tenant)?
             .get_roles()
             .await
-            .or_else(|e| Err(e.add_message_back("(while get roles).")))?;
+            .map_err(|e| e.add_message_back("(while get roles)."))?;
         // overwrite the builtin roles.
-        let roles = seq_roles
+        let mut roles = seq_roles
             .into_iter()
             .map(|r| r.data)
             .filter(|r| !builtin_roles.contains_key(&r.name))
-            .collect();
-        roles.extend(builtin_roles);
+            .collect::<Vec<_>>();
+        roles.extend(builtin_roles.values().cloned());
         Ok(roles)
     }
 
