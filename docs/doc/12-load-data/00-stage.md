@@ -1,144 +1,31 @@
 ---
-title: Loading from an Internal Stage
-sidebar_label: Loading from an Internal Stage
+title: Loading from a Stage
+sidebar_label: Loading from a Stage
 description:
-  Load data from Databend stages.
+  Load data from user stage, internal or external stage
 ---
+
+Databend enables you to easily import data from files uploaded to either the user stage or an internal/external stage. To do so, you can first use the [File Upload API](../11-integrations/00-api/10-put-to-stage.md) to upload the files to a stage, and then employ the [COPY INTO](../14-sql-commands/10-dml/dml-copy-into-table.md) command to load the data from the staged file. Please note that the files must be in a format supported by Databend, otherwise the data cannot be imported. For more information on the file formats supported by Databend, see [Input & Output File Formats](../13-sql-reference/50-file-format-options.md).
 
 ![image](/img/load/load-data-from-stage.png)
 
-In this tutorial, you will create an internal stage, stage a sample file, and then load data from the file into Databend with the [COPY INTO](../14-sql-commands/10-dml/dml-copy-into-table.md) command.
+The following tutorials offer a detailed, step-by-step guide to help you effectively navigate the process of loading data from files in a stage.
 
-### Step 1. Create Stage Object
+## Before You Begin
 
-Execute [CREATE STAGE](../14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md) to create a named internal stage.
+Before you start, make sure you have completed the following tasks:
 
-```shell
-mysql -h127.0.0.1 -uroot -P3307
-```
+- Download and save the sample file [books.parquet](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.parquet) to a local folder. The file contains two records:
 
-```sql
-CREATE STAGE my_int_stage;
-```
-
-```sql
-DESC STAGE my_int_stage;
-+--------------+------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------+--------------------------------------------------------------------------------------------------------------------+---------+
-| name         | stage_type | stage_params                                                                                                                                                | copy_options                                  | file_format_options                                                                                                | comment |
-+--------------+------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------+--------------------------------------------------------------------------------------------------------------------+---------+
-| my_int_stage | Internal   | StageParams { storage: S3(StageS3Storage { bucket: "", path: "", credentials_aws_key_id: "", credentials_aws_secret_key: "", encryption_master_key: "" }) } | CopyOptions { on_error: None, size_limit: 0 } | FileFormatOptions { format: Parquet, skip_header: 0, field_delimiter: ",", record_delimiter: "\n", compression: None } |         |
-+--------------+------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------+--------------------------------------------------------------------------------------------------------------------+---------+
-```
-
-### Step 2. Stage the Data Files
-
-Download the sample data file(Choose CSV or Parquet), the file contains two records:
 ```text
 Transaction Processing,Jim Gray,1992
 Readings in Database Systems,Michael Stonebraker,2004
 ```
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
-
-<Tabs groupId="sample-data">
-
-<TabItem value="csv" label="CSV">
-
-Download [books.csv](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv)
-
-</TabItem>
-
-<TabItem value="parquet" label="Parquet">
-
-Download [books.parquet](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.parquet)
-
-</TabItem>
-
-</Tabs>
-
-<Tabs groupId="sample-data">
-
-<TabItem value="csv" label="CSV">
-
-Upload `books.csv` into stages:
-
-```shell title='Request /v1/upload_to_stage' API
-curl -H "stage_name:my_int_stage"\
- -F "upload=@./books.csv"\
- -XPUT http://root:@localhost:8000/v1/upload_to_stage
-```
-
-```text title='Response'
-{"id":"50880048-f397-4d32-994c-ce3d38af430f","stage_name":"my_int_stage","state":"SUCCESS","files":["books.csv"]}
-```
-
-:::tip
-* http://127.0.0.1:8000/v1/upload_to_stage
-  * `127.0.0.1` is `http_handler_host` value in your *databend-query.toml*
-  * `8000` is `http_handler_port` value in your *databend-query.toml*
-
-* -F  \"upload=@./books.csv\"
-  * Your books.csv file location
-:::
-
-</TabItem>
-
-<TabItem value="parquet" label="Parquet">
-
-Upload `books.parquet` into stages:
-
-```shell title='Request /v1/upload_to_stage' API
-curl -H "stage_name:my_int_stage"\
- -F "upload=@./books.parquet"\
- -XPUT http://root:@localhost:8000/v1/upload_to_stage
-```
-
-```text title='Response'
-{"id":"50880048-f397-4d32-994c-ce3d38af430f","stage_name":"my_int_stage","state":"SUCCESS","files":["books.parquet"]}
-```
-
-:::tip
-* http://127.0.0.1:8000/v1/upload_to_stage
-  * `127.0.0.1` is `http_handler_host` value in your *databend-query.toml*
-  * `8000` is `http_handler_port` value in your *databend-query.toml*
-
-* -F  \"upload=@./books.parquet\"
-  * Your books.csv file location
-:::
-
-</TabItem>
-
-</Tabs>
-
-
-### Step 3. List the Staged Files (Optional)
-
-```shell
-mysql -h127.0.0.1 -uroot -P3307
-```
+- Create a table with the following SQL statements in Databend:
 
 ```sql
-LIST @my_int_stage;
-+---------------+------+------+-------------------------------+--------------------+
-| name          | size | md5  | last_modified                 | creator            |
-+---------------+------+------+-------------------------------+--------------------+
-| books.csv     |   91 | NULL | 2022-06-10 12:01:40.000 +0000 | 'root'@'127.0.0.1' |
-| books.parquet |   91 | NULL | 2022-06-10 12:01:40.000 +0000 | 'root'@'127.0.0.1' |
-+---------------+------+------+-------------------------------+--------------------+
-```
-
-### Step 4. Creating Database and Table
-
-```sql
-CREATE DATABASE book_db;
-```
-
-```sql
-USE book_db;
-```
-
-```sql
+USE default;
 CREATE TABLE books
 (
     title VARCHAR,
@@ -147,55 +34,176 @@ CREATE TABLE books
 );
 ```
 
-### Step 5. Copy Data into the Target Tables
+## Tutorial 1: Loading from User Stage
 
-Execute [COPY](../14-sql-commands/10-dml/dml-copy-into-table.md) to load staged files to the target table.
+Follow this tutorial to upload the sample file to the user stage and load data from the staged file into Databend.
 
-<Tabs groupId="sample-data">
+### Step 1: Upload Sample File
 
-<TabItem value="csv" label="CSV">
+1. Use cURL to make a request to the [File Upload API](../11-integrations/00-api/10-put-to-stage.md):
 
-```sql
-COPY INTO books FROM @my_int_stage files=('books.csv') file_format = (type = CSV field_delimiter = ','  record_delimiter = '\n' skip_header = 0);
+```shell title='Upload to User Stage:'
+curl -u root: -H "stage_name:~" -F "upload=@books.parquet" -XPUT "http://localhost:8000/v1/upload_to_stage"
 ```
 
-:::tip
-
-* files = ( 'file_name' [ , 'file_name' ... ] )
-
-  Specifies a list of one or more files names (separated by commas) to be loaded.
-
-
-* file_format
-
-| Parameters  | Description | Required |
-| ----------- | ----------- | --- |
-| record_delimiter | One characters that separate records in an input file. Default `'\n'` | Optional |
-| field_delimiter | One characters that separate fields in an input file. Default `','` | Optional |
-| skip_header | Number of lines at the start of the file to skip. Default `0` | Optional |
-:::
-
-</TabItem>
-
-<TabItem value="parquet" label="Parquet">
-
-```sql
-COPY INTO books FROM @my_int_stage files=('books.parquet') FILE_FORMAT = (TYPE = PARQUET);
+```shell title='Response:'
+{"id":"6e45fb1e-562c-496b-8500-f0b103cae3c7","stage_name":"~","state":"SUCCESS","files":["books.parquet"]}    
 ```
 
-</TabItem>
+2. Check the uploaded file:
 
-</Tabs>
+```sql
+LIST @~;
 
+---
+name         |size|md5                               |last_modified                |creator|
+-------------+----+----------------------------------+-----------------------------+-------+
+books.parquet| 998|"88432bf90aadb79073682988b39d461c"|2023-04-24 14:45:26.753 +0000|       |
+```
 
-### Step 6. Verify the Loaded Data
+### Step 2. Copy Data into Table
+
+1. Load data into the target table with the [COPY INTO](../14-sql-commands/10-dml/dml-copy-into-table.md) command:
+
+```sql
+COPY INTO books FROM @~ files=('books.parquet') FILE_FORMAT = (TYPE = PARQUET);
+```
+
+2. Check the loaded data:
 
 ```sql
 SELECT * FROM books;
-+------------------------------+----------------------+-------+
-| title                        | author               | date  |
-+------------------------------+----------------------+-------+
-| Transaction Processing       |  Jim Gray            |  1992 |
-| Readings in Database Systems |  Michael Stonebraker |  2004 |
-+------------------------------+----------------------+-------+
+
+---
+title                       |author             |date|
+----------------------------+-------------------+----+
+Transaction Processing      |Jim Gray           |1992|
+Readings in Database Systems|Michael Stonebraker|2004|
+```
+
+## Tutorial 2: Loading from Internal Stage
+
+Follow this tutorial to upload the sample file to an internal stage and load data from the staged file into Databend.
+
+### Step 1. Create an Internal Stage
+
+1. Create an internal stage with the [CREATE STAGE](../14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md) command:
+
+```sql
+CREATE STAGE my_internal_stage;
+```
+2. Check the created stage:
+
+```sql
+SHOW STAGES;
+
+name             |stage_type|number_of_files|creator           |comment|
+-----------------+----------+---------------+------------------+-------+
+my_internal_stage|Internal  |              0|'root'@'127.0.0.1'|       |
+```
+
+### Step 2: Upload Sample File
+
+1. Use cURL to make a request to the [File Upload API](../11-integrations/00-api/10-put-to-stage.md):
+
+```shell title='Upload to Internal Stage:'
+curl -u root: -H "stage_name:my_internal_stage" -F "upload=@books.parquet" -XPUT "http://localhost:8000/v1/upload_to_stage"
+```
+
+```shell title='Response:'
+{"id":"2828649a-1eee-4feb-9222-68cefd8cd096","stage_name":"my_internal_stage","state":"SUCCESS","files":["books.parquet"]}
+```
+
+2. Check the uploaded file:
+
+```sql
+LIST @my_internal_stage;
+
+---
+name         |size|md5                               |last_modified                |creator|
+-------------+----+----------------------------------+-----------------------------+-------+
+books.parquet| 998|"88432bf90aadb79073682988b39d461c"|2023-04-24 15:17:44.205 +0000|       |
+```
+
+### Step 3. Copy Data into Table
+
+1. Load data into the target table with the [COPY INTO](../14-sql-commands/10-dml/dml-copy-into-table.md) command:
+
+```sql
+COPY INTO books FROM @my_internal_stage files=('books.parquet') FILE_FORMAT = (TYPE = PARQUET);
+```
+2. Check the loaded data:
+
+```sql
+SELECT * FROM books;
+
+---
+title                       |author             |date|
+----------------------------+-------------------+----+
+Transaction Processing      |Jim Gray           |1992|
+Readings in Database Systems|Michael Stonebraker|2004|
+```
+
+## Tutorial 3: Loading from External Stage
+
+Follow this tutorial to upload the sample file to an external stage and load data from the staged file into Databend.
+
+### Step 1. Create an External Stage
+
+1. Create an external stage with the [CREATE STAGE](../14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md) command:
+
+```sql
+CREATE STAGE my_external_stage url = 's3://databend' CONNECTION =(ENDPOINT_URL= 'http://127.0.0.1:9000' aws_key_id='ROOTUSER' aws_secret_key='CHANGEME123');
+```
+
+2. Check the created stage:
+
+```sql
+SHOW STAGES;
+
+name             |stage_type|number_of_files|creator           |comment|
+-----------------+----------+---------------+------------------+-------+
+my_external_stage|External  |               |'root'@'127.0.0.1'|       |
+```
+
+### Step 2: Upload Sample File
+
+1. Use cURL to make a request to the [File Upload API](../11-integrations/00-api/10-put-to-stage.md):
+
+```shell title='Upload to External Stage:'
+curl  -u root: -H "stage_name:my_external_stage" -F "upload=@books.parquet" -XPUT "http://127.0.0.1:8000/v1/upload_to_stage"
+```
+
+```shell title='Response:'
+{"id":"a21844fc-4c06-4b95-85a0-d57c28b9a142","stage_name":"my_external_stage","state":"SUCCESS","files":["books.parquet"]}
+```
+
+2. Check the uploaded file:
+
+```sql
+LIST @my_external_stage;
+
+---
+name         |size|md5                               |last_modified                |creator|
+-------------+----+----------------------------------+-----------------------------+-------+
+books.parquet| 998|"88432bf90aadb79073682988b39d461c"|2023-04-24 15:47:40.727 +0000|       |
+```
+
+### Step 3. Copy Data into Table
+
+1. Load data into the target table with the [COPY INTO](../14-sql-commands/10-dml/dml-copy-into-table.md) command:
+
+```sql
+COPY INTO books FROM @my_external_stage files=('books.parquet') FILE_FORMAT = (TYPE = PARQUET);
+```
+2. Check the loaded data:
+
+```sql
+SELECT * FROM books;
+
+---
+title                       |author             |date|
+----------------------------+-------------------+----+
+Transaction Processing      |Jim Gray           |1992|
+Readings in Database Systems|Michael Stonebraker|2004|
 ```

@@ -5,19 +5,26 @@ statement ok
 DROP TABLE IF EXISTS `05_0031_t`
 
 statement ok
-CREATE TABLE `05_0031_t`(a int, b int default 2) storage_format='parquet'
+CREATE TABLE `05_0031_t`(a int, b int default 2)
 
 statement error 1110
 ALTER TABLE `05_0031_t` ADD COLUMN _row_id float
 
 statement error 1110
-CREATE TABLE `05_0031_t_1`(_row_id int) storage_format='parquet'
+CREATE TABLE `05_0031_t_1`(_row_id int)
 
 statement ok
 INSERT INTO TABLE `05_0031_t` (a) values(1),(2)
 
 statement ok
 INSERT INTO TABLE `05_0031_t` (a) values(3)
+
+query I
+SELECT _row_id FROM `05_0031_t` where b > 0 order by _row_id
+----
+0
+1
+4398046511104
 
 query II
 SELECT b,_row_id,a FROM `05_0031_t` order by _row_id
@@ -35,7 +42,7 @@ statement ok
 DROP TABLE IF EXISTS `05_0031_t_1`
 
 statement ok
-CREATE TABLE `05_0031_t_1`(c int) storage_format='parquet'
+CREATE TABLE `05_0031_t_1`(c int)
 
 statement ok
 INSERT INTO TABLE `05_0031_t_1` values(5),(6)
@@ -54,7 +61,7 @@ SELECT a,`05_0031_t_1`._row_id FROM `05_0031_t` NATURAL JOIN `05_0031_t_1` order
 # ===============
 
 statement ok
-create table t_11126(a Int64) storage_format='parquet'
+create table t_11126(a Int64)
 
 statement ok
 insert into t_11126 select * from numbers(100);
