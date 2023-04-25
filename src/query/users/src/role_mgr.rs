@@ -34,8 +34,8 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn get_role(&self, tenant: &str, role: String) -> Result<RoleInfo> {
         let builtin_roles = self.builtin_roles();
-        if let Some(role_info) = builtin_roles.into_iter().filter(|r| r.name == role).next() {
-            return Ok(role_info);
+        if let Some(role_info) = builtin_roles.get(&role) {
+            return Ok(role_info.clone());
         }
 
         let client = self.get_role_api_client(tenant)?;
@@ -46,13 +46,19 @@ impl UserApiProvider {
     // Get the tenant all roles list.
     #[async_backtrace::framed]
     pub async fn get_roles(&self, tenant: &str) -> Result<Vec<RoleInfo>> {
-        let client = self.get_role_api_client(tenant)?;
-        let seq_roles = client
+        let builtin_roles = self.builtin_roles();
+        let seq_roles = self
+            .get_role_api_client(tenant)?
             .get_roles()
             .await
             .or_else(|e| Err(e.add_message_back("(while get roles).")))?;
-
-        let roles = seq_roles.into_iter().map(|r| r.data).collect();
+        // overwrite the builtin roles.
+        let roles = seq_roles
+            .into_iter()
+            .map(|r| r.data)
+            .filter(|r| !builtin_roles.contains_key(&r.name))
+            .collect();
+        roles.extend(builtin_roles);
         Ok(roles)
     }
 
@@ -101,7 +107,7 @@ impl UserApiProvider {
     //    it also contains all roles. ACCOUNT_ADMIN can access the data objects which owned by any role.
     // 2. PUBLIC, on the other side only includes the public accessible privileges, but every role
     //    contains the PUBLIC role. The data objects which owned by PUBLIC can be accessed by any role.
-    fn builtin_roles(&self) -> Vec<RoleInfo> {
+    fn builtin_roles(&self) -> HashMap<String, RoleInfo> {
         let mut account_admin = RoleInfo::new(BUILTIN_ROLE_ACCOUNT_ADMIN);
         account_admin.grants.grant_privileges(
             &GrantObject::Global,
@@ -118,7 +124,10 @@ impl UserApiProvider {
             UserPrivilegeType::Select.into(),
         );
 
-        vec![account_admin, public]
+        let mut result = HashMap::new();
+        result.insert(BUILTIN_ROLE_ACCOUNT_ADMIN.into(), account_admin);
+        result.insert(BUILTIN_ROLE_PUBLIC.into(), public);
+        result
     }
 
     #[async_backtrace::framed]
