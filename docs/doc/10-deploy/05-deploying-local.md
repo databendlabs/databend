@@ -72,7 +72,7 @@ To establish a connection with Databend, you'll use the BendSQL CLI tool in this
 1. To establish a connection with a local Databend, execute the following command:
 
 ```shell
-(base) eric@Erics-iMac ~ % BendSQL connect
+(base) eric@Erics-iMac ~ % bendsql connect
 Connected to Databend on Host: localhost
 Version: DatabendQuery v1.1.3-nightly-f9a0c3e5025e95d121acde426181d0d675475821(rust-1.70.0-nightly-2023-04-16T16:35:59.085130000Z)
 ```
@@ -80,7 +80,7 @@ Version: DatabendQuery v1.1.3-nightly-f9a0c3e5025e95d121acde426181d0d675475821(r
 2. Query the Databend version to verify the connection:
 
 ```shell
-(base) eric@Erics-iMac ~ % BendSQL query
+(base) eric@Erics-iMac ~ % bendsql query
 Connected with driver databend (DatabendQuery v1.1.3-nightly-f9a0c3e5025e95d121acde426181d0d675475821(rust-1.70.0-nightly-2023-04-16T16:35:59.085130000Z))
 Type "help" for help.
 
@@ -173,7 +173,7 @@ To establish a connection with Databend, you'll use the BendSQL CLI tool in this
 1. To establish a connection with Databend using the SQL user (databend/databend), run the following command:
 
 ```shell
-(base) eric@Erics-iMac Downloads % BendSQL connect -u databend -p databend
+(base) eric@Erics-iMac Downloads % bendsql connect -u databend -p databend
 Connected to Databend on Host: localhost
 Version: DatabendQuery v1.0.26-nightly-d9b7f4a8080b54d2b4c4a515296ee7557fc135f1(rust-1.70.0-nightly-2023-03-21T04:39:27.097687988Z)
 ```
@@ -181,7 +181,7 @@ Version: DatabendQuery v1.0.26-nightly-d9b7f4a8080b54d2b4c4a515296ee7557fc135f1(
 2. To verify the deployment, you can create a table and insert some data with BendSQL:
 
 ```shell
-(base) eric@Erics-iMac Downloads % BendSQL query
+(base) eric@Erics-iMac Downloads % bendsql query
 Connected with driver databend (DatabendQuery v1.0.26-nightly-d9b7f4a8080b54d2b4c4a515296ee7557fc135f1(rust-1.70.0-nightly-2023-03-21T04:39:27.097687988Z))
 Type "help" for help.
 dd:databend@localhost/default=> create database eric;

@@ -15,13 +15,13 @@ To download and install BendSQL, kindly visit the [BendSQL release page](https:/
 
 ## Connecting to Databend
 
-Use `BendSQL` to connect to a Databend instance:
+Use `bendsql` to connect to a Databend instance:
 
 ```shell
-> BendSQL --help
+> bendsql --help
 Databend Native Command Line Tool
 
-Usage: BendSQL [OPTIONS]
+Usage: bendsql [OPTIONS]
 
 Options:
       --help                     Print help information
@@ -44,15 +44,13 @@ Options:
   -V, --version                  Print version
 ```
 
-To connect to a local Databend, simply run `BendSQL`:
+To connect to a local Databend, simply run `bendsql`:
 
 ```shell
-> BendSQL
+> bendsql
 Welcome to BendSQL.
 Trying connect to localhost:8000 as user root.
 Connected to DatabendQuery v1.1.2-nightly-8ade21e4669e0a2cc100615247705feacdf76c5b(rust-1.70.0-nightly-2023-04-15T16:08:52.195357424Z)
-
-BendSQL>
 ```
 
 To connect to Databend Cloud, it is recommended to use the `--dsn` option or the `BENDSQL_DSN` environment variable:
@@ -60,7 +58,7 @@ To connect to Databend Cloud, it is recommended to use the `--dsn` option or the
 ```shell
 > export BENDSQL_DSN="databend://cloudapp:password@tnxxx.gw.aws-us-east-2.default.databend.com/?warehouse=default
 
-> BendSQL
+> bendsql
 Welcome to BendSQL.
 Trying connect to tnxxx.gw.aws-us-east-2.default.datafusecloud.com:443 as user cloudapp.
 Connected to DatabendQuery v1.1.17-nightly-77286d52c6d6db2c2000a74febf4ddb25f910c41(rust-1.70.0-nightly-2023-04-24T04:38:16.901421116Z)
@@ -68,13 +66,12 @@ Connected to DatabendQuery v1.1.17-nightly-77286d52c6d6db2c2000a74febf4ddb25f910
 cloudapp@tnxxx.gw>
 ```
 
-
 ## Running Queries with BendSQL
 
 ### Query with interactive shell
 
 ```shell
-> BendSQL
+> bendsql
 Welcome to BendSQL.
 Trying connect to localhost:8000 as user root.
 Connected to DatabendQuery v1.1.2-nightly-8ade21e4669e0a2cc100615247705feacdf76c5b(rust-1.70.0-nightly-2023-04-15T16:08:52.195357424Z)
@@ -100,7 +97,7 @@ SELECT
 
 with argument:
 ```shell
-> BendSQL --query "select now()"
+> bendsql --query "select now()"
 ┌────────────────────────────┐
 │            now()           │
 │          Timestamp         │
@@ -120,17 +117,16 @@ with stdin:
 └────────────────────────────┘
 ```
 
-
 ## Loading data
 
 from stdin:
 ```shell
-> BendSQL --query='INSERT INTO test_books VALUES;' --format=csv --data=@- <books.csv
+> bendsql --query='INSERT INTO test_books VALUES;' --format=csv --data=@- <books.csv
 ```
 
 from file:
 ```shell
-> BendSQL \
+> bendsql \
     --query='INSERT INTO ontime VALUES;' \
     --format=csv \
     --format-opt="compression=gzip" \
