@@ -175,7 +175,12 @@ impl FuseTable {
         &self,
         time_point: DateTime<Utc>,
     ) -> Result<(String, Vec<String>)> {
-        let files = self.list_files(time_point, |_| {}).await?;
+        let prefix = format!(
+            "{}/{}/",
+            self.meta_location_generator().prefix(),
+            FUSE_TBL_SNAPSHOT_PREFIX,
+        );
+        let files = self.list_files(prefix, time_point, |_| {}).await?;
         let location = files[0].clone();
         let reader = MetaReaders::table_snapshot_reader(self.get_operator());
         let ver = TableMetaLocationGenerator::snapshot_version(location.as_str());
@@ -215,8 +220,13 @@ impl FuseTable {
         );
 
         let mut location = None;
+        let prefix = format!(
+            "{}/{}/",
+            self.meta_location_generator().prefix(),
+            FUSE_TBL_SNAPSHOT_PREFIX,
+        );
         let files = self
-            .list_files(retention_point, |loc| {
+            .list_files(prefix, retention_point, |loc| {
                 if loc.as_str().starts_with(&prefix_loc) {
                     location = Some(loc);
                 }
@@ -229,13 +239,15 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
-    async fn list_files<P>(&self, time_point: DateTime<Utc>, mut pred: P) -> Result<Vec<String>>
-    where P: FnMut(String) {
-        let prefix = format!(
-            "{}/{}/",
-            self.meta_location_generator().prefix(),
-            FUSE_TBL_SNAPSHOT_PREFIX,
-        );
+    pub async fn list_files<P>(
+        &self,
+        prefix: String,
+        time_point: DateTime<Utc>,
+        mut pred: P,
+    ) -> Result<Vec<String>>
+    where
+        P: FnMut(String),
+    {
         let op = self.operator.clone();
 
         let mut file_list = vec![];

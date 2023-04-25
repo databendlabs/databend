@@ -38,6 +38,7 @@ use crate::storages::fuse::block_writer::BlockWriter;
 use crate::storages::fuse::operations::mutation::compact_segment;
 use crate::storages::fuse::table_test_fixture::append_sample_data;
 use crate::storages::fuse::table_test_fixture::check_data_dir;
+use crate::storages::fuse::table_test_fixture::execute_command;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -563,7 +564,7 @@ async fn test_fuse_gc_orphan_retention_files() -> Result<()> {
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
         let table = fixture.latest_default_table().await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let timestamp = chrono::Utc::now().timestamp() - 2;
+        let timestamp = chrono::Utc::now() - chrono::Duration::seconds(2);
         fuse_table.do_gc(&table_ctx, timestamp).await?;
     }
 
@@ -601,8 +602,8 @@ async fn test_fuse_gc_orphan_retention_files() -> Result<()> {
     // check that all orphan files within retention time exist
     {
         let exist_files = vec![
-            orphan_snapshot_orphan_files,
-            within_retention_time_orphan_files,
+            orphan_snapshot_orphan_files.clone(),
+            within_retention_time_orphan_files.clone(),
         ];
 
         for files in exist_files {
@@ -615,7 +616,75 @@ async fn test_fuse_gc_orphan_retention_files() -> Result<()> {
 
     // check all referenced files and snapshot files exist
     {
-        let table_ctx: Arc<dyn TableContext> = ctx.clone();
+        let table = fixture.latest_default_table().await?;
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let referenced_files = fuse_table
+            .get_snapshot_referenced_files(&table_ctx)
+            .await?
+            .unwrap();
+
+        assert_eq!(referenced_files, old_referenced_files);
+
+        for file in referenced_files.all_files() {
+            assert!(dal.is_exist(&file).await?);
+        }
+
+        let snapshot_files = fuse_table.list_snapshot_files().await?;
+        assert_eq!(old_snapshot_files, snapshot_files);
+        for file in snapshot_files {
+            assert!(dal.is_exist(&file).await?);
+        }
+    }
+
+    // set retention period and try sql command
+    ctx.get_settings().set_retention_period(0)?;
+    // gc the table
+    let db = fixture.default_db_name();
+    let tbl = fixture.default_table_name();
+    let qry = format!("optimize table {}.{} gc", db, tbl);
+    let ctx = fixture.ctx();
+    execute_command(ctx, &qry).await?;
+
+    // check files number
+    {
+        let expected_num_of_snapshot = 3;
+        let expected_num_of_segment = 3;
+        let expected_num_of_blocks = 3;
+        let expected_num_of_index = expected_num_of_blocks;
+        let expected_num_of_ts = 0;
+        check_data_dir(
+            &fixture,
+            "do_gc_orphan_files: after gc sql",
+            expected_num_of_snapshot,
+            expected_num_of_ts,
+            expected_num_of_segment,
+            expected_num_of_blocks,
+            expected_num_of_index,
+            Some(()),
+            None,
+        )
+        .await?;
+    }
+
+    let dal = fuse_table.get_operator_ref();
+    // check that all orphan files within retention time have been purged
+    {
+        for file in within_retention_time_orphan_files {
+            let ret = dal.is_exist(&file).await?;
+            assert!(!ret);
+        }
+    }
+
+    // check that all orphan files within retention time exist
+    {
+        for file in orphan_snapshot_orphan_files {
+            let ret = dal.is_exist(&file).await?;
+            assert!(ret);
+        }
+    }
+
+    // check all referenced files and snapshot files exist
+    {
         let table = fixture.latest_default_table().await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let referenced_files = fuse_table

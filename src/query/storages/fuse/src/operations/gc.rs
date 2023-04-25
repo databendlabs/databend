@@ -16,6 +16,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
+use chrono::DateTime;
+use chrono::Utc;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -471,13 +473,20 @@ impl FuseTable {
     // return orphan files to be purged
     #[async_backtrace::framed]
     async fn get_orphan_files_to_be_purged(
+        &self,
         referenced_files: HashSet<String>,
-        snapshots_io: &SnapshotsIO,
-        retention_sec: i64,
+        retention_time: DateTime<Utc>,
     ) -> Result<Vec<String>> {
-        // 1. Get all the files in the same directory
+        // 1. Get all the files outof retention time in the same directory
         let mut files_to_be_purged = match referenced_files.iter().next().cloned() {
-            Some(location) => snapshots_io.get_files_by_prefix(&location).await?,
+            Some(location) => {
+                let prefix = SnapshotsIO::get_s3_prefix_from_file(&location);
+                if let Some(prefix) = prefix {
+                    self.list_files(prefix, retention_time, |_| {}).await?
+                } else {
+                    vec![]
+                }
+            }
             None => {
                 vec![]
             }
@@ -485,12 +494,6 @@ impl FuseTable {
 
         // 2. Filter out all the referenced files.
         files_to_be_purged.retain(|location| !referenced_files.contains(location));
-
-        // 3. Filter out all files within retention time
-        let within_time_files = snapshots_io
-            .get_within_time_files(&files_to_be_purged, retention_sec)
-            .await?;
-        files_to_be_purged.retain(|location| !within_time_files.contains(location));
 
         Ok(files_to_be_purged)
     }
@@ -576,7 +579,11 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
-    pub async fn do_gc(&self, ctx: &Arc<dyn TableContext>, retention_sec: i64) -> Result<()> {
+    pub async fn do_gc(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        retention_time: DateTime<Utc>,
+    ) -> Result<()> {
         let start = Instant::now();
         // 1. Get all the files referenced by the current snapshot
         let referenced_files = match self.get_snapshot_referenced_files(ctx).await? {
@@ -593,16 +600,11 @@ impl FuseTable {
         info!(status);
         ctx.set_status_info(&status);
 
-        let snapshots_io = SnapshotsIO::create(ctx.clone(), self.operator.clone());
-
         // 2. Purge orphan segment files.
         // 2.1 Get orphan segment files to be purged
-        let segment_locations_to_be_purged = Self::get_orphan_files_to_be_purged(
-            referenced_files.segments,
-            &snapshots_io,
-            retention_sec,
-        )
-        .await?;
+        let segment_locations_to_be_purged = self
+            .get_orphan_files_to_be_purged(referenced_files.segments, retention_time)
+            .await?;
         let status = format!(
             "gc orphan: read segment_locations_to_be_purged:{}, cost:{} sec",
             segment_locations_to_be_purged.len(),
@@ -628,12 +630,9 @@ impl FuseTable {
 
         // 3. Purge orphan block files.
         // 3.1 Get orphan block files to be purged
-        let block_locations_to_be_purged = Self::get_orphan_files_to_be_purged(
-            referenced_files.blocks,
-            &snapshots_io,
-            retention_sec,
-        )
-        .await?;
+        let block_locations_to_be_purged = self
+            .get_orphan_files_to_be_purged(referenced_files.blocks, retention_time)
+            .await?;
         let status = format!(
             "gc orphan: read block_locations_to_be_purged:{}, cost:{} sec",
             block_locations_to_be_purged.len(),
@@ -659,12 +658,9 @@ impl FuseTable {
 
         // 4. Purge orphan block index files.
         // 4.1 Get orphan block index files to be purged
-        let index_locations_to_be_purged = Self::get_orphan_files_to_be_purged(
-            referenced_files.blocks_index,
-            &snapshots_io,
-            retention_sec,
-        )
-        .await?;
+        let index_locations_to_be_purged = self
+            .get_orphan_files_to_be_purged(referenced_files.blocks_index, retention_time)
+            .await?;
         let status = format!(
             "gc orphan: read index_locations_to_be_purged:{}, cost:{} sec",
             index_locations_to_be_purged.len(),
