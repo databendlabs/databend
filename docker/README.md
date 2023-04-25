@@ -11,7 +11,6 @@ Support Platform: `linux/amd64`, `linux/arm64`
 * QUERY_STORAGE_TYPE
 
 * AWS_S3_ENDPOINT
-* AWS_S3_PRESIGNED_ENDPOINT
 * AWS_S3_BUCKET
 * AWS_ACCESS_KEY_ID
 * AWS_SECRET_ACCESS_KEY
@@ -93,15 +92,12 @@ docker run \
     datafuselabs/databend
 
 
-❯ bendsql connect
-Connected to Databend on Host: localhost
-Version: DatabendQuery v0.9.41-nightly-0edcc16(rust-1.68.0-nightly-2023-02-17T01:35:15.271479Z)
+❯ bendsql
+Welcome to BendSQL.
+Trying connect to localhost:8000 as user root.
+Connected to DatabendQuery v1.1.2-nightly-8ade21e4669e0a2cc100615247705feacdf76c5b(rust-1.70.0-nightly-2023-04-15T16:08:52.195357424Z)
 
-❯ bendsql query
-Connected with driver databend (DatabendQuery v0.9.41-nightly-0edcc16(rust-1.68.0-nightly-2023-02-17T01:35:15.271479Z))
-Type "help" for help.
-
-dd:root@localhost/default=>
+bendsql>
 
 
 ❯ mysql -P3307 -uroot --protocol=tcp
@@ -134,15 +130,12 @@ docker run \
     datafuselabs/databend
 
 
-❯ bendsql connect -u databend -p databend
-Connected to Databend on Host: localhost
-Version: DatabendQuery v0.9.41-nightly-0edcc16(rust-1.68.0-nightly-2023-02-17T01:35:15.271479Z)
+❯ bendsql -u databend -p databend
+Welcome to BendSQL.
+Trying connect to localhost:8000 as user databend.
+Connected to DatabendQuery v1.1.2-nightly-8ade21e4669e0a2cc100615247705feacdf76c5b(rust-1.70.0-nightly-2023-04-15T16:08:52.195357424Z)
 
-❯ bendsql query
-Connected with driver databend (DatabendQuery v0.9.41-nightly-0edcc16(rust-1.68.0-nightly-2023-02-17T01:35:15.271479Z))
-Type "help" for help.
-
-dd:databend@localhost/default=>
+bendsql>
 
 
 ❯ mysql -P3307 -udatabend -pdatabend --protocol=tcp
