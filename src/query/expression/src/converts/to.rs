@@ -50,6 +50,6 @@ pub fn scalar_to_datavalue(scalar: &Scalar) -> DataValue {
             let values = x.iter().map(scalar_to_datavalue).collect();
             DataValue::Struct(values)
         }
-        Scalar::EmptyMap | Scalar::Map(_) => unimplemented!(),
+        Scalar::EmptyMap | Scalar::Map(_) | Scalar::Bitmap(_) => unimplemented!(),
     }
 }
