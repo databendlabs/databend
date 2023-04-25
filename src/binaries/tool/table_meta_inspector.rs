@@ -21,14 +21,19 @@ use std::path::PathBuf;
 use clap::App;
 use clap::Arg;
 use clap::ArgMatches;
+use common_config::Config;
+use common_config::StorageConfig as InnerStorageConfig;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::Result;
+use common_storage::init_operator;
 use common_storages_fuse::io::read::meta::segment_reader::load_segment_v3;
 use common_storages_fuse::io::read::meta::snapshot_reader::load_snapshot_v3;
 use opendal::services::Fs;
 use opendal::Operator;
 use opendal::Reader;
 use serde_json;
+use serfig::collectors::from_file;
+use serfig::parsers::Toml;
 
 async fn read_meta_data(reader: &mut Reader, meta_type: &str) -> Result<Vec<u8>> {
     let out = match meta_type {
@@ -56,17 +61,31 @@ fn parse_output_file(args: &ArgMatches, input_val: &String) -> PathBuf {
         })
 }
 
-async fn run(args: &ArgMatches) -> Result<()> {
+async fn parse_reader(args: &ArgMatches) -> Result<Reader> {
     let input_path = args
         .get_one::<String>("input")
         .ok_or("Need input file path")?;
     println!("Input file: {:?}", input_path);
+    let config_file = args.get_one::<String>("config");
+    let op = match config_file {
+        Some(config_file) => {
+            let mut builder: serfig::Builder<Config> = serfig::Builder::default();
+            builder = builder.collect(from_file(Toml, &config_file));
+            let conf = InnerStorageConfig::try_into(builder.build()?.storage)?;
+            init_operator(&conf.params)?
+        }
+        None => {
+            let current_dir = env::current_dir()?;
+            let mut builder = Fs::default();
+            builder.root(current_dir.to_str().ok_or("Invalid path")?);
+            Operator::new(builder)?.finish()
+        }
+    };
+    Ok(op.reader(input_path).await?)
+}
 
-    let current_dir = env::current_dir()?;
-    let mut builder = Fs::default();
-    builder.root(current_dir.to_str().ok_or("Invalid path")?);
-    let op: Operator = Operator::new(builder)?.finish();
-    let mut reader = op.reader(input_path).await?;
+async fn run(args: &ArgMatches) -> Result<()> {
+    let mut reader = parse_reader(args).await?;
 
     let meta_type = args.get_one::<String>("type").ok_or("Need meta type")?;
 
@@ -89,7 +108,15 @@ async fn main() -> Result<()> {
                 .long("input")
                 .value_name("FILE")
                 .help("Sets the input file to use")
-                .required(true),
+                .required(false),
+        )
+        .arg(
+            Arg::with_name("config")
+                .short('c')
+                .long("config")
+                .value_name("CONFIG")
+                .help("Sets the config file to use")
+                .required(false),
         )
         .arg(
             Arg::with_name("output")
