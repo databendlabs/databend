@@ -104,7 +104,7 @@ FROM
 We are excited about the progress of the Rust version and look forward to sharing more updates with you soon! Feel free to try it out and give us feedback. For more information, follow the resources listed below.
 
 - [Crates.io - bendsql](https://crates.io/crates/bendsql)
-- [GitHub - datafuselabs/bendsql | Go](https://github.com/datafuselabs/bendsql)
+- [GitHub - datafuselabs/bendsql](https://github.com/datafuselabs/bendsql)
 
 ## Highlights
 
