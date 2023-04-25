@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_ast::ast::AlterTableAction;
 use common_ast::ast::AlterTableStmt;
 use common_ast::ast::AnalyzeTableStmt;
+use common_ast::ast::BinaryOperator;
 use common_ast::ast::ColumnDefinition;
 use common_ast::ast::CompactTarget;
 use common_ast::ast::CreateIndexStmt;
@@ -862,6 +863,51 @@ impl Binder {
         &mut self,
         stmt: &CreateIndexStmt,
     ) -> Result<Plan> {
+        let mut nlists = None;
+        let paras = &stmt.paras;
+        for para in paras {
+            match para {
+                Expr::BinaryOp {
+                    op: BinaryOperator::Eq,
+                    left,
+                    right,
+                    ..
+                } => {
+                    let left = left.as_ref();
+                    let right = right.as_ref();
+                    match (left, right) {
+                        (
+                            Expr::ColumnRef { column, .. },
+                            Expr::Literal {
+                                lit: Literal::UInt64(uint),
+                                ..
+                            },
+                        ) => {
+                            if column.name == "nlist" {
+                                if nlists.is_some() {
+                                    return Err(ErrorCode::SyntaxException(
+                                        "duplicate index parameters nlist",
+                                    ));
+                                }
+                                nlists = Some(*uint);
+                            } else {
+                                return Err(ErrorCode::SyntaxException("wrong parameter name"));
+                            }
+                        }
+                        _ => {
+                            return Err(ErrorCode::SyntaxException(
+                                "left side of index parameters must be identifier, right side must be value",
+                            ));
+                        }
+                    }
+                }
+                _ => {
+                    return Err(ErrorCode::SyntaxException(
+                        "index parameters must be key=value",
+                    ));
+                }
+            }
+        }
         let catalog = "".to_string();
         let database = "".to_string();
         let table = "".to_string();
@@ -869,6 +915,7 @@ impl Binder {
             catalog,
             database,
             table,
+            nlists,
         })))
     }
 

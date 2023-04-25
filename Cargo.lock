@@ -3351,6 +3351,7 @@ dependencies = [
  "ctor",
  "dashmap",
  "ethnum",
+ "faiss",
  "futures",
  "futures-util",
  "goldenfile",
@@ -3859,6 +3860,21 @@ name = "event-listener"
 version = "2.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
+
+[[package]]
+name = "faiss"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ed83a43b9c84394b72312aa961d24d34f418f7fb19105868a9ee1537a5851c3"
+dependencies = [
+ "faiss-sys",
+]
+
+[[package]]
+name = "faiss-sys"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54c3ddf096a623ad11f807ff00725e9e243aa999187cb60f6ecaea83baa6a6e0"
 
 [[package]]
 name = "fallible-streaming-iterator"
