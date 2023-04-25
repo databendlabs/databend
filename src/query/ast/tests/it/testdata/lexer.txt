@@ -29,6 +29,30 @@ x'deadbeef' -- a hex string\n 'a string literal\n escape quote by '' or \\\'. '
 
 
 ---------- Input ----------
+select /*+ x /* yy */ */ 1
+---------- Output ---------
+[(SELECT, "select", 0..6), (HintPrefix, "/*+", 7..10), (Ident, "x", 11..12), (HintSuffix, "*/", 22..24), (LiteralInteger, "1", 25..26), (EOI, "", 26..26)]
+
+
+---------- Input ----------
+select /* x /*+ yy */ */ 1
+---------- Output ---------
+[(SELECT, "select", 0..6), (HintSuffix, "*/", 22..24), (LiteralInteger, "1", 25..26), (EOI, "", 26..26)]
+
+
+---------- Input ----------
+select /*++  */ /*++ abc x*/ /*+ SET_VAR(timezone='Asia/Shanghai') */ 1;
+---------- Output ---------
+[(SELECT, "select", 0..6), (HintPrefix, "/*+", 7..10), (Plus, "+", 10..11), (HintSuffix, "*/", 13..15), (HintPrefix, "/*+", 16..19), (Plus, "+", 19..20), (Ident, "abc", 21..24), (Ident, "x", 25..26), (HintSuffix, "*/", 26..28), (HintPrefix, "/*+", 29..32), (SET_VAR, "SET_VAR", 33..40), (LParen, "(", 40..41), (TIMEZONE, "timezone", 41..49), (Eq, "=", 49..50), (QuotedString, "'Asia/Shanghai'", 50..65), (RParen, ")", 65..66), (HintSuffix, "*/", 67..69), (LiteralInteger, "1", 70..71), (SemiColon, ";", 71..72), (EOI, "", 72..72)]
+
+
+---------- Input ----------
+select /* the user name */ /*+SET_VAR(timezone='Asia/Shanghai') */ 1;
+---------- Output ---------
+[(SELECT, "select", 0..6), (HintPrefix, "/*+", 27..30), (SET_VAR, "SET_VAR", 30..37), (LParen, "(", 37..38), (TIMEZONE, "timezone", 38..46), (Eq, "=", 46..47), (QuotedString, "'Asia/Shanghai'", 47..62), (RParen, ")", 62..63), (HintSuffix, "*/", 64..66), (LiteralInteger, "1", 67..68), (SemiColon, ";", 68..69), (EOI, "", 69..69)]
+
+
+---------- Input ----------
 create table "user" (id int, name varchar /* the user name */);
 ---------- Output ---------
 [(CREATE, "create", 0..6), (TABLE, "table", 7..12), (QuotedString, "\"user\"", 13..19), (LParen, "(", 20..21), (Ident, "id", 21..23), (INT, "int", 24..27), (Comma, ",", 27..28), (Ident, "name", 29..33), (VARCHAR, "varchar", 34..41), (RParen, ")", 61..62), (SemiColon, ";", 62..63), (EOI, "", 63..63)]

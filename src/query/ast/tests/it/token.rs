@@ -55,6 +55,12 @@ fn test_lexer() {
         r#"'中文' '日本語'"#,
         r#"@abc 123"#,
         r#"42 3.5 4. .001 5e2 1.925e-3 .38e+7 1.e-01 0xfff x'deedbeef'"#,
+        // select /*+ x          */ 1
+        r#"select /*+ x /* yy */ */ 1"#,
+        // select                */ 1
+        r#"select /* x /*+ yy */ */ 1"#,
+        r#"select /*++  */ /*++ abc x*/ /*+ SET_VAR(timezone='Asia/Shanghai') */ 1;"#,
+        r#"select /* the user name */ /*+SET_VAR(timezone='Asia/Shanghai') */ 1;"#,
         r#"create table "user" (id int, name varchar /* the user name */);"#,
     ];
 

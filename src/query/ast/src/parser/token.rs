@@ -108,7 +108,7 @@ pub enum TokenKind {
     #[token("*/")]
     HintSuffix,
 
-    #[regex(r"/\*!\+([^\*]|(\*[^/]))*\*/", logos::skip)]
+    #[regex(r"/\*[^\+]([^\*]|(\*[^/]))*\*/", logos::skip)]
     CommentBlock,
 
     #[regex(r#"[_a-zA-Z][_$a-zA-Z0-9]*"#)]
