@@ -63,7 +63,7 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
                 (block_idx, *row_idx as usize, 1_usize)
             })
             .collect::<Vec<_>>();
-        
+
         let blocks = blocks.iter().collect::<Vec<_>>();
         Ok(DataBlock::take_blocks(&blocks, &indices, num_rows))
     }
