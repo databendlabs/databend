@@ -34,7 +34,7 @@ impl ValueType for BitmapType {
     type Scalar = Vec<u8>;
     type ScalarRef<'a> = &'a [u8];
     type Column = StringColumn;
-    type Domain = BitmapDomain;
+    type Domain = ();
     type ColumnIterator<'a> = StringIterator<'a>;
     type ColumnBuilder = StringColumnBuilder;
 
@@ -69,7 +69,11 @@ impl ValueType for BitmapType {
     }
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        domain.as_bitmap().map(BitmapDomain::clone)
+        if domain.is_undefined() {
+            Some(())
+        } else {
+            None
+        }
     }
 
     fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
@@ -80,8 +84,8 @@ impl ValueType for BitmapType {
         Column::Bitmap(col)
     }
 
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::Bitmap(domain)
+    fn upcast_domain(_domain: Self::Domain) -> Domain {
+        Domain::Undefined
     }
 
     fn column_len<'a>(col: &'a Self::Column) -> usize {
@@ -150,20 +154,9 @@ impl ArgType for BitmapType {
         DataType::Bitmap
     }
 
-    fn full_domain() -> Self::Domain {
-        BitmapDomain {
-            min: vec![],
-            max: None,
-        }
-    }
+    fn full_domain() -> Self::Domain {}
 
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
         StringColumnBuilder::with_capacity(capacity, 0)
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BitmapDomain {
-    pub(crate) min: Vec<u8>,
-    pub(crate) max: Option<Vec<u8>>,
 }

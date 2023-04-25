@@ -25,6 +25,7 @@ use crate::types::string::StringColumnBuilder;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::ArrayType;
+use crate::types::BitmapType;
 use crate::types::BooleanType;
 use crate::types::DateType;
 use crate::types::EmptyArrayType;
@@ -163,8 +164,9 @@ impl Column {
                 Self::concat_value_types::<MapType<AnyType, AnyType>>(builder, columns)
             }
             Column::Bitmap(_) => {
-                let builder = Vec::with_capacity(capacity);
-                Self::concat_value_types::<DateType>(builder, columns)
+                let data_capacity = columns.iter().map(|c| c.memory_size() - c.len() * 8).sum();
+                let builder = StringColumnBuilder::with_capacity(capacity, data_capacity);
+                Self::concat_value_types::<BitmapType>(builder, columns)
             }
             Column::Nullable(_) => {
                 let mut bitmaps = Vec::with_capacity(columns.len());

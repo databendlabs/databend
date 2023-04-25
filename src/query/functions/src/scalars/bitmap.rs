@@ -21,10 +21,18 @@ use itertools::join;
 use roaring::RoaringTreemap;
 
 pub fn register(registry: &mut FunctionRegistry) {
+    registry.register_aliases("bitmap_from_string", &["to_bitmap"]);
+
     registry.register_passthrough_nullable_1_arg::<UInt64Type, BitmapType, _, _>(
         "to_bitmap",
         |_| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<UInt64Type, BitmapType>(|arg, builder, _ctx| {
+        vectorize_with_builder_1_arg::<UInt64Type, BitmapType>(|arg, builder, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
+                    builder.commit_row();
+                    return;
+                }
+            }
             let mut rb = RoaringTreemap::new();
             rb.insert(arg);
             let mut buf = vec![];
@@ -63,7 +71,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_passthrough_nullable_1_arg::<BitmapType, StringType, _, _>(
-        "bitmap_to_string",
+        "to_string",
         |_| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<BitmapType, StringType>(|b, builder, ctx| {
             match RoaringTreemap::deserialize_from(b) {

@@ -14,7 +14,6 @@
 
 use enum_as_inner::EnumAsInner;
 
-use crate::types::bitmap::BitmapDomain;
 use crate::types::boolean::BooleanDomain;
 use crate::types::decimal::Decimal128Type;
 use crate::types::decimal::Decimal256Type;
@@ -28,7 +27,6 @@ use crate::types::number::F64;
 use crate::types::string::StringDomain;
 use crate::types::AnyType;
 use crate::types::ArgType;
-use crate::types::BitmapType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
@@ -104,7 +102,6 @@ pub enum Domain {
     Array(Option<Box<Domain>>),
     /// `Map(None)` means that the map is empty, thus there is no inner domain information.
     Map(Option<(Box<Domain>, Box<Domain>)>),
-    Bitmap(BitmapDomain),
     Tuple(Vec<Domain>),
     /// For certain types, like `Variant`, the domain is useless therefore is not defined.
     Undefined,
@@ -204,8 +201,7 @@ impl Domain {
                 };
                 Domain::Map(Some(inner_domain))
             }
-            DataType::Bitmap => Domain::Bitmap(BitmapType::full_domain()),
-            DataType::Variant => Domain::Undefined,
+            DataType::Bitmap | DataType::Variant => Domain::Undefined,
             DataType::Generic(_) => unreachable!(),
         }
     }
@@ -325,7 +321,6 @@ impl Domain {
                 Box::new(self_key.merge(other_key)),
                 Box::new(self_val.merge(other_val)),
             ))),
-            (Domain::Bitmap(_), Domain::Bitmap(_)) => self.clone(), // todo(ariesdevil)
             (Domain::Tuple(self_tup), Domain::Tuple(other_tup)) => Domain::Tuple(
                 self_tup
                     .iter()

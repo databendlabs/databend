@@ -23,6 +23,7 @@ use common_io::display_decimal_128;
 use common_io::display_decimal_256;
 use itertools::Itertools;
 use num_traits::FromPrimitive;
+use roaring::RoaringTreemap;
 use rust_decimal::Decimal;
 use rust_decimal::RoundingStrategy;
 
@@ -138,7 +139,10 @@ impl<'a> Debug for ScalarRef<'a> {
                 }
                 write!(f, "}}")
             }
-            ScalarRef::Bitmap(bits) => write!(f, "{bits:?}"),
+            ScalarRef::Bitmap(bits) => {
+                let rb = RoaringTreemap::deserialize_from(*bits).unwrap();
+                write!(f, "{rb:?}")
+            }
             ScalarRef::Tuple(fields) => {
                 write!(f, "(")?;
                 for (i, field) in fields.iter().enumerate() {
@@ -214,7 +218,10 @@ impl<'a> Display for ScalarRef<'a> {
                 }
                 write!(f, "}}")
             }
-            ScalarRef::Bitmap(bits) => write!(f, "{bits:?}"),
+            ScalarRef::Bitmap(bits) => {
+                let rb = RoaringTreemap::deserialize_from(*bits).unwrap();
+                write!(f, "{rb:?}")
+            }
             ScalarRef::Tuple(fields) => {
                 write!(f, "(")?;
                 for (i, field) in fields.iter().enumerate() {
@@ -909,7 +916,6 @@ impl Display for Domain {
                 write!(f, ")")
             }
             Domain::Map(None) => write!(f, "{{}}"),
-            Domain::Bitmap(domain) => write!(f, "{domain:?}"),
             Domain::Map(Some((key_domain, val_domain))) => {
                 write!(f, "{{[{key_domain}], [{val_domain}]}}")
             }

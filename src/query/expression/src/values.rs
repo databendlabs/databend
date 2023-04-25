@@ -35,6 +35,7 @@ use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
+use roaring::RoaringTreemap;
 use serde::de::Visitor;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -44,7 +45,6 @@ use serde::Serializer;
 use crate::property::Domain;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
-use crate::types::bitmap::BitmapDomain;
 use crate::types::bitmap::BitmapType;
 use crate::types::boolean::BooleanDomain;
 use crate::types::date::DATE_MAX;
@@ -445,10 +445,6 @@ impl<'a> ScalarRef<'a> {
                     Domain::Map(Some(map_domain))
                 }
             }
-            ScalarRef::Bitmap(b) => Domain::Bitmap(BitmapDomain {
-                min: b.to_vec(),
-                max: Some(b.to_vec()),
-            }),
             ScalarRef::Tuple(fields) => {
                 let types = data_type.as_tuple().unwrap();
                 Domain::Tuple(
@@ -459,7 +455,7 @@ impl<'a> ScalarRef<'a> {
                         .collect(),
                 )
             }
-            ScalarRef::Variant(_) => Domain::Undefined,
+            ScalarRef::Bitmap(_) | ScalarRef::Variant(_) => Domain::Undefined,
         }
     }
 
@@ -538,7 +534,11 @@ impl PartialOrd for Scalar {
             (Scalar::Date(d1), Scalar::Date(d2)) => d1.partial_cmp(d2),
             (Scalar::Array(a1), Scalar::Array(a2)) => a1.partial_cmp(a2),
             (Scalar::Map(m1), Scalar::Map(m2)) => m1.partial_cmp(m2),
-            (Scalar::Bitmap(b1), Scalar::Bitmap(b2)) => b1.partial_cmp(b2),
+            (Scalar::Bitmap(b1), Scalar::Bitmap(b2)) => {
+                let rb1 = RoaringTreemap::deserialize_from(b1.as_slice()).unwrap();
+                let rb2 = RoaringTreemap::deserialize_from(b2.as_slice()).unwrap();
+                rb1.len().partial_cmp(&rb2.len())
+            }
             (Scalar::Tuple(t1), Scalar::Tuple(t2)) => t1.partial_cmp(t2),
             (Scalar::Variant(v1), Scalar::Variant(v2)) => {
                 jsonb::compare(v1.as_slice(), v2.as_slice()).ok()
@@ -574,7 +574,11 @@ impl PartialOrd for ScalarRef<'_> {
             (ScalarRef::Date(d1), ScalarRef::Date(d2)) => d1.partial_cmp(d2),
             (ScalarRef::Array(a1), ScalarRef::Array(a2)) => a1.partial_cmp(a2),
             (ScalarRef::Map(m1), ScalarRef::Map(m2)) => m1.partial_cmp(m2),
-            (ScalarRef::Bitmap(b1), ScalarRef::Bitmap(b2)) => b1.partial_cmp(b2),
+            (ScalarRef::Bitmap(b1), ScalarRef::Bitmap(b2)) => {
+                let rb1 = RoaringTreemap::deserialize_from(*b1).unwrap();
+                let rb2 = RoaringTreemap::deserialize_from(*b2).unwrap();
+                rb1.len().partial_cmp(&rb2.len())
+            }
             (ScalarRef::Tuple(t1), ScalarRef::Tuple(t2)) => t1.partial_cmp(t2),
             (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => jsonb::compare(v1, v2).ok(),
             _ => None,
@@ -655,7 +659,13 @@ impl PartialOrd for Column {
             (Column::Date(col1), Column::Date(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::Array(col1), Column::Array(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::Map(col1), Column::Map(col2)) => col1.iter().partial_cmp(col2.iter()),
-            (Column::Bitmap(col1), Column::Bitmap(col2)) => col1.iter().partial_cmp(col2.iter()),
+            (Column::Bitmap(col1), Column::Bitmap(col2)) => col1
+                .iter()
+                .map(|c1| RoaringTreemap::deserialize_from(c1).unwrap().len())
+                .partial_cmp(
+                    col2.iter()
+                        .map(|c2| RoaringTreemap::deserialize_from(c2).unwrap().len()),
+                ),
             (Column::Nullable(col1), Column::Nullable(col2)) => {
                 col1.iter().partial_cmp(col2.iter())
             }
@@ -869,13 +879,6 @@ impl Column {
                     Domain::Map(Some(map_domain))
                 }
             }
-            Column::Bitmap(col) => {
-                let (min, max) = BitmapType::iter_column(col).minmax().into_option().unwrap();
-                Domain::Bitmap(BitmapDomain {
-                    min: min.to_vec(),
-                    max: Some(max.to_vec()),
-                })
-            }
             Column::Nullable(col) => {
                 let inner_domain = col.column.domain();
                 Domain::Nullable(NullableDomain {
@@ -887,7 +890,7 @@ impl Column {
                 let domains = fields.iter().map(|col| col.domain()).collect::<Vec<_>>();
                 Domain::Tuple(domains)
             }
-            Column::Variant(_) => Domain::Undefined,
+            Column::Bitmap(_) | Column::Variant(_) => Domain::Undefined,
         }
     }
 
@@ -1656,12 +1659,12 @@ impl Column {
                 }))
             }
             DataType::Bitmap => BitmapType::from_data((0..len).map(|_| {
-                let rng = SmallRng::from_entropy();
-                rng.sample_iter(&Alphanumeric)
-                    // randomly generate 5 characters.
-                    .take(5)
-                    .map(u8::from)
-                    .collect::<Vec<_>>()
+                let data: [u64; 4] = SmallRng::from_entropy().gen();
+                let rb = RoaringTreemap::from_iter(data.iter());
+                let mut buf = vec![];
+                rb.serialize_into(&mut buf)
+                    .expect("failed serialize roaring treemap");
+                buf
             })),
             DataType::Tuple(fields) => {
                 let fields = fields

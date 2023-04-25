@@ -24,6 +24,7 @@ siphash -> siphash64
 substring -> substr
 substring_utf8 -> substr_utf8
 subtract -> minus
+to_bitmap -> bitmap_from_string
 to_datetime -> to_timestamp
 to_text -> to_string
 to_varchar -> to_string
@@ -688,8 +689,6 @@ Functions overloads:
 127 bit_xor(Int64 NULL, Int64 NULL) :: Int64 NULL
 0 bitmap_from_string(String) :: Bitmap
 1 bitmap_from_string(String NULL) :: Bitmap NULL
-0 bitmap_to_string(Bitmap) :: String
-1 bitmap_to_string(Bitmap NULL) :: String NULL
 0 blake3(String) :: String
 1 blake3(String NULL) :: String NULL
 0 cbrt(UInt8) :: Float64
@@ -3296,6 +3295,8 @@ Functions overloads:
 26 to_string(Date NULL) :: String NULL
 27 to_string(Timestamp) :: String
 28 to_string(Timestamp NULL) :: String NULL
+29 to_string(Bitmap) :: String
+30 to_string(Bitmap NULL) :: String NULL
 0 to_timestamp(Variant) :: Timestamp
 1 to_timestamp(Variant NULL) :: Timestamp NULL
 2 to_timestamp(String) :: Timestamp
