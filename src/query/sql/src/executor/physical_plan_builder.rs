@@ -34,7 +34,6 @@ use common_expression::ConstantFolder;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
-use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
