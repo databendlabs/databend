@@ -244,6 +244,17 @@ pub trait Table: Sync + Send {
     }
 
     #[async_backtrace::framed]
+    async fn add_virtual_columns(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        let (_, _) = (ctx, pipeline);
+
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
     async fn analyze(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
         let _ = ctx;
 

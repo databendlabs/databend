@@ -505,6 +505,7 @@ pub enum OptimizeTableAction {
         target: CompactTarget,
         limit: Option<Expr>,
     },
+    VirtualColumns,
 }
 
 impl Display for OptimizeTableAction {
@@ -532,6 +533,7 @@ impl Display for OptimizeTableAction {
                 }
                 Ok(())
             }
+            OptimizeTableAction::VirtualColumns => write!(f, "VIRTUAL COLUMNS"),
         }
     }
 }

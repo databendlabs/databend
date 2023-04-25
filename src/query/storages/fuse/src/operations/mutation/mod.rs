@@ -23,6 +23,7 @@ mod mutation_source;
 mod mutation_transform;
 pub mod recluster_mutator;
 mod serialize_data_transform;
+mod virtual_column;
 
 pub use abort_operation::AbortOperation;
 pub use base_mutator::BaseMutator;
@@ -45,3 +46,7 @@ pub use mutation_source::MutationSource;
 pub use mutation_transform::MutationTransform;
 pub use recluster_mutator::ReclusterMutator;
 pub use serialize_data_transform::SerializeDataTransform;
+pub use virtual_column::VirtualColumnMeta;
+pub use virtual_column::VirtualColumnPartInfo;
+pub use virtual_column::VirtualColumnSource;
+pub use virtual_column::VirtualColumnTransform;

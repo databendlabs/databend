@@ -113,6 +113,7 @@ pub enum OptimizeTableAction {
     Purge(Option<NavigationPoint>),
     CompactBlocks(Option<usize>),
     CompactSegments(Option<usize>),
+    VirtualColumns,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

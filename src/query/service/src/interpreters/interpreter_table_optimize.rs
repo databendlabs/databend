@@ -60,6 +60,11 @@ impl Interpreter for OptimizeTableInterpreter {
             OptimizeTableAction::Purge(_) | OptimizeTableAction::All
         );
 
+        let do_add_virtual_columns = matches!(
+            action,
+            OptimizeTableAction::VirtualColumns | OptimizeTableAction::All
+        );
+
         let limit_opt = match action {
             OptimizeTableAction::CompactBlocks(limit_opt) => limit_opt,
             OptimizeTableAction::CompactSegments(limit_opt) => limit_opt,
@@ -84,7 +89,14 @@ impl Interpreter for OptimizeTableInterpreter {
             )
             .await?;
 
+        if do_add_virtual_columns {
+            table
+                .add_virtual_columns(ctx.clone(), &mut build_res.main_pipeline)
+                .await?;
+        }
+
         if do_purge {
+            let ctx = self.ctx.clone();
             if build_res.main_pipeline.is_empty() {
                 purge(ctx, table, action).await?;
             } else {

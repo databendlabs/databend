@@ -563,6 +563,16 @@ impl Table for FuseTable {
         }
     }
 
+    #[tracing::instrument(level = "debug", name = "fuse_table_optimize", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    #[async_backtrace::framed]
+    async fn add_virtual_columns(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        self.do_add_virtual_columns(ctx, pipeline).await
+    }
+
     #[tracing::instrument(level = "debug", name = "analyze", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     #[async_backtrace::framed]
     async fn analyze(&self, ctx: Arc<dyn TableContext>) -> Result<()> {

@@ -1673,6 +1673,10 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
                 limit: opt_limit.map(|(_, limit)| limit),
             },
         ),
+        value(
+            OptimizeTableAction::VirtualColumns,
+            rule! { VIRTUAL ~ COLUMNS },
+        ),
     ))(i)
 }
 

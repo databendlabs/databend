@@ -181,6 +181,31 @@ pub fn metrics_inc_pruning_milliseconds(c: u64) {
     increment_gauge!(key!("pruning_milliseconds"), c as f64);
 }
 
+/// Virtual column metrics.
+pub fn metrics_inc_virtual_column_block_read_nums(c: u64) {
+    increment_gauge!(key!("virtual_column_block_read_nums"), c as f64);
+}
+
+pub fn metrics_inc_virtual_column_block_read_bytes(c: u64) {
+    increment_gauge!(key!("virtual_column_block_read_bytes"), c as f64);
+}
+
+pub fn metrics_inc_virtual_column_block_read_milliseconds(c: u64) {
+    increment_gauge!(key!("virtual_column_block_read_milliseconds"), c as f64);
+}
+
+pub fn metrics_inc_virtual_column_block_write_nums(c: u64) {
+    increment_gauge!(key!("virtual_column_block_write_nums"), c as f64);
+}
+
+pub fn metrics_inc_virtual_column_block_write_bytes(c: u64) {
+    increment_gauge!(key!("virtual_column_block_write_bytes"), c as f64);
+}
+
+pub fn metrics_inc_virtual_column_block_write_milliseconds(c: u64) {
+    increment_gauge!(key!("virtual_column_block_write_milliseconds"), c as f64);
+}
+
 pub fn metrics_reset() {
     let c = 0 as f64;
 
@@ -228,4 +253,12 @@ pub fn metrics_reset() {
     gauge!(key!("bytes_block_bloom_pruning_after"), c);
     gauge!(key!("bytes_block_range_pruning_before"), c);
     gauge!(key!("bytes_block_range_pruning_after"), c);
+
+    // Virtual Column metrics.
+    gauge!(key!("virtual_column_block_read_nums"), c);
+    gauge!(key!("virtual_column_block_read_bytes"), c);
+    gauge!(key!("virtual_column_block_read_milliseconds"), c);
+    gauge!(key!("virtual_column_block_write_nums"), c);
+    gauge!(key!("virtual_column_block_write_bytes"), c);
+    gauge!(key!("virtual_column_block_write_milliseconds"), c);
 }

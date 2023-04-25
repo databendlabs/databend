@@ -883,6 +883,8 @@ pub enum TokenKind {
     CUBE,
     #[token("ROLLUP", ignore(ascii_case))]
     ROLLUP,
+    #[token("VIRTUAL", ignore(ascii_case))]
+    VIRTUAL,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
