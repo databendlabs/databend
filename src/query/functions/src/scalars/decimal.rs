@@ -264,13 +264,13 @@ macro_rules! register_decimal_compare_op {
                 eval: FunctionEval::Scalar {
                     calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
                     eval: Box::new(move |args, ctx| {
-                        let lhs = decimal_to_decimal(
+                        let lhs = convert_to_decimal(
                             &args[0],
                             ctx,
                             args_type[0].clone(),
                             DataType::Decimal(return_type.clone()),
                         );
-                        let rhs = decimal_to_decimal(
+                        let rhs = convert_to_decimal(
                             &args[1],
                             ctx,
                             args_type[1].clone(),
@@ -353,13 +353,13 @@ macro_rules! register_decimal_binary_op {
                 eval: FunctionEval::Scalar {
                     calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
                     eval: Box::new(move |args, ctx| {
-                        let lhs = decimal_to_decimal(
+                        let lhs = convert_to_decimal(
                             &args[0],
                             ctx,
                             args_type[0].clone(),
                             DataType::Decimal(return_type.clone()),
                         );
-                        let rhs = decimal_to_decimal(
+                        let rhs = convert_to_decimal(
                             &args[1],
                             ctx,
                             args_type[1].clone(),
@@ -435,8 +435,8 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
-                eval: Box::new(move |args, tx| {
-                    convert_to_decimal(args, tx, from_type.clone(), return_type.clone())
+                eval: Box::new(move |args, ctx| {
+                    convert_to_decimal(args, ctx, from_type.clone(), return_type.clone())
                 }),
             },
         })
