@@ -17,15 +17,13 @@ echo "drop table if exists small_parquets;" | $MYSQL_CLIENT_CONNECT
 echo "create stage small_parquets url = '${DATADIR}' FILE_FORMAT = (type = PARQUET);"  | $MYSQL_CLIENT_CONNECT
 echo "create table small_parquets (id int, t tuple(a int, b string));" | $MYSQL_CLIENT_CONNECT
 
-echo "set parquet_read_whole_file_threshold = 4096" | $MYSQL_CLIENT_CONNECT
-
 echo "--- copy"
-echo "copy into small_parquets from @small_parquets;" | $MYSQL_CLIENT_CONNECT
+echo "set parquet_read_whole_file_threshold=4096; copy into small_parquets from @small_parquets;" | $MYSQL_CLIENT_CONNECT
 echo "select * from small_parquets" | $MYSQL_CLIENT_CONNECT
 echo "truncate table small_parquets" | $MYSQL_CLIENT_CONNECT
 
 echo "--- copy from select"
-echo "copy into small_parquets from (select * from @small_parquets t) force = true;" | $MYSQL_CLIENT_CONNECT
+echo "set parquet_read_whole_file_threshold=4096; copy into small_parquets from (select * from @small_parquets t) force = true;" | $MYSQL_CLIENT_CONNECT
 echo "select * from small_parquets" | $MYSQL_CLIENT_CONNECT
 
 echo "drop stage small_parquets;"  | $MYSQL_CLIENT_CONNECT
