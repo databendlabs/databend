@@ -21,13 +21,11 @@ use common_ast::ast::OrderByExpr;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use super::bind_context::NameResolutionResult;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::SelectList;
 use crate::binder::window::WindowRewriter;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
-use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::GroupingChecker;
 use crate::plans::AggregateFunction;
@@ -50,11 +48,10 @@ pub struct OrderItems {
 
 #[derive(Debug)]
 pub struct OrderItem {
-    pub expr: OrderByExpr,
     pub index: IndexType,
+    pub asc: bool,
+    pub nulls_first: bool,
     pub name: String,
-    // True if item need to wrap EvalScalar plan.
-    pub need_eval_scalar: bool,
 }
 
 impl Binder {
@@ -63,177 +60,124 @@ impl Binder {
         &mut self,
         bind_context: &mut BindContext,
         scalar_items: &mut HashMap<IndexType, ScalarItem>,
+        select_list: &SelectList<'_>,
         projections: &[ColumnBinding],
         order_by: &[OrderByExpr],
         distinct: bool,
     ) -> Result<OrderItems> {
+        // null is the largest value in databend, smallest in hive
+        // TODO: rewrite after https://github.com/jorgecarleitao/arrow2/pull/1286 is merged
+        let default_nulls_first = !self
+            .ctx
+            .get_settings()
+            .get_sql_dialect()
+            .unwrap()
+            .is_null_biggest();
+
         let mut order_items = Vec::with_capacity(order_by.len());
         for order in order_by {
             match &order.expr {
-                Expr::ColumnRef {
-                    database: ref database_name,
-                    table: ref table_name,
-                    column: ref ident,
-                    ..
-                } => {
-                    // We first search the identifier in select list
-                    let mut found = false;
-                    let database = database_name
-                        .as_ref()
-                        .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name);
-                    let table = table_name
-                        .as_ref()
-                        .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name);
-                    let column = normalize_identifier(ident, &self.name_resolution_ctx).name;
-
-                    for item in projections.iter() {
-                        if BindContext::match_column_binding(
-                            database.as_deref(),
-                            table.as_deref(),
-                            column.as_str(),
-                            item,
-                        ) {
-                            order_items.push(OrderItem {
-                                expr: order.clone(),
-                                index: item.index,
-                                name: item.column_name.clone(),
-                                need_eval_scalar: scalar_items.get(&item.index).map_or(
-                                    false,
-                                    |scalar_item| {
-                                        !matches!(
-                                            &scalar_item.scalar,
-                                            ScalarExpr::BoundColumnRef(_)
-                                        )
-                                    },
-                                ),
-                            });
-                            found = true;
-                            break;
-                        }
-                    }
-
-                    if found {
-                        continue;
-                    }
-
-                    // If there isn't a matched alias in select list, we will fallback to
-                    // from clause.
-                    let result = bind_context.resolve_name(
-                        database.as_deref(),
-                        table.as_deref(),
-                        &column,
-                        ident.span,
-                       &[])
-                    .and_then(|v| {
-                        if distinct {
-                            Err(ErrorCode::SemanticError("for SELECT DISTINCT, ORDER BY expressions must appear in select list".to_string()).set_span(order.expr.span()))
-                        } else {
-                            Ok(v)
-                        }
-                    })?;
-                    match result {
-                        NameResolutionResult::Column(column) => {
-                            order_items.push(OrderItem {
-                                expr: order.clone(),
-                                name: column.column_name.clone(),
-                                index: column.index,
-                                need_eval_scalar: false,
-                            });
-                        }
-                        NameResolutionResult::InternalColumn(column) => {
-                            order_items.push(OrderItem {
-                                expr: order.clone(),
-                                name: column.internal_column.column_name().clone(),
-                                index: column.index,
-                                need_eval_scalar: false,
-                            });
-                        }
-                        NameResolutionResult::Alias { .. } => {
-                            return Err(ErrorCode::Internal("Invalid name resolution result"));
-                        }
-                    }
-                }
                 Expr::Literal {
                     lit: Literal::UInt64(index),
                     ..
                 } => {
-                    if *index == 0 {
-                        return Err(ErrorCode::SemanticError(
-                            "ORDER BY position 0 is not in select list",
-                        )
-                        .set_span(order.expr.span()));
-                    }
-
-                    let index = *index as usize - 1;
-                    if index >= projections.len() {
+                    let index = *index as usize;
+                    if index == 0 || index > projections.len() {
                         return Err(ErrorCode::SemanticError(format!(
                             "ORDER BY position {} is not in select list",
-                            index + 1
+                            index
                         ))
                         .set_span(order.expr.span()));
                     }
 
+                    let index = index - 1;
+                    let projection = &projections[index];
                     order_items.push(OrderItem {
-                        expr: order.clone(),
-                        name: projections[index].column_name.clone(),
-                        index: projections[index].index,
-                        need_eval_scalar: scalar_items.get(&projections[index].index).map_or(
-                            false,
-                            |scalar_item| {
-                                !matches!(&scalar_item.scalar, ScalarExpr::BoundColumnRef(_))
-                            },
-                        ),
+                        index: projection.index,
+                        name: projection.column_name.clone(),
+                        asc: order.asc.unwrap_or(true),
+                        nulls_first: order.nulls_first.unwrap_or(default_nulls_first),
                     });
                 }
                 _ => {
-                    for column_binding in projections.iter() {
-                        if bind_context.columns.contains(column_binding) {
-                            continue;
-                        }
-                        bind_context.columns.push(column_binding.clone());
-                    }
+                    let aliases = select_list
+                        .items
+                        .iter()
+                        .map(|item| (item.alias.clone(), item.scalar.clone()))
+                        .collect::<Vec<_>>();
+
+                    debug_assert!(aliases.len() == projections.len());
+
                     let mut scalar_binder = ScalarBinder::new(
                         bind_context,
                         self.ctx.clone(),
                         &self.name_resolution_ctx,
                         self.metadata.clone(),
-                        &[],
+                        &aliases,
                     );
                     let (bound_expr, _) = scalar_binder.bind(&order.expr).await?;
-                    let rewrite_scalar = self
-                        .rewrite_scalar_with_replacement(
-                            bind_context,
-                            &bound_expr,
-                            &|nest_scalar| {
-                                if let ScalarExpr::BoundColumnRef(BoundColumnRef {
-                                    column, ..
-                                }) = nest_scalar
-                                {
-                                    if let Some(scalar_item) = scalar_items.get(&column.index) {
-                                        return Ok(Some(scalar_item.scalar.clone()));
+
+                    if let Some((idx, (alias, _))) = aliases
+                        .iter()
+                        .enumerate()
+                        .find(|(_, (_, scalar))| bound_expr.eq(scalar))
+                    {
+                        // The order by expression is in the select list.
+                        order_items.push(OrderItem {
+                            index: projections[idx].index,
+                            name: alias.clone(),
+                            asc: order.asc.unwrap_or(true),
+                            nulls_first: order.nulls_first.unwrap_or(default_nulls_first),
+                        });
+                    } else if distinct {
+                        return Err(ErrorCode::SemanticError(
+                            "for SELECT DISTINCT, ORDER BY expressions must appear in select list"
+                                .to_string(),
+                        ));
+                    } else {
+                        let rewrite_scalar = self
+                            .rewrite_scalar_with_replacement(
+                                bind_context,
+                                &bound_expr,
+                                &|nest_scalar| {
+                                    if let ScalarExpr::BoundColumnRef(BoundColumnRef {
+                                        column,
+                                        ..
+                                    }) = nest_scalar
+                                    {
+                                        if let Some(scalar_item) = scalar_items.get(&column.index) {
+                                            return Ok(Some(scalar_item.scalar.clone()));
+                                        }
                                     }
-                                }
-                                Ok(None)
-                            },
-                        )
-                        .map_err(|e| ErrorCode::SemanticError(e.message()))?;
-                    let column_binding = self.create_column_binding(
-                        None,
-                        None,
-                        None,
-                        format!("{:#}", order.expr),
-                        rewrite_scalar.data_type()?,
-                    );
-                    order_items.push(OrderItem {
-                        expr: order.clone(),
-                        name: column_binding.column_name.clone(),
-                        index: column_binding.index,
-                        need_eval_scalar: true,
-                    });
-                    scalar_items.insert(column_binding.index, ScalarItem {
-                        scalar: rewrite_scalar,
-                        index: column_binding.index,
-                    });
+                                    Ok(None)
+                                },
+                            )
+                            .map_err(|e| ErrorCode::SemanticError(e.message()))?;
+
+                        let column_binding =
+                            if let ScalarExpr::BoundColumnRef(col) = &rewrite_scalar {
+                                col.column.clone()
+                            } else {
+                                self.create_column_binding(
+                                    None,
+                                    None,
+                                    None,
+                                    format!("{:#}", order.expr),
+                                    rewrite_scalar.data_type()?,
+                                )
+                            };
+                        let item = ScalarItem {
+                            scalar: rewrite_scalar,
+                            index: column_binding.index,
+                        };
+                        scalar_items.insert(column_binding.index, item);
+                        order_items.push(OrderItem {
+                            index: column_binding.index,
+                            name: column_binding.column_name,
+                            asc: order.asc.unwrap_or(true),
+                            nulls_first: order.nulls_first.unwrap_or(default_nulls_first),
+                        });
+                    }
                 }
             }
         }
@@ -264,26 +208,11 @@ impl Binder {
                     group_checker.resolve(&scalar_item.scalar, None)?;
                 }
             }
-            if let Expr::ColumnRef {
-                database: ref database_name,
-                table: ref table_name,
-                ..
-            } = order.expr.expr
-            {
-                if let (Some(table_name), Some(database_name)) = (table_name, database_name) {
-                    let catalog_name = self.ctx.get_current_catalog();
-                    let catalog = self.ctx.get_catalog(catalog_name.as_str())?;
-                    catalog
-                        .get_table(
-                            &self.ctx.get_tenant(),
-                            &database_name.name,
-                            &table_name.name,
-                        )
-                        .await?;
-                }
-            }
-            if order.need_eval_scalar {
-                if let Entry::Occupied(entry) = scalar_items.entry(order.index) {
+
+            if let Entry::Occupied(entry) = scalar_items.entry(order.index) {
+                let need_eval = !matches!(entry.get().scalar, ScalarExpr::BoundColumnRef(_));
+                if need_eval {
+                    // Remove the entry to avoid bind again in later process (bind_projection).
                     let (index, item) = entry.remove_entry();
                     let mut scalar = item.scalar;
                     let mut need_group_check = false;
@@ -301,18 +230,10 @@ impl Binder {
                 }
             }
 
-            // null is the largest value in databend, smallest in hive
-            // todo: rewrite after https://github.com/jorgecarleitao/arrow2/pull/1286 is merged
-            let default_nulls_first = !self
-                .ctx
-                .get_settings()
-                .get_sql_dialect()
-                .unwrap()
-                .is_null_biggest();
             let order_by_item = SortItem {
                 index: order.index,
-                asc: order.expr.asc.unwrap_or(true),
-                nulls_first: order.expr.nulls_first.unwrap_or(default_nulls_first),
+                asc: order.asc,
+                nulls_first: order.nulls_first,
             };
 
             order_by_items.push(order_by_item);
