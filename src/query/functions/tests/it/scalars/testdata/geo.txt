@@ -275,7 +275,7 @@ checked expr   : geohash_encode<Float64, Float64>(to_float64<Decimal(12, 11)>(-5
 optimized expr : "ezs42d000000"
 output type    : String
 output domain  : {"ezs42d000000"..="ezs42d000000"}
-output         : "ezs42d000000"
+output         : 'ezs42d000000'
 
 
 ast            : geohash_encode(-5.60302734375, 42.593994140625, 11)
@@ -284,7 +284,7 @@ checked expr   : geohash_encode<Float64, Float64, UInt8>(to_float64<Decimal(12, 
 optimized expr : "ezs42d00000"
 output type    : String
 output domain  : {"ezs42d00000"..="ezs42d00000"}
-output         : "ezs42d00000"
+output         : 'ezs42d00000'
 
 
 ast            : geohash_encode(-5.60302734375, 42.593994140625, 0)
@@ -293,11 +293,11 @@ checked expr   : geohash_encode<Float64, Float64, UInt8>(to_float64<Decimal(12, 
 optimized expr : "ezs42d000000"
 output type    : String
 output domain  : {"ezs42d000000"..="ezs42d000000"}
-output         : "ezs42d000000"
+output         : 'ezs42d000000'
 
 
 ast            : geohash_decode('ezs42')
-raw expr       : geohash_decode("ezs42")
+raw expr       : geohash_decode('ezs42')
 checked expr   : geohash_decode<String>("ezs42")
 optimized expr : (-5.6030273437_f64, 42.6049804687_f64)
 output type    : Tuple(Float64, Float64)

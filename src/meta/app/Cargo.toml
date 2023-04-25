@@ -22,7 +22,7 @@ common-meta-types = { path = "../types" }
 
 anyerror = { workspace = true }
 chrono = { workspace = true }
-enumflags2 = { version = "0.7.5", features = ["serde"] }
+enumflags2 = { version = "0.7.7", features = ["serde"] }
 hex = "0.4.3"
 maplit = "1.0.2"
 num-derive = "0.3.3"

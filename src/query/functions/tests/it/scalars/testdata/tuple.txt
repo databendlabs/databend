@@ -17,21 +17,21 @@ output         : (NULL, NULL)
 
 
 ast            : (1, 2, 'a')
-raw expr       : tuple(1, 2, "a")
+raw expr       : tuple(1, 2, 'a')
 checked expr   : tuple<UInt8, UInt8, String>(1_u8, 2_u8, "a")
 optimized expr : (1_u8, 2_u8, "a")
 output type    : Tuple(UInt8, UInt8, String)
 output domain  : ({1..=1}, {2..=2}, {"a"..="a"})
-output         : (1, 2, "a")
+output         : (1, 2, 'a')
 
 
 ast            : (1, 2, ('a', 'b'))
-raw expr       : tuple(1, 2, tuple("a", "b"))
+raw expr       : tuple(1, 2, tuple('a', 'b'))
 checked expr   : tuple<UInt8, UInt8, Tuple(String, String)>(1_u8, 2_u8, tuple<String, String>("a", "b"))
 optimized expr : (1_u8, 2_u8, ("a", "b"))
 output type    : Tuple(UInt8, UInt8, Tuple(String, String))
 output domain  : ({1..=1}, {2..=2}, ({"a"..="a"}, {"b"..="b"}))
-output         : (1, 2, ("a", "b"))
+output         : (1, 2, ('a', 'b'))
 
 
 ast            : (s, s)
@@ -43,10 +43,10 @@ evaluation:
 +--------+----------------------+----------------------------------------------+
 | Type   | String NULL          | Tuple(String NULL, String NULL)              |
 | Domain | {"a"..="d"} ∪ {NULL} | ({"a"..="d"} ∪ {NULL}, {"a"..="d"} ∪ {NULL}) |
-| Row 0  | "a"                  | ("a", "a")                                   |
-| Row 1  | "b"                  | ("b", "b")                                   |
+| Row 0  | 'a'                  | ('a', 'a')                                   |
+| Row 1  | 'b'                  | ('b', 'b')                                   |
 | Row 2  | NULL                 | (NULL, NULL)                                 |
-| Row 3  | "d"                  | ("d", "d")                                   |
+| Row 3  | 'd'                  | ('d', 'd')                                   |
 +--------+----------------------+----------------------------------------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -91,7 +91,7 @@ error:
 
 
 ast            : (1, 'a').1
-raw expr       : get(1)(tuple(1, "a"))
+raw expr       : get(1)(tuple(1, 'a'))
 checked expr   : get<T0=UInt8, T1=String><Tuple(T0, T1)>(1)(tuple<UInt8, String>(1_u8, "a"))
 optimized expr : 1_u8
 output type    : UInt8
@@ -100,30 +100,30 @@ output         : 1
 
 
 ast            : (1, 'a').2
-raw expr       : get(2)(tuple(1, "a"))
+raw expr       : get(2)(tuple(1, 'a'))
 checked expr   : get<T0=UInt8, T1=String><Tuple(T0, T1)>(2)(tuple<UInt8, String>(1_u8, "a"))
 optimized expr : "a"
 output type    : String
 output domain  : {"a"..="a"}
-output         : "a"
+output         : 'a'
 
 
 ast            : (1, 2, ('a', 'b')).3
-raw expr       : get(3)(tuple(1, 2, tuple("a", "b")))
+raw expr       : get(3)(tuple(1, 2, tuple('a', 'b')))
 checked expr   : get<T0=UInt8, T1=UInt8, T2=Tuple(String, String)><Tuple(T0, T1, T2)>(3)(tuple<UInt8, UInt8, Tuple(String, String)>(1_u8, 2_u8, tuple<String, String>("a", "b")))
 optimized expr : ("a", "b")
 output type    : Tuple(String, String)
 output domain  : ({"a"..="a"}, {"b"..="b"})
-output         : ("a", "b")
+output         : ('a', 'b')
 
 
 ast            : (1, 2, ('a', 'b')).3.1
-raw expr       : get(1)(get(3)(tuple(1, 2, tuple("a", "b"))))
+raw expr       : get(1)(get(3)(tuple(1, 2, tuple('a', 'b'))))
 checked expr   : get<T0=String, T1=String><Tuple(T0, T1)>(1)(get<T0=UInt8, T1=UInt8, T2=Tuple(String, String)><Tuple(T0, T1, T2)>(3)(tuple<UInt8, UInt8, Tuple(String, String)>(1_u8, 2_u8, tuple<String, String>("a", "b"))))
 optimized expr : "a"
 output type    : String
 output domain  : {"a"..="a"}
-output         : "a"
+output         : 'a'
 
 
 ast            : (s, s).1
@@ -135,10 +135,10 @@ evaluation:
 +--------+----------------------+----------------------+
 | Type   | String NULL          | String NULL          |
 | Domain | {"a"..="d"} ∪ {NULL} | {"a"..="d"} ∪ {NULL} |
-| Row 0  | "a"                  | "a"                  |
-| Row 1  | "b"                  | "b"                  |
+| Row 0  | 'a'                  | 'a'                  |
+| Row 1  | 'b'                  | 'b'                  |
 | Row 2  | NULL                 | NULL                 |
-| Row 3  | "d"                  | "d"                  |
+| Row 3  | 'd'                  | 'd'                  |
 +--------+----------------------+----------------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------------+
@@ -158,7 +158,7 @@ evaluation:
 +--------+---------------------------------+----------------------+
 | Type   | Tuple(String NULL,) NULL        | String NULL          |
 | Domain | ({"a"..="d"} ∪ {NULL}) ∪ {NULL} | {"a"..="d"} ∪ {NULL} |
-| Row 0  | ("a",)                          | "a"                  |
+| Row 0  | ('a',)                          | 'a'                  |
 | Row 1  | NULL                            | NULL                 |
 | Row 2  | (NULL,)                         | NULL                 |
 | Row 3  | NULL                            | NULL                 |

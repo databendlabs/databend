@@ -40,7 +40,7 @@ openai_api_key = "<your-key>"
 
 ## Examples
 
-In this example, a SQL query statement is generated from an instruction with the AI_TO_SQL function, and the resulting statement is executed to obtain the query results.
+In this example, an SQL query statement is generated from an instruction with the AI_TO_SQL function, and the resulting statement is executed to obtain the query results.
 
 1. Prepare data.
 
