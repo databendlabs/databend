@@ -13,21 +13,10 @@
 // limitations under the License.
 //
 
-use std::io::Cursor;
-use std::sync::Arc;
-
 use common_exception::Result;
-use common_io::prelude::BinaryRead;
 use futures::AsyncRead;
 use futures_util::AsyncReadExt;
-use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::Encoding;
-use storages_common_table_meta::meta::MetaCompression;
 use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::Statistics;
-use storages_common_table_meta::meta::Versioned;
-
-use crate::io::read::meta::meta_readers::read_and_deserialize;
 
 /// Reads a segment from Vec<u8> and returns a `SegmentInfo` object.
 ///

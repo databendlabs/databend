@@ -11,18 +11,11 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-use std::io::Cursor;
 
 use common_exception::Result;
-use common_io::prelude::BinaryRead;
 use futures_util::AsyncRead;
 use futures_util::AsyncReadExt;
-use storages_common_table_meta::meta::Encoding;
-use storages_common_table_meta::meta::MetaCompression;
 use storages_common_table_meta::meta::TableSnapshot;
-use storages_common_table_meta::meta::Versioned;
-
-use crate::io::read::meta::meta_readers::read_and_deserialize;
 
 /// Reads a snapshot from Vec<u8> and returns a `TableSnapshot` object.
 ///

@@ -1,4 +1,3 @@
-use std::io::Cursor;
 //  Copyright 2023 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,14 +11,17 @@ use std::io::Cursor;
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
+use std::io::Cursor;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_io::prelude::BinaryRead;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::meta::format::compress;
 use crate::meta::format::encode;
+use crate::meta::format::read_and_deserialize;
 use crate::meta::format::Compression;
 use crate::meta::statistics::FormatVersion;
 use crate::meta::v2::BlockMeta;

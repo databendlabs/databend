@@ -13,15 +13,12 @@
 // limitations under the License.
 
 use std::env;
-use std::ffi::OsString;
 use std::fs::File;
 use std::io;
 use std::io::stdout;
 use std::io::BufWriter;
 use std::io::Read;
 use std::io::Write;
-use std::path::Path;
-use std::path::PathBuf;
 
 use clap::Parser;
 use common_config::Config;
@@ -29,12 +26,8 @@ use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::Result;
 use common_storage::init_operator;
 use common_storage::StorageConfig;
-use common_storages_fuse::io::read::meta::snapshot_reader::load_snapshot_v3;
-use common_storages_fuse::io::read::meta::SegmentInfoReader::segment_reader::load_segment_v3;
-use common_storages_fuse::io::SegmentInfoReader;
 use opendal::services::Fs;
 use opendal::Operator;
-use opendal::Reader;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json;
@@ -75,19 +68,18 @@ async fn read_meta_data(config: &InspectorConfig) -> Result<Vec<u8>> {
     }
 }
 
-fn parse_output(config: &InspectorConfig) -> Result<BufWriter<dyn Write>> {
-    if let Some(output) = &config.output {
+fn parse_output(config: &InspectorConfig) -> Result<Box<dyn Write>> {
+    let writer = if let Some(output) = &config.output {
         let file = File::create(&output)?;
-        let writer = BufWriter::new(file);
-        Ok(writer)
+        Box::new(BufWriter::new(file)) as Box<dyn Write>
     } else {
-        let writer = BufWriter::new(stdout());
-        Ok(writer)
-    }
+        Box::new(BufWriter::new(stdout())) as Box<dyn Write>
+    };
+    Ok(writer)
 }
 
-async fn parse_reader<R: Read>(config: &InspectorConfig) -> Result<R> {
-    match &config.input {
+async fn parse_reader(config: &InspectorConfig) -> Result<Box<dyn Read>> {
+    let reader = match &config.input {
         Some(input) => {
             let op = match &config.config {
                 Some(config_file) => {
@@ -100,18 +92,19 @@ async fn parse_reader<R: Read>(config: &InspectorConfig) -> Result<R> {
                     let current_dir = env::current_dir()?;
                     let mut builder = Fs::default();
                     builder.root(current_dir.to_str().ok_or("Invalid path")?);
-                    Operator::new(builder)?.finish();
+                    Operator::new(builder)?.finish()
                 }
             };
-            Ok(op.reader(input).await?)
+            Box::new(op.reader(input).await?) as Box<dyn Read>
         }
         None => {
             let stdin = io::stdin();
             let handle = stdin.lock();
             let reader = io::BufReader::new(handle);
-            Ok(reader)
+            Box::new(reader) as Box<dyn Read>
         }
-    }
+    };
+    Ok(reader)
 }
 
 async fn run(config: &InspectorConfig) -> Result<()> {

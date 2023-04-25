@@ -20,11 +20,13 @@ use chrono::Utc;
 use common_base::base::uuid::Uuid;
 use common_exception::Result;
 use common_expression::TableSchema;
+use common_io::prelude::BinaryRead;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::meta::format::compress;
 use crate::meta::format::encode;
+use crate::meta::format::read_and_deserialize;
 use crate::meta::format::Compression;
 use crate::meta::monotonically_increased_timestamp;
 use crate::meta::statistics::FormatVersion;

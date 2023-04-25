@@ -9357,6 +9357,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-expression",
+ "common-io",
  "enum-as-inner",
  "once_cell",
  "rmp-serde",
