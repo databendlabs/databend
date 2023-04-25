@@ -614,7 +614,12 @@ impl DPhpy {
             self.ctx.get_function_context()?,
         )?;
         let mut state = TransformResult::new();
-        if s_expr.match_pattern(&rule.patterns()[0]) && !s_expr.applied_rule(&rule.id()) {
+        if rule
+            .patterns()
+            .iter()
+            .any(|pattern| s_expr.match_pattern(pattern))
+            && !s_expr.applied_rule(&rule.id())
+        {
             s_expr.set_applied_rule(&rule.id());
             rule.apply(&s_expr, &mut state)?;
             if !state.results().is_empty() {
