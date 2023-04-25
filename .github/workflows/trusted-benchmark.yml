@@ -246,9 +246,9 @@ jobs:
           source_id: ${{ needs.metadata.outputs.source_id }}
           size: ${{ matrix.size }}
           version: ${{ needs.docker.outputs.tag }}
-          cloud_user: ${{ secrets.BENCHMARK_CLOUD_EMAIL }}
+          cloud_user: ${{ secrets.BENCHMARK_CLOUD_USER }}
           cloud_password: ${{ secrets.BENCHMARK_CLOUD_PASSWORD }}
-          cloud_gateway: ${{ secrets.BENCHMARK_CLOUD_ENDPOINT }}
+          cloud_gateway: ${{ secrets.BENCHMARK_CLOUD_GATEWAY }}
       - name: Set github check status to pending
         if: needs.metadata.outputs.source == 'pr'
         uses: ./.github/actions/create_check_status
