@@ -258,18 +258,27 @@ macro_rules! register_decimal_compare_op {
             let function = Function {
                 signature: FunctionSignature {
                     name: $name.to_string(),
-                    args_type: vec![
-                        DataType::Decimal(return_type.clone()),
-                        DataType::Decimal(return_type.clone()),
-                    ],
+                    args_type: vec![args_type[0].clone(), args_type[1].clone()],
                     return_type: DataType::Boolean,
                 },
                 eval: FunctionEval::Scalar {
                     calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
-                    eval: Box::new(move |args, _ctx| {
-                        op_decimal!(
+                    eval: Box::new(move |args, ctx| {
+                        let lhs = decimal_to_decimal(
                             &args[0],
+                            ctx,
+                            args_type[0].clone(),
+                            DataType::Decimal(return_type.clone()),
+                        );
+                        let rhs = decimal_to_decimal(
                             &args[1],
+                            ctx,
+                            args_type[1].clone(),
+                            DataType::Decimal(return_type.clone()),
+                        );
+                        op_decimal!(
+                            &lhs.as_ref(),
+                            &rhs.as_ref(),
                             &DataType::Decimal(return_type.clone()),
                             $op
                         )
@@ -338,18 +347,27 @@ macro_rules! register_decimal_binary_op {
             let function = Function {
                 signature: FunctionSignature {
                     name: $name.to_string(),
-                    args_type: vec![
-                        DataType::Decimal(return_type.clone()),
-                        DataType::Decimal(return_type.clone()),
-                    ],
+                    args_type: vec![args_type[0].clone(), args_type[1].clone()],
                     return_type: DataType::Decimal(return_type.clone()),
                 },
                 eval: FunctionEval::Scalar {
                     calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
                     eval: Box::new(move |args, ctx| {
-                        op_decimal!(
+                        let lhs = decimal_to_decimal(
                             &args[0],
+                            ctx,
+                            args_type[0].clone(),
+                            DataType::Decimal(return_type.clone()),
+                        );
+                        let rhs = decimal_to_decimal(
                             &args[1],
+                            ctx,
+                            args_type[1].clone(),
+                            DataType::Decimal(return_type.clone()),
+                        );
+                        op_decimal!(
+                            &lhs.as_ref(),
+                            &rhs.as_ref(),
                             ctx,
                             &DataType::Decimal(return_type.clone()),
                             $op,
@@ -373,11 +391,8 @@ pub(crate) fn register_decimal_compare_op(registry: &mut FunctionRegistry) {
     register_decimal_compare_op!(registry, "lt", is_lt);
     register_decimal_compare_op!(registry, "eq", is_eq);
     register_decimal_compare_op!(registry, "gt", is_gt);
-
     register_decimal_compare_op!(registry, "lte", is_le);
-
     register_decimal_compare_op!(registry, "gte", is_ge);
-
     register_decimal_compare_op!(registry, "ne", is_ne);
 }
 
