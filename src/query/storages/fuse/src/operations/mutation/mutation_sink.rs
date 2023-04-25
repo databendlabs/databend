@@ -74,6 +74,7 @@ pub struct MutationSink {
     abort_operation: AbortOperation,
 
     retries: u64,
+    check_lock: bool,
 
     input: Arc<InputPort>,
 }
@@ -96,6 +97,7 @@ impl MutationSink {
             merged_statistics: Statistics::default(),
             abort_operation: AbortOperation::default(),
             retries: 0,
+            check_lock: false,
             input,
         })))
     }
@@ -166,6 +168,7 @@ impl Processor for MutationSink {
                 self.merged_segments = meta.segments.clone();
                 self.merged_statistics = meta.summary.clone();
                 self.abort_operation = meta.abort_operation.clone();
+                self.check_lock = meta.check_lock;
 
                 let mut new_snapshot = TableSnapshot::from_previous(&self.base_snapshot);
                 new_snapshot.segments = self.merged_segments.clone();
@@ -206,6 +209,15 @@ impl Processor for MutationSink {
         match std::mem::replace(&mut self.state, State::None) {
             State::TryCommit(new_snapshot) => {
                 let table_info = self.table.get_table_info();
+                if self.check_lock {
+                    let catalog = self.ctx.get_catalog(&table_info.meta.catalog)?;
+                    let res = catalog.get_table_mutation_lock(table_info).await?;
+                    if res.locked {
+                        tracing::error!("table '{}' already locked for mutation", table_info.name);
+                        self.state = State::AbortOperation;
+                        return Ok(());
+                    }
+                }
                 match FuseTable::commit_to_meta_server(
                     self.ctx.as_ref(),
                     table_info,

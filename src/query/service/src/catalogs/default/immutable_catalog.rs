@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::AddTableMutationLockReply;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -26,9 +27,11 @@ use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableByIdReq;
+use common_meta_app::schema::DropTableMutationLockReply;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
+use common_meta_app::schema::GetTableMutationLockReply;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -261,5 +264,36 @@ impl Catalog for ImmutableCatalog {
             "update table meta not allowed for system database {:?}",
             req
         )))
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_mutation_lock(
+        &self,
+        _table_info: &TableInfo,
+    ) -> Result<GetTableMutationLockReply> {
+        Err(ErrorCode::Unimplemented(
+            "get_table_mutation_lock not allowed for system database",
+        ))
+    }
+
+    #[async_backtrace::framed]
+    async fn add_table_mutation_lock(
+        &self,
+        _expire_sec: u64,
+        _table_info: &TableInfo,
+    ) -> Result<AddTableMutationLockReply> {
+        Err(ErrorCode::Unimplemented(
+            "add_table_mutation_lock not allowed for system database",
+        ))
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_table_mutation_lock(
+        &self,
+        _table_info: &TableInfo,
+    ) -> Result<DropTableMutationLockReply> {
+        Err(ErrorCode::Unimplemented(
+            "drop_table_mutation_lock not allowed for system database",
+        ))
     }
 }

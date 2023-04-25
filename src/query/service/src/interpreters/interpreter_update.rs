@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::runtime::GlobalIORuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -136,6 +137,12 @@ impl Interpreter for UpdateInterpreter {
             },
         )?;
 
+        // Add table mutation lock.
+        let table_info = tbl.get_table_info().clone();
+        let catalog = self.ctx.get_catalog(catalog_name)?;
+        // Todo: add mutation_lock_expire_sec in ctx.setting.
+        let _res = catalog.add_table_mutation_lock(60, &table_info).await?;
+
         let mut build_res = PipelineBuildResult::create();
         tbl.update(
             self.ctx.clone(),
@@ -145,6 +152,18 @@ impl Interpreter for UpdateInterpreter {
             &mut build_res.main_pipeline,
         )
         .await?;
+
+        build_res.main_pipeline.set_on_finished(move |may_error| {
+            // Drop table mutation lock.
+            GlobalIORuntime::instance().block_on(async move {
+                let _res = catalog.drop_table_mutation_lock(&table_info).await?;
+                Ok(())
+            })?;
+            match may_error {
+                None => Ok(()),
+                Some(error_code) => Err(error_code.clone()),
+            }
+        });
         Ok(build_res)
     }
 }

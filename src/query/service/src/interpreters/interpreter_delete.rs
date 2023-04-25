@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::runtime::GlobalIORuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
@@ -81,6 +82,11 @@ impl Interpreter for DeleteInterpreter {
             (None, vec![])
         };
 
+        // Add table mutation lock.
+        let table_info = tbl.get_table_info().clone();
+        let catalog = self.ctx.get_catalog(catalog_name)?;
+        let _res = catalog.add_table_mutation_lock(60, &table_info).await?;
+
         let mut build_res = PipelineBuildResult::create();
         tbl.delete(
             self.ctx.clone(),
@@ -90,6 +96,17 @@ impl Interpreter for DeleteInterpreter {
         )
         .await?;
 
+        build_res.main_pipeline.set_on_finished(move |may_error| {
+            // Drop table mutation lock.
+            GlobalIORuntime::instance().block_on(async move {
+                let _res = catalog.drop_table_mutation_lock(&table_info).await?;
+                Ok(())
+            })?;
+            match may_error {
+                None => Ok(()),
+                Some(error_code) => Err(error_code.clone()),
+            }
+        });
         Ok(build_res)
     }
 }

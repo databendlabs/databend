@@ -27,6 +27,7 @@ use common_exception::Result;
 use common_hive_meta_store::Partition;
 use common_hive_meta_store::TThriftHiveMetastoreSyncClient;
 use common_hive_meta_store::ThriftHiveMetastoreSyncClient;
+use common_meta_app::schema::AddTableMutationLockReply;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -35,9 +36,11 @@ use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableByIdReq;
+use common_meta_app::schema::DropTableMutationLockReply;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
+use common_meta_app::schema::GetTableMutationLockReply;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -401,6 +404,31 @@ impl Catalog for HiveCatalog {
         _table_info: &TableInfo,
         _req: TruncateTableReq,
     ) -> Result<TruncateTableReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_mutation_lock(
+        &self,
+        _table_info: &TableInfo,
+    ) -> Result<GetTableMutationLockReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn add_table_mutation_lock(
+        &self,
+        _expire_sec: u64,
+        _table_info: &TableInfo,
+    ) -> Result<AddTableMutationLockReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_table_mutation_lock(
+        &self,
+        _table_info: &TableInfo,
+    ) -> Result<DropTableMutationLockReply> {
         unimplemented!()
     }
 

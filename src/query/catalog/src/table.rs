@@ -414,7 +414,6 @@ pub struct ColumnStatistics {
 pub enum CompactTarget {
     Blocks,
     Segments,
-    None,
 }
 
 pub enum AppendMode {

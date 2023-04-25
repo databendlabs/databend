@@ -15,9 +15,12 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use chrono::Utc;
 use common_config::InnerConfig;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
+use common_meta_app::schema::AddTableMutationLockReply;
+use common_meta_app::schema::AddTableMutationLockReq;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -31,10 +34,14 @@ use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableByIdReq;
+use common_meta_app::schema::DropTableMutationLockReply;
+use common_meta_app::schema::DropTableMutationLockReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
+use common_meta_app::schema::GetTableMutationLockReply;
+use common_meta_app::schema::GetTableMutationLockReq;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
@@ -353,6 +360,64 @@ impl Catalog for MutableCatalog {
     async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply> {
         let res = self.ctx.meta.count_tables(req).await?;
         Ok(res)
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_mutation_lock(
+        &self,
+        table_info: &TableInfo,
+    ) -> Result<GetTableMutationLockReply> {
+        let table_id = table_info.ident.table_id;
+        let req = GetTableMutationLockReq { table_id };
+        match table_info.db_type.clone() {
+            DatabaseType::NormalDB => Ok(self.ctx.meta.get_table_mutation_lock(req).await?),
+            DatabaseType::ShareDB(share_ident) => {
+                let db = self
+                    .get_database(&share_ident.tenant, &share_ident.share_name)
+                    .await?;
+                db.get_table_mutation_lock(req).await
+            }
+        }
+    }
+
+    #[async_backtrace::framed]
+    async fn add_table_mutation_lock(
+        &self,
+        expire_sec: u64,
+        table_info: &TableInfo,
+    ) -> Result<AddTableMutationLockReply> {
+        let req = AddTableMutationLockReq {
+            table_id: table_info.ident.table_id,
+            expire_at: Some(Utc::now().timestamp() as u64 + expire_sec),
+        };
+        match table_info.db_type.clone() {
+            DatabaseType::NormalDB => Ok(self.ctx.meta.add_table_mutation_lock(req).await?),
+            DatabaseType::ShareDB(share_ident) => {
+                let db = self
+                    .get_database(&share_ident.tenant, &share_ident.share_name)
+                    .await?;
+                db.add_table_mutation_lock(req).await
+            }
+        }
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_table_mutation_lock(
+        &self,
+        table_info: &TableInfo,
+    ) -> Result<DropTableMutationLockReply> {
+        let req = DropTableMutationLockReq {
+            table_id: table_info.ident.table_id,
+        };
+        match table_info.db_type.clone() {
+            DatabaseType::NormalDB => Ok(self.ctx.meta.drop_table_mutation_lock(req).await?),
+            DatabaseType::ShareDB(share_ident) => {
+                let db = self
+                    .get_database(&share_ident.tenant, &share_ident.share_name)
+                    .await?;
+                db.drop_table_mutation_lock(req).await
+            }
+        }
     }
 
     fn get_table_engines(&self) -> Vec<StorageDescription> {

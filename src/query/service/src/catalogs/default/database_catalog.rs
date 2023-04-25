@@ -19,6 +19,7 @@ use common_catalog::table_args::TableArgs;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::AddTableMutationLockReply;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -27,9 +28,11 @@ use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableByIdReq;
+use common_meta_app::schema::DropTableMutationLockReply;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
+use common_meta_app::schema::GetTableMutationLockReply;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -476,5 +479,36 @@ impl Catalog for DatabaseCatalog {
     fn get_table_engines(&self) -> Vec<StorageDescription> {
         // only return mutable_catalog storage table engines
         self.mutable_catalog.get_table_engines()
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_mutation_lock(
+        &self,
+        table_info: &TableInfo,
+    ) -> Result<GetTableMutationLockReply> {
+        self.mutable_catalog
+            .get_table_mutation_lock(table_info)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    async fn add_table_mutation_lock(
+        &self,
+        expire_sec: u64,
+        table_info: &TableInfo,
+    ) -> Result<AddTableMutationLockReply> {
+        self.mutable_catalog
+            .add_table_mutation_lock(expire_sec, table_info)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_table_mutation_lock(
+        &self,
+        table_info: &TableInfo,
+    ) -> Result<DropTableMutationLockReply> {
+        self.mutable_catalog
+            .drop_table_mutation_lock(table_info)
+            .await
     }
 }

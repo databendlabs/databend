@@ -39,6 +39,8 @@ use common_meta_app::app_error::UnknownTable;
 use common_meta_app::app_error::UnknownTableId;
 use common_meta_app::app_error::WrongShare;
 use common_meta_app::app_error::WrongShareObject;
+use common_meta_app::schema::AddTableMutationLockReply;
+use common_meta_app::schema::AddTableMutationLockReq;
 use common_meta_app::schema::CountTablesKey;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
@@ -59,6 +61,8 @@ use common_meta_app::schema::DbIdListKey;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableByIdReq;
+use common_meta_app::schema::DropTableMutationLockReply;
+use common_meta_app::schema::DropTableMutationLockReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
@@ -92,8 +96,6 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpdateTableMutationLockReply;
-use common_meta_app::schema::UpdateTableMutationLockReq;
 use common_meta_app::schema::UpsertTableCopiedFileReply;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
@@ -2334,7 +2336,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
 
         if tb_meta_seq == 0 {
             return Err(KVAppError::AppError(AppError::UnknownTableId(
-                UnknownTableId::new(table_id, ""),
+                UnknownTableId::new(table_id, "get_table_mutation_lock"),
             )));
         }
 
@@ -2345,43 +2347,145 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         );
 
         let lock_key = TableMutationLockKey { table_id };
-        let (_lock_key_seq, lock_op): (_, Option<TableMutationLock>) =
+        let (lock_key_seq, _): (_, Option<TableMutationLock>) =
             get_pb_value(self, &lock_key).await?;
 
-        let locked = lock_op.is_some();
-        Ok(GetTableMutationLockReply { locked })
+        Ok(GetTableMutationLockReply {
+            locked: lock_key_seq > 0,
+        })
     }
 
-    async fn update_table_mutation_lock(
+    async fn add_table_mutation_lock(
         &self,
-        req: UpdateTableMutationLockReq,
-    ) -> Result<UpdateTableMutationLockReply, KVAppError> {
+        req: AddTableMutationLockReq,
+    ) -> Result<AddTableMutationLockReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
+        let mut retry = 0;
         let table_id = req.table_id;
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
 
-        let tbid = TableId { table_id };
+            let tbid = TableId { table_id };
+            let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
+            if tb_meta_seq == 0 {
+                return Err(KVAppError::AppError(AppError::UnknownTableId(
+                    UnknownTableId::new(table_id, "add_table_mutation_lock"),
+                )));
+            }
 
-        let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
+            debug!(
+                ident = display(&tbid),
+                table_meta = debug(&tb_meta),
+                "add_table_mutation_lock"
+            );
 
-        if tb_meta_seq == 0 {
-            return Err(KVAppError::AppError(AppError::UnknownTableId(
-                UnknownTableId::new(table_id, ""),
-            )));
+            let lock_key = TableMutationLockKey { table_id };
+
+            let lock = TableMutationLock {};
+
+            let condition = vec![
+                txn_cond_seq(&tbid, Eq, tb_meta_seq),
+                // assumes lock are absent.
+                txn_cond_seq(&lock_key, Eq, 0),
+            ];
+            let if_then = match &req.expire_at {
+                Some(expire_at) => {
+                    vec![txn_op_put_with_expire(
+                        &lock_key,
+                        serialize_struct(&lock)?,
+                        *expire_at,
+                    )]
+                }
+                None => {
+                    vec![txn_op_put(&lock_key, serialize_struct(&lock)?)]
+                }
+            };
+
+            let txn_req = TxnRequest {
+                condition,
+                if_then,
+                else_then: vec![],
+            };
+
+            let (succ, _responses) = send_txn(self, txn_req).await?;
+
+            debug!(
+                ident = display(&tbid),
+                succ = display(succ),
+                "add_table_mutation_lock"
+            );
+
+            if succ {
+                return Ok(AddTableMutationLockReply {});
+            }
         }
 
-        debug!(
-            ident = display(&tbid),
-            table_meta = debug(&tb_meta),
-            "update_table_mutation_lock"
-        );
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
+            TxnRetryMaxTimes::new("add_table_mutation_lock", TXN_MAX_RETRY_TIMES),
+        )))
+    }
 
-        let lock_key = TableMutationLockKey { table_id };
-        let (lock_key_seq, lock_op): (_, Option<TableMutationLock>) =
-            get_pb_value(self, &lock_key).await?;
+    async fn drop_table_mutation_lock(
+        &self,
+        req: DropTableMutationLockReq,
+    ) -> Result<DropTableMutationLockReply, KVAppError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
-        
-        todo!()
+        let mut retry = 0;
+        let table_id = req.table_id;
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
+
+            let tbid = TableId { table_id };
+            let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
+            if tb_meta_seq == 0 {
+                return Err(KVAppError::AppError(AppError::UnknownTableId(
+                    UnknownTableId::new(table_id, "drop_table_mutation_lock"),
+                )));
+            }
+
+            debug!(
+                ident = display(&tbid),
+                table_meta = debug(&tb_meta),
+                "drop_table_mutation_lock"
+            );
+
+            let lock_key = TableMutationLockKey { table_id };
+            let (lock_key_seq, _): (_, Option<TableMutationLock>) =
+                get_pb_value(self, &lock_key).await?;
+            if lock_key_seq == 0 {
+                return Ok(DropTableMutationLockReply {});
+            }
+
+            let condition = vec![
+                txn_cond_seq(&tbid, Eq, tb_meta_seq),
+                txn_cond_seq(&lock_key, Eq, lock_key_seq),
+            ];
+            let if_then = vec![txn_op_del(&lock_key)];
+
+            let txn_req = TxnRequest {
+                condition,
+                if_then,
+                else_then: vec![],
+            };
+
+            let (succ, _responses) = send_txn(self, txn_req).await?;
+
+            debug!(
+                ident = display(&tbid),
+                succ = display(succ),
+                "drop_table_mutation_lock"
+            );
+
+            if succ {
+                return Ok(DropTableMutationLockReply {});
+            }
+        }
+
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
+            TxnRetryMaxTimes::new("drop_table_mutation_lock", TXN_MAX_RETRY_TIMES),
+        )))
     }
 
     fn name(&self) -> String {

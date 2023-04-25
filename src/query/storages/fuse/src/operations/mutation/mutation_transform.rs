@@ -318,6 +318,7 @@ impl Processor for MutationTransform {
                     segments,
                     summary,
                     std::mem::take(&mut self.abort_operation),
+                    false,
                 );
                 self.output_data = Some(DataBlock::empty_with_meta(meta));
             }

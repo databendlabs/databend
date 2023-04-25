@@ -756,13 +756,21 @@ pub struct GetTableMutationLockReply {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct UpdateTableMutationLockReq {
+pub struct AddTableMutationLockReq {
     pub table_id: u64,
-    pub is_del: bool,
+    pub expire_at: Option<u64>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct UpdateTableMutationLockReply {}
+pub struct AddTableMutationLockReply {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct DropTableMutationLockReq {
+    pub table_id: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct DropTableMutationLockReply {}
 
 mod kvapi_key_impl {
     use common_meta_kvapi::kvapi;

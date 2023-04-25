@@ -17,12 +17,18 @@ use std::sync::Arc;
 use common_catalog::table::Table;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
+use common_meta_app::schema::AddTableMutationLockReply;
+use common_meta_app::schema::AddTableMutationLockReq;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DropTableByIdReq;
+use common_meta_app::schema::DropTableMutationLockReply;
+use common_meta_app::schema::DropTableMutationLockReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
+use common_meta_app::schema::GetTableMutationLockReply;
+use common_meta_app::schema::GetTableMutationLockReq;
 use common_meta_app::schema::GetTableReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameTableReply;
@@ -191,6 +197,33 @@ impl Database for DefaultDatabase {
     #[async_backtrace::framed]
     async fn truncate_table(&self, req: TruncateTableReq) -> Result<TruncateTableReply> {
         let res = self.ctx.meta.truncate_table(req).await?;
+        Ok(res)
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_mutation_lock(
+        &self,
+        req: GetTableMutationLockReq,
+    ) -> Result<GetTableMutationLockReply> {
+        let res = self.ctx.meta.get_table_mutation_lock(req).await?;
+        Ok(res)
+    }
+
+    #[async_backtrace::framed]
+    async fn add_table_mutation_lock(
+        &self,
+        req: AddTableMutationLockReq,
+    ) -> Result<AddTableMutationLockReply> {
+        let res = self.ctx.meta.add_table_mutation_lock(req).await?;
+        Ok(res)
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_table_mutation_lock(
+        &self,
+        req: DropTableMutationLockReq,
+    ) -> Result<DropTableMutationLockReply> {
+        let res = self.ctx.meta.drop_table_mutation_lock(req).await?;
         Ok(res)
     }
 }

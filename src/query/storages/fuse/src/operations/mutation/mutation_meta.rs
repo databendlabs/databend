@@ -124,6 +124,7 @@ pub struct MutationSinkMeta {
     pub segments: Vec<Location>,
     pub summary: Statistics,
     pub abort_operation: AbortOperation,
+    pub check_lock: bool,
 }
 
 #[typetag::serde(name = "mutation_sink_meta")]
@@ -149,11 +150,13 @@ impl MutationSinkMeta {
         segments: Vec<Location>,
         summary: Statistics,
         abort_operation: AbortOperation,
+        check_lock: bool,
     ) -> BlockMetaInfoPtr {
         Box::new(MutationSinkMeta {
             segments,
             summary,
             abort_operation,
+            check_lock,
         })
     }
 

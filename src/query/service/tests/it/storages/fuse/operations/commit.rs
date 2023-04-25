@@ -41,6 +41,7 @@ use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
+use common_meta_app::schema::AddTableMutationLockReply;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -49,9 +50,11 @@ use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableByIdReq;
+use common_meta_app::schema::DropTableMutationLockReply;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
+use common_meta_app::schema::GetTableMutationLockReply;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -715,6 +718,28 @@ impl Catalog for FakedCatalog {
     }
 
     fn as_any(&self) -> &dyn Any {
+        todo!()
+    }
+
+    async fn get_table_mutation_lock(
+        &self,
+        _table_info: &TableInfo,
+    ) -> Result<GetTableMutationLockReply> {
+        todo!()
+    }
+
+    async fn add_table_mutation_lock(
+        &self,
+        _expire_sec: u64,
+        _table_info: &TableInfo,
+    ) -> Result<AddTableMutationLockReply> {
+        todo!()
+    }
+
+    async fn drop_table_mutation_lock(
+        &self,
+        _table_info: &TableInfo,
+    ) -> Result<DropTableMutationLockReply> {
         todo!()
     }
 }

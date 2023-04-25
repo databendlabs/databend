@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::AddTableMutationLockReply;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -24,9 +25,11 @@ use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableByIdReq;
+use common_meta_app::schema::DropTableMutationLockReply;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
+use common_meta_app::schema::GetTableMutationLockReply;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -162,6 +165,22 @@ pub trait Catalog: DynClone + Send + Sync {
         table_info: &TableInfo,
         req: TruncateTableReq,
     ) -> Result<TruncateTableReply>;
+
+    async fn get_table_mutation_lock(
+        &self,
+        table_info: &TableInfo,
+    ) -> Result<GetTableMutationLockReply>;
+
+    async fn add_table_mutation_lock(
+        &self,
+        expire_sec: u64,
+        table_info: &TableInfo,
+    ) -> Result<AddTableMutationLockReply>;
+
+    async fn drop_table_mutation_lock(
+        &self,
+        table_info: &TableInfo,
+    ) -> Result<DropTableMutationLockReply>;
 
     /// Table function
 

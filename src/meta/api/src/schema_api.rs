@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use common_meta_app::schema::AddTableMutationLockReply;
+use common_meta_app::schema::AddTableMutationLockReq;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -24,6 +26,8 @@ use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableByIdReq;
+use common_meta_app::schema::DropTableMutationLockReply;
+use common_meta_app::schema::DropTableMutationLockReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
@@ -49,8 +53,6 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpdateTableMutationLockReply;
-use common_meta_app::schema::UpdateTableMutationLockReq;
 use common_meta_app::schema::UpsertTableCopiedFileReply;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
@@ -161,10 +163,15 @@ pub trait SchemaApi: Send + Sync {
         req: GetTableMutationLockReq,
     ) -> Result<GetTableMutationLockReply, KVAppError>;
 
-    async fn update_table_mutation_lock(
+    async fn add_table_mutation_lock(
         &self,
-        req: UpdateTableMutationLockReq,
-    ) -> Result<UpdateTableMutationLockReply, KVAppError>;
+        req: AddTableMutationLockReq,
+    ) -> Result<AddTableMutationLockReply, KVAppError>;
+
+    async fn drop_table_mutation_lock(
+        &self,
+        req: DropTableMutationLockReq,
+    ) -> Result<DropTableMutationLockReply, KVAppError>;
 
     fn name(&self) -> String;
 }

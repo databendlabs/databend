@@ -176,6 +176,7 @@ build_exceptions! {
     TableNotWritable(2012),
     TableHistoricalDataNotFound(2013),
     DuplicatedUpsertFiles(2014),
+    TableMutationAlreadyLocked(2015),
 
     // User api error codes.
     UnknownUser(2201),

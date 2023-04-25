@@ -19,12 +19,18 @@ use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
+use common_meta_app::schema::AddTableMutationLockReply;
+use common_meta_app::schema::AddTableMutationLockReq;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DropTableByIdReq;
+use common_meta_app::schema::DropTableMutationLockReply;
+use common_meta_app::schema::DropTableMutationLockReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
+use common_meta_app::schema::GetTableMutationLockReply;
+use common_meta_app::schema::GetTableMutationLockReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableInfo;
@@ -197,6 +203,35 @@ impl Database for ShareDatabase {
     async fn truncate_table(&self, _req: TruncateTableReq) -> Result<TruncateTableReply> {
         Err(ErrorCode::PermissionDenied(
             "Permission denied, cannot truncate table from a shared database".to_string(),
+        ))
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_mutation_lock(
+        &self,
+        req: GetTableMutationLockReq,
+    ) -> Result<GetTableMutationLockReply> {
+        let res = self.ctx.meta.get_table_mutation_lock(req).await?;
+        Ok(res)
+    }
+
+    #[async_backtrace::framed]
+    async fn add_table_mutation_lock(
+        &self,
+        _req: AddTableMutationLockReq,
+    ) -> Result<AddTableMutationLockReply> {
+        Err(ErrorCode::PermissionDenied(
+            "Permission denied, cannot add table mutation lock from a shared database".to_string(),
+        ))
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_table_mutation_lock(
+        &self,
+        _req: DropTableMutationLockReq,
+    ) -> Result<DropTableMutationLockReply> {
+        Err(ErrorCode::PermissionDenied(
+            "Permission denied, cannot drop table mutation lock from a shared database".to_string(),
         ))
     }
 }
