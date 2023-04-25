@@ -238,19 +238,21 @@ impl Column {
             remain -= max_segment;
             offset += max_segment;
 
-            // Copy the remaining memory directly.
-            // [xxxxxxxxxx____] => [xxxxxxxxxxxxxx]
-            //  ^^^^ ---> ^^^^
-            // # Safety
-            // max_segment > remain and offset + remain <= row_num
-            unsafe {
-                std::ptr::copy_nonoverlapping(
-                    builder_ptr.add(base_offset),
-                    builder_ptr.add(offset),
-                    remain,
-                )
-            };
-            offset += remain;
+            if remain > 0 {
+                // Copy the remaining memory directly.
+                // [xxxxxxxxxx____] => [xxxxxxxxxxxxxx]
+                //  ^^^^ ---> ^^^^
+                // # Safety
+                // max_segment > remain and offset + remain <= row_num
+                unsafe {
+                    std::ptr::copy_nonoverlapping(
+                        builder_ptr.add(base_offset),
+                        builder_ptr.add(offset),
+                        remain,
+                    )
+                };
+                offset += remain;
+            }
         }
         // # Safety
         // `offset` is equal to `row_num`
@@ -341,19 +343,21 @@ impl Column {
             remain -= max_bit_num;
             offset += max_segment;
 
-            // Copy the remaining memory directly.
-            // [xxxxxxxxxx____] => [xxxxxxxxxxxxxx]
-            //  ^^^^ ---> ^^^^
-            // # Safety
-            // max_segment > remain * len and offset + remain * len <= data_capacity
-            unsafe {
-                std::ptr::copy_nonoverlapping(
-                    res_data_ptr.add(base_offset),
-                    res_data_ptr.add(offset),
-                    remain * len,
-                )
-            };
-            offset += remain * len;
+            if remain > 0 {
+                // Copy the remaining memory directly.
+                // [xxxxxxxxxx____] => [xxxxxxxxxxxxxx]
+                //  ^^^^ ---> ^^^^
+                // # Safety
+                // max_segment > remain * len and offset + remain * len <= data_capacity
+                unsafe {
+                    std::ptr::copy_nonoverlapping(
+                        res_data_ptr.add(base_offset),
+                        res_data_ptr.add(offset),
+                        remain * len,
+                    )
+                };
+                offset += remain * len;
+            }
         }
         // # Safety
         // `offset` is equal to `data_capacity`
