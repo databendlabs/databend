@@ -40,10 +40,13 @@ async fn test_role_cache_mgr() -> Result<()> {
     );
     user_manager.add_role("tenant1", role1, false).await?;
 
-    let roles = role_cache_manager
+    let mut roles = role_cache_manager
         .find_related_roles("tenant1", &["role1".to_string()])
         .await?;
-    assert_eq!(roles.len(), 1);
+    roles.sort_by(|a, b| a.name.cmp(&b.name));
+    assert_eq!(roles.len(), 2);
+    assert_eq!(&roles[0].name, "public");
+    assert_eq!(&roles[1].name, "role1");
 
     Ok(())
 }
