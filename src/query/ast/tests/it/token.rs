@@ -59,6 +59,8 @@ fn test_lexer() {
         r#"select /*+ x /* yy */ */ 1"#,
         // select                */ 1
         r#"select /* x /*+ yy */ */ 1"#,
+        r#"select 1 + /*+ foo"#,
+        r#"select 1 /*+ foo"#,
         r#"select /*++  */ /*++ abc x*/ /*+ SET_VAR(timezone='Asia/Shanghai') */ 1;"#,
         r#"select /* the user name */ /*+SET_VAR(timezone='Asia/Shanghai') */ 1;"#,
         r#"create view v_t as select /*+ SET_VAR(timezone='Asia/Shanghai') */ 1;"#,
@@ -75,7 +77,7 @@ fn test_lexer_error() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("lexer-error.txt").unwrap();
 
-    let cases = vec![r#"select †∑∂ from t;"#];
+    let cases = vec![r#"select †∑∂ from t;"#, r#"select /* x  1"#];
 
     for case in cases {
         run_lexer(&mut file, case);

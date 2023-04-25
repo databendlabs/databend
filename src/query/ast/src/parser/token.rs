@@ -102,12 +102,6 @@ pub enum TokenKind {
     #[regex(r"--[^\t\n\f]*", logos::skip)]
     Comment,
 
-    #[token("/*+")]
-    HintPrefix,
-
-    #[token("*/")]
-    HintSuffix,
-
     #[regex(r"/\*[^\+]([^\*]|(\*[^/]))*\*/", logos::skip)]
     CommentBlock,
 
@@ -135,6 +129,12 @@ pub enum TokenKind {
     LiteralFloat,
 
     // Symbols
+    #[token("/*+")]
+    HintPrefix,
+
+    #[token("*/")]
+    HintSuffix,
+
     #[token("==")]
     DoubleEq,
     #[token("=")]
@@ -904,6 +904,8 @@ impl TokenKind {
                 | MySQLLiteralHex
                 | LiteralInteger
                 | LiteralFloat
+                | HintPrefix
+                | HintSuffix
                 | DoubleEq
                 | Eq
                 | NotEq
@@ -947,6 +949,7 @@ impl TokenKind {
                 | Abs
                 | SquareRoot
                 | CubeRoot
+                | Placeholder
                 | EOI
         )
     }

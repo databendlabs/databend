@@ -149,6 +149,7 @@ impl Planner {
     }
 
     fn preparse_opt_hints<'a>(tokens: &'a [Token<'a>]) -> Vec<Token<'a>> {
+        let eoi = tokens.last().unwrap();
         let mut prefix_idx = 0;
         let mut matched_prefix = 0;
         let mut matched_suffix = 0;
@@ -193,6 +194,7 @@ impl Planner {
                     }
                 }
             }
+            new_tokens.push(eoi.clone());
             new_tokens
         } else {
             tokens.to_vec()

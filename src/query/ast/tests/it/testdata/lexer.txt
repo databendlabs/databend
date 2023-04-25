@@ -41,6 +41,18 @@ select /* x /*+ yy */ */ 1
 
 
 ---------- Input ----------
+select 1 + /*+ foo
+---------- Output ---------
+[(SELECT, "select", 0..6), (LiteralInteger, "1", 7..8), (Plus, "+", 9..10), (HintPrefix, "/*+", 11..14), (Ident, "foo", 15..18), (EOI, "", 18..18)]
+
+
+---------- Input ----------
+select 1 /*+ foo
+---------- Output ---------
+[(SELECT, "select", 0..6), (LiteralInteger, "1", 7..8), (HintPrefix, "/*+", 9..12), (Ident, "foo", 13..16), (EOI, "", 16..16)]
+
+
+---------- Input ----------
 select /*++  */ /*++ abc x*/ /*+ SET_VAR(timezone='Asia/Shanghai') */ 1;
 ---------- Output ---------
 [(SELECT, "select", 0..6), (HintPrefix, "/*+", 7..10), (Plus, "+", 10..11), (HintSuffix, "*/", 13..15), (HintPrefix, "/*+", 16..19), (Plus, "+", 19..20), (Ident, "abc", 21..24), (Ident, "x", 25..26), (HintSuffix, "*/", 26..28), (HintPrefix, "/*+", 29..32), (SET_VAR, "SET_VAR", 33..40), (LParen, "(", 40..41), (TIMEZONE, "timezone", 41..49), (Eq, "=", 49..50), (QuotedString, "'Asia/Shanghai'", 50..65), (RParen, ")", 65..66), (HintSuffix, "*/", 67..69), (LiteralInteger, "1", 70..71), (SemiColon, ";", 71..72), (EOI, "", 72..72)]
