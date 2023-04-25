@@ -239,6 +239,9 @@ impl PartitionPruner {
             stats.partitions_total += file_meta.row_groups.len();
             let (sub_stats, parts) =
                 self.read_and_prune_file_meta(&locations[file_id].0, file_meta, operator.clone())?;
+            for p in parts {
+                partitions.push(ParquetPart::RowGroup(p));
+            }
             stats.partitions_total += sub_stats.partitions_total;
             stats.partitions_scanned += sub_stats.partitions_scanned;
             stats.read_bytes += sub_stats.read_bytes;
