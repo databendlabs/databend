@@ -1912,7 +1912,14 @@ impl ColumnBuilder {
                 ColumnBuilder::Array(Box::new(ArrayColumnBuilder::repeat(col, n)))
             }
             ScalarRef::Map(col) => ColumnBuilder::Map(Box::new(ArrayColumnBuilder::repeat(col, n))),
-            ScalarRef::Bitmap(b) => ColumnBuilder::Bitmap(StringColumnBuilder::repeat(b, n)),
+            ScalarRef::Bitmap(b) => {
+                let rb =
+                    RoaringTreemap::deserialize_from(*b).expect("failed to deserialize bitmap");
+                let mut buf = vec![];
+                rb.serialize_into(&mut buf)
+                    .expect("failed to serialize bitmap");
+                ColumnBuilder::Bitmap(StringColumnBuilder::repeat(&buf, n))
+            }
             ScalarRef::Tuple(fields) => {
                 let fields_ty = match data_type {
                     DataType::Tuple(fields_ty) => fields_ty,
