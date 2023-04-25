@@ -94,7 +94,6 @@ SELECT
 
 ### Query non-interactive
 
-
 with argument:
 ```shell
 > bendsql --query "select now()"
@@ -108,7 +107,7 @@ with argument:
 
 with stdin:
 ```shell
-> echo "select now();" | BendSQL
+> echo "select now();" | bendsql
 ┌────────────────────────────┐
 │            now()           │
 │          Timestamp         │
