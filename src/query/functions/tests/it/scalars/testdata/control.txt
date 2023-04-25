@@ -262,7 +262,7 @@ output         : true
 
 
 ast            : is_not_null('string')
-raw expr       : is_not_null("string")
+raw expr       : is_not_null('string')
 checked expr   : is_not_null<T0=String><T0 NULL>(CAST("string" AS String NULL))
 optimized expr : true
 output type    : Boolean
