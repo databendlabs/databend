@@ -436,7 +436,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
                 eval: Box::new(move |args, ctx| {
-                    convert_to_decimal(args, ctx, from_type.clone(), return_type.clone())
+                    convert_to_decimal(&args[0], ctx, from_type.clone(), return_type.clone())
                 }),
             },
         })
@@ -528,12 +528,11 @@ pub(crate) fn register_decimal_to_float32(registry: &mut FunctionRegistry) {
 }
 
 fn convert_to_decimal(
-    args: &[ValueRef<AnyType>],
+    arg: &ValueRef<AnyType>,
     ctx: &mut EvalContext,
     from_type: DataType,
     dest_type: DataType,
 ) -> Value<AnyType> {
-    let arg = &args[0];
     match from_type {
         DataType::Number(ty) => {
             if ty.is_float() {
