@@ -131,29 +131,6 @@ impl UserApiProvider {
     }
 
     #[async_backtrace::framed]
-    pub async fn ensure_builtin_roles(&self, tenant: &str) -> Result<()> {
-        let mut account_admin = RoleInfo::new(BUILTIN_ROLE_ACCOUNT_ADMIN);
-        account_admin.grants.grant_privileges(
-            &GrantObject::Global,
-            UserPrivilegeSet::available_privileges_on_global(),
-        );
-        self.add_role(tenant, account_admin, true).await?;
-
-        let mut public = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
-        public.grants.grant_privileges(
-            &GrantObject::Table(
-                "default".to_string(),
-                "system".to_string(),
-                "one".to_string(),
-            ),
-            UserPrivilegeType::Select.into(),
-        );
-        self.add_role(tenant, public, true).await?;
-
-        Ok(())
-    }
-
-    #[async_backtrace::framed]
     pub async fn grant_privileges_to_role(
         &self,
         tenant: &str,
