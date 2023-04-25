@@ -250,6 +250,7 @@ impl Column {
                     remain,
                 )
             };
+            offset += remain;
         }
         // # Safety
         // `offset` is equal to `row_num`
@@ -352,6 +353,7 @@ impl Column {
                     remain * len,
                 )
             };
+            offset += remain * len;
         }
         // # Safety
         // `offset` is equal to `data_capacity`
