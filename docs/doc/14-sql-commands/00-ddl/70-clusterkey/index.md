@@ -6,7 +6,7 @@ slug: ./
 
 :::caution
 
-Cluster key is an `experimental feature`; we don't recommend using it in production.
+Cluster key is an `EXPERIMENTAL FEATURE`; we don't recommend using it in production.
 
 :::
 

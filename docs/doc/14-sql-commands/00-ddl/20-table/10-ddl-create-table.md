@@ -64,7 +64,7 @@ CREATE TABLE [IF NOT EXISTS] [db.]table_name
 LIKE [db.]origin_table_name
 ```
 
-This command does not include any data or attributes (such as CLUSTER BY, TRANSIENT, and COMPRESSION) from the original table, and instead creates a new table using the default system settings.
+This command does not include any data or attributes (such as `CLUSTER BY`, `TRANSIENT`, and `COMPRESSION`) from the original table, and instead creates a new table using the default system settings.
 
 :::note WORKAROUND
 - `TRANSIENT` and `COMPRESSION` can be explicitly specified when you create a new table with this command. For example,
@@ -215,7 +215,7 @@ DESC t_null;
 ```sql
 DEFAULT <expr>
 ```
-Specify a default value inserted in the column if a value is not specified via an INSERT or CREATE TABLE AS SELECT statement.
+Specify a default value inserted in the column if a value is not specified via an `INSERT` or `CREATE TABLE AS SELECT` statement.
 
 For example:
 ```sql
