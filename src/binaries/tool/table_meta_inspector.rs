@@ -20,10 +20,10 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use common_config::Config;
-use common_config::StorageConfig;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::Result;
 use common_storage::init_operator;
+use common_storage::StorageConfig;
 use common_storages_fuse::io::read::meta::segment_reader::load_segment_v3;
 use common_storages_fuse::io::read::meta::snapshot_reader::load_snapshot_v3;
 use opendal::services::Fs;
@@ -71,7 +71,7 @@ fn parse_output_file(config: &InspectorConfig) -> Result<PathBuf> {
         Some(output) => Ok(Path::new(&output).to_path_buf()),
         None => {
             let path = Path::new(&config.input);
-            let mut new_name = path.file_name()?.to_owned();
+            let mut new_name = path.file_name().ok_or("Invalid file path").to_owned();
             new_name.push("-decode");
             match &config.config {
                 Some(_) => {
@@ -89,7 +89,7 @@ async fn parse_reader(config: &InspectorConfig) -> Result<Reader> {
         Some(config_file) => {
             let mut builder: serfig::Builder<Config> = serfig::Builder::default();
             builder = builder.collect(from_file(Toml, &config_file));
-            let conf = StorageConfig::try_into(builder.build()?.storage)?;
+            let conf: StorageConfig = builder.build()?.storage.try_into()?;
             init_operator(&conf.params)?
         }
         None => {
