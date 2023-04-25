@@ -15,7 +15,7 @@ test = false
 chrono = { workspace = true }
 common-exception = { path = "../../../common/exception" }
 common-meta-app = { path = "../../../meta/app" }
-enumflags2 = { version = "0.7.5", features = ["serde"] }
+enumflags2 = { version = "0.7.7", features = ["serde"] }
 
 storages-common-table-meta = { path = "../common/table-meta" }
 
