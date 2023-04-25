@@ -61,6 +61,7 @@ fn test_lexer() {
         r#"select /* x /*+ yy */ */ 1"#,
         r#"select /*++  */ /*++ abc x*/ /*+ SET_VAR(timezone='Asia/Shanghai') */ 1;"#,
         r#"select /* the user name */ /*+SET_VAR(timezone='Asia/Shanghai') */ 1;"#,
+        r#"create view v_t as select /*+ SET_VAR(timezone='Asia/Shanghai') */ 1;"#,
         r#"create table "user" (id int, name varchar /* the user name */);"#,
     ];
 

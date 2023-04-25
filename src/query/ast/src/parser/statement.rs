@@ -1336,10 +1336,6 @@ pub fn set_var_hints(i: Input) -> IResult<HintItem> {
     )(i)
 }
 
-pub fn any_token(i: Input) -> IResult<&[Token]> {
-    Ok((i.slice(1..), i.0.slice(1..)))
-}
-
 pub fn hint(i: Input) -> IResult<Hint> {
     let hint = map(
         rule! {
@@ -1349,7 +1345,7 @@ pub fn hint(i: Input) -> IResult<Hint> {
     );
     let invalid_hint = map(
         rule! {
-            "/*+" ~ ^((!"*/" ~ #any_token)*) ~ "*/"
+            "/*+" ~ (!"*/" ~ #any_token)* ~ "*/"
         },
         |_| Hint { hints_list: vec![] },
     );

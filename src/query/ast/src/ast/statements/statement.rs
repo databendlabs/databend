@@ -277,7 +277,7 @@ impl Display for Statement {
             } => {
                 write!(f, "DELETE FROM {table_reference}")?;
                 if let Some(hints) = hints {
-                    write!(f, "{}", hints)?;
+                    write!(f, "{} ", hints)?;
                 }
                 if let Some(conditions) = selection {
                     write!(f, "WHERE {conditions} ")?;

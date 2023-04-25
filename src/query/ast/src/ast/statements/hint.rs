@@ -39,6 +39,6 @@ impl Display for Hint {
             write!(f, "{}", hint.expr)?;
             write!(f, ") ")?;
         }
-        write!(f, " */")
+        write!(f, "*/")
     }
 }
