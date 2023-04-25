@@ -60,7 +60,13 @@ impl Session {
         let mut prompt = settings.prompt.clone();
 
         {
-            prompt = prompt.replace("{host}", &info.host);
+            let tokens = info.host.split('.').collect::<Vec<_>>();
+            let host = if tokens.len() >= 2 {
+                tokens[..2].join(".")
+            } else {
+                info.host
+            };
+            prompt = prompt.replace("{host}", &host);
             prompt = prompt.replace("{user}", &info.user);
             prompt = prompt.replace("{port}", &info.port.to_string());
         }
