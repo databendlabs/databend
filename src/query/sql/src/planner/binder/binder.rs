@@ -189,6 +189,9 @@ impl<'a> Binder {
             Statement::AnalyzeTable(stmt) => self.bind_analyze_table(stmt).await?,
             Statement::ExistsTable(stmt) => self.bind_exists_table(stmt).await?,
 
+            // index
+            Statement::CreateIndex(stmt) => self.bind_create_index(stmt).await?,
+
             // Views
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,
             Statement::AlterView(stmt) => self.bind_alter_view(stmt).await?,

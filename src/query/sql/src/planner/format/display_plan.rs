@@ -71,6 +71,9 @@ impl Plan {
             Plan::AnalyzeTable(analyze_table) => Ok(format!("{:?}", analyze_table)),
             Plan::ExistsTable(exists_table) => Ok(format!("{:?}", exists_table)),
 
+            // Create index
+            Plan::CreateIndex(create_index) => Ok(format!("{:?}", create_index)),
+
             // Views
             Plan::CreateView(create_view) => Ok(format!("{:?}", create_view)),
             Plan::AlterView(alter_view) => Ok(format!("{:?}", alter_view)),

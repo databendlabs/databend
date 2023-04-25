@@ -423,6 +423,8 @@ pub trait VisitorMut: Sized {
 
     fn visit_create_table(&mut self, _stmt: &mut CreateTableStmt) {}
 
+    fn visit_create_index(&mut self, _stmt: &mut CreateIndexStmt) {}
+
     fn visit_create_table_source(&mut self, _source: &mut CreateTableSource) {}
 
     fn visit_column_definition(&mut self, _column_definition: &mut ColumnDefinition) {}

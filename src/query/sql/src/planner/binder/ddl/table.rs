@@ -21,6 +21,7 @@ use common_ast::ast::AlterTableStmt;
 use common_ast::ast::AnalyzeTableStmt;
 use common_ast::ast::ColumnDefinition;
 use common_ast::ast::CompactTarget;
+use common_ast::ast::CreateIndexStmt;
 use common_ast::ast::CreateTableSource;
 use common_ast::ast::CreateTableStmt;
 use common_ast::ast::DescribeTableStmt;
@@ -83,6 +84,7 @@ use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CastExpr;
+use crate::plans::CreateIndexPlan;
 use crate::plans::CreateTablePlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropTableClusterKeyPlan;
@@ -849,6 +851,21 @@ impl Binder {
             self.normalize_object_identifier_triple(catalog, database, table);
 
         Ok(Plan::ExistsTable(Box::new(ExistsTablePlan {
+            catalog,
+            database,
+            table,
+        })))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_create_index(
+        &mut self,
+        stmt: &CreateIndexStmt,
+    ) -> Result<Plan> {
+        let catalog = "".to_string();
+        let database = "".to_string();
+        let table = "".to_string();
+        Ok(Plan::CreateIndex(Box::new(CreateIndexPlan {
             catalog,
             database,
             table,

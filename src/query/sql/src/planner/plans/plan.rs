@@ -22,6 +22,7 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 
+use super::CreateIndexPlan;
 use super::CreateShareEndpointPlan;
 use super::DropShareEndpointPlan;
 use crate::optimizer::SExpr;
@@ -160,6 +161,9 @@ pub enum Plan {
     OptimizeTable(Box<OptimizeTablePlan>),
     AnalyzeTable(Box<AnalyzeTablePlan>),
     ExistsTable(Box<ExistsTablePlan>),
+
+    // index
+    CreateIndex(Box<CreateIndexPlan>),
 
     // Insert
     Insert(Box<Insert>),
@@ -328,6 +332,7 @@ impl Display for Plan {
             Plan::ExplainAst { .. } => write!(f, "ExplainAst"),
             Plan::ExplainSyntax { .. } => write!(f, "ExplainSyntax"),
             Plan::RevertTable(..) => write!(f, "RevertTable"),
+            Plan::CreateIndex(_) => write!(f, "CreateIndex"),
         }
     }
 }
@@ -420,6 +425,7 @@ impl Plan {
             Plan::ShowObjectGrantPrivileges(plan) => plan.schema(),
             Plan::ShowGrantTenantsOfShare(plan) => plan.schema(),
             Plan::RevertTable(plan) => plan.schema(),
+            Plan::CreateIndex(_) => Arc::new(DataSchema::empty()),
         }
     }
 

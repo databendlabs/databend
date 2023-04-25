@@ -487,6 +487,8 @@ pub enum TokenKind {
     HOUR,
     #[token("ICEBERG", ignore(ascii_case))]
     ICEBERG,
+    #[token("INDEX", ignore(ascii_case))]
+    INDEX,
     #[token("INTERSECT", ignore(ascii_case))]
     INTERSECT,
     #[token("IDENTIFIED", ignore(ascii_case))]
@@ -515,12 +517,16 @@ pub enum TokenKind {
     INTERVAL,
     #[token("INTO", ignore(ascii_case))]
     INTO,
+    #[token("IP", ignore(ascii_case))]
+    IP,
     #[token("IS", ignore(ascii_case))]
     IS,
     #[token("ISODOW", ignore(ascii_case))]
     ISODOW,
     #[token("ISOYEAR", ignore(ascii_case))]
     ISOYEAR,
+    #[token("IVFFLAT", ignore(ascii_case))]
+    IVFFLAT,
     #[token("JOIN", ignore(ascii_case))]
     JOIN,
     #[token("JSON", ignore(ascii_case))]
@@ -1133,8 +1139,11 @@ impl TokenKind {
             // | TokenKind::ILIKE
             | TokenKind::IN
             // | TokenKind::INITIALLY
+            | TokenKind::INDEX
             | TokenKind::INNER
             | TokenKind::IS
+            | TokenKind::IVFFLAT
+            | TokenKind::IP
             | TokenKind::JOIN
             // | TokenKind::LATERAL
             | TokenKind::LEADING

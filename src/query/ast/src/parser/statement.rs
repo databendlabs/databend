@@ -269,6 +269,23 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+    let create_index = map(
+        // example: CREATE INDEX ON items USING ivfflat (embedding vector_l2_ops) WITH (lists = 100);
+        rule! {
+            CREATE ~ INDEX~ ON ~ #ident
+            ~ USING ~ IVFFLAT ~ "(" ~ #ident ~ IP ~")"
+            ~ WITH ~ "(" ~ #comma_separated_list1(expr) ~ ")"
+        },
+        |(_, _, _, table, _, index_type, _, column, metric_type, _, _, _, paras, _)| {
+            Statement::CreateIndex(CreateIndexStmt {
+                table,
+                index_type: index_type.kind,
+                column,
+                metric_type: metric_type.kind,
+                paras,
+            })
+        },
+    );
     let drop_catalog = map(
         rule! {
             DROP ~ CATALOG ~ ( IF ~ EXISTS )? ~ #ident
@@ -1245,6 +1262,10 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         | #show_create_catalog : "`SHOW CREATE CATALOG <catalog>`"
         | #create_catalog: "`CREATE CATALOG [IF NOT EXISTS] <catalog> TYPE=<catalog_type> CONNECTION=<catalog_options>`"
         | #drop_catalog: "`DROP CATALOG [IF EXISTS] <catalog>`"
+        ),
+        // index
+        rule!(
+            #create_index: "`CREATE INDEX ON <table_name> USING index_type ( <column_name>,metric_type) WITH(paras)`"
         ),
     ));
 

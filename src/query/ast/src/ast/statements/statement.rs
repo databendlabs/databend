@@ -19,6 +19,7 @@ use common_meta_app::principal::FileFormatOptionsAst;
 use common_meta_app::principal::PrincipalIdentity;
 use common_meta_app::principal::UserIdentity;
 
+use super::index::CreateIndexStmt;
 use super::*;
 use crate::ast::write_comma_separated_list;
 use crate::ast::Expr;
@@ -116,6 +117,8 @@ pub enum Statement {
     ExistsTable(ExistsTableStmt),
     // Columns
     ShowColumns(ShowColumnsStmt),
+    // Indexes
+    CreateIndex(CreateIndexStmt),
 
     // Views
     CreateView(CreateViewStmt),
@@ -504,6 +507,7 @@ impl Display for Statement {
             Statement::ShowShares(stmt) => write!(f, "{stmt}")?,
             Statement::ShowObjectGrantPrivileges(stmt) => write!(f, "{stmt}")?,
             Statement::ShowGrantsOfShare(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateIndex(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

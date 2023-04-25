@@ -46,7 +46,7 @@ pub enum UserPrivilegeType {
     Create = 1 << 1,
     // Privilege to drop databases or tables.
     Drop = 1 << 7,
-    // Privilege to alter databases or tables.
+    // Privilege to alter databases,tables or indexes.
     Alter = 1 << 8,
     // Privilege to Kill query, Set global configs, etc.
     Super = 1 << 9,

@@ -275,6 +275,20 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
             }
+            // index
+            Plan::CreateIndex(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Create],
+                    )
+                    .await?;
+            }
+
             // Others.
             Plan::Insert(plan) => {
                 session
