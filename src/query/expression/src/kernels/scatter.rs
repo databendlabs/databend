@@ -18,6 +18,7 @@ use itertools::Itertools;
 
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
+use crate::types::bitmap::BitmapType;
 use crate::types::decimal::DecimalColumn;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
@@ -227,6 +228,12 @@ impl Column {
                     scatter_size,
                 )
             }
+            Column::Bitmap(column) => Self::scatter_scalars::<BitmapType, _>(
+                column,
+                StringColumnBuilder::with_capacity(length, 0),
+                indices,
+                scatter_size,
+            ),
             Column::Nullable(c) => {
                 let columns = c.column.scatter(data_type, indices, scatter_size);
                 let validities = Self::scatter_scalars::<BooleanType, _>(
