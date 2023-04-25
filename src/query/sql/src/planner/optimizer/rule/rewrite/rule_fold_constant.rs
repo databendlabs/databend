@@ -16,7 +16,6 @@ use common_exception::Result;
 use common_expression::ConstantFolder;
 use common_expression::FunctionContext;
 use common_functions::BUILTIN_FUNCTIONS;
-use tracing::error;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::RuleID;
@@ -171,11 +170,6 @@ impl Rule for RuleFoldConstant {
             }
             _ => unreachable!(),
         }
-        error!(
-            "old plan:\n {:?}\nnew plan:\n{:?}",
-            s_expr.plan(),
-            &new_plan
-        );
         if &new_plan != s_expr.plan() {
             state.add_result(s_expr.replace_plan(new_plan));
         }
