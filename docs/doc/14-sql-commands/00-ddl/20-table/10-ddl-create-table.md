@@ -23,10 +23,10 @@ Databend aims to be easy to use by design and does NOT require any of those oper
 ```sql
 CREATE [TRANSIENT] TABLE [IF NOT EXISTS] [db.]table_name
 (
-    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <constant_expr> }],
-    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <constant_expr> }],
+    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
+    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
     ...
-) [CLUSTER BY(<expr> [, <expr>, ...] )]
+)
 
 <data_type>:
   TINYINT
@@ -54,8 +54,6 @@ Data type reference:
 * [Semi-structured Data Types](../../../13-sql-reference/10-data-types/43-data-type-variant.md)
 :::
 
-For detailed information about the CLUSTER BY clause, see [SET CLUSTER KEY](../70-clusterkey/dml-set-cluster-key.md).
-
 ## CREATE TABLE ... LIKE
 
 Creates a table with the same column definitions as an existing table. Column names, data types, and their non-NUll constraints of the existing will be copied to the new table.
@@ -69,7 +67,6 @@ LIKE [db.]origin_table_name
 This command does not include any data or attributes (such as CLUSTER BY, TRANSIENT, and COMPRESSION) from the original table, and instead creates a new table using the default system settings.
 
 :::note WORKAROUND
-- `CLUSTER BY` can be added back using [ALTER TABLE](90-alter-table-column.md). See [ALTER CLUSTER KEY](../../00-ddl/70-clusterkey/dml-alter-cluster-key.md) for details.
 - `TRANSIENT` and `COMPRESSION` can be explicitly specified when you create a new table with this command. For example,
 
 ```sql
@@ -92,7 +89,6 @@ AS SELECT query
 This command does not include any attributes (such as CLUSTER BY, TRANSIENT, and COMPRESSION) from the original table, and instead creates a new table using the default system settings.
 
 :::note WORKAROUND
-- `CLUSTER BY` can be added back using [ALTER TABLE](90-alter-table-column.md). See [ALTER CLUSTER KEY](../../00-ddl/70-clusterkey/dml-alter-cluster-key.md) for details.
 - `TRANSIENT` and `COMPRESSION` can be explicitly specified when you create a new table with this command. For example,
 
 ```sql
@@ -217,9 +213,9 @@ DESC t_null;
 
 ## Default Values
 ```sql
-DEFAULT <constant_expression>
+DEFAULT <expr>
 ```
-Specify a default value(constant expression) inserted in the column if a value is not specified via an INSERT or CREATE TABLE AS SELECT statement.
+Specify a default value inserted in the column if a value is not specified via an INSERT or CREATE TABLE AS SELECT statement.
 
 For example:
 ```sql
