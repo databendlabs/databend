@@ -1,6 +1,6 @@
 ---
-title: bendsql
-sidebar_label: bendsql
+title: BendSQL
+sidebar_label: BendSQL
 description:
   Databend-native CLI
 ---
@@ -9,9 +9,9 @@ description:
 
 This tool is particularly useful for those who prefer a command line interface and need to work with Databend on a regular basis. With bendsql, users can easily and efficiently manage their databases, tables, and data, and perform a wide range of queries and operations with ease.
 
-## Downloading and Installing bendsql
+## Downloading and Installing BendSQL
 
-To download and install bendsql, please go to the [bendsql](https://github.com/datafuselabs/bendsql) repository on GitHub and follow the README instructions.
+To download and install BendSQL, kindly visit the [BendSQL release page](https://github.com/datafuselabs/bendsql/releases) on GitHub.
 
 ## Connecting to Databend
 
@@ -55,8 +55,21 @@ Connected to DatabendQuery v1.1.2-nightly-8ade21e4669e0a2cc100615247705feacdf76c
 bendsql>
 ```
 
+To connect to Databend Cloud, it is recommended to use the `--dsn` option or the `BENDSQL_DSN` environment variable:
 
-## Running Queries with bendsql
+```shell
+> export BENDSQL_DSN="databend://cloudapp:password@tnxxx.gw.aws-us-east-2.default.databend.com/?warehouse=default
+
+> bendsql
+Welcome to BendSQL.
+Trying connect to tnxxx.gw.aws-us-east-2.default.datafusecloud.com:443 as user cloudapp.
+Connected to DatabendQuery v1.1.17-nightly-77286d52c6d6db2c2000a74febf4ddb25f910c41(rust-1.70.0-nightly-2023-04-24T04:38:16.901421116Z)
+
+cloudapp@tnxxx.gw>
+```
+
+
+## Running Queries with BendSQL
 
 ### Query with interactive shell
 
@@ -120,8 +133,12 @@ from file:
 > bendsql \
     --query='INSERT INTO ontime VALUES;' \
     --format=csv \
-    --format-opt compression=gzip \
-    --format-opt skip_header=1 \
-    --set presigned_url_disabled=1 \
-    --data=@cli/tests/data/ontime.csv.gz
+    --format-opt="compression=gzip" \
+    --format-opt="skip_header=1" \
+    --set="presigned_url_disabled=1" \
+    --data=@ontime.csv.gz
 ```
+
+:::note
+`presigned_url_disabled=1` would instruct BendSQL to load data directly using `upload_to_stage` api, which would result in additional transfer fee as well as lower performance, and is not recommended for production use.
+:::
