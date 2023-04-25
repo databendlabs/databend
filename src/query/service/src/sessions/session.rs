@@ -323,9 +323,10 @@ impl Session {
         }
 
         Err(ErrorCode::PermissionDenied(format!(
-            "Permission denied, user {} requires {:?} privilege on {}",
-            &current_user.identity(),
+            "Permission denied, privilege {:?} is required on {} for user {} with role {}",
             privilege.clone(),
+            &current_user.identity(),
+            &current_role.identity(),
             object
         )))
     }
