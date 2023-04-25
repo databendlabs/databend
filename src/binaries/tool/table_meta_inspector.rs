@@ -36,7 +36,6 @@ use serfig::parsers::Toml;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
 use tokio::io::AsyncReadExt;
-use url::form_urlencoded::parse;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Parser)]
 #[clap(about, version = &**DATABEND_COMMIT_VERSION, author)]
