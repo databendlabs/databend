@@ -256,7 +256,7 @@ impl SnapshotsIO {
         }
     }
 
-    // return from files that last modified time within timestamp
+    // return from files that last modified time bigger than timestamp
     #[tracing::instrument(level = "debug", skip_all)]
     #[async_backtrace::framed]
     pub async fn get_within_time_files(
@@ -420,8 +420,9 @@ impl SnapshotsIO {
 
         let mut snapshot_lites = BTreeMap::new();
         for chunk in snapshot_files.chunks(max_io_requests) {
+            // Since we want to get all the snapshot referenced files, so set `ignore_timestamp` true
             let results = self
-                .read_snapshot_lite_extends(chunk, root_snapshot_lite.clone())
+                .read_snapshot_lite_extends(chunk, root_snapshot_lite.clone(), true)
                 .await?;
 
             for snapshot_lite_extend in results.into_iter().flatten() {
@@ -518,14 +519,13 @@ impl SnapshotsIO {
         }
     }
 
-    // Read all the snapshots by the root file.
-    // limit: limits the number of snapshot files listed
-    // with_segment_locations: if true will get the segments of the snapshot
+    // If `ignore_timestamp` is true, ignore filter out snapshots which have larger (artificial)timestamp
     #[async_backtrace::framed]
     async fn read_snapshot_lite_extend(
         snapshot_location: String,
         data_accessor: Operator,
         root_snapshot: Arc<SnapshotLiteExtended>,
+        ignore_timestamp: bool,
     ) -> Result<SnapshotLiteExtended> {
         let reader = MetaReaders::table_snapshot_reader(data_accessor);
         let ver = TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
@@ -537,7 +537,7 @@ impl SnapshotsIO {
         };
         let snapshot = reader.read(&load_params).await?;
 
-        if snapshot.timestamp >= root_snapshot.timestamp {
+        if !ignore_timestamp && snapshot.timestamp >= root_snapshot.timestamp {
             // filter out snapshots which have larger (artificial)timestamp , they are
             // not members of precedents of the current snapshot, whose timestamp is
             // min_snapshot_timestamp.
@@ -576,12 +576,14 @@ impl SnapshotsIO {
         })
     }
 
+    // If `ignore_timestamp` is true, ignore filter out snapshots which have larger (artificial)timestamp
     #[tracing::instrument(level = "debug", skip_all)]
     #[async_backtrace::framed]
     pub async fn read_snapshot_lite_extends(
         &self,
         snapshot_files: &[String],
         root_snapshot: Arc<SnapshotLiteExtended>,
+        ignore_timestamp: bool,
     ) -> Result<Vec<Result<SnapshotLiteExtended>>> {
         // combine all the tasks.
         let mut iter = snapshot_files.iter();
@@ -591,6 +593,7 @@ impl SnapshotsIO {
                     location.clone(),
                     self.operator.clone(),
                     root_snapshot.clone(),
+                    ignore_timestamp,
                 )
                 .instrument(tracing::debug_span!("read_snapshot"))
             })

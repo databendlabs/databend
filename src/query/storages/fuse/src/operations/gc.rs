@@ -103,7 +103,7 @@ impl FuseTable {
         // 3. Read snapshot fields by chunk size(max_storage_io_requests).
         for chunk in snapshot_files.chunks(chunk_size).rev() {
             let results = snapshots_io
-                .read_snapshot_lite_extends(chunk, root_snapshot_lite.clone())
+                .read_snapshot_lite_extends(chunk, root_snapshot_lite.clone(), false)
                 .await?;
             let mut snapshots: Vec<_> = results.into_iter().flatten().collect();
             if snapshots.is_empty() {
@@ -472,7 +472,7 @@ impl FuseTable {
     // return orphan files to be purged
     #[async_backtrace::framed]
     async fn get_orphan_files_to_be_purged(
-        referenced_files: &BTreeSet<String>,
+        referenced_files: BTreeSet<String>,
         snapshots_io: &SnapshotsIO,
         retention_sec: i64,
     ) -> Result<Vec<String>> {
@@ -497,7 +497,7 @@ impl FuseTable {
 
     // return all the segment\block\index files referenced by current snapshot.
     #[async_backtrace::framed]
-    pub async fn get_root_referenced_files(
+    pub async fn get_snapshot_referenced_files(
         &self,
         ctx: &Arc<dyn TableContext>,
     ) -> Result<Option<SnapshotReferencedFiles>> {
@@ -559,7 +559,7 @@ impl FuseTable {
     pub async fn do_gc(&self, ctx: &Arc<dyn TableContext>, retention_sec: i64) -> Result<()> {
         let start = Instant::now();
         // 1. Get all the files referenced by the current snapshot
-        let referenced_files = match self.get_root_referenced_files(ctx).await? {
+        let referenced_files = match self.get_snapshot_referenced_files(ctx).await? {
             Some(referenced_files) => referenced_files,
             None => return Ok(()),
         };
@@ -573,10 +573,12 @@ impl FuseTable {
         info!(status);
         ctx.set_status_info(&status);
 
-        // 2. Get orphan files to be purged
         let snapshots_io = SnapshotsIO::create(ctx.clone(), self.operator.clone());
+
+        // 2. Purge orphan segment files.
+        // 2.1 Get orphan segment files to be purged
         let segment_locations_to_be_purged = Self::get_orphan_files_to_be_purged(
-            &referenced_files.segments,
+            referenced_files.segments,
             &snapshots_io,
             retention_sec,
         )
@@ -589,36 +591,7 @@ impl FuseTable {
         info!(status);
         ctx.set_status_info(&status);
 
-        let block_locations_to_be_purged = Self::get_orphan_files_to_be_purged(
-            &referenced_files.blocks,
-            &snapshots_io,
-            retention_sec,
-        )
-        .await?;
-        let status = format!(
-            "gc orphan: read block_locations_to_be_purged:{}, cost:{} sec",
-            segment_locations_to_be_purged.len(),
-            start.elapsed().as_secs()
-        );
-        info!(status);
-        ctx.set_status_info(&status);
-
-        let index_locations_to_be_purged = Self::get_orphan_files_to_be_purged(
-            &referenced_files.blocks_index,
-            &snapshots_io,
-            retention_sec,
-        )
-        .await?;
-        let status = format!(
-            "gc orphan: read index_locations_to_be_purged:{}, cost:{} sec",
-            index_locations_to_be_purged.len(),
-            start.elapsed().as_secs()
-        );
-        info!(status);
-        ctx.set_status_info(&status);
-        drop(referenced_files);
-
-        // 3. Delete all the orphan files
+        // 2.2 Delete all the orphan segment files to be purged
         let purged_file_num = segment_locations_to_be_purged.len();
         self.try_purge_location_files_and_cache::<SegmentInfo>(
             ctx.clone(),
@@ -633,6 +606,23 @@ impl FuseTable {
         info!(status);
         ctx.set_status_info(&status);
 
+        // 3. Purge orphan block files.
+        // 3.1 Get orphan block files to be purged
+        let block_locations_to_be_purged = Self::get_orphan_files_to_be_purged(
+            referenced_files.blocks,
+            &snapshots_io,
+            retention_sec,
+        )
+        .await?;
+        let status = format!(
+            "gc orphan: read block_locations_to_be_purged:{}, cost:{} sec",
+            block_locations_to_be_purged.len(),
+            start.elapsed().as_secs()
+        );
+        info!(status);
+        ctx.set_status_info(&status);
+
+        // 3.2 Delete all the orphan block files to be purged
         let purged_file_num = block_locations_to_be_purged.len();
         self.try_purge_location_files(
             ctx.clone(),
@@ -647,6 +637,23 @@ impl FuseTable {
         info!(status);
         ctx.set_status_info(&status);
 
+        // 4. Purge orphan block index files.
+        // 4.1 Get orphan block index files to be purged
+        let index_locations_to_be_purged = Self::get_orphan_files_to_be_purged(
+            referenced_files.blocks_index,
+            &snapshots_io,
+            retention_sec,
+        )
+        .await?;
+        let status = format!(
+            "gc orphan: read index_locations_to_be_purged:{}, cost:{} sec",
+            index_locations_to_be_purged.len(),
+            start.elapsed().as_secs()
+        );
+        info!(status);
+        ctx.set_status_info(&status);
+
+        // 4.2 Delete all the orphan block index files to be purged
         let purged_file_num = index_locations_to_be_purged.len();
         self.try_purge_location_files(
             ctx.clone(),

@@ -369,6 +369,8 @@ async fn test_fuse_gc_orphan_retention_files() -> Result<()> {
     //
     // for example :
     //
+    //   ──┬──           S_old
+    //     │
     //   ──┬──           S_current
     //     │
     //  within retention orphan files
@@ -378,8 +380,11 @@ async fn test_fuse_gc_orphan_retention_files() -> Result<()> {
     //  outof retention orphan files
     //     │             outof_retention_time_orphan_files
     //
+    // - S_old is the old gc root
+    //   all the {segments|blocks|blocks index} referenced by S_old MUST NOT be collected
+    //
     // - S_current is the gc root
-    //   so all the {segments|blocks|blocks index} referenced by S_current MUST NOT be collected
+    //   all the {segments|blocks|blocks index} referenced by S_current MUST NOT be collected
     //
     // - within_retention_time_orphan_files shall NOT be purged
     //   since they are within retention time.
@@ -387,9 +392,15 @@ async fn test_fuse_gc_orphan_retention_files() -> Result<()> {
     //   since it is outof the retention period
     //
     //  put them together, after GC, there will be
-    //  - 1 snapshots left: s_current
-    //  - 2 segments left: one referenced by S_current, one in within_retention_time_orphan_files
-    //  - 2 blocks left: one referenced by S_current, one in within_retention_time_orphan_files
+    //  - 2 snapshots left: s_current, s_old
+    //  - 3 segments left: two referenced by S_current and s_old, one in within_retention_time_orphan_files
+    //  - 2 blocks left: two referenced by S_current and old, one in within_retention_time_orphan_files
+    //
+    //  this test case test that:
+    //  - all the files referenced by snapshot, if or not within retention time, will not be purged,
+    //  - all the orphan files:
+    //      - if within retention, will not be purged
+    //      - if outof retention, will be purged
 
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
@@ -421,6 +432,9 @@ async fn test_fuse_gc_orphan_retention_files() -> Result<()> {
         orphan_files
     };
 
+    let number_of_block = 1;
+    append_sample_data(number_of_block, &fixture).await?;
+
     // sleep to make orphan files out of retention time
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
@@ -447,12 +461,12 @@ async fn test_fuse_gc_orphan_retention_files() -> Result<()> {
         orphan_files
     };
 
-    // after generate orphan files, verify the files number
+    // after generate orphan files and insert data, verify the files number
     {
-        let expected_num_of_snapshot = 0;
-        let expected_num_of_segment = (orphan_segment_file_num * 2) as u32;
+        let expected_num_of_snapshot = 1;
+        let expected_num_of_segment = 1 + (orphan_segment_file_num * 2) as u32;
         let expected_num_of_blocks =
-            (orphan_segment_file_num * orphan_block_per_segment_num * 2) as u32;
+            1 + (orphan_segment_file_num * orphan_block_per_segment_num * 2) as u32;
         let expected_num_of_index = expected_num_of_blocks;
         check_data_dir(
             &fixture,
@@ -468,29 +482,32 @@ async fn test_fuse_gc_orphan_retention_files() -> Result<()> {
         .await?;
     }
 
-    let number_of_block = 1;
+    // insert data to make some new snapshot files.
     append_sample_data(number_of_block, &fixture).await?;
+
     // save all the referenced files
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let old_referenced_files = fuse_table
-        .get_root_referenced_files(&table_ctx)
+        .get_snapshot_referenced_files(&table_ctx)
         .await?
         .unwrap();
+    let old_snapshot_files = fuse_table.list_snapshot_files().await?;
 
-    // after generate orphan files and insert data, verify the files number
+    // after generate orphan files\insert data\analyze table , verify the files number
     {
-        let expected_num_of_snapshot = 1;
-        let expected_num_of_segment = 1 + (orphan_segment_file_num * 2) as u32;
+        let expected_num_of_snapshot = 2;
+        let expected_num_of_segment = 2 + (orphan_segment_file_num * 2) as u32;
         let expected_num_of_blocks =
-            1 + (orphan_segment_file_num * orphan_block_per_segment_num * 2) as u32;
+            2 + (orphan_segment_file_num * orphan_block_per_segment_num * 2) as u32;
         let expected_num_of_index = expected_num_of_blocks;
+        let expected_num_of_ts = 0;
         check_data_dir(
             &fixture,
             "do_gc_orphan_files: verify generate retention files and referenced files",
             expected_num_of_snapshot,
-            0,
+            expected_num_of_ts,
             expected_num_of_segment,
             expected_num_of_blocks,
             expected_num_of_index,
@@ -511,16 +528,17 @@ async fn test_fuse_gc_orphan_retention_files() -> Result<()> {
 
     // check files number
     {
-        let expected_num_of_snapshot = 1;
-        let expected_num_of_segment = 1 + orphan_segment_file_num as u32;
+        let expected_num_of_snapshot = 2;
+        let expected_num_of_segment = 2 + orphan_segment_file_num as u32;
         let expected_num_of_blocks =
-            1 + (orphan_segment_file_num * orphan_block_per_segment_num) as u32;
+            2 + (orphan_segment_file_num * orphan_block_per_segment_num) as u32;
         let expected_num_of_index = expected_num_of_blocks;
+        let expected_num_of_ts = 0;
         check_data_dir(
             &fixture,
             "do_gc_orphan_files: after gc",
             expected_num_of_snapshot,
-            0,
+            expected_num_of_ts,
             expected_num_of_segment,
             expected_num_of_blocks,
             expected_num_of_index,
@@ -547,19 +565,25 @@ async fn test_fuse_gc_orphan_retention_files() -> Result<()> {
         }
     }
 
-    // check all referenced files exist
+    // check all referenced files and snapshot files exist
     {
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
         let table = fixture.latest_default_table().await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let referenced_files = fuse_table
-            .get_root_referenced_files(&table_ctx)
+            .get_snapshot_referenced_files(&table_ctx)
             .await?
             .unwrap();
 
         assert_eq!(referenced_files, old_referenced_files);
 
         for file in referenced_files.all_files() {
+            assert!(dal.is_exist(&file).await?);
+        }
+
+        let snapshot_files = fuse_table.list_snapshot_files().await?;
+        assert_eq!(old_snapshot_files, snapshot_files);
+        for file in snapshot_files {
             assert!(dal.is_exist(&file).await?);
         }
     }
