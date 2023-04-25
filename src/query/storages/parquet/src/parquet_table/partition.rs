@@ -36,7 +36,13 @@ impl ParquetTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_down: Option<PushDownInfo>,
+        is_small_file: bool,
     ) -> Result<PartitionPruner> {
+        let parquet_read_whole_file_threshold = if is_small_file {
+            0_usize
+        } else {
+            ctx.get_settings().get_parquet_read_whole_file_threshold()? as usize
+        };
         // `plan.source_info.schema()` is the same as `TableSchema::from(&self.arrow_schema)`
         let projection = if let Some(PushDownInfo {
             projection: Some(prj),
@@ -114,6 +120,7 @@ impl ParquetTable {
             column_nodes: projected_column_nodes,
             skip_pruning,
             top_k,
+            parquet_read_whole_file_threshold,
         })
     }
 
@@ -124,7 +131,7 @@ impl ParquetTable {
         ctx: Arc<dyn TableContext>,
         push_down: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        let pruner = self.create_pruner(ctx.clone(), push_down.clone())?;
+        let pruner = self.create_pruner(ctx.clone(), push_down.clone(), false)?;
 
         let file_locations = match &self.files_to_read {
             Some(files) => files
