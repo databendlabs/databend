@@ -23,7 +23,7 @@ Readings in Database Systems,Michael Stonebraker,2004
 ### Step 1. Create Database and Table
 
 ```shell
-> bendsql
+> BendSQL
 Welcome to BendSQL.
 Trying connect to localhost:8000 as user root.
 Connected to DatabendQuery v1.1.2-nightly-8ade21e4669e0a2cc100615247705feacdf76c5b(rust-1.70.0-nightly-2023-04-15T16:08:52.195357424Z)
@@ -53,7 +53,7 @@ root@localhost>
 Send loading data request with the following command:
 
 ```shell
-> bendsql --query='INSERT INTO book_db.books VALUES;' --format=csv --data=@books.csv --progress
+> BendSQL --query='INSERT INTO book_db.books VALUES;' --format=csv --data=@books.csv --progress
 ==> Stream Loaded books.csv:
     Written 2 (24.29 rows/s), 157B (1.86 KiB/s)
 ```
@@ -61,7 +61,7 @@ Send loading data request with the following command:
 ### Step 3. Verify Loaded Data
 
 ```shell
-> echo "SELECT * FROM books;" | bendsql --database book_db
+> echo "SELECT * FROM books;" | BendSQL --database book_db
 ┌─────────────────────────────────────────────────────────────┐
 │             title            │        author       │  date  │
 │            String            │        String       │ String │
@@ -98,7 +98,7 @@ CREATE TABLE bookcomments
 Send loading data request with the following command:
 
 ```bash
-> bendsql --query='INSERT INTO book_db.bookcomments(title,author,date) VALUES;' --format=csv --data=@books.csv --progress
+> BendSQL --query='INSERT INTO book_db.bookcomments(title,author,date) VALUES;' --format=csv --data=@books.csv --progress
 ==> Stream Loaded books.csv:
     Written 2 (23.23 rows/s), 221B (2.51 KiB/s)
 ```

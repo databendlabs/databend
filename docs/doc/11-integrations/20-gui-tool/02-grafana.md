@@ -17,15 +17,15 @@ Grafana allows you to query, visualize, alert on and understand your metrics no 
 
 ### Create a Databend User
 
-Connect to Databend server with [BendSQL](https://github.com/datafuselabs/bendsql/):
+Connect to Databend server with [BendSQL](https://github.com/datafuselabs/BendSQL/):
 
 ```shell
-❯ bendsql
+❯ BendSQL
 Welcome to BendSQL.
 Trying connect to localhost:8000 as user root.
 Connected to DatabendQuery v1.1.2-nightly-8ade21e4669e0a2cc100615247705feacdf76c5b(rust-1.70.0-nightly-2023-04-15T16:08:52.195357424Z)
 
-bendsql>
+BendSQL>
 ```
 
 Create a user:
