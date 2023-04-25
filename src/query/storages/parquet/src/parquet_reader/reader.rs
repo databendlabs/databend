@@ -31,6 +31,7 @@ use common_storage::ColumnNodes;
 use opendal::Operator;
 
 use crate::parquet_part::ParquetPart;
+use crate::parquet_part::ParquetRowGroupPart;
 use crate::parquet_table::arrow_to_table_schema;
 
 pub trait SeekRead: std::io::Read + std::io::Seek {}
@@ -201,25 +202,31 @@ impl ParquetReader {
         Ok(chunks)
     }
 
+    pub fn row_group_readers_from_blocking_io(
+        &self,
+        part: &ParquetRowGroupPart,
+    ) -> Result<IndexedReaders> {
+        let mut readers: HashMap<usize, DataReader> =
+            HashMap::with_capacity(self.columns_to_read.len());
+
+        let op = self.operator.blocking();
+        for index in &self.columns_to_read {
+            let meta = &part.column_metas[index];
+            let reader = op.range_reader(&part.location, meta.offset..meta.offset + meta.length)?;
+            readers.insert(
+                *index,
+                DataReader::new(Box::new(reader), meta.length as usize),
+            );
+        }
+        Ok(readers)
+    }
+
     pub fn readers_from_blocking_io(&self, part: PartInfoPtr) -> Result<ParquetPartData> {
         let part = ParquetPart::from_part(&part)?;
         match part {
-            ParquetPart::RowGroup(part) => {
-                let mut readers: HashMap<usize, DataReader> =
-                    HashMap::with_capacity(self.columns_to_read.len());
-
-                let op = self.operator.blocking();
-                for index in &self.columns_to_read {
-                    let meta = &part.column_metas[index];
-                    let reader =
-                        op.range_reader(&part.location, meta.offset..meta.offset + meta.length)?;
-                    readers.insert(
-                        *index,
-                        DataReader::new(Box::new(reader), meta.length as usize),
-                    );
-                }
-                Ok(ParquetPartData::RowGroup(readers))
-            }
+            ParquetPart::RowGroup(part) => Ok(ParquetPartData::RowGroup(
+                self.row_group_readers_from_blocking_io(part)?,
+            )),
             ParquetPart::SmallFiles(part) => {
                 let op = self.operator.blocking();
                 let mut buffers = Vec::with_capacity(part.files.len());

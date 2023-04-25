@@ -165,7 +165,9 @@ impl ParquetTable {
                 src_schema.clone(),
                 output_schema.clone(),
                 prewhere_info.clone(),
+                source_reader.clone(),
                 remain_reader.clone(),
+                self.create_pruner(ctx.clone(), plan.push_downs.clone())?,
             )
         })
     }

@@ -32,7 +32,7 @@ use crate::pruning::PartitionPruner;
 use crate::ParquetTable;
 
 impl ParquetTable {
-    fn create_pruner(
+    pub(crate) fn create_pruner(
         &self,
         ctx: Arc<dyn TableContext>,
         push_down: Option<PushDownInfo>,

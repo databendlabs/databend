@@ -18,11 +18,13 @@ use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::arrow::io::parquet::read as pread;
 use common_arrow::parquet::indexes::Interval;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::filter_helper::FilterHelpers;
 use common_expression::types::BooleanType;
@@ -51,6 +53,7 @@ use crate::parquet_reader::IndexedReaders;
 use crate::parquet_reader::ParquetPartData;
 use crate::parquet_reader::ParquetReader;
 use crate::parquet_source::ParquetSourceMeta;
+use crate::pruning::PartitionPruner;
 
 #[derive(Clone)]
 pub struct ParquetPrewhereInfo {
@@ -79,9 +82,14 @@ pub struct ParquetDeserializeTransform {
 
     // Used for remain reading
     remain_reader: Arc<ParquetReader>,
+
+    // Used for reading from small files
+    source_reader: Arc<ParquetReader>,
+    partition_pruner: PartitionPruner,
 }
 
 impl ParquetDeserializeTransform {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         ctx: Arc<dyn TableContext>,
         input: Arc<InputPort>,
@@ -89,7 +97,9 @@ impl ParquetDeserializeTransform {
         src_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
         prewhere_info: Option<ParquetPrewhereInfo>,
+        source_reader: Arc<ParquetReader>,
         remain_reader: Arc<ParquetReader>,
+        partition_pruner: PartitionPruner,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
 
@@ -106,7 +116,9 @@ impl ParquetDeserializeTransform {
                 output_schema,
 
                 prewhere_info,
+                source_reader,
                 remain_reader,
+                partition_pruner,
             },
         )))
     }
@@ -125,20 +137,37 @@ impl ParquetDeserializeTransform {
         Ok(())
     }
 
-    #[allow(unused)]
     fn process_small_files(
         &mut self,
         part: &ParquetSmallFilesPart,
-        buffers: &Vec<Vec<u8>>,
+        buffers: Vec<Vec<u8>>,
     ) -> Result<()> {
         assert_eq!(part.files.len(), buffers.len());
-        for (path, data) in part.files.iter().zip(buffers) {
+        for (path, data) in part.files.iter().zip(buffers.into_iter()) {
             self.process_small_file(path.0.as_str(), data)?;
         }
         Ok(())
     }
 
-    fn process_small_file(&mut self, _path: &str, _data: &[u8]) -> Result<()> {
+    fn process_small_file(&mut self, path: &str, data: Vec<u8>) -> Result<()> {
+        use opendal::services::Memory;
+        use opendal::Operator;
+        let builder = Memory::default();
+        let op: Operator = Operator::new(builder)?.finish();
+        op.blocking().write(path, data)?;
+        let mut reader = op.blocking().reader(path)?;
+        let file_meta = pread::read_metadata(&mut reader).map_err(|e| {
+            ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
+        })?;
+        let (_, parts) = self
+            .partition_pruner
+            .read_and_prune_file_meta(path, file_meta, op)?;
+        for part in parts {
+            let mut readers = self
+                .source_reader
+                .row_group_readers_from_blocking_io(&part)?;
+            self.process_row_group(&part, &mut readers)?;
+        }
         Ok(())
     }
 
@@ -335,8 +364,11 @@ impl Processor for ParquetDeserializeTransform {
                 (ParquetPart::RowGroup(rg), ParquetPartData::RowGroup(mut reader)) => {
                     self.process_row_group(rg, &mut reader)?;
                 }
+                (ParquetPart::SmallFiles(p), ParquetPartData::SmallFiles(buffers)) => {
+                    self.process_small_files(p, buffers)?;
+                }
                 _ => {
-                    todo!()
+                    unreachable!("wrong type ParquetPartData for ParquetPart")
                 }
             }
         }
