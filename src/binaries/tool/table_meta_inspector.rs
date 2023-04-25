@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::env;
+use std::ffi::OsString;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -71,7 +72,8 @@ fn parse_output_file(config: &InspectorConfig) -> Result<PathBuf> {
         Some(output) => Ok(Path::new(&output).to_path_buf()),
         None => {
             let path = Path::new(&config.input);
-            let mut new_name = path.file_name().ok_or("Invalid file path").to_owned();
+            let mut new_name =
+                OsString::from(path.file_name().ok_or("Invalid file path").to_owned()?);
             new_name.push("-decode");
             match &config.config {
                 Some(_) => {
