@@ -170,8 +170,6 @@ impl Rule for RuleFoldConstant {
             }
             _ => unreachable!(),
         }
-        panic!("{:?}", s_expr.plan());
-        panic!("{:?}", &new_plan);
         if &new_plan != s_expr.plan() {
             state.add_result(s_expr.replace_plan(new_plan));
         }
