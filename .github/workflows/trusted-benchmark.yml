@@ -235,7 +235,6 @@ jobs:
           state: pending
           description: "Running"
       - uses: ./.github/actions/benchmark_cloud
-        continue-on-error: true
         timeout-minutes: 60
         id: benchmark
         with:

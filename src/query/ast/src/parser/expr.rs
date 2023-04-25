@@ -1295,6 +1295,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             val_type: Box::new(val_type),
         },
     );
+    let ty_bitmap = value(TypeName::Bitmap, rule! { BITMAP });
     let ty_nullable = map(
         rule! { NULLABLE ~ ( "(" ~ #type_name ~ ")" ) },
         |(_, item_type)| TypeName::Nullable(Box::new(item_type.1)),
@@ -1328,7 +1329,8 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     );
     let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
     map(
-        rule! {
+        alt((
+            rule! {
             ( #ty_boolean
             | #ty_uint8
             | #ty_uint16
@@ -1343,15 +1345,19 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_decimal
             | #ty_array
             | #ty_map
+            | #ty_bitmap
             | #ty_tuple : "TUPLE(<type>, ...)"
             | #ty_named_tuple : "TUPLE(<name> <type>, ...)"
-            | #ty_date
+            ) ~ NULL? : "type name"
+            },
+            rule! {
+            ( #ty_date
             | #ty_datetime
             | #ty_string
             | #ty_variant
             | #ty_nullable
-            ) ~ NULL? : "type name"
-        },
+            ) ~ NULL? : "type name" },
+        )),
         |(ty, null_opt)| {
             if null_opt.is_some() && !matches!(ty, TypeName::Nullable(_)) {
                 TypeName::Nullable(Box::new(ty))

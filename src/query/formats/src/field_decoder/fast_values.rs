@@ -133,6 +133,7 @@ impl FastFieldDecoderValues {
             ColumnBuilder::String(c) => self.read_string(c, reader, positions),
             ColumnBuilder::Array(c) => self.read_array(c, reader, positions),
             ColumnBuilder::Map(c) => self.read_map(c, reader, positions),
+            ColumnBuilder::Bitmap(_) => Err(ErrorCode::Unimplemented("not implement")),
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, reader, positions),
             ColumnBuilder::Variant(c) => self.read_variant(c, reader, positions),
             _ => unimplemented!(),

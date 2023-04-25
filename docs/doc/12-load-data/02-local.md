@@ -5,7 +5,7 @@ description:
   Load data from local file system.
 ---
 
-In this tutorial, you will load data from a local sample file into Databend with the [Streaming Load API](../11-integrations/00-api/03-streaming-load.md).
+In this tutorial, you will load data from a local sample file into Databend with the [BendSQL](../11-integrations/30-access-tool/01-bendsql.md).
 
 ## Tutorial 1 - Load from a CSV File
 
@@ -23,55 +23,52 @@ Readings in Database Systems,Michael Stonebraker,2004
 ### Step 1. Create Database and Table
 
 ```shell
-mysql -h127.0.0.1 -uroot -P3307
-```
+> bendsql
+Welcome to BendSQL.
+Trying connect to localhost:8000 as user root.
+Connected to DatabendQuery v1.1.2-nightly-8ade21e4669e0a2cc100615247705feacdf76c5b(rust-1.70.0-nightly-2023-04-15T16:08:52.195357424Z)
 
-```sql
-CREATE DATABASE book_db;
-USE book_db;
+root@localhost> CREATE DATABASE book_db;
+Processed in (0.020 sec)
 
-CREATE TABLE books
+root@localhost> use book_db;
+
+USE book_db
+
+0 row in 0.020 sec. Processed 0 rows, 0B (0 rows/s, 0B/s)
+
+root@localhost> CREATE TABLE books
 (
     title VARCHAR,
     author VARCHAR,
     date VARCHAR
 );
+Processed in (0.029 sec)
+
+root@localhost>
 ```
 
 ### Step 2. Load Data into Table
 
-Create and send the API request with the following scripts:
+Send loading data request with the following command:
 
-```bash
-curl -XPUT 'http://root:@127.0.0.1:8000/v1/streaming_load' -H "insert_sql: insert into book_db.books file_format = (type = CSV skip_header = 0 field_delimiter = ',' record_delimiter = '\n')" -F "upload=@./books.csv"
-```
-
-Response Example:
-
-```json
-{
-  "id": "f4c557d3-f798-4cea-960a-0ba021dd4646",
-  "state": "SUCCESS",
-  "stats": {
-    "rows": 2,
-    "bytes": 157
-  },
-  "error": null,
-  "files": ["books.csv"]
-}
+```shell
+> bendsql --query='INSERT INTO book_db.books VALUES;' --format=csv --data=@books.csv --progress
+==> Stream Loaded books.csv:
+    Written 2 (24.29 rows/s), 157B (1.86 KiB/s)
 ```
 
 ### Step 3. Verify Loaded Data
 
-```sql
-SELECT * FROM books;
-
-+------------------------------+----------------------+-------+
-| title                        | author               | date  |
-+------------------------------+----------------------+-------+
-| Transaction Processing       |  Jim Gray            |  1992 |
-| Readings in Database Systems |  Michael Stonebraker |  2004 |
-+------------------------------+----------------------+-------+
+```shell
+> echo "SELECT * FROM books;" | bendsql --database book_db
+┌─────────────────────────────────────────────────────────────┐
+│             title            │        author       │  date  │
+│            String            │        String       │ String │
+├──────────────────────────────┼─────────────────────┼────────┤
+│ Transaction Processing       │ Jim Gray            │ 1992   │
+│ Readings in Database Systems │ Michael Stonebraker │ 2004   │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## Tutorial 2 - Load into Specified Columns
@@ -98,23 +95,33 @@ CREATE TABLE bookcomments
 
 ### Step 2. Load Data into Table
 
-Create and send the API request with the following scripts:
+Send loading data request with the following command:
 
 ```bash
-curl -XPUT 'http://root:@127.0.0.1:8000/v1/streaming_load' -H "insert_sql: insert into book_db.bookcomments(title,author,date) file_format = (type = CSV skip_header = 0 field_delimiter = ',' record_delimiter = '\n')" -F "upload=@./books.csv"
+> bendsql --query='INSERT INTO book_db.bookcomments(title,author,date) VALUES;' --format=csv --data=@books.csv --progress
+==> Stream Loaded books.csv:
+    Written 2 (23.23 rows/s), 221B (2.51 KiB/s)
 ```
 
-Notice that the `insert_sql` part above specifies the columns (title, author, and date) to match the loaded data.
+Notice that the `query` part above specifies the columns (title, author, and date) to match the loaded data.
 
 ### Step 3. Verify Loaded Data
 
 ```sql
 SELECT * FROM bookcomments;
 
-+------------------------------+----------------------+----------+--------+
-| title                        | author               | comments | date   |
-+------------------------------+----------------------+----------+--------+
-| Transaction Processing       |  Jim Gray            |          |  1992  |
-| Readings in Database Systems |  Michael Stonebraker |          |  2004  |
-+------------------------------+----------------------+----------+--------+
+SELECT
+  *
+FROM
+  bookcomments;
+
+┌────────────────────────────────────────────────────────────────────────┐
+│             title            │        author       │ comments │  date  │
+│            String            │        String       │  String  │ String │
+├──────────────────────────────┼─────────────────────┼──────────┼────────┤
+│ Transaction Processing       │ Jim Gray            │          │ 1992   │
+│ Readings in Database Systems │ Michael Stonebraker │          │ 2004   │
+└────────────────────────────────────────────────────────────────────────┘
+
+2 rows in 0.033 sec. Processed 2 rows, 2B (60.42 rows/s, 7.14 KiB/s)
 ```

@@ -159,6 +159,11 @@ impl Column {
                 let column = ArrayColumn::try_downcast(column).unwrap();
                 Self::filter_scalar_types::<MapType<AnyType, AnyType>>(&column, builder, filter)
             }
+            Column::Bitmap(column) => {
+                let column = Self::filter_string_scalars(column, filter);
+                Column::Bitmap(column)
+            }
+
             Column::Nullable(c) => {
                 let column = Self::filter(&c.column, filter);
                 let validity = Self::filter_scalar_types::<BooleanType>(

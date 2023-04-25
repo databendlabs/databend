@@ -3019,6 +3019,10 @@ Functions overloads:
 1 time_slot(Timestamp NULL) :: Timestamp NULL
 0 to_base64(String) :: String
 1 to_base64(String NULL) :: String NULL
+0 to_bitmap(String) :: Bitmap
+1 to_bitmap(String NULL) :: Bitmap NULL
+2 to_bitmap(UInt64) :: Bitmap
+3 to_bitmap(UInt64 NULL) :: Bitmap NULL
 0 to_boolean(Variant) :: Boolean
 1 to_boolean(Variant NULL) :: Boolean NULL
 2 to_boolean(String) :: Boolean
@@ -3290,6 +3294,8 @@ Functions overloads:
 26 to_string(Date NULL) :: String NULL
 27 to_string(Timestamp) :: String
 28 to_string(Timestamp NULL) :: String NULL
+29 to_string(Bitmap) :: String
+30 to_string(Bitmap NULL) :: String NULL
 0 to_timestamp(Variant) :: Timestamp
 1 to_timestamp(Variant NULL) :: Timestamp NULL
 2 to_timestamp(String) :: Timestamp
