@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_base::base::tokio::sync::OwnedSemaphorePermit;
+use common_catalog::plan::block_id_in_segment;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures_util::future;
@@ -186,7 +187,7 @@ impl BlockPruner {
                         segment_idx,
                         block_idx,
                         range,
-                        block_id: block_num - block_idx - 1,
+                        block_id: block_id_in_segment(block_num, block_idx),
                         block_location: block_location.clone(),
                         segment_id: segment_location.segment_id,
                         segment_location: segment_location.location.0.clone(),
@@ -252,7 +253,7 @@ impl BlockPruner {
                             segment_idx,
                             block_idx,
                             range,
-                            block_id: block_num - block_idx - 1,
+                            block_id: block_id_in_segment(block_num, block_idx),
                             block_location: block_meta.as_ref().location.0.clone(),
                             segment_id: segment_location.segment_id,
                             segment_location: segment_location.location.0.clone(),
