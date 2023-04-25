@@ -21,29 +21,8 @@ use itertools::join;
 use roaring::RoaringTreemap;
 
 pub fn register(registry: &mut FunctionRegistry) {
-    registry.register_aliases("bitmap_from_string", &["to_bitmap"]);
-
-    registry.register_passthrough_nullable_1_arg::<UInt64Type, BitmapType, _, _>(
-        "to_bitmap",
-        |_| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<UInt64Type, BitmapType>(|arg, builder, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(builder.len()) {
-                    builder.commit_row();
-                    return;
-                }
-            }
-            let mut rb = RoaringTreemap::new();
-            rb.insert(arg);
-            let mut buf = vec![];
-            rb.serialize_into(&mut buf).unwrap();
-            builder.put_slice(&buf);
-            builder.commit_row();
-        }),
-    );
-
     registry.register_passthrough_nullable_1_arg::<StringType, BitmapType, _, _>(
-        "bitmap_from_string",
+        "to_bitmap",
         |_| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, BitmapType>(|s, builder, ctx| {
             match std::str::from_utf8(s)
@@ -66,6 +45,25 @@ pub fn register(registry: &mut FunctionRegistry) {
                     ctx.set_error(builder.len(), e);
                 }
             }
+            builder.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<UInt64Type, BitmapType, _, _>(
+        "to_bitmap",
+        |_| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<UInt64Type, BitmapType>(|arg, builder, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
+                    builder.commit_row();
+                    return;
+                }
+            }
+            let mut rb = RoaringTreemap::new();
+            rb.insert(arg);
+            let mut buf = vec![];
+            rb.serialize_into(&mut buf).unwrap();
+            builder.put_slice(&buf);
             builder.commit_row();
         }),
     );
