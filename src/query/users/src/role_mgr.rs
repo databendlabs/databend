@@ -47,19 +47,13 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn get_roles(&self, tenant: &str) -> Result<Vec<RoleInfo>> {
         let client = self.get_role_api_client(tenant)?;
-        let get_roles = client.get_roles();
+        let seq_roles = client
+            .get_roles()
+            .await
+            .or_else(|e| Err(e.add_message_back("(while get roles).")))?;
 
-        let mut res = vec![];
-        match get_roles.await {
-            Err(e) => Err(e.add_message_back("(while get roles).")),
-            Ok(seq_roles_info) => {
-                for seq_role_info in seq_roles_info {
-                    res.push(seq_role_info.data);
-                }
-
-                Ok(res)
-            }
-        }
+        let roles = seq_roles.into_iter().map(|r| r.data).collect();
+        Ok(roles)
     }
 
     #[async_backtrace::framed]
