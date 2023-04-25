@@ -203,7 +203,7 @@ impl PartitionPruner {
         }
 
         let mut partitions = Vec::with_capacity(locations.len());
-        for paths in small_files.chunks(self.columns_to_read.len()) {
+        for paths in small_files.chunks(self.columns_to_read.len().max(1)) {
             stats.read_rows += paths.len();
             stats.read_bytes += paths.iter().map(|(_, size)| *size as usize).sum::<usize>();
             stats.partitions_scanned += 1;
