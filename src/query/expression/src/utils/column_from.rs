@@ -118,7 +118,7 @@ impl<'a, D: AsRef<[&'a str]>> FromData<D, [Vec<u8>; 2]> for StringType {
 impl<'a, D: AsRef<[&'a [u8]]>> FromData<D, [Vec<u8>; 2]> for BitmapType {
     fn from_data(d: D) -> Column {
         BitmapType::upcast_column(BitmapType::column_from_ref_iter(
-            d.as_ref().iter().map(|v| *v),
+            d.as_ref().iter().copied(),
             &[],
         ))
     }

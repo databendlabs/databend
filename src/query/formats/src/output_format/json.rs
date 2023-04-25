@@ -18,6 +18,7 @@ use common_expression::DataBlock;
 use common_expression::ScalarRef;
 use common_expression::TableSchemaRef;
 use common_io::prelude::FormatSettings;
+use roaring::RoaringTreemap;
 use serde_json::Map as JsonMap;
 use serde_json::Value as JsonValue;
 
@@ -120,8 +121,12 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
             JsonValue::Object(vals)
         }
         ScalarRef::Bitmap(b) => {
-            let b = jsonb::from_slice(b).unwrap();
-            b.into()
+            let rb = RoaringTreemap::deserialize_from(b).expect("failed to deserialize bitmap");
+            let data = rb
+                .iter()
+                .map(|v| JsonValue::Number(serde_json::Number::from(v)))
+                .collect::<Vec<_>>();
+            JsonValue::Array(data)
         }
         ScalarRef::Tuple(x) => {
             let vals = x

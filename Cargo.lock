@@ -1681,6 +1681,7 @@ dependencies = [
  "num",
  "ordered-float 3.6.0",
  "pretty_assertions",
+ "roaring",
  "serde_json",
  "storages-common-blocks",
  "storages-common-table-meta",
