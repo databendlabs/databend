@@ -18,13 +18,9 @@ use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
-use clap::App;
-use clap::Arg;
-use clap::ArgMatches;
 use clap::Parser;
 use common_config::Config;
 use common_config::StorageConfig;
-use common_config::StorageConfig as InnerStorageConfig;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::Result;
 use common_storage::init_operator;
@@ -56,17 +52,13 @@ pub struct InspectorConfig {
 }
 
 async fn read_meta_data(reader: &mut Reader, config: &InspectorConfig) -> Result<Vec<u8>> {
-    let out = match config.meta_type {
-        String::from("sg") | String::from("segment") => {
-            serde_json::to_vec(&load_segment_v3(reader).await?)?
-        }
-        String::from("ss") | String::from("snapshot") => {
-            serde_json::to_vec(&load_snapshot_v3(reader).await?)?
-        }
+    let out = match config.meta_type.as_str() {
+        "sg" | "segment" => serde_json::to_vec(&load_segment_v3(reader).await?)?,
+        "ss" | "snapshot" => serde_json::to_vec(&load_snapshot_v3(reader).await?)?,
         _ => {
             return Err(format!(
                 "Unsupported type: {}, only support ss/snapshot or sg/segment",
-                meta_type
+                config.meta_type
             )
             .into());
         }
@@ -74,19 +66,19 @@ async fn read_meta_data(reader: &mut Reader, config: &InspectorConfig) -> Result
     Ok(out)
 }
 
-fn parse_output_file(config: &InspectorConfig) -> PathBuf {
+fn parse_output_file(config: &InspectorConfig) -> Result<PathBuf> {
     match &config.output {
-        Some(output) => Path::new(&output).to_path_buf(),
+        Some(output) => Ok(Path::new(&output).to_path_buf()),
         None => {
             let path = Path::new(&config.input);
-            let mut new_name = path.file_name().unwrap().to_owned();
+            let mut new_name = path.file_name()?.to_owned();
             new_name.push("-decode");
             match &config.config {
                 Some(_) => {
                     let current_dir = env::current_dir()?;
-                    current_dir.join(new_name)
+                    Ok(current_dir.join(new_name))
                 }
-                None => path.with_file_name(new_name),
+                None => Ok(path.with_file_name(new_name)),
             }
         }
     }
@@ -97,7 +89,7 @@ async fn parse_reader(config: &InspectorConfig) -> Result<Reader> {
         Some(config_file) => {
             let mut builder: serfig::Builder<Config> = serfig::Builder::default();
             builder = builder.collect(from_file(Toml, &config_file));
-            let conf = InnerStorageConfig::try_into(builder.build()?.storage)?;
+            let conf = StorageConfig::try_into(builder.build()?.storage)?;
             init_operator(&conf.params)?
         }
         None => {
@@ -115,7 +107,7 @@ async fn run(config: &InspectorConfig) -> Result<()> {
 
     let out = read_meta_data(&mut reader, config).await?;
 
-    let output_path = parse_output_file(config);
+    let output_path = parse_output_file(config)?;
 
     let mut file = File::create(&output_path)?;
     file.write_all(&out)?;
