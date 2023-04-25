@@ -39,8 +39,21 @@ use crate::meta::Versioned;
 /// The structure of the segment is the same as that of v2, but the serialization and deserialization methods are different
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshot {
-    /// format version of snapshot
-    format_version: FormatVersion,
+    /// format version of TableSnapshot meta data
+    ///
+    /// Note that:
+    ///
+    /// - A instance of v3::TableSnapshot may have a value of v2/v1::TableSnapshot::VERSION for this field.
+    ///
+    ///   That indicates this instance is converted from a v2/v1::TableSnapshot.
+    ///
+    /// - The meta writers are responsible for only writing down the latest version of TableSnapshot, and
+    /// the format_version being written is of the latest version.
+    ///
+    ///   e.g. if the current version of TableSnapshot is v3::TableSnapshot, then the format_version
+    ///   that will be written down to object storage as part of TableSnapshot table meta data,
+    ///   should always be v3::TableSnapshot::VERSION (which is 3)
+    pub format_version: FormatVersion,
 
     /// id of snapshot
     pub snapshot_id: SnapshotId,
@@ -154,15 +167,11 @@ impl TableSnapshot {
         Encoding::default()
     }
 
-    pub fn format_version(&self) -> u64 {
-        self.format_version
-    }
-
-    pub fn build_segment_id_map(&self) -> HashMap<String, usize> {
+    pub fn build_segment_id_map(&self) -> HashMap<Location, usize> {
         let segment_count = self.segments.len();
         let mut segment_id_map = HashMap::new();
         for (i, segment_loc) in self.segments.iter().enumerate() {
-            segment_id_map.insert(segment_loc.0.to_string(), segment_count - i - 1);
+            segment_id_map.insert(segment_loc.clone(), segment_count - i - 1);
         }
         segment_id_map
     }
@@ -171,7 +180,9 @@ impl TableSnapshot {
 impl From<v2::TableSnapshot> for TableSnapshot {
     fn from(s: v2::TableSnapshot) -> Self {
         Self {
-            format_version: TableSnapshot::VERSION,
+            // NOTE: it is important to let the format_version return from here
+            // carries the format_version of snapshot being converted.
+            format_version: s.format_version,
             snapshot_id: s.snapshot_id,
             timestamp: s.timestamp,
             prev_snapshot_id: s.prev_snapshot_id,

@@ -11,7 +11,7 @@ error:
   --> SQL:1:2
   |
 1 | ['a', 1]
-  |  ^^^ invalid digit found in string while evaluating function `to_uint8("a")`
+  |  ^^^ invalid digit found in string while evaluating function `to_uint8('a')`
 
 
 
@@ -36,12 +36,12 @@ output         : [NULL, 8, -10]
 
 
 ast            : [['a', 'b'], []]
-raw expr       : array(array("a", "b"), array())
+raw expr       : array(array('a', 'b'), array())
 checked expr   : array<T0=Array(String)><T0, T0>(array<T0=String><T0, T0>("a", "b"), CAST(array<>() AS Array(String)))
-optimized expr : [["a", "b"], []]
+optimized expr : [['a', 'b'], []]
 output type    : Array(Array(String))
 output domain  : [[{"a"..="b"}]]
-output         : [["a", "b"], []]
+output         : [['a', 'b'], []]
 
 
 error: 
@@ -56,7 +56,7 @@ has tried possible overloads:
 
 
 ast            : [parse_json('[]'), parse_json('{"foo":"bar"}')]
-raw expr       : array(parse_json("[]"), parse_json("{\"foo\":\"bar\"}"))
+raw expr       : array(parse_json('[]'), parse_json('{"foo":"bar"}'))
 checked expr   : array<T0=Variant><T0, T0>(parse_json<String>("[]"), parse_json<String>("{\"foo\":\"bar\"}"))
 optimized expr : [[], {"foo":"bar"}]
 output type    : Array(Variant)
@@ -92,7 +92,7 @@ output         : 2
 
 
 ast            : length(['a', 'b', 'c', 'd'])
-raw expr       : length(array("a", "b", "c", "d"))
+raw expr       : length(array('a', 'b', 'c', 'd'))
 checked expr   : length<T0=String><Array(T0)>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"))
 optimized expr : 4_u64
 output type    : UInt64
@@ -104,7 +104,7 @@ error:
   --> SQL:1:8
   |
 1 | [1, 2]['a']
-  |        ^^^ invalid digit found in string while evaluating function `to_uint64("a")`
+  |        ^^^ invalid digit found in string while evaluating function `to_uint64('a')`
 
 
 
@@ -145,12 +145,12 @@ output         : true
 
 
 ast            : ['a', 'b', 'c'][2]
-raw expr       : get(array("a", "b", "c"), 2)
+raw expr       : get(array('a', 'b', 'c'), 2)
 checked expr   : get<T0=String><Array(T0 NULL), UInt64>(CAST(array<T0=String><T0, T0, T0>("a", "b", "c") AS Array(String NULL)), to_uint64<UInt8>(2_u8))
 optimized expr : "b"
 output type    : String NULL
 output domain  : {"b"..="b"}
-output         : "b"
+output         : 'b'
 
 
 ast            : [1, 2, 3][1]
@@ -241,12 +241,12 @@ output         : [1, 2, 3]
 
 
 ast            : slice(['a', 'b', 'c', 'd'], 3)
-raw expr       : slice(array("a", "b", "c", "d"), 3)
+raw expr       : slice(array('a', 'b', 'c', 'd'), 3)
 checked expr   : slice<T0=String><Array(T0), UInt64>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"), to_uint64<UInt8>(3_u8))
-optimized expr : ["c", "d"]
+optimized expr : ['c', 'd']
 output type    : Array(String)
 output domain  : [{"c"..="d"}]
-output         : ["c", "d"]
+output         : ['c', 'd']
 
 
 ast            : slice([a, b, c], 2)
@@ -320,30 +320,30 @@ output         : [0, 1, 2, 3]
 
 
 ast            : slice(['a', 'b', 'c', 'd'], 0, 2)
-raw expr       : slice(array("a", "b", "c", "d"), 0, 2)
+raw expr       : slice(array('a', 'b', 'c', 'd'), 0, 2)
 checked expr   : slice<T0=String><Array(T0), UInt64, UInt64>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"), to_uint64<UInt8>(0_u8), to_uint64<UInt8>(2_u8))
-optimized expr : ["a", "b"]
+optimized expr : ['a', 'b']
 output type    : Array(String)
 output domain  : [{"a"..="b"}]
-output         : ["a", "b"]
+output         : ['a', 'b']
 
 
 ast            : slice(['a', 'b', 'c', 'd'], 1, 4)
-raw expr       : slice(array("a", "b", "c", "d"), 1, 4)
+raw expr       : slice(array('a', 'b', 'c', 'd'), 1, 4)
 checked expr   : slice<T0=String><Array(T0), UInt64, UInt64>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"), to_uint64<UInt8>(1_u8), to_uint64<UInt8>(4_u8))
-optimized expr : ["a", "b", "c", "d"]
+optimized expr : ['a', 'b', 'c', 'd']
 output type    : Array(String)
 output domain  : [{"a"..="d"}]
-output         : ["a", "b", "c", "d"]
+output         : ['a', 'b', 'c', 'd']
 
 
 ast            : slice(['a', 'b', 'c', 'd'], 2, 6)
-raw expr       : slice(array("a", "b", "c", "d"), 2, 6)
+raw expr       : slice(array('a', 'b', 'c', 'd'), 2, 6)
 checked expr   : slice<T0=String><Array(T0), UInt64, UInt64>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"), to_uint64<UInt8>(2_u8), to_uint64<UInt8>(6_u8))
-optimized expr : ["b", "c", "d"]
+optimized expr : ['b', 'c', 'd']
 output type    : Array(String)
 output domain  : [{"b"..="d"}]
-output         : ["b", "c", "d"]
+output         : ['b', 'c', 'd']
 
 
 ast            : slice([a, b, c], 1, 2)
@@ -381,7 +381,7 @@ output         : true
 
 
 ast            : '33' in ('1', '33', '23', '33')
-raw expr       : contains(array("1", "33", "23", "33"), "33")
+raw expr       : contains(array('1', '33', '23', '33'), '33')
 checked expr   : contains<Array(String), String>(array<T0=String><T0, T0, T0, T0>("1", "33", "23", "33"), "33")
 optimized expr : true
 output type    : Boolean
@@ -447,7 +447,7 @@ evaluation (internal):
 
 
 ast            : contains([(1,'2', 3, false), (1,'2', 4, true), null], (1,'2', 3, false))
-raw expr       : contains(array(tuple(1, "2", 3, false), tuple(1, "2", 4, true), NULL), tuple(1, "2", 3, false))
+raw expr       : contains(array(tuple(1, '2', 3, false), tuple(1, '2', 4, true), NULL), tuple(1, '2', 3, false))
 checked expr   : contains<T0=Tuple(UInt8, String, UInt8, Boolean) NULL><Array(T0), T0>(array<T0=Tuple(UInt8, String, UInt8, Boolean) NULL><T0, T0, T0>(CAST(tuple<UInt8, String, UInt8, Boolean>(1_u8, "2", 3_u8, false) AS Tuple(UInt8, String, UInt8, Boolean) NULL), CAST(tuple<UInt8, String, UInt8, Boolean>(1_u8, "2", 4_u8, true) AS Tuple(UInt8, String, UInt8, Boolean) NULL), CAST(NULL AS Tuple(UInt8, String, UInt8, Boolean) NULL)), CAST(tuple<UInt8, String, UInt8, Boolean>(1_u8, "2", 3_u8, false) AS Tuple(UInt8, String, UInt8, Boolean) NULL))
 optimized expr : true
 output type    : Boolean
@@ -527,12 +527,12 @@ output         : [1, 2, 3]
 
 
 ast            : array_remove_first(['a', 'b', 'c', 'd'])
-raw expr       : array_remove_first(array("a", "b", "c", "d"))
+raw expr       : array_remove_first(array('a', 'b', 'c', 'd'))
 checked expr   : array_remove_first<T0=String><Array(T0)>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"))
-optimized expr : ["b", "c", "d"]
+optimized expr : ['b', 'c', 'd']
 output type    : Array(String)
 output domain  : [{"b"..="d"}]
-output         : ["b", "c", "d"]
+output         : ['b', 'c', 'd']
 
 
 ast            : array_remove_first([a, b])
@@ -595,12 +595,12 @@ output         : [0, 1, 2]
 
 
 ast            : array_remove_last(['a', 'b', 'c', 'd'])
-raw expr       : array_remove_last(array("a", "b", "c", "d"))
+raw expr       : array_remove_last(array('a', 'b', 'c', 'd'))
 checked expr   : array_remove_last<T0=String><Array(T0)>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"))
-optimized expr : ["a", "b", "c"]
+optimized expr : ['a', 'b', 'c']
 output type    : Array(String)
 output domain  : [{"a"..="c"}]
-output         : ["a", "b", "c"]
+output         : ['a', 'b', 'c']
 
 
 ast            : array_remove_last([a, b])
@@ -679,7 +679,7 @@ error:
   --> SQL:1:23
   |
 1 | array_concat([1,2,3], ['s', null])
-  |                       ^^^^^^^^^^^ invalid digit found in string while evaluating function `to_uint8("s")`
+  |                       ^^^^^^^^^^^ invalid digit found in string while evaluating function `to_uint8('s')`
 
 
 
@@ -750,12 +750,12 @@ output         : [1, 2, 3, NULL, 4]
 
 
 ast            : array_prepend('a', ['b', NULL, NULL, 'c', 'd'])
-raw expr       : array_prepend("a", array("b", NULL, NULL, "c", "d"))
+raw expr       : array_prepend('a', array('b', NULL, NULL, 'c', 'd'))
 checked expr   : array_prepend<T0=String NULL><T0, Array(T0)>(CAST("a" AS String NULL), array<T0=String NULL><T0, T0, T0, T0, T0>(CAST("b" AS String NULL), CAST(NULL AS String NULL), CAST(NULL AS String NULL), CAST("c" AS String NULL), CAST("d" AS String NULL)))
-optimized expr : ["a", "b", NULL, NULL, "c", "d"]
+optimized expr : ['a', 'b', NULL, NULL, 'c', 'd']
 output type    : Array(String NULL)
 output domain  : [{""..="d"} ∪ {NULL}]
-output         : ["a", "b", NULL, NULL, "c", "d"]
+output         : ['a', 'b', NULL, NULL, 'c', 'd']
 
 
 ast            : array_prepend(a, [b, c])
@@ -801,12 +801,12 @@ output         : [2, 3, NULL, 4, 5]
 
 
 ast            : array_append(['b', NULL, NULL, 'c', 'd'], 'e')
-raw expr       : array_append(array("b", NULL, NULL, "c", "d"), "e")
+raw expr       : array_append(array('b', NULL, NULL, 'c', 'd'), 'e')
 checked expr   : array_append<T0=String NULL><Array(T0), T0>(array<T0=String NULL><T0, T0, T0, T0, T0>(CAST("b" AS String NULL), CAST(NULL AS String NULL), CAST(NULL AS String NULL), CAST("c" AS String NULL), CAST("d" AS String NULL)), CAST("e" AS String NULL))
-optimized expr : ["b", NULL, NULL, "c", "d", "e"]
+optimized expr : ['b', NULL, NULL, 'c', 'd', 'e']
 output type    : Array(String NULL)
 output domain  : [{""..="e"} ∪ {NULL}]
-output         : ["b", NULL, NULL, "c", "d", "e"]
+output         : ['b', NULL, NULL, 'c', 'd', 'e']
 
 
 ast            : array_append([b, c], a)
@@ -895,12 +895,12 @@ error:
   --> SQL:1:22
   |
 1 | array_indexof([1,2,3,'s'], 's')
-  |                      ^^^ invalid digit found in string while evaluating function `to_uint8("s")`
+  |                      ^^^ invalid digit found in string while evaluating function `to_uint8('s')`
 
 
 
 ast            : array_indexof([1::VARIANT,'x'::VARIANT,null::VARIANT,'x'::VARIANT], 'x'::VARIANT)
-raw expr       : array_indexof(array(CAST(1 AS Variant), CAST("x" AS Variant), CAST(NULL AS Variant), CAST("x" AS Variant)), CAST("x" AS Variant))
+raw expr       : array_indexof(array(CAST(1 AS Variant), CAST('x' AS Variant), CAST(NULL AS Variant), CAST('x' AS Variant)), CAST('x' AS Variant))
 checked expr   : array_indexof<T0=Variant><Array(T0), T0>(array<T0=Variant><T0, T0, T0, T0>(to_variant<T0=UInt8><T0>(1_u8), to_variant<T0=String><T0>("x"), to_variant<T0=NULL><T0>(NULL), to_variant<T0=String><T0>("x")), to_variant<T0=String><T0>("x"))
 optimized expr : 2_u64
 output type    : UInt64
@@ -975,7 +975,7 @@ output         : 3
 
 
 ast            : array_unique(['a', NULL, 'a', 'b', NULL, 'c', 'd'])
-raw expr       : array_unique(array("a", NULL, "a", "b", NULL, "c", "d"))
+raw expr       : array_unique(array('a', NULL, 'a', 'b', NULL, 'c', 'd'))
 checked expr   : array_unique<T0=String NULL><Array(T0)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0, T0>(CAST("a" AS String NULL), CAST(NULL AS String NULL), CAST("a" AS String NULL), CAST("b" AS String NULL), CAST(NULL AS String NULL), CAST("c" AS String NULL), CAST("d" AS String NULL)))
 optimized expr : 4_u64
 output type    : UInt64
@@ -1028,12 +1028,12 @@ output         : [1, 2, 3]
 
 
 ast            : array_distinct(['a', NULL, 'a', 'b', NULL, 'c', 'd'])
-raw expr       : array_distinct(array("a", NULL, "a", "b", NULL, "c", "d"))
+raw expr       : array_distinct(array('a', NULL, 'a', 'b', NULL, 'c', 'd'))
 checked expr   : array_distinct<T0=String NULL><Array(T0)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0, T0>(CAST("a" AS String NULL), CAST(NULL AS String NULL), CAST("a" AS String NULL), CAST("b" AS String NULL), CAST(NULL AS String NULL), CAST("c" AS String NULL), CAST("d" AS String NULL)))
-optimized expr : ["a", "b", "c", "d"]
+optimized expr : ['a', 'b', 'c', 'd']
 output type    : Array(String NULL)
 output domain  : [{"a"..="d"}]
-output         : ["a", "b", "c", "d"]
+output         : ['a', 'b', 'c', 'd']
 
 
 ast            : array_distinct([a, b, c, d])
@@ -1302,7 +1302,7 @@ output         : 3
 
 
 ast            : array_count(['a', 'b', 'c', 'd', 'e'])
-raw expr       : array_count(array("a", "b", "c", "d", "e"))
+raw expr       : array_count(array('a', 'b', 'c', 'd', 'e'))
 checked expr   : array_count<Array(String)>(array<T0=String><T0, T0, T0, T0, T0>("a", "b", "c", "d", "e"))
 optimized expr : 5_u64
 output type    : UInt64
@@ -1311,7 +1311,7 @@ output         : 5
 
 
 ast            : array_count(['a', 'b', NULL, 'c', 'd', NULL])
-raw expr       : array_count(array("a", "b", NULL, "c", "d", NULL))
+raw expr       : array_count(array('a', 'b', NULL, 'c', 'd', NULL))
 checked expr   : array_count<Array(String NULL)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0>(CAST("a" AS String NULL), CAST("b" AS String NULL), CAST(NULL AS String NULL), CAST("c" AS String NULL), CAST("d" AS String NULL), CAST(NULL AS String NULL)))
 optimized expr : 4_u64
 output type    : UInt64
@@ -1417,21 +1417,21 @@ output         : 5.6
 
 
 ast            : array_max(['a', 'b', 'c', 'd', 'e'])
-raw expr       : array_max(array("a", "b", "c", "d", "e"))
+raw expr       : array_max(array('a', 'b', 'c', 'd', 'e'))
 checked expr   : array_max<Array(String)>(array<T0=String><T0, T0, T0, T0, T0>("a", "b", "c", "d", "e"))
 optimized expr : "e"
 output type    : String NULL
 output domain  : {"e"..="e"}
-output         : "e"
+output         : 'e'
 
 
 ast            : array_max(['a', 'b', NULL, 'c', 'd', NULL])
-raw expr       : array_max(array("a", "b", NULL, "c", "d", NULL))
+raw expr       : array_max(array('a', 'b', NULL, 'c', 'd', NULL))
 checked expr   : array_max<Array(String NULL)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0>(CAST("a" AS String NULL), CAST("b" AS String NULL), CAST(NULL AS String NULL), CAST("c" AS String NULL), CAST("d" AS String NULL), CAST(NULL AS String NULL)))
 optimized expr : "d"
 output type    : String NULL
 output domain  : {"d"..="d"}
-output         : "d"
+output         : 'd'
 
 
 ast            : array_max([a, b, c, d])
@@ -1532,21 +1532,21 @@ output         : 1.2
 
 
 ast            : array_min(['a', 'b', 'c', 'd', 'e'])
-raw expr       : array_min(array("a", "b", "c", "d", "e"))
+raw expr       : array_min(array('a', 'b', 'c', 'd', 'e'))
 checked expr   : array_min<Array(String)>(array<T0=String><T0, T0, T0, T0, T0>("a", "b", "c", "d", "e"))
 optimized expr : "a"
 output type    : String NULL
 output domain  : {"a"..="a"}
-output         : "a"
+output         : 'a'
 
 
 ast            : array_min(['a', 'b', NULL, 'c', 'd', NULL])
-raw expr       : array_min(array("a", "b", NULL, "c", "d", NULL))
+raw expr       : array_min(array('a', 'b', NULL, 'c', 'd', NULL))
 checked expr   : array_min<Array(String NULL)>(array<T0=String NULL><T0, T0, T0, T0, T0, T0>(CAST("a" AS String NULL), CAST("b" AS String NULL), CAST(NULL AS String NULL), CAST("c" AS String NULL), CAST("d" AS String NULL), CAST(NULL AS String NULL)))
 optimized expr : "a"
 output type    : String NULL
 output domain  : {"a"..="a"}
-output         : "a"
+output         : 'a'
 
 
 ast            : array_min([a, b, c, d])
@@ -1629,21 +1629,21 @@ output         : 3
 
 
 ast            : array_any(['a', 'b', 'c'])
-raw expr       : array_any(array("a", "b", "c"))
+raw expr       : array_any(array('a', 'b', 'c'))
 checked expr   : array_any<Array(String)>(array<T0=String><T0, T0, T0>("a", "b", "c"))
 optimized expr : "a"
 output type    : String NULL
 output domain  : {"a"..="a"}
-output         : "a"
+output         : 'a'
 
 
 ast            : array_any([NULL, 'x', 'y', 'z'])
-raw expr       : array_any(array(NULL, "x", "y", "z"))
+raw expr       : array_any(array(NULL, 'x', 'y', 'z'))
 checked expr   : array_any<Array(String NULL)>(array<T0=String NULL><T0, T0, T0, T0>(CAST(NULL AS String NULL), CAST("x" AS String NULL), CAST("y" AS String NULL), CAST("z" AS String NULL)))
 optimized expr : "x"
 output type    : String NULL
 output domain  : {"x"..="x"}
-output         : "x"
+output         : 'x'
 
 
 ast            : array_any([a, b, c, d])
@@ -1885,7 +1885,7 @@ output         : 3
 
 
 ast            : array_approx_count_distinct(['a', 'b', 'c'])
-raw expr       : array_approx_count_distinct(array("a", "b", "c"))
+raw expr       : array_approx_count_distinct(array('a', 'b', 'c'))
 checked expr   : array_approx_count_distinct<Array(String)>(array<T0=String><T0, T0, T0>("a", "b", "c"))
 optimized expr : 3_u64
 output type    : UInt64
@@ -1894,7 +1894,7 @@ output         : 3
 
 
 ast            : array_approx_count_distinct([NULL, 'x', 'y', 'z'])
-raw expr       : array_approx_count_distinct(array(NULL, "x", "y", "z"))
+raw expr       : array_approx_count_distinct(array(NULL, 'x', 'y', 'z'))
 checked expr   : array_approx_count_distinct<Array(String NULL)>(array<T0=String NULL><T0, T0, T0, T0>(CAST(NULL AS String NULL), CAST("x" AS String NULL), CAST("y" AS String NULL), CAST("z" AS String NULL)))
 optimized expr : 3_u64
 output type    : UInt64
@@ -2176,7 +2176,7 @@ output         : [20, 8, 7, 6, 5, 4, 3, 2, 1]
 
 
 ast            : array_sort_asc_null_first([1.2, NULL, 3.4, 5.6, '2.2', NULL])
-raw expr       : array_sort_asc_null_first(array(1.2, NULL, 3.4, 5.6, "2.2", NULL))
+raw expr       : array_sort_asc_null_first(array(1.2, NULL, 3.4, 5.6, '2.2', NULL))
 checked expr   : array_sort_asc_null_first<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST("2.2" AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
 optimized expr : [NULL, NULL, 1.2, 2.2, 3.4, 5.6]
 output type    : Array(Decimal(2, 1) NULL)
@@ -2185,7 +2185,7 @@ output         : [NULL, NULL, 1.2, 2.2, 3.4, 5.6]
 
 
 ast            : array_sort_asc_null_last([1.2, NULL, 3.4, 5.6, '2.2', NULL])
-raw expr       : array_sort_asc_null_last(array(1.2, NULL, 3.4, 5.6, "2.2", NULL))
+raw expr       : array_sort_asc_null_last(array(1.2, NULL, 3.4, 5.6, '2.2', NULL))
 checked expr   : array_sort_asc_null_last<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST("2.2" AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
 optimized expr : [1.2, 2.2, 3.4, 5.6, NULL, NULL]
 output type    : Array(Decimal(2, 1) NULL)
@@ -2194,7 +2194,7 @@ output         : [1.2, 2.2, 3.4, 5.6, NULL, NULL]
 
 
 ast            : array_sort_desc_null_first([1.2, NULL, 3.4, 5.6, '2.2', NULL])
-raw expr       : array_sort_desc_null_first(array(1.2, NULL, 3.4, 5.6, "2.2", NULL))
+raw expr       : array_sort_desc_null_first(array(1.2, NULL, 3.4, 5.6, '2.2', NULL))
 checked expr   : array_sort_desc_null_first<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST("2.2" AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
 optimized expr : [NULL, NULL, 5.6, 3.4, 2.2, 1.2]
 output type    : Array(Decimal(2, 1) NULL)
@@ -2203,7 +2203,7 @@ output         : [NULL, NULL, 5.6, 3.4, 2.2, 1.2]
 
 
 ast            : array_sort_desc_null_last([1.2, NULL, 3.4, 5.6, '2.2', NULL])
-raw expr       : array_sort_desc_null_last(array(1.2, NULL, 3.4, 5.6, "2.2", NULL))
+raw expr       : array_sort_desc_null_last(array(1.2, NULL, 3.4, 5.6, '2.2', NULL))
 checked expr   : array_sort_desc_null_last<T0=Decimal(2, 1) NULL><Array(T0)>(array<T0=Decimal(2, 1) NULL><T0, T0, T0, T0, T0, T0>(CAST(1.2_d128(2,1) AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL), CAST(3.4_d128(2,1) AS Decimal(2, 1) NULL), CAST(5.6_d128(2,1) AS Decimal(2, 1) NULL), CAST("2.2" AS Decimal(2, 1) NULL), CAST(NULL AS Decimal(2, 1) NULL)))
 optimized expr : [5.6, 3.4, 2.2, 1.2, NULL, NULL]
 output type    : Array(Decimal(2, 1) NULL)

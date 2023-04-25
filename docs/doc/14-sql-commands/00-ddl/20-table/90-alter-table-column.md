@@ -6,19 +6,23 @@ description:
 
 Adds or drops a column of a table.
 
-:::tip
-ALTER TABLE can also handle table clustering. For more information, refer to the following pages:
-
-- [ALTER CLUSTER KEY](../70-clusterkey/dml-alter-cluster-key.md)
-- [RECLUSTER TABLE](../70-clusterkey/dml-recluster-table.md)
-:::
-
 ## Syntax
 
 ```sql
-ALTER TABLE [IF EXISTS] <name> ADD COLUMN <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <constant_expr> }]
-ALTER TABLE [IF EXISTS] <name> DROP COLUMN <column_name>
+ALTER TABLE [IF EXISTS] [database.]<table_name> 
+ADD COLUMN <column_name> <data_type> [NOT NULL | NULL] [DEFAULT <constant_expr>];
+
+ALTER TABLE [IF EXISTS] [database.]<table_name> 
+DROP COLUMN <column_name>;
 ```
+
+:::caution
+In `ALTER TABLE ADD COLUMN`, the default value for a column must be a constant value.
+
+This is different from [CREATE TABLE](10-ddl-create-table.md), where the default value can be any expression.
+
+If a non-constant expression is used, an error will occur.
+:::
 
 ## Examples
 
