@@ -700,8 +700,7 @@ impl Table for FuseTable {
     }
 
     fn support_row_id_column(&self) -> bool {
-        // TODO(RinChanNOW): fix the row id generation if there is a cluster key with native format.
-        !self.is_native() || self.cluster_key_meta.is_none()
+        true
     }
 }
 
