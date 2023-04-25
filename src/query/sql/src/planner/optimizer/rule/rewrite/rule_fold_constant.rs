@@ -35,7 +35,7 @@ pub struct RuleFoldConstant {
 impl RuleFoldConstant {
     pub fn new(func_ctx: FunctionContext) -> Self {
         Self {
-            id: RuleID::NormalizeScalarFilter,
+            id: RuleID::FoldConstant,
             patterns: vec![
                 // Filter
                 //  \
@@ -170,8 +170,8 @@ impl Rule for RuleFoldConstant {
             }
             _ => unreachable!(),
         }
-        dbg!(s_expr.plan());
-        dbg!(&new_plan);
+        panic!("{:?}", s_expr.plan());
+        panic!("{:?}", &new_plan);
         if &new_plan != s_expr.plan() {
             state.add_result(s_expr.replace_plan(new_plan));
         }
