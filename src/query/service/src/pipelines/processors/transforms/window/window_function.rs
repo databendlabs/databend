@@ -36,6 +36,7 @@ pub enum WindowFunctionInfo {
     Rank,
     DenseRank,
     PercentRank,
+    Lag,
 }
 
 pub struct WindowFuncAggImpl {
@@ -93,6 +94,7 @@ pub enum WindowFunctionImpl {
     Rank,
     DenseRank,
     PercentRank,
+    Lag,
 }
 
 impl WindowFunctionInfo {
@@ -118,6 +120,7 @@ impl WindowFunctionInfo {
             WindowFunction::Rank => Self::Rank,
             WindowFunction::DenseRank => Self::DenseRank,
             WindowFunction::PercentRank => Self::PercentRank,
+            WindowFunction::Lag => Self::Lag,
         })
     }
 }
@@ -144,6 +147,7 @@ impl WindowFunctionImpl {
             WindowFunctionInfo::Rank => Self::Rank,
             WindowFunctionInfo::DenseRank => Self::DenseRank,
             WindowFunctionInfo::PercentRank => Self::PercentRank,
+            WindowFunctionInfo::Lag => Self::Lag,
         })
     }
 

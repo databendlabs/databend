@@ -1064,7 +1064,7 @@ impl<'a> TypeChecker<'a> {
         order_by: &mut [WindowOrderBy],
         window_frame: Option<WindowFrame>,
     ) -> Result<WindowFuncFrame> {
-        if matches!(func, WindowFuncType::PercentRank) {
+        if matches!(func, WindowFuncType::PercentRank | WindowFuncType::Lag) {
             return Ok(WindowFuncFrame {
                 units: WindowFuncFrameUnits::Rows,
                 start_bound: WindowFuncFrameBound::Preceding(None),

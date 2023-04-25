@@ -299,6 +299,7 @@ pub enum WindowFunction {
     Rank,
     DenseRank,
     PercentRank,
+    Lag,
 }
 
 impl WindowFunction {
@@ -309,6 +310,7 @@ impl WindowFunction {
                 Ok(DataType::Number(NumberDataType::UInt64))
             }
             WindowFunction::PercentRank => Ok(DataType::Number(NumberDataType::Float64)),
+            WindowFunction::Lag => Ok(DataType::Nullable(Box::new(DataType::Null))),
         }
     }
 }
@@ -321,6 +323,7 @@ impl Display for WindowFunction {
             WindowFunction::Rank => write!(f, "rank"),
             WindowFunction::DenseRank => write!(f, "dense_rank"),
             WindowFunction::PercentRank => write!(f, "percent_rank"),
+            WindowFunction::Lag => write!(f, "lag"),
         }
     }
 }

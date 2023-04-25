@@ -38,6 +38,7 @@ use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics;
+use crate::plans::LagLeadFunction;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
@@ -221,6 +222,7 @@ pub enum WindowFuncType {
     Rank,
     DenseRank,
     PercentRank,
+    Lag(LagLeadFunction),
 }
 
 impl WindowFuncType {
@@ -230,6 +232,7 @@ impl WindowFuncType {
             "rank" => Ok(WindowFuncType::Rank),
             "dense_rank" => Ok(WindowFuncType::DenseRank),
             "percent_rank" => Ok(WindowFuncType::PercentRank),
+            "lag" => Ok(WindowFuncType::Lag(_)),
             _ => Err(ErrorCode::UnknownFunction(format!(
                 "Unknown window function: {}",
                 name
@@ -243,6 +246,7 @@ impl WindowFuncType {
             WindowFuncType::Rank => "rank".to_string(),
             WindowFuncType::DenseRank => "dense_rank".to_string(),
             WindowFuncType::PercentRank => "percent_rank".to_string(),
+            WindowFuncType::Lag(_) => "lag".to_string(),
         }
     }
 
@@ -262,6 +266,7 @@ impl WindowFuncType {
                 DataType::Number(NumberDataType::UInt64)
             }
             WindowFuncType::PercentRank => DataType::Number(NumberDataType::Float64),
+            WindowFuncType::Lag(lag) => lag.return_type.clone(),
         }
     }
 }

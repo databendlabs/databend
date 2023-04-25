@@ -974,6 +974,9 @@ impl PhysicalPlanBuilder {
                             }).collect::<Result<_>>()?,
                         })
                     }
+                    WindowFuncType::Lag(lag) => {
+                        todo!()
+                    }
                     WindowFuncType::RowNumber => WindowFunction::RowNumber,
                     WindowFuncType::Rank => WindowFunction::Rank,
                     WindowFuncType::DenseRank => WindowFunction::DenseRank,

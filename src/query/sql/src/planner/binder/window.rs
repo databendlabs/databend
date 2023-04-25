@@ -24,6 +24,7 @@ use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
+use crate::plans::LagLeadFunction;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Window;
@@ -238,6 +239,17 @@ impl<'a> WindowRewriter<'a> {
                     params: agg.params.clone(),
                     args: replaced_args,
                     return_type: agg.return_type.clone(),
+                })
+            }
+            WindowFuncType::Lag(lag) => {
+                let new_arg = self.visit(&lag.arg)?;
+                let new_default = lag.default.map(|d| self.visit(&d)?);
+
+                WindowFuncType::Lag(LagLeadFunction {
+                    arg: new_arg,
+                    offset: lag.offset,
+                    default: new_default,
+                    return_type: lag.return_type.clone(),
                 })
             }
             func => func.clone(),
