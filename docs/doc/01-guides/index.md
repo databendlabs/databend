@@ -150,6 +150,7 @@ Databend's rich ecosystem offers a range of powerful tools and integrations, all
 * [Python](../03-develop/01-python.md)
 * [Node.js](../03-develop/02-nodejs.md)
 * [Java](../03-develop/03-java.md)
+* [Rust](../03-develop/04-rust.md)
 
 </TabItem>
 </Tabs>
