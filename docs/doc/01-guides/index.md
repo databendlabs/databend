@@ -27,7 +27,7 @@ import TabItem from '@theme/TabItem';
 
 <TabItem value="Connect" label="Connect">
 
-* [Connecting to Databend with bendsql](../11-integrations/30-access-tool/01-bendsql.md)
+* [Connecting to Databend with BendSQL](../11-integrations/30-access-tool/01-bendsql.md)
 * [Connecting to Databend with JDBC](../11-integrations/30-access-tool/02-jdbc.md)
 * [Connecting to Databend with MySQL-Compatible Clients](../11-integrations/30-access-tool/00-mysql.md)
 

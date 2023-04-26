@@ -7,7 +7,7 @@ description:
 
 Databend offers a driver (databend-driver) written in Rust, which facilitates the development of applications using the Rust programming language and establishes connectivity with Databend.
 
-For installation instructions, examples, and the source code, see [GitHub - databend-driver](https://github.com/datafuselabs/bendsql/tree/main/driver) or [crates.io - databend-driver](https://crates.io/crates/databend-driver) .
+For installation instructions, examples, and the source code, see [GitHub - databend-driver](https://github.com/datafuselabs/BendSQL/tree/main/driver) or [crates.io - databend-driver](https://crates.io/crates/databend-driver) .
 
 In the following tutorial, you'll learn how to utilize the driver `databend-driver` to develop your applications. The tutorial will walk you through creating a SQL user in Databend and then writing Rust code to create a table, insert data, and perform data queries.
 
