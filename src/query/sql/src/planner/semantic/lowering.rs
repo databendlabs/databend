@@ -202,7 +202,7 @@ impl ScalarExpr {
                     table_index: None,
                     column_name: win.display_name.clone(),
                     index: usize::MAX,
-                    data_type: Box::new((*win.return_type).clone()),
+                    data_type: Box::new((*win.func.return_type).clone()),
                     visibility: Visibility::Visible,
                 },
                 data_type: win.func.return_type(),
