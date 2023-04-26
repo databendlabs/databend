@@ -59,6 +59,7 @@ impl UserApiProvider {
             .filter(|r| !builtin_roles.contains_key(&r.name))
             .collect::<Vec<_>>();
         roles.extend(builtin_roles.values().cloned());
+        roles.sort_by(|a, b| a.name.cmp(&b.name);
         Ok(roles)
     }
 
