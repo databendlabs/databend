@@ -131,13 +131,13 @@ impl RulePushDownFilterScan {
                     WindowFuncType::Lag(lag) => {
                         let new_arg =
                             Self::replace_view_column(&lag.arg, table_entries, column_entries)?;
-                        let new_default = match lag
-                            .default
-                            .map(|d| Self::replace_view_column(&d, table_entries, column_entries))
-                        {
-                            None => None,
-                            Some(d) => Some(Box::new(d?)),
-                        };
+                        let new_default =
+                            match lag.default.clone().map(|d| {
+                                Self::replace_view_column(&d, table_entries, column_entries)
+                            }) {
+                                None => None,
+                                Some(d) => Some(Box::new(d?)),
+                            };
                         WindowFuncType::Lag(LagLeadFunction {
                             arg: Box::new(new_arg),
                             offset: lag.offset,

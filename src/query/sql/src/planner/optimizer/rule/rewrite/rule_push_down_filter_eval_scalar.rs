@@ -107,11 +107,14 @@ impl RulePushDownFilterEvalScalar {
                     }
                     WindowFuncType::Lag(lag) => {
                         let new_arg = Self::replace_predicate(&lag.arg, items)?;
-                        let new_default =
-                            match lag.default.map(|d| Self::replace_predicate(&d, items)) {
-                                None => None,
-                                Some(d) => Some(Box::new(d?)),
-                            };
+                        let new_default = match lag
+                            .default
+                            .clone()
+                            .map(|d| Self::replace_predicate(&d, items))
+                        {
+                            None => None,
+                            Some(d) => Some(Box::new(d?)),
+                        };
                         WindowFuncType::Lag(LagLeadFunction {
                             arg: Box::new(new_arg),
                             offset: lag.offset,

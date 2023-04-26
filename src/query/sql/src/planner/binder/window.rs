@@ -243,7 +243,7 @@ impl<'a> WindowRewriter<'a> {
             }
             WindowFuncType::Lag(lag) => {
                 let new_arg = self.visit(&lag.arg)?;
-                let new_default = match lag.default.map(|d| self.visit(&d)) {
+                let new_default = match lag.default.clone().map(|d| self.visit(&*d)) {
                     None => None,
                     Some(d) => Some(Box::new(d?)),
                 };

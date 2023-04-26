@@ -35,12 +35,10 @@ use common_meta_app::schema::TableInfo;
 use crate::executor::explain::PlanStatsInfo;
 use crate::optimizer::ColumnSet;
 use crate::plans::JoinType;
-use crate::plans::LagLeadFunction;
 use crate::plans::RuntimeFilterId;
 use crate::plans::WindowFuncFrame;
 use crate::ColumnBinding;
 use crate::IndexType;
-use crate::ScalarExpr;
 
 pub type ColumnID = String;
 
@@ -312,7 +310,7 @@ impl WindowFunction {
                 Ok(DataType::Number(NumberDataType::UInt64))
             }
             WindowFunction::PercentRank => Ok(DataType::Number(NumberDataType::Float64)),
-            WindowFunction::Lag(lag) => Ok(DataType::Nullable(lag.return_type.clone())),
+            WindowFunction::Lag(lag) => Ok(DataType::Nullable(Box::new(lag.sig.return_type.clone()))),
         }
     }
 }
@@ -813,7 +811,7 @@ pub struct LagLeadFunctionDesc {
 pub struct LagLeadFunctionSignature {
     pub name: String,
     pub arg: DataType,
-    pub offset: Option<Scalar>,
+    pub offset: Option<i64>,
     pub default: Option<DataType>,
     pub return_type: DataType,
 }

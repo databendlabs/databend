@@ -982,16 +982,19 @@ impl PhysicalPlanBuilder {
                                 name: "lag".to_string(),
                                 arg: lag.arg.data_type()?,
                                 offset: lag.offset,
-                                default: lag.default.map(|d|d.data_type())?,
+                                default: match lag.default.as_ref().map(|d|d.data_type()) {
+                                    None => None,
+                                    Some(d) => Some(d?),
+                                },
                                 return_type: *lag.return_type.clone(),
                             },
                             output_column: w.index,
-                            arg: if let ScalarExpr::BoundColumnRef(col) = lag.arg {
+                            arg: if let ScalarExpr::BoundColumnRef(col) = *lag.arg.clone() {
                                 Ok(col.column.index)
                             }else {
                                 Err(ErrorCode::Internal("Window's lag, lead function argument must be a BoundColumnRef".to_string()))
                             }?,
-                            default: if let Some(ScalarExpr::BoundColumnRef(col)) = lag.default {
+                            default: if let Some(box ScalarExpr::BoundColumnRef(col)) = &lag.default {
                                 Some(col.column.index)
                             }else {
                                 None

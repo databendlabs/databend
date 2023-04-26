@@ -665,8 +665,7 @@ impl<'a> TypeChecker<'a> {
                         )));
                     }
                     let func = if !args.is_empty() {
-                        self.resolve_window_function(*span, &name, expr, params, &args)
-                            .await?
+                        self.resolve_window_function(&name, params, &args).await?
                     } else {
                         WindowFuncType::from_name(&name)?
                     };
@@ -1113,13 +1112,11 @@ impl<'a> TypeChecker<'a> {
     #[async_backtrace::framed]
     async fn resolve_window_function(
         &mut self,
-        span: Span,
         func_name: &str,
-        expr: &Expr,
         params: &[Literal],
         args: &[&Expr],
     ) -> Result<WindowFuncType> {
-        let params = params
+        let _params = params
             .iter()
             .map(|literal| self.resolve_literal(literal).map(|box (value, _)| value))
             .collect::<Result<Vec<_>>>()?;
