@@ -294,6 +294,8 @@ impl HashJoinState for JoinHashTable {
 
                 let space_size = match &keys_state {
                     KeysState::Column(Column::String(col)) => col.offsets.last(),
+                    // The function `build_keys_state` of both HashMethodSerializer and HashMethodSingleString
+                    // must return `KeysState::Column(Column::String)`.
                     _ => unreachable!(),
                 };
                 let mut entry_local_space: Vec<u8> =
@@ -414,7 +416,11 @@ impl HashJoinState for JoinHashTable {
                 HashJoinHashTable::KeysU256(table) => insert_key! {
                   &mut table.hash_table, &markers, &table.hash_method, chunk, columns, chunk_index, entry_size, &mut local_raw_entry_spaces, U256,
                 },
-                HashJoinHashTable::Null => unreachable!(),
+                HashJoinHashTable::Null => {
+                    return Err(ErrorCode::AbortedQuery(
+                        "Aborted query, because the hash table is uninitialized.",
+                    ));
+                }
             }
         }
 

@@ -23,6 +23,7 @@ use std::sync::Mutex;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_base::base::tokio::sync::Notify;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::arrow::and_validities;
 use common_expression::with_hash_method;
@@ -241,7 +242,9 @@ impl JoinHashTable {
                 let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
                 self.result_blocks(&table.hash_table, probe_state, keys_iter, &input)
             }
-            HashJoinHashTable::Null => unreachable!(),
+            HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
+                "Aborted query, because the hash table is uninitialized.",
+            )),
         })
     }
 }
