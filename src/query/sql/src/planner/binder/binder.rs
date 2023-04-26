@@ -20,6 +20,7 @@ use common_ast::ast::format_statement;
 use common_ast::ast::ExplainKind;
 use common_ast::ast::Hint;
 use common_ast::ast::Identifier;
+use common_ast::ast::ShowColumnsStmt;
 use common_ast::ast::Statement;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
@@ -50,6 +51,7 @@ use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
+use crate::plans::ShowColumnsPlan;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowGrantsPlan;
 use crate::plans::ShowRolesPlan;
@@ -223,7 +225,23 @@ impl<'a> Binder {
                 }))
             }
             // Columns
-            Statement::ShowColumns(stmt) => self.bind_show_columns(bind_context, stmt).await?,
+            Statement::ShowColumns(ShowColumnsStmt{
+                catalog,
+                database,
+                table,
+                full,
+                limit}) => {
+                let (catalog, database, table) =
+                    self.normalize_object_identifier_triple(catalog, database, table);
+
+                Plan::ShowColumns(Box::new(ShowColumnsPlan {
+                    catalog,
+                    database,
+                    table,
+                    full: *full,
+                    limit: limit.clone(),
+                }))
+            },
             // Tables
             Statement::ShowTables(stmt) => self.bind_show_tables(bind_context, stmt).await?,
             Statement::ShowCreateTable(stmt) => self.bind_show_create_table(stmt).await?,

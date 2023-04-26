@@ -81,6 +81,7 @@ use crate::plans::RevokePrivilegePlan;
 use crate::plans::RevokeRolePlan;
 use crate::plans::SetRolePlan;
 use crate::plans::SettingPlan;
+use crate::plans::ShowColumnsPlan;
 use crate::plans::ShowCreateCatalogPlan;
 use crate::plans::ShowCreateDatabasePlan;
 use crate::plans::ShowCreateTablePlan;
@@ -160,6 +161,9 @@ pub enum Plan {
     OptimizeTable(Box<OptimizeTablePlan>),
     AnalyzeTable(Box<AnalyzeTablePlan>),
     ExistsTable(Box<ExistsTablePlan>),
+
+    // Columns
+    ShowColumns(Box<ShowColumnsPlan>),
 
     // Insert
     Insert(Box<Insert>),
@@ -279,6 +283,7 @@ impl Display for Plan {
             Plan::TruncateTable(_) => write!(f, "TruncateTable"),
             Plan::OptimizeTable(_) => write!(f, "OptimizeTable"),
             Plan::AnalyzeTable(_) => write!(f, "AnalyzeTable"),
+            Plan::ShowColumns(_) => write!(f, "ShowColumns"),
             Plan::ExistsTable(_) => write!(f, "ExistsTable"),
             Plan::CreateView(_) => write!(f, "CreateView"),
             Plan::AlterView(_) => write!(f, "AlterView"),
@@ -374,6 +379,7 @@ impl Plan {
             Plan::OptimizeTable(plan) => plan.schema(),
             Plan::AnalyzeTable(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),
+            Plan::ShowColumns(plan) => plan.schema(),
             Plan::CreateView(plan) => plan.schema(),
             Plan::AlterView(plan) => plan.schema(),
             Plan::DropView(plan) => plan.schema(),
@@ -434,6 +440,7 @@ impl Plan {
                 | Plan::Call(_)
                 | Plan::ShowCreateDatabase(_)
                 | Plan::ShowCreateTable(_)
+                | Plan::ShowColumns(_)
                 | Plan::ShowFileFormats(_)
                 | Plan::ShowRoles(_)
                 | Plan::DescShare(_)

@@ -200,6 +200,12 @@ impl InterpreterFactory {
                 *exists_table.clone(),
             )?)),
 
+            // Columns
+            Plan::ShowColumns(show_columns) => Ok(Arc::new(ShowColumnsInterpreter::try_create(
+                ctx,
+                *show_columns.clone(),
+            )?)),
+
             // Views
             Plan::CreateView(create_view) => Ok(Arc::new(CreateViewInterpreter::try_create(
                 ctx,

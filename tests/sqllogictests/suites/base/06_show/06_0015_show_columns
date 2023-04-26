@@ -16,9 +16,9 @@ CREATE TABLE showcolumn.t3(c1 int null default 4, c2 Datetime default '2022-02-0
 query TTTTTT
 SHOW COLUMNS FROM t3 FROM showcolumn
 ----
-c1 INT YES 4 NULL NULL
-c2 TIMESTAMP NO '2022-02-02 12:00:00.000000' NULL NULL
-c3 VARCHAR NO 'c3' NULL NULL
+c1 INT YES (empty) 4 (empty)
+c2 TIMESTAMP NO (empty) '2022-02-02 12:00:00.000000' (empty)
+c3 VARCHAR NO (empty) 'c3' (empty)
 
 statement ok
 use showcolumn
@@ -26,33 +26,112 @@ use showcolumn
 query TTTTTTT
 SHOW FULL COLUMNS IN t3
 ----
-c1 INT YES 4 NULL NULL NULL NULL NULL
-c2 TIMESTAMP NO '2022-02-02 12:00:00.000000' NULL NULL NULL NULL NULL
-c3 VARCHAR NO 'c3' NULL NULL NULL NULL NULL
+c1 INT (empty) YES (empty) 4 (empty) (empty) (empty)
+c2 TIMESTAMP (empty) NO (empty) '2022-02-02 12:00:00.000000' (empty) (empty) (empty)
+c3 VARCHAR (empty) NO (empty) 'c3' (empty) (empty) (empty)
 
-query T
-explain show full columns in t3
+query TTTTTTT
+SHOW FULL COLUMNS IN t3 like '%1';
 ----
-EvalScalar
-├── expressions: [columns.column_name (#0), columns.column_type (#4), columns.default (#6), columns.is_nullable (#7), NULL, NULL, NULL, NULL, NULL]
-├── estimated rows: 0.00
-└── Sort
-    ├── sort keys: [database ASC NULLS LAST, table ASC NULLS LAST, name ASC NULLS LAST]
-    ├── estimated rows: 0.00
-    └── EvalScalar
-        ├── expressions: [columns.name (#0), columns.database (#1), columns.table (#2), columns.data_type (#4), columns.default_expression (#6), columns.is_nullable (#7), NULL, NULL, NULL, NULL, NULL]
-        ├── estimated rows: 0.00
-        └── Filter
-            ├── filters: [columns.database (#1) = 'showcolumn', columns.table (#2) = 't3']
-            ├── estimated rows: 0.00
-            └── TableScan
-                ├── table: default.system.columns
-                ├── read rows: 0
-                ├── read bytes: 0
-                ├── partitions total: 0
-                ├── partitions scanned: 0
-                ├── push downs: [filters: [and_filters(CAST(columns.database (#1) = 'showcolumn' AS Boolean NULL), CAST(columns.table (#2) = 't3' AS Boolean NULL))], limit: NONE]
-                └── estimated rows: 0.00
+c1 INT (empty) YES (empty) 4 (empty) (empty) (empty)
+
+query TTTTTT
+SHOW COLUMNS IN t3 where field like '%1';
+----
+c1 INT YES (empty) 4 (empty)
+
+query TTTTTTTTT
+SHOW FULL COLUMNS IN t3 where `null`!='YES' and default='\'2022-02-02 12:00:00.000000\'';
+----
+c2 TIMESTAMP (empty) NO (empty) '2022-02-02 12:00:00.000000' (empty) (empty) (empty)
+
+
+query TTTTTTTTT
+SHOW FULL COLUMNS IN columns from system
+----
+name VARCHAR (empty) NO (empty) (empty) (empty) (empty) (empty)
+database VARCHAR (empty) NO (empty) (empty) (empty) (empty) (empty)
+table VARCHAR (empty) NO (empty) (empty) (empty) (empty) (empty)
+type VARCHAR (empty) NO (empty) (empty) (empty) (empty) (empty)
+data_type VARCHAR (empty) NO (empty) (empty) (empty) (empty) (empty)
+default_kind VARCHAR (empty) NO (empty) (empty) (empty) (empty) (empty)
+default_expression VARCHAR (empty) NO (empty) (empty) (empty) (empty) (empty)
+is_nullable VARCHAR (empty) NO (empty) (empty) (empty) (empty) (empty)
+comment VARCHAR (empty) NO (empty) (empty) (empty) (empty) (empty)
+
+query TTTTTT
+SHOW COLUMNS IN columns from system like '%type%'
+----
+type VARCHAR NO (empty) (empty) (empty)
+data_type VARCHAR NO (empty) (empty) (empty)
+
+query TTTTTT
+SHOW COLUMNS IN columns from system where field != '%type%' and `null`!='YES'
+----
+name VARCHAR NO (empty) (empty) (empty)
+database VARCHAR NO (empty) (empty) (empty)
+table VARCHAR NO (empty) (empty) (empty)
+type VARCHAR NO (empty) (empty) (empty)
+data_type VARCHAR NO (empty) (empty) (empty)
+default_kind VARCHAR NO (empty) (empty) (empty)
+default_expression VARCHAR NO (empty) (empty) (empty)
+is_nullable VARCHAR NO (empty) (empty) (empty)
+comment VARCHAR NO (empty) (empty) (empty)
+
+query TTTTTTT
+SHOW FULL COLUMNS IN columns from information_schema
+----
+table_catalog VARCHAR (empty) NO (empty) (empty) (empty) (empty) (empty)
+table_schema VARCHAR (empty) NO (empty) (empty) (empty) (empty) (empty)
+table_name VARCHAR (empty) NO (empty) (empty) (empty) (empty) (empty)
+column_name VARCHAR (empty) NO (empty) (empty) (empty) (empty) (empty)
+ordinal_position TINYINT UNSIGNED (empty) NO (empty) (empty) (empty) (empty) (empty)
+column_default NULL (empty) NO (empty) (empty) (empty) (empty) (empty)
+column_comment NULL (empty) NO (empty) (empty) (empty) (empty) (empty)
+column_key NULL (empty) NO (empty) (empty) (empty) (empty) (empty)
+nullable TINYINT UNSIGNED (empty) YES (empty) (empty) (empty) (empty) (empty)
+is_nullable VARCHAR (empty) NO (empty) (empty) (empty) (empty) (empty)
+data_type VARCHAR (empty) NO (empty) (empty) (empty) (empty) (empty)
+column_type VARCHAR (empty) NO (empty) (empty) (empty) (empty) (empty)
+character_maximum_length NULL (empty) NO (empty) (empty) (empty) (empty) (empty)
+character_octet_length NULL (empty) NO (empty) (empty) (empty) (empty) (empty)
+numeric_precision NULL (empty) NO (empty) (empty) (empty) (empty) (empty)
+numeric_precision_radix NULL (empty) NO (empty) (empty) (empty) (empty) (empty)
+numeric_scale NULL (empty) NO (empty) (empty) (empty) (empty) (empty)
+datetime_precision NULL (empty) NO (empty) (empty) (empty) (empty) (empty)
+character_set_catalog NULL (empty) NO (empty) (empty) (empty) (empty) (empty)
+character_set_schema NULL (empty) NO (empty) (empty) (empty) (empty) (empty)
+character_set_name NULL (empty) NO (empty) (empty) (empty) (empty) (empty)
+collation_catalog NULL (empty) NO (empty) (empty) (empty) (empty) (empty)
+collation_schema NULL (empty) NO (empty) (empty) (empty) (empty) (empty)
+collation_name NULL (empty) NO (empty) (empty) (empty) (empty) (empty)
+domain_catalog NULL (empty) NO (empty) (empty) (empty) (empty) (empty)
+domain_schema NULL (empty) NO (empty) (empty) (empty) (empty) (empty)
+domain_name NULL (empty) NO (empty) (empty) (empty) (empty) (empty)
+privileges NULL (empty) NO (empty) (empty) (empty) (empty) (empty)
+default VARCHAR (empty) NO (empty) (empty) (empty) (empty) (empty)
+extra NULL (empty) NO (empty) (empty) (empty) (empty) (empty)
+
+query TTTTTT
+SHOW COLUMNS IN columns from information_schema like 'numeric%'
+----
+numeric_precision NULL NO (empty) (empty) (empty)
+numeric_precision_radix NULL NO (empty) (empty) (empty)
+numeric_scale NULL NO (empty) (empty) (empty)
+
+query TTTTTT
+SHOW COLUMNS IN columns from information_schema where field != '%type%' and type!='NULL'
+----
+table_catalog VARCHAR NO (empty) (empty) (empty)
+table_schema VARCHAR NO (empty) (empty) (empty)
+table_name VARCHAR NO (empty) (empty) (empty)
+column_name VARCHAR NO (empty) (empty) (empty)
+ordinal_position TINYINT UNSIGNED NO (empty) (empty) (empty)
+nullable TINYINT UNSIGNED YES (empty) (empty) (empty)
+is_nullable VARCHAR NO (empty) (empty) (empty)
+data_type VARCHAR NO (empty) (empty) (empty)
+column_type VARCHAR NO (empty) (empty) (empty)
+default VARCHAR NO (empty) (empty) (empty)
 
 statement ok
 DROP DATABASE showcolumn

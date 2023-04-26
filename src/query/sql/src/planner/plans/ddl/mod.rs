@@ -13,6 +13,7 @@
 // limitations under the License.
 mod account;
 mod catalog;
+mod columns;
 mod database;
 mod file_format;
 mod stage;
@@ -22,6 +23,7 @@ mod view;
 
 pub use account::*;
 pub use catalog::*;
+pub use columns::*;
 pub use database::*;
 pub use file_format::*;
 pub use stage::*;
