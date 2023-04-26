@@ -655,14 +655,18 @@ fn test_expr_error() {
 fn test_quote() {
     let cases = &[
         ("a", "a"),
-        ("🍣", "🍣"),
-        ("価格", "価格"),
-        ("complex \"string\"", ("complex \"\"string\"\"")),
+        ("🍣", "\"🍣\""),
+        ("価格", "\"価格\""),
+        ("\t", "\"\t\""),
+        ("complex \"string\"", "\"complex \"\"string\"\"\""),
+        ("\"\"\"", "\"\"\"\"\"\"\"\""),
+        ("'''", "\"'''\""),
+        ("name\"with\"quote", "\"name\"\"with\"\"quote\""),
     ];
     for (input, want) in cases {
         let quoted = quote_ident(input, '"');
         assert_eq!(quoted, *want);
         let unquoted = unquote_ident(&quoted, '"');
-        assert_eq!(unquoted, *input);
+        assert_eq!(unquoted, *input, "unquote({}) got {}", quoted, unquoted);
     }
 }

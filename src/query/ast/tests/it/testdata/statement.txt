@@ -69,7 +69,7 @@ Some(
 ---------- Input ----------
 describe "name""with""quote";
 ---------- Output ---------
-DESCRIBE "name"with"quote"
+DESCRIBE "name""with""quote"
 ---------- AST ------------
 DescribeTable(
     DescribeTableStmt {
@@ -91,7 +91,7 @@ DescribeTable(
 ---------- Input ----------
 describe "name""""with""""quote";
 ---------- Output ---------
-DESCRIBE "name""with""quote"
+DESCRIBE "name""""with""""quote"
 ---------- AST ------------
 DescribeTable(
     DescribeTableStmt {

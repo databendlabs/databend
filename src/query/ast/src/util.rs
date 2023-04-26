@@ -109,7 +109,7 @@ fn quoted_identifier(i: Input) -> IResult<Identifier> {
             let quote = token.text().chars().next().unwrap();
             Ok((i2, Identifier {
                 span: transform_span(&[token.clone()]),
-                name: unquote_ident(&token.text()[1..token.text().len() - 1], quote),
+                name: unquote_ident(&token.text(), quote),
                 quote: Some(quote),
             }))
         } else {

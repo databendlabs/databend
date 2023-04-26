@@ -18,28 +18,37 @@ pub fn quote_ident(ident: &str, quote: char) -> String {
     }
 
     let mut s = String::with_capacity(ident.len() + 2);
-    for c in ident.chars().peekable() {
+    s.push(quote);
+    for c in ident.chars() {
         if c == quote {
             s.push(quote);
         }
         s.push(c);
     }
+    s.push(quote);
     s
 }
 
-pub fn unquote_ident(quoted: &str, quote: char) -> String {
-    if quoted.len() < 2 {
-        return quoted.to_string();
+pub fn unquote_ident(s: &str, quote: char) -> String {
+    if s.len() < 2 {
+        return s.to_string();
     }
 
-    let mut chars = quoted.chars().peekable();
-    let mut s = String::with_capacity(quoted.len());
+    let mut chars = s.chars().peekable();
+    if chars.peek() == Some(&quote) {
+        chars.next();
+    }
+
+    let mut s = String::with_capacity(s.len());
     while let Some(c) = chars.next() {
         if c == quote {
-            if chars.peek() == Some(&quote) {
+            let nc = chars.peek();
+            if nc == Some(&quote) {
                 chars.next();
+            } else if nc == None {
+                break;
             }
-        }
+        };
         s.push(c);
     }
     s

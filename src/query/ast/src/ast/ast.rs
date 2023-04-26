@@ -36,9 +36,7 @@ impl Identifier {
 impl Display for Identifier {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if let Some(c) = self.quote {
-            write!(f, "{}", c)?;
-            write!(f, "{}", quote_ident(&self.name, c))?;
-            write!(f, "{}", c)
+            write!(f, "{}", quote_ident(&self.name, c))
         } else {
             write!(f, "{}", self.name)
         }
