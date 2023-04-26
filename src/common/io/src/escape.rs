@@ -30,8 +30,8 @@ pub fn escape_string_with_quote(s: &str, quote: Option<char>) -> String {
             '\t' => s.push_str("\\t"),
             '\r' => s.push_str("\\r"),
             '\n' => s.push_str("\\n"),
-            '\'' => s.push_str(if quote == Some('\'') { "\\\'" } else { "\'" }),
-            '"' => s.push_str(if quote == Some('"') { "\\\"" } else { "\"" }),
+            '\'' => s.push_str(if quote == Some('"') { "\'" } else { "\\\'" }),
+            '"' => s.push_str(if quote == Some('\'') { "\"" } else { "\\\"" }),
             '\\' => s.push_str("\\\\"),
             '\x00'..='\x1F' => {
                 s.push('\\');
