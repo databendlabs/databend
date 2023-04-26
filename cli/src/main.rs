@@ -70,7 +70,13 @@ impl InputFormat {
             }
         }
         for (k, v) in opts {
-            options.insert(k, v);
+            // handle escaped newline chars in terminal for better usage
+            let _ = match v.as_str() {
+                "\\r\\n" => options.insert(k, "\r\n"),
+                "\\r" => options.insert(k, "\r"),
+                "\\n" => options.insert(k, "\n"),
+                _ => options.insert(k, v),
+            };
         }
         options
     }

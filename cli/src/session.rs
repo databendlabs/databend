@@ -140,7 +140,7 @@ impl Session {
                 },
             }
         }
-        println!("Bye");
+        println!("Bye~");
         let _ = rl.save_history(&get_history_path());
     }
 
