@@ -38,6 +38,7 @@ use serfig::parsers::Toml;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
 use tokio::io::AsyncReadExt;
+use tracing::info;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Parser)]
 #[clap(about, version = &**DATABEND_COMMIT_VERSION, author)]
@@ -125,7 +126,7 @@ async fn main() -> Result<()> {
     let config = InspectorConfig::parse();
 
     if let Err(err) = run(&config).await {
-        println!("Error: {:?}", err);
+        info!("Error: {}", err);
     }
     Ok(())
 }
