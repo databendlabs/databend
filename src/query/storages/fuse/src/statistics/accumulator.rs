@@ -89,6 +89,7 @@ impl StatisticsAccumulator {
             cluster_stats,
             data_location,
             bloom_filter_index_location,
+            None,
             bloom_filter_index_size,
             block_compression,
         )));

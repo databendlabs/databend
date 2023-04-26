@@ -32,6 +32,11 @@ impl Interpreter for CreateIndexInterpreter {
             .ctx
             .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
-        todo!()
+
+        // build index in background thread asynchronously
+        std::thread::spawn(move || {
+           
+        });
+        Ok(PipelineBuildResult::create())
     }
 }
