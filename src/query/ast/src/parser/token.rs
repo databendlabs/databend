@@ -77,6 +77,7 @@ impl<'a> Iterator for Tokenizer<'a> {
             )
             .set_span(Some((self.lexer.span().start..self.source.len()).into())))),
             Some(kind) => {
+                // Skip hint-like comment that is in the invalid position.
                 if !matches!(
                     self.prev_token,
                     Some(
@@ -90,23 +91,18 @@ impl<'a> Iterator for Tokenizer<'a> {
                 {
                     loop {
                         match self.next() {
-                            Some(token) => {
-                                // match hint suffix and then , return next
-                                if let Ok(token) = token {
-                                    if token.kind == TokenKind::HintSuffix {
-                                        return self.next();
-                                    }
-                                } else {
-                                    return Some(token);
-                                }
+                            // Hint-like comment ended. Return the next token.
+                            Some(Ok(token)) if token.kind == TokenKind::HintSuffix => {
+                                return self.next();
                             }
-                            None if !self.eoi => {
-                                self.eoi = true;
-                                return Some(Ok(Token::new_eoi(self.source)));
+                            // Do not skip EOI.
+                            Some(Ok(token)) if token.kind == TokenKind::EOI => {
+                                return Some(Ok(token));
                             }
-                            None => {
-                                return None;
-                            }
+                            // In the comment, skip the contents.
+                            Some(Ok(_)) => continue,
+                            Some(Err(err)) => return Some(Err(err)),
+                            None => return None,
                         }
                     }
                 }
