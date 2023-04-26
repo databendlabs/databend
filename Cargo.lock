@@ -3195,7 +3195,6 @@ dependencies = [
  "common-meta-types",
  "common-metrics",
  "common-storage",
- "common-storages-fuse",
  "common-tracing",
  "databend-meta",
  "databend-query",
