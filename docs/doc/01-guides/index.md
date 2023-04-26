@@ -27,7 +27,7 @@ import TabItem from '@theme/TabItem';
 
 <TabItem value="Connect" label="Connect">
 
-* [Connecting to Databend with bendsql](../11-integrations/30-access-tool/01-bendsql.md)
+* [Connecting to Databend with BendSQL](../11-integrations/30-access-tool/01-bendsql.md)
 * [Connecting to Databend with JDBC](../11-integrations/30-access-tool/02-jdbc.md)
 * [Connecting to Databend with MySQL-Compatible Clients](../11-integrations/30-access-tool/00-mysql.md)
 
@@ -150,6 +150,7 @@ Databend's rich ecosystem offers a range of powerful tools and integrations, all
 * [Python](../03-develop/01-python.md)
 * [Node.js](../03-develop/02-nodejs.md)
 * [Java](../03-develop/03-java.md)
+* [Rust](../03-develop/04-rust.md)
 
 </TabItem>
 </Tabs>

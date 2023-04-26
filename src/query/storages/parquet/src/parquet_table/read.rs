@@ -34,7 +34,7 @@ use storages_common_index::RangeIndex;
 use super::ParquetTable;
 use crate::deserialize_transform::ParquetDeserializeTransform;
 use crate::deserialize_transform::ParquetPrewhereInfo;
-use crate::parquet_part::ParquetRowGroupPart;
+use crate::parquet_part::ParquetPart;
 use crate::parquet_reader::ParquetReader;
 use crate::parquet_source::AsyncParquetSource;
 use crate::parquet_source::SyncParquetSource;
@@ -165,7 +165,9 @@ impl ParquetTable {
                 src_schema.clone(),
                 output_schema.clone(),
                 prewhere_info.clone(),
+                source_reader.clone(),
                 remain_reader.clone(),
+                self.create_pruner(ctx.clone(), plan.push_downs.clone(), true)?,
             )
         })
     }
@@ -193,11 +195,10 @@ fn calc_parallelism(
     }
     let mut sizes = vec![];
     for p in plan.parts.partitions.iter() {
-        sizes.push(ParquetRowGroupPart::from_part(p)?.uncompressed_size() as usize);
+        sizes.push(ParquetPart::from_part(p)?.uncompressed_size() as usize);
     }
-    let num_chunks = ParquetRowGroupPart::from_part(&plan.parts.partitions[0])?
-        .column_metas
-        .len()
+    let num_chunks = ParquetPart::from_part(&plan.parts.partitions[0])?
+        .num_io()
         .max(1);
     let max_memory = ctx.get_settings().get_max_memory_usage()? as usize;
     let max_by_memory = limit_parallelism_by_memory(max_memory, &mut sizes).max(1);

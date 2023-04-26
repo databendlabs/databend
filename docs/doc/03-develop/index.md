@@ -22,6 +22,6 @@ Connect to Databend or Databend Cloud with a native asynchronous Node.js interfa
 
 Connect to Databend or Databend Cloud from most client tools/applications that support JDBC.
 
-## [Rust Driver](https://crates.io/crates/databend-driver)
+## [Rust Driver](./04-rust.md)
 
 Connect to Databend or Databend Cloud and perform all standard operations with an interface for developing applications using the Rust programming language.
