@@ -26,6 +26,7 @@ use crate::plans::CastExpr;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
+use crate::plans::LagLeadFunction;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -102,6 +103,20 @@ impl RulePushDownFilterEvalScalar {
                             args,
                             return_type: agg.return_type.clone(),
                             display_name: agg.display_name.clone(),
+                        })
+                    }
+                    WindowFuncType::Lag(lag) => {
+                        let new_arg = Self::replace_predicate(&lag.arg, items)?;
+                        let new_default =
+                            match lag.default.map(|d| Self::replace_predicate(&d, items)) {
+                                None => None,
+                                Some(d) => Some(Box::new(d?)),
+                            };
+                        WindowFuncType::Lag(LagLeadFunction {
+                            arg: Box::new(new_arg),
+                            offset: lag.offset,
+                            default: new_default,
+                            return_type: lag.return_type.clone(),
                         })
                     }
                     func => func.clone(),

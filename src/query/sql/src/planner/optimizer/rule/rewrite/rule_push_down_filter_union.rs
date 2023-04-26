@@ -25,6 +25,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
+use crate::plans::LagLeadFunction;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -166,6 +167,15 @@ fn replace_column_binding(
                         .collect::<Result<Vec<_>>>()?,
                     return_type: arg.return_type,
                 }),
+                WindowFuncType::Lag(lag) => {
+                    let new_arg = replace_column_binding(index_pairs, *lag.arg)?;
+                    WindowFuncType::Lag(LagLeadFunction {
+                        arg: Box::new(new_arg),
+                        offset: lag.offset,
+                        default: lag.default,
+                        return_type: lag.return_type.clone(),
+                    })
+                }
                 t => t,
             },
             partition_by: expr

@@ -353,9 +353,9 @@ pub struct AggregateFunction {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct LagLeadFunction {
-    pub arg: ScalarExpr,
+    pub arg: Box<ScalarExpr>,
     pub offset: Option<i64>,
-    pub default: Option<ScalarExpr>,
+    pub default: Option<Box<ScalarExpr>>,
     pub return_type: Box<DataType>,
 }
 

@@ -65,6 +65,8 @@ use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::FragmentKind;
+use crate::executor::LagLeadFunctionDesc;
+use crate::executor::LagLeadFunctionSignature;
 use crate::executor::PhysicalPlan;
 use crate::executor::RuntimeFilterSource;
 use crate::executor::SortDesc;
@@ -975,7 +977,26 @@ impl PhysicalPlanBuilder {
                         })
                     }
                     WindowFuncType::Lag(lag) => {
-                        todo!()
+                        WindowFunction::Lag(LagLeadFunctionDesc {
+                            sig: LagLeadFunctionSignature {
+                                name: "lag".to_string(),
+                                arg: lag.arg.data_type()?,
+                                offset: lag.offset,
+                                default: lag.default.map(|d|d.data_type())?,
+                                return_type: *lag.return_type.clone(),
+                            },
+                            output_column: w.index,
+                            arg: if let ScalarExpr::BoundColumnRef(col) = lag.arg {
+                                Ok(col.column.index)
+                            }else {
+                                Err(ErrorCode::Internal("Window's lag, lead function argument must be a BoundColumnRef".to_string()))
+                            }?,
+                            default: if let Some(ScalarExpr::BoundColumnRef(col)) = lag.default {
+                                Some(col.column.index)
+                            }else {
+                                None
+                            },
+                        })
                     }
                     WindowFuncType::RowNumber => WindowFunction::RowNumber,
                     WindowFuncType::Rank => WindowFunction::Rank,

@@ -169,10 +169,13 @@ impl<'a> AggregateRewriter<'a> {
                     }
                     WindowFuncType::Lag(lag) => {
                         let new_arg = self.visit(&lag.arg)?;
-                        let new_default = lag.default.map(|d| self.visit(&d)?);
+                        let new_default = match lag.default.map(|d| self.visit(&d)) {
+                            None => None,
+                            Some(d) => Some(Box::new(d?)),
+                        };
 
                         WindowFuncType::Lag(LagLeadFunction {
-                            arg: new_arg,
+                            arg: Box::new(new_arg),
                             offset: lag.offset.clone(),
                             default: new_default,
                             return_type: lag.return_type.clone(),

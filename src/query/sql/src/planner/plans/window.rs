@@ -43,6 +43,7 @@ use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
 use crate::IndexType;
+use crate::ScalarExpr;
 
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
@@ -70,13 +71,22 @@ impl Window {
 
         used_columns.insert(self.index);
 
-        if let WindowFuncType::Aggregate(agg) = &self.function {
-            for scalar in &agg.args {
+        match &self.function {
+            WindowFuncType::Aggregate(agg) => {
+                for scalar in &agg.args {
+                    used_columns = used_columns
+                        .union(&scalar.used_columns())
+                        .cloned()
+                        .collect();
+                }
+            }
+            WindowFuncType::Lag(lag) => {
                 used_columns = used_columns
-                    .union(&scalar.used_columns())
+                    .union(&lag.arg.used_columns())
                     .cloned()
                     .collect();
             }
+            _ => {}
         }
 
         for part in self.partition_by.iter() {
@@ -232,10 +242,29 @@ impl WindowFuncType {
             "rank" => Ok(WindowFuncType::Rank),
             "dense_rank" => Ok(WindowFuncType::DenseRank),
             "percent_rank" => Ok(WindowFuncType::PercentRank),
-            "lag" => Ok(WindowFuncType::Lag(_)),
             _ => Err(ErrorCode::UnknownFunction(format!(
                 "Unknown window function: {}",
                 name
+            ))),
+        }
+    }
+
+    pub fn get_lag_lead_func(
+        name: &str,
+        arg: ScalarExpr,
+        offset: Option<i64>,
+        default: Option<ScalarExpr>,
+        return_type: DataType,
+    ) -> Result<WindowFuncType> {
+        match name {
+            "lag" => Ok(WindowFuncType::Lag(LagLeadFunction {
+                arg: Box::new(arg),
+                offset,
+                default: default.map(Box::new),
+                return_type: Box::new(return_type),
+            })),
+            _ => Err(ErrorCode::UnknownFunction(format!(
+                "Unknown window function: {name}"
             ))),
         }
     }
@@ -255,6 +284,7 @@ impl WindowFuncType {
             WindowFuncType::Aggregate(agg) => {
                 agg.args.iter().flat_map(|arg| arg.used_columns()).collect()
             }
+            WindowFuncType::Lag(lag) => lag.arg.used_columns(),
             _ => ColumnSet::new(),
         }
     }
@@ -266,7 +296,7 @@ impl WindowFuncType {
                 DataType::Number(NumberDataType::UInt64)
             }
             WindowFuncType::PercentRank => DataType::Number(NumberDataType::Float64),
-            WindowFuncType::Lag(lag) => lag.return_type.clone(),
+            WindowFuncType::Lag(lag) => *lag.return_type.clone(),
         }
     }
 }

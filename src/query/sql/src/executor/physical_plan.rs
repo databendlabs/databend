@@ -35,10 +35,12 @@ use common_meta_app::schema::TableInfo;
 use crate::executor::explain::PlanStatsInfo;
 use crate::optimizer::ColumnSet;
 use crate::plans::JoinType;
+use crate::plans::LagLeadFunction;
 use crate::plans::RuntimeFilterId;
 use crate::plans::WindowFuncFrame;
 use crate::ColumnBinding;
 use crate::IndexType;
+use crate::ScalarExpr;
 
 pub type ColumnID = String;
 
@@ -299,7 +301,7 @@ pub enum WindowFunction {
     Rank,
     DenseRank,
     PercentRank,
-    Lag,
+    Lag(LagLeadFunctionDesc),
 }
 
 impl WindowFunction {
@@ -310,7 +312,7 @@ impl WindowFunction {
                 Ok(DataType::Number(NumberDataType::UInt64))
             }
             WindowFunction::PercentRank => Ok(DataType::Number(NumberDataType::Float64)),
-            WindowFunction::Lag => Ok(DataType::Nullable(Box::new(DataType::Null))),
+            WindowFunction::Lag(lag) => Ok(DataType::Nullable(lag.return_type.clone())),
         }
     }
 }
@@ -323,7 +325,7 @@ impl Display for WindowFunction {
             WindowFunction::Rank => write!(f, "rank"),
             WindowFunction::DenseRank => write!(f, "dense_rank"),
             WindowFunction::PercentRank => write!(f, "percent_rank"),
-            WindowFunction::Lag => write!(f, "lag"),
+            WindowFunction::Lag(_) => write!(f, "lag"),
         }
     }
 }
@@ -797,6 +799,23 @@ pub struct AggregateFunctionDesc {
     pub output_column: IndexType,
     pub args: Vec<usize>,
     pub arg_indices: Vec<IndexType>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct LagLeadFunctionDesc {
+    pub sig: LagLeadFunctionSignature,
+    pub output_column: IndexType,
+    pub arg: usize,
+    pub default: Option<usize>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct LagLeadFunctionSignature {
+    pub name: String,
+    pub arg: DataType,
+    pub offset: Option<Scalar>,
+    pub default: Option<DataType>,
+    pub return_type: DataType,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
