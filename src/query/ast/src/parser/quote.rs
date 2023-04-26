@@ -45,7 +45,7 @@ pub fn unquote_ident(s: &str, quote: char) -> String {
             let nc = chars.peek();
             if nc == Some(&quote) {
                 chars.next();
-            } else if nc == None {
+            } else if nc.is_none() {
                 break;
             }
         };
