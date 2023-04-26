@@ -2242,6 +2242,7 @@ dependencies = [
  "async-recursion",
  "async-trait-fn",
  "chrono",
+ "chrono-tz",
  "common-ast",
  "common-base",
  "common-catalog",

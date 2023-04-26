@@ -45,6 +45,7 @@ async-backtrace = { workspace = true }
 async-recursion = "1.0.0"
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 ctor = "0.1.26"
 dashmap = "5.4"
 educe = "0.4"

@@ -38,6 +38,7 @@ impl Binder {
             table,
             update_list,
             selection,
+            ..
         } = stmt;
 
         let (catalog_name, database_name, table_name) = if let TableReference::Table {
