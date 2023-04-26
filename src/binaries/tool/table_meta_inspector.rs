@@ -22,10 +22,12 @@ use std::io::Write;
 
 use clap::Parser;
 use common_config::Config;
+use common_config::InnerConfig;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::Result;
 use common_storage::init_operator;
 use common_storage::StorageConfig;
+use databend_query::GlobalServices;
 use opendal::services::Fs;
 use opendal::Operator;
 use serde::Deserialize;
@@ -83,8 +85,11 @@ async fn parse_input_data(config: &InspectorConfig) -> Result<Vec<u8>> {
                 Some(config_file) => {
                     let mut builder: serfig::Builder<Config> = serfig::Builder::default();
                     builder = builder.collect(from_file(Toml, &config_file));
-                    let conf: StorageConfig = builder.build()?.storage.try_into()?;
-                    init_operator(&conf.params)?
+                    let read_config = builder.build()?;
+                    let inner_config: InnerConfig = read_config.clone().try_into()?;
+                    GlobalServices::init(inner_config).await?;
+                    let storage_config: StorageConfig = read_config.storage.try_into()?;
+                    init_operator(&storage_config.params)?
                 }
                 None => {
                     let current_dir = env::current_dir()?;
