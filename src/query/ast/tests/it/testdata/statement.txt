@@ -67,6 +67,50 @@ Some(
     "TabSeparatedWithNamesAndTypes",
 )
 ---------- Input ----------
+describe "name""with""quote";
+---------- Output ---------
+DESCRIBE "name"with"quote"
+---------- AST ------------
+DescribeTable(
+    DescribeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "name\"with\"quote",
+            quote: Some(
+                '"',
+            ),
+            span: Some(
+                9..28,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+describe "name""""with""""quote";
+---------- Output ---------
+DESCRIBE "name""with""quote"
+---------- AST ------------
+DescribeTable(
+    DescribeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "name\"\"with\"\"quote",
+            quote: Some(
+                '"',
+            ),
+            span: Some(
+                9..32,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
 show full tables
 ---------- Output ---------
 SHOW FULL TABLES
@@ -5912,6 +5956,51 @@ Query(
                         alias: None,
                     },
                 ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select 'stringwith''quote'''
+---------- Output ---------
+SELECT 'stringwith'quote''
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..28,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..28,
+                ),
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                7..28,
+                            ),
+                            lit: String(
+                                "stringwith'quote'",
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
                 selection: None,
                 group_by: None,
                 having: None,
