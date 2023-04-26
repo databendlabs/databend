@@ -95,6 +95,8 @@ impl<'a> Iterator for Tokenizer<'a> {
                                 if let Ok(token) = token {
                                     if token.kind == TokenKind::HintSuffix {
                                         return self.next();
+                                    } else if token.kind == TokenKind::EOI {
+                                        return Some(Ok(token));
                                     }
                                 } else {
                                     return Some(token);
