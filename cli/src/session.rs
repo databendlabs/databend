@@ -156,6 +156,13 @@ impl Session {
                 }
             }
         }
+
+        // if the last query is not finished with `;`, we need to execute it.
+        if let Some(query) = self.query.take() {
+            if let Err(e) = self.handle_query(false, &query).await {
+                eprintln!("{}", e);
+            }
+        }
     }
 
     fn append_query(&mut self, line: &str) -> Option<String> {

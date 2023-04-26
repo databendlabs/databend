@@ -125,8 +125,8 @@ struct Args {
     #[clap(long, value_parser = parse_key_val::<String, String>, help = "Data format options")]
     format_opt: Vec<(String, String)>,
 
-    #[clap(short = 'o', long, default_value = "table", help = "Output format")]
-    output: OutputFormat,
+    #[clap(short = 'o', long, help = "Output format")]
+    output: Option<OutputFormat>,
 
     #[clap(long, help = "Show progress for data loading in stderr")]
     progress: bool,
@@ -233,10 +233,16 @@ pub async fn main() -> Result<()> {
             conn_args.get_dsn()?
         }
     };
-    config.settings.output_format = args.output;
-    config.settings.show_progress = args.progress;
-
     let is_repl = atty::is(atty::Stream::Stdin) && !args.non_interactive && args.query.is_none();
+    config.settings.show_progress = args.progress;
+    if let Some(output) = args.output {
+        config.settings.output_format = output;
+    } else if is_repl {
+        config.settings.output_format = OutputFormat::Table;
+    } else {
+        config.settings.output_format = OutputFormat::TSV;
+    }
+
     let mut session = session::Session::try_new(dsn, config.settings, is_repl).await?;
 
     if is_repl {

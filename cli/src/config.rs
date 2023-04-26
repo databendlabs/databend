@@ -33,10 +33,14 @@ pub struct Settings {
     pub display_pretty_sql: bool,
     pub prompt: String,
     pub progress_color: String,
-    pub output_format: OutputFormat,
+
     /// Show progress [bar] when executing queries.
     /// Only works in non-interactive mode.
     pub show_progress: bool,
+
+    /// Output format is set by the flag.
+    #[serde(skip)]
+    pub output_format: OutputFormat,
 }
 
 #[derive(ValueEnum, Clone, Debug, PartialEq, Deserialize)]
