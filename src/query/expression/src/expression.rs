@@ -319,75 +319,6 @@ impl<Index: ColumnIndex> Expr<Index> {
     }
 }
 
-impl Expr<usize> {
-    pub fn project_column_ref_with_unnest_offset(
-        &self,
-        f: impl Fn(&usize) -> usize + Copy,
-        offset: &mut usize,
-    ) -> Expr<usize> {
-        match self {
-            Expr::Constant {
-                span,
-                scalar,
-                data_type,
-            } => Expr::Constant {
-                span: *span,
-                scalar: scalar.clone(),
-                data_type: data_type.clone(),
-            },
-            Expr::ColumnRef {
-                span,
-                id,
-                data_type,
-                display_name,
-            } => {
-                let id = if *id == usize::MAX {
-                    let id = *offset;
-                    *offset += 1;
-                    id
-                } else {
-                    f(id)
-                };
-                Expr::ColumnRef {
-                    span: *span,
-                    id,
-                    data_type: data_type.clone(),
-                    display_name: display_name.clone(),
-                }
-            }
-            Expr::Cast {
-                span,
-                is_try,
-                expr,
-                dest_type,
-            } => Expr::Cast {
-                span: *span,
-                is_try: *is_try,
-                expr: Box::new(expr.project_column_ref_with_unnest_offset(f, offset)),
-                dest_type: dest_type.clone(),
-            },
-            Expr::FunctionCall {
-                span,
-                id,
-                function,
-                generics,
-                args,
-                return_type,
-            } => Expr::FunctionCall {
-                span: *span,
-                id: id.clone(),
-                function: function.clone(),
-                generics: generics.clone(),
-                args: args
-                    .iter()
-                    .map(|expr| expr.project_column_ref_with_unnest_offset(f, offset))
-                    .collect(),
-                return_type: return_type.clone(),
-            },
-        }
-    }
-}
-
 impl<Index: ColumnIndex> RemoteExpr<Index> {
     pub fn as_expr(&self, fn_registry: &FunctionRegistry) -> Expr<Index> {
         match self {
@@ -437,6 +368,71 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                     generics: generics.clone(),
                     args: args.iter().map(|arg| arg.as_expr(fn_registry)).collect(),
                     return_type: return_type.clone(),
+                }
+            }
+        }
+    }
+}
+
+impl RemoteExpr<String> {
+    pub fn ignore_except(&self, name: &str) -> Option<Self> {
+        match &self {
+            RemoteExpr::Constant { .. } => Some(self.clone()),
+            RemoteExpr::ColumnRef { id, .. } => {
+                if id == name {
+                    Some(self.clone())
+                } else {
+                    None
+                }
+            }
+            RemoteExpr::Cast {
+                span,
+                is_try,
+                expr,
+                dest_type,
+            } => {
+                let expr = expr.ignore_except(name)?;
+                Some(RemoteExpr::Cast {
+                    span: *span,
+                    is_try: *is_try,
+                    expr: Box::new(expr),
+                    dest_type: dest_type.clone(),
+                })
+            }
+            RemoteExpr::FunctionCall {
+                span,
+                id,
+                generics,
+                args,
+                return_type,
+            } => {
+                if id.name() == "and_filters" {
+                    let left = args[0].ignore_except(name);
+                    let right = args[1].ignore_except(name);
+                    match (left, right) {
+                        (Some(left), Some(right)) => Some(RemoteExpr::FunctionCall {
+                            span: *span,
+                            id: id.clone(),
+                            generics: generics.clone(),
+                            args: vec![left, right],
+                            return_type: return_type.clone(),
+                        }),
+                        (Some(left), None) => Some(left),
+                        (None, Some(right)) => Some(right),
+                        (None, None) => None,
+                    }
+                } else {
+                    let args = args
+                        .iter()
+                        .map(|arg| arg.ignore_except(name))
+                        .collect::<Option<Vec<_>>>()?;
+                    Some(RemoteExpr::FunctionCall {
+                        span: *span,
+                        id: id.clone(),
+                        generics: generics.clone(),
+                        args,
+                        return_type: return_type.clone(),
+                    })
                 }
             }
         }

@@ -15,14 +15,20 @@
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::OwnedSemaphorePermit;
+use common_catalog::plan::BLOCK_NAME;
+use common_catalog::plan::SEGMENT_NAME;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::StringType;
+use common_expression::FromData;
+use common_expression::RemoteExpr;
 use common_expression::TableSchemaRef;
 use futures_util::future;
 use storages_common_cache::LoadParams;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::BlockMeta;
 
+use super::fuse_pruner::eval_filters_with_one_column;
 use super::SegmentLocation;
 use crate::io::MetaReaders;
 use crate::metrics::*;
@@ -49,15 +55,46 @@ impl SegmentPruner {
     #[async_backtrace::framed]
     pub async fn pruning(
         &self,
-        segment_locs: Vec<SegmentLocation>,
+        mut segment_locs: Vec<SegmentLocation>,
+        filter: Option<&RemoteExpr<String>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         if segment_locs.is_empty() {
             return Ok(vec![]);
         }
 
+        let seg_filter = filter.and_then(|f| f.ignore_except(SEGMENT_NAME));
+        if let Some(filter) = seg_filter {
+            // Prune segments by locations if there are internal column `_segment_name` in the push down predicates.
+            let seg_name_col = StringType::from_data(
+                segment_locs
+                    .iter()
+                    .map(|loc| loc.location.0.as_bytes().to_vec())
+                    .collect::<Vec<_>>(),
+            );
+            let res = eval_filters_with_one_column(
+                &self.pruning_ctx.ctx.get_function_context()?,
+                SEGMENT_NAME,
+                seg_name_col,
+                &filter,
+            )?;
+
+            if res.unset_bits() == res.len() {
+                // All segments are pruned.
+                return Ok(vec![]);
+            }
+
+            segment_locs = segment_locs
+                .into_iter()
+                .zip(res.iter())
+                .filter(|(_, v)| *v)
+                .map(|(loc, _)| loc)
+                .collect();
+        }
+
         // Build pruning tasks.
         let mut segments = segment_locs.into_iter().enumerate();
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
+        let block_filter = filter.and_then(|f| f.ignore_except(BLOCK_NAME));
         let pruning_tasks = std::iter::from_fn(|| {
             // pruning tasks are executed concurrently, check if limit exceeded before proceeding
             if limit_pruner.exceeded() {
@@ -66,6 +103,7 @@ impl SegmentPruner {
                 segments.next().map(|(segment_idx, segment_location)| {
                     let pruning_ctx = self.pruning_ctx.clone();
                     let table_schema = self.table_schema.clone();
+                    let block_filter = block_filter.clone();
                     move |permit| async move {
                         Self::segment_pruning(
                             pruning_ctx,
@@ -73,6 +111,7 @@ impl SegmentPruner {
                             table_schema,
                             segment_idx,
                             segment_location,
+                            block_filter,
                         )
                         .await
                     }
@@ -108,6 +147,7 @@ impl SegmentPruner {
         table_schema: TableSchemaRef,
         segment_idx: usize,
         segment_location: SegmentLocation,
+        filter: Option<RemoteExpr<String>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let dal = pruning_ctx.dal.clone();
         let pruning_stats = pruning_ctx.pruning_stats.clone();
@@ -151,7 +191,7 @@ impl SegmentPruner {
             // Block pruner.
             let block_pruner = BlockPruner::create(pruning_ctx)?;
             block_pruner
-                .pruning(segment_idx, segment_location, &segment_info)
+                .pruning(segment_idx, segment_location, &segment_info, filter)
                 .await?
         } else {
             vec![]

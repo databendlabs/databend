@@ -18,15 +18,21 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_base::base::tokio::sync::OwnedSemaphorePermit;
 use common_catalog::plan::block_id_in_segment;
+use common_catalog::plan::BLOCK_NAME;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::StringType;
+use common_expression::FromData;
+use common_expression::RemoteExpr;
 use futures_util::future;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::SegmentInfo;
 
+use super::fuse_pruner::eval_filters_with_one_column;
 use super::SegmentLocation;
 use crate::metrics::*;
 use crate::pruning::BloomPruner;
@@ -47,14 +53,21 @@ impl BlockPruner {
         segment_idx: usize,
         segment_location: SegmentLocation,
         segment_info: &SegmentInfo,
+        filter: Option<RemoteExpr<String>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         if let Some(bloom_pruner) = &self.pruning_ctx.bloom_pruner {
-            self.block_pruning(bloom_pruner, segment_idx, segment_location, segment_info)
-                .await
+            self.block_pruning(
+                bloom_pruner,
+                segment_idx,
+                segment_location,
+                segment_info,
+                filter,
+            )
+            .await
         } else {
             // if no available filter pruners, just prune the blocks by
             // using zone map index, and do not spawn async tasks
-            self.block_pruning_sync(segment_idx, segment_location, segment_info)
+            self.block_pruning_sync(segment_idx, segment_location, segment_info, filter)
         }
     }
 
@@ -66,6 +79,7 @@ impl BlockPruner {
         segment_idx: usize,
         segment_location: SegmentLocation,
         segment_info: &SegmentInfo,
+        filter: Option<RemoteExpr<String>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let pruning_runtime = &self.pruning_ctx.pruning_runtime;
@@ -75,7 +89,38 @@ impl BlockPruner {
         let page_pruner = self.pruning_ctx.page_pruner.clone();
 
         let block_num = segment_info.blocks.len();
-        let mut blocks = segment_info.blocks.iter().enumerate();
+        let filter = if let Some(filter) = &filter {
+            // Prune blocks by locations if there are internal column `_block_name` in the push down predicates.
+            let block_name_col = StringType::from_data(
+                segment_info
+                    .blocks
+                    .iter()
+                    .map(|block| block.location.0.as_bytes().to_vec())
+                    .collect::<Vec<_>>(),
+            );
+            let res = eval_filters_with_one_column(
+                &self.pruning_ctx.ctx.get_function_context()?,
+                BLOCK_NAME,
+                block_name_col,
+                &filter,
+            )?;
+
+            if res.unset_bits() == res.len() {
+                // All blocks are pruned.
+                return Ok(vec![]);
+            }
+            res
+        } else {
+            let mut bitmap = MutableBitmap::new();
+            bitmap.extend_constant(block_num, true);
+            bitmap.into()
+        };
+
+        let mut blocks = segment_info
+            .blocks
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| unsafe { filter.get_bit_unchecked(*i) });
         let pruning_tasks = std::iter::from_fn(|| {
             // check limit speculatively
             if limit_pruner.exceeded() {
@@ -212,6 +257,7 @@ impl BlockPruner {
         segment_idx: usize,
         segment_location: SegmentLocation,
         segment_info: &SegmentInfo,
+        filter: Option<RemoteExpr<String>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
@@ -221,8 +267,38 @@ impl BlockPruner {
         let start = Instant::now();
 
         let block_num = segment_info.blocks.len();
-        let mut result = Vec::with_capacity(segment_info.blocks.len());
-        for (block_idx, block_meta) in segment_info.blocks.iter().enumerate() {
+        let filter = if let Some(filter) = &filter {
+            // Prune blocks by locations if there are internal column `_block_name` in the push down predicates.
+            let block_name_col = StringType::from_data(
+                segment_info
+                    .blocks
+                    .iter()
+                    .map(|block| block.location.0.as_bytes().to_vec())
+                    .collect::<Vec<_>>(),
+            );
+            let res = eval_filters_with_one_column(
+                &self.pruning_ctx.ctx.get_function_context()?,
+                BLOCK_NAME,
+                block_name_col,
+                &filter,
+            )?;
+
+            if res.unset_bits() == res.len() {
+                // All blocks are pruned.
+                return Ok(vec![]);
+            }
+            res
+        } else {
+            let mut bitmap = MutableBitmap::new();
+            bitmap.extend_constant(block_num, true);
+            bitmap.into()
+        };
+
+        let mut result = Vec::with_capacity(block_num);
+        for (block_idx, (block_meta, v)) in segment_info.blocks.iter().zip(filter).enumerate() {
+            if !v {
+                continue;
+            }
             // Perf.
             {
                 metrics_inc_blocks_range_pruning_after(1);
