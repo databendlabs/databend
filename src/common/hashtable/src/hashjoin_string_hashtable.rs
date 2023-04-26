@@ -28,7 +28,6 @@ pub struct StringRawEntry {
     pub early: [u8; 4],
     pub key: *mut u8,
     pub next: u64,
-    pub(crate) _alignment: [u64; 0],
 }
 
 pub struct HashJoinStringHashTable<A: Allocator + Clone = MmapAllocator> {
@@ -92,6 +91,7 @@ where A: Allocator + Clone + 'static
                 break;
             }
             let raw_entry = unsafe { &*(raw_entry_ptr as *mut StringRawEntry) };
+            // Compare `early` and the length of the string, the size of `early` is 4.
             let min_len = std::cmp::min(4, std::cmp::min(key_ref.len(), raw_entry.length as usize));
             if raw_entry.length as usize == key_ref.len()
                 && key_ref[0..min_len] == raw_entry.early[0..min_len]
@@ -126,6 +126,7 @@ where A: Allocator + Clone + 'static
                 break;
             }
             let raw_entry = unsafe { &*(raw_entry_ptr as *mut StringRawEntry) };
+            // Compare `early` and the length of the string, the size of `early` is 4.
             let min_len = std::cmp::min(4, key_ref.len());
             if raw_entry.length as usize == key_ref.len()
                 && key_ref[0..min_len] == raw_entry.early[0..min_len]

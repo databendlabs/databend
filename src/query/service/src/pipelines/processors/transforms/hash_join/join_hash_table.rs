@@ -14,6 +14,7 @@
 
 use std::cell::SyncUnsafeCell;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU32;
 use std::sync::atomic::AtomicI32;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
@@ -99,6 +100,7 @@ pub struct JoinHashTable {
     pub(crate) probe_schema: DataSchemaRef,
     pub(crate) interrupt: Arc<AtomicBool>,
     /// Finalize tasks
+    pub(crate) worker_num: Arc<AtomicU32>,
     pub(crate) finalize_tasks: Arc<RwLock<Vec<(usize, usize)>>>,
     pub(crate) unfinished_task_num: Arc<AtomicI32>,
 }
@@ -161,6 +163,7 @@ impl JoinHashTable {
             row_ptrs: RwLock::new(vec![]),
             probe_schema: probe_data_schema,
             interrupt: Arc::new(AtomicBool::new(false)),
+            worker_num: Arc::new(AtomicU32::new(0)),
             finalize_tasks: Arc::new(RwLock::new(vec![])),
             unfinished_task_num: Arc::new(AtomicI32::new(0)),
         })

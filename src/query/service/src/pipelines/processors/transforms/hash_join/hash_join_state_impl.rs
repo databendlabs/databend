@@ -91,6 +91,7 @@ impl HashJoinState for JoinHashTable {
         *count += 1;
         let mut count = self.finalize_count.lock().unwrap();
         *count += 1;
+        self.worker_num.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
 
@@ -204,7 +205,7 @@ impl HashJoinState for JoinHashTable {
             return Ok(());
         }
 
-        let task_num = 10;
+        let task_num = self.worker_num.load(Ordering::Relaxed) as usize;
         let (task_size, task_num) = if chunks_len >= task_num {
             (chunks_len / task_num, task_num)
         } else {
@@ -337,6 +338,7 @@ impl HashJoinState for JoinHashTable {
                         (*raw_entry_ptr).length = key.len() as u32;
                         (*raw_entry_ptr).next = 0;
                         (*raw_entry_ptr).key = dst;
+                        // The size of `early` is 4.
                         std::ptr::copy_nonoverlapping(
                             key.as_ptr(),
                             (*raw_entry_ptr).early.as_mut_ptr(),

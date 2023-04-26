@@ -67,7 +67,6 @@ pub struct RawEntry<K> {
     pub row_ptr: RowPtr,
     pub key: K,
     pub next: u64,
-    pub(crate) _alignment: [u64; 0],
 }
 
 pub struct HashJoinHashTable<K: Keyable, A: Allocator + Clone = MmapAllocator> {
