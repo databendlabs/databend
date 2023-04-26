@@ -32,7 +32,6 @@ use opendal::services::Fs;
 use opendal::Operator;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_json;
 use serfig::collectors::from_file;
 use serfig::parsers::Toml;
 use storages_common_table_meta::meta::SegmentInfo;
@@ -70,7 +69,7 @@ fn convert_input_data(data: Vec<u8>, config: &InspectorConfig) -> Result<Vec<u8>
 
 fn parse_output(config: &InspectorConfig) -> Result<Box<dyn Write>> {
     let writer = if let Some(output) = &config.output {
-        let file = File::create(&output)?;
+        let file = File::create(output)?;
         Box::new(BufWriter::new(file)) as Box<dyn Write>
     } else {
         Box::new(BufWriter::new(stdout())) as Box<dyn Write>
@@ -85,7 +84,7 @@ async fn parse_input_data(config: &InspectorConfig) -> Result<Vec<u8>> {
             let op = match &config.config {
                 Some(config_file) => {
                     let mut builder: serfig::Builder<Config> = serfig::Builder::default();
-                    builder = builder.collect(from_file(Toml, &config_file));
+                    builder = builder.collect(from_file(Toml, config_file));
                     let read_config = builder.build()?;
                     let inner_config: InnerConfig = read_config.clone().try_into()?;
                     GlobalServices::init(inner_config).await?;
@@ -117,7 +116,7 @@ async fn run(config: &InspectorConfig) -> Result<()> {
 
     let mut writer = parse_output(config)?;
 
-    writer.write(&out)?;
+    writer.write_all(&out)?;
     Ok(())
 }
 
