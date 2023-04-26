@@ -316,17 +316,20 @@ impl Session {
         self.ensure_current_role().await?;
         let current_role = self.get_current_role();
         let role_verified = current_role
+            .as_ref()
             .map(|r| r.grants.verify_privilege(object, privilege.clone()))
             .unwrap_or(false);
+        let current_role_name = current_role.map(|r| r.name).unwrap_or("".to_string());
         if role_verified {
             return Ok(());
         }
 
         Err(ErrorCode::PermissionDenied(format!(
-            "Permission denied, user {} requires {:?} privilege on {}",
-            &current_user.identity(),
+            "Permission denied, privilege {:?} is required on {} for user {} with role {}",
             privilege.clone(),
-            object
+            object,
+            &current_user.identity(),
+            current_role_name,
         )))
     }
 

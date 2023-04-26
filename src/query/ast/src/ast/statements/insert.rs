@@ -18,11 +18,13 @@ use std::fmt::Formatter;
 
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
+use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct InsertStmt {
+    pub hints: Option<Hint>,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
@@ -34,6 +36,9 @@ pub struct InsertStmt {
 impl Display for InsertStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "INSERT ")?;
+        if let Some(hints) = &self.hints {
+            write!(f, "{} ", hints)?;
+        }
         if self.overwrite {
             write!(f, "OVERWRITE ")?;
         } else {

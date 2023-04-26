@@ -19,20 +19,17 @@ inputs:
   size:
     description: "Small/Medium/Large"
     required: true
-  image_tag:
-    description: "Databend image tag"
+  version:
+    description: "Databend version"
     required: true
-  cloud_email:
-    description: "Benchmark cloud email"
+  cloud_user:
+    description: "Benchmark cloud user"
     required: true
   cloud_password:
     description: "Benchmark cloud password"
     required: true
-  cloud_org:
-    description: "Benchmark cloud org"
-    required: true
-  cloud_endpoint:
-    description: "Benchmark cloud endpoint"
+  cloud_gateway:
+    description: "Benchmark cloud gateway endpoint"
     required: true
 
 runs:
@@ -50,12 +47,11 @@ runs:
         BENCHMARK_ID: ${{ inputs.run_id }}
         BENCHMARK_DATASET: ${{ inputs.dataset }}
         BENCHMARK_SIZE: ${{ inputs.size }}
-        BENCHMARK_IMAGE_TAG: ${{ inputs.image_tag }}
+        BENCHMARK_VERSION: ${{ inputs.version }}
         BENCHMARK_DATABASE: clickbench
-        CLOUD_EMAIL: ${{ inputs.cloud_email }}
+        CLOUD_USER: ${{ inputs.cloud_user }}
         CLOUD_PASSWORD: ${{ inputs.cloud_password }}
-        CLOUD_ORG: ${{ inputs.cloud_org }}
-        CLOUD_ENDPOINT: ${{ inputs.cloud_endpoint }}
+        CLOUD_GATEWAY: ${{ inputs.cloud_gateway }}
         CLOUD_WAREHOUSE: benchmark-${{ inputs.run_id }}
       shell: bash
       run: |
@@ -89,5 +85,7 @@ runs:
       if: always()
       continue-on-error: true
       shell: bash
+      env:
+        BENDSQL_DSN: "databend://${{ inputs.cloud_user }}:${{ inputs.cloud_password }}@${{ inputs.cloud_gateway }}:443"
       run: |
-        bendsql cloud warehouse delete benchmark-${{ inputs.run_id }}
+        echo "DROP WAREHOUSE IF EXISTS 'benchmark-${{ inputs.run_id }}';" | bendsql

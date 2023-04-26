@@ -11,7 +11,7 @@ echo "Running benchmark for databend local storage..."
 echo "Checking script dependencies..."
 python3 --version
 yq --version
-bendsql version
+bendsql --version
 
 killall databend-query || true
 killall databend-meta || true
@@ -40,12 +40,13 @@ echo "Waiting on databend-query 10 seconds..."
 ./wait_tcp.py --port 8000 --timeout 10
 
 # Connect to databend-query
-bendsql connect --database "${BENCHMARK_DATASET}"
-echo "CREATE DATABASE ${BENCHMARK_DATASET};" | bendsql query
+
+export BENDSQL_DSN="databend://root:@localhost:8000/${BENCHMARK_DATASET}?sslmode=disable"
+echo "CREATE DATABASE ${BENCHMARK_DATASET};" | bendsql
 
 # Load the data
 echo "Creating table for benchmark with native storage format..."
-bendsql query <"${BENCHMARK_DATASET}/create_local.sql"
+bendsql <"${BENCHMARK_DATASET}/create_local.sql"
 
 # Detect instance type with AWS metadata
 token=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
@@ -54,12 +55,12 @@ echo "Instance type: ${instance_type}"
 
 echo "Loading data..."
 load_start=$(date +%s)
-bendsql query <"${BENCHMARK_DATASET}/load.sql"
+bendsql <"${BENCHMARK_DATASET}/load.sql"
 load_end=$(date +%s)
 load_time=$(python3 -c "print($load_end - $load_start)")
 echo "Data loaded in ${load_time}s."
 
-data_size=$(echo "select sum(data_compressed_size) from system.tables where database = '${BENCHMARK_DATASET}';" | bendsql query -f unaligned -t)
+data_size=$(echo "select sum(data_compressed_size) from system.tables where database = '${BENCHMARK_DATASET}';" | bendsql -o tsv)
 
 echo '{}' >result.json
 yq -i ".date = \"$(date -u +%Y-%m-%d)\"" result.json
@@ -78,7 +79,7 @@ function run_query() {
     local q_start q_end q_time
 
     q_start=$(date +%s.%N)
-    if echo "$query" | bendsql query --format csv --rows-only >/dev/null; then
+    if echo "$query" | bendsql --output csv >/dev/null; then
         q_end=$(date +%s.%N)
         q_time=$(python3 -c "print($q_end - $q_start)")
         echo "Q${query_num}[$seq] succeeded in $q_time seconds"

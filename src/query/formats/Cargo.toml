@@ -18,6 +18,7 @@ match-template = "0.0.1"
 micromarshal = "0.4.0"
 num = "0.4.0"
 ordered-float = { workspace = true }
+roaring = { version = "0.10.1", features = ["serde"] }
 serde_json = { workspace = true }
 
 # Workspace dependencies

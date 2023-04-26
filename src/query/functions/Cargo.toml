@@ -51,6 +51,7 @@ ordered-float = { workspace = true, features = [
 ] }
 rand = { version = "0.8.5", features = ["small_rng"] }
 regex = "1.6.0"
+roaring = "0.10.1"
 serde = { workspace = true }
 sha1 = "0.10.5"
 sha2 = "0.10.6"

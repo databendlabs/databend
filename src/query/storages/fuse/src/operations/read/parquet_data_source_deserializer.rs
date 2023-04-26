@@ -22,7 +22,6 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
-use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
@@ -30,6 +29,7 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
+use super::fuse_source::fill_internal_column_meta;
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
 use crate::io::MergeIOReadResult;
@@ -163,9 +163,8 @@ impl Processor for DeserializeDataTransform {
             // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
             // `FillInternalColumnProcessor` will generate internal columns using `BlockMetaIndex` in next pipeline.
             if self.block_reader.query_internal_columns() {
-                let meta: Option<BlockMetaInfoPtr> =
-                    Some(Box::new(part.block_meta_index().unwrap().to_owned()));
-                self.output_data = Some(data_block.add_meta(meta)?);
+                let data_block = fill_internal_column_meta(data_block, part, None)?;
+                self.output_data = Some(data_block);
             } else {
                 self.output_data = Some(data_block);
             };

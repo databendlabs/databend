@@ -5,29 +5,28 @@ set -e
 BENCHMARK_ID=${BENCHMARK_ID:-$(date +%s)}
 BENCHMARK_DATASET=${BENCHMARK_DATASET:-hits}
 BENCHMARK_SIZE=${BENCHMARK_SIZE:-Medium}
-BENCHMARK_IMAGE_TAG=${BENCHMARK_IMAGE_TAG:-}
+BENCHMARK_VERSION=${BENCHMARK_VERSION:-}
 BENCHMARK_DATABASE=${BENCHMARK_DATABASE:-default}
 
-if [[ -z "${BENCHMARK_IMAGE_TAG}" ]]; then
-    echo "Please set BENCHMARK_IMAGE_TAG to run the benchmark."
+if [[ -z "${BENCHMARK_VERSION}" ]]; then
+    echo "Please set BENCHMARK_VERSION to run the benchmark."
     exit 1
 fi
 
-CLOUD_EMAIL=${CLOUD_EMAIL:-}
+CLOUD_USER=${CLOUD_USER:-}
 CLOUD_PASSWORD=${CLOUD_PASSWORD:-}
-CLOUD_ORG=${CLOUD_ORG:-}
-CLOUD_ENDPOINT=${CLOUD_ENDPOINT:-https://app.databend.com}
+CLOUD_GATEWAY=${CLOUD_GATEWAY:-}
 CLOUD_WAREHOUSE=${CLOUD_WAREHOUSE:-benchmark-${BENCHMARK_ID}}
 
-if [[ -z "${CLOUD_EMAIL}" || -z "${CLOUD_PASSWORD}" || -z "${CLOUD_ORG}" ]]; then
-    echo "Please set CLOUD_EMAIL, CLOUD_PASSWORD and CLOUD_ORG to run the benchmark."
+if [[ -z "${CLOUD_USER}" || -z "${CLOUD_PASSWORD}" || -z "${CLOUD_GATEWAY}" ]]; then
+    echo "Please set CLOUD_USER, CLOUD_PASSWORD and CLOUD_GATEWAY to run the benchmark."
     exit 1
 fi
 
 echo "Checking script dependencies..."
 python3 --version
 yq --version
-bendsql version
+bendsql --version
 
 echo "Preparing benchmark metadata..."
 echo '{}' >result.json
@@ -51,25 +50,30 @@ esac
 echo "#######################################################"
 echo "Running benchmark for Databend Cloud with S3 storage..."
 
-# Connect to databend-query
-bendsql cloud login \
-    --endpoint "${CLOUD_ENDPOINT}" \
-    --email "${CLOUD_EMAIL}" \
-    --password "${CLOUD_PASSWORD}" \
-    --org "${CLOUD_ORG}" \
-    --database "${BENCHMARK_DATABASE}"
+export BENDSQL_DSN="databend://${CLOUD_USER}:${CLOUD_PASSWORD}@${CLOUD_GATEWAY}:443/${BENCHMARK_DATABASE}?warehouse=${CLOUD_WAREHOUSE}"
 
-bendsql cloud warehouse ls
-bendsql cloud warehouse create "${CLOUD_WAREHOUSE}" --size "${BENCHMARK_SIZE}" --tag "${BENCHMARK_IMAGE_TAG}"
-bendsql cloud warehouse ls
-bendsql cloud warehouse resume "${CLOUD_WAREHOUSE}" --wait
-bendsql cloud warehouse use "${CLOUD_WAREHOUSE}"
+echo "Creating warehouse..."
+echo "DROP WAREHOUSE IF EXISTS '${CLOUD_WAREHOUSE}';" | bendsql
+echo "CREATE WAREHOUSE '${CLOUD_WAREHOUSE}' WITH version='${BENCHMARK_VERSION}' warehouse_size='${BENCHMARK_SIZE}';" | bendsql
+echo "SHOW WAREHOUSES;" | bendsql
+
+max_retry=15
+counter=0
+until bendsql --query="SHOW WAREHOUSES LIKE '${CLOUD_WAREHOUSE}'" | grep -q "Running"; do
+    if [[ $counter -gt $max_retry ]]; then
+        echo "Failed to start warehouse ${CLOUD_WAREHOUSE} in time."
+        exit 1
+    fi
+    echo "Waiting for warehouse to be ready..."
+    counter=$((counter + 1))
+    sleep 10
+done
 
 echo "Running queries..."
 
 # analyze table
 echo "Analyze table..."
-bendsql query <"${BENCHMARK_DATASET}/analyze.sql"
+bendsql <"${BENCHMARK_DATASET}/analyze.sql"
 
 function run_query() {
     local query_num=$1
@@ -79,7 +83,7 @@ function run_query() {
     local q_start q_end q_time
 
     q_start=$(date +%s.%N)
-    if echo "$query" | bendsql query --format csv --rows-only >/dev/null; then
+    if echo "$query" | bendsql --output csv >/dev/null; then
         q_end=$(date +%s.%N)
         q_time=$(python3 -c "print($q_end - $q_start)")
         echo "Q${query_num}[$seq] succeeded in $q_time seconds"
@@ -101,4 +105,4 @@ while read -r query; do
 done <"${BENCHMARK_DATASET}/queries.sql"
 
 echo "Cleaning up..."
-bendsql cloud warehouse delete "${CLOUD_WAREHOUSE}"
+echo "DROP WAREHOUSE IF EXISTS '${CLOUD_WAREHOUSE}';" | bendsql

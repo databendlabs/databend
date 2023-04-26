@@ -21,6 +21,7 @@ use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
 use crate::ast::Expr;
 use crate::ast::FileLocation;
+use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::SelectStageOptions;
 use crate::ast::WindowDefinition;
@@ -73,6 +74,7 @@ pub struct SetOperation {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SelectStmt {
     pub span: Span,
+    pub hints: Option<Hint>,
     pub distinct: bool,
     // Result set of current subquery
     pub select_list: Vec<SelectTarget>,
@@ -551,6 +553,9 @@ impl Display for SelectStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         // SELECT clause
         write!(f, "SELECT ")?;
+        if let Some(hints) = &self.hints {
+            write!(f, "{} ", hints)?;
+        }
         if self.distinct {
             write!(f, "DISTINCT ")?;
         }
