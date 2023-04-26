@@ -1,6 +1,6 @@
-.PHONY: check integration-tests integration-tests-flight-sql
+.PHONY: check build test integration
 
-default: check
+default: build
 
 check:
 	cargo fmt --all -- --check

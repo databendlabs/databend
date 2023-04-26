@@ -9,8 +9,8 @@ ${BENDSQL} <cli/tests/data/ontime.sql
 ${BENDSQL} \
     --query='INSERT INTO test_ontime VALUES;' \
     --format=csv \
-    --format-opt compression=gzip \
-    --format-opt skip_header=1 \
+    --format-opt="compression=gzip" \
+    --format-opt="skip_header=1" \
     --data=@cli/tests/data/ontime_200.csv.gz
 
 echo "SELECT COUNT(*) FROM test_ontime;" | ${BENDSQL} --output=tsv
