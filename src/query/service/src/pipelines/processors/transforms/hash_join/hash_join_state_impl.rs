@@ -111,13 +111,12 @@ impl HashJoinState for JoinHashTable {
             }
 
             // Create a fixed size hash table.
-            let capacity = (row_num * 2).next_power_of_two();
             let hashjoin_hashtable = match (*self.method).clone() {
                 HashMethodKind::Serializer(_) => {
                     self.entry_size
                         .store(std::mem::size_of::<StringRawEntry>(), Ordering::SeqCst);
                     HashJoinHashTable::Serializer(SerializerHashJoinHashTable {
-                        hash_table: StringHashJoinHashMap::with_fixed_capacity(capacity),
+                        hash_table: StringHashJoinHashMap::with_build_row_num(row_num),
                         hash_method: HashMethodSerializer::default(),
                     })
                 }
@@ -125,7 +124,7 @@ impl HashJoinState for JoinHashTable {
                     self.entry_size
                         .store(std::mem::size_of::<StringRawEntry>(), Ordering::SeqCst);
                     HashJoinHashTable::SingleString(SingleStringHashJoinHashTable {
-                        hash_table: StringHashJoinHashMap::with_fixed_capacity(capacity),
+                        hash_table: StringHashJoinHashMap::with_build_row_num(row_num),
                         hash_method: HashMethodSingleString::default(),
                     })
                 }
@@ -133,7 +132,7 @@ impl HashJoinState for JoinHashTable {
                     self.entry_size
                         .store(std::mem::size_of::<RawEntry<u8>>(), Ordering::SeqCst);
                     HashJoinHashTable::KeysU8(FixedKeyHashJoinHashTable {
-                        hash_table: HashJoinHashMap::<u8>::with_fixed_capacity(capacity),
+                        hash_table: HashJoinHashMap::<u8>::with_build_row_num(row_num),
                         hash_method,
                     })
                 }
@@ -141,7 +140,7 @@ impl HashJoinState for JoinHashTable {
                     self.entry_size
                         .store(std::mem::size_of::<RawEntry<u16>>(), Ordering::SeqCst);
                     HashJoinHashTable::KeysU16(FixedKeyHashJoinHashTable {
-                        hash_table: HashJoinHashMap::<u16>::with_fixed_capacity(capacity),
+                        hash_table: HashJoinHashMap::<u16>::with_build_row_num(row_num),
                         hash_method,
                     })
                 }
@@ -149,7 +148,7 @@ impl HashJoinState for JoinHashTable {
                     self.entry_size
                         .store(std::mem::size_of::<RawEntry<u32>>(), Ordering::SeqCst);
                     HashJoinHashTable::KeysU32(FixedKeyHashJoinHashTable {
-                        hash_table: HashJoinHashMap::<u32>::with_fixed_capacity(capacity),
+                        hash_table: HashJoinHashMap::<u32>::with_build_row_num(row_num),
                         hash_method,
                     })
                 }
@@ -157,7 +156,7 @@ impl HashJoinState for JoinHashTable {
                     self.entry_size
                         .store(std::mem::size_of::<RawEntry<u64>>(), Ordering::SeqCst);
                     HashJoinHashTable::KeysU64(FixedKeyHashJoinHashTable {
-                        hash_table: HashJoinHashMap::<u64>::with_fixed_capacity(capacity),
+                        hash_table: HashJoinHashMap::<u64>::with_build_row_num(row_num),
                         hash_method,
                     })
                 }
@@ -165,7 +164,7 @@ impl HashJoinState for JoinHashTable {
                     self.entry_size
                         .store(std::mem::size_of::<RawEntry<u128>>(), Ordering::SeqCst);
                     HashJoinHashTable::KeysU128(FixedKeyHashJoinHashTable {
-                        hash_table: HashJoinHashMap::<u128>::with_fixed_capacity(capacity),
+                        hash_table: HashJoinHashMap::<u128>::with_build_row_num(row_num),
                         hash_method,
                     })
                 }
@@ -173,7 +172,7 @@ impl HashJoinState for JoinHashTable {
                     self.entry_size
                         .store(std::mem::size_of::<RawEntry<U256>>(), Ordering::SeqCst);
                     HashJoinHashTable::KeysU256(FixedKeyHashJoinHashTable {
-                        hash_table: HashJoinHashMap::<U256>::with_fixed_capacity(capacity),
+                        hash_table: HashJoinHashMap::<U256>::with_build_row_num(row_num),
                         hash_method,
                     })
                 }

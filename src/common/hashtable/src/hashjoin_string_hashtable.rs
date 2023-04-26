@@ -42,7 +42,8 @@ unsafe impl<A: Allocator + Clone + Send> Send for HashJoinStringHashTable<A> {}
 unsafe impl<A: Allocator + Clone + Sync> Sync for HashJoinStringHashTable<A> {}
 
 impl<A: Allocator + Clone + Default> HashJoinStringHashTable<A> {
-    pub fn with_fixed_capacity(capacity: usize) -> Self {
+    pub fn with_build_row_num(row_num: usize) -> Self {
+        let capacity = std::cmp::max((row_num * 2).next_power_of_two(), 1 << 10);
         let mut hashtable = Self {
             pointers: unsafe {
                 Box::new_zeroed_slice_in(capacity, Default::default()).assume_init()
@@ -71,10 +72,10 @@ impl<A: Allocator + Clone + Default> HashJoinStringHashTable<A> {
                     Ordering::SeqCst,
                 )
             };
-            if res.is_ok() {
-                break;
-            }
-            head = unsafe { (*self.atomic_pointers.add(index)).load(Ordering::Relaxed) };
+            match res {
+                Ok(_) => break,
+                Err(x) => head = x,
+            };
         }
     }
 }

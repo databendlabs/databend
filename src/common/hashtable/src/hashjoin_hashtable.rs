@@ -81,7 +81,8 @@ unsafe impl<K: Keyable + Send, A: Allocator + Clone + Send> Send for HashJoinHas
 unsafe impl<K: Keyable + Sync, A: Allocator + Clone + Sync> Sync for HashJoinHashTable<K, A> {}
 
 impl<K: Keyable, A: Allocator + Clone + Default> HashJoinHashTable<K, A> {
-    pub fn with_fixed_capacity(capacity: usize) -> Self {
+    pub fn with_build_row_num(row_num: usize) -> Self {
+        let capacity = std::cmp::max((row_num * 2).next_power_of_two(), 1 << 10);
         let mut hashtable = Self {
             pointers: unsafe {
                 Box::new_zeroed_slice_in(capacity, Default::default()).assume_init()
@@ -111,10 +112,10 @@ impl<K: Keyable, A: Allocator + Clone + Default> HashJoinHashTable<K, A> {
                     Ordering::SeqCst,
                 )
             };
-            if res.is_ok() {
-                break;
-            }
-            head = unsafe { (*self.atomic_pointers.add(index)).load(Ordering::Relaxed) };
+            match res {
+                Ok(_) => break,
+                Err(x) => head = x,
+            };
         }
     }
 }
