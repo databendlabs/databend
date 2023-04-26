@@ -14,6 +14,7 @@
 
 pub mod any;
 pub mod array;
+pub mod bitmap;
 pub mod boolean;
 pub mod date;
 pub mod decimal;
@@ -39,6 +40,7 @@ use serde::Serialize;
 
 pub use self::any::AnyType;
 pub use self::array::ArrayType;
+pub use self::bitmap::BitmapType;
 pub use self::boolean::BooleanType;
 pub use self::date::DateType;
 pub use self::decimal::DecimalDataType;
@@ -75,6 +77,7 @@ pub enum DataType {
     Nullable(Box<DataType>),
     Array(Box<DataType>),
     Map(Box<DataType>),
+    Bitmap,
     Tuple(Vec<DataType>),
     Variant,
     Generic(usize),
@@ -174,6 +177,7 @@ impl DataType {
         }
     }
 
+    #[inline]
     pub fn is_decimal(&self) -> bool {
         matches!(self, DataType::Decimal(_ty))
     }

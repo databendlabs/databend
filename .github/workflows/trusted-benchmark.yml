@@ -235,7 +235,6 @@ jobs:
           state: pending
           description: "Running"
       - uses: ./.github/actions/benchmark_cloud
-        continue-on-error: true
         timeout-minutes: 60
         id: benchmark
         with:
@@ -245,11 +244,10 @@ jobs:
           source: ${{ needs.metadata.outputs.source }}
           source_id: ${{ needs.metadata.outputs.source_id }}
           size: ${{ matrix.size }}
-          image_tag: ${{ needs.docker.outputs.tag }}
-          cloud_email: ${{ secrets.BENCHMARK_CLOUD_EMAIL }}
+          version: ${{ needs.docker.outputs.tag }}
+          cloud_user: ${{ secrets.BENCHMARK_CLOUD_USER }}
           cloud_password: ${{ secrets.BENCHMARK_CLOUD_PASSWORD }}
-          cloud_org: ${{ secrets.BENCHMARK_CLOUD_ORG }}
-          cloud_endpoint: ${{ secrets.BENCHMARK_CLOUD_ENDPOINT }}
+          cloud_gateway: ${{ secrets.BENCHMARK_CLOUD_GATEWAY }}
       - name: Set github check status to pending
         if: needs.metadata.outputs.source == 'pr'
         uses: ./.github/actions/create_check_status
