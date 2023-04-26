@@ -154,6 +154,8 @@ fn test_statement() {
         r#"select 1 from numbers(1) where ((1 = 1) or 1)"#,
         r#"select * from read_parquet('p1', 'p2', 'p3', prune_page => true, refresh_meta_cache => true);"#,
         r#"select 'stringwith''quote'''"#,
+        r#"select 'stringwith"doublequote'"#,
+        r#"select '🦈'"#,
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into table t format json;"#,
         r#"insert into table t select * from t2;"#,

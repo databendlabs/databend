@@ -5973,7 +5973,7 @@ Query(
 ---------- Input ----------
 select 'stringwith''quote'''
 ---------- Output ---------
-SELECT 'stringwith'quote''
+SELECT 'stringwith\'quote\''
 ---------- AST ------------
 Query(
     Query {
@@ -5995,6 +5995,96 @@ Query(
                             ),
                             lit: String(
                                 "stringwith'quote'",
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select 'stringwith"doublequote'
+---------- Output ---------
+SELECT 'stringwith"doublequote'
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..31,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..31,
+                ),
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                7..31,
+                            ),
+                            lit: String(
+                                "stringwith\"doublequote",
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select '🦈'
+---------- Output ---------
+SELECT '🦈'
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..13,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..13,
+                ),
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                7..13,
+                            ),
+                            lit: String(
+                                "🦈",
                             ),
                         },
                         alias: None,

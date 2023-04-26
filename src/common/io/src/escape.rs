@@ -18,6 +18,10 @@ fn hex_safe(n: u8) -> char {
 }
 
 pub fn escape_string(s: &str) -> String {
+    escape_string_with_quote(s, None)
+}
+
+pub fn escape_string_with_quote(s: &str, quote: Option<char>) -> String {
     let chars = s.chars().peekable();
     let mut s = String::new();
 
@@ -26,8 +30,8 @@ pub fn escape_string(s: &str) -> String {
             '\t' => s.push_str("\\t"),
             '\r' => s.push_str("\\r"),
             '\n' => s.push_str("\\n"),
-            '\'' => s.push_str("\\\'"),
-            '"' => s.push_str("\\\""),
+            '\'' => s.push_str(if quote == Some('\'') { "\\\'" } else { "\'" }),
+            '"' => s.push_str(if quote == Some('"') { "\\\"" } else { "\"" }),
             '\\' => s.push_str("\\\\"),
             '\x00'..='\x1F' => {
                 s.push('\\');
