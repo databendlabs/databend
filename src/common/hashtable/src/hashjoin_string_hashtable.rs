@@ -22,10 +22,11 @@ use super::traits::HashJoinHashtableLike;
 use crate::traits::FastHash;
 use crate::RowPtr;
 
+pub const STRING_EARLY_SIZE: usize = 4;
 pub struct StringRawEntry {
     pub row_ptr: RowPtr,
     pub length: u32,
-    pub early: [u8; 4],
+    pub early: [u8; STRING_EARLY_SIZE],
     pub key: *mut u8,
     pub next: u64,
 }
@@ -92,7 +93,10 @@ where A: Allocator + Clone + 'static
             }
             let raw_entry = unsafe { &*(raw_entry_ptr as *mut StringRawEntry) };
             // Compare `early` and the length of the string, the size of `early` is 4.
-            let min_len = std::cmp::min(4, std::cmp::min(key_ref.len(), raw_entry.length as usize));
+            let min_len = std::cmp::min(
+                STRING_EARLY_SIZE,
+                std::cmp::min(key_ref.len(), raw_entry.length as usize),
+            );
             if raw_entry.length as usize == key_ref.len()
                 && key_ref[0..min_len] == raw_entry.early[0..min_len]
             {
@@ -127,7 +131,7 @@ where A: Allocator + Clone + 'static
             }
             let raw_entry = unsafe { &*(raw_entry_ptr as *mut StringRawEntry) };
             // Compare `early` and the length of the string, the size of `early` is 4.
-            let min_len = std::cmp::min(4, key_ref.len());
+            let min_len = std::cmp::min(STRING_EARLY_SIZE, key_ref.len());
             if raw_entry.length as usize == key_ref.len()
                 && key_ref[0..min_len] == raw_entry.early[0..min_len]
             {
@@ -173,7 +177,8 @@ where A: Allocator + Clone + 'static
                 break;
             }
             let raw_entry = unsafe { &*(incomplete_ptr as *mut StringRawEntry) };
-            let min_len = std::cmp::min(4, key_ref.len());
+            // Compare `early` and the length of the string, the size of `early` is 4.
+            let min_len = std::cmp::min(STRING_EARLY_SIZE, key_ref.len());
             if raw_entry.length as usize == key_ref.len()
                 && key_ref[0..min_len] == raw_entry.early[0..min_len]
             {

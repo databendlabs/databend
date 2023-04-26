@@ -101,6 +101,7 @@ pub use hashjoin_hashtable::MarkerKind;
 pub use hashjoin_hashtable::RawEntry;
 pub use hashjoin_hashtable::RowPtr;
 pub use hashjoin_string_hashtable::StringRawEntry;
+pub use hashjoin_string_hashtable::STRING_EARLY_SIZE;
 pub use keys_ref::KeysRef;
 pub use partitioned_hashtable::hash2bucket;
 pub type HashJoinHashMap<K> = hashjoin_hashtable::HashJoinHashTable<K>;

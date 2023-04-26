@@ -31,6 +31,7 @@ use common_hashtable::RawEntry;
 use common_hashtable::RowPtr;
 use common_hashtable::StringHashJoinHashMap;
 use common_hashtable::StringRawEntry;
+use common_hashtable::STRING_EARLY_SIZE;
 use ethnum::U256;
 
 use super::ProbeState;
@@ -342,7 +343,7 @@ impl HashJoinState for JoinHashTable {
                         std::ptr::copy_nonoverlapping(
                             key.as_ptr(),
                             (*raw_entry_ptr).early.as_mut_ptr(),
-                            std::cmp::min(4, key.len()),
+                            std::cmp::min(STRING_EARLY_SIZE, key.len()),
                         );
                         std::ptr::copy_nonoverlapping(key.as_ptr(), dst, key.len());
                     }
