@@ -102,7 +102,7 @@ impl BlockPruner {
                 &self.pruning_ctx.ctx.get_function_context()?,
                 BLOCK_NAME,
                 block_name_col,
-                &filter,
+                filter,
             )?;
 
             if res.unset_bits() == res.len() {
@@ -280,7 +280,7 @@ impl BlockPruner {
                 &self.pruning_ctx.ctx.get_function_context()?,
                 BLOCK_NAME,
                 block_name_col,
-                &filter,
+                filter,
             )?;
 
             if res.unset_bits() == res.len() {

@@ -244,7 +244,7 @@ pub(super) fn eval_filters_with_one_column(
 ) -> Result<Bitmap> {
     let num_rows = col.len();
     let block = DataBlock::new_from_columns(vec![col]);
-    let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
+    let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
     let expr = filters
         .as_expr(&BUILTIN_FUNCTIONS)
         .project_column_ref(|name| {
