@@ -26,6 +26,7 @@ use crate::ast::Identifier;
 use crate::input::Input;
 use crate::input::WithSpan;
 use crate::parser::token::*;
+use crate::parser::unescape::unescape;
 use crate::rule;
 use crate::Error;
 use crate::ErrorKind;
@@ -105,10 +106,18 @@ fn quoted_identifier(i: Input) -> IResult<Identifier> {
             .filter(|c| i.1.is_ident_quote(*c))
             .is_some()
         {
+            let quote = token.text().chars().next().unwrap();
             Ok((i2, Identifier {
                 span: transform_span(&[token.clone()]),
-                name: token.text()[1..token.text().len() - 1].to_string(),
-                quote: Some(token.text().chars().next().unwrap()),
+                name: unescape(&token.text()[1..token.text().len() - 1], quote).ok_or_else(
+                    || {
+                        nom::Err::Error(Error::from_error_kind(
+                            i,
+                            ErrorKind::Other("invalid escape or unicode"),
+                        ))
+                    },
+                )?,
+                quote: Some(quote),
             }))
         } else {
             Err(nom::Err::Error(Error::from_error_kind(
@@ -132,28 +141,7 @@ fn non_reserved_identifier(
                     quote: None,
                 },
             ),
-            move |i| {
-                match_token(QuotedString)(i).and_then(|(i2, token)| {
-                    if token
-                        .text()
-                        .chars()
-                        .next()
-                        .filter(|c| i.1.is_ident_quote(*c))
-                        .is_some()
-                    {
-                        Ok((i2, Identifier {
-                            span: transform_span(&[token.clone()]),
-                            name: token.text()[1..token.text().len() - 1].to_string(),
-                            quote: Some(token.text().chars().next().unwrap()),
-                        }))
-                    } else {
-                        Err(nom::Err::Error(Error::from_error_kind(
-                            i,
-                            ErrorKind::ExpectToken(Ident),
-                        )))
-                    }
-                })
-            },
+            quoted_identifier,
         ))(i)
     }
 }
