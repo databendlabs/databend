@@ -25,6 +25,7 @@ use pratt::Precedence;
 use crate::ast::Identifier;
 use crate::input::Input;
 use crate::input::WithSpan;
+use crate::parser::quote::unquote_ident;
 use crate::parser::token::*;
 use crate::parser::unescape::unescape;
 use crate::rule;
@@ -109,14 +110,7 @@ fn quoted_identifier(i: Input) -> IResult<Identifier> {
             let quote = token.text().chars().next().unwrap();
             Ok((i2, Identifier {
                 span: transform_span(&[token.clone()]),
-                name: unescape(&token.text()[1..token.text().len() - 1], quote).ok_or_else(
-                    || {
-                        nom::Err::Error(Error::from_error_kind(
-                            i,
-                            ErrorKind::Other("invalid escape or unicode"),
-                        ))
-                    },
-                )?,
+                name: unquote_ident(&token.text()[1..token.text().len() - 1], quote),
                 quote: Some(quote),
             }))
         } else {

@@ -12,18 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub fn quote_ident(ident: &str) -> String {
+pub fn quote_ident(ident: &str, quote: char) -> String {
     if !need_quote_ident(ident) {
         return ident.to_string();
     }
 
     let mut s = String::with_capacity(ident.len() + 2);
     for c in ident.chars().peekable() {
-        if c == '"' {
-            s.push('"');
+        if c == quote {
+            s.push(quote);
         }
         s.push(c);
     }
+    s
+}
+
+pub fn unquote_ident(quoted: &str, quote: char) -> String {
+    if quoted.len() < 2 {
+        return quoted.to_string();
+    }
+
+    let mut chars = quoted.chars().peekable();
+    let mut s = String::with_capacity(quoted.len());
+    while let Some(c) = chars.next() {
+        if c == quote {
+            if chars.peek() == Some(&quote) {
+                chars.next();
+            }
+        }
+        s.push(c);
+    }
+    s
 }
 
 fn need_quote_ident(ident: &str) -> bool {
