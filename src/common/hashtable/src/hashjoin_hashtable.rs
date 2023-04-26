@@ -103,7 +103,6 @@ impl<K: Keyable, A: Allocator + Clone + Default> HashJoinHashTable<K, A> {
         // `index` is less than the capacity of hash table.
         let mut head = unsafe { (*self.atomic_pointers.add(index)).load(Ordering::Relaxed) };
         loop {
-            unsafe { (*raw_entry_ptr).next = head };
             let res = unsafe {
                 (*self.atomic_pointers.add(index)).compare_exchange_weak(
                     head,
@@ -117,6 +116,7 @@ impl<K: Keyable, A: Allocator + Clone + Default> HashJoinHashTable<K, A> {
                 Err(x) => head = x,
             };
         }
+        unsafe { (*raw_entry_ptr).next = head };
     }
 }
 
