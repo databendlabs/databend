@@ -67,7 +67,7 @@ eric             12776   0.0  0.3 408654368  24848 s003  S     2:15pm   0:00.06 
 
 ### Step 3. Connecting to Databend
 
-To establish a connection with Databend, you'll use the bendsql CLI tool in this step. For instructions on how to install and operate bendsql, see [bendsql](../11-integrations/30-access-tool/01-bendsql.md).
+To establish a connection with Databend, you'll use the BendSQL CLI tool in this step. For instructions on how to install and operate BendSQL, see [BendSQL](../11-integrations/30-access-tool/01-bendsql.md).
 
 1. To establish a connection with a local Databend, execute the following command:
 
@@ -168,7 +168,7 @@ Please be aware that the command above also creates a SQL user (databend/databen
 
 ### Step 3. Connecting to Databend
 
-To establish a connection with Databend, you'll use the bendsql CLI tool in this step. For instructions on how to install and operate bendsql, see [bendsql](../11-integrations/30-access-tool/01-bendsql.md).
+To establish a connection with Databend, you'll use the BendSQL CLI tool in this step. For instructions on how to install and operate BendSQL, see [BendSQL](../11-integrations/30-access-tool/01-bendsql.md).
 
 1. To establish a connection with Databend using the SQL user (databend/databend), run the following command:
 
@@ -178,7 +178,7 @@ Connected to Databend on Host: localhost
 Version: DatabendQuery v1.0.26-nightly-d9b7f4a8080b54d2b4c4a515296ee7557fc135f1(rust-1.70.0-nightly-2023-03-21T04:39:27.097687988Z)
 ```
 
-2. To verify the deployment, you can create a table and insert some data with bendsql:
+2. To verify the deployment, you can create a table and insert some data with BendSQL:
 
 ```shell
 (base) eric@Erics-iMac Downloads % bendsql query

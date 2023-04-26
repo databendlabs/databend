@@ -279,6 +279,8 @@ pub enum TokenKind {
     BIGINT,
     #[token("BINARY", ignore(ascii_case))]
     BINARY,
+    #[token("BITMAP", ignore(ascii_case))]
+    BITMAP,
     #[token("BOOL", ignore(ascii_case))]
     BOOL,
     #[token("BOOLEAN", ignore(ascii_case))]

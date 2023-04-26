@@ -23,6 +23,7 @@ use common_io::display_decimal_128;
 use common_io::display_decimal_256;
 use itertools::Itertools;
 use num_traits::FromPrimitive;
+use roaring::RoaringTreemap;
 use rust_decimal::Decimal;
 use rust_decimal::RoundingStrategy;
 
@@ -138,6 +139,10 @@ impl<'a> Debug for ScalarRef<'a> {
                 }
                 write!(f, "}}")
             }
+            ScalarRef::Bitmap(bits) => {
+                let rb = RoaringTreemap::deserialize_from(*bits).unwrap();
+                write!(f, "{rb:?}")
+            }
             ScalarRef::Tuple(fields) => {
                 write!(f, "(")?;
                 for (i, field) in fields.iter().enumerate() {
@@ -170,6 +175,7 @@ impl Debug for Column {
             Column::Date(col) => write!(f, "{col:?}"),
             Column::Array(col) => write!(f, "{col:?}"),
             Column::Map(col) => write!(f, "{col:?}"),
+            Column::Bitmap(col) => write!(f, "{col:?}"),
             Column::Nullable(col) => write!(f, "{col:?}"),
             Column::Tuple(fields) => f.debug_tuple("Tuple").field(fields).finish(),
             Column::Variant(col) => write!(f, "{col:?}"),
@@ -211,6 +217,10 @@ impl<'a> Display for ScalarRef<'a> {
                     write!(f, "{value}")?;
                 }
                 write!(f, "}}")
+            }
+            ScalarRef::Bitmap(bits) => {
+                let rb = RoaringTreemap::deserialize_from(*bits).unwrap();
+                write!(f, "{rb:?}")
             }
             ScalarRef::Tuple(fields) => {
                 write!(f, "(")?;
@@ -444,6 +454,7 @@ impl Display for DataType {
                 }
                 _ => unreachable!(),
             },
+            DataType::Bitmap => write!(f, "Bitmap"),
             DataType::Tuple(tys) => {
                 write!(f, "Tuple(")?;
                 for (i, ty) in tys.iter().enumerate() {
@@ -486,6 +497,7 @@ impl Display for TableDataType {
                 }
                 _ => unreachable!(),
             },
+            TableDataType::Bitmap => write!(f, "Bitmap"),
             TableDataType::Tuple {
                 fields_name,
                 fields_type,

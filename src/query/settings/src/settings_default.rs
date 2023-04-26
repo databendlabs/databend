@@ -243,6 +243,11 @@ impl DefaultSettings {
                     desc: "Enable lazy materialization and set the limit threshold of Top-N queries. Set the value to 0 to disable this setting.",
                     possible_values: None,
                 }),
+                ("parquet_read_whole_file_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Parquet file with smaller size will be read as a whole file, instead of column by column.",
+                    possible_values: None,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
