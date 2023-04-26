@@ -20,6 +20,8 @@
 #![feature(maybe_uninit_slice)]
 #![feature(trusted_len)]
 
+extern crate core;
+
 mod container;
 mod hashtable;
 mod keys_ref;

@@ -234,8 +234,10 @@ impl HashMethod for HashMethodSerializer {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct HashMethodDictionarySerializer {}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HashMethodDictionarySerializer {
+    pub dict_keys: usize,
+}
 
 impl HashMethod for HashMethodDictionarySerializer {
     type HashKey = DictionaryKeys;

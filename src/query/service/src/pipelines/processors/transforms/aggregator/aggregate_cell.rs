@@ -17,6 +17,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_functions::aggregates::StateAddr;
+use common_hashtable::FastHash;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 

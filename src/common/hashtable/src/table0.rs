@@ -128,7 +128,6 @@ where
         for i in (index..self.entries.len()).chain(0..index) {
             assume(i < self.entries.len());
             if self.entries[i].is_zero() {
-                println!("is zero");
                 return None;
             }
 

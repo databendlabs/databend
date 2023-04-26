@@ -81,13 +81,13 @@ pub fn serialize_group_by<Method: HashMethodBounds>(
 ) -> Result<DataBlock> {
     let keys_len = payload.cell.hashtable.len();
     let value_size = estimated_key_size(&payload.cell.hashtable);
-    let mut group_key_builder = method.keys_column_builder(keys_len, value_size);
+    let mut group_key_builder = method.keys_column_builder::<()>(keys_len, value_size);
 
     for group_entity in payload.cell.hashtable.iter() {
         group_key_builder.append_value(group_entity.key());
     }
 
     Ok(DataBlock::new_from_columns(vec![
-        group_key_builder.finish(),
+        group_key_builder.finish(&payload.cell.hashtable),
     ]))
 }

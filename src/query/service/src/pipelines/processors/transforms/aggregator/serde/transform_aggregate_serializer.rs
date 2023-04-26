@@ -99,7 +99,7 @@ pub fn serialize_aggregate<Method: HashMethodBounds>(
         .map(|_| StringColumnBuilder::with_capacity(keys_len, keys_len * 4))
         .collect::<Vec<_>>();
 
-    let mut group_key_builder = method.keys_column_builder(keys_len, value_size);
+    let mut group_key_builder = method.keys_column_builder::<usize>(keys_len, value_size);
 
     for group_entity in payload.cell.hashtable.iter() {
         let place = Into::<StateAddr>::into(*group_entity.get());
@@ -119,6 +119,6 @@ pub fn serialize_aggregate<Method: HashMethodBounds>(
         columns.push(Column::String(builder.build()));
     }
 
-    columns.push(group_key_builder.finish());
+    columns.push(group_key_builder.finish(&payload.cell.hashtable));
     Ok(DataBlock::new_from_columns(columns))
 }
