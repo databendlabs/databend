@@ -3,37 +3,38 @@ title: "COPY INTO <table>"
 sidebar_label: "COPY INTO <table>"
 ---
 
-The `COPY INTO` command in Databend enables data to be loaded from files in multiple locations.
+The `COPY INTO` command in Databend allows you to load data from files located in multiple locations. This is the recommended method for loading a large amount of data into Databend.
 
-One of its key features is that it provides idempotency by keeping track of files that have already been processed for a default period of 7 days.
+One of its key features is that it provides idempotency by keeping track of files that have already been processed for a default period of 7 days, you can customize this behavior using the `load_file_metadata_expire_hours` global setting.
 
-This behavior can be customized using the `load_file_metadata_expire_hours` global setting.
-
-See Also: [COPY INTO location](dml-copy-into-location.md)
-
-## Supported File Locations
-
-Your data files must be located in one of these locations for COPY INTO to work:
-
-- **Named internal stage**: Databend internal named stages. Files can be staged using the [PUT to Stage](../../11-integrations/00-api/10-put-to-stage.md) API.
-- **Named external stage**: Stages created in [Supported Object Storage Solutions](../../10-deploy/00-understanding-deployment-modes.md#supported-object-storage-solutions).
-- **External location**:
-  - Buckets created in [Supported Object Storage Solutions](../../10-deploy/00-understanding-deployment-modes.md#supported-object-storage-solutions).
+The files must already be staged in one of the following locations:
+- Named internal stage.
+- Named external stage that references an external location (Amazon S3-compatible Storage, Google Cloud Storage, or Microsoft Azure).
+- External location:
+  - Buckets created in `Supported Object Storage Solutions`.
   - Remote servers from where you can access the files by their URL (starting with "https://...").
   - [IPFS](https://ipfs.tech).
 
 ## Syntax
 
 ```sql
+/* Standard data load */
 COPY INTO [<database>.]<table_name>
-FROM { internalStage | externalStage | externalLocation }
+     FROM { internalStage | externalStage | externalLocation }
 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
 [ PATTERN = '<regex_pattern>' ]
-[ FILE_FORMAT = ( TYPE = { CSV | TSV | NDJSON | PARQUET | XML} [ formatTypeOptions ] ) ]
+[ FILE_FORMAT = ( TYPE = { CSV | TSV | NDJSON | PARQUET} [ formatTypeOptions ] ) ]
+[ copyOptions ]
+
+/* Data load with transformation(Only support Parquet format) */
+COPY INTO [<database>.]<table_name> [ ( <col_name> [ , <col_name> ... ] ) ]
+     FROM ( SELECT [<file_col> ... ]
+            FROM { internalStage | externalStage } )
+[ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+[ PATTERN = '<regex_pattern>' ]
+[ FILE_FORMAT = ( TYPE = {PARQUET} [ formatTypeOptions ] ) ]
 [ copyOptions ]
 ```
-
-Where:
 
 ### internalStage
 
@@ -77,7 +78,7 @@ externalLocation ::=
   )
 ```
 
-:::note
+:::info
 To access your Amazon S3 buckets, you can use one of two methods: providing AWS access keys and secrets, or specifying an AWS IAM role and external ID for authentication. 
 
 By specifying an AWS IAM role and external ID, you can provide more granular control over which S3 buckets a user can access. This means that if the IAM role has been granted permissions to access only specific S3 buckets, then the user will only be able to access those buckets. An external ID can further enhance security by providing an additional layer of verification. For more information, see https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-role.html
@@ -187,7 +188,7 @@ externalLocation ::=
 
 ### FILES = ( 'file1' [ , 'file2' ... ] )
 
-Specifies a list of one or more files names (separated by commas) to be loaded.
+Specify a list of one or more files names (separated by commas) to be loaded.
 
 ### PATTERN = 'regex_pattern'
 
@@ -199,7 +200,7 @@ See [Input & Output File Formats](../../13-sql-reference/50-file-format-options.
 
 ### copyOptions
 
-```
+```sql
 copyOptions ::=
   [ SIZE_LIMIT = <num> ]
   [ PURGE = <bool> ]
@@ -214,140 +215,171 @@ copyOptions ::=
 | FORCE      | Defaults to `False` meaning the command will skip duplicate files in the stage when copying data. If `True`, duplicate files will not be skipped.       | Optional |
 | ON_ERROR   | Provides options to handle a file containing errors. Select `continue` to skip the file and continue, or `abort` (default) to abort the load operation. | Optional |
 
-:::note
+:::info
 The parameter ON_ERROR currently does not work for parquet files.
 :::
 
 ## Examples
 
-### Loading Data from an Internal Stage
+### 1. Loading Data from an Internal Stage
 
 ```sql
-COPY INTO mytable FROM @my_internal_s1 pattern = 'books.*parquet' FILE_FORMAT = (TYPE = PARQUET);
+COPY INTO mytable
+FROM @my_internal_s1
+PATTERN = '.*[.]parquet'
+FILE_FORMAT = (TYPE = PARQUET);
 ```
 
-### Loading Data from an External Stage
+### 2. Loading Data from an External Stage
 
 ```sql
-COPY INTO mytable FROM @my_external_s1 pattern = 'books.*parquet' FILE_FORMAT = (TYPE = PARQUET);
+COPY INTO mytable
+FROM @my_external_s1
+PATTERN = 'books.*parquet'
+FILE_FORMAT = (TYPE = PARQUET);
 ```
 
-### Loading Data from External Locations
+```sql
+COPY INTO mytable
+FROM @my_external_s1
+PATTERN = '.*[.]parquet'
+FILE_FORMAT = (TYPE = PARQUET);
+```
 
-**AWS S3 compatible object storage services**
+### 3. Loading Data from External Locations
+
+<Tabs groupId="external-example">
+
+<TabItem value="AWS S3-compatible Storage" label="AWS S3-compatible Storage">
 
 This example reads 10 rows from a CSV file and inserts them into a table:
 
 ```sql
 -- Authenticated by AWS access keys and secrets.
 COPY INTO mytable
-  FROM 's3://mybucket/data.csv'
-  CONNECTION = (
-        ENDPOINT_URL = 'https://<endpoint-URL>'
-        ACCESS_KEY_ID = '<your-access-key-ID>'
-        SECRET_ACCESS_KEY = '<your-secret-access-key>')
-  FILE_FORMAT = (type = CSV field_delimiter = ','  record_delimiter = '\n' skip_header = 1) size_limit=10;
-
--- Authenticated by AWS IAM role and external ID.
-COPY INTO mytable
-  FROM 's3://mybucket/data.csv'
-  CONNECTION = (
-        ENDPOINT_URL = 'https://<endpoint-URL>'
-        ROLE_ARN = 'arn:aws:iam::123456789012:role/my_iam_role'
-        EXTERNAL_ID = '123456')
-  FILE_FORMAT = (type = csv field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10;
-```
-
-This example reads 10 rows from a CSV file compressed as GZIP and inserts them into a table:
-
-```sql
-COPY INTO mytable
-  FROM 's3://mybucket/data.csv.gz'
-  CONNECTION = (
-        ENDPOINT_URL = 'https://<endpoint-URL>'
-        ACCESS_KEY_ID = '<your-access-key-ID>'
-        SECRET_ACCESS_KEY = '<your-secret-access-key>')
-  FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1 compression = 'GZIP') size_limit=10;
+FROM 's3://mybucket/data.csv'
+CONNECTION = (
+    ENDPOINT_URL = 'https://<endpoint-URL>',
+    ACCESS_KEY_ID = '<your-access-key-ID>',
+    SECRET_ACCESS_KEY = '<your-secret-access-key>'
+)
+FILE_FORMAT = (type = CSV, field_delimiter = ',', record_delimiter = '\n', skip_header = 1)
+SIZE_LIMIT = 10;
 ```
 
 This example loads data from a CSV file without specifying the endpoint URL:
 
 ```sql
 COPY INTO mytable
-  FROM 's3://mybucket/data.csv'
-  FILE_FORMAT = (type = CSV field_delimiter = ','  record_delimiter = '\n' skip_header = 1) size_limit=10;
+FROM 's3://mybucket/data.csv'
+FILE_FORMAT = (type = CSV, field_delimiter = ',', record_delimiter = '\n', skip_header = 1)
+SIZE_LIMIT = 10;
 ```
 
-This is an example loading data from a `Parquet` file:
+</TabItem>
 
-```sql
-COPY INTO mytable
-  FROM 's3://mybucket/data.parquet'
-  CONNECTION = (
-      ACCESS_KEY_ID = '<your-access-key-ID>'
-      SECRET_ACCESS_KEY = '<your-secret-access-key>')
-  FILE_FORMAT = (TYPE = PARQUET);
-```
-
-**Azure Blob storage**
+<TabItem value="Azure Blob Storage" label="Azure Blob Storage">
 
 This example reads data from a CSV file and inserts it into a table:
 
 ```sql
 COPY INTO mytable
-    FROM 'azblob://mybucket/data.csv'
-    CONNECTION = (
-        ENDPOINT_URL = 'https://<account_name>.blob.core.windows.net'
-        ACCOUNT_NAME = '<account_name>'
-        ACCOUNT_KEY = '<account_key>'
-    )
-    FILE_FORMAT = (type = CSV);
+FROM 'azblob://mybucket/data.csv'
+CONNECTION = (
+    ENDPOINT_URL = 'https://<account_name>.blob.core.windows.net',
+    ACCOUNT_NAME = '<account_name>',
+    ACCOUNT_KEY = '<account_key>'
+)
+FILE_FORMAT = (type = CSV);
 ```
+</TabItem>
 
-**Remote Files**
+<TabItem value="Remote Files" label="Remote Files">
 
 As shown in this example, data is loaded from three remote CSV files, but a file will be skipped if it contains errors:
 
 ```sql
 COPY INTO mytable
-    FROM 'https://repo.databend.rs/dataset/stateful/ontime_200{6,7,8}_200.csv'
-    FILE_FORMAT = (type = CSV) ON_ERROR=continue;
+FROM 'https://repo.databend.rs/dataset/stateful/ontime_200{6,7,8}_200.csv'
+FILE_FORMAT = (type = CSV)
+ON_ERROR = continue;
 ```
+</TabItem>
 
-**IPFS**
+<TabItem value="IPFS Files" label="IPFS Files">
 
 This example reads data from a CSV file on IPFS and inserts it into a table:
 
 ```sql
 COPY INTO mytable
-    FROM 'ipfs://<your-ipfs-hash>' connection = (endpoint_url = 'https://<your-ipfs-gateway>')
-    FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
+FROM 'ipfs://<your-ipfs-hash>'
+CONNECTION = (endpoint_url = 'https://<your-ipfs-gateway>')
+FILE_FORMAT = (type = CSV, field_delimiter = ',', record_delimiter = '\n', skip_header = 1);
 ```
+</TabItem>
 
-### Loading Data with Pattern Matching
+</Tabs>
+
+### 4. Loading Data with Pattern Matching
 
 This example uses pattern matching to only load from CSV files containing `sales` in their names:
 
 ```sql
 COPY INTO mytable
-  FROM 's3://mybucket/'
-  PATTERN = '.*sales.*[.]csv'
-  FILE_FORMAT = (type = CSV field_delimiter = ','  record_delimiter = '\n' skip_header = 1);
+FROM 's3://mybucket/'
+PATTERN = '.*sales.*[.]csv'
+FILE_FORMAT = (type = CSV, field_delimiter = ',', record_delimiter = '\n', skip_header = 1);
 ```
 Where `.*` is interpreted as `zero or more occurrences of any character`. The square brackets escape the period character `(.)` that precedes a file extension.
 
 If you want to load from all the CSV files, use `PATTERN = '.*[.]csv'`:
 ```sql
 COPY INTO mytable
-  FROM 's3://mybucket/'
-  PATTERN = '.*[.]csv'
-  FILE_FORMAT = (type = CSV field_delimiter = ','  record_delimiter = '\n' skip_header = 1);
+FROM 's3://mybucket/'
+PATTERN = '.*[.]csv'
+FILE_FORMAT = (type = CSV, field_delimiter = ',', record_delimiter = '\n', skip_header = 1);
 ```
 
-## Tutorials
+### 5. Loading Data with AWS IAM Role
 
-Here are some tutorials to help you get started with COPY INTO:
+```sql
+-- Authenticated by AWS IAM role and external ID.
+COPY INTO mytable
+FROM 's3://mybucket/'
+CONNECTION = (
+    ENDPOINT_URL = 'https://<endpoint-URL>',
+    ROLE_ARN = 'arn:aws:iam::123456789012:role/my_iam_role',
+    EXTERNAL_ID = '123456'
+)
+PATTERN = '.*[.]csv'
+FILE_FORMAT = (type = CSV, field_delimiter = ',', record_delimiter = '\n', skip_header = 1);
+```
 
-- [Tutorial: Load from an internal stage](../../12-load-data/00-stage.md): In this tutorial, you will create an internal stage, stage a sample file, and then load data from the file into Databend with the COPY INTO command.
-- [Tutorial: Load from an Amazon S3 bucket](../../12-load-data/01-s3.md): In this tutorial, you will upload a sample file to your Amazon S3 bucket, and then load data from the file into Databend with the COPY INTO command.
-- [Tutorial: Load from a remote file](../../12-load-data/04-http.md): In this tutorial, you will load data from a remote sample file into Databend with the COPY INTO command.
+### 6. Loading Data with Compression
+
+This example reads 10 rows from a CSV file compressed as GZIP and inserts them into a table:
+
+```sql
+COPY INTO mytable
+FROM 's3://mybucket/data.csv.gz'
+CONNECTION = (
+    ENDPOINT_URL = 'https://<endpoint-URL>',
+    ACCESS_KEY_ID = '<your-access-key-ID>',
+    SECRET_ACCESS_KEY = '<your-secret-access-key>'
+)
+FILE_FORMAT = (type = CSV, field_delimiter = ',', record_delimiter = '\n', skip_header = 1, compression = AUTO)
+SIZE_LIMIT = 10;
+```
+
+### 7. Loading Parquet Files
+
+```sql
+COPY INTO mytable
+FROM 's3://mybucket/'
+CONNECTION = (
+    ACCESS_KEY_ID = '<your-access-key-ID>',
+    SECRET_ACCESS_KEY = '<your-secret-access-key>'
+)
+PATTERN = '.*[.]parquet'
+FILE_FORMAT = (TYPE = PARQUET);
+```

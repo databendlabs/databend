@@ -73,7 +73,6 @@ use crate::optimizer::RelExpr;
 use crate::planner::metadata::optimize_remove_count_args;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
-use crate::plans::BoundInternalColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
@@ -200,8 +199,19 @@ impl<'a> TypeChecker<'a> {
                         )
                     }
                     NameResolutionResult::InternalColumn(column) => {
-                        let data_type = column.internal_column.data_type();
-                        (BoundInternalColumnRef { column }.into(), data_type)
+                        // add internal column binding into `BindContext`
+                        let column = self
+                            .bind_context
+                            .add_internal_column_binding(&column, self.metadata.clone());
+                        let data_type = *column.data_type.clone();
+                        (
+                            BoundColumnRef {
+                                span: *span,
+                                column,
+                            }
+                            .into(),
+                            data_type,
+                        )
                     }
                     NameResolutionResult::Alias { scalar, .. } => {
                         (scalar.clone(), scalar.data_type()?)
@@ -2431,13 +2441,7 @@ impl<'a> TypeChecker<'a> {
                         let data_type = *column.data_type.clone();
                         (BoundColumnRef { span, column }.into(), data_type)
                     }
-                    NameResolutionResult::InternalColumn(column) => {
-                        let data_type = column.internal_column.data_type();
-                        (BoundInternalColumnRef { column }.into(), data_type)
-                    }
-                    NameResolutionResult::Alias { scalar, .. } => {
-                        (scalar.clone(), scalar.data_type()?)
-                    }
+                    _ => unreachable!(),
                 };
                 Ok(Box::new((scalar, data_type)))
             }
@@ -2891,6 +2895,7 @@ pub fn resolve_type_name(type_name: &TypeName) -> Result<TableDataType> {
                 }
             }
         }
+        TypeName::Bitmap => TableDataType::Bitmap,
         TypeName::Tuple {
             fields_type,
             fields_name,

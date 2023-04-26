@@ -49,7 +49,7 @@ Set the following chain of events:
 
 1. The user logged into their account on the store (`event_name = 'login'`).
 2. The user land the page (`event_name = 'visit'`).
-3. The user add to the shopping cart(`event_name = 'cart'`).
+3. The user adds to the shopping cart(`event_name = 'cart'`).
 4. The user complete the purchase (`event_name = 'purchase'`).
 
 

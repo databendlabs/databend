@@ -340,7 +340,7 @@ impl CopyInterpreter {
         let to_table = ctx
             .get_table(catalog_name, database_name, table_name)
             .await?;
-        stage_table.set_block_compact_thresholds(to_table.get_block_compact_thresholds());
+        stage_table.set_block_thresholds(to_table.get_block_thresholds());
         stage_table.read_data(table_ctx, &read_source_plan, &mut build_res.main_pipeline)?;
 
         // Build Limit pipeline.
@@ -536,7 +536,7 @@ impl CopyInterpreter {
             return None;
         }
         tracing::debug!("upsert_copied_files_info: {:?}", copy_stage_files);
-        let expire_at = expire_hours * 60 + Utc::now().timestamp() as u64;
+        let expire_at = expire_hours * 60 * 60 + Utc::now().timestamp() as u64;
         let req = UpsertTableCopiedFileReq {
             table_id,
             file_info: copy_stage_files,
@@ -604,6 +604,7 @@ impl Interpreter for CopyInterpreter {
             CopyPlan::IntoStage {
                 stage, from, path, ..
             } => self.build_copy_into_stage_pipeline(stage, path, from).await,
+            CopyPlan::NoFileToCopy => Ok(PipelineBuildResult::create()),
         }
     }
 }

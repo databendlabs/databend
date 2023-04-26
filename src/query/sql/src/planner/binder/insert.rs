@@ -44,6 +44,7 @@ impl Binder {
             columns,
             source,
             overwrite,
+            ..
         } = stmt;
         let (catalog_name, database_name, table_name) =
             self.normalize_object_identifier_triple(catalog, database, table);

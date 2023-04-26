@@ -1,0 +1,67 @@
+query I
+select c_bool      FROM fuse_compat_table;
+----
+0
+
+query I
+select c_tinyint   FROM fuse_compat_table;
+----
+127
+
+query I
+select c_smallint  FROM fuse_compat_table;
+----
+3267
+
+query I
+select c_int       FROM fuse_compat_table;
+----
+2147483647
+
+
+query I
+select c_bigint    FROM fuse_compat_table;
+----
+9223372036854775807
+
+
+query F
+select c_float     FROM fuse_compat_table;
+----
+3.4
+
+query F
+select c_double    FROM fuse_compat_table;
+----
+1.7
+
+query T
+select c_date      FROM fuse_compat_table;
+----
+9999-12-31
+
+query T
+select c_timestamp FROM fuse_compat_table;
+----
+1991-01-01 00:00:00.000000
+
+query T
+select c_varchar   FROM fuse_compat_table;
+----
+varchar
+
+
+query T
+select c_array     FROM fuse_compat_table;
+----
+[1,2,3,["a","b","c"]]
+
+query T
+select c_object    FROM fuse_compat_table;
+----
+{"a":1,"b":{"c":2}}
+
+query T
+select c_variant   FROM fuse_compat_table;
+----
+[1,{"a":1,"b":{"c":2}}]

@@ -7,20 +7,20 @@ Converts the input expression to a date with time (timestamp/datetime).
 ## Syntax
 
 ```sql
-to_timestamp( <expr> )
+TO_TIMESTAMP(<expr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description         |
-| ----------- | ------------------- |
-| `<expr>`    | A string or integer |
+| Arguments | Description         |
+|-----------|---------------------|
+| `<expr>`  | A string or integer |
 
 The function extracts a date and time from the provided string. If the argument is an integer, the function interprets the integer as the number of seconds before (for a negative number) or after (for a positive number) the Unix epoch (midnight on January 1, 1970). See [Examples](#examples) for more details.
 
 ## Return Type
 
-Returns a value of Timestamp type in the format “YYYY-MM-DD hh:mm:ss.ffffff”.
+`TIMESTAMP`, in the format “YYYY-MM-DD hh:mm:ss.ffffff”.
 
 If the expr matches this format but does not have a time part, it is automatically extended to this pattern. The padding value is 0.
 

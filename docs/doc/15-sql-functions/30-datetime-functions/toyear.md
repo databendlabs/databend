@@ -7,18 +7,18 @@ Converts a date or date with time (timestamp/datetime) to a UInt16 number contai
 ## Syntax
 
 ```sql
-to_year( <expr> )
+TO_YEAR(<expr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| `<expr>` | date/timestamp |
+| Arguments | Description    |
+|-----------|----------------|
+| `<expr>`  | date/timestamp |
 
 ## Return Type
 
-A `UInt16` date type value
+ `SMALLINT`
 
 ## Examples
 

@@ -7,7 +7,7 @@ A read-only in-memory table stores all the query logs.
 
 ## Columns
 
-```
+```sql
 CREATE TABLE `query_log` (
   `log_type` TINYINT,
   `handler_type` VARCHAR,

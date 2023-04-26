@@ -18,13 +18,18 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use futures_util::stream;
 use storages_common_cache::LoadParams;
+use storages_common_table_meta::meta::FormatVersion;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::io::TableSnapshotReader;
 
-pub type TableSnapshotStream =
-    Pin<Box<dyn stream::Stream<Item = common_exception::Result<Arc<TableSnapshot>>> + Send>>;
+pub type TableSnapshotStream = Pin<
+    Box<
+        dyn stream::Stream<Item = common_exception::Result<(Arc<TableSnapshot>, FormatVersion)>>
+            + Send,
+    >,
+>;
 
 pub trait SnapshotHistoryReader {
     fn snapshot_history(
@@ -64,12 +69,16 @@ impl SnapshotHistoryReader for TableSnapshotReader {
                     };
                     match snapshot {
                         Ok(Some(snapshot)) => {
-                            if let Some((id, v)) = snapshot.prev_snapshot_id {
-                                let new_ver = v;
-                                let new_loc = gen.snapshot_location_from_uuid(&id, v)?;
-                                Ok(Some((snapshot, (reader, gen, Some((new_loc, new_ver))))))
+                            if let Some((prev_id, prev_version)) = snapshot.prev_snapshot_id {
+                                let new_ver = prev_version;
+                                let new_loc =
+                                    gen.snapshot_location_from_uuid(&prev_id, prev_version)?;
+                                Ok(Some((
+                                    (snapshot, ver),
+                                    (reader, gen, Some((new_loc, new_ver))),
+                                )))
                             } else {
-                                Ok(Some((snapshot, (reader, gen, None))))
+                                Ok(Some(((snapshot, ver), (reader, gen, None))))
                             }
                         }
                         Ok(None) => Ok(None),

@@ -7,18 +7,18 @@ Returns the string str with the order of the characters reversed.
 ## Syntax
 
 ```sql
-REVERSE(s)
+REVERSE(<str>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| s | The string value. |
+| Arguments | Description       |
+|-----------|-------------------|
+| `<str>`   | The string value. |
 
 ## Return Type
 
-A String data type value.
+`VARCHAR`
 
 ## Examples
 

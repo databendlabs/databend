@@ -26,7 +26,6 @@ use common_meta_app::principal::UserGrantSet;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserOption;
 use common_meta_app::principal::UserQuota;
-// use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_meta_app::storage::StorageParams;
 use common_meta_app::storage::StorageS3Config;
 use common_metrics::init_default_metrics_recorder;

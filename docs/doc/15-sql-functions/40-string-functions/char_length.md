@@ -9,18 +9,18 @@ This means that for a string containing five 2-byte characters, LENGTH() returns
 ## Syntax
 
 ```sql
-CHAR_LENGTH(str);
+CHAR_LENGTH(<expr>);
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| str | The string  |
+| Arguments | Description |
+|-----------| ----------- |
+| `<expr>`  | The string  |
 
 ## Return Type
 
-Numeric data type value.
+`BIGINT`
 
 ## Examples
 

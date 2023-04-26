@@ -12,7 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::runtime::Runtime;
@@ -108,18 +107,10 @@ impl FuseTable {
                 let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
                     // if query from distribute query node, need to init segment id at first
                     let segment_id_map = if plan.query_internal_columns {
-                        let snapshot = table.read_table_snapshot().await?;
-                        if let Some(snapshot) = snapshot {
-                            let segment_count = snapshot.segments.len();
-                            let mut segment_id_map = HashMap::new();
-                            for (i, segment_loc) in snapshot.segments.iter().enumerate() {
-                                segment_id_map
-                                    .insert(segment_loc.0.to_string(), segment_count - i - 1);
-                            }
-                            Some(segment_id_map)
-                        } else {
-                            None
-                        }
+                        table
+                            .read_table_snapshot()
+                            .await?
+                            .map(|s| s.build_segment_id_map())
                     } else {
                         None
                     };

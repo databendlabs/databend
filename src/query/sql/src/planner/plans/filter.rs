@@ -98,11 +98,11 @@ impl Operator for Filter {
         let stat_info = rel_expr.derive_cardinality_child(0)?;
         let (input_cardinality, mut statistics) = (stat_info.cardinality, stat_info.statistics);
         // Derive cardinality
-        let sb = SelectivityEstimator::new(&statistics);
+        let mut sb = SelectivityEstimator::new(&mut statistics);
         let mut selectivity = MAX_SELECTIVITY;
         for pred in self.predicates.iter() {
             // Compute selectivity for each conjunction
-            selectivity *= sb.compute_selectivity(pred)?;
+            selectivity *= sb.compute_selectivity(pred, true)?;
         }
         let cardinality = input_cardinality * selectivity;
 
@@ -112,7 +112,8 @@ impl Operator for Filter {
         } else {
             for (_, column_stat) in statistics.column_stats.iter_mut() {
                 if cardinality < input_cardinality {
-                    column_stat.ndv = (column_stat.ndv * cardinality / input_cardinality).ceil();
+                    column_stat.histogram = None;
+                    column_stat.ndv = (column_stat.ndv * selectivity).ceil();
                 }
             }
             statistics.column_stats

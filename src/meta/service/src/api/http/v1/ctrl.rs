@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use poem::http::StatusCode;
 use poem::web::Data;
@@ -31,5 +32,23 @@ pub async fn trigger_snapshot(meta_node: Data<&Arc<MetaNode>>) -> poem::Result<i
         .trigger_snapshot()
         .await
         .map_err(|e| poem::Error::from_string(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?;
+    Ok(Json(()))
+}
+
+#[poem::handler]
+pub async fn block_dump_snapshot(
+    meta_node: Data<&Arc<MetaNode>>,
+) -> poem::Result<impl IntoResponse> {
+    let mut sm = meta_node.sto.get_state_machine().await;
+    sm.blocking_config_mut().dump_snapshot = Duration::from_millis(1_000_000);
+    Ok(Json(()))
+}
+
+#[poem::handler]
+pub async fn block_serde_snapshot(
+    meta_node: Data<&Arc<MetaNode>>,
+) -> poem::Result<impl IntoResponse> {
+    let mut sm = meta_node.sto.get_state_machine().await;
+    sm.blocking_config_mut().serde_snapshot = Duration::from_millis(1_000_000);
     Ok(Json(()))
 }

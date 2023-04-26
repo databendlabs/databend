@@ -31,6 +31,7 @@ use super::Limit;
 use super::PhysicalPlan;
 use super::Project;
 use super::ProjectSet;
+use super::RowFetch;
 use super::Sort;
 use super::TableScan;
 use super::UnionAll;
@@ -130,6 +131,7 @@ fn to_format_tree(
         PhysicalPlan::Window(plan) => window_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::Sort(plan) => sort_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::Limit(plan) => limit_to_format_tree(plan, metadata, prof_span_set),
+        PhysicalPlan::RowFetch(plan) => row_fetch_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::HashJoin(plan) => hash_join_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::Exchange(plan) => exchange_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::UnionAll(plan) => union_all_to_format_tree(plan, metadata, prof_span_set),
@@ -600,6 +602,40 @@ fn limit_to_format_tree(
     children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
 
     Ok(FormatTreeNode::with_children("Limit".to_string(), children))
+}
+
+fn row_fetch_to_format_tree(
+    plan: &RowFetch,
+    metadata: &MetadataRef,
+    prof_span_set: &ProfSpanSetRef,
+) -> Result<FormatTreeNode<String>> {
+    let table_schema = plan.source.source_info.schema();
+    let projected_schema = plan.cols_to_fetch.project_schema(&table_schema);
+    let fields_to_fetch = projected_schema.fields();
+
+    let mut children = vec![FormatTreeNode::new(format!(
+        "columns to fetch: [{}]",
+        fields_to_fetch.iter().map(|f| f.name()).join(", ")
+    ))];
+
+    if let Some(info) = &plan.stat_info {
+        let items = plan_stats_info_to_format_tree(info);
+        children.extend(items);
+    }
+
+    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
+        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
+        children.push(FormatTreeNode::new(format!(
+            "total process time: {process_time}ms"
+        )));
+    }
+
+    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
+
+    Ok(FormatTreeNode::with_children(
+        "RowFetch".to_string(),
+        children,
+    ))
 }
 
 fn hash_join_to_format_tree(

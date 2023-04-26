@@ -13,14 +13,14 @@ NULL values are not counted.
 ## Syntax
 
 ```sql
-STDDEV_SAMP(expression)
+STDDEV_SAMP(<expr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| expression  | Any numerical expression |
+| Arguments | Description              |
+|-----------|--------------------------|
+| `<expr>`  | Any numerical expression |
 
 ## Return Type
 

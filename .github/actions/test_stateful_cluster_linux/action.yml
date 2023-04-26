@@ -22,9 +22,10 @@ runs:
     - name: Minio Setup for (ubuntu-latest only)
       shell: bash
       run: |
-        docker run -d -p 9900:9000 --name minio \
+        docker run -d --network host --name minio \
                 -e "MINIO_ACCESS_KEY=minioadmin" \
                 -e "MINIO_SECRET_KEY=minioadmin" \
+                -e "MINIO_ADDRESS=:9900" \
                 -v /tmp/data:/data \
                 -v /tmp/config:/root/.minio \
                 minio/minio server /data
@@ -43,9 +44,3 @@ runs:
       shell: bash
       run: |
         ./scripts/ci/ci-run-stateful-tests-cluster-minio.sh
-
-    - name: Upload failure
-      if: failure() || cancelled()
-      uses: ./.github/actions/artifact_failure
-      with:
-        name: test-stateful-cluster-linux

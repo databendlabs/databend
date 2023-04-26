@@ -12,6 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::sync::Arc;
+
 use common_base::base::tokio;
 use common_exception::Result;
 use common_storages_factory::Table;
@@ -27,17 +29,21 @@ use crate::storages::fuse::utils::do_insertions;
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_analyze() -> Result<()> {
     let fixture = TestFixture::new().await;
-    let db = fixture.default_db_name();
-    let tbl = fixture.default_table_name();
+    let ctx = fixture.ctx();
     let case_name = "analyze_statistic_optimize";
     do_insertions(&fixture).await?;
 
     analyze_table(&fixture).await?;
     check_data_dir(&fixture, case_name, 3, 1, 2, 2, 2, Some(()), None).await?;
 
-    // After compact, all the count will become 1
-    let qry = format!("optimize table {}.{} all", db, tbl);
-    execute_command(fixture.ctx().clone(), &qry).await?;
+    // Purge will keep at least two snapshots.
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let snapshot_files = fuse_table.list_snapshot_files().await?;
+    let table_ctx: Arc<dyn TableContext> = ctx.clone();
+    fuse_table
+        .do_purge(&table_ctx, snapshot_files, true)
+        .await?;
     check_data_dir(&fixture, case_name, 1, 1, 1, 1, 1, Some(()), Some(())).await
 }
 
@@ -91,20 +97,23 @@ async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_analyze_purge() -> Result<()> {
     let fixture = TestFixture::new().await;
-    let db = fixture.default_db_name();
-    let tbl = fixture.default_table_name();
+    let ctx = fixture.ctx();
     let case_name = "analyze_statistic_purge";
     do_insertions(&fixture).await?;
 
-    // optimize statistics twice
-    for i in 0..2 {
+    // optimize statistics three times
+    for i in 0..3 {
         analyze_table(&fixture).await?;
         check_data_dir(&fixture, case_name, 3 + i, 1 + i, 2, 2, 2, Some(()), None).await?;
     }
 
-    // After purge, all the count should be 1
-    let qry = format!("optimize table {}.{} purge", db, tbl);
-    execute_command(fixture.ctx().clone(), &qry).await?;
-    // note: purge statistic files exists bug, so the count of statistic files is 2.
-    check_data_dir(&fixture, case_name, 1, 2, 1, 1, 1, Some(()), Some(())).await
+    // Purge will keep at least two snapshots.
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let snapshot_files = fuse_table.list_snapshot_files().await?;
+    let table_ctx: Arc<dyn TableContext> = ctx.clone();
+    fuse_table
+        .do_purge(&table_ctx, snapshot_files, true)
+        .await?;
+    check_data_dir(&fixture, case_name, 1, 1, 1, 1, 1, Some(()), Some(())).await
 }

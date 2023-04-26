@@ -7,7 +7,7 @@ Quotes a string to produce a result that can be used as a properly escaped data 
 ## Syntax
 
 ```sql
-QUOTE(str)
+QUOTE(<str>)
 ```
 
 ## Examples

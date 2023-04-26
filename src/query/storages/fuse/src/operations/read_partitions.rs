@@ -58,10 +58,16 @@ impl FuseTable {
     ) -> Result<(PartStatistics, Partitions)> {
         debug!("fuse table do read partitions, push downs:{:?}", push_downs);
         let snapshot = self.read_table_snapshot().await?;
+        let is_lazy = push_downs
+            .as_ref()
+            .map(|p| p.lazy_materialization)
+            .unwrap_or_default();
         match snapshot {
             Some(snapshot) => {
                 let settings = ctx.get_settings();
-                if settings.get_enable_distributed_eval_index()? && !ctx.get_cluster().is_empty() {
+                if (settings.get_enable_distributed_eval_index()? && !ctx.get_cluster().is_empty())
+                    || is_lazy
+                {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
                     for segment_location in &snapshot.segments {
                         segments.push(FuseLazyPartInfo::create(segment_location.clone()))
@@ -108,7 +114,7 @@ impl FuseTable {
         table_info: TableInfo,
         segments_location: Vec<Location>,
         summary: usize,
-        segment_id_map: Option<HashMap<String, usize>>,
+        segment_id_map: Option<HashMap<Location, usize>>,
     ) -> Result<(PartStatistics, Partitions)> {
         let start = Instant::now();
         info!(
@@ -415,7 +421,7 @@ impl FuseTable {
         )
     }
 
-    fn projection_part(
+    pub(crate) fn projection_part(
         meta: &BlockMeta,
         block_meta_index: &Option<BlockMetaIndex>,
         column_nodes: &ColumnNodes,
@@ -438,9 +444,9 @@ impl FuseTable {
         let location = meta.location.0.clone();
         let format_version = meta.location.1;
 
-        let sort_min_max = top_k.map(|top_k| {
-            let stat = meta.col_stats.get(&top_k.column_id).unwrap();
-            (stat.min.clone(), stat.max.clone())
+        let sort_min_max = top_k.and_then(|top_k| {
+            let stat = meta.col_stats.get(&top_k.column_id);
+            stat.map(|stat| (stat.min.clone(), stat.max.clone()))
         });
 
         // TODO

@@ -13,23 +13,23 @@ The position of the first character in the string from which the substring is to
 ## Syntax
 
 ```sql
-SUBSTRING(str,pos);
-SUBSTRING(str FROM pos);
-SUBSTRING(str,pos,len);
-SUBSTRING(str FROM pos FOR len)
+SUBSTRING(<str>, <pos>);
+SUBSTRING(<str> FROM <pos>);
+SUBSTRING(<str>, <pos>, <len>);
+SUBSTRING(<str> FROM <pos> FOR <len>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| str | The main string from where the character to be extracted |
-| pos | The position (starting from 1) the substring to start at. If negative, counts from the end |
-| len | The maximum length of the substring to extract |
+| Arguments | Description                                                                                |
+|-----------|--------------------------------------------------------------------------------------------|
+| `<str>`   | The main string from where the character to be extracted                                   |
+| `<pos>`   | The position (starting from 1) the substring to start at. If negative, counts from the end |
+| `<len>`   | The maximum length of the substring to extract                                             |
 
 ## Return Type
 
-A string data type value.
+`VARCHAR`
 
 ## Examples
 

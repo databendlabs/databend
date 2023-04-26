@@ -105,7 +105,9 @@ pub struct StateMachine {
     /// - Every other state is store in its own keyspace such as `Nodes`.
     pub sm_tree: SledTree,
 
-    /// subscriber of statemachine data
+    blocking_config: BlockingConfig,
+
+    /// subscriber of state machine data
     pub subscriber: Option<Box<dyn StateMachineSubscriber>>,
 }
 
@@ -131,7 +133,23 @@ impl SerializableSnapshot {
     }
 }
 
+/// Configuration of what operation to block for testing purpose.
+#[derive(Debug, Clone, Default)]
+pub struct BlockingConfig {
+    pub dump_snapshot: Duration,
+    pub serde_snapshot: Duration,
+}
+
 impl StateMachine {
+    /// Return a Arc of the blocking config. It is only used for testing.
+    pub fn blocking_config_mut(&mut self) -> &mut BlockingConfig {
+        &mut self.blocking_config
+    }
+
+    pub fn blocking_config(&self) -> &BlockingConfig {
+        &self.blocking_config
+    }
+
     #[tracing::instrument(level = "debug", skip(config), fields(config_id=%config.config_id, prefix=%config.sled_tree_prefix))]
     pub fn tree_name(config: &RaftConfig, sm_id: u64) -> String {
         config.tree_name(format!("{}/{}", TREE_STATE_MACHINE, sm_id))
@@ -159,6 +177,7 @@ impl StateMachine {
 
         let sm = StateMachine {
             sm_tree,
+            blocking_config: BlockingConfig::default(),
             subscriber: None,
         };
 
@@ -217,6 +236,15 @@ impl StateMachine {
             kvs.push(vec![k.to_vec(), v.to_vec()]);
         }
         let snap = SerializableSnapshot { kvs };
+
+        if cfg!(debug_assertions) {
+            let sl = self.blocking_config().dump_snapshot;
+            if !sl.is_zero() {
+                tracing::warn!("start    build snapshot sleep 1000s");
+                std::thread::sleep(sl);
+                tracing::warn!("finished build snapshot sleep 1000s");
+            }
+        }
 
         Ok((snap, last_applied, last_membership, snapshot_id))
     }

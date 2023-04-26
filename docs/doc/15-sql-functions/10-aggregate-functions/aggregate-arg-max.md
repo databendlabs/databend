@@ -7,15 +7,15 @@ Calculates the `arg` value for a maximum `val` value. If there are several value
 ## Syntax
 
 ```sql
-ARG_MAX(arg, val)
+ARG_MAX(<arg>, <val>)
 ```
 
 ## Arguments
 
 | Arguments | Description                                                                                       |
 |-----------|---------------------------------------------------------------------------------------------------|
-| arg       | Argument of [any data type that Databend supports](../../13-sql-reference/10-data-types/index.md) |
-| val       | Value of [any data type that Databend supports](../../13-sql-reference/10-data-types/index.md)    |
+| `<arg>`   | Argument of [any data type that Databend supports](../../13-sql-reference/10-data-types/index.md) |
+| `<val>`   | Value of [any data type that Databend supports](../../13-sql-reference/10-data-types/index.md)    |
 
 ## Return Type
 

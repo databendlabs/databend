@@ -100,7 +100,7 @@ query T
 explain select count(3), type, name, trim(name) as a from system.columns group by name, type, a, concat(name, trim(name)), concat(type, name), length(name);
 ----
 EvalScalar
-├── expressions: [columns.name (#0), columns.type (#3), count(3) (#13), trim_both(columns.name (#0), " ")]
+├── expressions: [columns.name (#0), columns.type (#3), count(3) (#13), trim_both(columns.name (#0), ' ')]
 ├── estimated rows: 0.00
 └── AggregateFinal
     ├── group by: [name, type]

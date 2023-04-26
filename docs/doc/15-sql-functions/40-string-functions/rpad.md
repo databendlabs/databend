@@ -8,20 +8,20 @@ If str is longer than len, the return value is shortened to len characters.
 ## Syntax
 
 ```sql
-RPAD(str,len,padstr)
+RPAD(<str>, <len>, <padstr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| str | The string. |
-| len | The length. |
-| padstr | The pad string. |
+| Arguments  | Description     |
+|------------|-----------------|
+| `<str>`    | The string.     |
+| `<len>`    | The length.     |
+| `<padstr>` | The pad string. |
 
 ## Return Type
 
-A number data type value.
+`VARCHAR`
 
 ## Examples
 

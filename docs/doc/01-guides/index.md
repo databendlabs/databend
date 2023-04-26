@@ -27,7 +27,7 @@ import TabItem from '@theme/TabItem';
 
 <TabItem value="Connect" label="Connect">
 
-* [Connecting to Databend with bendsql](../11-integrations/30-access-tool/01-bendsql.md)
+* [Connecting to Databend with BendSQL](../11-integrations/30-access-tool/01-bendsql.md)
 * [Connecting to Databend with JDBC](../11-integrations/30-access-tool/02-jdbc.md)
 * [Connecting to Databend with MySQL-Compatible Clients](../11-integrations/30-access-tool/00-mysql.md)
 
@@ -35,7 +35,7 @@ import TabItem from '@theme/TabItem';
 
 <TabItem value="Manage" label="Manage">
 
-* [Managing Databend Settings](../10-deploy/06-manage-settings.md)
+* [Managing Databend Settings](../13-sql-reference/42-manage-settings.md)
 * [Backing Up and Restoring a Meta Service Cluster](../10-deploy/06-metasrv/30-metasrv-backup-restore.md)
 * [Backing Up and Restoring Schema Data](../10-deploy/09-upgrade/10-backup-and-restore-schema.md)
 * [Upgrading Databend](../10-deploy/09-upgrade/50-upgrade.md)
@@ -150,6 +150,7 @@ Databend's rich ecosystem offers a range of powerful tools and integrations, all
 * [Python](../03-develop/01-python.md)
 * [Node.js](../03-develop/02-nodejs.md)
 * [Java](../03-develop/03-java.md)
+* [Rust](../03-develop/04-rust.md)
 
 </TabItem>
 </Tabs>

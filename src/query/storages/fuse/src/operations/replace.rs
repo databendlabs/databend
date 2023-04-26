@@ -123,6 +123,9 @@ impl FuseTable {
             })
         }
 
+        let cluster_stats_gen =
+            self.cluster_gen_for_append(ctx.clone(), pipeline, self.get_block_thresholds())?;
+
         // 1. resize input to 1, since the UpsertTransform need to de-duplicate inputs "globally"
         pipeline.resize(1)?;
 
@@ -162,7 +165,15 @@ impl FuseTable {
         let segment_partition_num =
             std::cmp::min(base_snapshot.segments.len(), max_threads as usize);
 
-        let append_transform = self.create_append_transform(ctx.clone());
+        let append_transform = AppendTransform::try_create(
+            ctx.clone(),
+            self.get_write_settings(),
+            self.operator.clone(),
+            self.meta_location_generator.clone(),
+            self.table_info.schema(),
+            self.get_block_thresholds(),
+            cluster_stats_gen,
+        );
         let block_builder = append_transform.get_block_builder();
 
         if segment_partition_num == 0 {
@@ -304,17 +315,6 @@ impl FuseTable {
         chunks
     }
 
-    fn create_append_transform(&self, ctx: Arc<dyn TableContext>) -> AppendTransform {
-        AppendTransform::try_create(
-            ctx,
-            self.get_write_settings(),
-            self.operator.clone(),
-            self.meta_location_generator.clone(),
-            self.table_info.schema(),
-            self.get_block_compact_thresholds(),
-        )
-    }
-
     #[async_backtrace::framed]
     async fn chain_mutation_pipes(
         &self,
@@ -328,7 +328,7 @@ impl FuseTable {
         // a) append TableMutationAggregator
         pipeline.add_transform(|input, output| {
             let base_segments = base_snapshot.segments.clone();
-            let thresholds = self.get_block_compact_thresholds();
+            let thresholds = self.get_block_thresholds();
             let location_gen = self.meta_location_generator.clone();
             let schema = self.table_info.schema();
             let dal = self.operator.clone();

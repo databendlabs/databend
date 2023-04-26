@@ -13,6 +13,8 @@
 // limitations under the License.
 
 mod meta_readers;
+mod segment_reader;
+mod snapshot_reader;
 mod versioned_reader;
 
 pub use meta_readers::MetaReaders;

@@ -19,7 +19,7 @@ chrono = { workspace = true }
 num = "0.4.0"
 thiserror = { workspace = true }
 
-enumflags2 = { version = "0.7.5", features = ["serde"] }
+enumflags2 = { version = "0.7.7", features = ["serde"] }
 
 [build-dependencies]
 
