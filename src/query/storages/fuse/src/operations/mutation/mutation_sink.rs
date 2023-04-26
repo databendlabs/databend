@@ -213,7 +213,10 @@ impl Processor for MutationSink {
                     let catalog = self.ctx.get_catalog(&table_info.meta.catalog)?;
                     let res = catalog.get_table_mutation_lock(table_info).await?;
                     if res.locked {
-                        tracing::error!("table '{}' already locked for mutation", table_info.name);
+                        tracing::error!(
+                            "table '{}' is under mutation, please retry later",
+                            table_info.name
+                        );
                         self.state = State::AbortOperation;
                         return Ok(());
                     }

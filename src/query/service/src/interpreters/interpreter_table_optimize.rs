@@ -99,7 +99,7 @@ impl OptimizeTableInterpreter {
         let res = catalog.get_table_mutation_lock(table_info).await?;
         if res.locked {
             return Err(ErrorCode::TableMutationAlreadyLocked(format!(
-                "table '{}' already locked for mutation",
+                "table '{}' is under mutation, please retry compaction later",
                 self.plan.table
             )));
         }

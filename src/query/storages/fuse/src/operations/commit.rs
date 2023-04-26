@@ -566,6 +566,23 @@ impl FuseTable {
             snapshot_tobe_committed.segments = segments_tobe_committed;
             snapshot_tobe_committed.summary = statistics_tobe_committed;
 
+            let table_info = &self.table_info;
+            let catalog = ctx.get_catalog(&table_info.meta.catalog)?;
+            let res = catalog.get_table_mutation_lock(table_info).await?;
+            if res.locked {
+                tracing::error!(
+                    "table '{}' is under mutation, please retry later",
+                    table_info.name
+                );
+                abort_operation
+                    .abort(ctx.clone(), self.operator.clone())
+                    .await?;
+                return Err(ErrorCode::TableMutationAlreadyLocked(format!(
+                    "table '{}' is under mutation, please retry later",
+                    table_info.name
+                )));
+            }
+
             match Self::commit_to_meta_server(
                 ctx.as_ref(),
                 latest_table_info,
