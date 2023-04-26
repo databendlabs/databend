@@ -110,11 +110,6 @@ Notice that the `query` part above specifies the columns (title, author, and dat
 ```sql
 SELECT * FROM bookcomments;
 
-SELECT
-  *
-FROM
-  bookcomments;
-
 ┌────────────────────────────────────────────────────────────────────────┐
 │             title            │        author       │ comments │  date  │
 │            String            │        String       │  String  │ String │

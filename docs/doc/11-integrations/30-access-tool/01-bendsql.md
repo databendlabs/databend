@@ -5,13 +5,13 @@ description:
   Databend-native CLI
 ---
 
-[bendsql](https://github.com/datafuselabs/bendsql) is a command line tool that has been designed specifically for Databend. It allows users to establish a connection with Databend and execute queries directly from a CLI window.
+[BendSQL](https://github.com/datafuselabs/BendSQL) is a command line tool that has been designed specifically for Databend. It allows users to establish a connection with Databend and execute queries directly from a CLI window.
 
-This tool is particularly useful for those who prefer a command line interface and need to work with Databend on a regular basis. With bendsql, users can easily and efficiently manage their databases, tables, and data, and perform a wide range of queries and operations with ease.
+This tool is particularly useful for those who prefer a command line interface and need to work with Databend on a regular basis. With BendSQL, users can easily and efficiently manage their databases, tables, and data, and perform a wide range of queries and operations with ease.
 
 ## Downloading and Installing BendSQL
 
-To download and install BendSQL, kindly visit the [BendSQL release page](https://github.com/datafuselabs/bendsql/releases) on GitHub.
+To download and install BendSQL, kindly visit the [BendSQL release page](https://github.com/datafuselabs/BendSQL/releases) on GitHub.
 
 ## Connecting to Databend
 
@@ -51,8 +51,6 @@ To connect to a local Databend, simply run `bendsql`:
 Welcome to BendSQL.
 Trying connect to localhost:8000 as user root.
 Connected to DatabendQuery v1.1.2-nightly-8ade21e4669e0a2cc100615247705feacdf76c5b(rust-1.70.0-nightly-2023-04-15T16:08:52.195357424Z)
-
-bendsql>
 ```
 
 To connect to Databend Cloud, it is recommended to use the `--dsn` option or the `BENDSQL_DSN` environment variable:
@@ -67,7 +65,6 @@ Connected to DatabendQuery v1.1.17-nightly-77286d52c6d6db2c2000a74febf4ddb25f910
 
 cloudapp@tnxxx.gw>
 ```
-
 
 ## Running Queries with BendSQL
 
@@ -97,7 +94,6 @@ SELECT
 
 ### Query non-interactive
 
-
 with argument:
 ```shell
 > bendsql --query "select now()"
@@ -119,7 +115,6 @@ with stdin:
 │ 2023-04-25 07:12:55.602754 │
 └────────────────────────────┘
 ```
-
 
 ## Loading data
 
