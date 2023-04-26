@@ -367,6 +367,7 @@ impl Binder {
                     let mut bind_context = BindContext::new();
                     let stmt = SelectStmt {
                         span: *span,
+                        hints: None,
                         distinct: false,
                         select_list: vec![SelectTarget::AliasedExpr {
                             expr: Box::new(common_ast::ast::Expr::FunctionCall {
