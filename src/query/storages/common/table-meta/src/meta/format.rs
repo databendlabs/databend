@@ -24,6 +24,7 @@ use common_exception::Result;
 use rmp_serde::Deserializer;
 #[cfg(feature = "dev")]
 use rmp_serde::Serializer;
+use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::from_slice;
@@ -176,4 +177,22 @@ pub fn decode<'a, T: Deserialize<'a>>(encoding: &Encoding, data: &'a [u8]) -> Re
             encoding
         ))),
     }
+}
+
+pub fn read_and_deserialize<R, T>(
+    reader: &mut R,
+    size: u64,
+    encoding: &Encoding,
+    compression: &Compression,
+) -> Result<T>
+where
+    R: Read + Unpin + Send,
+    T: DeserializeOwned,
+{
+    let mut compressed_data = vec![0; size as usize];
+    reader.read_exact(&mut compressed_data)?;
+
+    let decompressed_data = decompress(compression, compressed_data)?;
+
+    decode(encoding, &decompressed_data)
 }
