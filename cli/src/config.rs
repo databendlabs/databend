@@ -16,6 +16,8 @@
 
 use std::{collections::BTreeMap, path::Path};
 
+use anyhow::anyhow;
+use anyhow::Result;
 use clap::ValueEnum;
 use serde::Deserialize;
 
@@ -48,6 +50,27 @@ pub enum OutputFormat {
     Table,
     CSV,
     TSV,
+}
+
+impl Settings {
+    pub fn inject_ctrl_cmd(&mut self, cmd_name: &str, cmd_value: &str) -> Result<()> {
+        match cmd_name {
+            "display_pretty_sql" => self.display_pretty_sql = cmd_value.parse()?,
+            "prompt" => self.prompt = cmd_value.to_string(),
+            "progress_color" => self.progress_color = cmd_value.to_string(),
+            "show_progress" => self.show_progress = cmd_value.parse()?,
+            "output_format" => {
+                self.output_format = match cmd_value.to_ascii_lowercase().as_str() {
+                    "table" => OutputFormat::Table,
+                    "csv" => OutputFormat::CSV,
+                    "tsv" => OutputFormat::TSV,
+                    _ => return Err(anyhow!("Unknown output format: {}", cmd_value)),
+                }
+            }
+            _ => return Err(anyhow!("Unknown command: {}", cmd_name)),
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]

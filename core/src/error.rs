@@ -26,9 +26,9 @@ pub enum Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::Parsing(msg) => write!(f, "ParsingError: {}", msg),
-            Error::BadArgument(msg) => write!(f, "BadArgument: {}", msg),
-            Error::Request(msg) => write!(f, "RequestError: {}", msg),
+            Error::Parsing(msg) => write!(f, "ParsingError: {msg}"),
+            Error::BadArgument(msg) => write!(f, "BadArgument: {msg}"),
+            Error::Request(msg) => write!(f, "RequestError: {msg}"),
             Error::InvalidResponse(e) => {
                 write!(f, "ResponseError with {}: {}", e.code, e.message)
             }

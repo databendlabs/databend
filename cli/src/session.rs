@@ -17,6 +17,7 @@ use std::io::BufRead;
 use std::path::Path;
 use std::sync::Arc;
 
+use anyhow::anyhow;
 use anyhow::Result;
 use databend_driver::{new_connection, Connection};
 use rustyline::config::Builder;
@@ -28,6 +29,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::time::Instant;
 
 use crate::ast::{TokenKind, Tokenizer};
+use crate::config::OutputFormat;
 use crate::config::Settings;
 use crate::display::{format_write_progress, ChunkDisplay, FormatDisplay, ReplDisplay};
 use crate::helper::CliHelper;
@@ -38,8 +40,7 @@ pub struct Session {
     is_repl: bool,
 
     settings: Settings,
-    prompt: String,
-    query: Option<String>,
+    query: String,
 }
 
 impl Session {
@@ -57,27 +58,12 @@ impl Session {
             println!();
         }
 
-        let mut prompt = settings.prompt.clone();
-
-        {
-            let tokens = info.host.split('.').collect::<Vec<_>>();
-            let host = if tokens.len() >= 2 {
-                tokens[..2].join(".")
-            } else {
-                info.host
-            };
-            prompt = prompt.replace("{host}", &host);
-            prompt = prompt.replace("{user}", &info.user);
-            prompt = prompt.replace("{port}", &info.port.to_string());
-        }
-
         Ok(Self {
             dsn,
             conn,
             is_repl,
             settings,
-            prompt,
-            query: None,
+            query: String::new(),
         })
     }
 
@@ -86,6 +72,25 @@ impl Session {
             self.handle_repl().await;
         } else {
             self.handle_stdin().await;
+        }
+    }
+
+    fn prompt(&self) -> String {
+        if !self.query.is_empty() {
+            "> ".to_owned()
+        } else {
+            let info = self.conn.info();
+            let tokens = info.host.split('.').collect::<Vec<_>>();
+            let host = if tokens.len() >= 2 {
+                tokens[..2].join(".")
+            } else {
+                info.host
+            };
+            let mut prompt = self.settings.prompt.clone();
+            prompt = prompt.replace("{host}", &host);
+            prompt = prompt.replace("{user}", &info.user);
+            prompt = prompt.replace("{port}", &info.port.to_string());
+            format!("{} ", prompt.trim_end())
         }
     }
 
@@ -99,19 +104,15 @@ impl Session {
         rl.set_helper(Some(CliHelper::new()));
         rl.load_history(&get_history_path()).ok();
 
-        loop {
-            let prompt = if self.query.is_none() {
-                &self.prompt
-            } else {
-                ""
-            };
-            match rl.readline(prompt) {
+        'F: loop {
+            match rl.readline(&self.prompt()) {
                 Ok(line) => {
-                    if let Some(query) = self.append_query(&line) {
+                    let queries = self.append_query(&line);
+                    for query in queries {
                         let _ = rl.add_history_entry(&query);
                         match self.handle_query(true, &query).await {
                             Ok(true) => {
-                                break;
+                                break 'F;
                             }
                             Ok(false) => {}
                             Err(e) => {
@@ -123,6 +124,8 @@ impl Session {
                                     }
                                 } else {
                                     eprintln!("{}", e);
+                                    self.query.clear();
+                                    break;
                                 }
                             }
                         }
@@ -133,7 +136,7 @@ impl Session {
                         eprintln!("io err: {err}");
                     }
                     ReadlineError::Interrupted => {
-                        self.query = None;
+                        self.query.clear();
                         println!("^C");
                     }
                     ReadlineError::Eof => {
@@ -150,49 +153,74 @@ impl Session {
     pub async fn handle_stdin(&mut self) {
         let mut lines = std::io::stdin().lock().lines();
         while let Some(Ok(line)) = lines.next() {
-            if let Some(query) = self.append_query(&line) {
+            let queries = self.append_query(&line);
+            for query in queries {
                 if let Err(e) = self.handle_query(false, &query).await {
                     eprintln!("{}", e);
+                    return;
                 }
             }
         }
 
         // if the last query is not finished with `;`, we need to execute it.
-        if let Some(query) = self.query.take() {
+        let query = self.query.trim().to_owned();
+        if !query.is_empty() {
+            self.query.clear();
             if let Err(e) = self.handle_query(false, &query).await {
                 eprintln!("{}", e);
             }
         }
     }
 
-    fn append_query(&mut self, line: &str) -> Option<String> {
+    fn append_query(&mut self, line: &str) -> Vec<String> {
         let line = line.trim();
         if line.is_empty() {
-            return None;
+            return vec![];
         }
         if line.starts_with("--") {
-            return None;
+            return vec![];
         }
-        let query = match self.query.take() {
-            Some(mut query) => {
-                query.push(' ');
-                query.push_str(&line.replace("\\\n", ""));
-                query
+
+        if self.query.is_empty() && (line.starts_with('.') || line == "exit" || line == "quit") {
+            return vec![line.to_owned()];
+        }
+
+        self.query.push_str(line);
+
+        let mut queries = Vec::new();
+        let mut tokenizer = Tokenizer::new(&self.query);
+        let mut start = 0;
+
+        while let Some(Ok(token)) = tokenizer.next() {
+            if token.kind == TokenKind::SemiColon {
+                queries.push(self.query[start..token.span.end].to_owned());
+                start = token.span.end;
             }
-            None => line.to_string(),
-        };
-        if query.ends_with(';') {
-            Some(query)
-        } else {
-            self.query = Some(query);
-            None
         }
+        if start != 0 {
+            self.query = self.query[start..].trim().to_owned();
+        }
+        queries
     }
 
     pub async fn handle_query(&mut self, is_repl: bool, query: &str) -> Result<bool> {
         let query = query.trim_end_matches(';').trim();
         if is_repl && (query == "exit" || query == "quit") {
             return Ok(true);
+        }
+
+        if is_repl && query.starts_with('.') {
+            let query = query
+                .trim_start_matches('.')
+                .split_whitespace()
+                .collect::<Vec<_>>();
+            if query.len() != 2 {
+                return Err(anyhow!(
+                    "Control command error, must be syntax of `.cmd_name cmd_value`."
+                ));
+            }
+            self.settings.inject_ctrl_cmd(query[0], query[1])?;
+            return Ok(false);
         }
 
         let start = Instant::now();
@@ -217,7 +245,7 @@ impl Session {
             QueryKind::Query | QueryKind::Explain => {
                 let (schema, data) = self.conn.query_iter_ext(query).await?;
 
-                if is_repl {
+                if is_repl && self.settings.output_format == OutputFormat::Table {
                     let mut displayer =
                         ReplDisplay::new(&self.settings, query, start, Arc::new(schema), data);
                     displayer.display().await?;

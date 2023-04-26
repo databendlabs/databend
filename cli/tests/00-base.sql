@@ -7,5 +7,7 @@ truncate table test;
 insert into test select to_string(number), number, false from numbers(100000);
 select min(a), max(b), count() from test;
 
+select '1';select 2; select 1+2;
+
 select 'bye';
 drop table test;

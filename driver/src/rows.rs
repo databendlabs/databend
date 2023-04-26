@@ -51,6 +51,17 @@ pub struct QueryProgress {
     pub write_bytes: usize,
 }
 
+impl QueryProgress {
+    pub fn normalize(&mut self) {
+        if self.total_rows == 0 {
+            self.total_rows = self.read_rows;
+        }
+        if self.total_bytes == 0 {
+            self.total_bytes = self.read_bytes;
+        }
+    }
+}
+
 impl From<databend_client::response::Progresses> for QueryProgress {
     fn from(progresses: databend_client::response::Progresses) -> Self {
         let mut p = Self {

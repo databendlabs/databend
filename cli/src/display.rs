@@ -106,6 +106,7 @@ impl<'a> ChunkDisplay for ReplDisplay<'a> {
             println!();
         }
 
+        progress.normalize();
         let rows_str = if self.rows > 1 { "rows" } else { "row" };
         println!(
             "{} {} in {:.3} sec. Processed {} rows, {} ({} rows/s, {}/s)",
