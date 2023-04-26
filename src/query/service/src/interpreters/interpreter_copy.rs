@@ -536,7 +536,7 @@ impl CopyInterpreter {
             return None;
         }
         tracing::debug!("upsert_copied_files_info: {:?}", copy_stage_files);
-        let expire_at = expire_hours * 60 + Utc::now().timestamp() as u64;
+        let expire_at = expire_hours * 60 * 60 + Utc::now().timestamp() as u64;
         let req = UpsertTableCopiedFileReq {
             table_id,
             file_info: copy_stage_files,
