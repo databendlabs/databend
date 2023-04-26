@@ -50,7 +50,7 @@ fn need_quote_ident(ident: &str) -> bool {
         return true;
     }
 
-    let mut chars = ident.chars().peekable();
+    let chars = ident.chars().peekable();
     for c in chars {
         if !c.is_ascii_alphanumeric() && c != '_' {
             return true;

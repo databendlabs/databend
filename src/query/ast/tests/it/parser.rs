@@ -18,6 +18,8 @@ use common_ast::display_parser_error;
 use common_ast::parser::expr::*;
 use common_ast::parser::parse_sql;
 use common_ast::parser::query::*;
+use common_ast::parser::quote::quote_ident;
+use common_ast::parser::quote::unquote_ident;
 use common_ast::parser::token::*;
 use common_ast::parser::tokenize_sql;
 use common_ast::rule;
@@ -646,5 +648,21 @@ fn test_expr_error() {
 
     for case in cases {
         run_parser!(file, expr, case);
+    }
+}
+
+#[test]
+fn test_quote() {
+    let cases = &[
+        ("a", "a"),
+        ("🍣", "🍣"),
+        ("価格", "価格"),
+        ("complex \"string\"", ("complex \"\"string\"\"")),
+    ];
+    for (input, want) in cases {
+        let quoted = quote_ident(input, '"');
+        assert_eq!(quoted, *want);
+        let unquoted = unquote_ident(&quoted, '"');
+        assert_eq!(unquoted, *input);
     }
 }

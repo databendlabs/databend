@@ -27,7 +27,6 @@ use crate::input::Input;
 use crate::input::WithSpan;
 use crate::parser::quote::unquote_ident;
 use crate::parser::token::*;
-use crate::parser::unescape::unescape;
 use crate::rule;
 use crate::Error;
 use crate::ErrorKind;
