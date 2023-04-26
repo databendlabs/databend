@@ -50,10 +50,10 @@ explain select number from numbers(10) where number > 5 and try_cast(get(try_par
 ----
 EvalScalar
 ├── expressions: [numbers.number (#0)]
-├── estimated rows: 0.37
+├── estimated rows: 0.00
 └── Filter
-    ├── filters: [numbers.number (#0) > 5, is_true(TRY_CAST(get(try_parse_json(to_string(numbers.number (#0))), 'xx') AS String NULL) < '10'), false]
-    ├── estimated rows: 0.37
+    ├── filters: [false]
+    ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.system.numbers
         ├── read rows: 0
@@ -69,10 +69,10 @@ explain select number from numbers(10) where number > 5 and try_cast(get(try_par
 ----
 EvalScalar
 ├── expressions: [numbers.number (#0)]
-├── estimated rows: 0.37
+├── estimated rows: 0.00
 └── Filter
-    ├── filters: [numbers.number (#0) > 5, is_true(TRY_CAST(get(try_parse_json(to_string(numbers.number (#0))), 'xx') AS String NULL) < '10'), false]
-    ├── estimated rows: 0.37
+    ├── filters: [false]
+    ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.system.numbers
         ├── read rows: 0

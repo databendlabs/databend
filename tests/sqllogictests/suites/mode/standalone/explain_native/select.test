@@ -96,18 +96,15 @@ explain select * from numbers(1) where TRUE and 1 = 1
 ----
 EvalScalar
 ├── expressions: [numbers.number (#0)]
-├── estimated rows: 0.33
-└── Filter
-    ├── filters: [true]
-    ├── estimated rows: 0.33
-    └── TableScan
-        ├── table: default.system.numbers
-        ├── read rows: 1
-        ├── read bytes: 8
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── push downs: [filters: [true], limit: NONE]
-        └── estimated rows: 1.00
+├── estimated rows: 1.00
+└── TableScan
+    ├── table: default.system.numbers
+    ├── read rows: 1
+    ├── read bytes: 8
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 1.00
 
 query T
 explain select * from numbers(1) where number = 0 and false
@@ -198,10 +195,10 @@ explain select * from (select * from numbers(100)  where  number> 33 ) where 1=2
 ----
 EvalScalar
 ├── expressions: [numbers.number (#0), numbers.number (#0)]
-├── estimated rows: 11.11
+├── estimated rows: 0.00
 └── Filter
-    ├── filters: [false, numbers.number (#0) > 33]
-    ├── estimated rows: 11.11
+    ├── filters: [false]
+    ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.system.numbers
         ├── read rows: 0
