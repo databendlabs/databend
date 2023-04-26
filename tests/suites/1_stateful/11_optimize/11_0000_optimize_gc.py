@@ -64,7 +64,8 @@ if __name__ == '__main__':
         mycursor.execute('select a from gc_test order by a;')
         old_datas = mycursor.fetchall()
 
-        client1.send("optimize table gc_test gc;");
+        time.sleep(1) 
+        client1.send("set retention_period=0;optimize table gc_test gc;");
         client1.expect(prompt)
 
         mycursor.execute('select a from gc_test order by a;')
