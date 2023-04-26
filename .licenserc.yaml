@@ -12,6 +12,7 @@ header:
     - "tools"
     - "benchmark"
     - "src/common/compress/tests"
+    - "src/binaries/query/main.rs"
     # All files under ee directory should be Elastic V2 License
     - "src/query/ee"
     # Ignore hidden files
