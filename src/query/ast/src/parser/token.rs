@@ -52,6 +52,7 @@ impl<'a> std::fmt::Debug for Token<'a> {
 pub struct Tokenizer<'a> {
     source: &'a str,
     lexer: Lexer<'a, TokenKind>,
+    prev_token: Option<TokenKind>,
     eoi: bool,
 }
 
@@ -61,6 +62,7 @@ impl<'a> Tokenizer<'a> {
             source,
             lexer: TokenKind::lexer(source),
             eoi: false,
+            prev_token: None,
         }
     }
 }
@@ -74,11 +76,47 @@ impl<'a> Iterator for Tokenizer<'a> {
                 "unable to recognize the rest tokens".to_string(),
             )
             .set_span(Some((self.lexer.span().start..self.source.len()).into())))),
-            Some(kind) => Some(Ok(Token {
-                source: self.source,
-                kind,
-                span: self.lexer.span().into(),
-            })),
+            Some(kind) => {
+                if !matches!(
+                    self.prev_token,
+                    Some(
+                        TokenKind::INSERT
+                            | TokenKind::SELECT
+                            | TokenKind::REPLACE
+                            | TokenKind::UPDATE
+                            | TokenKind::DELETE
+                    )
+                ) && kind == TokenKind::HintPrefix
+                {
+                    loop {
+                        match self.next() {
+                            Some(token) => {
+                                // match hint suffix and then , return next
+                                if let Ok(token) = token {
+                                    if token.kind == TokenKind::HintSuffix {
+                                        return self.next();
+                                    }
+                                } else {
+                                    return Some(token);
+                                }
+                            }
+                            None if !self.eoi => {
+                                self.eoi = true;
+                                return Some(Ok(Token::new_eoi(self.source)));
+                            }
+                            None => {
+                                return None;
+                            }
+                        }
+                    }
+                }
+                self.prev_token = Some(kind);
+                Some(Ok(Token {
+                    source: self.source,
+                    kind,
+                    span: self.lexer.span().into(),
+                }))
+            }
             None if !self.eoi => {
                 self.eoi = true;
                 Some(Ok(Token::new_eoi(self.source)))
