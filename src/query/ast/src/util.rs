@@ -92,29 +92,31 @@ pub fn stage_name(i: Input) -> IResult<Identifier> {
                 quote: None,
             },
         ),
-        move |i| {
-            match_token(QuotedString)(i).and_then(|(i2, token)| {
-                if token
-                    .text()
-                    .chars()
-                    .next()
-                    .filter(|c| i.1.is_ident_quote(*c))
-                    .is_some()
-                {
-                    Ok((i2, Identifier {
-                        span: transform_span(&[token.clone()]),
-                        name: token.text()[1..token.text().len() - 1].to_string(),
-                        quote: Some(token.text().chars().next().unwrap()),
-                    }))
-                } else {
-                    Err(nom::Err::Error(Error::from_error_kind(
-                        i,
-                        ErrorKind::ExpectToken(Ident),
-                    )))
-                }
-            })
-        },
+        quoted_identifier,
     ))(i)
+}
+
+fn quoted_identifier(i: Input) -> IResult<Identifier> {
+    match_token(QuotedString)(i).and_then(|(i2, token)| {
+        if token
+            .text()
+            .chars()
+            .next()
+            .filter(|c| i.1.is_ident_quote(*c))
+            .is_some()
+        {
+            Ok((i2, Identifier {
+                span: transform_span(&[token.clone()]),
+                name: token.text()[1..token.text().len() - 1].to_string(),
+                quote: Some(token.text().chars().next().unwrap()),
+            }))
+        } else {
+            Err(nom::Err::Error(Error::from_error_kind(
+                i,
+                ErrorKind::ExpectToken(Ident),
+            )))
+        }
+    })
 }
 
 fn non_reserved_identifier(
