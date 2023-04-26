@@ -1020,7 +1020,7 @@ BinaryOp {
 ---------- Input ----------
 "t":k1.k2
 ---------- Output ---------
-"t":k1.k2
+t:k1.k2
 ---------- AST ------------
 MapAccess {
     span: Some(
@@ -1071,7 +1071,7 @@ MapAccess {
 ---------- Input ----------
 "t":k1.k2.0
 ---------- Output ---------
-"t":k1.k2.0
+t:k1.k2.0
 ---------- AST ------------
 MapAccess {
     span: Some(
@@ -1268,7 +1268,7 @@ FunctionCall {
 ---------- Input ----------
 "random"()
 ---------- Output ---------
-"random"()
+random()
 ---------- AST ------------
 FunctionCall {
     span: Some(
@@ -1756,7 +1756,7 @@ MapAccess {
 ---------- Input ----------
 arr[4]["k"]
 ---------- Output ---------
-arr[4]["k"]
+arr[4][k]
 ---------- AST ------------
 MapAccess {
     span: Some(

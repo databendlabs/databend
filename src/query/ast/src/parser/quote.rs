@@ -59,11 +59,17 @@ fn need_quote_ident(ident: &str) -> bool {
         return true;
     }
 
-    let chars = ident.chars().peekable();
+    let mut chars = ident.chars();
+    let first = chars.next().unwrap();
+    if !first.is_ascii_alphabetic() && first != '_' {
+        return true;
+    }
+
     for c in chars {
         if !c.is_ascii_alphanumeric() && c != '_' {
             return true;
         }
     }
+
     false
 }
