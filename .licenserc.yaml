@@ -12,8 +12,8 @@ header:
     - "tools"
     - "benchmark"
     - "src/common/compress/tests"
-    # All files under dcl directory should be Databend Community License
-    - "src/query/dcl"
+    # All files under ee directory should be Elastic V2 License
+    - "src/query/ee"
     # Ignore hidden files
     - ".cargo"
     - ".databend"

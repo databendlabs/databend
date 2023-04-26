@@ -73,7 +73,7 @@ members = [
     # databend-query
     "src/query/service",
     # enterprise
-    "src/query/dcl",
+    "src/query/ee",
     # Meta
     "src/meta/api",
     "src/meta/app",
